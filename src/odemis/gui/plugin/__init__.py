@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from functools import partial
 from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
@@ -44,6 +45,7 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
+from odemis.util import inspect_getmembers
 
 
 def find_plugins():
@@ -124,7 +126,7 @@ def load_plugin(filename, microscope, main_app):
 
     # For each subclass of Plugin in the module, start it by instantiating it
     found_plugin = False
-    for n, pc in inspect.getmembers(pm, inspect.isclass):
+    for n, pc in inspect_getmembers(pm, inspect.isclass):
         # We only want Plugin subclasses, not even the Plugin class itself
         if not issubclass(pc, Plugin) or pc is Plugin:
             continue
@@ -158,7 +160,7 @@ def load_plugin(filename, microscope, main_app):
     return ret
 
 
-class Plugin(object):
+class Plugin(with_metaclass(ABCMeta, object)):
     """
     This is the root class for Odemis GUI plugins.
     Every plugin must be a subclass of that class.
@@ -168,7 +170,6 @@ class Plugin(object):
       /usr/local/share/odemis/plugins/
       $HOME/.local/share/odemis/plugins/
     """
-    __metaclass__ = ABCMeta
 
     # The following 4 attributes must be overridden
     @abstractproperty
@@ -193,7 +194,7 @@ class Plugin(object):
             name = self.__class__.__name__
 
         if self.__version__:
-            v = " v%s" % (self.__version__)
+            v = " v%s" % (self.__version__,)
         else:
             v = ""
 
@@ -289,7 +290,9 @@ class Plugin(object):
         # Attach the callback function
         def menu_callback_wrapper(evt):
             try:
+                logging.info("Menu '%s' handled by %s, %s", entry, self.__class__.__name__, callback)
                 callback()
+                logging.debug("Menu '%s' callback completed", entry)
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
                                   path[-1], self)
@@ -310,12 +313,13 @@ class AcquisitionDialog(xrcfr_plugin):
         """
         Creates a modal window. The return code is the button number that was
           last pressed before closing the window.
+        plugin (Plugin): The plugin creating this dialog
         title (str): The title of the window
         text (None or str): If provided, it is displayed at the top of the window
         """
-
         super(AcquisitionDialog, self).__init__(plugin.main_app.main_frame)
 
+        logging.debug("Creating acquisition dialog for %s", plugin.__class__.__name__)
         self.plugin = plugin
 
         self.SetTitle(title)
@@ -355,7 +359,6 @@ class AcquisitionDialog(xrcfr_plugin):
             ignore_view=True
         )
 
-        self.Refresh()
         self.Fit()
 
     @call_in_wx_main
@@ -378,12 +381,14 @@ class AcquisitionDialog(xrcfr_plugin):
 
         if not conf:
             conf = {}
-        vas_names = util.sorted_according_to(vas.keys(), conf.keys())
+        vas_names = util.sorted_according_to(list(vas.keys()), list(conf.keys()))
 
         for name in vas_names:
             va = vas[name]
             self.setting_controller.add_setting_entry(name, va, None,
                                                       conf=conf.get(name, None))
+
+        self.Layout()
 
     @call_in_wx_main
     def addButton(self, label, callback=None, face_colour='def'):
@@ -425,7 +430,7 @@ class AcquisitionDialog(xrcfr_plugin):
         else:
             btn.Bind(wx.EVT_BUTTON, partial(self.on_close, btnid))
 
-        self.Fit()
+        self.pnl_buttons.Layout()
 
     @call_in_wx_main
     def addStream(self, stream, index=0):
@@ -441,7 +446,7 @@ class AcquisitionDialog(xrcfr_plugin):
           1 = right, 2 = spectrum viewport. If None, it will not show the stream
           on any viewport (and it will be added to the .hidden_view)
         """
-        need_fit = False
+        need_layout = False
 
         if index is None:
             v = self.hidden_view
@@ -452,17 +457,16 @@ class AcquisitionDialog(xrcfr_plugin):
 
             if not viewport.IsShown():
                 viewport.Show()
-                need_fit = True
+                need_layout = True
 
         if stream:
             if not self.fp_streams.IsShown():
                 self.fp_streams.Show()
-                need_fit = True
+                need_layout = True
             self.streambar_controller.addStream(stream, add_to_view=v)
 
-        if need_fit:
+        if need_layout:
             self.Layout()
-            self.Fit()
             self.Update()
 
     @call_in_wx_main
@@ -476,13 +480,12 @@ class AcquisitionDialog(xrcfr_plugin):
           If future is cancellable, show a cancel button next to the progress bar.
 
         """
-
         if future is not None and not future.cancelled():
             self.current_future = future
             self.enable_buttons(False)
 
+        self.pnl_gauge.Show(future is not None)
         self.Layout()
-        self.Update()
 
         if self.current_future is None:
             self._acq_future_connector = None
@@ -496,16 +499,16 @@ class AcquisitionDialog(xrcfr_plugin):
                 # TODO: just pulse the gauge at a "good" frequency (need to use a timer)
                 self.gauge_progress.Pulse()
 
+            # If the future is cancellable (ie, has task_canceller), allow to
+            # press the "cancel" button, which will call cancel() on the future.
+            # TODO: if there is already a "cancel" button in the window, use it
+            # instead a providing another one.
             if hasattr(self.current_future, 'task_canceller'):
                 self.btn_cancel.Enable()
             else:
                 self.btn_cancel.Disable()
 
         future.add_done_callback(self._on_future_done)
-
-        # TODO: if the future is cancellable (ie, has task_canceller), allow to
-        # press the "cancel" button, if such button exists, otherwise provide
-        # such a button. That button will call cancel() on the future.
 
     @call_in_wx_main
     def setAcquisitionInfo(self, text=None, lvl=logging.INFO):
@@ -517,7 +520,7 @@ class AcquisitionDialog(xrcfr_plugin):
         Options: logging.INFO, logging.WARNING, logging.ERROR
         """
         if text is None:
-            self.lbl_acquisition_info.Hide()
+            self.pnl_info.Hide()
         else:
             self.lbl_acquisition_info.SetLabel(text)
             if lvl >= logging.ERROR:
@@ -526,7 +529,7 @@ class AcquisitionDialog(xrcfr_plugin):
                 self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_WARNING)
             else:
                 self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_MAIN)
-            self.lbl_acquisition_info.Show()
+            self.pnl_info.Show()
 
         self.Layout()
 
@@ -562,13 +565,11 @@ class AcquisitionDialog(xrcfr_plugin):
 
     @call_in_wx_main
     def _on_future_done(self, _):
-        """ Hide the gauge and label when the future finishes """
+        """ When the future finishes, reset the progress bar and enable the buttons """
         self.gauge_progress.SetValue(0)
         self.lbl_gauge.SetLabel("")
         self.btn_cancel.Disable()
         self.enable_buttons(True)
-        self.Layout()
-        self.Update()
 
     def on_close(self, btnid, _):
         logging.debug("Closing window")

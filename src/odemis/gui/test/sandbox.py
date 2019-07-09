@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
+from __future__ import division, print_function
 import array
 import random
 import numpy
+from builtins import range
 
 import wx
 from wx.lib.delayedresult import startWorker
@@ -88,7 +89,7 @@ class DrawPanelDBT(wx.Panel):
 
         def color(i):
             a = int(mapme(i, 1, MI, 0, 255))
-            return(a, a, a)
+            return a, a, a
 
         def compute_buff(x1, x2, y1, y2, w, h):
             buffer = array.array('B')
@@ -145,7 +146,7 @@ def generate_img_data(width, height, depth, alpha=255):
         rgb[..., 0, 1] = numpy.linspace(tl[1], bl[1], height)
         rgb[..., 0, 2] = numpy.linspace(tl[2], bl[2], height)
 
-        for i in xrange(height):
+        for i in range(height):
             sr, sg, sb = rgb[i, 0, :3]
             er, eg, eb = rgb[i, -1, :3]
 
@@ -157,8 +158,8 @@ def generate_img_data(width, height, depth, alpha=255):
             rgb[..., 3] = min(255, max(alpha, 0))
 
     else:
-        for w in xrange(width):
-            for h in xrange(height):
+        for w in range(width):
+            for h in range(height):
                 rgb[h, w] = random_color((230, 230, 255), alpha)
 
     return DataArray(rgb)
@@ -283,4 +284,4 @@ if haveCairo:
     theFrame = MyFrame(None, 'Barebones Cairo Example')
     app.MainLoop()
 else:
-    print "Error! PyCairo or a related dependency was not found"
+    print("Error! PyCairo or a related dependency was not found")

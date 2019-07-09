@@ -115,7 +115,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Galvano Mirror"],
-    children: {"x": "Optical Stage", "y": "Optical Stage"},
+    dependencies: {"x": "Optical Stage", "y": "Optical Stage"},
     init: {
         axes_map: {"x": "x", "y": "y"},
     },
@@ -128,7 +128,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Galvano Mirror"],
-    children: {"z": "Optical Stage"},
+    dependencies: {"z": "Optical Stage"},
     init: {
         axes_map: {"z": "z"}
     },

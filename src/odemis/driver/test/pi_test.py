@@ -21,7 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 from odemis.driver import pi
@@ -30,6 +30,7 @@ import math
 import os
 import time
 import unittest
+from builtins import range
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -74,7 +75,7 @@ class TestPIRedStoneStatic(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             stage = pi.StageRedStone(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
@@ -137,7 +138,7 @@ class TestPIRedStone(unittest.TestCase):
         f.result()
         dur_fast = time.time() - start
         act_speed = abs(move['x']) / dur_fast
-        print "actual speed=%f" % act_speed
+        print("actual speed=%f" % act_speed)
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio/2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
@@ -150,14 +151,14 @@ class TestPIRedStone(unittest.TestCase):
         f.result()
         dur_slow = time.time() - start
         act_speed = abs(move['x']) / dur_slow
-        print "actual speed=%f" % act_speed
+        print("actual speed=%f" % act_speed)
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio/2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
                       (act_speed, stage.speed.value['x']))
 
         ratio = dur_slow / dur_fast
-        print "ratio of %f while expected %f" % (ratio, expected_ratio)
+        print("ratio of %f while expected %f" % (ratio, expected_ratio))
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
             self.fail("Speed not consistent: ratio of " + str(ratio) +
                          " instead of " + str(expected_ratio) + ".")
@@ -254,12 +255,12 @@ class TestPIRedStone(unittest.TestCase):
         steps = 100
         cur_pos = (0, 0)
         move = {}
-        for i in xrange(steps):
+        for i in range(steps):
             next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
-            print next_pos, move
+            print(next_pos, move)
             f = stage.moveRel(move)
             f.result() # wait
             cur_pos = next_pos

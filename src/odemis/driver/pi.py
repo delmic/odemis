@@ -36,7 +36,6 @@ import sys
 import threading
 import time
 
-
 # Status:
 # byte 1
 STATUS_ECHO_ON = 0x0001 #Bit 0: Echo ON
@@ -261,7 +260,7 @@ class PIRedStone(object):
         st = bytes_int[0] + (bytes_int[1] << 8) + (bytes_int[2] << 16) + (bytes_int[3] << 24)
         err = bytes_int[4]
         assert((0 <= err) and (err <= 255))
-        return (st, err)
+        return st, err
 
     def tellBoardAddress(self):
         """
@@ -462,7 +461,6 @@ class PIRedStone(object):
             return 0.0
 
         self.select()
-        sign = cmp(stepsize, 0)
 
         # Tried to use a compound command with several big steps and one small.
         # eg: 1SW1,1SS255,1SR3,1GN,1WS2,1SS35,1SR1,1GN\r
@@ -477,7 +475,7 @@ class PIRedStone(object):
             com = self.stringSetWaitTime(axis, waittime)
         com += "," + self.stringSetStepSize(axis, abs(stepsize))
         com += "," + self.stringSetRepeatCounter(axis, steps)
-        if sign > 0:
+        if stepsize > 0:
             com += "," + self.stringGoPositive(axis)
         else:
             com += "," + self.stringGoNegative(axis)
@@ -585,7 +583,7 @@ class PIRedStone(object):
         # dis = a*x² + b*x + c
         # so x: impossible if dis < c => return 0
         #       normal solution (with x >0) : x = (-b + sqrt(b**2 - 4*a*(c-y)))/(2 * a)
-        sign = cmp(m, 0)
+        sign = math.copysign(1, m)
         distance = abs(m)
         a, b, c = self.move_calibration
         if (distance < (c * 1.01) or # 1% margin
@@ -607,16 +605,16 @@ class PIRedStone(object):
         # if less than 255 for pulse => one step => use convertSmallMToDevice
         a, b, c = self.move_calibration
         distance_step = a * 255 ** 2 + b * 255 + c
-        sign = cmp(m, 0)
+        sign = math.copysign(1, m)
         distance = abs(m)
         if distance < distance_step:
-            return (1, self.convertSmallMToDevice(m))
+            return 1, self.convertSmallMToDevice(m)
 
         # linear => several times steps of at much 255 (can be smaller to accommodate)
         steps = math.ceil(distance / distance_step)
         stepsize = self.convertSmallMToDevice(distance / steps)
         assert(stepsize > 0) # could happen if c is very bad (but normally it's never so bad)
-        return (steps, sign * stepsize)
+        return steps, sign * stepsize
 
     def convertDeviceToM(self, units):
         """
@@ -625,7 +623,7 @@ class PIRedStone(object):
         returns (float) distance: can be negative
         """
         steps, stepsize = units
-        sign = cmp(stepsize, 0)
+        sign = math.copysign(1, stepsize)
         if abs(stepsize) < self.min_stepsize:
             return 0
         a, b, c = self.move_calibration
@@ -768,7 +766,7 @@ class FakePIRedStone(PIRedStone):
     def tellStatus(self):
         status = STATUS_BOARD_ADDRESSED
         err = 0
-        return (status, err)
+        return status, err
 
     def tellBoardAddress(self):
         return self.address
@@ -804,7 +802,7 @@ class FakePIRedStone(PIRedStone):
 
     @staticmethod
     def scan(port, max_add=15):
-        present = set([1])
+        present = {1}
         return present
 
     @staticmethod

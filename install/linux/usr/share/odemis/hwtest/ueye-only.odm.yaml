@@ -2,9 +2,8 @@
 Optical: {
     class: Microscope,
     role: optical,
-    emitters: [Light, "Optical Objective", "Optical Emission Filter"],
-    detectors: [Camera],
-    actuators: ["FakeStage", "Objective Stage", "Optical Focus"],
+    children: [Light, "Optical Objective", "Optical Emission Filter", Camera, "FakeStage",
+              "Objective Stage", "Optical Focus"],
 }
 
 Light: {
@@ -50,7 +49,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: [Camera],
-    children: {"a": "Optical Stage", "b": "Optical Stage"},
+    dependencies: {"a": "Optical Stage", "b": "Optical Stage"},
     init: {
         axes_map: {"a": "a", "b": "b"},
     },
@@ -63,7 +62,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: [Camera],
-    children: {"z": "Optical Stage"},
+    dependencies: {"z": "Optical Stage"},
     init: {
         axes_map: {"z": "z"}
     },

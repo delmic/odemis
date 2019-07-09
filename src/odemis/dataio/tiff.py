@@ -19,8 +19,10 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
 
+from past.builtins import basestring
 import calendar
 from libtiff import TIFF
 import logging
@@ -42,7 +44,7 @@ import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
 from odemis.util.conversion import get_tile_md_pos
 from datetime import datetime
-
+from builtins import range
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -93,20 +95,19 @@ def _convertToTiffTag(metadata):
     # bring too much problem we might need .encode("ascii", "ignore") or
     # unidecode (but they are lossy).
 
-    tiffmd = {}
+    tiffmd = {T.TIFFTAG_RESOLUTIONUNIT: T.RESUNIT_CENTIMETER,
+              T.TIFFTAG_SOFTWARE: (u"%s %s" % (odemis.__shortname__, odemis.__version__)).encode("utf-8", "ignore")}
     # we've got choice between inches and cm... so it's easy
-    tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
-    tiffmd[T.TIFFTAG_SOFTWARE] = "%s %s" % (odemis.__shortname__, odemis.__version__)
     for key, val in metadata.items():
         if key == model.MD_HW_NAME:
-            tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")
+            tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8", "ignore")
         elif key == model.MD_HW_VERSION:
             v = val
             if model.MD_SW_VERSION in metadata:
-                v += " (driver %s)" % (metadata[model.MD_SW_VERSION],)
-            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8")
+                v += u" (driver %s)" % (metadata[model.MD_SW_VERSION],)
+            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8", "ignore")
         elif key == model.MD_ACQ_DATE:
-            tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
+            tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val)).encode("utf-8", "ignore")
         elif key == model.MD_PIXEL_SIZE:
             # convert m/px -> px/cm
             # Note: apparently some reader (Word?) try to use this to display
@@ -122,8 +123,12 @@ def _convertToTiffTag(metadata):
             # everything by 1 m, which should be enough as samples are typically
             # a few cm big. The most important is that the image positions are
             # correct relatively to each other (for a given sample).
-            tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
-            tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+            pos_cm = [100 + v * 100 for v in val]
+            tiffmd[T.TIFFTAG_XPOSITION] = max(0, pos_cm[0])
+            tiffmd[T.TIFFTAG_YPOSITION] = max(0, pos_cm[1])
+            if [tiffmd[T.TIFFTAG_XPOSITION], tiffmd[T.TIFFTAG_YPOSITION]] != pos_cm:
+                logging.warning("Position metadata clipped to avoid negative position %s", pos_cm)
+
 #         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
             # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
@@ -133,7 +138,7 @@ def _convertToTiffTag(metadata):
         # N = SPP in the specification, but libtiff duplicates the values
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
-            tiffmd[T.TIFFTAG_PAGENAME] = val.encode("utf-8")
+            tiffmd[T.TIFFTAG_PAGENAME] = val.encode("utf-8", "ignore")
         # TODO save the brightness and contrast applied by the user?
         # Could use GrayResponseCurve, DotRange, or TransferFunction?
         # TODO save the tint applied by the user? maybe WhitePoint can help
@@ -187,6 +192,7 @@ def _readTiffTag(tfile):
 
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
+
     if xres is not None and yres is not None:
         try:
             md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
@@ -202,20 +208,20 @@ def _readTiffTag(tfile):
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
     if val is not None:
-        md[model.MD_DESCRIPTION] = val
+        md[model.MD_DESCRIPTION] = val.decode("utf-8", "ignore")
 #     val = tfile.GetField(T.TIFFTAG_SOFTWARE)
 #     if val is not None:
 #         md[model.MD_SW_VERSION] = val
     val = tfile.GetField(T.TIFFTAG_MAKE)
     if val is not None:
-        md[model.MD_HW_NAME] = val
+        md[model.MD_HW_NAME] = val.decode("utf-8", "ignore")
     val = tfile.GetField(T.TIFFTAG_MODEL)
     if val is not None:
-        md[model.MD_HW_VERSION] = val
+        md[model.MD_HW_VERSION] = val.decode("utf-8", "ignore")
     val = tfile.GetField(T.TIFFTAG_DATETIME)
     if val is not None:
         try:
-            t = calendar.timegm(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
+            t = calendar.timegm(time.strptime(val.decode("utf-8", "ignore"), "%Y:%m:%d %H:%M:%S"))
             md[model.MD_ACQ_DATE] = t
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
@@ -341,7 +347,9 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #                          # we explicitly reference each DataArray to avoid
 #                          # potential ordering problems of the "Image" elements
 #        + ROIRef (*)
-#        + ARData (*)
+#        + ARData ({0, 1})
+#        + POLData ({0, 1})
+#        + StreakCamData ({0, 1})
 #      + ROI (*)
 #        . ID
 #        . Name
@@ -453,14 +461,14 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             _addImageElement(root, g, ifd, rois)
 
     # ROIs have to come _after_ images, so add them only now
-    root.extend(rois.values())
+    root.extend(list(rois.values()))
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
 
     # make it more readable
     _indent(root)
-    ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
+    ometxt = (b'<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
 
@@ -565,10 +573,16 @@ def _updateMDFromOME(root, das):
                 pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
+
         try:
-            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6 # µm -> m
+            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6  # µm -> m
             psy = float(pxe.attrib["PhysicalSizeY"]) * 1e-6
             md[model.MD_PIXEL_SIZE] = (psx, psy)
+            # PIXEL_SIZE has already been updated. If the PhysicalSizeZ is not present
+            # the code will stop the metadata will be 2D, and if it's present,
+            # the metadata will be changed to 3D.
+            psz = float(pxe.attrib["PhysicalSizeZ"]) * 1e-6
+            md[model.MD_PIXEL_SIZE] = (psx, psy, psz)
         except (KeyError, ValueError):
             pass
 
@@ -762,7 +776,8 @@ def _updateMDFromOME(root, das):
 
             try:
                 t = int(ple.attrib["TheT"])
-                deltats[t] = float(ple.attrib["DeltaT"])  # s
+                deltats[t] = float(ple.attrib["DeltaT"])  # s  if key exists -> overwritten
+                # TODO can we put this code somewhere else, as time_list should be the same for all in c-dim
             except (KeyError, ValueError):
                 pass
 
@@ -777,6 +792,10 @@ def _updateMDFromOME(root, das):
                 psx = float(ple.attrib["PositionX"])
                 psy = float(ple.attrib["PositionY"])
                 mdp[model.MD_POS] = (psx, psy)
+                # MD_POS is already updated, but if a Z position is also present,
+                # we should add it as well. If not, this part will trigger a KeyError
+                psz = float(ple.attrib["PositionZ"])
+                mdp[model.MD_POS] = (psx, psy, psz)
             except (KeyError, ValueError):
                 pass
 
@@ -792,19 +811,12 @@ def _updateMDFromOME(root, das):
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
 
-        # Convert the DeltaT's into PIXEL_DUR + TIME_OFFSET
-        if len(deltats) >= 2:
-            dk = deltats.keys()
-            mint = min(dk)
-            maxt = max(dk)
-            tof = deltats[mint]
-            pxd = (deltats[maxt] - tof) / (maxt - mint)
-            for t, dt in deltats.iteritems():
-                if not util.almost_equal(dt, tof + pxd * t):
-                    logging.warning("DeltaT's are not linear, which cannot be encoded in metadata: %s",
-                                    deltats)
-
-            # Update metadata of all the DAs
+        # Update metadata of each da, so that they will be merged
+        if deltats:
+            time_list = [v for k, v in sorted(deltats.items(), key=lambda item: item[0])]
+            if len(time_list) != len(deltats.keys()):
+                logging.warning("TIME_LIST has length %d, while expected %d",
+                                len(time_list), len(deltats.keys()))
             for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
@@ -815,8 +827,7 @@ def _updateMDFromOME(root, das):
                     continue
                 if da is None:
                     continue
-                da.metadata.update({model.MD_TIME_OFFSET: tof,
-                                    model.MD_PIXEL_DUR: pxd})
+                da.metadata.update({model.MD_TIME_LIST: time_list})
 
         # Mirror data
         md = {}
@@ -833,7 +844,7 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
-        # TODO what does .find do? seems to work anyways
+        # polarization analyzer
         poldata = ime.find("POLData")  # there must be only one per Image
         try:
             pol = str(poldata.attrib["Polarization"])
@@ -848,6 +859,35 @@ def _updateMDFromOME(root, das):
         try:
             poslinpol = float(poldata.attrib["LinearPolarizer"])
             md[model.MD_POL_POS_LINPOL] = poslinpol
+        except (AttributeError, KeyError, ValueError):
+            pass
+
+        # streak camera
+        # TODO shorten code: if timeRange then also the others should be there??
+        streakCamData = ime.find("StreakCamData")  # there must be only one per Image
+        try:
+            timeRange = float(streakCamData.attrib["TimeRange"])
+            md[model.MD_STREAK_TIMERANGE] = timeRange
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            MCPGain = int(streakCamData.attrib["MCPGain"])
+            md[model.MD_STREAK_MCPGAIN] = MCPGain
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            streakMode = bool(streakCamData.attrib["StreakMode"])
+            md[model.MD_STREAK_MODE] = streakMode
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            triggerDelay = float(streakCamData.attrib["TriggerDelay"])
+            md[model.MD_TRIGGER_DELAY] = triggerDelay
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            triggerRate = float(streakCamData.attrib["TriggerRate"])
+            md[model.MD_TRIGGER_RATE] = triggerRate
         except (AttributeError, KeyError, ValueError):
             pass
 
@@ -894,6 +934,19 @@ def _updateMDFromOME(root, das):
                     # First apply the global MD, then per-channel
                     da.metadata.update(md)
 
+        # TODO make it a separate method (it is called multiple times in this method here...)
+        for ifd in hd_2_ifd.flat:
+            if ifd == -1:
+                continue
+            try:
+                da = das[ifd]
+            except IndexError:
+                logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                continue
+            if da is None:
+                continue
+            da.metadata.update(md)
+
 
 def _getIFDsFromOME(pxe, offset=0):
     """
@@ -931,7 +984,7 @@ def _getIFDsFromOME(pxe, offset=0):
                 logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
                                 hdims, hdshape, needed_ifds, nbifds)
             break
-        ldims = dims.translate(None, hdims)  # low dim = dims - hdims
+        ldims = dims.replace(hdims, "")  # low dim = dims - hdims
         if len(ldims) <= 3 and needed_ifds == nbifds:
             # If the next ldim is not XY and =1, consider it to be high dim
             nxtdim = ldims[0]
@@ -1059,13 +1112,14 @@ def _findImageGroups(das):
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
         if (prev_da is None
-            or not (model.MD_IN_WL in da.metadata or model.MD_OUT_WL in da.metadata)
+            or da.shape[0] != 1  # If C != 1 => not possible to merge (C is always first dimension)
+            or (model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata)
             or prev_da.shape != da.shape
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
             or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
             or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
             or prev_da.metadata.get(model.MD_LIGHT_POWER) != da.metadata.get(model.MD_LIGHT_POWER)
-            # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
+            or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
            ):
@@ -1232,6 +1286,8 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+        if len(pxs) == 3:
+            pixels.attrib["PhysicalSizeZ"] = "%.15f" % (pxs[2] * 1e6)
 
     # Note: TimeIncrement can be used to replace DeltaT if the duration is always
     # the same (which it is), but it also means it starts at 0, which is not
@@ -1255,6 +1311,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             wl_list = spectrum.get_wavelength_per_pixel(da0)
         except Exception:
             logging.warning("Spectrum metadata is insufficient to be saved")
+
+    time_list = None
+    if model.MD_TIME_LIST in globalMD:
+        try:
+            time_list = spectrum.get_time_per_pixel(da0)
+        except Exception:
+            logging.warning("Temporal spectrum metadata is insufficient to be saved")
 
     subid = 0
     for da in das:
@@ -1415,10 +1478,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         # much never useful to know the slightly different acquisition dates for
         # each C.
         # We now just store TIME_OFFSET + PIXEL_DUR info
+        # TODO in future only use TIME_LIST
         if model.MD_PIXEL_DUR in da.metadata:
             t = index[hdims.index("T")]
             deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
             plane.attrib["DeltaT"] = "%.15f" % deltat
+        if time_list is not None:
+            plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
@@ -1435,6 +1501,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.15f" % pos[1]
+
+            if len(pos) == 3:
+                plane.attrib["PositionZ"] = "%.15f" % pos[2]
 
         subid += 1
 
@@ -1464,7 +1533,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         if model.MD_AR_PARABOLA_F in globalMD:
             ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
 
-    # Store polarization analyzer data if any
+    # Store polarization analyzer MD data if any
     if any(rd in globalMD for rd in [model.MD_POL_MODE,
                                      model.MD_POL_POS_QWP,
                                      model.MD_POL_POS_LINPOL]):
@@ -1476,6 +1545,25 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             poldata.attrib["QuarterWavePlate"] = "%.15f" % globalMD[model.MD_POL_POS_QWP]
         if model.MD_POL_POS_LINPOL in globalMD:
             poldata.attrib["LinearPolarizer"] = "%.15f" % globalMD[model.MD_POL_POS_LINPOL]
+
+    # Store streak camera MD data if any
+    if any(rd in globalMD for rd in [model.MD_STREAK_TIMERANGE,
+                                     model.MD_STREAK_MCPGAIN,
+                                     model.MD_STREAK_MODE,
+                                     model.MD_TRIGGER_DELAY,
+                                     model.MD_TRIGGER_RATE]):
+
+        streakCamData = ET.SubElement(ime, "StreakCamData")
+        if model.MD_STREAK_TIMERANGE in globalMD:
+            streakCamData.attrib["TimeRange"] = "%.9f" % globalMD[model.MD_STREAK_TIMERANGE]
+        if model.MD_STREAK_MCPGAIN in globalMD:
+            streakCamData.attrib["MCPGain"] = "%d" % globalMD[model.MD_STREAK_MCPGAIN]
+        if model.MD_STREAK_MODE in globalMD:
+            streakCamData.attrib["StreakMode"] = "%s" % globalMD[model.MD_STREAK_MODE]
+        if model.MD_TRIGGER_DELAY in globalMD:
+            streakCamData.attrib["TriggerDelay"] = "%.12f" % globalMD[model.MD_TRIGGER_DELAY]
+        if model.MD_TRIGGER_RATE in globalMD:
+            streakCamData.attrib["TriggerRate"] = "%f" % globalMD[model.MD_TRIGGER_RATE]
 
 
 def _createPointROI(rois, name, p, shp_attrib=None):
@@ -1588,7 +1676,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # clever thumbnailer?
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
         ometxt = None
-        f.SetField(T.TIFFTAG_PAGENAME, "Composited image")
+        f.SetField(T.TIFFTAG_PAGENAME, b"Composited image")
         # Flag for saying it's a thumbnail
         f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
 
@@ -1662,7 +1750,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
             write_rgb = True
             hdim = data.shape[:-3]
-        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
+        # TODO: handle RGB for C at any position before and after XY, but iif TZ=11
         # for data > 2D: write as a sequence of 2D images or RGB images
         elif data.ndim == 5 and data.shape[0] == 3:  # RGB
             # Write an RGB image, instead of 3 images along C
@@ -1781,9 +1869,9 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
             nfiles = len(_findImageGroups(data))
             # Create the whole list of uuid's to pass it to each file
             uuid_list = []
-            for i in xrange(nfiles):
+            for i in range(nfiles):
                 uuid_list.append(uuid.uuid4().urn)
-            for i in xrange(nfiles):
+            for i in range(nfiles):
                 # TODO: Take care of thumbnails
                 _saveAsMultiTiffLT(filename, data, None, compressed,
                                    multiple_files, i, uuid_list, pyramid)
@@ -1860,7 +1948,7 @@ class DataArrayShadowTIFF(DataArrayShadow):
             subcls = DataArrayShadowPyramidalTIFF
         else:
             subcls = DataArrayShadowTIFF
-        return super(DataArrayShadowTIFF, cls).__new__(subcls, tiff_info, *args, **kwargs)
+        return super(DataArrayShadowTIFF, cls).__new__(subcls)
 
     def __init__(self, tiff_info, shape, dtype, metadata=None):
         """
@@ -2214,13 +2302,13 @@ class AcquisitionDataTIFF(AcquisitionData):
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
-        if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower()) or
-                      desc[:4].lower() == '<ome')):
+        if (desc and ((desc.startswith(b"<?xml") and b"<ome " in desc.lower()) or
+                      desc[:4].lower() == b'<ome')):
             try:
-                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                              "", desc, count=1)
-                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                              "", desc)
+                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                              b"", desc, count=1)
+                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                              b"", desc)
                 root = ET.fromstring(desc)
                 if root.tag.lower() == "ome":
                     return root
@@ -2323,7 +2411,7 @@ class AcquisitionDataTIFF(AcquisitionData):
             # in IFDs to be 2D, but we allow to have RGB images too (so dimension C).
             dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
             if fim.ndim == 3:
-                planedims = dims.translate(None, "TZ")  # remove TZ
+                planedims = dims.replace("TZ", "")  # remove TZ
                 ci = planedims.index("C")
                 if fim.shape[ci] > 1:
                     if "C" in hdims:

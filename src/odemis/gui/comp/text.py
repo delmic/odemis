@@ -26,10 +26,12 @@ Content:
 
 """
 from __future__ import division
+from builtins import str, chr # For Python 2 & 3
 
 import locale
 import logging
 import math
+import numpy
 import os
 import re
 import string
@@ -273,11 +275,11 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdownlistbox.SetWindowStyleFlag(flags)
         if not isinstance(choices, list):
             self._choices = list(choices)
-        self._choices.sort(cmp=locale.strcoll)
+        self._choices.sort(key=str.lower)
         self._updateDataList(self._choices)
         self.dropdownlistbox.InsertColumn(0, "")
         for num, colVal in enumerate(self._choices):
-            index = self.dropdownlistbox.InsertItem(sys.maxint, colVal, -1)
+            index = self.dropdownlistbox.InsertItem(sys.maxsize, colVal, -1)
             self.dropdownlistbox.SetItem(index, 0, colVal)
             self.dropdownlistbox.SetItemData(index, num)
         self._setListSize()
@@ -313,7 +315,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
             if self._select_callback:
                 dd = self.dropdownlistbox
                 values = [dd.GetItem(sel, x).GetText()
-                          for x in xrange(dd.GetColumnCount())]
+                          for x in range(dd.GetColumnCount())]
                 self._select_callback(values)
             self.SetValue(itemtext)
             self.SetToolTip(itemtext)
@@ -496,9 +498,9 @@ class _NumberValidator(ValidatorClass):
             event.Skip()
             return
 
-        field_val = unicode(self._get_str_value())
+        field_val = str(self._get_str_value())
         start, end = self.GetWindow().GetSelection()
-        field_val = field_val[:start] + unichr(ukey) + field_val[end:]
+        field_val = field_val[:start] + chr(ukey) + field_val[end:]
 
         if not field_val or self.entry_pattern.match(field_val):
             # logging.debug("Field value %s accepted using %s", "field_val", self.entry_regex)
@@ -579,7 +581,7 @@ class _NumberValidator(ValidatorClass):
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
     try:
-        step = (max_val - min_val) / 255
+        step = (max_val - min_val) * 1e-9
         # To keep the inc/dec values 'clean', set the step
         # value to the nearest power of 10
         step = 10 ** round(math.log10(step))
@@ -602,13 +604,18 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     """
 
+    _num_type = None  # type of the input widget
+
     def __init__(self, *args, **kwargs):
         """
 
         Args:
             validator (Validator): Validator that checks the value entered by the user
-            key_step (number or None): by how much the value should be changed on key up/down
-            accuracy (None or int): how many significant digits to keep when cleanly displayed. If
+            key_step (number or None): By how much the value should be changed on key up/down.
+                If specified, all key combinations are ignored and step size is fixed and change is linear.
+                If None, the change in the values will be not linear.
+            key_step_min (number or None): By how much the value should be changed when zero.
+            accuracy (None or int): How many significant digits to keep when cleanly displayed. If
                 None, it is never truncated.
 
         """
@@ -620,6 +627,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         # The step size for when the up and down keys are pressed
         self.key_step = kwargs.pop('key_step', None)
         self.accuracy = kwargs.pop('accuracy', None)
+        self.key_step_min = kwargs.pop('key_step_min', None)  # calculation based on min/max values
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER style needs to be set, but
         # setting it in XRC throws an error. A possible workaround is to include the style by hand
@@ -643,7 +651,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         if val is not None:
             self.SetValue(self._number_value)
 
-        if self.key_step is not None:
+        if self.key_step_min or self.key_step:
             self.Bind(wx.EVT_CHAR, self.on_char)
 
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
@@ -751,9 +759,14 @@ class _NumberTextCtrl(wx.TextCtrl):
         wx.PostEvent(self, changeEvent)
 
     def on_char(self, evt):
-        """ This event handler increases or decreases the integer value when
-        the up/down cursor keys are pressed.
-
+        """ This event handler increases or decreases the value when the following key combinations are pressed:
+        * up/down cursor: increase/decrease by step size with one magnitude less than value
+        * up/down cursor + Shift: increase/decrease by step size with two magnitudes less than value
+        * up/down cursor + Ctrl: increase/decrease by step size with same magnitudes than value
+        If "key_step" is specified, only this step size will be used, when up/down cursor is pressed.
+        If an integer input value, the value will be increased/decreased by a value of at least one.
+        If the value is zero, the min step size will be used.
+        If no "key_step" or "key_step_min" are provided, this method is not bound to the input widget.
         The event is ignored otherwise.
         """
 
@@ -761,10 +774,29 @@ class _NumberTextCtrl(wx.TextCtrl):
         prev_num = self._number_value
         num = self._number_value
 
-        if key == wx.WXK_UP and self.key_step and self.IsEditable():
-            num = (num or 0) + self.key_step
-        elif key == wx.WXK_DOWN and self.key_step and self.IsEditable():
-            num = (num or 0) - self.key_step
+        if (key == wx.WXK_UP or key == wx.WXK_DOWN) and self.IsEditable():
+            if evt.ShiftDown():
+                k = 0.01  # decrease step size of one magnitude (two less then mag of value)
+            elif evt.ControlDown():
+                k = 1  # increase step size of one magnitude (same mag as value)
+            else:
+                k = 0.1  # default step size with one magnitude less than value
+
+            num = (num or 0)
+
+            if key == wx.WXK_UP:
+                if self.key_step:
+                    # Note: If step size (key step) explicitly specified, only arrows needed to change value
+                    num += self.key_step
+                else:
+                    num += self.get_log_step(num, k)
+            elif key == wx.WXK_DOWN:
+                if self.key_step:
+                    # Note: If step size (key step) explicitly specified, only arrows needed to change value
+                    num -= self.key_step
+                else:
+                    num += self.get_log_step(num, -k)
+
         else:
             # Skip the event, so it can be processed in the regular way
             # (As in validate typed numbers etc.)
@@ -777,6 +809,33 @@ class _NumberTextCtrl(wx.TextCtrl):
         if prev_num != self._number_value:
             self._display_pretty()  # Update the GUI immediately
             self._send_change_event()
+
+    def get_log_step(self, value, k):
+        """
+        Calculates the step size by which the current value should be increased/decreased.
+        :parameter value: (float) Current value displayed in widget and that should be increased/decreased
+        :parameter k: (float) Order by which the value should be increased/decreases.
+            Is dependent on key combination pressed.
+        :return: (float) Step by which the current value should be increased/decreased (already contains the sign).
+        """
+        if k < 0:  # arrow down was pressed -> decrease of value requested
+            # Up/down keys are not just "opposite" (down = -up). They must compensate each other so that in
+            # (almost) all cases pressing up then down (or down then up) returns to the original value.
+            # If down was just "-up", this wouldn't work on the magnitude transitions. For example 9->10.
+            # So, instead, we compute the "retraction" of the "up function" (which is injective).
+            # In practice, this results in computing the magnitude of a "little bit" smaller value.
+            value *= (1 + k / 10)
+        try:
+            magnitude = int(math.floor(math.log10(abs(value))))
+            if magnitude <= -12:
+                raise ValueError("Value is so small, so set it zero.")
+        except ValueError:
+            return math.copysign(self.key_step_min, k)
+        step = (10 ** magnitude) * k
+        if self.key_step_min and abs(step) < self.key_step_min:
+            step = math.copysign(self.key_step_min, step)
+
+        return step
 
     def on_focus(self, evt):
         """ Select the number part (minus any unit indication) of the data in the text field """
@@ -817,12 +876,17 @@ class UnitNumberCtrl(_NumberTextCtrl):
     def _display_pretty(self):
         if self._number_value is None:
             str_val = u""
-        elif self._number_value == 0 and self.key_step and self.unit not in units.IGNORE_UNITS:
+        elif self._number_value == 0 and self.unit not in units.IGNORE_UNITS:
             # Special case with 0: readable_str return just "0 unit", without
             # prefix. This is technically correct, but quite inconvenient and
             # a little strange when the typical value has a prefix (eg, nm, kV).
             # => use prefix of key_step (as it's a "small value")
-            _, prefix = units.get_si_scale(self.key_step)
+            if self.key_step:
+                _, prefix = units.get_si_scale(self.key_step)
+            elif self.key_step_min:
+                _, prefix = units.get_si_scale(self.key_step_min)
+            else:
+                prefix = ""
             str_val = "0 %s%s" % (prefix, self.unit)
         else:
             str_val = units.readable_str(self._number_value, self.unit, self.accuracy)
@@ -892,6 +956,8 @@ class IntegerTextCtrl(_NumberTextCtrl):
 
     """
 
+    _num_type = int  # type of input
+
     # TODO: should use the same parameter as NumberSlider: val_range instead
     # of min_val/max_val
 
@@ -903,7 +969,8 @@ class IntegerTextCtrl(_NumberTextCtrl):
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
-        kwargs['key_step'] = kwargs.get('key_step', 1)
+        if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
+            kwargs['key_step_min'] = max(int(round(_step_from_range(min_val, max_val))), 1)
 
         _NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -923,6 +990,8 @@ class UnitIntegerCtrl(UnitNumberCtrl):
     When focus is lost, the units will be shown again.
     """
 
+    _num_type = int  # type of input
+
     def __init__(self, *args, **kwargs):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
@@ -931,8 +1000,8 @@ class UnitIntegerCtrl(UnitNumberCtrl):
 
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices, unit)
 
-        if 'key_step' not in kwargs and (min_val != max_val):
-            kwargs['key_step'] = max(int(round(_step_from_range(min_val, max_val))), 1)
+        if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
+            kwargs['key_step_min'] = max(int(round(_step_from_range(min_val, max_val))), 1)
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
@@ -986,7 +1055,8 @@ class FloatTextCtrl(_NumberTextCtrl):
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
-        kwargs['key_step'] = kwargs.get('key_step', 0.1)
+        if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
+            kwargs['key_step_min'] = _step_from_range(min_val, max_val)
 
         _NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -1000,8 +1070,8 @@ class UnitFloatCtrl(UnitNumberCtrl):
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices, unit)
 
-        if 'key_step' not in kwargs and (min_val != max_val):
-            kwargs['key_step'] = _step_from_range(min_val, max_val)
+        if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
+            kwargs['key_step_min'] = _step_from_range(min_val, max_val)
 
         kwargs['accuracy'] = kwargs.get('accuracy', None)
 

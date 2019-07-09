@@ -73,6 +73,7 @@ class Stage(model.Actuator):
     def __init__(self, name, role, axes, ranges=None, **kwargs):
         """
         axes (set of string): names of the axes
+        ranges (dict string -> float,float): min/max of the axis
         """
         assert len(axes) > 0
         if ranges is None:

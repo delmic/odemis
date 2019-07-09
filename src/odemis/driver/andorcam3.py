@@ -28,6 +28,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import long
+from builtins import str
 import collections
 from ctypes import *
 import gc
@@ -195,13 +197,18 @@ class AndorCam3(model.DigitalCamera):
     It also provides low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, bitflow_install_dirs=None, **kwargs):
+    def __init__(self, name, role, device=None, bitflow_install_dirs=None,
+                 max_bin=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
         bitflow_install_dirs (None or str): path of bitflow install directory,
           used to set BITFLOW_INSTALL_DIRS
+        max_bin (1 <= int, 1 <= int): maximum binning accepted. If None, it'll
+          use the one officially reported. Can be used to workaround issues on
+          some cameras where full vertical binning tends to cause too much data
+          clipping.
         Raises:
           ATError if the device cannot be opened.
         """
@@ -318,9 +325,11 @@ class AndorCam3(model.DigitalCamera):
                                self._transposeSizeToUser(resolution)),
                                              setter=self._setResolution)
 
+        mxb = self._transposeSizeToUser(self._getMaxBinnings())
+        if max_bin is not None:
+            mxb = [min(hb, ub) for hb, ub in zip(mxb, max_bin)]
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                              (self._transposeSizeToUser((1, 1)),
-                               self._transposeSizeToUser(self._getMaxBinnings())),
+                                          (self._transposeSizeToUser((1, 1)), mxb),
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
@@ -330,8 +339,8 @@ class AndorCam3(model.DigitalCamera):
             uh_shape = self._transposeSizeToUser(hlf_shape)
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
-            self.translation = model.ResolutionVA((0, 0), tran_rng,
-                                                  cls=(int, long), unit="px",
+            self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
+                                                  cls=(int, long),
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0
@@ -515,7 +524,7 @@ class AndorCam3(model.DigitalCamera):
                 f = open(sys_path + "/version")
                 usbv = float(f.read().strip())
             except Exception:
-                logging.info("Failed to check USB version for device %s", self.name, ex_info=True)
+                logging.info("Failed to check USB version for device %s", self.name, exc_info=True)
                 return
 
             if usbv < 3:
@@ -552,7 +561,7 @@ class AndorCam3(model.DigitalCamera):
                 self.handle = None
             # Note: FinaliseLibrary() doesn't seem to help
 
-            while(not self.handle):
+            while not self.handle:
                 try:
                     handle = c_int()
                     # Note: with USB, doesn't seem to work if the camera is
@@ -679,7 +688,7 @@ class AndorCam3(model.DigitalCamera):
         result = (c_longlong(), c_longlong())
         self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
+        return result[0].value, result[1].value
 
     def SetFloat(self, prop, value):
         assert(isinstance(prop, unicode))
@@ -700,7 +709,7 @@ class AndorCam3(model.DigitalCamera):
         result = (c_double(), c_double())
         self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
+        return result[0].value, result[1].value
 
     def SetBool(self, prop, value):
         assert(isinstance(prop, unicode))
@@ -716,7 +725,7 @@ class AndorCam3(model.DigitalCamera):
         if not self.handle:  # TODO: apply this to all API calls. As a decorator?
             raise HwError("Device not opened")
         self.atcore.AT_GetBool(self.handle, prop, byref(result))
-        return (result.value != 0)
+        return result.value != 0
 
     def isImplemented(self, prop):
         """
@@ -725,7 +734,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         implemented = c_int()
         self.atcore.AT_IsImplemented(self.handle, prop, byref(implemented))
-        return (implemented.value != 0)
+        return implemented.value != 0
 
     def isWritable(self, prop):
         """
@@ -734,7 +743,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         writable = c_int()
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
-        return (writable.value != 0)
+        return writable.value != 0
 
     def isEnumIndexAvailable(self, prop, idx):
         """
@@ -743,7 +752,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         available = c_int()
         self.atcore.AT_IsEnumIndexAvailable(self.handle, prop, idx, byref(available))
-        return (available.value != 0)
+        return available.value != 0
 
     def SetEnumString(self, prop, value):
         """
@@ -802,7 +811,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return (2-tuple int): size of the sensor (width, height) in pixel
         """
-        return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
+        return self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight")
 
     def _getTargetTemperatureRange(self):
         """
@@ -822,7 +831,7 @@ class AndorCam3(model.DigitalCamera):
                 tmps = [float(t) for t in tmps_str if tmps_str is not None]
                 if not self.isWritable(u"TemperatureControl"):
                     # Still allow 25°C to disable the cooling
-                    return (min(tmps), 25)
+                    return min(tmps), 25
                 else:
                     # TODO: just return a set
                     return min(tmps), max(tmps)
@@ -993,7 +1002,7 @@ class AndorCam3(model.DigitalCamera):
                 binning[1] = max(binning[1], int(m.group(2)))
             return tuple(binning)
         else:
-            return (1, 1)
+            return 1, 1
 
     def _findBinning(self, binning):
         """
@@ -1002,7 +1011,7 @@ class AndorCam3(model.DigitalCamera):
         if self._binmtd == FULL_BINNING:
             return binning  # Any spellable binning is allowed
         elif self._binmtd == FIXED_BINNING:
-            allowed_bin = self._bin_to_resrng[0].keys()
+            allowed_bin = list(self._bin_to_resrng[0].keys())
             binning = (util.find_closest(min(binning), allowed_bin),) * 2
         else:
             binning = (1, 1)
@@ -1603,6 +1612,10 @@ class AndorCam3(model.DigitalCamera):
                 tend = time.time() + exposure_time + readout_time * 1.2 + 3  # s
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
+                # merge BASELINE and BASELINE_COR immediately
+                if model.MD_BASELINE in metadata and model.MD_BASELINE_COR in metadata:
+                    metadata[model.MD_BASELINE] += metadata[model.MD_BASELINE_COR]
+                    del metadata[model.MD_BASELINE_COR]
 
                 try:
                     cbuffer = self._get_new_frame(tend, size, buffers, max_discard)

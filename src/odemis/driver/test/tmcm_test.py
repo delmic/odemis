@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -24,18 +24,19 @@ import os
 import time
 import unittest
 from unittest.case import skip
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0) # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 if os.name == "nt":
     PORT = "COM1"
 else:
     # that will catch pretty much any TMCM controller connected to the computer
-    PORT = "/dev/ttyTMCM*"  # "/dev/ttyACM0"
+    PORT = "/dev/ttyTMCM*"
 
 CLASS = tmcm.TMCLController
 KWARGS = dict(name="test", role="stage", port=PORT,
@@ -47,27 +48,45 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               # temp=True,
               # For the more standard configurations:
               refproc="Standard",
-              # refswitch={"x": 0},
+              refswitch={"x": 0},
               # minpower=1.3,  # For working without external power supply
-              inverted=["x"])
+              inverted=["x"],
+              do_axes={4: ["shutter0", 0, 1, 0.5], 5: ["shutter1", 10, 5, 1]},
+              led_prot_do={4: 0, 5: 10})
 
 # For testing encoder
-KWARGS_ENC = dict(name="test", role="selector", port=PORT,
+KWARGS_AENC = dict(name="test", role="selector", port=PORT,
               axes=["x"],
               ustepsize=[122e-9],  # rad/µstep
               unit=["rad"],
               abs_encoder=[True],
               )
 
+# For testing 3214 (relative encoder + param_file)
+ABS_PATH = os.path.abspath(os.path.dirname(__file__))
+KWARGS_RENC = dict(name="test", role="stage",
+              port=PORT,
+              axes=["x", "y"],
+              ustepsize=[10e-9, 16e-9],
+              rng=[[-15.e-3, 15.e-3], [-1e-3, 150e-3]],  # m, min/max
+              abs_encoder=[False, False],
+              refproc="Standard",
+              # minpower=20,  # Expects 24V
+              param_file=ABS_PATH + "/tmcm3214.tmcm.tsv",
+              )
+
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
 KWARGS_SIM["port"] = "/dev/fake6"
-KWARGS_ENC_SIM = dict(KWARGS_ENC)
-KWARGS_ENC_SIM["port"] = "/dev/fake1"
+KWARGS_AENC_SIM = dict(KWARGS_AENC)
+KWARGS_AENC_SIM["port"] = "/dev/fake1"
+KWARGS_RENC_SIM = dict(KWARGS_RENC)
+KWARGS_RENC_SIM["port"] = "/dev/fake3"
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
-    KWARGS_ENC = KWARGS_ENC_SIM
+    KWARGS_AENC = KWARGS_AENC_SIM
+    KWARGS_RENC = KWARGS_RENC_SIM
 
 
 # @skip("faster")
@@ -85,7 +104,7 @@ class TestStatic(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening", name
+            print("opening", name)
             stage = CLASS(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
@@ -97,8 +116,10 @@ class TestStatic(unittest.TestCase):
 
         self.assertGreater(len(dev.axes), 0)
         for axis in dev.axes:
-            dev.moveAbs({axis:-1e-3})
-
+            if hasattr(axis, 'range'):
+                dev.moveAbs({axis:-1e-3})
+            elif hasattr(axis, 'choices'):
+                dev.moveAbs({axis: 0})
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
@@ -106,7 +127,7 @@ class TestStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break the simulator after an update
         """
-        dev = CLASS(**KWARGS_ENC_SIM)
+        dev = CLASS(**KWARGS_AENC_SIM)
 
         self.assertGreater(len(dev.axes), 0)
         for axis in dev.axes:
@@ -114,6 +135,25 @@ class TestStatic(unittest.TestCase):
 
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
+
+    def test_param_file(self):
+        """
+        Check the tsv file is read properly
+        """
+        # Very simple TSV file
+        PARAM_FILE = "tmcm_test.tmcm.tsv"
+        f = open(PARAM_FILE, "w")
+        f.write("A0\t4\t500")  # Default value of simulator is 1024
+        f.close()
+
+        dev = CLASS(param_file=PARAM_FILE, **KWARGS_SIM)
+
+        self.assertGreater(len(dev.axes), 0)
+        self.assertEqual(dev.GetAxisParam(0, 4), 500)
+        self.assertEqual(dev.GetAxisParam(1, 4), 1024)
+
+        dev.terminate()
+        os.remove(PARAM_FILE)
 
 
 # @skip("faster")
@@ -222,6 +262,7 @@ class TestActuator(unittest.TestCase):
         move_back = {'x':-1e-3}
         start = time.time()
         expected_time = 4 * move_forth["x"] / self.dev.speed.value["x"]
+        logging.info("Speed = %g m/s -> expecting %g s", self.dev.speed.value["x"], expected_time)
         f0 = self.dev.moveRel(move_forth)
         f1 = self.dev.moveRel(move_back)
         f2 = self.dev.moveRel(move_forth)
@@ -295,12 +336,12 @@ class TestActuator(unittest.TestCase):
         steps = 100
         cur_pos = (0, 0)
         move = {}
-        for i in xrange(steps):
+        for i in range(steps):
             next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
-            print next_pos, move
+            print(next_pos, move)
             f = self.dev.moveRel(move)
             f.result() # wait
             cur_pos = next_pos
@@ -362,10 +403,11 @@ class TestActuator(unittest.TestCase):
         """
         Try referencing each axis
         """
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())  # don't reference do axes (raises error)
 
         # first try one by one
         for a in axes:
+            print(a)
             self.dev.moveRel({a: -1e-3}) # move a bit to make it a bit harder
             f = self.dev.reference({a})
             f.result()
@@ -385,7 +427,7 @@ class TestActuator(unittest.TestCase):
         """
         Try cancelling referencing
         """
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())
 
         # first try one by one => cancel during ref
         for a in axes:
@@ -416,11 +458,77 @@ class TestActuator(unittest.TestCase):
         # Some axes might have had time to be referenced, but not all
         self.assertFalse(all(self.dev.referenced.value.values()))
 
+    def test_close_shutter(self):
+        for port, vals in KWARGS["do_axes"].items():
+            axis, hval, lval, t = vals
+            self.dev.moveAbsSync({axis: lval})
+            self.assertEqual(False, self.dev.GetIO(2, port))
 
-class TestActuatorEnc(TestActuator):
+    def test_open_shutter(self):
+        for port, vals in KWARGS["do_axes"].items():
+            axis, hval, lval, t = vals
+            self.dev.moveAbsSync({axis: hval})
+            self.assertEqual(True, self.dev.GetIO(2, port))
+
+    def test_led_protection_referencing(self):
+        """
+        When a referencing switch is active, the shutters should always close, and restore
+        to their previous position afterwards.
+        """
+        # We imagine a system, where the shutters position are the following:
+        # * closed: shutter0 = 0, shutter1 = 10 (signal is high)
+        # * open: shutter0 = 1, shutter1 = 5 (signal is low)
+        # during referencing, the shutters should be closed (ie, signal is HIGH)
+
+        # First open shutters
+        self.dev.moveAbsSync({"shutter0": 1, "shutter1": 5})
+        # Now start referencing
+        self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
+        f = self.dev.reference({'x'})
+        # Shutters should close automatically
+        time.sleep(1.5)
+        self.assertEqual(self.dev.position.value['shutter0'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 10)
+        # Protection should be on during referencing
+        self.assertEqual(self.dev._leds_on, True)
+        # Check channel state directly on hardware (ie, high for both)
+        for channel in KWARGS["do_axes"]:
+            self.assertEqual(True, self.dev.GetIO(2, channel))
+        f.result()
+        # After referencing, we should re-open the shutters
+        self.assertEqual(self.dev._leds_on, False)
+        self.assertEqual(self.dev.position.value['shutter0'], 1)
+        self.assertEqual(self.dev.position.value['shutter1'], 5)
+
+        # Now do it the other way around, start referencing and then try to open the
+        # shutters -> shutters should remain closed
+        self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
+        f = self.dev.reference({'x'})
+        time.sleep(1)
+        self.assertEqual(self.dev._leds_on, True)
+        # Try to open the shutters (it shouldn't work)
+        self.dev.moveAbsSync({"shutter0": 1, "shutter1": 5})
+        self.assertEqual(self.dev.position.value['shutter0'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 10)
+        # Check channel state directly on hardware (ie, high for both)
+        for port, vals in KWARGS["do_axes"].items():
+            self.assertEqual(True, self.dev.GetIO(2, port))
+        f.result()
+        # Now that the referencing is done, the shutters should open
+        self.assertEqual(self.dev.position.value['shutter0'], 1)
+        self.assertEqual(self.dev.position.value['shutter1'], 5)
+        # Check channel state directly on hardware (ie, low for both)
+        for port, vals in KWARGS["do_axes"].items():
+            self.assertEqual(False, self.dev.GetIO(2, port))
+
+        # Close shutters
+        self.dev.moveAbsSync({"shutter0": 0, "shutter1": 10})
+
+
+class TestActuatorAbsEnc(TestActuator):
 
     def setUp(self):
-        self.dev = CLASS(**KWARGS_ENC)
+        self.dev = CLASS(**KWARGS_AENC)
         self.orig_pos = dict(self.dev.position.value)
 
     def test_move_circle(self):
@@ -437,13 +545,40 @@ class TestActuatorEnc(TestActuator):
         """
         # Much "simpler" than the standard version as it doesn't actually run
         # any referencing.
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())
 
         for a in axes:
             f = self.dev.reference({a})
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
             # position is not 0, as it's not really referenced!
+
+    def test_led_protection_referencing(self):
+        # don't test led protection on abs enc
+        pass
+
+    def test_close_shutter(self):
+        pass
+
+    def test_open_shutter(self):
+        pass
+
+
+class TestActuatorRelEnc(TestActuator):
+
+    def setUp(self):
+        self.dev = CLASS(**KWARGS_RENC)
+        self.orig_pos = dict(self.dev.position.value)
+
+    def test_led_protection_referencing(self):
+        # don't test led protection on rel enc
+        pass
+
+    def test_close_shutter(self):
+        pass
+
+    def test_open_shutter(self):
+        pass
 
 
 if __name__ == "__main__":

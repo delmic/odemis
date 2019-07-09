@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import basestring
 import collections
 from ctypes import *
 import ctypes  # for fake AndorV2DLL
@@ -38,15 +39,12 @@ import time
 import weakref
 
 
-class AndorV2Error(Exception):
+class AndorV2Error(IOError):
     def __init__(self, errno, strerror, *args, **kwargs):
         super(AndorV2Error, self).__init__(errno, strerror, *args, **kwargs)
-        self.args = (errno, strerror)
-        self.errno = errno
-        self.strerror = strerror
 
     def __str__(self):
-        return self.args[1]
+        return self.strerror
 
 
 class CancelledError(Exception):
@@ -467,6 +465,8 @@ class AndorCam2(model.DigitalCamera):
           to use as fake image.
         Raise an exception if the device cannot be opened.
         """
+        self.handle = None  # In case of early failure, to not confuse __del__
+
         if device in ("fake", "fakesys"):
             self.atcore = FakeAndorV2DLL(image)
             if device == "fake":
@@ -482,7 +482,6 @@ class AndorCam2(model.DigitalCamera):
         self.temp_timer = None
         if device is None:
             # nothing else to initialise
-            self.handle = None
             return
 
         self._initpath = None # Will be updated by Initialize()
@@ -651,7 +650,7 @@ class AndorCam2(model.DigitalCamera):
                                     "in the device properties (%s/%s)",
                                     rr, gain, ror_choices, gain_choices)
                     continue
-                if not 1 <= emgain <= 300 or not isinstance(emgain, (int)):
+                if not 1 <= emgain <= 300 or not isinstance(emgain, int):
                     raise ValueError("emgain must be 1 <= integer <= 300, but "
                                      "got %s" % (emgain,))
                 if (exc_rr, exc_gain) in self._lut_emgains:
@@ -1214,7 +1213,7 @@ class AndorCam2(model.DigitalCamera):
         gain (float): wished gain (multiplication, no unit), should be a correct value
         return (float): the actual gain set
         """
-        assert((0 <= gain))
+        assert(0 <= gain)
 
         gains = self.GetPreAmpGains()
         self.atcore.SetPreAmpGain(util.index_closest(gain, gains))
@@ -1438,10 +1437,10 @@ class AndorCam2(model.DigitalCamera):
                 self.atcore.CoolerOFF()
             else:
                 self.atcore.CoolerON()
-        except AndorV2Error as (errno, strerr):
+        except AndorV2Error as ex:
             # TODO: With some cameras it can fail if the driver is acquiring
             # => queue it for after the end of the acquisition
-            if errno == 20072: # DRV_ACQUIRING
+            if ex.errno == 20072: # DRV_ACQUIRING
                 logging.error("Failed to update temperature due to acquisition in progress")
                 return self.targetTemperature.value
             raise
@@ -1459,10 +1458,10 @@ class AndorCam2(model.DigitalCamera):
 
         try:
             temp = self.GetTemperature()
-        except AndorV2Error as (errno, strerr):
+        except AndorV2Error as ex:
             # Some cameras are not happy if reading temperature while acquiring
             # => just ignore, and hopefully next time will work
-            if errno == 20072: # DRV_ACQUIRING
+            if ex.errno == 20072: # DRV_ACQUIRING
                 logging.debug("Failed to read temperature due to acquisition in progress")
                 return
             raise
@@ -1494,10 +1493,10 @@ class AndorCam2(model.DigitalCamera):
         self.select()
         try:
             self.atcore.SetFanMode(val)
-        except AndorV2Error as (errno, strerr):
+        except AndorV2Error as ex:
             # TODO: With some cameras it can fail if the driver is acquiring
             # => queue it for after the end of the acquisition
-            if errno == 20072: # DRV_ACQUIRING
+            if ex.errno == 20072: # DRV_ACQUIRING
                 logging.error("Failed to change fan speed due to acquisition in progress")
                 return self.fanSpeed.value
             raise
@@ -1594,7 +1593,7 @@ class AndorCam2(model.DigitalCamera):
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
-        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
+        if not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE:
             if size != resolution:
                 raise IOError("AndorCam: Requested image size " + str(size) +
                               " does not match sensor resolution " + str(resolution))
@@ -1937,9 +1936,9 @@ class AndorCam2(model.DigitalCamera):
                                 self.hw_lock.release()
                                 has_hw_lock = False
                             time.sleep(0.1)
-                    except AndorV2Error as (errno, strerr):
+                    except AndorV2Error as ex:
                         # it was already aborted
-                        if errno != 20073: # DRV_IDLE
+                        if ex.errno != 20073: # DRV_IDLE
                             self.acquisition_lock.release()
                             self.acquire_must_stop.clear()
                             raise
@@ -1980,8 +1979,8 @@ class AndorCam2(model.DigitalCamera):
                         # we actually _expect_ a timeout
                         try:
                             self.WaitForAcquisition(0.1)
-                        except AndorV2Error as (errno, strerr):
-                            if errno == 20024: # DRV_NO_NEW_DATA
+                        except AndorV2Error as ex:
+                            if ex.errno == 20024: # DRV_NO_NEW_DATA
                                 if time.time() > tend + 1:
                                     logging.warning("Timeout after %g s", time.time() - tstart)
                                     raise # seems actually serious
@@ -1992,7 +1991,7 @@ class AndorCam2(model.DigitalCamera):
                     # it might have acquired _several_ images in the time to process
                     # one image. In this case we discard all but the last one.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
-                except AndorV2Error as (errno, strerr):
+                except AndorV2Error as ex:
                     # try again up to 5 times
                     failures += 1
                     if failures >= 5:
@@ -2012,7 +2011,7 @@ class AndorCam2(model.DigitalCamera):
                         self.Reinitialize()
                     else:
                         time.sleep(0.1)
-                        logging.warning("trying again to acquire image after error %s", strerr)
+                        logging.warning("trying again to acquire image after error %s", ex.strerr)
                     need_reinit = True
                     continue
                 else:
@@ -2035,16 +2034,15 @@ class AndorCam2(model.DigitalCamera):
             try:
                 if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                     self.atcore.AbortAcquisition()
-            except AndorV2Error as (errno, strerr):
+            except AndorV2Error as ex:
                 # it was already aborted
-                if errno != 20073: # DRV_IDLE
+                if ex.errno != 20073: # DRV_IDLE
                     self.acquisition_lock.release()
                     logging.debug("Acquisition thread closed after giving up")
                     self.acquire_must_stop.clear()
                     raise
             if has_hw_lock:
                 self.hw_lock.release()
-                has_hw_lock = False
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
             gc.collect()
@@ -2072,9 +2070,9 @@ class AndorCam2(model.DigitalCamera):
                         if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                             self.atcore.AbortAcquisition()
                             time.sleep(0.1)
-                    except AndorV2Error as (errno, strerr):
+                    except AndorV2Error as ex:
                         # it was already aborted
-                        if errno != 20073: # DRV_IDLE
+                        if ex.errno != 20073: # DRV_IDLE
                             self.acquisition_lock.release()
                             self.acquire_must_stop.clear()
                             raise
@@ -2118,8 +2116,8 @@ class AndorCam2(model.DigitalCamera):
                         # we actually _expect_ a timeout
                         try:
                             self.WaitForAcquisition(0.1)
-                        except AndorV2Error as (errno, strerr):
-                            if errno == 20024: # DRV_NO_NEW_DATA
+                        except AndorV2Error as ex:
+                            if ex.errno == 20024: # DRV_NO_NEW_DATA
                                 if time.time() > tend + 1:
                                     logging.warning("Timeout after %g s", time.time() - tstart)
                                     raise # seems actually serious
@@ -2131,7 +2129,7 @@ class AndorCam2(model.DigitalCamera):
                     # Normally only one image has been produced as it's on a
                     # software trigger, but just in case, discard older images.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
-                except AndorV2Error as (errno, strerr):
+                except AndorV2Error as ex:
                     # try again up to 5 times
                     failures += 1
                     if failures >= 5:
@@ -2151,7 +2149,7 @@ class AndorCam2(model.DigitalCamera):
                         self.Reinitialize()
                     else:
                         time.sleep(0.1)
-                        logging.warning("trying again to acquire image after error %s", strerr)
+                        logging.warning("trying again to acquire image after error %s", ex.strerr)
                     need_reinit = True
                     continue
                 else:
@@ -2174,9 +2172,9 @@ class AndorCam2(model.DigitalCamera):
             try:
                 if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                     self.atcore.AbortAcquisition()
-            except AndorV2Error as (errno, strerr):
+            except AndorV2Error as ex:
                 # it was already aborted
-                if errno != 20073: # DRV_IDLE
+                if ex.errno != 20073: # DRV_IDLE
                     self.acquisition_lock.release()
                     logging.debug("Acquisition thread closed after giving up")
                     self.acquire_must_stop.clear()
@@ -2291,8 +2289,8 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Shutting down the camera")
             try:
                 self.Shutdown()
-            except AndorV2Error as (errno, strerr):
-                if errno == 20075: # DRV_NOT_INITIALIZED
+            except AndorV2Error as ex:
+                if ex.errno == 20075: # DRV_NOT_INITIALIZED
                     # Seems to happen when closing the Shamrock lib first
                     logging.debug("Andor2 lib was already shutdown")
                 else:
@@ -2583,7 +2581,7 @@ class FakeAndorV2DLL(object):
 
     def Initialize(self, path):
         if not os.path.isdir(path):
-            logging.warning("Trying to inialise simulator with an incorrect path: %s",
+            logging.warning("Trying to initialize simulator with an incorrect path: %s",
                             path)
 
     def ShutDown(self):

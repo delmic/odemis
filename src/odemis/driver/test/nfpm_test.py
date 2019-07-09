@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -24,7 +24,7 @@ import os
 import time
 import unittest
 from unittest.case import skip
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -58,7 +58,7 @@ class TestStatic(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening", name
+            print("opening", name)
             stage = CLASS(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
@@ -251,12 +251,12 @@ class TestActuator(unittest.TestCase):
         steps = 100
         cur_pos = (0, 0)
         move = {}
-        for i in xrange(steps):
+        for i in range(steps):
             next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
-            print next_pos, move
+            print(next_pos, move)
             f = self.dev.moveRel(move)
             f.result() # wait
             cur_pos = next_pos

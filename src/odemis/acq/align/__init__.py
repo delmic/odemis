@@ -24,8 +24,8 @@ from __future__ import division
 
 import logging
 from odemis.model import MD_PIXEL_SIZE
-
-from .autofocus import AutoFocus, AutoFocusSpectrometer
+from .autofocus import AutoFocus, AutoFocusSpectrometer, Sparc2AutoFocus
+from .light import turnOnLight
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
 from odemis.util.img import Subtract

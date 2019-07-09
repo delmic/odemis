@@ -19,30 +19,28 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
 
+from __future__ import division
+from past.builtins import basestring, long
 import Pyro4
 from Pyro4.core import oneway
 import collections
-import inspect
 import logging
 import numbers
 import numpy
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
-from types import NoneType
 import types
+import sys
 import zmq
+from scipy.spatial import distance
 
 from . import _core
+from odemis.util import inspect_getmembers
 
 
 class NotSettableError(AttributeError):
-    pass
-
-
-class NotApplicableError(Exception):
     pass
 
 
@@ -132,7 +130,7 @@ class VigilantAttribute(VigilantAttributeBase):
 
         self.readonly = readonly
         if setter is None:
-            self._setter = self.__default_setter
+            self._setter = WeakMethod(self.__default_setter)
         else:
             self._setter = WeakMethod(setter) # to avoid cycles
 
@@ -349,6 +347,22 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._commands = None
         self._thread = None
 
+    def __getattr__(self, name):
+        # Behaviour of .range and .choices remote attributes:
+        # When calling .range or .choices, Pyro4.Proxy__getattr__ is called. If the remote
+        # object does not have these attributes, a remote AttributeError is raised.
+        # This AttributeError results in a call to self.__getattr__. If we don't overwrite
+        # __getattr__ here, the corresponding method of the superclass would be called
+        # and return a RemoteObject. However, we actually do want the AttributeError to be
+        # raised, otherwise we get unexpected behaviour, for example: when calling
+        # hasattr(object, attribute) and the remote object does **not** have the attribute
+        # we are looking for, it would still return True because the call object.attribute
+        # does not raise an error.
+        if name == "choices" or name == "range":
+            raise AttributeError()
+
+        return super(VigilantAttributeProxy, self).__getattr__(name)
+
     @property
     def value(self):
         return self.__getattr__("_get_value")()
@@ -363,22 +377,15 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # for enumerated VA
     @property
     def choices(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
-        except AttributeError:
-            # if we let AttributeError, python will look in the super classes,
-            # and eventually get a RemoteMethod from the Proxy :-(
-            # So return our own NotApplicableError exception
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
         return value
 
     # for continuous VA
     @property
     def range(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_range")()
-        except AttributeError:
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_range")()
         return value
 
     def __getstate__(self):
@@ -431,7 +438,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         if not self._thread:
             self._create_thread()
-        self._commands.send("SUB")
+        self._commands.send(b"SUB")
         self._commands.recv() # synchronise
 
         # send subscription to the actual VA
@@ -449,7 +456,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
         if self._commands:
-            self._commands.send("UNSUB")
+            self._commands.send(b"UNSUB")
 
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
@@ -461,7 +468,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
                                         "because VA '%s' is going out of context",
                                         self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-                    self._commands.send("STOP")
+                    self._commands.send(b"STOP")
                     self._thread.join(1)
                 self._commands.close()
             # self._ctx.term()
@@ -511,13 +518,13 @@ class SubscribeProxyThread(threading.Thread):
             # process commands
             if socks.get(self._commands) == zmq.POLLIN:
                 message = self._commands.recv()
-                if message == "SUB":
-                    self.data.setsockopt(zmq.SUBSCRIBE, '')
-                    self._commands.send("SUBD")
-                elif message == "UNSUB":
-                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
+                if message == b"SUB":
+                    self.data.setsockopt(zmq.SUBSCRIBE, b'')
+                    self._commands.send(b"SUBD")
+                elif message == b"UNSUB":
+                    self.data.setsockopt(zmq.UNSUBSCRIBE, b'')
                     # no confirmation (async)
-                elif message == "STOP":
+                elif message == b"STOP":
                     self._commands.close()
                     self.data.close()
                     return
@@ -545,7 +552,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
+    for _, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
 
 
@@ -559,7 +566,7 @@ def dump_vigilant_attributes(self):
     """
     vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value
@@ -692,9 +699,11 @@ class _NotifyingList(list):
     __iadd__ = _call_with_notifier(list.__iadd__)
     __imul__ = _call_with_notifier(list.__imul__)
     __setitem__ = _call_with_notifier(list.__setitem__)
-    __setslice__ = _call_with_notifier(list.__setslice__)
     __delitem__ = _call_with_notifier(list.__delitem__)
-    __delslice__ = _call_with_notifier(list.__delslice__)
+    if sys.version_info[0] < 3:
+        # unused since Python 3 (setitem and delitem are used)
+        __setslice__ = _call_with_notifier(list.__setslice__)
+        __delslice__ = _call_with_notifier(list.__delslice__)
 
     append = _call_with_notifier(list.append)
     extend = _call_with_notifier(list.extend)
@@ -781,7 +790,7 @@ class TupleVA(VigilantAttribute):
 
     def _check(self, value):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
-        if not isinstance(value, (tuple, NoneType)):
+        if not (isinstance(value, tuple) or value is None):
             raise TypeError("Value '%r' is not a tuple." % value)
 
 
@@ -857,10 +866,10 @@ class Continuous(object):
             value = self.value
             start, end = new_range
             if not isinstance(value, collections.Iterable):
-                value = (value,)
+                tvalue = (value,)
                 start, end = (start,), (end,)
 
-            if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
+            if not all(mn <= v <= mx for v, mn, mx in zip(tvalue, start, end)):
                 msg = "Current value '%s' is outside of the range %s->%s."
                 raise IndexError(msg % (value, start, end))
 
@@ -981,6 +990,39 @@ class VAEnumerated(VigilantAttribute, Enumerated):
     def _check(self, value):
         Enumerated._check(self, value)
         VigilantAttribute._check(self, value)
+
+    def clip(self, val):
+        """ Clip the given value to fit within the choices.
+          If the value is not within the choices, the closest choice will be used.
+          If no "close" choice can be found, the current value of the VA is returned.
+          Note that "closest" is loosely defined. Currently, for numbers and
+          vectors, the Euclidean distance is used, but this might change.
+        val (any): requested value
+        return (same type as val): value clipped
+        """
+        if val in self.choices:
+            return val
+
+        # find the closest choice (for numbers or tuples only)
+        if isinstance(val, collections.Iterable) or isinstance(val, numbers.Real):
+            ls = []
+
+            for choice in self.choices:
+                try:
+                    # Calculate euclidean distance.
+                    # If choice contains non numbers, choice and val cannot be compared.
+                    ls.append((choice, distance.euclidean(choice, val)))
+                except (TypeError, ValueError):
+                    pass
+
+            if not ls:
+                return self.value  # in case of all choices of type tuple and not containing only numbers
+
+            return min(ls, key=lambda cd: cd[1])[0]
+
+        else:
+            # if not possible to set the requested value, return the current value
+            return self.value
 
 
 class FloatContinuous(FloatVA, Continuous):

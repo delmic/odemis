@@ -36,20 +36,21 @@ import math
 from odemis import model, dataio, acq
 from odemis.acq import align
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
+from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.util import units
-from odemis.util.img import mergeTiles
 from odemis.util.filename import guess_pattern, create_filename, update_counter
+from odemis.util.img import mergeTiles
 import os
 import re
 import subprocess
@@ -58,8 +59,6 @@ import time
 import wx
 
 import odemis.gui.model as guimod
-from odemis.acq.stream._helper import ScannedTCSettingsStream
-from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 
 
 class SnapshotController(object):
@@ -297,7 +296,7 @@ class SnapshotController(object):
         if not os.name == 'nt':
             xrandr_out = subprocess.check_output("xrandr")
             # only pick the "connected" outputs
-            ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
+            ret = re.findall(b"^(\\w+) connected ", xrandr_out, re.MULTILINE)
             return ret
         else:
             return []
@@ -715,6 +714,19 @@ class SparcAcquiController(object):
         Start the acquisition (really)
         Similar to win.acquisition.on_acquire()
         """
+        # Time-resolved data cannot be saved in .ome.tiff format for now
+        # OME-TIFF wants to save each time data on a separate "page", which causes too many pages.
+        has_temporal = False
+        for s in self._tab_data_model.streams.value:
+            if (isinstance(s, ScannedTemporalSettingsStream) or
+                isinstance(s, ScannedTCSettingsStream) or
+                isinstance(s, TemporalSpectrumSettingsStream)):
+                has_temporal = True
+
+        if (self.conf.last_format == 'TIFF' or self.conf.last_format == 'Serialized TIFF') and has_temporal:
+            raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5." \
+                                      % self.conf.last_format)
+
         self._pause_streams()
 
         self.btn_acquire.Disable()
@@ -755,8 +767,8 @@ class SparcAcquiController(object):
         thumb = acq.computeThumbnail(st, acq_future)
         data, exp = acq_future.result()
 
+        filename = self.filename.value
         if data:
-            filename = self.filename.value
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info(u"Acquisition saved as file '%s'.", filename)
@@ -1001,7 +1013,11 @@ class FineAlignController(object):
         self._faf_connector = None
 
         try:
-            trans_val, cor_md = future.result()
+            # DEBUG
+            try:
+                trans_val, cor_md = future.result()
+            except Exception:
+                cor_md = {}, {}
             opt_md, sem_md = cor_md
 
             # Save the optical correction metadata straight into the CCD
@@ -1011,28 +1027,58 @@ class FineAlignController(object):
             main_data.ebeam.updateMetadata(sem_md)
         except CancelledError:
             self._tab_panel.lbl_fine_align.Label = "Cancelled"
-        except Exception:
+        except Exception as ex:
+            logging.warning("Failure during overlay: %s", ex)
             self._tab_panel.lbl_fine_align.Label = "Failed"
         else:
-            self._tab_panel.lbl_fine_align.Label = "Successful"
             self._main_frame.menu_item_reset_finealign.Enable(True)
-            # Temporary info until the GUI can actually rotate the images
-            rot = math.degrees(opt_md.get(model.MD_ROTATION_COR, 0))
+
+            # Check whether the values make sense. If not, we still accept them,
+            # but hopefully make it clear enough to the user that the calibration
+            # should not be trusted.
+            rot = opt_md.get(model.MD_ROTATION_COR, 0)
+            rot0 = (rot + math.pi) % (2 * math.pi) - math.pi  # between -pi and pi
+            rot_deg = math.degrees(rot0)
+            opt_scale = opt_md.get(model.MD_PIXEL_SIZE_COR, (1, 1))[0]
             shear = sem_md.get(model.MD_SHEAR_COR, 0)
             scaling_xy = sem_md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
-            # the worse is the rotation, the longer it's displayed
-            timeout = max(2, min(abs(rot), 10))
+            if (not abs(rot_deg) < 10 or  # Rotation < 10°
+                not 0.9 < opt_scale < 1.1 or  # Optical mag < 10%
+                not abs(shear) < 0.3 or  # Shear < 30%
+                any(not 0.9 < v < 1.1 for v in scaling_xy) # SEM ratio diff < 10%
+               ):
+                # Special warning in case of wrong magnification
+                if not 0.9 < opt_scale < 1.1 and model.hasVA(main_data.lens, "magnification"):
+                    lens_mag = main_data.lens.magnification.value
+                    measured_mag = lens_mag / opt_scale
+                    logging.warning("The measured optical magnification is %fx, instead of expected %fx. "
+                                    "Check that the lens magnification and the SEM magnification are correctly set.",
+                                    measured_mag, lens_mag)
+                else:  # Generic warning
+                    logging.warning(u"The fine alignment values are very large, try on a different place on the sample. "
+                                    u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f",
+                                    opt_scale, rot_deg, shear, scaling_xy)
+
+                self._tab_panel.lbl_fine_align.Label = "Probably incorrect"
+            else:
+                self._tab_panel.lbl_fine_align.Label = "Successful"
+
+            # Rotation is compensated in software on the FM image, but the user
+            # can also change the SEM scan rotation, and re-run the alignment,
+            # so show it clearly, for the user to take action.
+            # The worse the rotation, the longer it's displayed.
+            timeout = max(2, min(abs(rot_deg), 10))
             popup.show_message(
                 self._tab_panel,
                 u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
-                % (units.readable_str(rot, unit="°", sig=3),
+                % (units.readable_str(rot_deg, unit=u"°", sig=3),
                    units.readable_str(shear, sig=3),
                    units.readable_str(scaling_xy, sig=3)),
                 timeout=timeout
             )
-            logging.warning("Fine alignment computed rotation needed of %f°, "
-                            "shear needed of %s, and X/Y scaling needed of %s.",
-                            rot, shear, scaling_xy)
+            logging.info(u"Fine alignment computed mag correction of %f, rotation of %f°, "
+                         u"shear needed of %s, and X/Y scaling needed of %s.",
+                         opt_scale, rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit
         self._tab_panel.vp_align_ccd.canvas.fit_view_to_next_image = True

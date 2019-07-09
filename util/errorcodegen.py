@@ -37,6 +37,6 @@ for line in fileinput.input():
         "_" in words[1] and words[2].isdigit()):
         # and generates something like:
         # 20001: "DRV_ERROR_CODES",
-        print "%s: \"%s\"," % (words[2], words[1])
+        print("%s: \"%s\"," % (words[2], words[1]))
         
     

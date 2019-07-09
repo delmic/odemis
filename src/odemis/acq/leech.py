@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from past.builtins import long
 import logging
 import math
 import numpy
@@ -256,7 +257,7 @@ class AnchorDriftCorrector(LeechAcquirer):
                                       self.roi.value, self.dwellTime.value)
         period = dce.estimateCorrectionPeriod(self.period.value, dt, shape[-2:])
         npixels = numpy.prod(shape)
-        n_anchor = 1 + npixels // period.next()
+        n_anchor = 1 + npixels // next(period)
         return n_anchor * dce.estimateAcquisitionTime()
 
     def series_start(self):
@@ -301,7 +302,7 @@ class AnchorDriftCorrector(LeechAcquirer):
             last_acq_date = self._dc_estimator.raw[-1].metadata[model.MD_ACQ_DATE]
             if last_acq_date > time.time() - self.period.value:
                 logging.debug("Skipping DC estimation at acquisition start, as latest anchor is still fresh")
-                return self._next_px.next()
+                return next(self._next_px)
         except KeyError:  # No MD_ACQ_DATE => no short-cut
             pass
 
@@ -324,7 +325,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         self._dc_estimator.estimate()
 
         # TODO: if next() would mean all the pixels, skip the last call by returning None
-        return self._next_px.next()
+        return next(self._next_px)
 
     def complete(self, das):
         """

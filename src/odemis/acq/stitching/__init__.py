@@ -24,12 +24,13 @@ import random
 
 REGISTER_IDENTITY = 0
 REGISTER_SHIFT = 1
+REGISTER_GLOBAL_SHIFT = 2
 WEAVER_MEAN = 0
 WEAVER_COLLAGE = 1
 WEAVER_COLLAGE_REVERSE = 2
 
 
-def register(tiles, method=REGISTER_SHIFT):
+def register(tiles, method=REGISTER_GLOBAL_SHIFT):
     """
     tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles to compute the registration. 
     If it's tuples, the first tile of each tuple is the “main tile”, and the following ones are 
@@ -44,6 +45,8 @@ def register(tiles, method=REGISTER_SHIFT):
         registrar = ShiftRegistrar()
     elif method == REGISTER_IDENTITY:
         registrar = IdentityRegistrar()
+    elif method == REGISTER_GLOBAL_SHIFT:
+        registrar = GlobalShiftRegistrar()
     else:
         raise ValueError("Invalid registrar %s" % (method,))
 
@@ -80,8 +83,6 @@ def register(tiles, method=REGISTER_SHIFT):
             tileUpd = tuple(tilesNew)
 
         else:
-            dep_tiles = None
-
             md = copy.deepcopy(ts.metadata)
             md[model.MD_POS] = registrar.getPositions()[0][i]
             tileUpd = model.DataArray(ts, md)

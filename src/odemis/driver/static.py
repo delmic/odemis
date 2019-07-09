@@ -33,7 +33,8 @@ from odemis import model
 from odemis.model import isasync
 import odemis
 
-
+# dictionary that relates the attibute names related to the mirror with their corresponding vigilant attributes
+CONFIG_2_VA = {"pole_pos": "polePosition", "focus_dist": "focusDistance", "hole_diam": "holeDiameter", "parabola_f": "parabolaF", "x_max": "xMax"}
 # TODO what is the best type? Emitter? Or something else?
 # Detector needs a specific .data and .shape
 class OpticalLens(model.HwComponent):
@@ -42,12 +43,16 @@ class OpticalLens(model.HwComponent):
     or the parabolic mirror and lens of a SPARC.
     It should "affect" the detector on which it's in front of.
     """
-    def __init__(self, name, role, mag, na=0.95, ri=1,
+
+    def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1,
                  pole_pos=None, x_max=None, hole_diam=None,
-                 focus_dist=None, parabola_f=None, rotation=None, **kwargs):
+                 focus_dist=None, parabola_f=None, rotation=None,
+                 configurations=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
+        mag_choices (None, list of floats > 0): list of allowed magnification ratio.
+          If None, the magnification will be allowed for any value between 1e-3 to 1e6.
         na (float > 0): numerical aperture
         ri (0.01 < float < 100): refractive index
         pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
@@ -69,6 +74,11 @@ class OpticalLens(model.HwComponent):
         rotation (0<float<2*pi): rotation between the Y axis of the SEM
           referential and the optical path axis. Used on the SPARC to report
           the rotation between the AR image and the SEM image.
+        configurations (dict str -> (dict str -> value)): {configuration name -> {attribute name -> value}}
+          All the configurations supported and their settings. A "configuration" is a set of attributes with
+          predefined values. When this argument is specified, a .configuration attribute will be available,
+          with each configuration name, and changing it will automatically set all the associated attributes
+          to their predefined value.
         """
         assert (mag > 0)
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -77,7 +87,15 @@ class OpticalLens(model.HwComponent):
         self._hwVersion = name
 
         # allow the user to modify the value, if the lens is manually changed
-        self.magnification = model.FloatContinuous(mag, range=(1e-3, 1e6), unit="")
+        if mag_choices is None:
+            self.magnification = model.FloatContinuous(mag, range=(1e-3, 1e6), unit="")
+        else:
+            mag_choices = frozenset(mag_choices)
+            if mag not in mag_choices:
+                raise ValueError("mag (%s) is not within the mag_choices %s" %
+                                 (mag, mag_choices))
+            self.magnification = model.FloatEnumerated(mag, choices=mag_choices, unit="")
+
         self.numericalAperture = model.FloatContinuous(na, range=(1e-6, 1e3), unit="")
         self.refractiveIndex = model.FloatContinuous(ri, range=(0.01, 10), unit="")
 
@@ -99,7 +117,33 @@ class OpticalLens(model.HwComponent):
         if rotation is not None:
             self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi),
                                                   unit="rad")
+        if configurations is not None:
+            self._configurations = configurations
+            # Find the configuration which is closest to the current settings
+            def _compare_config(cn):
+                settings = configurations[cn]
+                score = 0
+                for arg, value in settings.items():
+                    try:
+                        vaname = CONFIG_2_VA[arg]
+                        va = getattr(self, vaname)
+                    except (KeyError, AttributeError):
+                        raise ValueError("Attribute name predefined in the configuration required")
+                    if value == va.value:
+                        score += 1
+                return score
+            current_conf = max(configurations, key=_compare_config)
+            self.configuration = model.StringEnumerated(current_conf, choices=set(configurations.keys()), setter=self._setConfiguration)
 
+    def _setConfiguration(self, config):
+        # set all the VAs based on the ._configurations
+        settings = self._configurations[config]
+        for arg, value in settings.items():
+            vaname = CONFIG_2_VA[arg]
+            va = getattr(self, vaname)
+            va.value = value
+
+        return config
 
 class LightFilter(model.Actuator):
     """

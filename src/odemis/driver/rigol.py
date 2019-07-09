@@ -241,9 +241,6 @@ class IPAccesser(object):
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
 
-    def __del__(self):
-        self.terminate()
-
     def terminate(self):
         if self.simulator:
             self.simulator.terminate()
@@ -269,14 +266,14 @@ class IPAccesser(object):
 
     def sendQueryCommand(self, cmd):
         """
-        Sends one command, and don't expect any reply
+        Sends one command, and expect a reply
         cmd (str): command to send, including the ?
 
         raises:
             IOError: if problem with sending/receiving data over the connection
         """
         if not self._is_connected:
-            raise IOError("Device %s not connected." % (self._host))
+            raise IOError("Device %s not connected." % (self._host,))
 
         msg = "%s\n" % cmd
 

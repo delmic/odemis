@@ -25,14 +25,15 @@ Created on 8 Feb 2012
 
 from __future__ import division
 
-from abc import abstractmethod, ABCMeta
+from abc import abstractmethod
 from concurrent.futures._base import CancelledError
+from functools import partial
 import logging
 import math
 from odemis import gui, model, util
 from odemis.acq.stream import EMStream, SpectrumStream, \
-                              StaticStream, CLStream, FluoStream, \
-                              StaticFluoStream
+    StaticStream, CLStream, FluoStream, \
+    StaticFluoStream, Stream, DataProjection, POL_POSITIONS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -41,10 +42,34 @@ from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
-from odemis.model import NotApplicableError
 from odemis.util import units, spectrum, peak
 import wx
-from odemis.util import no_conflict
+
+
+def get_original_stream(s_or_p):
+    """
+    To support Streams which provide projection on their own, and Streams which
+    rely on a separate projection, find the original Stream.
+    s_or_p (Stream or DataProjection or None)
+    return:
+       stream (Stream or None): the corresponding stream
+    """
+    if isinstance(s_or_p, DataProjection):
+        # Projection: easy, the stream is p.stream
+        return s_or_p.stream
+
+    if isinstance(s_or_p, Stream):
+        # Stream: then it's supposed to provide a projection by its own
+        if not hasattr(s_or_p, "image"):
+            # We could raise an Exception, but let's see, maybe the caller will
+            # not care anyway
+            logging.warning("Got a non-projectable stream to be projected: %s", s_or_p)
+        return s_or_p
+
+    if s_or_p is None:
+        return None
+
+    raise ValueError("%s is not a Stream nor a DataProjection" % (s_or_p,))
 
 
 class ViewPort(wx.Panel):
@@ -130,7 +155,7 @@ class ViewPort(wx.Panel):
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy, source=self)
 
     def _on_destroy(self, evt):
         # Drop references
@@ -282,6 +307,10 @@ class MicroscopeViewport(ViewPort):
 
         # By default, cannot focus, unless the child class allows it
         self.canvas.abilities.discard(CAN_FOCUS)
+        # TODO:Listen instead to the StreamTree so that only visible streams affect display.
+        tab_data.streams.subscribe(self._on_stream_change, init=True)
+        if model.hasVA(tab_data, "zPos"):
+            tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
@@ -315,6 +344,16 @@ class MicroscopeViewport(ViewPort):
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
         self.bottom_legend.set_hfw_label(label)
+
+    def UpdateZposLabel(self):
+        if self.bottom_legend:
+            # Check if z position should be displayed
+            if self._tab_data_model.zPos.range == (0, 0):
+                label = None
+            else:
+                label = u"Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
+
+            self.bottom_legend.set_zPos_label(label)
 
     def UpdateMagnification(self):
         # Total magnification
@@ -369,6 +408,9 @@ class MicroscopeViewport(ViewPort):
             self.UpdateHFWLabel()
             self.UpdateMagnification()
             # the MicroscopeView will send an event that the view has to be redrawn
+
+    def _on_zPos_change(self, val):
+        self.UpdateZposLabel()
 
     def _checkMergeSliderDisplay(self):
         """
@@ -530,7 +572,7 @@ class MicroscopeViewport(ViewPort):
                 choices = fov_va.choices
                 # Get the choice that matches hfw most closely
                 hfov = util.find_closest(hfov, choices)
-            except (AttributeError, NotApplicableError):
+            except AttributeError:
                 hfov = fov_va.clip(hfov)
 
             logging.debug("Setting hardware FoV to %s", hfov)
@@ -623,6 +665,16 @@ class MicroscopeViewport(ViewPort):
         if not self.stage_limit_overlay:
             self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
+        
+    def _on_stream_change(self, streams):
+        """
+        When the streams are changed, check if z-index is supported. If so,
+        add the focus tool to the canvas abilities. Otherwise, remove it.
+        """
+        if any(model.hasVA(s, "zIndex") for s in streams):
+            self.canvas.abilities.add(CAN_FOCUS)
+        else:
+            self.canvas.abilities.discard(CAN_FOCUS)
 
 
 class OverviewViewport(MicroscopeViewport):
@@ -875,13 +927,14 @@ class AngularResolvedViewport(ViewPort):
         polarization position is requested.
         """
         choices = self.stream.polarization.choices
+        if choices == frozenset(POL_POSITIONS):
+            choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
         default = self.stream.polarization.value
         self.bottom_legend.set_pol_entries(choices, default)
 
 
 class PlotViewport(ViewPort):
-    """ Class for displaying plotted data """
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
+    """ Abstract Class for displaying plotted data """
 
     # Default class
     canvas_class = miccanvas.BarPlotCanvas
@@ -890,10 +943,11 @@ class PlotViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         super(PlotViewport, self).__init__(*args, **kwargs)
-        # We need a local reference to the stream, because if we rely
-        # on the reference within the MicroscopeView, it might be replaced
-        # before we get an explicit chance to unsubscribe event handlers
-        self.stream = None
+        # We need a local reference to the projection (and stream), because if
+        # we rely on the reference within the MicroscopeView, it might be
+        # replaced before we get an explicit chance to unsubscribe event handlers.
+        self._projection = None  # Might be the same as _stream, if it has its own .image
+        self._stream = None
 
     def setView(self, view, tab_data):
         """
@@ -914,32 +968,30 @@ class PlotViewport(ViewPort):
 
         self._view = view
         self._tab_data_model = tab_data
+        self._stream_subs = []  # _on_stream_play subscribers
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        # view.stream_tree.should_update.subscribe(self.connect_stream)
-        # FIXME: it shouldn't listen to should_update, but to modifications of
-        # the stream tree itself... it just there is nothing to do that.
-        view.lastUpdate.subscribe(self.connect_stream)
+        view.stream_tree.flat.subscribe(self._on_stream_tree, init=True)
 
-        view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
-        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        # For the play/pause icon
+        view.stream_tree.should_update.subscribe(self._on_streams_play, init=True)
+        view.stream_tree.flat.subscribe(self._on_stream_update, init=True)
 
-    def _on_stream_update(self, _):
+    def _on_stream_update(self, projs):
         """
         Hide the play icon overlay if no stream are present (or they are all static)
         """
-        ss = self._view.getStreams()
-        if len(ss) > 0:
+        if len(projs) > 0:
             # Any stream not static?
-            show = any(not isinstance(s, StaticStream) for s in ss)
+            show = any(not isinstance(get_original_stream(o), StaticStream) for o in projs)
         else:
             show = False
         self.canvas.play_overlay.show = show
 
-    def _on_stream_play(self, is_playing):
+    def _on_streams_play(self, is_playing):
         """
         Update the status of the play/pause icon overlay
         """
@@ -954,195 +1006,508 @@ class PlotViewport(ViewPort):
         self.bottom_legend.Refresh()
         self.canvas.Refresh()
 
-    def connect_stream(self, _):
-        """ Find the most appropriate stream in the view to be displayed, and make sure the display
-        is updated when the stream is updated.
-
+    def _on_stream_tree(self, projs):
         """
+        Called when the stream_tree is changed.
+        projs (list of Streams or Projections)
+        Find the most appropriate stream in the view to be displayed, and make
+        sure the display is updated when the stream is updated.
+        """
+        # Disconnect all previous subscribers
+        self._stream_subs = []  # Automatic unsubscription
 
-        ss = self._view.getStreams()
         # Most of the time, there is only one stream, but in some cases, there might be more.
-        # TODO: filter based on the type of stream?
-        # ss = self.view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
-
-        if not ss:
-            stream = None
-        elif len(ss) > 1:
+        if not projs:
+            proj = None
+        elif len(projs) > 1:
             # => pick the first one playing
-            for s in ss:
+            for o in projs:
+                s = get_original_stream(o)
                 if s.should_update.value:
-                    stream = s
+                    proj = o
                     break
             else:  # no stream playing
-                logging.warning("Found %d streams, will pick one randomly", len(ss))
-                if self.stream in ss:
-                    stream = self.stream  # don't change
+                logging.warning("Found %d streams, will pick one randomly", len(projs))
+                if self._projection in projs:
+                    proj = self._projection  # don't change
                 else:
-                    stream = ss[0]
-        else:
-            stream = ss[0]
+                    proj = projs[0]
 
-        if self.stream is stream:
+            for o in projs:
+                s = get_original_stream(o)
+                f = partial(self._on_stream_play, s)
+                s.should_update.subscribe(f)
+                self._stream_subs.append(f)  # Hold the ref to avoid unsubscription
+        else:
+            proj = projs[0]
+
+        self._connect_projection(proj)
+
+    def _on_stream_play(self, stream, is_playing):
+        # Force the stream playing to be shown
+        if is_playing:
+            self._connect_projection(stream)
+
+    def _connect_projection(self, proj):
+        """
+        Adjust the viewport to show the given projection (of a stream)
+        """
+        if self._projection is proj:
             # logging.debug("not reconnecting to stream as it's already connected")
             return
 
         # Disconnect the old stream
-        if self.stream:
-            logging.debug("Disconnecting %s from plotviewport", stream)
-            if hasattr(self.stream, 'selected_pixel'):
-                self.stream.selected_pixel.unsubscribe(self._on_pixel_select)
-            elif hasattr(self.stream, 'image'):
-                self.stream.image.unsubscribe(self._on_new_data)
+        if self._projection:
+            logging.debug("Disconnecting %s from PlotViewPort", self._projection)
+            if hasattr(self._stream, "peak_method"):
+                self._stream.peak_method.unsubscribe(self._on_peak_method)
+            self._projection.image.unsubscribe(self._on_new_data)
 
-        # Connect the new one
-        self.stream = stream
-        if stream:
-            logging.debug("Connecting %s to plotviewport", stream)
+        # Connect the new stream
+        self._stream, self._projection = get_original_stream(proj), proj
+        if proj:
+            logging.debug("Connecting %s to PlotViewPort", proj)
 
-            # Hack: StaticSpectrumStream contain a 2D spectrum in .image, and
-            # to get the point spectrum we need to use get_pixel_spectrum() and
-            # listen to selected_pixel VA.
-
-            if hasattr(self.stream, 'selected_pixel'):
-                self.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-            elif hasattr(self.stream, 'image'):
-                self.stream.image.subscribe(self._on_new_data, init=True)
+            # If there is a DataProjection, peak_method is still "global" on the
+            # Stream (shared between all the projections)
+            if hasattr(self._stream, "peak_method"):
+                self._stream.peak_method.subscribe(self._on_peak_method, init=True)
+            self._projection.image.subscribe(self._on_new_data, init=True)
         else:
             logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
-
-        if hasattr(self.stream, "peak_method"):
-            self.stream.peak_method.subscribe(self._on_peak_method, init=True)
 
     @abstractmethod
     def _on_new_data(self, data):
         pass
 
-    def _on_pixel_select(self, pixel):
-        raise NotImplementedError("This viewport doesn't support streams with .selected_pixel")
-
     def _on_peak_method(self, state):
-        raise NotImplementedError("This viewport doesn't support streams with .peak_method")
+        pass
 
 
-class PointSpectrumViewport(PlotViewport):
+class NavigablePlotViewport(PlotViewport):
+    """ Abstract Class for displaying plotted data
+
+    Unlike PlotViewport, the NavigablePlotViewport can be manipulated by the user.
+    The plot can be zoomed and panned
+        - Mousewheel over an axis zooms that axis.
+        - Left mouse drag over an axis pans that axis.
+        - Mousewheel over the canvas zooms the horizontal axis
+        - Middle mouse button drag on the canvas pans the plot
+
+    This is controlled by VA's
+    .hrange: Tuple VA with the horizontal scale range
+    .vrange: Tuple VA with the vertical scale range
+    .hrange_lock, .vrange_lock: Bool VA that locks H/V axes from manipulation
+
+    Note: clamping of the ranges is handle by the mouse events, because
+    the clamping behavior must function differently for pans, drags, and scrolling
+
+    """
+
+    # Default class
+    canvas_class = miccanvas.NavigableBarPlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(NavigablePlotViewport, self).__init__(*args, **kwargs)
+
+        self.hrange = model.TupleVA(None, setter=self.set_hrange)
+        self.hrange.subscribe(self.on_hrange)
+        self.hrange_lock = model.BooleanVA(False)
+        self.bottom_legend.lock_va = self.hrange_lock
+
+        self.vrange = model.TupleVA(None, setter=self.set_vrange)
+        self.vrange.subscribe(self.on_vrange)
+        self.vrange_lock = model.BooleanVA(False)
+        self.left_legend.lock_va = self.vrange_lock
+
+        # Indicate a left mouse button drag in the canvas
+        # Note: *only* use it indicate that the *canvas* is performing an operation related to
+        # dragging!
+        self._dragging = False
+        self._hdrag_scale_factor = -0.1
+        self._vdrag_scale_factor = -0.1
+        self._vmargin = 2  # factor for the upper margin of data display
+
+        # The amount of pixels shifted in the current drag event
+        self.drag_shift = (0, 0)  # cnvs, cnvs
+        #  initial position of mouse when started dragging
+        self.drag_init_pos = (0, 0)  # cnvs, cnvs
+
+        # Track if the legend was dragged. It should be reset to False at the
+        # end of button up handlers, giving overlay the chance to check if a
+        # drag occurred.
+
+        self.canvas.Bind(wx.EVT_MOUSEWHEEL, self.on_hlegend_scroll)
+
+        self.canvas.Bind(wx.EVT_MIDDLE_DOWN, self.on_drag_start)
+        self.canvas.Bind(wx.EVT_MIDDLE_UP, self.on_drag_end)
+        self.canvas.Bind(wx.EVT_MOTION, self.on_canvas_motion)
+        self.canvas.Bind(miccanvas.EVT_FIT_VIEW_TO_CONTENT, self.on_fit_view)
+
+        self.left_legend.Bind(wx.EVT_MOUSEWHEEL, self.on_vlegend_scroll)
+        self.left_legend.Bind(wx.EVT_LEFT_DOWN, self.on_drag_start)
+        self.left_legend.Bind(wx.EVT_LEFT_UP, self.on_drag_end)
+        self.left_legend.Bind(wx.EVT_MOTION, self.on_vlegend_motion)
+
+        self.bottom_legend.Bind(wx.EVT_MOUSEWHEEL, self.on_hlegend_scroll)
+        self.bottom_legend.Bind(wx.EVT_LEFT_DOWN, self.on_drag_start)
+        self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.on_drag_end)
+        self.bottom_legend.Bind(wx.EVT_MOTION, self.on_hlegend_motion)
+
+    def _connect_projection(self, proj):
+        if self._projection is not proj:
+            self.hrange.value = None
+            self.vrange.value = None
+
+        super(NavigablePlotViewport, self)._connect_projection(proj)
+
+    def on_fit_view(self, _):
+        """
+        Called when a fit view to content event occurs.
+
+        Sets the display ranges to the data ranges.
+        """
+        if not self.canvas.has_data():
+            return
+
+        # Unlock the axis locks
+        self.hrange_lock.value = False
+        self.vrange_lock.value = False
+
+        # TODO: a public access to the data? Or an overridden method to get the data from the projection?
+        xd, yd = self.canvas._data_buffer
+        self.hrange.value = util.find_plot_content(xd, yd)
+        self.vrange.value = self.canvas.data_yrange
+
+        logging.debug("Fitting view to content: H %s V %s", self.hrange.value, self.vrange.value)
+
+    def set_hrange(self, hrange):
+        """
+        Setter for VA hrange
+        """
+        if hrange is not None and hrange[0] > hrange[1]:
+            raise ValueError("Bad horizontal range: %s > %s" % (hrange[0], hrange[1]))
+        return hrange
+
+    def on_hrange(self, hrange):
+        """
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        logging.debug("HRange: %s", hrange)
+        self.bottom_legend.range = hrange
+        if hrange is None:
+            return
+
+        self.canvas.set_ranges(hrange, self.canvas.display_yrange)
+        if self.canvas.has_data():
+            self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
+            self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
+
+    def set_vrange(self, vrange):
+        """
+        Setter for VA vrange
+        """
+        if vrange is not None and vrange[0] > vrange[1]:
+            raise ValueError("Bad vertical range: %s > %s" % (vrange[0], vrange[1]))
+        return vrange
+
+    def on_vrange(self, vrange):
+        """
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        logging.debug("VRange: %s", vrange)
+        self.left_legend.range = vrange
+        if vrange is None:
+            return
+
+        self.canvas.set_ranges(self.canvas.display_xrange, vrange)
+        if self.canvas.has_data():
+            self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
+            self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
+
+    def on_hlegend_scroll(self, evt=None):
+        """ Scroll event for the bottom legend.
+
+        Zooms the x-scale of the data and refreshes display
+        """
+        if not self.canvas.has_data():
+            return
+
+        rot = evt.GetWheelRotation() / evt.GetWheelDelta()
+        span = self.hrange.value[1] - self.hrange.value[0]
+        zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        scale = 0.1
+        rng = self.hrange.value
+
+        # proportion of zoom_centre
+        prop = (zoom_centre - rng[0]) / span
+        
+        # zoom around the centre point
+        if rot < 0:
+            new_span = span * (1 + scale)
+        else:
+            new_span = span * (1 - scale)
+
+        lo = zoom_centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges - this functions differently for scrolls than pans
+        if lo < self.canvas.data_xrange[0]:
+            lo = self.canvas.data_xrange[0]
+        if hi > self.canvas.data_xrange[1]:
+            hi = self.canvas.data_xrange[1]
+
+        self.hrange.value = (lo, hi)
+
+    def on_vlegend_scroll(self, evt=None):
+        """ Scroll event for the left legend.
+
+        Zooms the y-scale of the data and refreshes display
+        """
+        if not self.canvas.has_data():
+            return
+
+        rot = evt.GetWheelRotation() / evt.GetWheelDelta()
+        span = self.vrange.value[1] - self.vrange.value[0]
+        # zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        zoom_centre = self.canvas.pos_y_to_val_y(evt.Position[1])
+        scale = 0.1
+        rng = self.vrange.value
+
+        # proportion of zoom_centre
+        prop = (zoom_centre - rng[0]) / span
+
+        # zoom around the centre point
+        if rot < 0:
+            new_span = span * (1 + scale)
+        else:
+            new_span = span * (1 - scale)
+
+        lo = zoom_centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges - this functions differently for scrolls than pans
+        lo = max(self.canvas.data_yrange[0], lo)
+        hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
+
+        self.vrange.value = (lo, hi)
+
+    def on_drag_start(self, evt):
+        """ Start a dragging procedure """
+        if not self.canvas.has_data():
+            return
+
+        self._dragging = True
+
+        pos = evt.Position
+        self.drag_init_pos = (self.canvas.pos_x_to_val_x(pos[0]),
+                              self.canvas.pos_y_to_val_y(pos[1]))
+
+        logging.debug("Drag started at %s", self.drag_init_pos)
+
+    def on_drag_end(self, evt):
+        """ End the dragging procedure """
+        self._dragging = False
+
+    def on_hlegend_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            # Rescale the horizontal axis
+            (lo, hi) = self.hrange.value
+
+            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
+            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
+
+            if lo < self.canvas.data_xrange[0]:
+                lo = self.canvas.data_xrange[0]
+                hi = self.canvas.display_xrange[1]
+            if hi > self.canvas.data_xrange[1]:
+                hi = self.canvas.data_xrange[1]
+                lo = self.canvas.display_xrange[0]
+
+            self.hrange.value = (lo, hi)
+
+    def on_vlegend_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            # Rescale the vertical axis
+            (lo, hi) = self.vrange.value
+            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
+            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
+
+            if lo < self.canvas.data_yrange[0]:
+                lo = self.canvas.data_yrange[0]
+                hi = self.canvas.display_yrange[1]
+            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
+                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
+                lo = self.canvas.display_yrange[0]
+
+            self.vrange.value = (lo, hi)
+
+    def on_canvas_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            (lo, hi) = self.hrange.value
+            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
+            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
+            if lo < self.canvas.data_xrange[0]:
+                lo = self.canvas.data_xrange[0]
+                hi = self.canvas.display_xrange[1]
+            if hi > self.canvas.data_xrange[1]:
+                hi = self.canvas.data_xrange[1]
+                lo = self.canvas.display_xrange[0]
+            self.hrange.value = (lo, hi)
+
+            (lo, hi) = self.vrange.value
+            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
+            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
+
+            if lo < self.canvas.data_yrange[0]:
+                lo = self.canvas.data_yrange[0]
+                hi = self.canvas.display_yrange[1]
+            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
+                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
+                lo = self.canvas.display_yrange[0]
+
+            self.vrange.value = (lo, hi)
+
+
+class PointSpectrumViewport(NavigablePlotViewport):
     """
     Shows the spectrum of a point -> bar plot + legend
     Legend axes are wavelength/intensity.
     """
 
+    def __init__(self, *args, **kwargs):
+        super(PointSpectrumViewport, self).__init__(*args, **kwargs)
+        self._curve_overlay = None
+
     def setView(self, view, tab_data):
-        super(PointSpectrumViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
-        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
         self._peak_fitter = peak.PeakFitter()
         self._peak_future = model.InstantaneousFuture()
         self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
 
+        super(PointSpectrumViewport, self).setView(view, tab_data)
+
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+    def _connect_projection(self, proj):
+        if self._projection is not proj:
+            # In case it the peak was updating right at the moment the stream changes
+            self._peak_future.cancel()
+
+        super(PointSpectrumViewport, self)._connect_projection(proj)
+
     def clear(self):
-        # Try to clear previous curve, if any
-        if hasattr(self, "_curve_overlay"):
+        # Try to clear previous curve (if already initialised)
+        if self._curve_overlay is not None:
             self._curve_overlay.clear_labels()
         super(PointSpectrumViewport, self).clear()
+
+    def _on_new_data(self, data):
+        """
+        Called when a new data is available (in a live stream, or because the
+           selected pixel has changed)
+        data (1D DataArray)
+        """
+        if data is not None and data.size:
+            wll, unit_x = spectrum.get_spectrum_range(data)
+
+            range_x = wll[0], wll[-1]
+            if not self.hrange_lock.value:
+                display_xrange = util.find_plot_content(wll, data)
+            else:
+                display_xrange = self.hrange.value
+
+            range_y = float(min(data)), float(max(data))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                display_yrange = range_y
+            else:
+                display_yrange = self.vrange.value
+
+            self.canvas.set_1d_data(wll, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
+            self.bottom_legend.unit = unit_x
+
+            if hasattr(self._stream, "peak_method") and self._stream.peak_method.value is not None:
+                # cancel previous fitting if there is one in progress
+                self._peak_future.cancel()
+                self._curve_overlay.clear_labels()
+                self.spectrum_range = wll
+                self.unit_x = unit_x
+                # TODO: try to find more peaks (= small window) based on width?
+                # => so far not much success
+                # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
+                self._peak_future = self._peak_fitter.Fit(data, wll,
+                                                          type=self._stream.peak_method.value)
+                self._peak_future.add_done_callback(self._update_peak)
+        else:
+            self.clear()
+        self.Refresh()
 
     def _on_peak_method(self, state):
         if state is not None:
             self.canvas.add_view_overlay(self._curve_overlay)
             self._curve_overlay.activate()
-            if self.stream is not None:
-                data = self.stream.get_pixel_spectrum()
-                if data is not None:
-                    # cancel previous fitting if there is one in progress
-                    self._peak_future.cancel()
-                    spectrum_range, _ = self.stream.get_spectrum_range()
-                    unit_x = self.stream.spectrumBandwidth.unit
-                    # cancel previous fitting if there is one in progress
-                    self.spectrum_range = spectrum_range
-                    self.unit_x = unit_x
-                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=state)
-                    self._peak_future.add_done_callback(self._update_peak)
-                else:
-                    self._curve_overlay.clear_labels()
-                    self.canvas.Refresh()
+            if self._projection is not None:
+                # Force update of the peak_method
+                self._on_new_data(self._projection.image.value)
         else:
             self._curve_overlay.deactivate()
             self.canvas.remove_view_overlay(self._curve_overlay)
             self.canvas.Refresh()
 
-    def _on_new_data(self, data):
-        """
-        Called when a new data is available (in a live stream)
-        data (1D DataArray)
-        """
-        if data.size:
-            # TODO: factorize with get_spectrum_range() for static stream?
-            try:
-                spectrum_range = spectrum.get_wavelength_per_pixel(data)
-                unit_x = "m"
-            except (ValueError, KeyError):
-                # useless polynomial => just show pixels values (ex: -50 -> +50 px)
-                max_bw = data.shape[0] // 2
-                min_bw = (max_bw - data.shape[0]) + 1
-                spectrum_range = range(min_bw, max_bw + 1)
-                unit_x = "px"
-
-            self.canvas.set_1d_data(spectrum_range, data, unit_x)
-
-            self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            self.left_legend.range = (min(data), max(data))
-            # For testing
-            # import random
-            # self.left_legend.range = (min(data) + random.randint(0, 100),
-            #                           max(data) + random.randint(-100, 100))
-        else:
-            self.clear()
-        self.Refresh()
-
-    def _on_pixel_select(self, pixel):
-        """
-        Pixel selection event handler.
-        Called when the user picks a new point to display on a 2D spectrum.
-        pixel (int, int): position of the point (in px, px) on the stream
-        """
-        if pixel == (None, None):
-            # TODO: handle more graciously when pixel is unselected?
-            logging.debug("No pixel selected")
-            # Remove legend ticks and clear plot
-            self.clear()
-            return
-        elif self.stream is None:
-            logging.warning("No Spectrum Stream present!")
-            return
-
-        data = self.stream.get_pixel_spectrum()
-        spectrum_range, unit_x = self.stream.get_spectrum_range()
-
-        if self.stream.peak_method.value is not None:
-            # cancel previous fitting if there is one in progress
-            self._peak_future.cancel()
-            self._curve_overlay.clear_labels()
-            self.spectrum_range = spectrum_range
-            self.unit_x = unit_x
-            # TODO: try to find more peaks (= small window) based on width?
-            # => so far not much success
-            # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
-            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
-            self._peak_future.add_done_callback(self._update_peak)
-
-        self.canvas.set_1d_data(spectrum_range, data, unit_x)
-
-        self.bottom_legend.unit = unit_x
-        self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-        self.left_legend.range = (min(data), max(data))
-
-        self.Refresh()
-
     @call_in_wx_main
     def _update_peak(self, f):
         try:
             peak_data, peak_offset = f.result()
-            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
+            if not hasattr(self._stream, "peak_method"):
+                # In case the stream has just changed, or removed.
+                return
+
+            self._curve_overlay.update_data(peak_data, peak_offset,
+                                            self.spectrum_range, self.unit_x,
+                                            self._stream.peak_method.value)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
@@ -1156,59 +1521,77 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.Refresh()
 
 
-class ChronographViewport(PlotViewport):
+class ChronographViewport(NavigablePlotViewport):
     """
     Shows the chronograph of a 0D detector reading -> bar plot + legend
     Legend axes are time/intensity.
     Intensity is between min/max of data.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(ChronographViewport, self).__init__(*args, **kwargs)
-        self.canvas.markline_overlay.hide_x_label()
-
     def setView(self, view, tab_data):
         super(ChronographViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTip, "Time (s)")
-        wx.CallAfter(self.left_legend.SetToolTip, "Count per second")
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+    def _connect_projection(self, proj):
+        super(ChronographViewport, self)._connect_projection(proj)
+        if proj:
+            # Show "count / s" if we know the data is normalized
+            im = proj.image.value
+            if im is not None and im.metadata.get(model.MD_DET_TYPE) == model.MD_DT_NORMAL:
+                wx.CallAfter(self.left_legend.SetToolTip, "Count per second")
+            else:
+                wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+            # If there is a known period, lock the horizontal range by default
+            # and use the period as initial range
+            if hasattr(self._stream, "windowPeriod"):
+                self.hrange_lock.value = True
+                self.hrange.value = (-self._stream.windowPeriod.value, 0)
 
     def _on_new_data(self, data):
-        if data.size:
-            unit_x = 's'
+        if data is not None and data.size:
+            x, unit_x = spectrum.get_time_range(data)
 
-            x = data.metadata[model.MD_ACQ_DATE]
-            y = data
-            range_x = (min(x[0], -self.stream.windowPeriod.value), x[-1])
-            # Put the data axis with -5% of min and +5% of max:
-            # the margin hints the user the display is not clipped
-            extrema = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
-            data_width = extrema[1] - extrema[0]
-            if data_width == 0:
-                range_y = (0, extrema[1] * 1.05)
+            range_x = (x[0], x[-1])
+            if not self.hrange_lock.value or self.hrange.value is None:
+                # If there is a known period, use it
+                if hasattr(self._stream, "windowPeriod"):
+                    display_xrange = (-self._stream.windowPeriod.value, range_x[1])
+                else:
+                    display_xrange = util.find_plot_content(x, data)
             else:
-                range_y = (max(0, extrema[0] - data_width * 0.05),
-                           extrema[1] + data_width * 0.05)
+                display_xrange = self.hrange.value
 
-            self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
+            range_y = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                # Put the data axis with -5% of min and +5% of max:
+                # the margin hints the user the display is not clipped
+                data_width = range_y[1] - range_y[0]
+                if data_width == 0:
+                    display_yrange = (0, range_y[1] * 1.05)
+                else:
+                    display_yrange = (max(0, range_y[0] - data_width * 0.05),
+                               range_y[1] + data_width * 0.05)
+            else:
+                display_yrange = self.vrange.value
 
+            self.canvas.set_1d_data(x, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = range_x
-            self.left_legend.range = range_y
 
         else:
             self.clear()
         self.Refresh()
 
-    def _on_pixel_select(self, pixel):
-        pass
 
-
-class SpatialSpectrumViewport(ViewPort):
+# TODO: share some code with PlotViewPort
+class TwoDViewPort(ViewPort):
     """
-    A viewport for showing 1D spectum: an image with wavelength horizontally and
-    space vertically.
+    An abstract class to show a (non draggable) 2D image, with axes on both sides
     """
-    # FIXME: This class shares a lot with PlotViewport, see what can be merged
 
     canvas_class = miccanvas.TwoDPlotCanvas
     bottom_legend_class = AxisLegend
@@ -1218,20 +1601,15 @@ class SpatialSpectrumViewport(ViewPort):
         """Note: The MicroscopeViewport is not fully initialised until setView()
         has been called.
         """
-        # Call parent constructor at the end, because it needs the legend panel
-        super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.stream = None
-        self.current_line = None
+        super(TwoDViewPort, self).__init__(*args, **kwargs)
+        self._projection = None  # Might be the same as _stream, if it has its own .image
+        self._stream = None
 
-        self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
-
-    def on_spectrum_motion(self, val):
-
-        if val:
-            rng = self.left_legend.range
-            rat = (val[1] - rng[0]) / (rng[1] - rng[0])
-            line_pixels = rasterize_line(*self.current_line)
-            self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
+        # TODO: the image from the projection (both LineSpectrum and TemporalSpectrum)
+        # are currently shown as one pixel per original pixel. However, the
+        # original pixels are *not* linearly spaced. So either the projection
+        # should compensate for this (difficult), or the axis legends should be
+        # non linear (easier).
 
     def Refresh(self, *args, **kwargs):
         """
@@ -1241,7 +1619,7 @@ class SpatialSpectrumViewport(ViewPort):
         self.left_legend.Refresh()
         self.bottom_legend.Refresh()
         # Note: this is not thread safe, so would need to be in a CallAfter()
-        # super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
+        # super(TwoDViewPort, self).Refresh(*args, **kwargs)
         wx.CallAfter(self.canvas.update_drawing)
 
     def setView(self, view, tab_data):
@@ -1258,69 +1636,176 @@ class SpatialSpectrumViewport(ViewPort):
         # via XRC.
         assert(self._view is None)
 
-        # import traceback
-        # traceback.print_stack()
-
         self._view = view
         self._tab_data_model = tab_data
+
+        view.show_crosshair.value = False
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        # view.stream_tree.should_update.subscribe(self.connect_stream)
-        # FIXME: it shouldn't listen to should_update, but to modifications of
-        # the stream tree itself... it just there is nothing to do that.
-        view.lastUpdate.subscribe(self.connect_stream)
+        view.stream_tree.flat.subscribe(self.connect_stream, init=True)
 
+        # For the play/pause icon
+        view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
+        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+
+    def _on_stream_play(self, is_playing):
+        """
+        Update the status of the play/pause icon overlay
+        """
+        self.canvas.play_overlay.hide_pause(is_playing)
+
+    def _on_stream_update(self, _):
+        """
+        Hide the play icon overlay if no stream are present (or they are all static)
+        """
+        ss = self._view.getStreams()
+        if len(ss) > 0:
+            # Any stream not static?
+            show = any(not isinstance(s, (StaticStream, DataProjection)) for s in ss)
+        else:
+            show = False
+        self.canvas.play_overlay.show = show
+
+    def connect_stream(self, projs):
+        """
+        Called when the stream_tree is changed.
+        projs (list of Streams or Projections)
+        Find the most appropriate stream in the view to be displayed, and make
+        sure the display is updated when the stream is updated.
+        """
+        # Most of the time, there is only one stream, but in some cases, there might be more.
+        if not projs:
+            proj = None
+        elif len(projs) > 1:
+            # => pick the first one playing
+            for o in projs:
+                s = get_original_stream(o)
+                if s.should_update.value:
+                    proj = o
+                    break
+            else:  # no stream playing
+                logging.warning("Found %d streams, will pick one randomly", len(projs))
+                if self._projection in projs:
+                    proj = self._projection  # don't change
+                else:
+                    proj = projs[0]
+        else:
+            proj = projs[0]
+
+        if self._projection is proj:
+            logging.debug("Not reconnecting to stream as it's already connected")
+            return
+
+        # Disconnect the old stream
+        if self._projection:
+            logging.debug("Disconnecting %s from TwoDViewPort", self._projection)
+            self._projection.image.unsubscribe(self._on_new_data)
+
+        # Connect the new stream
+        self._stream, self._projection = get_original_stream(proj), proj
+        if proj:
+            logging.debug("Connecting %s to TwoDViewPort", proj)
+            self._projection.image.subscribe(self._on_new_data, init=True)
+        else:
+            logging.info("No stream to plot found")
+            self.clear()  # Remove legend ticks and clear plot
+
+    @abstractmethod
+    def _on_new_data(self, data):
+        pass
+
+
+class TemporalSpectrumViewport(TwoDViewPort):
+    """
+    Shows a temporal spectrum image from a streak camera with time vertically and
+    wavelength horizontally.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(TemporalSpectrumViewport, self).__init__(*args, **kwargs)
+        self.canvas.markline_overlay.val.subscribe(self._on_overlay_selection)
+
+    def _on_overlay_selection(self, pos):
+        """
+        Called whenever the markline position of the overlay changes, to set
+        the selected wavelength & time in the stream (so that the SinglePoint
+        projections are updated).
+        """
+        if self._stream:
+            if hasattr(self._stream, "selected_wavelength"):
+                self._stream.selected_wavelength.value = pos[0]
+            if hasattr(self._stream, "selected_time"):
+                self._stream.selected_time.value = pos[1]
+
+    def setView(self, view, tab_data):
+        super(TemporalSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Time")
+
+    def connect_stream(self, projs):
+        super(TemporalSpectrumViewport, self).connect_stream(projs)
+        stream, proj = self._stream, self._projection
+
+        if hasattr(stream, "selected_time"):
+            pos = self.canvas.markline_overlay.val
+            pos.value = (stream.selected_wavelength.value, stream.selected_time.value)
+
+    def _on_new_data(self, data):
+        if data is not None and data.size:
+            wl, unit_x = spectrum.get_spectrum_range(data)
+            spectrum_range = (min(wl), max(wl))
+            times, unit_y = spectrum.get_time_range(data)
+            time_range = (max(times), min(times))  # inverted, to show the 0 at the top
+
+            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range)
+
+            self.bottom_legend.unit = unit_x
+            self.left_legend.unit = unit_y
+            self.bottom_legend.range = spectrum_range
+            self.left_legend.range = time_range
+        else:
+            self.clear()
+        self.Refresh()
+
+
+class LineSpectrumViewport(TwoDViewPort):
+    """
+    A viewport for showing 1D spectrum: an image with wavelength horizontally and
+    space vertically.
+    """
+    def __init__(self, *args, **kwargs):
+        """Note: The MicroscopeViewport is not fully initialised until setView()
+        has been called.
+        """
+        super(LineSpectrumViewport, self).__init__(*args, **kwargs)
+        self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
+
+    def on_spectrum_motion(self, val):
+        """
+        Connects the .selected_pixel based on the vertical position of the overlay.
+        The goal is that when the user picks a different position along the line,
+        the corresponding pixel is selected, and eventually the spectrum will be
+        shown (in a separate viewport).
+        """
+
+        if val and self._stream:
+            rng = self.left_legend.range
+            rat = (val[1] - rng[0]) / (rng[1] - rng[0])
+            line = self._stream.selected_line.value
+            line_pixels = rasterize_line(*line)
+            self._stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
+
+    def setView(self, view, tab_data):
+        super(LineSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTip, "Distance from origin")
 
-    def connect_stream(self, _=None):
-        """ This method will connect this ViewPort to the Spectrum Stream so it
-        it can react to spectrum pixel selection.
-        """
-        ss = self.view.stream_tree.get_streams_by_type(SpectrumStream)
-        if self.stream in ss:
-            logging.debug("not reconnecting to stream as it's already connected")
-            return
-
-        # There should be exactly one Spectrum stream. In the future there
-        # might be scenarios where there are more than one.
-        if not ss:
-            self.stream = None
-            logging.info("No spectrum streams found")
-            self.clear()  # Remove legend ticks and clear image
-            return
-        elif len(ss) > 1:
-            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
-
-        self.stream = ss[0]
-        self.stream.selected_line.subscribe(self._on_line_select, init=True)
-        self.stream.selected_pixel.subscribe(self._on_pixel_select)
-
-    def _on_pixel_select(self, pixel):
-        """ Clear the marking line when the selected pixel is cleared """
-        if None in pixel:
-            self.canvas.markline_overlay.clear_labels()
-
-    def _on_line_select(self, line):
-        """ Line selection event handler """
-
-        if (None, None) in line:
-            logging.debug("Line is not (fully) selected")
-            self.clear()
-            self.current_line = None
-            return
-        elif self.stream is None:
-            logging.warning("No Spectrum Stream present!")
-            return
-
-        data = self.stream.get_line_spectrum()
-        self.current_line = line
-
+    def _on_new_data(self, data):
         if data is not None:
-            spectrum_range, unit_x = self.stream.get_spectrum_range()
+            spectrum_range, unit_x = spectrum.get_spectrum_range(data)
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
             self.bottom_legend.unit = unit_x
@@ -1332,6 +1817,6 @@ class SpatialSpectrumViewport(ViewPort):
             self.canvas.set_2d_data(data, unit_x, unit_y,
                                     self.bottom_legend.range, self.left_legend.range)
         else:
-            logging.warn("No data to display for the selected line!")
+            self.clear()
 
         self.Refresh()

@@ -47,7 +47,7 @@ def MeasureShift(previous_img, current_img, precision=1):
     """
     if precision < 1:
         raise ValueError("Precision cannot be less than 1, got %s." % (precision,))
-    assert previous_img.shape == current_img.shape
+    assert previous_img.shape == current_img.shape, "Prev shape %s != new shape %s" % (previous_img.shape, current_img.shape)
 
     previous_fft = fft.fft2(previous_img)
     current_fft = fft.fft2(current_img)

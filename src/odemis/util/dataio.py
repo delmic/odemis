@@ -24,9 +24,10 @@ from __future__ import division
 
 import logging
 import numpy
+from odemis import dataio
 from odemis import model
 from odemis.acq import stream
-from odemis import dataio
+from odemis.model import MD_WL_LIST, MD_WL_POLYNOMIAL, MD_TIME_LIST
 import os
 
 
@@ -57,43 +58,38 @@ def data_to_static_streams(data):
             continue
 
         dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
-        if (((model.MD_WL_LIST in d.metadata or
-              model.MD_WL_POLYNOMIAL in d.metadata) and
-             (ci >= 0 and d.shape[ci] > 1)
-             ) or
-            (ci >= 0 and d.shape[ci] >= 5)
+        if (((MD_WL_LIST in d.metadata or MD_WL_POLYNOMIAL in d.metadata) and
+             (ci >= 0 and d.shape[ci] > 1)) or
+            (ci >= 0 and d.shape[ci] >= 5)  # No metadata, but looks like a spectrum
            ):
-            # Spectrum: either it's obvious according to metadata, or no metadata
-            # but lots of wavelengths, so no other way to display
-            name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-            klass = stream.StaticSpectrumStream
-        elif model.MD_PIXEL_DUR in d.metadata and ti >= 0 and d.shape[ti] > 1:
+            if (MD_TIME_LIST in d.metadata and
+                (ti >= 0 and d.shape[ti] > 1)):
+                # Streak camera data. Create a temporal spectrum
+                name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
+                klass = stream.StaticSpectrumStream
+            else:
+                # Spectrum: either it's obvious according to metadata, or no metadata
+                # but lots of wavelengths, so no other way to display
+                name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
+                klass = stream.StaticSpectrumStream
+        elif ((MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1) or
+              (ti >= 5 and d.shape[ti] >= 5)
+             ):
             # Time data (with XY)
-            logging.info("Converting time data into spectrum data")
-            # HACK: for now we don't have a good static stream and GUI tools for
-            # showing data with time, but it's pretty much the same as a spectrum
-            # (expected it's on the 4th dim, in s, instead of 5th dim in m).
-            # FIXME: make the StaticSpectrumStream more generic, to support any
-            # 3D data (ie, dYX).
-            i3d = [0] * (d.ndim - 2) + [slice(None), slice(None)]
-            i3d[ti] = slice(None)
-            sda = d[tuple(i3d)] # basically, d[0, :, 0, :, :] for CTZYX
-            if sda.size != d.size:
-                logging.warning("Attempted to reduce data to TYX, but data had shape %s", d.shape)
-
-            d = sda
-            d.metadata[model.MD_DIMS] = "TYX"
-            # Convert linear scale (PIXEL_DUR + TIME_OFFSET) to WL_LIST
-            pd = d.metadata[model.MD_PIXEL_DUR]
-            to = d.metadata.get(model.MD_TIME_OFFSET, 0)
-            n = sda.shape[0]
-            tv = numpy.linspace(to, to + pd * (n - 1), n)
-            d.metadata[model.MD_WL_LIST] = tv
-
             name = d.metadata.get(model.MD_DESCRIPTION, "Time")
             klass = stream.StaticSpectrumStream
+
+            # For now, the viewport cannot display large datasets, so we have to crop the temporal data
+            # FIXME: remove once we can display more data
+            # We do "d = d[:, :1024, :, :, :]", in a generic way
+            cropped_t = [slice(None)] * d.ndim
+            cropped_t[ti] = slice(1024)
+            d = d[cropped_t]  # if T < 1024, it does nothing
+            d.metadata[model.MD_TIME_LIST] = d.metadata[model.MD_TIME_LIST][:1024]
+            logging.info("Cropping data of %s to %d pixels in T", name, d.shape[ti])
         elif model.MD_AR_POLE in d.metadata:
             # AR data
             ar_data.append(d)
@@ -127,24 +123,29 @@ def data_to_static_streams(data):
         else:
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
-            if numpy.prod(d.shape[:-2]) != 1:
+            if numpy.prod(d.shape[:-2]) != 1 and pxs is not None and len(pxs) != 3:
                 # FIXME: doesn't work currently if d is a DAS
                 subdas = _split_planes(d)
                 logging.info("Reprocessing data of shape %s into %d sub-data",
                              d.shape, len(subdas))
+                if len(subdas) > 30:
+                    logging.error("The data seems to have %d sub-data, limiting it to the first 10",
+                                  len(subdas))
+                    subdas = subdas[:10]
                 if len(subdas) > 1:
                     result_streams.extend(data_to_static_streams(subdas))
                     continue
-
             name = d.metadata.get(model.MD_DESCRIPTION, "Electrons")
             klass = stream.StaticSEMStream
 
         if issubclass(klass, stream.Static2DStream):
             # FIXME: doesn't work currently if d is a DAS
-            if numpy.prod(d.shape[:-2]) != 1:
+            if numpy.prod(d.shape[:-3]) != 1:
                 logging.warning("Dropping dimensions from the data %s of shape %s",
-                                name, d.shape)
-                d = d[-2, -1]
+                            name, d.shape)
+                #      T  Z  X  Y
+                #     d[0,0] -> d[0,0,:,:]
+                d = d[(0,) * (d.ndim - 2)]
 
         stream_instance = klass(name, d)
         result_streams.append(stream_instance)
@@ -170,8 +171,8 @@ def _split_planes(data):
 
     # Anything to split?
     dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-    hdims = dims.translate(None, "XY") # remove XY while keeping order
-    ldims = dims.translate(None, hdims)
+    hdims = dims.replace("XY", "") # remove XY while keeping order
+    ldims = dims.replace(hdims, "")
     if "X" not in dims or "Y" not in dims:
         return [data]
 

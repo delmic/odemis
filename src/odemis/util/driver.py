@@ -119,9 +119,9 @@ def estimateMoveDuration(distance, speed, accel):
     acceleration. It considers that the speed curve of the move will follow
     a trapezoidal profile: first acceleration, then maximum speed, and then
     deceleration.
-    distance (0 <= float): distance that will be travelled (in m)
+    distance (0 <= float): distance that will be traveled (in m)
     speed (0 < float): maximum speed allowed (in m/s)
-    accel (0 < float): acceleration and deceleration (in m²/s)
+    accel (0 < float): acceleration and deceleration (in m/s²)
     return (0 <= float): time in s
     """
     if speed <= 0 or accel <= 0:
@@ -240,4 +240,4 @@ def get_backend_status():
         logging.exception("Unresponsive back-end")
         return BACKEND_DEAD
 
-    return BACKEND_DEAD
+    return BACKEND_DEAD  # Note: unreachable, but leave in case code will be changed

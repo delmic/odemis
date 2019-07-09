@@ -28,20 +28,16 @@ from __future__ import division
 
 from collections import OrderedDict
 import collections
-from concurrent import futures
 from concurrent.futures import CancelledError
 import logging
-import math
+
 from odemis import model
 from odemis.acq import _futures
-from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, \
-    OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream
+from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream, \
+    OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream, \
+    ScannedRemoteTCStream, ScannedTCSettingsStream
 from odemis.util import img, fluo, executeAsyncTask
-import sys
-import threading
 import time
-from odemis.acq.stream._sync import ScannedRemoteTCStream
-from odemis.acq.stream._helper import ScannedTCSettingsStream
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
@@ -184,7 +180,7 @@ def computeThumbnail(streamTree, acqTask):
 
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
-    streams = sorted(streamTree.getStreams(), key=_weight_stream,
+    streams = sorted(streamTree.getProjections(), key=_weight_stream,
                      reverse=True)
     if not streams:
         logging.warning("No stream found in the stream tree")
@@ -232,7 +228,7 @@ def _weight_stream(stream):
         return 85  # Stream for FLIM acquisition with time correlator
     elif isinstance(stream, EMStream):
         return 50 # can be done after any light
-    elif isinstance(stream, (SEMCCDMDStream, SEMMDStream)):
+    elif isinstance(stream, (SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream)):
         return 40 # after standard (=survey) SEM
     elif isinstance(stream, OverlayStream):
         return 10 # after everything (especially after SEM and optical)

@@ -23,6 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from builtins import str
+from past.builtins import basestring, long
 from collections import OrderedDict
 import collections
 import functools
@@ -30,14 +32,15 @@ import gc
 import logging
 import numpy
 from odemis import model, util
+from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
-    CONTROL_COMBO, CONTROL_FLT
+    CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_MAIN, BG_COLOUR_MAIN
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
-from odemis.gui.conf.data import get_local_vas
+from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
@@ -91,7 +94,7 @@ class StreamController(object):
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.StaticCLStream)):
             options |= OPT_BTN_TINT
             if not isinstance(stream, acqstream.StaticStream):
                 options |= OPT_NAME_EDIT
@@ -125,9 +128,7 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        # TODO: make it a list, as the dict keys are not used right now, and
-        # they could be just looked up via the SettingEntry.name anyway
-        self.entries = OrderedDict()  # name -> SettingEntry
+        self.entries = []  # SettingEntry
 
         # Metadata display in analysis tab (static streams)
         if isinstance(self.stream, acqstream.StaticStream):
@@ -165,8 +166,14 @@ class StreamController(object):
 
         if hasattr(stream, "spectrumBandwidth"):
             self._add_wl_ctrls()
+            self.mean_spec_proj = MeanSpectrumProjection(self.stream)
+            self.mean_spec_proj.image.subscribe(self._on_new_spec_data, init=True)
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
+                
+        if hasattr(stream, "zIndex") and hasattr(self.tab_data_model, "zPos"):
+            self.stream.zIndex.subscribe(self._on_z_index)
+            self.tab_data_model.zPos.subscribe(self._on_z_pos, init=True)
 
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
@@ -191,14 +198,12 @@ class StreamController(object):
         Display metadata for integration time, ebeam voltage, probe current and
         emission/excitation wavelength
         """
-        if hasattr(self.stream, "_das"):
-            # For tiled stream => use the DataArrayShadow (which is the only reliable one)
-            md = self.stream._das.metadata
-        elif self.stream.raw:
-            md = self.stream.raw[0].metadata
-        else:
+        mds = self.stream.getRawMetadata()
+        if not mds:
             logging.warning("No raw data in stream")
             return
+
+        md = mds[0]
 
         # Use "integration time" instead of "exposure time" since, in some cases,
         # the dwell time is stored in MD_EXP_TIME.
@@ -217,14 +222,14 @@ class StreamController(object):
         """ Pause (freeze) SettingEntry related control updates """
         # TODO: just call enable(False) from here? or is there any reason to
         # want to pause without showing it to the user?
-        for entry in self.entries.values():
+        for entry in self.entries:
             entry.pause()
 
         self.stream_panel.enable(False)
 
     def resume(self):
         """ Resume SettingEntry related control updates """
-        for entry in self.entries.values():
+        for entry in self.entries:
             entry.resume()
 
         self.stream_panel.enable(True)
@@ -241,20 +246,21 @@ class StreamController(object):
         # When all are enabled now, the position the toggle button is in, immediately causes
         # the right slider to be disabled again.
 
-        for entry in (e for e in self.entries.values() if e.value_ctrl):
-            entry.value_ctrl.Enable(enabled)
+        for entry in self.entries:
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
         # Get the emitter and detector configurations if they exist
         hw_settings = self.tab_data_model.main.hw_settings_config
         if self.stream.emitter:
-            emitter_conf = hw_settings.get(self.stream.emitter.role, {})
+            emitter_conf = get_hw_config(self.stream.emitter, hw_settings)
         else:
             emitter_conf = {}
 
         if self.stream.detector:
-            detector_conf = hw_settings.get(self.stream.detector.role, {})
+            detector_conf = get_hw_config(self.stream.detector, hw_settings)
         else:
             detector_conf = {}
 
@@ -262,7 +268,7 @@ class StreamController(object):
 
         # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
         # attribute called 'hw_vas'
-        vas_names = util.sorted_according_to(self.stream.hw_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.hw_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.hw_vas[name]
@@ -274,7 +280,7 @@ class StreamController(object):
             add_divider = True
 
         # Process the emitter VAs first
-        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.emt_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.emt_vas[name]
@@ -287,7 +293,7 @@ class StreamController(object):
             add_divider = True
 
         # Then process the detector
-        vas_names = util.sorted_according_to(self.stream.det_vas.keys(), detector_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.det_vas.keys()), list(detector_conf.keys()))
 
         for name in vas_names:
             va = self.stream.det_vas[name]
@@ -323,11 +329,13 @@ class StreamController(object):
         :param va: (VigilantAttribute)
         :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
-
+        :return SettingEntry or None: the entry created, or None, if no entry was
+          created (eg, because the conf indicates CONTROL_NONE).
         """
 
         se = create_setting_entry(self.stream_panel, name, va, hw_comp, conf)
-        self.entries[se.name] = se
+        if se is not None:
+            self.entries.append(se)
 
         return se
 
@@ -341,7 +349,8 @@ class StreamController(object):
         """
 
         ae = create_axis_entry(self.stream_panel, name, comp, conf)
-        self.entries[ae.name] = ae
+        if ae is not None:
+            self.entries.append(ae)
 
         return ae
 
@@ -401,7 +410,7 @@ class StreamController(object):
         if hasattr(self.stream, "repetition"):
             self.stream.repetition.unsubscribe(self._onStreamRep)
 
-        self.entries = OrderedDict()
+        self.entries = []
 
         gc.collect()
 
@@ -431,6 +440,36 @@ class StreamController(object):
                 break
         else:
             logging.error("No peak method corresponding to state %s", evt.state)
+
+    def _on_z_index(self, zIndex):
+        
+        self.tab_data_model.zPos.unsubscribe(self._on_z_pos)
+
+        metadata = self.stream.getRawMetadata()[0]  # take the first only
+        zcentre = metadata[model.MD_POS][2]
+        zstep = metadata[model.MD_PIXEL_SIZE][2]
+        # The number of zIndexes is zIndex.range[1] + 1 (as it starts at 0).
+        # zstart is the *center* position of the first pixel, so we need
+        # len(zIndexes) - 1 ==  zIndex.range[1]
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
+        self.tab_data_model.zPos.value = zstart + zstep * zIndex
+
+        self.tab_data_model.zPos.subscribe(self._on_z_pos)
+
+    def _on_z_pos(self, zPos):
+        # Given an absolute physical position in z pos, set the z index for a stream
+        # based on physical parameters
+
+        self.stream.zIndex.unsubscribe(self._on_z_index)
+
+        metadata = self.stream.getRawMetadata()[0]  # take the first only
+        zcentre = metadata[model.MD_POS][2]
+        zstep = metadata[model.MD_PIXEL_SIZE][2]
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
+        val = int(round((zPos - zstart) / zstep))
+        self.stream.zIndex.value = self.stream.zIndex.clip(val)
+
+        self.stream.zIndex.subscribe(self._on_z_index)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """
@@ -465,40 +504,38 @@ class StreamController(object):
                                    self._dye_ewl, self.stream.emission.value)
 
     def _on_metadata_btn(self, evt):
-        text = ""
-        # Show empty window if no image present
-        if hasattr(self.stream, '_das'):
-            # For tiled streams
-            r = self.stream._das
-        else:
-            if self.stream.raw:
-                r = self.stream.raw[0]
-            else:
-                r = None
+        text = u""
+        raw = [r for r in self.stream.raw if r is not None]
 
-        if r is not None:
+        for i, r in enumerate(raw):
+            if len(raw) > 1:
+                text += u"========= Array %d =========\n" % (i + 1,)
             shape = r.shape
             dtype = r.dtype
             md = r.metadata
 
-            text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
-            text += "Data type: %s\n" % (dtype,)
+            text += u"Shape: %s\n" % (u" x ".join(str(s) for s in shape),)
+            text += u"Data type: %s\n" % (dtype,)
             for key in sorted(md):
                 v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
-                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
+                    text += u"%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
                 else:
                     if isinstance(v, numpy.ndarray):
                         # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
                         # the data (unless it'd get really crazy).
                         # TODO: from numpy v1.14, the "threshold" argument can
                         # be directly used in array2string().
-                        numpy.set_printoptions(threshold=100000)
-                        v = numpy.array2string(v, max_line_width=100, separator=", ")
+                        numpy.set_printoptions(threshold=2500)
+                        v = numpy.array2string(v, max_line_width=100, separator=u", ")
                         numpy.set_printoptions(threshold=1000)
-                    text += "%s: %s\n" % (key, v)
+                    elif isinstance(v, list) and len(v) > 2500:
+                        v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
+                    text += u"%s: %s\n" % (key, v)
 
-        md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
+        # Note: we show empty window even if no data present, to let the user know
+        # that there is no data, but the button worked fine.
+        md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
 
     # Panel state methods
@@ -607,7 +644,7 @@ class StreamController(object):
         se = SettingEntry(name="selectionwidth", va=self.stream.selectionWidth, stream=self.stream,
                           lbl_ctrl=lbl_selection_width, value_ctrl=sld_selection_width,
                           events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_wl_ctrls(self):
         btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
@@ -615,13 +652,13 @@ class StreamController(object):
         se = SettingEntry(name="rgbfit", va=self.stream.fitToRGB, stream=self.stream,
                           value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
                           va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         self._sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
 
         se = SettingEntry(name="spectrum", va=self.stream.spectrumBandwidth, stream=self.stream,
                           value_ctrl=self._sld_spec, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_center():
             """ Return the low/high values for the bandwidth, from the requested center """
@@ -648,7 +685,7 @@ class StreamController(object):
                           stream=self.stream, value_ctrl=txt_spec_center, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_spec_center.SetValue((r[0] + r[1]) / 2),
                           ctrl_2_va=_get_center)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_bandwidth():
             """ Return the low/high values for the bandwidth, from the requested bandwidth """
@@ -675,20 +712,16 @@ class StreamController(object):
                           stream=self.stream, value_ctrl=txt_spec_bw, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_spec_bw.SetValue(r[1] - r[0]),
                           ctrl_2_va=_get_bandwidth)
-        self.entries[se.name] = se
-
-        # TODO: should the stream have a way to know when the raw data has changed?
-        # => just a spectrum VA, like histogram VA
-        self.stream.image.subscribe(self._on_new_spec_data, init=True)
+        self.entries.append(se)
 
     @wxlimit_invocation(0.2)
-    def _on_new_spec_data(self, _):
-        if not self or not self._sld_spec:
+    def _on_new_spec_data(self, gspec):
+        if not self or not self._sld_spec or gspec is None:
+            # if no new calibration, or empty data
             return  # already deleted
 
         logging.debug("New spec data")
         # Display the global spectrum in the visual range slider
-        gspec = self.stream.getMeanSpectrum()
         if len(gspec) <= 1:
             logging.warning("Strange spectrum of len %d", len(gspec))
             return
@@ -720,7 +753,7 @@ class StreamController(object):
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
-            self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
+            self.stream_panel.set_header_choices(list(dye.DyeDatabase.keys()))
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
         center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
@@ -794,7 +827,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
 
-            self.entries[se.name] = se
+            self.entries.append(se)
 
     def _add_emission_ctrl(self, center_wl_color=None):
         """
@@ -867,7 +900,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
 
-            self.entries[se.name] = se
+            self.entries.append(se)
 
     def _add_brightnesscontrast_ctrls(self):
         """ Add controls for manipulating the (auto) contrast of the stream image data """
@@ -889,12 +922,12 @@ class StreamController(object):
         se = SettingEntry(name="autobc", va=self.stream.auto_bc, stream=self.stream,
                           value_ctrl=btn_autobc, events=wx.EVT_BUTTON,
                           va_2_ctrl=_va_to_autobc, ctrl_2_va=_autobc_to_va)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         # Store a setting entry for the outliers slider
         se = SettingEntry(name="outliers", va=self.stream.auto_bc_outliers, stream=self.stream,
                           value_ctrl=sld_outliers, lbl_ctrl=lbl_bc_outliers, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_outliers_ctrls(self):
         """ Add the controls for manipulation the outliers """
@@ -933,7 +966,7 @@ class StreamController(object):
 
         se = SettingEntry(name="intensity_range", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=sld_hist, events=wx.EVT_SLIDER, va_2_ctrl=_on_irange)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         if hasattr(self.stream, "auto_bc"):
             # The outlier controls need to be disabled when auto brightness/contrast is active
@@ -948,7 +981,7 @@ class StreamController(object):
             # entry is only here so that a reference to `_enable_outliers` will be preserved).
             se = SettingEntry("_auto_bc_switch", va=self.stream.auto_bc, stream=self.stream,
                               va_2_ctrl=_enable_outliers, ctrl_2_va=lambda x: x)
-            self.entries[se.name] = se
+            self.entries.append(se)
 
         def _get_lowi():
             intensity_rng_va = self.stream.intensityRange
@@ -963,7 +996,7 @@ class StreamController(object):
         se = SettingEntry(name="low_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_low, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_low.SetValue(r[0]), ctrl_2_va=_get_lowi)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_highi():
             intensity_rng_va = self.stream.intensityRange
@@ -978,7 +1011,7 @@ class StreamController(object):
         se = SettingEntry(name="high_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_high, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_high.SetValue(r[1]), ctrl_2_va=_get_highi)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _on_histogram(hist):
             """ Display the new histogram data in the histogram slider
@@ -1004,7 +1037,7 @@ class StreamController(object):
         # Again, we use an entry to keep a reference of the closure around
         se = SettingEntry("_histogram", va=self.stream.histogram, stream=self.stream,
                           va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_repetition_ctrl(self):
         """
@@ -1013,7 +1046,7 @@ class StreamController(object):
         va_config = OrderedDict((
             ("repetition", {
                 "control_type": CONTROL_COMBO,
-                "choices": set((1, 1)),  # Actually, it's immediately replaced by _onStreamRep()
+                "choices": {1, 1},  # Actually, it's immediately replaced by _onStreamRep()
                 "accuracy": None,  # never simplify the numbers
             }),
             ("pixelSize", {
@@ -1259,7 +1292,11 @@ class StreamBarController(object):
         # when not in spot mode. (for now, we keep it simple)
         self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream, acqstream.OpticalStream)
         self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
-                               acqstream.MonochromatorSettingsStream, acqstream.ScannedTCSettingsStream)
+                               acqstream.MonochromatorSettingsStream,
+                               acqstream.ScannedTCSettingsStream,
+                               acqstream.ScannedTemporalSettingsStream,
+                               acqstream.TemporalSpectrumSettingsStream,
+                               )
         tab_data.tool.subscribe(self.on_tool_change)
 
         self._view_controller = view_ctrl
@@ -1641,7 +1678,7 @@ class StreamBarController(object):
         fview = self._tab_data_model.focussedView.value
 
         if add_to_view is True:
-            for v in self._tab_data_model.views.value:
+            for v in self._tab_data_model.visible_views.value:
                 if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
@@ -1805,8 +1842,8 @@ class StreamBarController(object):
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
             if isinstance(stream, self._spot_incompatible):
-                logging.info("Stopping spot mode because %s starts", stream)
                 if self._tab_data_model.tool.value == TOOL_SPOT:
+                    logging.info("Stopping spot mode because %s starts", stream)
                     self._tab_data_model.tool.value = TOOL_NONE
                     spots = self._tab_data_model.spotStream
                     spots.is_active.value = False
@@ -2012,6 +2049,7 @@ class StreamBarController(object):
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
+        Must be called in the main GUI thread
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
@@ -2354,6 +2392,8 @@ class SparcStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC)
         if main_data.cld:
             self.add_action("CL intensity", self.addCLIntensity)
+
+        # TODO: support every component in .ccds
         if main_data.ccd and main_data.lens and model.hasVA(main_data.lens, "polePosition"):
             # Some simple SPARC have a CCD which can only do rough chamber view,
             # but no actual AR acquisition. This is indicate by not having any
@@ -2361,20 +2401,23 @@ class SparcStreamsController(StreamBarController):
             self.add_action("Angle-resolved", self.addAR)
 
         # On the SPARCv2, there is potentially 4 different ways to acquire a
-        # spectrum: two spectrographs, with each two ports. In practice, there
-        # are never more than 2 at the same time.
-        sptms = [main_data.spectrometer, main_data.spectrometer_int]
-        sptms = [s for s in sptms if s is not None]
-        for sptm in sptms:
-            if len(sptms) == 1:
+        # spectrum: two spectrographs, each with two ports.
+        for sptm in main_data.spectrometers:
+            if len(main_data.spectrometers) == 1:
                 actname = "Spectrum"
             else:
                 actname = "Spectrum with %s" % (sptm.name,)
             act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
             self.add_action(actname, act)
 
+        if main_data.streak_ccd:
+            self.add_action("Temporal spectrum", self.addTemporalSpectrum)
+
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
+
+        if main_data.time_correlator:
+            self.add_action("Time Correlator", self.addTimeCorrelator)
 
     def _on_streams(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
@@ -2462,8 +2505,6 @@ class SparcStreamsController(StreamBarController):
         Display and connect a new RepetitionStream to the GUI
         stream (RepetitionStream): freshly baked stream
         mdstream (MDStream): corresponding new stream for acquisition
-        vas (list of str): name of VAs entries to create (in addition to standard one,
-          such as local HW VAs and B/C control)
         axes (dict axis name -> Component): axis entries to create
         kwargs (dict): to be passed to _add_stream()
         return (StreamController): the new stream controller
@@ -2480,7 +2521,7 @@ class SparcStreamsController(StreamBarController):
         stream_config = self._stream_config.get(type(stream), {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        axes_names = util.sorted_according_to(list(axes.keys()), list(stream_config.keys()))
         for axisname in axes_names:
             comp = axes[axisname]
             if comp is None:
@@ -2623,6 +2664,46 @@ class SparcStreamsController(StreamBarController):
                                   axes=axes,
                                   )
 
+    def addTemporalSpectrum(self):
+        """
+        Create a temporal spectrum stream and add to to all compatible viewports
+        """
+
+        main_data = self._main_data_model
+
+        ts_stream = acqstream.TemporalSpectrumSettingsStream(
+            "Temporal Spectrum",
+            main_data.streak_ccd,
+            main_data.streak_ccd.data,
+            main_data.ebeam,
+            main_data.streak_unit,
+            main_data.streak_delay,
+            sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm,
+            detvas=get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config),
+            streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_ts_stream = acqstream.SEMTemporalSpectrumMDStream("SEM TempSpec", [sem_stream, ts_stream])
+
+        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
+
+        # TODO: all the axes, including the filter band should be local. The
+        # band should be set to the pass-through by default
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg}
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.streak_ccd.name in fw.affects.value:
+                axes["band"] = fw
+
+        return self._addRepStream(ts_stream, sem_ts_stream, axes=axes)
+
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
@@ -2660,6 +2741,30 @@ class SparcStreamsController(StreamBarController):
                 axes["band"] = fw
 
         return self._addRepStream(monoch_stream, sem_monoch_stream,
+                                  axes=axes,
+                                  play=False
+                                  )
+
+    def addTimeCorrelator(self):
+        """ Create a Time Correlator stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        tc_stream = acqstream.ScannedTemporalSettingsStream(
+            "Time Correlator",
+            main_data.time_correlator,
+            main_data.time_correlator.data,
+            main_data.ebeam,
+            detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
+        )
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_tc_stream = acqstream.SEMTemporalMDStream("SEM Time Correlator",
+                                                  [sem_stream, tc_stream])
+        axes = {"density": main_data.tc_od_filter,
+                "band": main_data.tc_filter}
+        
+        return self._addRepStream(tc_stream, sem_tc_stream,
                                   axes=axes,
                                   play=False
                                   )

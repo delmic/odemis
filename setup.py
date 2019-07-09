@@ -4,6 +4,7 @@
 # To rebuild just the cython modules, use these commands:
 # sudo apt-get install python-setuptools cython
 # python setup.py build_ext --inplace
+from __future__ import division, print_function
 
 from setuptools import setup, find_packages
 from Cython.Build import cythonize # Warning: must be _after_ setup import
@@ -14,7 +15,7 @@ import sys
 
 
 # To be updated to the current version
-VERSION = "2.8.0"
+VERSION = "2.9.0"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
@@ -24,8 +25,8 @@ ROOT = os.geteuid() == 0
 # For Debian packaging it could be a fakeroot so reset flag to prevent execution of
 # system update services for Mime and Desktop registrations.
 # The debian/odemis.postinst script must do those.
-if not os.getenv("FAKEROOTKEY") == None:
-    print "NOTICE: Detected execution in a FakeRoot so disabling system update services."
+if "FAKEROOTKEY" in os.environ:
+    print("NOTICE: Detected execution in a FakeRoot so disabling system update services.")
     ROOT = False
 
 # almost copy from odemis.__init__.py, but we cannot load it as it's not installed yet
@@ -67,6 +68,8 @@ if sys.platform.startswith('linux'):
                   ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.odm.yaml')),
                   ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
                   ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
+                  # The key(s) for the bug reporter
+                  ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.key')),
                   # /usr/lib/odemis/plugins/ contains the plugins to be _loaded_,
                   # in /usr/share/, which put all the plugins which are available.
                   ('share/odemis/plugins/', glob.glob('plugins/*.py')),
@@ -132,11 +135,11 @@ dist = setup(name='Odemis',
              data_files=data_files, # not officially in setuptools, but works as for distutils
             )
 
-if ROOT and dist != None:
+if ROOT and dist is not None:
     # for mime file association, see openshot's setup.py
     # update the XDG .desktop file database
     try:
-        print "Updating the .desktop file database."
+        print("Updating the .desktop file database.")
         subprocess.check_output(["update-desktop-database"])
     except Exception:
         sys.stderr.write("Failed to update.\n")

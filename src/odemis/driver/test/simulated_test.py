@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent.futures._base import CancelledError
 import logging
@@ -60,7 +60,7 @@ class ActuatorTest(object):
         Asserts that two stage positions have almost equal coordinates.
         """
         try:
-            if expected.viewkeys() != actual.viewkeys():
+            if expected.keys() != actual.keys():
                 raise AssertionError("Dimensions of coordinates do not match")
             for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
                 self.assertAlmostEqual(actual[dim_act], expected[dim_exp], places=6)
@@ -79,7 +79,7 @@ class ActuatorTest(object):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             dev = self.actuator_type(name, "actuator", **kwargs)
             self.assertTrue(dev.selfTest(), "Actuator self test failed.")
 

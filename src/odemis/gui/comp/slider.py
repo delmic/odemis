@@ -22,10 +22,12 @@
 """
 
 from __future__ import division
+
+from past.builtins import long
 from odemis.util.conversion import hex_to_frgba
 from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 from odemis.gui import img
 from odemis.gui.util import wxlimit_invocation
 import collections
@@ -35,7 +37,6 @@ import odemis.gui as gui
 import time
 import wx
 import wx.lib.wxcairo as wxcairo
-from odemis.util import no_conflict
 
 
 class BaseSlider(wx.Control):
@@ -43,7 +44,6 @@ class BaseSlider(wx.Control):
     the right interface. This interface closely resembles the interface of
     wx.Slider.
     """
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider
@@ -516,7 +516,7 @@ class Slider(BaseSlider):
         self.SetRange(self.min_value, max_value)
 
     def GetRange(self):
-        return (self.min_value, self.max_value)
+        return self.min_value, self.max_value
 
     def GetMin(self):
         """ Return the minimum value of the range """
@@ -810,7 +810,7 @@ class VisualRangeSlider(BaseSlider):
             self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
 
     def GetRange(self):
-        return (self.min_value, self.max_value)
+        return self.min_value, self.max_value
 
     def Enable(self, enable=True):  #pylint: disable=W0221
 

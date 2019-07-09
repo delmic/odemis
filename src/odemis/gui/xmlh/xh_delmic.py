@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #
 # This module is used both by Odemis' GUI and XRCED.
 
-from __future__ import division
+from __future__ import division, print_function
 
 import ast
 import logging
@@ -254,31 +254,26 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         height = int(self.GetText('height')) if self.GetText('height') else None
 
         try:
+            kwargs = {
+                "icon": icon,
+                "icon_on": icon_on,
+                "pos": self.GetPosition(),
+                "size": self.GetSize(),
+                "style": self.GetStyle(),
+                "face_colour": self.GetText('face_colour'),
+                "height": height,
+            }
+
             if self.GetParamNode("label"):
-                w = self.klass(
-                    self.GetParentAsWindow(),
-                    self.GetID(),
-                    icon=icon,
-                    icon_on=icon_on,
-                    pos=self.GetPosition(),
-                    size=self.GetSize(),
-                    style=self.GetStyle(),
-                    label=self.GetText('label'),
-                    face_colour=self.GetText('face_colour'),
-                    height=height
-                )
-            else:
-                w = self.klass(
-                    self.GetParentAsWindow(),
-                    self.GetID(),
-                    icon=icon,
-                    icon_on=icon_on,
-                    pos=self.GetPosition(),
-                    size=self.GetSize(),
-                    style=self.GetStyle(),
-                    face_colour=self.GetText('face_colour'),
-                    height=height
-                )
+                kwargs["label"] = self.GetText('label')
+            if self.GetParamNode("active_colour"):
+                kwargs["active_colour"] = self.GetText('active_colour')
+
+            w = self.klass(
+                self.GetParentAsWindow(),
+                self.GetID(),
+                **kwargs)
+
         except ValueError:
             print("Failed to create ImageButton %s" % (self.GetName(),))
             raise
@@ -558,13 +553,24 @@ class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(AngularResolvedViewportXmlHandler)
 
 
-class SpatialSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+class LineSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.SpatialSpectrumViewport
+    klass = vport.LineSpectrumViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "SpatialSpectrumViewport")
-HANDLER_CLASS_LIST.append(SpatialSpectrumViewportXmlHandler)
+        return self.IsOfClass(node, "LineSpectrumViewport")
+HANDLER_CLASS_LIST.append(LineSpectrumViewportXmlHandler)
+
+
+class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.TemporalSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "TemporalSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
 
 ##################################

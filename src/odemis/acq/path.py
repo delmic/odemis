@@ -29,7 +29,6 @@ import math
 import re
 from odemis import model, util
 from odemis.acq import stream
-from odemis.model import NotApplicableError
 import time
 from odemis.util import TimeoutError
 
@@ -88,7 +87,7 @@ SPARC_MODES = {'ar': ("ccd",
 # It's still important to have every possible detector roles listed, for the
 # guessing methods to know which detector is optical.
 SPARC2_MODES = {
-            'ar': ("ccd",
+            'ar': (r"ccd.*",
                 {'lens-switch': {'x': 'on'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened
@@ -107,36 +106,47 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spectral': ("spectrometer",
+            'spectral': (r"spectrometer.*",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
-                 # TODO: need to restore slit-in to the current position?
-                 # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-det-selector': {'rx': 0},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 'slit-in-big': {'x': 'off'},  # closed
+                 # TODO: leave the grating as-is, if the user wants to acquire with
+                 # a mirror, so be it? (and up to the GUI to select a non-mirror
+                 # grating by default)
                  # That one will be automatically dropped if it doesn't affect
-                 # spectrometer (eg, with a spectrograph-dedicated)
+                 # spectrometer (eg, when using a spectrograph-dedicated)
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spectral-integrated': ("spectrometer-integrated",
+            'streak-align': ("streak-ccd",  # alignment tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
-                 # TODO: need to restore slit-in to the current position?
-                 # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-det-selector': {'rx': 0},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
+                 'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
+            'streak-focus': ("streak-ccd",  # manual focus in alignment tab
+                {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'off'},  # closed
+                 'filter': {'band': 'pass-through'},
+                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
+                }),
+            'temporal-spectrum': ("streak-ccd",  # acquisition tab
+                {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'off'},  # closed
+                 'filter': {'band': 'pass-through'},
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
+                 }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'slit-in-big': {'x': 'off'},  # closed
                  # 'cl-det-selector': {'x': 'off'},
                  # TODO
                  # 'spec-det-selector': {'rx': math.radians(90)},
@@ -151,7 +161,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'mirror-align': ("ccd",  # Also used for lens alignment
+            'mirror-align': (r"ccd.*",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
@@ -163,7 +173,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
+            'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
@@ -176,12 +186,12 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'on'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spec-focus': ("ccd",  # TODO: only use "focus" as target?
+            'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
-                 'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -199,13 +209,13 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
+            'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # In the current convention, only the spectrograph-dedicated
                  # can be after the fiber, so no need to check for spectrograph
-                 'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'spectrograph-dedicated': {'slit-in': 50e-6},  # small, to get a sharp line, but enought to get some light
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
@@ -226,7 +236,7 @@ SECOM_MODES = {
             'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
                 }),
-            'confocal': (r"photo-detector(\d*)",
+            'confocal': (r"photo-detector(\d*)$",
                 {
                 }),
             'overlay': ("ccd",
@@ -246,7 +256,7 @@ SECOM_MODES = {
                 }),
             }
 
-ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus', 'spec-fiber-focus'}
+ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus', 'streak-focus'}
 
 
 # TODO: Could be moved to util
@@ -299,9 +309,10 @@ class OpticalPathManager(object):
             if hasattr(comp, 'axes') and isinstance(comp.axes, dict):
                 self._actuators.append(comp)
 
-        # last known axes position
-        self._stored = {}
+        # last known axes position (before going to an alignment mode)
+        self._stored = {}  # (str, str) -> pos: (comp role, axis name) -> position
         self._last_mode = None  # previous mode that was set
+
         # Removes modes which are not supported by the current microscope
         for m, (det, conf) in self._modes.items():
             try:
@@ -357,32 +368,6 @@ class OpticalPathManager(object):
             if not self._chamber_view_own_focus:
                 logging.debug("No focus component affecting chamber")
 
-        # TODO: do this also for the sparc
-        if self.microscope.role == "sparc2":
-            # Remove the moves that don't affects the detector
-            for mode in self._modes:
-                det_role = self._modes[mode][0]
-                det = self._getComponent(det_role)
-                targets = {det.name}
-                # In case the "detector" (which might actually be any component)
-                # affects other components, also consider these affected
-                # components as the targets (as they are most probably the
-                # actual detectors).
-                targets.update(set(det.affects.value))
-
-                modeconf = self._modes[mode][1]
-                for act_role in modeconf.keys():
-                    try:
-                        act = self._getComponent(act_role)
-                    except LookupError:
-                        # TODO: just remove that move too?
-                        logging.debug("Failed to find component %s, skipping it", act_role)
-                        continue
-                    if not any(self.affects(act.name, n) for n in targets):
-                        logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
-                                      act_role, det_role, mode)
-                        del modeconf[act_role]
-
         # will take care of executing setPath asynchronously
         self._executor = ThreadPoolExecutor(max_workers=1)
 
@@ -416,7 +401,7 @@ class OpticalPathManager(object):
         """
         # if we have not returned raise an exception
         for comp in self._cached_components:
-            if comp.role is not None and re.match(role + '$', comp.role):
+            if comp.role is not None and re.match(role + "$", comp.role):
                 return comp
         # if not found...
         raise LookupError("No component with the role %s" % (role,))
@@ -436,55 +421,75 @@ class OpticalPathManager(object):
         if self.microscope.role in ("secom", "delphi"):
             if quality == ACQ_QUALITY_FAST:
                 # Restore the fan (if it was active before)
-                self._setCCDFan(True)
+                try:
+                    self._setCCDFan(True)
+                except Exception:
+                    # This can happen mainly if the hardware is in a bad state
+                    # let's not make a big fuss: only report the error.
+                    logging.exception("Failed to turn on CCD fan")
+
             # Don't turn off the fan if BEST: first wait for setPath()
 
-    def setPath(self, mode):
+    def setPath(self, mode, detector=None):
         """
         Given a particular mode it sets all the necessary components of the
         optical path (found through the microscope component) to the
         corresponding positions.
         path (stream.Stream or str): The stream or the optical path mode
+        detector (Component or None): The detector which will be targeted on this
+          path. This can only be set if the path is a str (optical mode). That
+          is useful in case the mode can be used with multiple detectors (eg,
+          fiber-align on a SPARC with multiple spectrometers). When path is a
+          Stream, the Stream.detector is always used.
         return (Future): a Future allowing to follow the status of the path
           update.
         raises (via the future):
             ValueError if the given mode does not exist
             IOError if a detector is missing
         """
-        f = self._executor.submit(self._doSetPath, mode)
+        f = self._executor.submit(self._doSetPath, mode, detector)
 
         return f
 
-    def _doSetPath(self, path):
+    def _doSetPath(self, path, detector):
         """
         Actual implementation of setPath()
         """
         if isinstance(path, stream.Stream):
+            if detector is not None:
+                raise ValueError("Not possible to specify both a stream, and a detector")
             try:
                 mode = self.guessMode(path)
             except LookupError:
                 logging.debug("%s doesn't require optical path change", path)
                 return
-            if mode not in self._modes:
-                raise ValueError("Mode '%s' does not exist" % (mode,))
             target = self.getStreamDetector(path)  # target detector
         else:
             mode = path
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             comp_role = self._modes[mode][0]
-            target = self._getComponent(comp_role)
+            if detector is None:
+                target = self._getComponent(comp_role)
+            else:
+                target = detector
 
         logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
 
         # Special SECOM mode: just look at the fan and be done
         if self.microscope.role in ("secom", "delphi"):
-            if self.quality == ACQ_QUALITY_FAST:
-                self._setCCDFan(True)
-            elif self.quality == ACQ_QUALITY_BEST:
-                self._setCCDFan(target.role == "ccd")
+            try:
+                if self.quality == ACQ_QUALITY_FAST:
+                    self._setCCDFan(True)
+                elif self.quality == ACQ_QUALITY_BEST:
+                    self._setCCDFan(target.role == "ccd")
+            except Exception:
+                # This can happen mainly if the hardware is in a bad state
+                # let's not make a big fuss: only report the error. The optical
+                # path is correct anyway, just potentially more vibrations.
+                logging.exception("Failed to change CCD fan")
 
-        fmoves = []  # moves in progress
+        fmoves = []  # moves in progress, list of (future, Component, dict(axis->pos) tuples
 
         # Restore the spectrometer focus before any other move, as (on the SR193),
         # the value is grating/output dependent
@@ -494,7 +499,7 @@ class OpticalPathManager(object):
             if self._focus_out_chamber_view is not None:
                 logging.debug("Restoring focus from before coming to chamber view to %s",
                               self._focus_out_chamber_view)
-                fmoves.append(focus_comp.moveAbs(self._focus_out_chamber_view))
+                fmoves.append((focus_comp.moveAbs(self._focus_out_chamber_view), focus_comp, self._focus_out_chamber_view))
 
         modeconf = self._modes[mode][1]
         for comp_role, conf in modeconf.items():
@@ -503,6 +508,13 @@ class OpticalPathManager(object):
                 comp = self._getComponent(comp_role)
             except LookupError:
                 logging.debug("Failed to find component %s, skipping it", comp_role)
+                continue
+
+            # Check whether that actuator affects the target
+            targets = {target.name} | set(target.affects.value)
+            if not any(self.affects(comp.name, n) for n in targets):
+                logging.debug("Actuator %s doesn't affect %s, so not moving it",
+                              comp.name, target.name)
                 continue
 
             mv = {}
@@ -534,7 +546,7 @@ class OpticalPathManager(object):
                                 # Just to store current band in order to restore
                                 # it once we leave this mode
                                 if self._last_mode not in ALIGN_MODES:
-                                    self._stored[axis] = comp.position.value[axis]
+                                    self._stored[comp_role, axis] = comp.position.value[axis]
                                 break
                         else:
                             logging.debug("Choice %s is not present in %s axis", pos, axis)
@@ -549,8 +561,8 @@ class OpticalPathManager(object):
                             # Store current grating (if we use one at the moment)
                             # to restore it once we use a normal grating again
                             if choices[comp.position.value[axis]] != "mirror":
-                                self._stored[axis] = comp.position.value[axis]
-                                self._stored['wavelength'] = comp.position.value['wavelength']
+                                self._stored[comp_role, axis] = comp.position.value[axis]
+                                self._stored[comp_role, 'wavelength'] = comp.position.value['wavelength']
                             # Use the special "mirror" grating, if it exists
                             for key, value in choices.items():
                                 if value == "mirror":
@@ -564,31 +576,28 @@ class OpticalPathManager(object):
                             if choices[comp.position.value[axis]] == "mirror":
                                 # if there is a grating stored use this one
                                 # otherwise find the non-mirror grating
-                                if axis in self._stored:
-                                    pos = self._stored[axis]
+                                if (comp_role, axis) in self._stored:
+                                    pos = self._stored[comp_role, axis]
                                 else:
                                     pos = self.findNonMirror(choices)
-                                if 'wavelength' in self._stored:
-                                    mv['wavelength'] = self._stored['wavelength']
+                                if (comp_role, 'wavelength') in self._stored:
+                                    mv['wavelength'] = self._stored[comp_role, 'wavelength']
                             else:
                                 pos = comp.position.value[axis]  # no change
                             try:
-                                del self._stored[axis]
+                                del self._stored[comp_role, axis]
                             except KeyError:
                                 pass
                             try:
-                                del self._stored['wavelength']
+                                del self._stored[comp_role, 'wavelength']
                             except KeyError:
                                 pass
                         else:
                             logging.debug("Using grating position as-is: '%s'", pos)
                             pass  # use pos as-is
                     elif axis == "slit-in":
-                        if self._last_mode not in ALIGN_MODES:
-                            # TODO: save also the component
-                            # FIXME: only if "spectrograph" (not "spectrograph-dedicated")?
-                            # Or also store the component
-                            self._stored[axis] = comp.position.value[axis]
+                        if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
+                            self._stored[comp_role, axis] = comp.position.value[axis]
                     elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                         choices = comp.axes[axis].choices
                         for key, value in choices.items():
@@ -602,39 +611,50 @@ class OpticalPathManager(object):
 
             try:
                 # move actuator
-                fmoves.append(comp.moveAbs(mv))
+                fmoves.append((comp.moveAbs(mv), comp, mv))
             except AttributeError:
-                logging.debug("%s not an actuator", comp_role)
+                logging.warning("%s not an actuator", comp_role)
 
         # Now take care of the selectors based on the target detector
         fmoves.extend(self.selectorsToPath(target.name))
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
-            if 'band' in self._stored:
-                try:
-                    flter = self._getComponent("filter")
-                    fmoves.append(flter.moveAbs({"band": self._stored['band']}))
-                except LookupError:
-                    logging.debug("No filter component available")
-            if 'slit-in' in self._stored:
-                try:
-                    spectrograph = self._getComponent("spectrograph")
-                    fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
-                except LookupError:
-                    logging.debug("No spectrograph component available")
+            logging.debug("Leaving align mode %s for %s, will restore positions: %s",
+                          self._last_mode, mode, self._stored)
+            for (cr, an), pos in self._stored.copy().items(): # copy for deleting entries
+                if an == "grating":
+                    continue  # handled separately via GRATING_NOT_MIRROR
+                comp = self._getComponent(cr)
+                fmoves.append((comp.moveAbs({an: pos}), comp, {an: pos}))
+                del self._stored[cr, an]
 
         # Save last mode
         self._last_mode = mode
 
         # wait for all the moves to be completed
-        for f in fmoves:
+        for f, comp, mv in fmoves:
             try:
-                # TODO: have some timeout?
                 # Can be large, eg within 5 min one (any) move should finish.
-                f.result()
+                f.result(timeout=180)
+
+                # To do an absolute move, an axis should be referenced (if it
+                # supports referencing). If not, that's an error (but for now we
+                # still try, just in case it might work anyway).
+                for a in mv:
+                    try:
+                        if (model.hasVA(comp, "referenced") and
+                            not comp.referenced.value.get(a, True)):
+                            logging.error("%s.%s is not referenced, it might be a sign of a hardware issue",
+                                          comp.name, a)
+                    except Exception:
+                        logging.exception("Failed to check %s.%s is referenced", comp.name, a)
+
             except IOError as e:
                 logging.warning("Actuator move failed giving the error %s", e)
+            except:
+                logging.exception("Actuator move failed!")
+                raise
 
         # When going to chamber view, store the current focus position, and
         # restore the special focus position for chamber, after _really_ all
@@ -656,7 +676,8 @@ class OpticalPathManager(object):
         Sets the selectors so the optical path leads to the target component
         (usually a detector).
         target (str): component name
-        return (list of futures)
+        return (list of tuple (futures, Component, dict)): for each move: the
+          future, the component, and the new position requested
         """
         fmoves = []
         for comp in self._actuators:
@@ -682,7 +703,7 @@ class OpticalPathManager(object):
 
             if mv:
                 logging.debug("Move %s added so %s targets to %s", mv, comp.name, target)
-                fmoves.append(comp.moveAbs(mv))
+                fmoves.append((comp.moveAbs(mv), comp, mv))
                 # make sure this component is also on the optical path
                 fmoves.extend(self.selectorsToPath(comp.name))
 
@@ -721,14 +742,14 @@ class OpticalPathManager(object):
     def getStreamDetector(self, path_stream):
         """
         Given a stream find the optical detector.
-        path_stream (object): The given stream
+        path_stream (Stream): The given stream
         returns (HwComponent): detector
         raises:
-                IOError if given object is not a stream
+                ValueError if given object is not a stream
                 LookupError: if stream has no detector
         """
         if not isinstance(path_stream, stream.Stream):
-            raise IOError("Given object is not a stream")
+            raise ValueError("Given object is not a stream")
 
         # Handle multiple detector streams
         if isinstance(path_stream, stream.MultipleDetectorStream):
@@ -740,7 +761,7 @@ class OpticalPathManager(object):
                     # TODO: handle setting multiple optical paths? => return all the detectors
                     role = st.detector.role
                     for conf in self.guessed.values():
-                        if conf[0] == role:
+                        if re.match(conf[0] + '$', role):
                             return st.detector
                     dets.append(st.detector)
                 except AttributeError:
@@ -756,7 +777,7 @@ class OpticalPathManager(object):
             except AttributeError:
                 pass  # will raise error just after
 
-        raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value))
+        raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value,))
 
     def findNonMirror(self, choices):
         """
@@ -782,6 +803,9 @@ class OpticalPathManager(object):
         """
         Returns True if "affecting" component affects -directly of indirectly-
         the "affected" component
+        affecting (str): component name
+        affected (str): component name
+        return bool
         """
         path = self.findPath(affecting, affected)
         if path is None:
@@ -789,10 +813,12 @@ class OpticalPathManager(object):
         else:
             return True
 
-    def findPath(self, node1, node2, path=[]):
+    def findPath(self, node1, node2, path=None):
         """
         Find any path between node1 and node2 (may not be shortest)
         """
+        if path is None:
+            path = []
         path = path + [node1]
         if node1 == node2:
             return path
@@ -852,7 +878,7 @@ class OpticalPathManager(object):
                 try:
                     try:
                         temp.value = min(comp.targetTemperature.range[1], 25)
-                    except (AttributeError, NotApplicableError):
+                    except AttributeError:
                         temp.value = util.find_closest(25, comp.targetTemperature.choices)
                 except Exception:
                     logging.warning("Failed to change targetTemperature when disabling fan",

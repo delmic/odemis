@@ -1,8 +1,7 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Light],
-    actuators: [PIGCS],
+    children: [Light, PIGCS],
 }
 
 Light: {

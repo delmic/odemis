@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import basestring
 import collections
 import glob
 import logging
@@ -55,7 +56,7 @@ def hextof(s):
         for c in s.split(","):
             d += chr(int(c, 16))
         return struct.unpack("<d", d)[0]
-    except ValueError, struct.error:
+    except (ValueError, struct.error):
         raise ValueError("Cannot convert %s to a float" % (s,))
 
 
@@ -141,7 +142,7 @@ MAX_GRATINGS_NUM = { # gratings
 
 class SpectraPro(model.Actuator):
     def __init__(self, name, role, port, turret=None, calib=None,
-                 _noinit=False, children=None, **kwargs):
+                 _noinit=False, dependencies=None, **kwargs):
         """
         port (string): name of the serial port to connect to.
         turret (None or 1<=int<=3): turret number set-up. If None, consider that
@@ -152,7 +153,7 @@ class SpectraPro(model.Actuator):
            blaze in nm, groove gl/mm, center adjust, slope adjust,
            focal length, inclusion angle, detector angle
         inverted (None): it is not allowed to invert the axes
-        children (dict str -> Component): "ccd" should be the CCD used to acquire
+        dependencies (dict str -> Component): "ccd" should be the CCD used to acquire
          the spectrum.
         _noinit (boolean): for internal use only, don't try to initialise the device
         """
@@ -180,11 +181,11 @@ class SpectraPro(model.Actuator):
         self._try_recover = True
 
         try:
-            self._ccd = children["ccd"]
+            self._ccd = dependencies["ccd"]
         except (TypeError, KeyError):
             # TODO: only needed if there is calibration info (for the pixel size)
             # otherwise it's fine without CCD.
-            raise ValueError("Spectrograph needs a child 'ccd'")
+            raise ValueError("Spectrograph needs a dependency 'ccd'")
 
         # according to the model determine how many gratings per turret
         model_name = self.GetModel()
@@ -222,14 +223,14 @@ class SpectraPro(model.Actuator):
                 "grating": model.Axis(choices=gchoices)
                 }
         # provides a ._axes
-        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+        model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
 
         # First step of parsing calib parmeter: convert to (int, int) -> ...
         calib = calib or ()
         if not isinstance(calib, collections.Iterable):
             raise ValueError("calib parameter must be in the format "
                              "[blz, gl, ca, sa, fl, ia, da], "
-                             "but got %s" % (calib))
+                             "but got %s" % (calib,))
         dcalib = {}
         for c in calib:
             if not isinstance(c, collections.Iterable) or len(c) != 7:
@@ -336,7 +337,7 @@ class SpectraPro(model.Actuator):
         # ?\r
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
 
-        assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
+        assert(1 < len(com) <= 100) # commands cannot be long
         com += "\r"
 
         logging.debug("Sending: %s", com.encode('string_escape'))
@@ -417,7 +418,7 @@ class SpectraPro(model.Actuator):
         # command we've just sent.
 
         try:
-            r = self._sendOrder("no-echo")
+            self._sendOrder("no-echo")
         except SPError:
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
 
@@ -448,7 +449,7 @@ class SpectraPro(model.Actuator):
         # TURRET  Specifies the presently installed turret or the turret to be installed.
         # Doesn't change the hardware, just which gratings are available
 
-        assert(1 <= t and t <= 3)
+        assert(1 <= t <= 3)
         # TODO check that there is grating configured for this turret (using GetGratingChoices)
         self._sendOrder("%d turret" % t)
 

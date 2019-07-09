@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # to provide input for high-resolution reconstruction algorithm.
 from __future__ import division
 
-import Queue
+import queue
 from collections import OrderedDict
 import logging
 from odemis import dataio, model, gui
@@ -91,7 +91,7 @@ class SRAcqPlugin(Plugin):
             "tooltip": "Each acquisition will be saved with the name and the number appended.",
             "control_type": gui.CONTROL_SAVE_FILE,
             "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
                 "HDF5 Files (*.h5)|*.h5",
         }),
         ("expectedDuration", {
@@ -162,8 +162,8 @@ class SRAcqPlugin(Plugin):
         self._future = None  # future to represent the acquisition progress
         self._exporter = None  # to save the file
 
-        self._q = Queue.Queue()  # queue of tuples (str, DataArray) for saving data
-        self._qdisplay = Queue.Queue()
+        self._q = queue.Queue()  # queue of tuples (str, DataArray) for saving data
+        self._qdisplay = queue.Queue()
         # TODO: find the right number of threads, based on CPU numbers (but with
         # python threading that might be a bit overkill)
         for i in range(4):
@@ -300,7 +300,7 @@ class SRAcqPlugin(Plugin):
                     # Hack: we pretend the stream has received an image it was
                     # subscribed to (although it's paused)
                     self._stream._onNewData(None, da)
-                except Queue.Empty:
+                except queue.Empty:
                     pass
 
             logging.info("Waiting for all data to be saved")

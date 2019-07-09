@@ -57,6 +57,9 @@ export NOMANUAL=1
 # This environment variable (should) make the driver test not try to use real hardware (only simulator)
 export TEST_NOHW=1
 
+# This environment variable makes the bugreporter test skip test cases that involve ticket creation
+export TEST_NO_SUPPORT_TICKET=1
+
 TESTLOG=./unittest-full-$DATE.log
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
@@ -79,6 +82,7 @@ if [ "$skippedfiles" != "" ]; then
     echo "$skippedfiles"
 fi
 
+echo -e "\n\n==============================================="
 echo "Running unit tests"
 echo "Running unit tests on $(date)" > "$TESTLOG"
 
@@ -90,7 +94,7 @@ for f in $testfiles; do
         echo "WARNING: test $f seems to not be runnable"
     fi
     echo "Running $f:" >> "$TESTLOG"
-    prev_size=$(stat -c '%s' "$TESTLOG")
+    prev_size=$(wc -l < "$TESTLOG")
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
@@ -99,18 +103,21 @@ for f in $testfiles; do
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
     # Don't show test output if the file hasn't grown, as it'd be the previous test output
-    new_size=$(stat -c '%s' "$TESTLOG")
+    new_size=$(wc -l < "$TESTLOG")
     if [[ "$new_size" == "$prev_size" ]]; then
         echo "NOT RUN"
     else
-        grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
+        tail -n "+$prev_size" "$TESTLOG" | grep -E 'OK' | tail -1
+        tail -n "+$prev_size" "$TESTLOG" | awk "/^FAIL: /,/FAILED/"
+        tail -n "+$prev_size" "$TESTLOG" | awk "/^ERROR: /,/FAILED/"
+        #tail -n "+$prev_size" "$TESTLOG" | awk '/===/, /FAILED/'
     fi
+    echo -e "\n"
     if [ "$status" -gt 0 ]; then
         # TODO: failures can increase even if the test reported OK, if it was killed
         # => synchronise it with FAILED
         failures=$(( $failures + 1 ))
     fi
-    echo Failures so far: $failures
 
     # Stops the back-end, just in case it happens to still be running
     sudo odemis-stop
@@ -144,5 +151,7 @@ ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
 if [ -d "$ODMPATH" ]; then
     "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
 fi
+
+# TODO: run GUI standalone tests by trying to load every test data file that we have.
 
 kill %1 # Stops the "tail -f"

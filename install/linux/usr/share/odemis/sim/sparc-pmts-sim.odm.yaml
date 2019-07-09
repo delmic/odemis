@@ -43,6 +43,7 @@ SPARC-MONASH: {
         channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
+        max_res: [5448, 4096], # 4:3 ratio
         settle_time: 5.e-6, # s
         hfw_nomag: 0.2553, # m
     },
@@ -68,8 +69,7 @@ SPARC-MONASH: {
 
 # Must be connected on AI 1/AI GND
 "CL PMT": { # the raw detector of the PMT
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {
         channel: 1, # 0-> sawtooth waves, 1-> square waves
@@ -95,7 +95,7 @@ SPARC-MONASH: {
     init: {
         settle_time: 1.0,  # s, time for the gain to be fully active
     },
-    children: {
+    dependencies: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
@@ -104,8 +104,7 @@ SPARC-MONASH: {
 
 # The real PMT is a counting PMT connected to PFI 8
 "Monochromator PMT": { # the raw detector of the counting PMT for monochromator
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {
         source: 8,  # PFI number
@@ -116,7 +115,7 @@ SPARC-MONASH: {
 "Monochromator": {
     class: pmtctrl.PMT,
     role: monochromator,
-    children: {
+    dependencies: {
        "detector": "Monochromator PMT",
        "pmt-control": "Spectrograph",
     },
@@ -243,7 +242,7 @@ SPARC-MONASH: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 64],
     },
@@ -264,7 +263,7 @@ SPARC-MONASH: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    children: {"ccd": "Spectral Camera"},
+    dependencies: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
@@ -279,7 +278,7 @@ SPARC-MONASH: {
 "Spec CCD-PMT Flipper": {
     class: actuator.MultiplexActuator,
     role: spec-det-selector,
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
     },

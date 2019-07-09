@@ -3,6 +3,7 @@ import subprocess
 import sys
 import odemis
 import traceback
+from builtins import input
 
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
@@ -14,7 +15,7 @@ nsis_command = [
 
 # PyInstaller/tkinter might have problems finding init.tcl
 if 'TCL_LIBRARY' not in os.environ or 'TK_LIBRARY' not in os.environ:
-    print "\n* ATTENTION * You might need to set the 'TCL_LIBRARY' and 'TK_LIBRARY' env vars!\n"
+    print("\n* ATTENTION * You might need to set the 'TCL_LIBRARY' and 'TK_LIBRARY' env vars!\n")
 
 
 def run_command(cmd, flavor=None):
@@ -25,7 +26,7 @@ def run_command(cmd, flavor=None):
     except Exception as ex:
         # Don't close terminal after raising Exception
         traceback.print_exc(ex)
-        raw_input("Press any key to exit.")
+        input("Press any key to exit.")
         sys.exit(-1)
 
 
@@ -34,19 +35,20 @@ def add_size_to_version():
         version = '.'.join(odemis._get_version().split('-')[:2])
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
-print "Build OdemisViewer", '.'.join(odemis._get_version().split('-')[:2])
+
+print("Build OdemisViewer", '.'.join(odemis._get_version().split('-')[:2]))
 
 os.chdir(os.path.dirname(__file__) or '.')
 
 
 def build_odemisviewer_exe():
-    rc = run_command(cpy_command)
-    return rc or run_command(pyi_command, "odemis")
+    run_command(cpy_command)
+    run_command(pyi_command, "odemis")
 
 
 def build_delphiviewer_exe():
-    rc = run_command(cpy_command)
-    return rc or run_command(pyi_command, "delphi")
+    run_command(cpy_command)
+    run_command(pyi_command, "delphi")
 
 
 def build_odemisviewer_inst():
@@ -72,7 +74,7 @@ def build_delphiviewer_inst():
 
 
 while True:
-    i = raw_input("""
+    i = input("""
     [1] OdemisViewer Executable
     [2] OdemisViewer Installer
 
@@ -127,6 +129,6 @@ while True:
         add_size_to_version()
     else:
         break
-    print "\n\nBuild Done."
+    print("\n\nBuild Done.")
 sys.exit(0)
 

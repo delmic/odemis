@@ -21,7 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Queue
+from past.builtins import basestring
+import queue
 from concurrent.futures import CancelledError
 import glob
 import logging
@@ -131,16 +132,14 @@ import time
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
 
-class PIGCSError(StandardError):
+class PIGCSError(Exception):
 
     def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
-        StandardError.__init__(self, errno, *args, **kwargs)
+        desc = self._errordict.get(errno, "Unknown error")
+        strerror = "PIGCS error %d: %s" % (errno, desc)
+        Exception.__init__(self, strerror, *args, **kwargs)
         self.errno = errno
-
-    def __str__(self):
-        desc = self._errordict.get(self.errno, "Unknown error")
-        return "PIGCS error %d: %s" % (self.errno, desc)
 
     _errordict = {
         0: "No error",
@@ -315,11 +314,17 @@ class PIGCSError(StandardError):
         5103: "RNP cannot be executed if axis is in closed loop",
         5104: "Relax procedure (RNP) needed",
         5200: "Axis must be configured for this action",
-        - 1024: "Motion error: position error too large, servo is switched off automatically",
+        -1001: "Unknown axis identifier",
+        -1008: "Controller is busy with some lengthy operation",
+        -1015: "One or more arguments given to function is invalid",
+        -1024: "Motion error: position error too large, servo is switched off automatically",
+        -1025: "Controller is already running a macro",
+        -1041: "Parameter could not be set with SPA--parameter not defined for this controller",
     }
 
 # constants for model number
 MODEL_C867 = 867
+MODEL_E709 = 709
 MODEL_E725 = 725
 MODEL_E861 = 861
 MODEL_UNKNOWN = 0
@@ -328,6 +333,7 @@ class Controller(object):
 
     idn_matches = {
         MODEL_C867: "Physik Instrumente.*,.*C-867",
+        MODEL_E709: "(?i)physik instrumente.*,.*E-709",
         MODEL_E725: "Physik Instrumente.*,.*E-725",
         MODEL_E861: "Physik Instrumente.*,.*E-861",
     }
@@ -350,7 +356,7 @@ class Controller(object):
                 raise ValueError("Controller %d, mix of closed-loop and "
                                  "open-loop axes is not supported", address)
             idn = busacc.sendQueryCommand(address, "*IDN?\n")
-            if re.search(cls.idn_matches[MODEL_E725], idn):
+            if re.search(cls.idn_matches[MODEL_E725], idn) or re.search(cls.idn_matches[MODEL_E709], idn):
                 subcls = CLAbsController
             else:
                 subcls = CLRelController
@@ -364,8 +370,7 @@ class Controller(object):
             else:
                 subcls = OLController
 
-        return super(Controller, cls).__new__(subcls, busacc, address, axes,
-                                              *args, **kwargs)
+        return super(Controller, cls).__new__(subcls)
 
     def __init__(self, busacc, address=None, axes=None, _stem=False):
         """
@@ -382,7 +387,7 @@ class Controller(object):
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if _stem:
-            self._channels = set(range(1, 17)) # allow commands to work on any axis
+            self._channels = set(bytes(v) for v in range(1, 17))  # allow commands to work on any axis
             return
         if axes is None:
             raise ValueError("Need to have at least one axis configured")
@@ -418,9 +423,9 @@ class Controller(object):
         try:
             self._hasRefSwitch = {a: self.HasRefSwitch(a) for a in self._channels}
         except NotImplementedError:
-            self._hasLimitSwitches = {a: False for a in self._channels}
+            self._hasRefSwitch = {a: False for a in self._channels}
 
-        # Dict of axis (int) -> bool: whether the axis supports position update
+        # Dict of axis (bytes) -> bool: whether the axis supports position update
         self.canUpdate = {a: False for a in self._channels}
 
         self._position = {} # m (dict axis-> position)
@@ -570,12 +575,12 @@ class Controller(object):
 
     def GetAxes(self):
         """
-        returns (set of int): all the available axes
+        returns (set of bytes): all the available axes
         """
         # SAI? (Get List Of Current Axis Identifiers)
         # SAI? ALL: list all axes (included disabled ones), one per line
         answer = self._sendQueryCommand("SAI? ALL\n")
-        axes = set(int(a) for a in answer)
+        axes = set(a for a in answer)
         return axes
 
     def GetAvailableCommands(self):
@@ -633,22 +638,22 @@ class Controller(object):
 
     def GetParameter(self, axis, param):
         """
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
-        assert 1 <= axis <= 16
+        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
-            raise ValueError("Parameter %d %d not available" % (axis, param))
+            raise ValueError("Parameter %s %d not available" % (axis, param))
 
-        answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
+        answer = self._sendQueryCommand("SPA? %s %d\n" % (axis, param))
         try:
             value = answer.split("=")[1]
         except IndexError:
             # no "=" => means the parameter is unknown
-            raise ValueError("Parameter %d %d unknown" % (axis, param))
+            raise ValueError("Parameter %s %d unknown" % (axis, param))
         return value
 
     def GetParameters(self):
@@ -672,16 +677,16 @@ class Controller(object):
 
     def SetParameter(self, axis, param, val, check=True):
         """
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         param (0<int): parameter id (cf p.35)
         val (str): value to set (if not a string, it will be converted)
         check (bool): if True, will check whether the hardware raised an error
         Raises ValueError if hardware complains
         """
         # SPA (Set Volatile Memory Parameters)
-        assert(1 <= axis <= 16)
+        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
         assert(0 <= param)
-        self._sendOrderCommand("SPA %d 0x%X %s\n" % (axis, param, val))
+        self._sendOrderCommand("SPA %s 0x%X %s\n" % (axis, param, val))
         if check:
             err = self.GetErrorNum()
             if err:
@@ -691,22 +696,22 @@ class Controller(object):
     def GetParameterNonVolatile(self, axis, param):
         """
         Read the value of the parameter in the non-volatile memory
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
         # SEP? (Get Non-Volatile Memory Parameters)
-        assert 1 <= axis <= 16
+        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
-            raise ValueError("Parameter %d %d not available" % (axis, param))
+            raise ValueError("Parameter %s %d not available" % (axis, param))
 
-        answer = self._sendQueryCommand("SEP? %d %d\n" % (axis, param))
+        answer = self._sendQueryCommand("SEP? %s %d\n" % (axis, param))
         try:
             value = answer.split("=")[1]
         except IndexError:
             # no "=" => means the parameter is unknown
-            raise ValueError("Parameter %d %d unknown" % (axis, param))
+            raise ValueError("Parameter %s %d unknown" % (axis, param))
         return value
 
     def SetCommandLevel(self, level, pwd):
@@ -724,7 +729,7 @@ class Controller(object):
         Returns the value for a command with axis.
         Ex: POS? 1 -> 1=25.3
         com (str): the 4 letter command (including the ?)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (int or float or str): value returned depending on the type detected
         """
         assert(axis in self._channels)
@@ -732,12 +737,11 @@ class Controller(object):
         if com not in self._avail_cmds:
             raise NotImplementedError("Command %s not supported by the controller" % (com,))
 
-        resp = self._sendQueryCommand("%s %d\n" % (com, axis))
+        resp = self._sendQueryCommand("%s %s\n" % (com, axis))
         try:
             value_str = resp.split("=")[1]
         except IndexError:
-            raise ValueError("Failed to parse answer from %s %d: '%s'" %
-                             (com, axis, resp))
+            raise ValueError("Failed to parse answer from %s %s: '%s'" % (com, axis, resp))
         try:
             value = int(value_str)
         except ValueError:
@@ -754,7 +758,7 @@ class Controller(object):
          the ends of the axis).
         Note: It's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (bool)
         """
         # LIM? (Indicate Limit Switches)
@@ -767,7 +771,7 @@ class Controller(object):
          the "middle" of the axis).
         Note: apparently it's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (bool)
         """
         # TRS? (Indicate Reference Switch)
@@ -776,7 +780,7 @@ class Controller(object):
 
     def GetMotionStatus(self, check=True):
         """
-        returns (set of int): the set of moving axes
+        returns (set of bytes): the set of moving axes
         Note: it seems the controller doesn't report moves when using OL via PID
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -797,9 +801,13 @@ class Controller(object):
         mv_axes = set()
         while bitmap > 0:
             if bitmap & 1:
-                mv_axes.add(i)
+                mv_axes.add(bytes(i))
             i += 1
             bitmap >>= 1
+        # if axes labels are not digits convert the mv_axes to characters.
+        if not all(k.isdigit() for k in self._channels):
+            # Assume axes are sorted alphabetically, i.e. 1 corresponds to x, 2 to y 3 to z.
+            mv_axes = set(n for i, n in enumerate(sorted(self._channels)) if bytes(i + 1) in mv_axes)
         return mv_axes
 
     def GetStatus(self):
@@ -833,7 +841,7 @@ class Controller(object):
         """
         Report whether the given axis has been referenced
         Note: setting position with RON disabled will also put it in this mode
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (bool)
         """
         # FRF? (Get Referencing Result)
@@ -844,7 +852,7 @@ class Controller(object):
         """
         Report whether the given axis is considered on target (for closed-loop
           moves only)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (bool)
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -853,7 +861,7 @@ class Controller(object):
         # cf parameters 0x3F (settle time), and 0x4D (algo), 0x406 (window size)
         # 0x407 (window off size)
         if check:
-            com = ["ERR?\n", "ONT? %d\n" % (axis,)]
+            com = ["ERR?\n", "ONT? %s\n" % (axis,)]
             lresp = self._sendQueryCommand(com)
             err = int(lresp[0])
             if err:
@@ -863,7 +871,7 @@ class Controller(object):
             if len(ss) != 2:
                 raise ValueError("Failed to parse answer from %s: '%s'" %
                                  (com, lresp))
-            return (ss[1] == "1")
+            return ss[1] == "1"
         else:
             return self._readAxisValue("ONT?", axis) == 1
 
@@ -894,18 +902,18 @@ class Controller(object):
         """
         Call relaxing procedure. Reduce voltage, to increase lifetime and needed
           to change between modes
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         """
         # RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
         # Also needed to change between nanostepping and analog
         assert(axis in self._channels)
-        self._sendOrderCommand("RNP %d 0\n" % axis)
+        self._sendOrderCommand("RNP %s 0\n" % axis)
 
     def Halt(self, axis=None):
         """
         Stop motion with deceleration
         Note: see Stop
-        axis (1<int<16): axis number,
+        axis (bytes): axis number,
         """
         # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
@@ -915,7 +923,7 @@ class Controller(object):
                 self._sendOrderCommand("HLT\n")
             else:
                 assert(axis in self._channels)
-                self._sendOrderCommand("HLT %d\n" % axis)
+                self._sendOrderCommand("HLT %s\n" % axis)
 
             # need to recover from the "error", otherwise nothing works
             error = self.GetErrorNum()
@@ -942,13 +950,13 @@ class Controller(object):
     def GetServo(self, axis):
         """
         Return whether the servo is active or not
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (bool): True if the servo is active (closed-loop)
         """
         # SVO? (Get Servo State)
         assert(axis in self._channels)
 
-        ans = self._sendQueryCommand("SVO? %d\n" % (axis,))
+        ans = self._sendQueryCommand("SVO? %s\n" % (axis,))
         ss = ans.split("=")
         if len(ss) != 2:
             raise IOError("Failed to parse answer from SVO?: '%s'" % (ans,))
@@ -958,7 +966,7 @@ class Controller(object):
         """
         Activate or de-activate the servo.
         Note: only activate it if there is a sensor (cf .HasRefSwitch and ._hasRefSwitch)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
         # SVO (Set Servo State)
@@ -971,13 +979,13 @@ class Controller(object):
             state = 0
         # FIXME: on E861 it seems recommended to first relax piezo.
         # On C867, RNP doesn't even exists
-        self._sendOrderCommand("SVO %d %d\n" % (axis, state))
+        self._sendOrderCommand("SVO %s %d\n" % (axis, state))
 
     def SetReferenceMode(self, axis, absolute):
         """
         Select the reference mode.
         Note: only useful for closed-loop moves
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         absolute (bool): If True, absolute moves can be used, but needs to have
           been referenced.
           If False only relative moves can be used, but only needs a sensor to
@@ -991,7 +999,7 @@ class Controller(object):
             state = 1
         else:
             state = 0
-        self._sendOrderCommand("RON %d %d\n" % (axis, state))
+        self._sendOrderCommand("RON %s %d\n" % (axis, state))
 
     # Functions for relative move in open-loop (no sensor)
     def OLMoveStep(self, axis, steps):
@@ -999,7 +1007,7 @@ class Controller(object):
         Moves an axis for a number of steps. Can be done only with servo off.
         If the axis is already moving, the number of steps to perform is
         reset to the new number. IOW, it is not added up.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         steps (float): number of steps to do (can be a float). If negative, goes
           the opposite direction. 1 step is about 10µm.
         """
@@ -1007,51 +1015,51 @@ class Controller(object):
         assert(axis in self._channels)
         if steps == 0:
             return
-        self._sendOrderCommand("OSM %d %.6f\n" % (axis, steps))
+        self._sendOrderCommand("OSM %s %.6f\n" % (axis, steps))
 
     def SetStepAmplitude(self, axis, amplitude):
         """
         Set the amplitude of one step (in nanostep mode). It affects the velocity
         of OLMoveStep.
         Note: probably it's best to set it to 55 and use OVL to change speed.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         amplitude (0<=float<=55): voltage applied (the more the further)
         """
         # SSA (Set Step Amplitude) : for nanostepping
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("SSA %d %.6f\n" % (axis, amplitude))
+        self._sendOrderCommand("SSA %s %.6f\n" % (axis, amplitude))
 
     def GetStepAmplitude(self, axis):
         """
         Get the amplitude of one step (in nanostep mode).
         Note: mostly just for self-test
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (0<=float<=55): voltage applied
         """
         # SSA? (Get Step Amplitude), returns something like:
         # 1=10.0000
         assert(axis in self._channels)
-        answer = self._sendQueryCommand("SSA? %d\n" % axis)
+        answer = self._sendQueryCommand("SSA? %s\n" % axis)
         amp = float(answer.split("=")[1])
         return amp
 
     def OLAnalogDriving(self, axis, amplitude):
         """
         Use analog mode to move the axis by a given amplitude.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         amplitude (-55<=float<=55): Amplitude of the move. It's only a small move.
           55 is approximately 5 um.
         """
         # OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("OAD %d %.6f\n" % (axis, amplitude))
+        self._sendOrderCommand("OAD %s %.6f\n" % (axis, amplitude))
 
     def GetOLVelocity(self, axis):
         """
         Get velocity for open-loop montion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return float: velocity in step-cycles/s
         """
         assert(axis in self._channels)
@@ -1060,18 +1068,18 @@ class Controller(object):
     def SetOLVelocity(self, axis, velocity):
         """
         Set velocity for open-loop nanostepping motion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
         """
         # OVL (Set Open-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("OVL %d %.6f\n" % (axis, velocity))
+        self._sendOrderCommand("OVL %s %.6f\n" % (axis, velocity))
 
     def GetOLAcceleration(self, axis):
         """
         Get acceleration for open-loop montion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return float: acceleration in step-cycles/s²
         """
         assert(axis in self._channels)
@@ -1080,36 +1088,36 @@ class Controller(object):
     def SetOLAcceleration(self, axis, value):
         """
         Set open-loop acceleration of given axis.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         value (0<float): acceleration in step-cycles/s². Default is 2000
         """
         # OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("OAC %d %.6f\n" % (axis, value))
+        self._sendOrderCommand("OAC %s %.6f\n" % (axis, value))
 
     def SetOLDeceleration(self, axis, value):
         """
         Set the open-loop deceleration.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         value (0<float): deceleration in step-cycles/s². Default is 2000
         """
         # ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ODC %d %.6f\n" % (axis, value))
+        self._sendOrderCommand("ODC %s %.6f\n" % (axis, value))
 
     # Methods for closed-loop functionality. For all of them, servo must be on
     def MoveAbs(self, axis, pos):
         """
         Start an absolute move of an axis to specific position.
          Can only be done with servo on and referenced.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         pos (float): position in "user" unit
         """
         # MOV (Set Target Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MOV %d %.6f\n" % (axis, pos))
+        self._sendOrderCommand("MOV %s %.6f\n" % (axis, pos))
 
     def MoveRel(self, axis, shift):
         """
@@ -1117,19 +1125,19 @@ class Controller(object):
          Can only be done with servo on and referenced.
         If the axis is moving, the target position is updated, and so the moves
         will add up.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         shift (float): change of position in "user" unit
         """
         # MVR (Set Target Relative To Current Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MVR %d %.6f\n" % (axis, shift))
+        self._sendOrderCommand("MVR %s %.6f\n" % (axis, shift))
 
     def ReferenceToLimit(self, axis, lim=1):
         """
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         lim (-1 or 1): -1 for negative limit and 1 for positive limit
         """
         # FNL (Fast Reference Move To Negative Limit)
@@ -1137,20 +1145,20 @@ class Controller(object):
         assert(axis in self._channels)
         assert(lim in (-1, 1))
         if lim == 1:
-            self._sendOrderCommand("FPL %d\n" % axis)
+            self._sendOrderCommand("FPL %s\n" % axis)
         else:
-            self._sendOrderCommand("FNL %d\n" % axis)
+            self._sendOrderCommand("FNL %s\n" % axis)
 
     def ReferenceToSwitch(self, axis):
         """
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         """
         # FRF (Fast Reference Move To Reference Switch)
         assert(axis in self._channels)
-        self._sendOrderCommand("FRF %d\n" % axis)
+        self._sendOrderCommand("FRF %s\n" % axis)
 
     def AutoZero(self, axes=None, voltage=None):
         """
@@ -1167,16 +1175,16 @@ class Controller(object):
         if axes is not None:
             for i, a in enumerate(axes):
                 if voltage is None:
-                    acmd += " %d NAN" % (a,)
+                    acmd += " %s NAN" % (a,)
                 else:
-                    acmd += " %d %g" % (a, voltage[i])
+                    acmd += " %s %g" % (a, voltage[i])
 
         self._sendOrderCommand("ATZ%s\n" % acmd)
 
     def GetAutoZero(self, axis):
         """
         Return the status of the Auto Zero procedure for the given axis
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (bool): True if successfull, False otherwise
         """
         ans = self._readAxisValue("ATZ?", axis)
@@ -1185,7 +1193,7 @@ class Controller(object):
     def GetPosition(self, axis):
         """
         Get the position (in "user" units)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (float): pos can be negative
         Note: after referencing, a constant is added by the controller
         """
@@ -1196,7 +1204,7 @@ class Controller(object):
         """
         Get the target position (in "user" units)
         Note: only works for closed loop controllers
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (float): pos can be negative
         """
         # MOV? (Get Target Position)
@@ -1206,16 +1214,16 @@ class Controller(object):
         """
         Assign a position value (in "user" units) for the current location.
         No move is performed.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         pos (float): pos can be negative
         """
         # POS (SetRealPosition)
-        return self._sendOrderCommand("POS %d %.6f\n" % (axis, pos))
+        return self._sendOrderCommand("POS %s %.6f\n" % (axis, pos))
 
     def GetMinPosition(self, axis):
         """
         Get the minimum reachable position (in "user" units)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (float): pos can be negative
         """
         # TMN? (Get Minimum Commandable Position)
@@ -1224,7 +1232,7 @@ class Controller(object):
     def GetMaxPosition(self, axis):
         """
         Get the maximum reachable position (in "user" units)
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         return (float): pos can be negative
         """
         # TMX? (Get Maximum Commandable Position)
@@ -1234,7 +1242,7 @@ class Controller(object):
     def GetCLVelocity(self, axis):
         """
         Get velocity for closed-loop motion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         """
         # VEL (Get Closed-Loop Velocity)
         assert(axis in self._channels)
@@ -1243,18 +1251,18 @@ class Controller(object):
     def SetCLVelocity(self, axis, velocity):
         """
         Set velocity for closed-loop motion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         velocity (0<float): velocity in units/s
         """
         # VEL (Set Closed-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("VEL %d %.6f\n" % (axis, velocity))
+        self._sendOrderCommand("VEL %s %.6f\n" % (axis, velocity))
 
     def GetCLAcceleration(self, axis):
         """
         Get acceleration for closed-loop motion.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         """
         # VEL (Get Closed-Loop Acceleration)
         assert(axis in self._channels)
@@ -1263,24 +1271,24 @@ class Controller(object):
     def SetCLAcceleration(self, axis, value):
         """
         Set closed-loop acceleration of given axis.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         value (0<float): acceleration in units/s²
         """
         # ACC (Set Closed-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ACC %d %.6f\n" % (axis, value))
+        self._sendOrderCommand("ACC %s %.6f\n" % (axis, value))
 
     def SetCLDeceleration(self, axis, value):
         """
         Set the closed-loop deceleration.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         value (0<float): deceleration in units/s²
         """
         # DEC (Set Closed-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("DEC %d %.6f\n" % (axis, value))
+        self._sendOrderCommand("DEC %s %.6f\n" % (axis, value))
 
     def SetRecordRate(self, value):
         """
@@ -1380,11 +1388,11 @@ class Controller(object):
         """
         Moves an axis for a given distance. While it's moving, data will be
         recorded. Can be done only if not referenced.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         shift (float): relative distance in user unit
         """
         assert(axis in self._channels)
-        self._sendOrderCommand("STE %d %.6f\n" % (axis, shift))
+        self._sendOrderCommand("STE %s %.6f\n" % (axis, shift))
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
@@ -1417,7 +1425,7 @@ class Controller(object):
         """
         Save move information for interpolating the position
         To be called when a new move is started
-        axis (int): the channel
+        axis (bytes): the channel
         shift (float): relative change in position (im m)
         duration (0<float): time it will take (in s)
         """
@@ -1484,7 +1492,7 @@ class Controller(object):
         Changes the move speed of the motor (for the next move).
         Note: in open-loop mode, it's very approximate.
         speed (0<float<10): speed in m/s.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         """
         assert (axis in self._channels)
         assert (self.speed_rng[axis][0] <= speed <= self.speed_rng[axis][1])
@@ -1500,7 +1508,7 @@ class Controller(object):
         """
         Move on a given axis for a given distance.
         It's asynchronous: the method might return before the move is complete.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
         """
@@ -1510,7 +1518,7 @@ class Controller(object):
         """
         Move on a given axis to a given position.
         It's asynchronous: the method might return before the move is complete.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         position (float): the target position in m (can be negative)
         returns (float): approximate distance actually moved
         """
@@ -1523,7 +1531,7 @@ class Controller(object):
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving.
-        axes (None or set of int): axes to check whether for move, or all if None
+        axes (None or set of bytes): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
         raise PIGCSError if an error on a controller happened
         """
@@ -1549,7 +1557,7 @@ class Controller(object):
         """
         Wait until the motion of all the given axis is finished.
         Note: there is a 5 s timeout
-        axes (None or set of int): axes to check whether for move, or all if None
+        axes (None or set of bytes): axes to check whether for move, or all if None
         """
         timeout = 5 # s
         end = time.time() + timeout
@@ -1598,8 +1606,8 @@ class Controller(object):
             if self._model in (MODEL_C867,): # support temperature reading
                 # No support for direct open-loop mode
                 # TODO put the temperature as a RO VA?
-                current_temp = float(self.GetParameter(1, 0x57))
-                max_temp = float(self.GetParameter(1, 0x58))
+                current_temp = float(self.GetParameter("1", 0x57))
+                max_temp = float(self.GetParameter("1", 0x58))
                 if current_temp >= max_temp:
                     logging.error("Motor of controller %s too hot (%f C)", self.address, current_temp)
                     return False
@@ -1655,7 +1663,7 @@ class CLAbsController(Controller):
         super(CLAbsController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
         # For _getPositionCached()
-        self._lastpos = {}  # axis (int) -> (pos (float), timestamp (float))
+        self._lastpos = {}  # axis (bytes) -> (pos (float), timestamp (float))
 
         # It's pretty much required to reference the axes, and fast and
         # normally not dangerous (travel range is very small).
@@ -1676,19 +1684,22 @@ class CLAbsController(Controller):
 
         for a, cl in axes.items():
             if a not in self._channels:
-                raise LookupError("Axis %d is not supported by controller %s" % (a, address))
+                raise LookupError("Axis %s is not supported by controller %s" % (a, address))
 
             if not cl:  # want open-loop?
                 raise ValueError("Initialising CLAbsController with request for open-loop")
 
-            # Check the unit is um
-            # TODO: cf PUN? Seems less supported than the parameter (eg, E-861 doesn't)
-            unit = self.GetParameter(a, 0x7000601)
-            if unit.lower() == "um":
-                self._upm[a] = 1e-6  # m
+            if self._model == MODEL_E709:
+                self._upm[a] = 1e-6
             else:
-                raise IOError("Controller %s configured with unit %s, but only "
-                              "micrometers (UM) is supported." % (address, unit))
+                # Check the unit is um
+                # TODO: cf PUN? Seems less supported than the parameter (eg, E-861 doesn't)
+                unit = self.GetParameter(a, 0x7000601)
+                if unit.lower() == "um":
+                    self._upm[a] = 1e-6  # m
+                else:
+                    raise IOError("Controller %s configured with unit %s, but only "
+                                  "micrometers (UM) is supported." % (address, unit))
 
             # Start the closed loop
             self.SetServo(a, True)
@@ -1753,7 +1764,7 @@ class CLAbsController(Controller):
     def getPosition(self, axis, maxage=0):
         """
         Find current position as reported by the sensor
-        axis (int)
+        axis (bytes)
         maxage (0 < float): maximum time (in s) since last reading before the
           position will be re-read from the hardware.
         return (float): the current position of the given axis
@@ -1771,7 +1782,7 @@ class CLAbsController(Controller):
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving (ie, last requested move is over)
-        axes (None or set of int): axes to check whether for move, or all if None
+        axes (None or set of bytes): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
         raise PIGCSError: if there is an error with the controller
         """
@@ -1824,12 +1835,18 @@ class CLRelController(Controller):
 #           For supporting absolute moves, we need to add querying and requesting
 #           "homing" procedure. Then the position would reset to 0 (and that's it
 #           from the user's point of view).
-    def __init__(self, busacc, address=None, axes=None, auto_suspend=10):
+    def __init__(self, busacc, address=None, axes=None, auto_suspend=10, suspend_mode="read"):
         """
-        auto_suspend (False or 0 < float): delay before turning off the servo
-          and encoder after a normal move. Useful as the encoder might cause
-          some warm up, and also ensures that no vibrations are caused by trying
-          to stay on target.
+        auto_suspend (False or 0 < float): delay before stopping the servo (and
+          encoder if possible). Useful as the encoder might cause some warm up,
+          and also ensures that no vibrations are caused by trying to stay on target.
+          If False, it will never turn the servo off between nornal moves.
+        suspend_mode ("read" or "full"): How to suspend the servo.
+          "full" will stop the servo and turn off the encoder. The main advantage
+            is that it avoids heating up while not moving (ie, reduce drift).
+            Only possible if sensor can be turned off (param 0x56).
+          "read" will pause the servo, and keep reading the sensor. This allows
+            to monitor the drift even when not moving. Default is "read".
         """
         super(CLRelController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
@@ -1851,13 +1868,13 @@ class CLRelController(Controller):
 
         for a, cl in axes.items():
             if a not in self._channels:
-                raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+                raise LookupError("Axis %s is not supported by controller %d" % (a, address))
 
             if not cl:  # want open-loop?
                 raise ValueError("Initialising CLRelController with request for open-loop")
             if not self._hasRefSwitch[a]:
                 logging.warning("Closed-loop control requested but controller "
-                                "%d reports no reference sensor for axis %d",
+                                "%d reports no reference sensor for axis %s",
                                 address, a)
 
             # Check the unit is mm
@@ -1873,21 +1890,23 @@ class CLRelController(Controller):
             # To be taken when reading position or affecting encoder reading
             self._pos_lock[a] = threading.RLock()
 
-            # TODO: allow to force servo_suspend off on E861 with encoder off support
             # We have two modes for auto_suspend:
-            #  * Servo and encoder off: used when encoders can be turned off.
+            #  * full: Servo and encoder off.
             #    That typically happens with the C-867. It allows to reduce heat
             #    due to encoder using infra-red light (and ensures the motor
-            #    doesn't move.
-            #  * PID values set to 0,0,0: used when encoders cannot be turned off.
+            #    doesn't move).
+            #  * read: PID values set to 0,0,0.
             #    That typically happens with the E-861. It avoids going through
             #    the piezo "relax" procedure that takes time (4 x slew rate) and
-            #    causes up to 100 nm move.
-            if 0x56 in self._avail_params:  # Parameter to control encoder power
+            #    causes up to 100 nm move. It also allows to monitor the position.
+            if suspend_mode == "full":
                 self._servo_suspend = True
                 if self._auto_suspend:
                     logging.info("Will turn off servo when axis not in use")
-            else:
+                    if 0x56 not in self._avail_params:  # Parameter to control encoder power
+                        logging.warning("Controller %d cannot turn off sensor so suspend_mode full is not useful",
+                                        address)
+            elif suspend_mode == "read":
                 self._servo_suspend = False
                 # Save the "real" PID values, from the EEPROM, so that even if
                 # the driver catastrophically finished with PID set to 0,0,0 ,
@@ -1898,8 +1917,10 @@ class CLRelController(Controller):
 
                 if self._auto_suspend:
                     logging.info("Will use PID = 0,0,0 when axis not in use")
+            else:
+                raise ValueError("Unexpected suspend_mode '%s' (should be read or full)" % (suspend_mode,))
 
-            try:  # Only exists on E-861 (and only used when _servo_suspend == True)
+            try:  # Only exists on E-861 (to know how long it takes to start the servo)
                 # slew rate is stored in ms
                 self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) / 1000
             except ValueError:  # param doesn't exist => no problem
@@ -1942,10 +1963,10 @@ class CLRelController(Controller):
             self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value for min)
 
             self._suspendAxis(a)  # in case it was not off yet
-            self._suspend_req[a] = Queue.Queue()
+            self._suspend_req[a] = queue.Queue()
             self._axis_ready[a] = threading.Event()
             t = threading.Thread(target=self._suspend_mng_run,
-                                 name="Suspend manager ctrl %d axis %d" % (address, a),
+                                 name="Suspend manager ctrl %d axis %s" % (address, a),
                                  args=(a,))
             t.daemon = True
             self._encoder_mng[a] = t
@@ -1959,10 +1980,13 @@ class CLRelController(Controller):
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
             self._suspend_req[a].put(MNG_TERMINATE)
+            self._stopServo(a)
             if not self._servo_suspend:
                 # Make sure the PID values are back to the normal move
-                self._resumeAxis(a)
-            self._stopServo(a)
+                P, I, D = self._pid
+                self.SetParameter(a, 1, P, check=False)  # P
+                self.SetParameter(a, 2, I, check=False)  # I
+                self.SetParameter(a, 3, D, check=False)  # D
 
     def recoverTimeout(self):
         ret = Controller.recoverTimeout(self)
@@ -1983,7 +2007,7 @@ class CLRelController(Controller):
         That means during this time it's not possible to move the axes.
         Referencing is lost.
         Should only be called when no move is taking place.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         """
         with self._pos_lock[axis]:
             self.SetServo(axis, False)
@@ -2001,7 +2025,7 @@ class CLRelController(Controller):
     def _startServo(self, axis):
         """
         Turn on the servo and the suplly power of the encoder.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         """
         with self._pos_lock[axis]:
             # Param 0x56 is only for C-867 and newer E-861 and allows to control encoder power
@@ -2086,6 +2110,11 @@ class CLRelController(Controller):
     def _resumeAxis(self, axis):
         if self._servo_suspend:
             self._startServo(axis)
+            try:
+                self.checkError()
+            except PIGCSError as ex:
+                logging.error("Axis %s/%s failed during resume: %s",
+                                self.address, axis, ex)
         else:
             # The servo should be on all the time, but if for some reason there
             # was an error, the servo might have been disabled => need to put
@@ -2153,7 +2182,7 @@ class CLRelController(Controller):
                     timeout = stopt - now
                     try:
                         msg = q.get(timeout=timeout)
-                    except Queue.Empty:
+                    except queue.Empty:
                         # time to stop the encoder => just do the loop again
                         continue
                 else:  # time to stop
@@ -2216,7 +2245,7 @@ class CLRelController(Controller):
         Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         """
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
@@ -2313,7 +2342,7 @@ class CLRelController(Controller):
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving (ie, last requested move is over)
-        axes (None or set of int): axes to check whether for move, or all if None
+        axes (None or set of bytes): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
         raise PIGCSError: if there is an error with the controller
         """
@@ -2370,7 +2399,7 @@ class CLRelController(Controller):
         """
         Start a referencing move. Use isMoving() or isReferenced() to know if
         the move is over. Position will change, as well as absolute positions.
-        axis (1<=int<=16)
+        axis (bytes)
         """
         self._acquireAxis(axis)
 
@@ -2387,6 +2416,7 @@ class CLRelController(Controller):
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
             raise NotImplementedError("Don't know how to reference to limit yet")
+            # TODO code for reference support to be implemented, for now code unreachable
             self.ReferenceToLimit(axis)
             # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))
@@ -2441,7 +2471,7 @@ class OLController(Controller):
 
         for a, cl in axes.items():
             if a not in self._channels:
-                raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+                raise LookupError("Axis %s is not supported by controller %d" % (a, address))
 
             if cl: # want closed-loop?
                 raise ValueError("Initialising OLController with request for closed-loop")
@@ -2455,7 +2485,7 @@ class OLController(Controller):
 
             try:
                 # (max m/s) = (max step/s) * (step/m)
-                max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
+                max_speed = float(self.GetParameter("1", 0x7000204)) / self._dist_to_steps # m/s
                 # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
                 # (max m/s²) = (max step/s²) * (step/m)
 #                 max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
@@ -2478,7 +2508,7 @@ class OLController(Controller):
             except (IOError, NotImplementedError):
                 try:
                     # Try with the parameter (for older versions of E-861)
-                    self._accel[a] = float(self.GetParameter(1, 0x7000202)) / self._dist_to_steps  # m/s²
+                    self._accel[a] = float(self.GetParameter("1", 0x7000202)) / self._dist_to_steps  # m/s²
                 except (IOError, ValueError) as err:
                     self._accel[a] = 0.01  # m/s² # Unknown
                     logging.debug("Using default acceleration value after error '%s'", err)
@@ -2515,7 +2545,7 @@ class OLController(Controller):
         Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
-        axis (1<=int<=16): the axis
+        axis (bytes): the axis
         """
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
@@ -2610,7 +2640,7 @@ class SMOController(Controller):
         # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
-        self._max_motor_out = int(self.GetParameter(1, 0x9))
+        self._max_motor_out = int(self.GetParameter("1", 0x9))
         # official approx. min is 3V, but from test, it can sometimes go down to 1.5V.
         self._min_motor_out = int((vmin / 10) * 32767) # encoded as a ratio of 10 V * 32767
         if self._max_motor_out < self._min_motor_out:
@@ -2639,18 +2669,18 @@ class SMOController(Controller):
         """
         Stop the fake PID driving when doing open-loop
         """
-        self._sendOrderCommand("SMO %d 0\n" % axis)
+        self._sendOrderCommand("SMO %s 0\n" % axis)
 
     def OLMovePID(self, axis, voltage, t):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
           the negative direction. 32766 is 10V
         t (0<int <= 9999): time in ms.
         """
         # Uses MAC OS, based on SMO
-        assert(axis == 1) # seems not possible to have 3 parameters?!
+        assert(axis == '1') # seems not possible to have 3 parameters?!
         assert(-32768 <= voltage <= 32767)
         assert(0 < t <= 9999)
 
@@ -2659,13 +2689,13 @@ class SMOController(Controller):
 
     def _isAxisMovingOLViaPID(self, axis):
         """
-        axis (1<int<16): axis number
+        axis (bytes): axis number
         returns (boolean): True moving axes for the axes controlled via PID
         raise PIGCSError if an error on a controller happened
         """
         # "SMO?" (Get Control Value)
         # Reports the speed set. If it's 0, it's not moving, otherwise, it is.
-        errs, answer = self._sendQueryCommand(["ERR?\n", "SMO? %d\n" % axis])
+        errs, answer = self._sendQueryCommand(["ERR?\n", "SMO? %s\n" % axis])
         err = int(errs)
         if err:
             raise PIGCSError(err)
@@ -2736,7 +2766,7 @@ class SMOController(Controller):
         speed = self._speed[axis]
         v, t, ad = self._convertDistanceSpeedToPIDControl(distance, speed)
         if t == 0: # if distance is too small, report it
-            logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
+            logging.debug(u"Move of %g µm too small, not moving", distance * 1e-6)
             return 0
         else:
             self.OLMovePID(axis, v, t)
@@ -2779,6 +2809,7 @@ class Bus(model.Actuator):
     def __init__(self, name, role, port, axes, baudrate=38400,
                  dist_to_steps=None, min_dist=None,
                  vmin=None, speed_base=None, auto_suspend=None,
+                 suspend_mode=None,
                  _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
@@ -2791,10 +2822,10 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         baudrate (int): baudrate of the serial port (default is the recommended
           38400). Use .scan() to detect it.
-        auto_suspend (dict str -> (False or 0 < float)): delay before turning
-          off the servo (and encoder if possible) for closed-loop controllers
-          If False, it will never turn the servo off between nornal moves.
+        auto_suspend (dict str -> (False or 0 < float)): see CLRelController.
           Default is 10 s.
+        suspend_mode (dict str -> "read" or "full"): see CLRelController.
+          Default is "read".
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
@@ -2805,11 +2836,15 @@ class Bus(model.Actuator):
         vmin = vmin or {}
         speed_base = speed_base or {}
         auto_suspend = auto_suspend or {}
+        suspend_mode = suspend_mode or {}
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
         controllers = {} # address -> kwargs (axes, dist_to_steps, min_dist, vpms...)
         for axis, (add, channel, isCL) in axes.items():
+            if isinstance(channel, int):
+                channel = str(channel)
+            channel = channel.encode("ascii")  # bytes
             if add not in controllers:
                 controllers[add] = {"axes": {}}
             kwc = controllers[add]
@@ -2828,6 +2863,8 @@ class Bus(model.Actuator):
                 kwc["speed_base"] = speed_base[axis]
             if axis in auto_suspend:
                 kwc["auto_suspend"] = auto_suspend[axis]
+            if axis in suspend_mode:
+                kwc["suspend_mode"] = suspend_mode[axis]
 
         # Special support for no address
         if len(controllers) == 1 and None in controllers:
@@ -3160,6 +3197,7 @@ class Bus(model.Actuator):
         moving_axes = set(axes)
 
         need_pos_update = True
+        raise_exp = None  # exception to raise at the end
 
         last_upd = time.time()
         dur = max(0.01, min(end - last_upd, 60))
@@ -3184,6 +3222,11 @@ class Bus(model.Actuator):
                     # TODO: change isMoving to report separate info on multiple channels
                     if not controller.isMoving({channel}):
                         moving_axes.discard(an)
+                        try:
+                            controller.checkError()
+                        except PIGCSError as ex:
+                            raise_exp = ex  # Keep it for the end, while waiting for other axes
+                            logging.error("Move on axis %s has failed: %s", an, ex)
                 if not moving_axes:
                     # no more axes to wait for
                     break
@@ -3218,6 +3261,9 @@ class Bus(model.Actuator):
                 raise CancelledError()
         except Exception:
             raise
+        else:
+            if raise_exp:
+                raise raise_exp
         finally:
             if need_pos_update:
                 # Position update takes quite some time, which increases latency for
@@ -3974,7 +4020,7 @@ class E861Simulator(object):
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)
-        args = filter(bool, com.split(" "))
+        args = [a for a in com.split(" ") if bool(a)]
         logging.debug("Command decoded: %s", args)
 
         if self._errno:

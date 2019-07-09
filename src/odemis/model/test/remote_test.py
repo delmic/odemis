@@ -20,14 +20,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import Pyro4
 from concurrent import futures
 from concurrent.futures import CancelledError
 import gc
 import logging
-from multiprocessing.process import Process
 import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
@@ -38,6 +37,7 @@ import sys
 import threading
 import time
 import unittest
+from multiprocessing import Process
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -271,7 +271,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         time.sleep(0.5)
         comp_indir.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -353,7 +353,7 @@ class RemoteTest(unittest.TestCase):
 
         if self.server.is_alive():
             if not USE_THREADS:
-                print "Warning: killing server still alive"
+                print("Warning: killing server still alive")
                 self.server.terminate()
 
 #    @unittest.skip("simple")
@@ -528,7 +528,7 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.5)
         self.comp.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -565,10 +565,10 @@ class RemoteTest(unittest.TestCase):
 
         self.assertEqual(0, self.left)
         self.assertEqual(number, self.count)
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
         max_lat = dfs.get_max_lat()
         if max_lat:
-            print "latency: %r, max= %f, avg= %f" % (max_lat, max(max_lat), sum(max_lat)/len(max_lat))
+            print("latency: %r, max= %f, avg= %f" % (max_lat, max(max_lat), sum(max_lat)/len(max_lat)))
 
         time.sleep(0.1)
         self.assertEqual(number, self.count)
@@ -591,7 +591,7 @@ class RemoteTest(unittest.TestCase):
         self.comp.data.unsubscribe(self.receive_data)
         self.comp.cut.value = 0 # put it back
         count_end = self.count
-        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d stridden arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -610,7 +610,7 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.5)
         self.comp.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d stridden arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -691,7 +691,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(prop.value, 0)
         self.assertEqual(self.last_value, 0)
         # called once or twice depending if the brief 3 was seen
-        self.assertTrue(1 <= self.called and self.called <= 2)
+        self.assertTrue(1 <= self.called <= 2)
         called_before = self.called
 
         # check we are not called anymore
@@ -722,7 +722,7 @@ class RemoteTest(unittest.TestCase):
     def test_enumerated_va(self):
         # enumerated
         self.assertEqual(self.comp.enum.value, "a")
-        self.assertEqual(self.comp.enum.choices, set(["a", "c", "bfds"]))
+        self.assertEqual(self.comp.enum.choices, {"a", "c", "bfds"})
         self.comp.enum.value = "c"
         self.assertEqual(self.comp.enum.value, "c")
 
@@ -810,7 +810,7 @@ class SimpleHwComponent(model.HwComponent):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4])
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
 
     @roattribute
     def my_value(self):
@@ -835,7 +835,7 @@ class MyComponent(model.Component):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
         self.cut = model.IntVA(0, setter=self._setCut)
         self.listval = model.ListVA([2, 65])
 
@@ -882,7 +882,7 @@ class MyComponent(model.Component):
         """
         start = time.time()
         time.sleep(duration)
-        return (time.time() - start)
+        return time.time() - start
 
     @isasync
     def do_progressive_long(self, duration=5):
@@ -907,7 +907,7 @@ class MyComponent(model.Component):
             psmt_end = max(psmt_end - 1, time.time())
             future.set_progress(end=psmt_end)
 
-        return (time.time() - start)
+        return time.time() - start
 
     def get_number_futures(self):
         return self.number_futures

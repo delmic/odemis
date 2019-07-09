@@ -59,7 +59,7 @@ class PowerControlUnit(model.PowerSupplier):
         Raise an exception if the device cannot be opened
         '''
         if pin_map:
-            self.powered = pin_map.keys()
+            self.powered = list(pin_map.keys())
         else:
             self.powered = []
         model.PowerSupplier.__init__(self, name, role, **kwargs)
@@ -252,8 +252,7 @@ class PowerControlUnit(model.PowerSupplier):
             # means there is no power provided
             raise HwError("There is no power provided to the Power Control Unit. "
                           "Please make sure the board is turned on.")
-        x = ans.split(',')
-        return filter(lambda a: a != '', x)
+        return [x for x in ans.split(',') if x != '']
 
     def _sendCommand(self, cmd):
         """

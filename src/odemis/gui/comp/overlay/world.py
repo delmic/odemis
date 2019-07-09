@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 """
 :created: 2014-01-25
 :author: Rinze de Laat
@@ -114,7 +115,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def set_physical_sel(self, rect):
         """ Set the selection using the provided physical coordinates
 
-        rect (tuple of 4 floats): t, l, b, r positions in m
+        rect (tuple of 4 floats): l, t, r, b positions in m
 
         """
 
@@ -322,8 +323,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         Convert and truncate the ROI in physical coordinates to the coordinates
           relative to the SEM FoV. It also ensures the ROI can never be smaller
           than a pixel (of the scanner).
-        phys_rect (None or 4 floats): physical position of the tl and br points
-        return (4 floats): tlbr positions relative to the FoV
+        phys_rect (None or 4 floats): physical position of the lt and rb points
+        return (4 floats): ltrb positions relative to the FoV
         """
         # Get the position of the overlay in physical coordinates
         if phys_rect is None:
@@ -362,8 +363,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         """
         Convert the ROI in relative coordinates (to the SEM FoV) into physical
          coordinates
-        roi (4 floats): tlbr positions relative to the FoV
-        return (None or 4 floats): physical position of the tl and br points, or
+        roi (4 floats): ltrb positions relative to the FoV
+        return (None or 4 floats): physical position of the lt and rb points, or
           None if no ROI is defined
         """
         if roi == UNDEFINED_ROI:
@@ -387,7 +388,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def on_roa(self, roa):
         """ Update the ROA overlay with the new roa VA data
 
-        roi (tuple of 4 floats): top, left, bottom, right position relative to the SEM image
+        roi (tuple of 4 floats): left, top, right, bottom position relative to the SEM image
 
         """
         phys_rect = self.convert_roi_ratio_to_phys(roa)
@@ -1521,16 +1522,14 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
            horizontally in m. (Also called "focus distance")
         hole_diam (float): diameter the hole in the mirror in m
         """
-        self.flipped = (parabola_f < 0)
-        parabola_f = abs(parabola_f)
+        self.flipped = (cut_offset_y < 0) # focus_dist - the vertical mirror cutoff can be positive or negative
+        # The mirror is cut horizontally just above the symmetry line
+        self.cut_offset_y = abs(cut_offset_y)
 
         # The radius of the circle shaped edge facing the detector
         # We don't care about cut_x, but "cut_y"
         # Use the formula y = x²/4f
         self.parabole_cut_radius = 2 * math.sqrt(parabola_f * cut_x)
-
-        # The mirror is cut horizontally just above the symmetry line
-        self.cut_offset_y = cut_offset_y
 
         self.mirror_height = self.parabole_cut_radius - self.cut_offset_y
         # The number of radians to remove from the left and right of the semi-circle

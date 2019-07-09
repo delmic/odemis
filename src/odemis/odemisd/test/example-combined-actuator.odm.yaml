@@ -25,7 +25,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: ["Andor SimCam"],
-    children: {"x": "Redstone Stage", "y": "Redstone Stage", "z": "Fake Stage Z"},
+    dependencies: {"x": "Redstone Stage", "y": "Redstone Stage", "z": "Fake Stage Z"},
     init: {
         axes_map: {"x": "x", "y": "y", "z": "x"}
     }

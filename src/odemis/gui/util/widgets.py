@@ -101,7 +101,7 @@ class VigilantAttributeConnector(object):
             value = self.ctrl_2_va()
             logging.debug("Setting VA value to %s after control event %d", value, evt.Id)
             self.vigilattr.value = value
-        except (ValueError, TypeError, IndexError), exc:
+        except (ValueError, TypeError, IndexError) as exc:
             logging.warn("VA refused value %s: %s", value, exc)
             self.va_2_ctrl(self.vigilattr.value)
         evt.Skip()
@@ -180,8 +180,13 @@ class AxisConnector(object):
         """ This method is called when the value of the control is changed.
         it moves the axis to the new value.
         """
+        evt.Skip()
+
         try:
             if self._future is not None and not self._future.done():
+                # Note: when the value is clipped (eg, because the user entered
+                # a value too large), COMMAND_ENTER is triggered twice, which
+                # is one of the reasons this path is taken.
                 logging.info("Not moving axis %s as it's already moving", self.axis)
                 return
 
@@ -191,13 +196,11 @@ class AxisConnector(object):
             # expect absolute move works
             move = {self.axis: value}
             future = self.comp.moveAbs(move)
-        except (ValueError, TypeError, IndexError), exc:
+        except (ValueError, TypeError, IndexError) as exc:
             logging.error("Illegal value: %s", exc)
-            return
-        finally:
-            evt.Skip()
+            future = None
 
-        if not future.done():
+        if future and not future.done():
             # disable the control until the move is finished => gives user
             # feedback and avoids accumulating moves. The drawback is that the
             # GUI focus is lost.
@@ -205,6 +208,10 @@ class AxisConnector(object):
             self.value_ctrl.Disable()
             self._future = future
             future.add_done_callback(self._on_move_done)
+        else:
+            # If the move actually did nothing, make sure the text reflects the
+            # current position again.
+            self._on_pos_change(self.comp.position.value)
 
     @call_in_wx_main
     def _on_move_done(self, _):
@@ -217,9 +224,12 @@ class AxisConnector(object):
             # Put back the focus on the widget if nothing else got it in the meantime
             if self._prev_focus and wx.Window.FindFocus() is None:
                 self._prev_focus.SetFocus()
+
+            # If the move actually did nothing, make sure the text reflects the
+            # current position again.
+            self._on_pos_change(self.comp.position.value)
         logging.debug("Axis %s finished moving", self.axis)
 
-    @call_in_wx_main
     def _on_pos_change(self, positions):
         """ Process a position change """
         position = positions[self.axis]

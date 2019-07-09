@@ -48,14 +48,13 @@ class TestCSVIO(unittest.TestCase):
 
     def testExportAR(self):
         """Try simple AR export"""
-        size = (101, 401)
+        size = (90, 360)
         dtype = numpy.float
         metadata = {model.MD_DESCRIPTION: "Angle-resolved",
                     model.MD_ACQ_TYPE: model.MD_AT_AR}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
-        data += 26.1561
-        data[1:, 0] = numpy.linspace(0, math.pi / 2, data.shape[0] - 1)
-        data[0, 1:] = numpy.linspace(0, math.pi * 2, data.shape[1] - 1)
+        data[...] = 26.1561
+        data[10, 10] = 10
 
         # export
         csv.export(FILENAME, data)
@@ -63,6 +62,7 @@ class TestCSVIO(unittest.TestCase):
         # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
+
         raised = False
         try:
             pycsv.reader(open(FILENAME, 'rb'))
@@ -70,12 +70,51 @@ class TestCSVIO(unittest.TestCase):
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
+        # test intensity value is at correct position
+        file = pycsv.reader(open(FILENAME, 'rb'))
+
+        a = numpy.zeros((91, 361))
+        index = 0
+        for line in file:
+            if index == 0:
+                a[index] = 0.0
+            else:
+                a[index] = line
+            index += 1
+        # test intensity for same px as defined above is also different when reading back
+        # (+1 as we add a line for theta/phi MD to the array when exporting)
+        self.assertEqual(a[11][11], 10)
+
     def testExportSpectrum(self):
         """Try simple spectrum export"""
         size = (150,)
         dtype = numpy.uint16
         md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
-              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "C"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 150)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportChronogram(self):
+        """Try simple chronogram export"""
+        size = (150,)
+        dtype = numpy.uint16
+        md = {model.MD_TIME_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "T"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
         data += 56
 
@@ -96,7 +135,7 @@ class TestCSVIO(unittest.TestCase):
         """Try simple spectrum export"""
         size = (10,)
         dtype = numpy.uint16
-        md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+        md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM, model.MD_DIMS: "C"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
         data += 56486
 
@@ -119,7 +158,8 @@ class TestCSVIO(unittest.TestCase):
         dtype = numpy.float
         md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
               model.MD_PIXEL_SIZE: (None, 4.2e-06),
-              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "XC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
 
         # export
@@ -140,7 +180,8 @@ class TestCSVIO(unittest.TestCase):
         size = (1340, 6)
         dtype = numpy.float
         md = {model.MD_PIXEL_SIZE: (None, 4.2e-06),
-              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "XC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
 
         # export

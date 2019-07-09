@@ -21,13 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Queue
+from future.utils import with_metaclass
+import queue
+from past.builtins import long
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import functools
+from functools import reduce
 import logging
 import math
 import numpy
@@ -255,7 +258,7 @@ class SEM(model.HwComponent):
         try:
             kwargs = children["pressure"]
         except (KeyError, TypeError):
-            raise KeyError("PhenomSEM was not given a 'pressure' child")
+            raise KeyError("PhenomSEM was not given a 'pressure' dependency")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._pressure)
 
@@ -688,7 +691,7 @@ class Detector(model.Detector):
     """
     def __init__(self, name, role, parent, **kwargs):
         """
-        Note: parent should have a child "scanner" already initialised
+        Note: parent should have a dependency "scanner" already initialised
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
@@ -1187,7 +1190,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._sync_event.subscribe(self)
 
     @oneway
@@ -1327,12 +1330,11 @@ class Stage(model.Actuator):
             self._executor = None
 
 
-class PhenomFocus(model.Actuator):
+class PhenomFocus(with_metaclass(ABCMeta, model.Actuator)):
     """
     This is an extension of the model.Actuator class and represents a focus
     actuator. This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, parent, axes, rng, **kwargs):
         assert len(axes) > 0

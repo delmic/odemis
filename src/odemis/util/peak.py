@@ -17,13 +17,14 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
-from itertools import izip
 import logging
 import numpy
 from odemis import model
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 import threading
 import time
+import warnings
+from builtins import range
 
 # TODO: this code is full of reliance on numpy being quite lax with wrong
 # computation, and easily triggers numpy warnings. To force numpy to be
@@ -122,7 +123,7 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
 
     length = len(y_vector)
     if x_vector is None:
-        x_vector = range(length)
+        x_vector = numpy.arange(length)
 
     # First check if parameters can be processed
     if length != len(x_vector):
@@ -239,7 +240,7 @@ class PeakFitter(object):
                 width = PEAK_WIDTHS[type]
                 FitFunction = PEAK_FUNCTIONS[type]
             except KeyError:
-                raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
+                raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
             for step in range(5):
                 if future._fit_state == CANCELLED:
                     raise CancelledError()
@@ -247,7 +248,7 @@ class PeakFitter(object):
                 # Increase window size until peak detection finds enough peaks to fit
                 # the spectrum curve
                 peaks = Detect(smoothed, wavelength, lookahead=window_size, delta=5)[0]
-                if peaks == []:
+                if not peaks:
                     window_size = int(round(window_size * 1.2))
                     logging.debug("Retrying to fit peak with window = %d", window_size)
                     continue
@@ -264,8 +265,13 @@ class PeakFitter(object):
                     raise CancelledError()
 
                 try:
-                    # => in scipy 0.17, curve_fit() supports the 'bounds' parameter
-                    params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
+                    with warnings.catch_warnings():
+                        # Hide scipy/optimize/minpack.py:690: OptimizeWarning: Covariance of the parameters could not be estimated
+                        warnings.filterwarnings("ignore", "", OptimizeWarning)
+                        # TODO, from scipy 0.17, curve_fit() supports the 'bounds' parameter.
+                        # It could be used to ensure the peaks params are positives.
+                        # (Once we don't support Ubuntu 12.04)
+                        params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
                     window_size = int(round(window_size * 1.2))
@@ -331,7 +337,7 @@ def Curve(wavelength, peak_parameters, offset, type='gaussian'):
     try:
         FitFunction = PEAK_FUNCTIONS[type]
     except KeyError:
-        raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
+        raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
 
     # Flatten the peak parameters tuples
     peak_flat = [p for l in peak_parameters for p in l]
@@ -346,7 +352,7 @@ def _Grouped(iterable, n):
     """
     Iterate over the iterable, n elements at a time
     """
-    return izip(*[iter(iterable)] * n)
+    return zip(*[iter(iterable)] * n)
 
 
 def _Normalize(vector):

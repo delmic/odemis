@@ -24,16 +24,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 #===============================================================================
 
-from __future__ import division
+from __future__ import division, print_function
 
-from odemis.gui import test
 import odemis.gui.comp.slider as slidecomp
-import odemis.gui.test as test
-import odemis.model as model
+from odemis.gui import test
+from odemis import model
 import math
-import odemis.gui.util.widgets as widgets
+from odemis.gui.util import widgets
 import unittest
 import wx
+from builtins import range
 
 test.goto_manual() # Keep the test frame open after the tests are run
 # test.goto_inspect()
@@ -77,14 +77,14 @@ def gen_test_data():
 
     for f in functions:
         for s in sizes:
-            print "%s," % [f(i) for i in xrange(s)]
-        print ""
+            print("%s," % [f(i) for i in range(s)])
+        print("")
         for s in sizes:
-            print "%s," % [abs(math.sin(i / (10 * math.pi))) for i in xrange(s)]
-        print ""
+            print("%s," % [abs(math.sin(i / (10 * math.pi))) for i in range(s)])
+        print("")
         for s in sizes:
-            print "%s," % [i / float(s) for i in xrange(s)]
-        print ""
+            print("%s," % [i / float(s) for i in range(s)])
+        print("")
 
     import sys
     sys.exit()

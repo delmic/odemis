@@ -25,9 +25,10 @@ from __future__ import division
 # for listing all the types of file format supported
 import importlib
 import logging
-from odemis.dataio import tiff
 import os
 
+from ._base import *
+from odemis.dataio import tiff
 
 # The interface of a "format manager" is as follows:
 #  * one module
@@ -38,7 +39,7 @@ import os
 #  * read_thumbnail (callable): read the thumbnail(s) of a file
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not read_data().
-_iomodules = ["tiff", "stiff", "hdf5", "png", "csv"]
+_iomodules = ["tiff", "stiff", "hdf5", "png", "csv", "catmaid"]
 __all__ = _iomodules + ["get_available_formats", "get_converter", "find_fittest_converter"]
 
 
@@ -49,7 +50,7 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
     mode (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list
         formats which can be read, which can be written, or all of them.
     allowlossy (bool): If True, will also return the formats that can lose some
-      of the original information (when writting the data to a file)
+      of the original information (when writing the data to a file)
     return (dict string -> list of strings): name of each format -> list of
         extensions
     """
@@ -64,10 +65,11 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
         if not allowlossy and exporter.LOSSY:
             logging.debug("Skipping exporter %s as it is lossy", module_name)
             continue
-        if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or
-            (mode == os.O_WRONLY and not hasattr(exporter, "export"))):
-            continue
-        formats[exporter.FORMAT] = exporter.EXTENSIONS
+        if ((mode == os.O_RDWR) or
+            (mode == os.O_RDONLY and (hasattr(exporter, "read_data") or hasattr(exporter, "open_data"))) or
+            (mode == os.O_WRONLY and hasattr(exporter, "export"))
+           ):
+            formats[exporter.FORMAT] = exporter.EXTENSIONS
 
     if not formats:
         logging.error("No file converter found!")
@@ -109,6 +111,12 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
     allowlossy: cf get_available_formats()
     returns (dataio. Module): the right exporter
     """
+    fmt2ext = get_available_formats(mode, allowlossy=True)
+    for fmt in fmt2ext.keys():
+        conv = get_converter(fmt)
+        if hasattr(conv, "PREFIXES") and any(filename.startswith(p) for p in conv.PREFIXES):
+            return conv
+
     # Find the extension of the file
     basename = os.path.basename(filename).lower()
     if basename == "":

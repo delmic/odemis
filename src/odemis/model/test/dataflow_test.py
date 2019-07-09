@@ -20,7 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 from Pyro4.core import oneway
 from odemis import model
 import logging
@@ -274,7 +274,7 @@ class TestDataFlow(unittest.TestCase):
         self.dfs.unsubscribe(self.receive_data) 
         self.dfs.synchronizedOn(None)
         if self.dfs.max_lat:
-            print self.dfs.max_lat, max(self.dfs.max_lat)
+            print(self.dfs.max_lat, max(self.dfs.max_lat))
         time.sleep(0.1)
         self.assertEqual(self.left, 10)
 

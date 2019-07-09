@@ -21,7 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -31,7 +31,7 @@ import os
 import time
 import unittest
 from unittest.case import skip
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -47,8 +47,8 @@ else:
 
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
-CONFIG_CTRL_BASIC = (1, {1: False})
-CONFIG_CTRL_CL = (1, {1: True})
+CONFIG_CTRL_BASIC = (1, {'1': False})
+CONFIG_CTRL_CL = (1, {'1': True})
 CONFIG_BUS_CL = {"x":(1, 1, True)}
 CONFIG_BUS_TWO_CL = {"x":(1, 1, True), "y":(2, 1, True)}
 
@@ -62,7 +62,8 @@ else:
 
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 #KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
-KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL, "auto_suspend": {"x": 1}}
+KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL,
+             "auto_suspend": {"x": 1}, "suspend_mode": {"x": "full"}}
 
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL,
@@ -72,6 +73,7 @@ KWARGS_IP = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_B
 KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CONFIG_BUS_TWO}
 
 KWARGS_E725 = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_E725}
+
 
 # @skip("faster")
 class TestController(unittest.TestCase):
@@ -94,17 +96,17 @@ class TestController(unittest.TestCase):
         so test failure might not indicate software bug.
         """
         ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
-        speed_rng = ctrl.speed_rng[1]
+        speed_rng = ctrl.speed_rng['1']
         speed = max(speed_rng[0], speed_rng[1] / 10)
         self.assertGreater(speed_rng[1], 100e-6, "Maximum speed is expected to be more than 100μm/s")
-        ctrl.setSpeed(1, speed)
-        distance = -ctrl.moveRel(1, -speed / 2) # should take 0.5s
+        ctrl.setSpeed('1', speed)
+        distance = -ctrl.moveRel('1', -speed / 2)  # should take 0.5s
         self.assertGreater(distance, 0)
-        self.assertTrue(ctrl.isMoving(set([1])))
+        self.assertTrue(ctrl.isMoving({'1'}))
         self.assertEqual(ctrl.GetErrorNum(), 0)
         status = ctrl.GetStatus()
         ts = time.time()
-        while ctrl.isMoving(set([1])):
+        while ctrl.isMoving({'1'}):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -112,13 +114,13 @@ class TestController(unittest.TestCase):
         self.assertLess(dur, 1.5)
 
         # now the same thing but with a stop
-        distance = -ctrl.moveRel(1, -speed) # should take one second
+        distance = -ctrl.moveRel('1', -speed) # should take one second
         time.sleep(0.01) # wait a bit that it's surely running
         self.assertGreater(distance, 0)
         ctrl.stopMotion()
 
         ts = time.time()
-        while ctrl.isMoving(set([1])):
+        while ctrl.isMoving({'1'}):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -181,7 +183,7 @@ class TestActuator(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             stage = CLASS("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             stage.terminate()
@@ -255,7 +257,7 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_fast
-        print "took %f s => actual speed=%g" % (dur_fast, act_speed)
+        print("took %f s => actual speed=%g" % (dur_fast, act_speed))
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
@@ -271,14 +273,14 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_slow
-        print "took %f s => actual speed=%g" % (dur_slow, act_speed)
+        print("took %f s => actual speed=%g" % (dur_slow, act_speed))
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
                       (act_speed, stage.speed.value['x']))
 
         ratio = dur_slow / dur_fast
-        print "ratio of %f while expected %f" % (ratio, expected_ratio)
+        print("ratio of %f while expected %f" % (ratio, expected_ratio))
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
             self.fail("Speed not consistent: ratio of " + str(ratio) +
                          " instead of " + str(expected_ratio) + ".")
@@ -527,12 +529,12 @@ class TestActuator(unittest.TestCase):
         steps = 100
         cur_pos = (0, 0)
         move = {}
-        for i in xrange(steps):
+        for i in range(steps):
             next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
-            print next_pos, move
+            print(next_pos, move)
             f = stage.moveRel(move)
             f.result() # wait
             cur_pos = next_pos

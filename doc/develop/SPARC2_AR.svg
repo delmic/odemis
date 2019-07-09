@@ -8,7 +8,6 @@
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
    xmlns:svg="http://www.w3.org/2000/svg"
    xmlns="http://www.w3.org/2000/svg"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    width="297mm"
@@ -16,7 +15,7 @@
    viewBox="0 0 297 210"
    version="1.1"
    id="svg8"
-   inkscape:version="0.92.3 (3ce5693, 2018-03-11)"
+   inkscape:version="0.91 r13725"
    sodipodi:docname="SPARC2_AR.svg"
    inkscape:export-filename="/home/sabrina/Documents/drawing/SPARC_ARPOL.svg.png"
    inkscape:export-xdpi="96"
@@ -727,86 +726,6 @@
          id="path22123-5-6-6-8"
          inkscape:connector-curvature="0" />
     </marker>
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4264"
-       x1="174.08909"
-       y1="121.9493"
-       x2="177.0808"
-       y2="121.9493"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(0.99966685,0,0,1.0084201,0.33387394,-1.0147631)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4268"
-       id="linearGradient4270"
-       x1="174.17459"
-       y1="121.9493"
-       x2="176.9953"
-       y2="121.9493"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(0.99966685,0,0,1.0084201,0.33387394,-1.0147631)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4264-2"
-       x1="174.0891"
-       y1="121.9493"
-       x2="177.0808"
-       y2="121.9493"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(0.99966685,0,0,1.0084201,-4.6015338,-1.0284913)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4268"
-       id="linearGradient4270-3"
-       x1="174.17459"
-       y1="121.9493"
-       x2="176.9953"
-       y2="121.9493"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(0.99966685,0,0,1.0084201,-4.6015338,-1.0284913)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4334"
-       x1="113.75429"
-       y1="-168.51727"
-       x2="130.08546"
-       y2="-168.51727"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(1.0095061,0,0,0.32410673,-1.1258424,-115.50171)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4346"
-       x1="113.75429"
-       y1="-169.04643"
-       x2="130.08546"
-       y2="-169.04643"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(1.0095061,0,0,0.32410673,-1.1258424,-115.3302)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4334-3"
-       x1="113.75429"
-       y1="-168.51727"
-       x2="130.08546"
-       y2="-168.51727"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(1.0098873,0,0,0.38434385,-1.188414,-111.94632)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient4262"
-       id="linearGradient4346-5"
-       x1="113.75429"
-       y1="-169.04643"
-       x2="130.08546"
-       y2="-169.04643"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="matrix(1.0098873,0,0,0.38434385,-1.188414,-111.74294)" />
   </defs>
   <sodipodi:namedview
      id="base"
@@ -817,14 +736,14 @@
      inkscape:pageshadow="2"
      inkscape:zoom="1.7033258"
      inkscape:cx="556.0987"
-     inkscape:cy="264.34313"
+     inkscape:cy="405.24395"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
-     inkscape:window-width="1871"
-     inkscape:window-height="1182"
-     inkscape:window-x="49"
-     inkscape:window-y="18"
+     inkscape:window-width="1920"
+     inkscape:window-height="1176"
+     inkscape:window-x="0"
+     inkscape:window-y="24"
      inkscape:window-maximized="1" />
   <metadata
      id="metadata5">
@@ -834,7 +753,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -878,7 +797,7 @@
          id="tspan12026"
          x="104.76965"
          y="338.9613"
-         style="stroke-width:0.26458332"> </tspan></text>
+         style="stroke-width:0.26458332" /></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:10.58333302px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332"
@@ -923,48 +842,6 @@
          x="187.35594"
          y="407.12439"
          style="stroke-width:0.26458332" /></text>
-    <g
-       id="g4384"
-       transform="translate(-63.247561,31.354961)">
-      <rect
-         transform="rotate(90)"
-         y="-175.5713"
-         x="113.7737"
-         height="4.4385166"
-         width="16.331173"
-         id="rect3793-0-1-6-0-2-8"
-         style="display:inline;fill:none;stroke:#000000;stroke-width:0.36300001;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.363, 0.726;stroke-dashoffset:0;stroke-opacity:1" />
-      <ellipse
-         ry="8.1513186"
-         rx="1.4098846"
-         cy="121.96137"
-         cx="175.86031"
-         id="path4126-0-1"
-         style="display:inline;fill:url(#linearGradient4264);fill-opacity:1;fill-rule:nonzero;stroke:url(#linearGradient4270);stroke-width:0.361;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.361, 0.722;stroke-dashoffset:0;stroke-opacity:1" />
-      <ellipse
-         ry="8.1513186"
-         rx="1.4098846"
-         cy="121.94764"
-         cx="170.92491"
-         id="path4126-0-1-0"
-         style="display:inline;fill:url(#linearGradient4264-2);fill-opacity:1;fill-rule:nonzero;stroke:url(#linearGradient4270-3);stroke-width:0.3605158;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.36051579, 0.72103157;stroke-dashoffset:0;stroke-opacity:1" />
-      <rect
-         transform="rotate(90)"
-         y="-170.83858"
-         x="113.7098"
-         height="1.4385531"
-         width="16.486418"
-         id="rect3793-0-1-6-0-2-8-6"
-         style="display:inline;fill:url(#linearGradient4334);fill-opacity:1;stroke:url(#linearGradient4346);stroke-width:0.20748052;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-      <rect
-         transform="rotate(90)"
-         y="-177.56789"
-         x="113.6906"
-         height="1.7059164"
-         width="16.492645"
-         id="rect3793-0-1-6-0-2-8-6-6"
-         style="display:inline;fill:url(#linearGradient4334-3);fill-opacity:1;stroke:url(#linearGradient4346-5);stroke-width:0.22598276;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-    </g>
     <path
        style="display:inline;fill:none;stroke:#ff0000;stroke-width:0.87619323;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.87619327, 1.75238653;stroke-dashoffset:0;stroke-opacity:1"
        d="M 223.28225,153.29371 H 35.633821"
@@ -992,7 +869,7 @@
        ry="7.7029777"
        rx="1.4145045"
        cy="153.2941"
-       cx="96.735939"
+       cx="101.2515"
        style="display:inline;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:0.36272612;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="path4126-3-2" />
     <ellipse
@@ -1004,7 +881,7 @@
        ry="7.7029777" />
     <path
        id="path4539-8"
-       d="m 105.11057,147.01049 v 0.43996 h -0.81623 c 0.007,-0.0715 0.0122,-0.14365 0.0122,-0.21838 0,-0.076 -0.006,-0.14879 -0.0112,-0.22126 h 0.81527 z m -3.42444,-2.10136 v -0.62756 h 0.44092 v 0.6298 c -0.0778,-0.007 -0.15567,-0.0112 -0.23349,-0.0112 -0.0691,0 -0.1383,0.003 -0.20743,0.009 z m 1.77557,0.49511 0.50492,-0.55892 0.32772,0.29438 -0.51554,0.56982 c -0.0804,-0.0952 -0.19071,-0.21548 -0.3171,-0.30528 z m -3.45338,0.30528 -0.515527,-0.56982 0.32771,-0.29438 0.504927,0.55892 c -0.12608,0.0898 -0.2367,0.21005 -0.31711,0.30528 z m -0.513607,1.74093 h -0.816224 v -0.43996 h 0.815264 c -0.006,0.0725 -0.0112,0.14559 -0.0112,0.22158 0,0.0747 0.006,0.14687 0.0122,0.21838 z m 3.043027,2.92388 h -1.28643 c -0.0888,0 -0.1608,0.0719 -0.1608,0.16034 0,0.0885 0.072,0.16034 0.1608,0.16034 h 1.28643 c 0.0888,0 0.1608,-0.0719 0.1608,-0.16034 0,-0.0885 -0.072,-0.16034 -0.1608,-0.16034 z m 0,0.64135 h -1.28643 c -0.0888,0 -0.1608,0.0719 -0.1608,0.16034 0,0.0885 0.072,0.16033 0.1608,0.16033 h 1.28643 c 0.0888,0 0.1608,-0.0719 0.1608,-0.16033 0,-0.0885 -0.072,-0.16034 -0.1608,-0.16034 z m 0.0804,0.64134 h -1.44721 l 0.38206,0.25077 c 0.0495,0.0443 0.12221,0.0699 0.19779,0.0699 h 0.28784 c 0.0753,0 0.14825,-0.0257 0.19779,-0.0699 z m 1.20602,-4.42495 c 0,1.14449 -1.03364,1.91858 -1.03364,2.82159 h -0.63966 c -7.3e-4,-0.5958 0.27979,-1.08675 0.55348,-1.56071 0.24474,-0.42489 0.47661,-0.82636 0.47661,-1.26088 0,-0.83118 -0.66732,-1.20957 -1.28738,-1.20957 -0.61909,0 -1.28545,0.37839 -1.28545,1.20957 0,0.43452 0.23188,0.83599 0.47662,1.26088 0.27368,0.47396 0.55476,0.96491 0.55316,1.56071 h -0.63936 c 0,-0.90301 -1.033617,-1.6771 -1.033617,-2.82159 0,-1.19386 0.964157,-1.85091 1.928647,-1.85091 0.96513,0 1.93059,0.6577 1.93059,1.85091 z"
+       d="m 113.57717,147.01049 0,0.43996 -0.81623,0 c 0.007,-0.0715 0.0122,-0.14365 0.0122,-0.21838 0,-0.076 -0.006,-0.14879 -0.0112,-0.22126 l 0.81527,0 z m -3.42444,-2.10136 0,-0.62756 0.44092,0 0,0.6298 c -0.0778,-0.007 -0.15567,-0.0112 -0.23349,-0.0112 -0.0691,0 -0.1383,0.003 -0.20743,0.009 z m 1.77557,0.49511 0.50492,-0.55892 0.32772,0.29438 -0.51554,0.56982 c -0.0804,-0.0952 -0.19071,-0.21548 -0.3171,-0.30528 z m -3.45338,0.30528 -0.51552,-0.56982 0.32771,-0.29438 0.50492,0.55892 c -0.12608,0.0898 -0.2367,0.21005 -0.31711,0.30528 z m -0.5136,1.74093 -0.81622,0 0,-0.43996 0.81526,0 c -0.006,0.0725 -0.0112,0.14559 -0.0112,0.22158 0,0.0747 0.006,0.14687 0.0122,0.21838 z m 3.04302,2.92388 -1.28643,0 c -0.0888,0 -0.1608,0.0719 -0.1608,0.16034 0,0.0885 0.072,0.16034 0.1608,0.16034 l 1.28643,0 c 0.0888,0 0.1608,-0.0719 0.1608,-0.16034 0,-0.0885 -0.072,-0.16034 -0.1608,-0.16034 z m 0,0.64135 -1.28643,0 c -0.0888,0 -0.1608,0.0719 -0.1608,0.16034 0,0.0885 0.072,0.16033 0.1608,0.16033 l 1.28643,0 c 0.0888,0 0.1608,-0.0719 0.1608,-0.16033 0,-0.0885 -0.072,-0.16034 -0.1608,-0.16034 z m 0.0804,0.64134 -1.44721,0 0.38206,0.25077 c 0.0495,0.0443 0.12221,0.0699 0.19779,0.0699 l 0.28784,0 c 0.0753,0 0.14825,-0.0257 0.19779,-0.0699 z m 1.20602,-4.42495 c 0,1.14449 -1.03364,1.91858 -1.03364,2.82159 l -0.63966,0 c -7.3e-4,-0.5958 0.27979,-1.08675 0.55348,-1.56071 0.24474,-0.42489 0.47661,-0.82636 0.47661,-1.26088 0,-0.83118 -0.66732,-1.20957 -1.28738,-1.20957 -0.61909,0 -1.28545,0.37839 -1.28545,1.20957 0,0.43452 0.23188,0.83599 0.47662,1.26088 0.27368,0.47396 0.55476,0.96491 0.55316,1.56071 l -0.63936,0 c 0,-0.90301 -1.03361,-1.6771 -1.03361,-2.82159 0,-1.19386 0.96415,-1.85091 1.92864,-1.85091 0.96513,0 1.93059,0.6577 1.93059,1.85091 z"
        inkscape:connector-curvature="0"
        style="display:inline;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none" />
     <text
@@ -1021,16 +898,17 @@
          id="tspan12214">Plate 1: lens system</tspan></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108116px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#009600;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108116px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#009600;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
        x="146.8058"
        y="123.69254"
        id="text3799-1-0-5"
-       transform="scale(1.0058296,0.99420418)"><tspan
+       transform="scale(1.0058296,0.99420418)"
+       sodipodi:linespacing="0%"><tspan
          sodipodi:role="line"
          x="146.8058"
          y="123.69254"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108116px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:center;writing-mode:lr-tb;text-anchor:middle;fill:#009600;fill-opacity:1;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-         id="tspan12224">Plate 2: empty</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108116px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:center;writing-mode:lr-tb;text-anchor:middle;fill:#009600;fill-opacity:1;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+         id="tspan12224">Plate 2: optional</tspan></text>
     <rect
        style="display:inline;opacity:1;fill:none;fill-opacity:1;stroke:#009600;stroke-width:0.39371076;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect3797-9-5"
@@ -1059,28 +937,17 @@
          id="tspan4884-7-6">l1</tspan></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-       x="95.303604"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+       x="99.812637"
        y="168.12799"
        id="text3819-5-7-4-3-86"
-       transform="scale(1.0014524,0.9985497)"><tspan
+       transform="scale(1.0014524,0.9985497)"
+       sodipodi:linespacing="0%"><tspan
          sodipodi:role="line"
-         x="95.303604"
+         x="99.812637"
          y="168.12799"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
          id="tspan4884-7-2">l2</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-       x="109.57925"
-       y="168.12799"
-       id="text3819-5-7-4-3-86-0"
-       transform="scale(1.0014524,0.9985497)"><tspan
-         sodipodi:role="line"
-         x="109.57925"
-         y="168.12799"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-         id="tspan4884-7-2-4">l</tspan></text>
     <path
        style="opacity:1;fill:none;stroke:#000000;stroke-width:0.36272612;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.36272613, 0.72545226;stroke-dashoffset:0;stroke-opacity:1;marker-start:url(#TriangleInM-3);marker-end:url(#marker22125-7)"
        d="m 92.308555,140.44051 c 0,-4.6451 0,-4.6451 0,-4.6451"
@@ -1088,36 +955,38 @@
        inkscape:connector-curvature="0" />
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-       x="95.465767"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+       x="99.955147"
        y="145.12943"
        id="text3803-2-0-2-0"
-       transform="scale(1.0058296,0.99420418)"><tspan
+       transform="scale(1.0058296,0.99420418)"
+       sodipodi:linespacing="0%"><tspan
          sodipodi:role="line"
          id="tspan3805-61-6-8-9"
-         x="95.465767"
+         x="99.955147"
          y="145.12943"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none">1</tspan><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none">1</tspan><tspan
          sodipodi:role="line"
-         x="95.465767"
-         y="147.04884"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+         x="99.955147"
+         y="148.96828"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
          id="tspan25831-6" /></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-       x="95.336777"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+       x="99.826157"
        y="134.6389"
        id="text3803-2-0-7-3"
-       transform="scale(1.0058296,0.99420418)"><tspan
+       transform="scale(1.0058296,0.99420418)"
+       sodipodi:linespacing="0%"><tspan
          sodipodi:role="line"
          id="tspan3805-61-6-9-8"
-         x="95.336777"
+         x="99.826157"
          y="134.6389"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none">2</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none">2</tspan></text>
     <path
        style="opacity:1;fill:none;stroke:#000000;stroke-width:0.36272612;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:0.36272613, 0.72545227;stroke-dashoffset:0;stroke-opacity:1;marker-start:url(#TriangleInM-3-9);marker-end:url(#marker22125-7-4)"
-       d="m 96.735561,140.44051 c 0,-4.6451 0,-4.6451 0,-4.6451"
+       d="m 101.25111,140.44051 c 0,-4.6451 0,-4.6451 0,-4.6451"
        id="path7850-1-9-3-1"
        inkscape:connector-curvature="0" />
     <text
@@ -1821,15 +1690,16 @@
          id="tspan4884-7-2-4-6">m</tspan></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
-       x="100.79829"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:0%;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+       x="109.25274"
        y="168.12184"
        id="text3819-5-7-4-3-8-4"
-       transform="scale(1.0014524,0.9985497)"><tspan
+       transform="scale(1.0014524,0.9985497)"
+       sodipodi:linespacing="0%"><tspan
          sodipodi:role="line"
-         x="100.79829"
+         x="109.25274"
          y="168.12184"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:3.07108092px;line-height:1.25;font-family:Ubuntu;-inkscape-font-specification:'Ubuntu, Normal';text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.36272612;stroke-miterlimit:4;stroke-dasharray:none"
          id="tspan4884-7-0-9">b</tspan></text>
     <text
        xml:space="preserve"
@@ -1897,8 +1767,8 @@
    id="flowSpan2025">spectrograph</flowSpan>: combines the slit (s) and the grating turret (gt); select the mirror or grating via axis &quot;grating&quot;. The center wavelength can be selected via axis &quot;wavelength&quot;. If the mirror is selected, axis &quot;wavelength&quot; is 0. Axis &quot;slit-in&quot; allows fine adjustments of the slit. In AR mode the axis &quot;slit-in&quot; is forced to switch to &quot;open&quot; as the slit is already opened via axis &quot;slit-in-big&quot; of the slit s.   </flowPara><flowPara
          id="flowPara2037"
          style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.53599644px;line-height:10.97485256px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';letter-spacing:0px"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.53599644px;line-height:10.97485256px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';letter-spacing:0px;fill:#000000;fill-opacity:0.58823529"
-   id="flowSpan2055">role: spectrograph (axes: wavelength, slit-in, grating)</flowSpan> </flowPara><flowPara
+           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.53599644px;line-height:10.97485256px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';letter-spacing:0px;fill:#000000;fill-opacity:0.58823529"
+           id="flowSpan2055">role: spectrograph (axes: wavelength, slit-in, grating)</flowSpan></flowPara><flowPara
          id="flowPara2039"
          style="font-size:8.53599644px;line-height:10.97485256px;letter-spacing:0px"><flowSpan
    style="font-size:8.53599644px;line-height:10.97485256px;letter-spacing:0px;fill:#dc0000;fill-opacity:1"
@@ -1962,8 +1832,8 @@
    id="flowSpan2950">m2</flowSpan>: mirror to switch between two detectors (position 1 and 2) </flowPara><flowPara
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre"
          id="flowPara2922"><flowSpan
-   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#000000;fill-opacity:0.58823529"
-   id="flowSpan2956">role: spec-det-selector (axes: rx)</flowSpan> </flowPara><flowPara
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#000000;fill-opacity:0.58823529"
+           id="flowSpan2956">role: spec-det-selector (axes: rx)</flowSpan></flowPara><flowPara
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre"
          id="flowPara2924"><flowSpan
    style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#0000ff;fill-opacity:1"
@@ -1976,8 +1846,8 @@
    id="flowSpan2954">det 2</flowSpan>: detector 2 (pixelated detector)</flowPara><flowPara
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#000000;fill-opacity:1"
          id="flowPara2594"><flowSpan
-   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#000000;fill-opacity:0.58823529"
-   id="flowSpan2596">role: sp-ccd</flowSpan> </flowPara></flowRoot>    <flowRoot
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.71071959px;line-height:9.91378212px;font-family:calibre;-inkscape-font-specification:calibre;fill:#000000;fill-opacity:0.58823529"
+           id="flowSpan2596">role: sp-ccd</flowSpan></flowPara></flowRoot>    <flowRoot
        xml:space="preserve"
        id="flowRoot1783-4"
        style="font-style:normal;font-weight:normal;font-size:10.66666698px;line-height:1.25;font-family:sans-serif;text-align:justify;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
@@ -1996,8 +1866,8 @@
    id="flowSpan3668">*optical path properties</flowSpan>: contains parameters concerning the parabolic mirror and the lens system</flowPara><flowPara
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.72733784px;line-height:11.22086334px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start"
          id="flowPara3654"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.72733784px;line-height:11.22086334px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
-   id="flowSpan3676">role: lens</flowSpan> </flowPara><flowPara
+           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.72733784px;line-height:11.22086334px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
+           id="flowSpan3676">role: lens</flowSpan></flowPara><flowPara
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.72733784px;line-height:11.22086334px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1"
          id="flowPara3666"><flowSpan
    style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.72733784px;line-height:11.22086334px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#dc0000;fill-opacity:1"
@@ -2018,30 +1888,26 @@
            x="150.27815"
            y="1018.2877"
            style="line-height:1.25;text-align:justify;text-anchor:start" /></flowRegion><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start"
          id="flowPara4392"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
+   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
    id="flowSpan4440">l1</flowSpan>: lens 1 position can be adjusted perpendicular to the optical axis; </flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start"
          id="flowPara4394">focuses the incoming collimated light</flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
          id="flowPara4396">role: lens-mover (axes: x)</flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start"
          id="flowPara4398"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
+   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
    id="flowSpan4442">l2</flowSpan>: lens 2 switched to position 1 (&quot;on&quot;); further focuses the light</flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
          id="flowPara4454">role: lens-switch (axes: x)</flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1"
          id="flowPara4456"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
+   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
    id="flowSpan4446">b</flowSpan>: light for spectrograph to calibrate the position offset between the two detectors the grating offset and the m1 position</flowPara><flowPara
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
-         id="flowPara4430">role: brightlight</flowPara><flowPara
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:sans-serif;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start"
-         id="flowPara5713"><flowSpan
-   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:sans-serif;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#009600;fill-opacity:1"
-   id="flowSpan5715">l</flowSpan>: additional non-moveable lens; functions as passive focusing optic</flowPara></flowRoot>    <flowRoot
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.09219551px;line-height:10.40425205px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';text-align:justify;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:0.58823529"
+         id="flowPara5713">role: brightlight</flowPara></flowRoot>    <flowRoot
        xml:space="preserve"
        id="flowRoot4464"
        style="fill:black;fill-opacity:1;stroke:none;font-family:sans-serif;font-style:normal;font-weight:normal;font-size:10.66666667px;line-height:0.25;letter-spacing:0px;word-spacing:0px"><flowRegion
@@ -2073,8 +1939,8 @@
          id="flowPara5166">role: e-beam</flowPara><flowPara
          style="font-size:16.25689888px;line-height:20.90172746px"
          id="flowPara5168"><flowSpan
-   style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:16.25689888px;line-height:20.90172746px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';fill:#000000;fill-opacity:0.58823529"
-   id="flowSpan5242">role: ebeam-focus (axes: z)</flowSpan>  </flowPara><flowPara
+           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:16.25689888px;line-height:20.90172746px;font-family:sans-serif;-inkscape-font-specification:'sans-serif Italic';fill:#000000;fill-opacity:0.58823529"
+           id="flowSpan5242">role: ebeam-focus (axes: z)</flowSpan></flowPara><flowPara
          style="font-size:16.25689888px;line-height:20.90172746px"
          id="flowPara5172"><flowSpan
    style="font-size:16.25689888px;line-height:20.90172746px;fill:#ffaf00;fill-opacity:1"

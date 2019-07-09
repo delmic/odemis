@@ -90,7 +90,6 @@ class ADCTestCase(unittest.TestCase):
         self.assertEqual(dc.estimateAcquisitionTime(0.1, (4, 3)), 0)
         with self.assertRaises(ValueError):
             dc.series_start()
-            np = dc.start(0.1, (5, 5))
 
     def test_get_next_pixels(self):
         dc = AnchorDriftCorrector(self.scanner, self.sed)
@@ -118,7 +117,6 @@ class ADCTestCase(unittest.TestCase):
         scan_px = np
         while scan_px < 5 * 5:
             self.assertIn(np, (2, 3))  # don't check the last call
-            da = model.DataArray([0] * np, {model.MD_ACQ_DATE: time.time()})
             np = dc.next([None])
             scan_px += np
         dc.next([None])  # one last time

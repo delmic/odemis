@@ -41,6 +41,7 @@ other dealings in the software.
 
 from __future__ import division
 
+from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -137,7 +138,10 @@ class SpectralARScanStream(stream.Stream):
         # Hard coded optical path (as the OPM doesn't know about this special mode)
         logging.info("Preparing optical path")
         # Configure the optical path for the CCD we need
-        fs = self._opm.selectorsToPath(self._detector.name)
+        mvs = self._opm.selectorsToPath(self._detector.name)
+        # On Odemis 2.9-, mvs is just a list of futures
+        # On Odemis 2.10+, mvs is a list of tuples(future, comp, pos) => only keep the futures
+        fs = [m[0] if isinstance(m, tuple) else m for m in mvs]
         # move lens 2 into position
         for p, n in self._lsw.axes["x"].choices.items():
             if n == "on":

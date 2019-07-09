@@ -15,7 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Helper functions for unit tests
-from __future__ import division
+from __future__ import division, print_function
 
 import logging
 from odemis import model, util
@@ -36,7 +36,7 @@ ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 def setlimits():
     # Increase the maximum number of files openable, as needed if many remote
     # objects are created
-    print "Setting resource limit in child (pid %d)" % os.getpid()
+    logging.info("Setting resource limit in child (pid %d)", os.getpid())
     resource.setrlimit(resource.RLIMIT_NOFILE, (3092, 3092))
 
 
@@ -112,7 +112,7 @@ def assert_pos_almost_equal(actual, expected, *args, **kwargs):
     """
     if set(expected.keys()) != set(actual.keys()):
         raise AssertionError("Dimensions of position do not match: %s != %s" %
-                             (actual.keys(), expected.keys()))
+                             (list(actual.keys()), list(expected.keys())))
 
     for k in expected.keys():
         if not util.almost_equal(actual[k], expected[k], *args, **kwargs):

@@ -21,11 +21,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Queue
 import logging
+import numpy
 from odemis import model
 from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2, andorshrk
 import os
+import queue
 import time
 import unittest
 from unittest.case import skip
@@ -58,7 +59,7 @@ CLASS_CCD = pvcam.PVCam
 KWARGS_CCD = {"name": "pixis", "role": "ccd", "device": 0}
 
 CLASS_CCD_SIM = andorcam2.FakeAndorCam2
-KWARGS_CCD_SIM = {"name": "simcam", "role": "ccd", "device": 0}
+KWARGS_CCD_SIM = {"name": "simcam", "role": "ccd", "device": 0, "image": "sparc-spec-sim.h5"}
 
 if TEST_NOHW:
     CLASS_SPG = CLASS_SPG_SIM
@@ -74,9 +75,9 @@ class TestSimulated(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
-        cls.spectrograph = CLASS_SPG_SIM(children={"ccd": cls.detector},
+        cls.spectrograph = CLASS_SPG_SIM(dependencies={"ccd": cls.detector},
                                          **KWARGS_SPG)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         #save position
@@ -145,7 +146,7 @@ class TestSimulatedShamrock(TestSimulated):
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
         cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         # save position
@@ -160,9 +161,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD(**KWARGS_CCD)
-        cls.spectrograph = CLASS_SPG(children={"ccd": cls.detector},
+        cls.spectrograph = CLASS_SPG(dependencies={"ccd": cls.detector},
                                      **KWARGS_SPG)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         #save position
@@ -226,11 +227,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test vertical binning (use less than the whole detector)
         """
-        if (self.spectrometer.binning.range[1][1] == 1):
-            self.skipTest("Spectrometer doesn't support vertical binning")
+        if self.detector.resolution.range[1][1] == 1:
+            self.skipTest("Detector doesn't support vertical binning")
 
-        # normally vertical binning is by default the maximum, so it's not going
-        # to change much
+        # Check using the maximum vertical binning (which is the default, so
+        # it's not going to change much)
+        # Things we check:
+        # -> vertical resolution stays 1
+        # -> the generated image is the same as the spectrometer resolution (inverted)
+        # -> new binning is updated in the metadata
+        # -> detector horizontal binning is: horizontal binning
+        # -> detector vertical binning * detector vertical resolution = vertical binning
         binning = [self.spectrometer.binning.value[0],    # as-is
                    self.spectrometer.binning.range[1][1]] # max
         self.spectrometer.binning.value = binning
@@ -239,11 +246,35 @@ class TestCompositedSpectrometer(unittest.TestCase):
 
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        self.assertEqual(self.detector.binning.value[0], binning[0])
+        self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                         binning[1])
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
 
-        # reduce the binning (v resolution stays 1)
+        # Reduce the binning
         binning[1] //= 2
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+
+        data = self.spectrometer.data.get()
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        md = data.metadata
+        self.assertEqual(md[model.MD_BINNING], tuple(binning))
+
+        # reduce the binning to just the CCD max binning
+        binning[1] = self.detector.binning.range[1][1]
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+
+        data = self.spectrometer.data.get()
+        self.assertEqual(self.detector.binning.value, tuple(binning))
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        md = data.metadata
+        self.assertEqual(md[model.MD_BINNING], tuple(binning))
+
+        # reduce the binning to just 1
+        binning[1] = 1
         self.spectrometer.binning.value = binning
         self.assertEqual(self.spectrometer.resolution.value[1], 1)
 
@@ -257,7 +288,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test horizontal binning (large horizontal pixels)
         """
-        if (self.spectrometer.binning.range[1][0] == 1):
+        if self.spectrometer.binning.range[1][0] == 1:
             self.skipTest("Spectrometer doesn't support horizontal binning")
 
         # start with minimum binning
@@ -287,19 +318,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Check the (unusual) behaviour of the resolution
         """
-        if (self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]):
+        if self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]:
             self.skipTest("Spectrometer doesn't support changing the resolution, boring")
 
         # horizontally, resolution behaves pretty normally
         res = self.spectrometer.resolution.range[1] # max
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
         res = self.spectrometer.resolution.range[0] # min
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
@@ -310,7 +339,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         except Exception:
             pass
         else:
-            self.fail("vertical resolution should not be allowed above 1, got %r" % new_res)
+            self.fail("vertical resolution should not be allowed above 1, got %r" % (new_res, ))
 
     def test_spec_calib(self):
         """
@@ -391,8 +420,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
             self.skipTest("Hardware needs to be a PIXIS 400 for the test")
         # TODO: check we have a SpectraPro i2300 or FakeSpectraPro
 
-        res = self.spectrometer.resolution.value
-
         # 300 l/mm / 600 nm
         # => CCD coverage = 278 nm
         self._select_grating(300)
@@ -436,7 +463,64 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(data.shape[1], self.spectrometer.resolution.value[0])
 
         self.assertEqual(self.spectrometer.binning.value, binning)
-        self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+        self.assertEqual(self.detector.binning.value[0], binning[0])
+        self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                         binning[1])
+
+    def test_sw_binning(self):
+        """
+        Test the internale software binning, which is triggered when the CCD
+        returns images with more than one pixel vertically.
+        """
+        # Long enough exposure time that only a single image is acquired while
+        # changing the settings and checking the output.
+        self.spectrometer.exposureTime.value = 0.1
+        binning = [self.spectrometer.binning.range[0][0],
+                   self.spectrometer.binning.range[1][1]]
+        self.spectrometer.binning.value = binning
+        self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
+
+        self._data = queue.Queue()
+
+        # Every time an acquisition starts, the ComponsitedSpectrometer
+        # automatically configures the CCD to use full vertical binning, unless
+        # the CCD doesn't support this. The simulated CCD supports full vertical
+        # binning. So to force a smaller binning, we use continuous acquisition:
+        # the acquisition starts with full vertical binning, and we change the
+        # CCD vertical binning "behind the back" of the ComponsitedSpectrometer.
+        orig_res = self.spectrometer.resolution.value
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+        try:
+            # Force the detector's vertical binning to be smaller (will be taken
+            # into account as soon as the next image is acquired, ie on the
+            # second image.
+            self.detector.binning.value = (binning[0], 1)
+
+            d = self._data.get()  # First image, with original FVB binning
+            self.assertEqual(d.shape, orig_res[::-1])
+            d = self._data.get()  # Second image, with the software binning
+            self.assertEqual(d.shape, orig_res[::-1])
+
+            # A little larger binning, and with BASELINE metadata (which is too big)
+            self.detector.updateMetadata({model.MD_BASELINE: 100})
+            self.detector.binning.value = (binning[0], 4)
+
+            # Get the latest image
+            d = self._data.get()
+            while True:
+                try:
+                    d = self._data.get(block=False)
+                except queue.Empty:
+                    break
+
+            self.assertEqual(d.shape, orig_res[::-1])
+            self.assertTrue(numpy.all(d >= 0))
+
+            # TODO: change the baseline level, and check it doesn't give negative values,
+            # and that baseline is the same, unless it's too high, in which case, it's
+            # clipped to fit the minimum data.
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
 
     def test_live_change(self):
         """
@@ -448,7 +532,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
 
-        self._data = Queue.Queue()
+        self._data = queue.Queue()
 
         orig_res = self.spectrometer.resolution.value
         self.spectrometer.data.subscribe(self.receive_spec_data)
@@ -456,7 +540,10 @@ class TestCompositedSpectrometer(unittest.TestCase):
             binning[0] *= 2
             self.spectrometer.binning.value = binning
             self.assertEqual(self.spectrometer.binning.value, tuple(binning))
-            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            self.assertEqual(self.detector.binning.value[0], binning[0])
+            self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                             binning[1])
+
             new_res = self.spectrometer.resolution.value
             self.assertEqual(orig_res[0] / 2, new_res[0])
             time.sleep(1)
@@ -464,7 +551,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
             while True:
                 try:
                     self._data.get(block=False)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             d = self._data.get()
@@ -473,14 +560,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
             binning[0] *= 2
             self.spectrometer.binning.value = binning
             self.assertEqual(self.spectrometer.binning.value, tuple(binning))
-            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            self.assertEqual(self.detector.binning.value[0], binning[0])
+            self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                             binning[1])
+
             new_res = self.spectrometer.resolution.value
             time.sleep(1)
             # Empty the queue
             while True:
                 try:
                     self._data.get(block=False)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             d = self._data.get()

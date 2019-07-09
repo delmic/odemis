@@ -38,7 +38,7 @@ import os
 import sys
 
 from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE, \
-                                REGISTER_SHIFT, REGISTER_IDENTITY
+                                REGISTER_SHIFT, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -308,8 +308,9 @@ def main(args):
     parser.add_argument("--registrar", "-r", dest="registrar",
             help="name of registrar to be used during stitching. Options: 'identity': IdentityRegistrar "
             "(place tiles at original position), 'shift': ShiftRegistrar (use cross-correlation "
-            "algorithm to correct for suboptimal stage movement)", choices=("identity", "shift"),
-            default="shift")
+            "algorithm to correct for suboptimal stage movement), 'global_shift': GlobalShiftRegistrar "
+            "(uses cross-correlation algorithm with global optimization)",
+            choices=("identity", "shift", "global_shift"), default="global_shift")
 
     # TODO: --export (spatial) image that defaults to a HFW corresponding to the
     # smallest image, and can be overridden by --hfw xxx (in µm).
@@ -342,7 +343,8 @@ def main(args):
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
     elif tifns:
-        registration_method = {"identity": REGISTER_IDENTITY, "shift": REGISTER_SHIFT}[options.registrar]
+        registration_method = {"identity": REGISTER_IDENTITY, "shift": REGISTER_SHIFT,
+                               "global_shift": REGISTER_GLOBAL_SHIFT}[options.registrar]
         weaving_method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN,
                   "collage_reverse": WEAVER_COLLAGE_REVERSE}[options.weaver]
         data = stitch(tifns, registration_method, weaving_method)

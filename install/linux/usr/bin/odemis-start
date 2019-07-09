@@ -173,6 +173,7 @@ class BackendStarter(object):
                           size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
+        frame.SetMinClientSize((400, 200)) 
         # TODO: use ListCtrl
         # self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
         self._list = wx.ListCtrl(frame,
@@ -224,6 +225,36 @@ class BackendStarter(object):
         self._notif.update(summary, message, icon)
         self._notif.show()
 
+    def proc_communicate(self, p):
+        """
+        Does the same as "out, err = p.communicate()", but (almost) immediately
+        returns when the process ends.
+        returns (list of strings, list of strings): out, err
+        """
+        def read_file(f, store):
+            try:
+                for l in f:
+                    store.append(l)
+                    # logging.debug("Read %d bytes", len(l))
+                    print(l, end="")
+            except Exception:
+                logging.exception("failed to read")
+            finally:
+                logging.info("readed ended")
+
+        out = []
+        err = []
+        tout = threading.Thread(target=read_file, args=(p.stdout, out))
+        tout.daemon = True
+        tout.start()
+        terr = threading.Thread(target=read_file, args=(p.stderr, err))
+        terr.daemon = True
+        terr.start()
+
+        p.wait()
+        time.sleep(0.1)  # Make sure we got all the data from the pipes
+        return out, err
+
     def start_backend(self, modelfile):
         """ Start the backend and returns when it's fully instantiated or has failed to do so
 
@@ -242,28 +273,32 @@ class BackendStarter(object):
             subprocess.call(["sudo", "/usr/bin/cgcreate", "-a", ":odemis", "-g", "memory:odemisd"])
 
         logging.info("Starting back-end...")
+        odemisd_cmd = ["sudo", "odemisd", "--daemonize",
+                 "--log-level", self._config["LOGLEVEL"],
+                 "--log-target", self._config["LOGFILE"],
+                 modelfile]
+        logging.debug("Running: %s", " ".join(odemisd_cmd))
 
         # odemisd likes to start as root to be able to create /var/run files, but then
         # drop its privileges to the odemis group
         # Note: sudo drops all the env variables, so /etc/odemis.conf might be
         # interpreted differently in odemisd than what we've just read
-        try:
-            subprocess.check_call(
-                ["sudo", "odemisd", "--daemonize",
-                 "--log-level", self._config["LOGLEVEL"],
-                 "--log-target", self._config["LOGFILE"],
-                 modelfile]
-            )
-        except subprocess.CalledProcessError as ex:
+        p = subprocess.Popen(odemisd_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # block until the backend returns (typically because it forks a daemon)
+        out, err = self.proc_communicate(p)
+        if p.returncode != 0:
             # If it immediately fails, it's easy
+            logging.error("Backend returned code %s", p.returncode)
             self.show_popup("Odemis back-end failed to start",
                             "For more information type odemis-start in a terminal.",
                             "dialog-warning")
             show_error_box("Error starting Odemis back-end",
-                           "Unexpected error while starting Odemis back-end:\n"
-                           "%s\n\n"
+                           "Unexpected error (%d) while starting Odemis back-end:\n"
+                           "%s\n"
                            "Try starting Odemis again, and use the \"Report a "
-                           "problem\" function if the issue continues." % ex)
+                           "problem\" function if the issue continues.\n\n"
+                           "The full message is the following:\n %s" %
+                           (p.returncode, err[-1], "".join(err)))
             raise ValueError("Starting back-end failed")
 
     # def _on_sigint(self, signum, frame):
@@ -513,6 +548,41 @@ def show_error_box(caption, message):
     app.Yield() # Hides the window
 
 
+def run_model_selector(cmd_str):
+    """
+    Gets the model file from the model selector
+    cmd_str (str): the whole command line, which will be parsed (as in a shell)
+    return (str): the model filename to use
+    raise ValueError: if the model selector failed
+    """
+    cmd = shlex.split(cmd_str)
+    logging.debug("Getting the model filename using %s", cmd)
+    try:
+        out = subprocess.check_output(cmd).splitlines()
+        if not out:
+            show_error_box("Error starting Odemis back-end",
+                           "No microscope file name provided by MODEL_SELECTOR %s.\n\n"
+                           "Check all the hardware is connected and try again to start Odemis." % (cmd,))
+            raise ValueError("No microscope file name provided by %s" % (cmd,))
+        elif len(out) > 1:
+            logging.warning("Model selector returned multiple lines: %s", out)
+        modelfile = out[0].strip()
+        logging.info("Will use model %s", modelfile)
+    except subprocess.CalledProcessError as ex:
+        if ex.output:
+            output = ":\n%s" % (ex.output.strip(),)
+        else:
+            output = "."
+        show_error_box("Error starting Odemis back-end",
+                       "Failed to pick the microscope file with MODEL_SELECTOR.\n"
+                       "The model selector (%s) exited with error %d%s\n\n"
+                       "Check all the hardware is connected and try again to start Odemis." %
+                       (ex.cmd[0], ex.returncode, output))
+        raise ValueError("Failed to pick the microscope file: %s" % (ex,))
+
+    return modelfile
+
+
 def main(args):
     """ Parse the command line arguments and launch the Odemis daemon
 
@@ -529,12 +599,17 @@ def main(args):
                                      description="Odemis starter program")
 
     parser.add_argument('model_conf', nargs='?', help="Model definition (yaml) file to use")
+    parser.add_argument('-s', '--selector', dest='model_sel',
+                        help="Model selector command (instead of using a model definition)")
     parser.add_argument('-n', '--nogui', dest='nogui', action='store_true',
                         help="Don't launch the GUI after the back end has started")
     parser.add_argument('-l', '--log-target', dest='logtarget',
                         help="Location of the back end log file")
 
     options = parser.parse_args(args[1:])
+
+    if options.model_sel and options.model_conf:
+        raise ValueError("Cannot have both a model selector and model definition")
 
     # Use the log level for ourselves first
     try:
@@ -571,36 +646,20 @@ def main(args):
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
                     starter.show_popup("Starting Odemis back-end")
 
-                    # Get the model file out of the various ways
+                    # Get the model file in this order:
+                    # 1. the command line (either model selector or model file)
+                    # 2. the model file
+                    # 3. the model selector
                     if options.model_conf:
                         modelfile = options.model_conf
+                    elif options.model_sel:
+                        modelfile = run_model_selector(options.model_sel)
                     elif "MODEL" in odemis_config:
                         modelfile = odemis_config["MODEL"]
+                        if "MODEL_SELECTOR" in odemis_config:
+                            logging.warning("Both MODEL and MODEL_SELECTOR defined in odemis.conf, using MODEL")
                     elif "MODEL_SELECTOR" in odemis_config:
-                        cmd = shlex.split(odemis_config["MODEL_SELECTOR"])
-                        logging.debug("Getting the model filename using %s", cmd)
-                        try:
-                            out = subprocess.check_output(cmd).splitlines()
-                            if not out:
-                                show_error_box("Error starting Odemis back-end",
-                                               "No microscope file name provided by MODEL_SELECTOR %s.\n\n"
-                                               "Check all the hardware is connected and try again to start Odemis." % (cmd,))
-                                raise ValueError("No microscope file name provided by %s" % (cmd,))
-                            elif len(out) > 1:
-                                logging.warning("Model selector returned multiple lines: %s", out)
-                            modelfile = out[0].strip()
-                            logging.info("Will use model %s", modelfile)
-                        except subprocess.CalledProcessError as ex:
-                            if ex.output:
-                                output = ":\n%s" % (ex.output.strip(),)
-                            else:
-                                output = "."
-                            show_error_box("Error starting Odemis back-end",
-                                           "Failed to pick the microscope file with MODEL_SELECTOR.\n"
-                                           "The model selector (%s) exited with error %d%s\n\n"
-                                           "Check all the hardware is connected and try again to start Odemis." %
-                                           (ex.cmd[0], ex.returncode, output))
-                            raise ValueError("Failed to pick the microscope file: %s" % (ex,))
+                        modelfile = run_model_selector(odemis_config["MODEL_SELECTOR"])
                     else:
                         raise ValueError("No microscope model specified")
 

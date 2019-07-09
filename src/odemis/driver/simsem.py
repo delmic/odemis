@@ -22,7 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import Queue
+import queue
+from past.builtins import long
 import logging
 import math
 import numpy
@@ -421,7 +422,7 @@ class Detector(model.Detector):
         drift = self.current_drift + random.random() * self.drift_factor
         if abs(drift) >= self.drift_bound:
             # Make it bounce back
-            drift = cmp(drift, 0) * (2 * self.drift_bound - abs(drift))
+            drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
             self.drift_factor = -self.drift_factor
 
         self.current_drift = drift
@@ -572,7 +573,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._sync_event.subscribe(self)
 
     @oneway

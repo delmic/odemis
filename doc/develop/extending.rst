@@ -27,14 +27,14 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 12.04 or 16.04 (x86 32 or 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 16.04 (x86 32 or 64 bits)
  * Eclipse + PyDev plug-in + Pylint
  * XRCed (package python-wxtools) for GUI edition
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
 To *clone* it, type::
 
-   git clone https://github.com/delmic/odemis.git
+    git clone https://github.com/delmic/odemis.git
 
 Note that Odemis can run in fully simulated mode, where no actual hardware is
 needed. In this case, it can run in a virtual machine.
@@ -46,7 +46,7 @@ Detailed instructions
 ---------------------
 
 Download Ubuntu 16.04 at this address:
-http://www.ubuntu.com/download/desktop/contribute?version=16.04.1&architecture=amd64
+http://www.ubuntu.com/download/desktop/contribute?version=16.04.5&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -61,7 +61,7 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo apt-get update
     sudo apt-get dist-upgrade
     sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp \
-     libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools \
+     python-pyro4-delmic odemis fluodb python-wxtools \
      python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush cython
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
@@ -315,9 +315,13 @@ scripts, or via a command-line interface.
    your preference).
 
 #. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
-   ``C:\Users\YOURUSERNAME\Anaconda2\Lib\site-packages``. Make sure the file does
-   *not* have a `.txt` extension. Edit that file and enter the full path to the
-   Odemis source code, such as: ``C:\Program Files\Odemis\src\``.
+   ``C:\Users\YOURUSERNAME\AppData\Local\Continuum\anaconda2\Lib\site-packages``
+   (if you cannot find it, check using the console in Spyder with ``import numpy``,
+   then ``numpy.__file__``). Make sure the file does *not* have a `.txt`
+   extension (which the File Explorer automatically hides). Open that file, type
+   the full path to the Odemis source code, such as: ``C:\Program Files\Odemis\src\``,
+   and save the file.
+   Note this can be done automatically by typing in a terminal ``conda-develop C:\Program Files\Odemis\src\``.
 
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 To read an acquisition file you can use code such as:
@@ -334,7 +338,7 @@ Starting odemis from the terminal/console
 =========================================
 
 After setting up the development environment it is possible to start odemis via the terminal.
-It is also possible to specify a specific configuration (*.yaml) file used for staring odemis.
+It is also possible to specify a specific configuration (``*.yaml``) file used for staring odemis.
 
 
 Starting Odemis
@@ -344,13 +348,13 @@ Odemis can be started from the terminal by typing the following command in the t
 
     odemis-start
 
-The default microscope file (*.yaml) is defined in the configuration file, which can be found and changed in
+The default microscope file (``*.yaml``) is defined in the configuration file, which can be found and changed in
 ``/etc/odemis.conf``.
 
 Starting Odemis with configuration file
 ---------------------------------------
 
-Odemis can be started using different hardware microscope files (*.yaml).
+Odemis can be started using different hardware microscope files (``*.yaml``).
 There are various examples, hardware tests and simulators available in
 ``~/development/odemis/install/linux/usr/share/odemis/``.
 
@@ -443,7 +447,9 @@ To list all the properties of a component::
 
 To acquire
 5 images sequentially from the secondary electron detector at 5 different 
-positions on the sample, you could write this in bash::
+positions on the sample, you could write this in bash:
+
+.. code-block:: bash
 
     for i in $(seq 5); do
         odemis-cli --acquire "SED ExtXY" --output etd-pos$i.h5
@@ -566,7 +572,7 @@ When saving the file, main_xrc.py will automatically be updated too.
 Alternatively, you can just regenerate the ``.py`` file from a ``.xrc`` file with
 this command::
 
-   ./util/generate_xrc.py src/odemis/gui/main.xrc
+    ./util/generate_xrc.py src/odemis/gui/main.xrc
 
 
 If you add/modify an image (used as a GUI element, not a microscope acquisition), 
@@ -596,8 +602,7 @@ In console panel (PyCrust) of the inspection window, type:
 .. code-block:: python
 
     import logging
-    logging.getLogger()
-    l.setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.DEBUG)
 
 From now on, all log messages are displayed and recorded in the log file.
 
@@ -637,7 +642,7 @@ should end with ``-sim.odm.yaml``).
 It is then possible to run all the test cases by running from the ``odemis-testing``
 directory this command::
 
-   ../odemis/util/runtests.sh 2>&1 | tee test-$(date +%Y%m%d).log
+    ../odemis/util/runtests.sh 2>&1 | tee test-$(date +%Y%m%d).log
 
 The summary of the test results will be stored in ``test-DATE.log``, and the
 complete log will be stored in separate files.
@@ -717,12 +722,11 @@ data to stay in memory while not used anymore:
 Only a few memory profilers are able to detect ``C`` library memory leakage. One of
 them is ``memory_profiler``. You can install it with::
 
-   sudo easy_install -U memory_profiler
+    sudo easy_install -U memory_profiler
 
 or if you have installed the pip package::
 
     pip install memory_profiler --user
-    
 
 In order to find the leaks, it's possible to add a decorator ``@profile``
 to the suspect methods/functions, and then run::
@@ -799,11 +803,11 @@ of the Odemis GUI:
 
 .. code-block:: python
 
-   from pympler import tracker
-   tr = tracker.SummaryTracker()
+    from pympler import tracker
+    tr = tracker.SummaryTracker()
 
-   # After every interesting call
-   tr.print_diff()
+    # After every interesting call
+    tr.print_diff()
 
 As it will not detect ``C`` library memory allocations, if no new large object has
 appeared and the Python process uses more memory, then it's likely a C library

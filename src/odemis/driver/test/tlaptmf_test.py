@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import glob
 import logging
@@ -51,7 +51,7 @@ class TestStatic(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening", name
+            print("opening", name)
             dev = CLASS(name, "switch", **kwargs)
             self.assertTrue(dev.selfTest(), "self test failed.")
             dev.terminate()
@@ -120,7 +120,7 @@ class TestMFF(unittest.TestCase):
 
     def test_simple(self):
         cur_pos = self.dev.position.value
-        axis = cur_pos.keys()[0]
+        axis = list(cur_pos.keys())[0]
         apos = cur_pos[axis]
         logging.info("Device is currently at position %s", apos)
 

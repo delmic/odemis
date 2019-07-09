@@ -24,7 +24,7 @@ from odemis import model
 from odemis.util import spectrum
 import time
 import unittest
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -34,7 +34,7 @@ class TestGetWavelength(unittest.TestCase):
     def test_wl_list(self):
         shape = (220, 1, 1, 50, 400)
         dtype = numpy.dtype("uint16")
-        wl_orig = (400e-9 + numpy.array(range(shape[0])) * 10e-9).tolist()
+        wl_orig = (400e-9 + numpy.arange(shape[0]) * 10e-9).tolist()
         metadata = {model.MD_SW_VERSION: "1.0-test",
                  model.MD_HW_NAME: "fake spec",
                  model.MD_DESCRIPTION: "test3d",
@@ -78,7 +78,7 @@ class TestCoefToDA(unittest.TestCase):
     
     def test_simple(self):
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
-        wl_calib = (400 + numpy.array(range(len(dcalib))))
+        wl_calib = (400 + numpy.arange(len(dcalib)))
         coef = numpy.vstack([wl_calib, dcalib]).T
         self.assertEqual(coef.shape[1], 2)
 

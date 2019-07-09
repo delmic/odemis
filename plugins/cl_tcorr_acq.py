@@ -25,6 +25,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -208,8 +209,6 @@ class CorrelatorScanStream(stream.Stream):
 
         self._save_hw_settings()
 
-        # drift correction vectors
-        dc_vect = (0, 0)
         # a list (instead of a tuple) for the summation to work on each element independently
         tot_dc_vect = [0, 0]
 
@@ -231,9 +230,7 @@ class CorrelatorScanStream(stream.Stream):
 
                 for x, y in xyps:
                     sedatapix = []
-                    sedatam = []
                     cordatapix = []
-                    cordatam = []
 
                     for ll in range(self.nDC.value):
                         # add total drift vector at this point
@@ -258,6 +255,7 @@ class CorrelatorScanStream(stream.Stream):
                         sedatapix.append(sedat)
                         logging.debug("Memory used = %d bytes", udriver.readMemoryUsage())
                         drift_est.acquire()
+                        # drift correction vectors
                         dc_vect = drift_est.estimate()
                         tot_dc_vect[0] += dc_vect[0]
                         tot_dc_vect[1] += dc_vect[1]
@@ -870,21 +868,6 @@ class Correlator2D(Plugin):
 
         dlg.Destroy()
 
-    def crop_time_dim(self, das):
-        """
-        For each DataArray, crop the time dimension to some "manageable" size
-        das (list of DataArray)
-        return (list DataArray)
-        """
-        ret = []
-        for da in das:
-            dims = da.metadata.get(model.MD_DIMS, "CTZYX"[:-da.ndim])
-            if dims == "CTZYX":
-                da = da[:, :self.cropvalue.value, :, :, :]
-            ret.append(da)
-
-        return ret
-
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
         try:
@@ -920,11 +903,7 @@ class Correlator2D(Plugin):
             logging.debug("Going to export data: %s", das)
             exporter.export(fn, das)
 
-            # Save also a cropped version, which is easier to see in Odemis GUI
-            basefn, ext = os.path.splitext(fn)
-            cfn = basefn + "-cropped" + ext
-            exporter.export(cfn, self.crop_time_dim(das))
-            self.showAcquisition(cfn)
+            self.showAcquisition(fn)
 
         if not f.cancelled():
             dlg.Close()

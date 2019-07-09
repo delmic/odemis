@@ -35,11 +35,13 @@ from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, Mar
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
-from odemis.util import units
+from odemis.util import units, limit_invocation
 import scipy.ndimage
 import time
+import numpy
 import wx
 from wx.lib.imageutils import stepColour
+import wx.lib.newevent
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
@@ -55,6 +57,11 @@ def view_check(f, self, *args, **kwargs):
     if self.view:
         return f(self, *args, **kwargs)
 
+
+"""
+Define a wx event that is triggered when the scale to fit view to content is triggered.
+"""
+evtFitViewToContent, EVT_FIT_VIEW_TO_CONTENT = wx.lib.newevent.NewEvent()
 
 # Note: a Canvas with a fit_view_to_content method indicates that the view
 # can be adapted. (Some other components of the GUI will use this information)
@@ -127,7 +134,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None
 
-        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy, source=self)
 
     def _on_destroy(self, evt):
         # FIXME: it seems like this object stays in memory even after being destroyed.
@@ -344,7 +351,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
             if not len(stream_tree):
                 return
-            elif stream_tree.get_streams_by_type(stream.SpectrumStream):
+            elif stream_tree.get_projections_by_type(stream.SpectrumStream):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
@@ -368,7 +375,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             stream_tree = self.view.stream_tree
-            if stream_tree.get_streams_by_type(stream.SpectrumStream):
+            if stream_tree.get_projections_by_type(stream.SpectrumStream):
                 self.line_overlay.activate()
                 self.add_world_overlay(self.line_overlay)
         else:
@@ -399,7 +406,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The merge ratio actually corresponds to the opacity of the last image drawn
 
         # Use the stream tree, to get the DataProjection if there is one
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
         images_opt = []
         images_spc = []
         images_std = []
@@ -820,21 +827,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
 
-    # TODO: just return best scale and center? And let the caller do what it wants?
-    # It would allow to decide how to redraw depending if it's on size event or more high level.
-    def fit_to_content(self, recenter=False):
-        """ Adapt the scale and (optionally) center to fit to the current content
-
-        :param recenter: (boolean) If True, also recenter the view.
-
+    def _getContentBoundingBox(self):
         """
-
-        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
-
+        return (4 floats or Nones): ltrb in m. The physical position of the content
+        or 4 Nones if no content is present.
+        """
         # Find bounding box of all the content
-        bbox = [None, None, None, None]  # ltrb in m
+        bbox = (None, None, None, None)  # ltrb in m
         if self.view is not None:
-            streams = self.view.stream_tree.getStreams()
+            streams = self.view.stream_tree.getProjections()
             for s in streams:
                 try:
                     s_bbox = s.getBoundingBox()
@@ -846,6 +847,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
                             max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
 
+        return bbox
+
+    # TODO: just return best scale and center? And let the caller do what it wants?
+    # It would allow to decide how to redraw depending if it's on size event or more high level.
+    def fit_to_content(self, recenter=False):
+        """ Adapt the scale and (optionally) center to fit to the current content
+        :param recenter: (boolean) If True, also recenter the view.
+        """
+        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
+
+        bbox = self._getContentBoundingBox()
         if bbox[0] is None:
             return  # no image => nothing to do
 
@@ -1001,7 +1013,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
 class SparcARCanvas(DblMicroscopeCanvas):
     """
     Special restricted version that displays the first stream always fitting
-    the entire canvas.
+    the entire canvas (and without taking into account rotation/shear).
     It also has a .flip attribute to flip horizontally and/or vertically the
     whole image if needed.
     """
@@ -1022,7 +1034,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
         ims = []
 
         # order and display the images
@@ -1055,13 +1067,35 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self.merge_ratio = self.view.stream_tree.kwargs.get("merge", 1)
 
         # always refit to image (for the rare case it has changed size)
-        self.fit_view_to_content(recenter=True)
+        self.fit_view_to_content(recenter=False)
 
     def on_size(self, event):
         # refit image
-        self.fit_view_to_content(recenter=True)
+        self.fit_view_to_content(recenter=False)
         # Skip DblMicroscopeCanvas.on_size which plays with mpp
         canvas.DraggableCanvas.on_size(self, event)
+
+    def fit_to_content(self, recenter=False):
+        # Override the default function to _not_ move the center, as we always
+        # display everything at 0,0.
+
+        bbox = self._getContentBoundingBox()
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f m", w, h)
+            return  # no image
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+
+        # Force it back to the center (in case recenter_buffer was called)
+        self.requested_phys_pos = (0, 0)
+        wx.CallAfter(self.request_drawing_update)
 
 
 class BarPlotCanvas(canvas.PlotCanvas):
@@ -1072,10 +1106,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
     """
 
     def __init__(self, *args, **kwargs):
-
-        # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
-        # would also require renaming the `view` attributes of the
-        # other Canvas classes.
         self.view = None
         self._tab_data_model = None
 
@@ -1103,7 +1133,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
-        if data:
+        if data is not None:
             self.markline_overlay.activate()
         else:
             self.markline_overlay.deactivate()
@@ -1142,6 +1172,202 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         if self.view:
             self.update_thumbnail()
+            
+class NavigableBarPlotCanvas(BarPlotCanvas):
+    
+    """
+    A plot canvas that can be navigated by the user.
+
+    The x and y scales can be dragged with the left mouse button, and can be zoomed
+    with the mouse wheel.The plot can be panned with a middle mouse button drag.
+    Therefore, the data range and display range are different.
+
+    The plot also re-samples large data sets to speed up their display.
+
+    API:
+    Read only values
+        .data_xrange: The x range of the data
+        .data_yrange: The y range of the data
+        .display_xrange: The currently displayed x range
+        .display_yrange: The currently displayed y range
+    Methods
+        .set_data(...): Functions similar to the parent
+        .set_1d_data(...): Functions similar to the parent
+        .set_ranges(x_range, y_range): Set the display range of the plot. x_range and y_range
+            are range tuples.
+        .reset_ranges(): Resets the display ranges to the data ranges
+        .refresh_plot(): Redraws the plot with the newest parameters.
+            This function takes a window of the data set based on the current display range
+            and resamples large data sets so that they can be displayed quickly without lag.
+
+    Note: fit_view_to_content does not function in the same way as the parent. Because the plot ranges
+        are usually controlled by VA's in the viewport, this method now posts
+        a evtFitViewToContent event, which is intercepted by the parent viewport.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(NavigableBarPlotCanvas, self).__init__(*args, **kwargs)
+        self.abilities |= {CAN_DRAG}
+        self._data_buffer = None  # numpy arrays with the plot X and Y data
+        self.display_xrange = None  # range tuple of floats
+        self.display_yrange = None  # range tuple of floats
+        self.data_xrange = None  # range tuple of floats
+        self.data_yrange = None  # range tuple of floats
+
+    # TODO: only provide set_data(), and store the data as a single 2xN numpy array.
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None,
+                 display_xrange=None, display_yrange=None):
+        xs, ys = list(zip(*data))
+        self.set_1d_data(xs, ys, unit_x, unit_y, range_x, range_y, display_xrange, display_yrange)
+
+    def set_1d_data(self, xs, ys, unit_x=None, unit_y=None, range_x=None, range_y=None,
+                    display_xrange=None, display_yrange=None):
+        if len(xs) != len(ys):
+            msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
+            raise ValueError(msg % (len(xs), len(ys), str(xs)[:30]))
+        self._data_buffer = (numpy.array(xs), numpy.array(ys))
+        self.unit_x = unit_x
+        self.unit_y = unit_y
+
+        if range_x is None:
+            # It's easy, as the data is ordered
+            range_x = (xs[0], xs[-1])
+
+        # If a range is not given, we calculate it from the data
+        if range_y is None:
+            min_y = float(min(self._data_buffer[1]))
+            max_y = float(max(self._data_buffer[1]))
+            range_y = (min_y, max_y)
+
+        self.data_xrange = range_x
+        self.data_yrange = range_y
+        self.display_xrange = range_x if display_xrange is None else display_xrange
+        self.display_yrange = range_y if display_yrange is None else display_yrange
+        
+        self.refresh_plot()
+
+    def clear(self):
+        self._data_buffer = None
+        super(NavigableBarPlotCanvas, self).clear()
+
+    # TODO: refactor so that the viewports has fit_view_to_content(), and they
+    # are in charge of calling the right function in the canvas
+    def fit_view_to_content(self, recenter=None):
+        # note - need to do this via an event to the viewport. Otherwise it doesn't
+        # set the axes properly
+        evt = evtFitViewToContent()
+        wx.PostEvent(self, evt)
+
+    def reset_ranges(self):
+        if self._data_buffer is None:
+            return
+
+        self.set_ranges(self.data_xrange, self.data_yrange)
+
+    def _resample_plot(self, xs, ys, threshold):
+        """
+        Re-sample the data if there are more points than the threshold
+        xs, ys: two 1-D arrays with data
+        threshold: the minimum number of points for a re-sampling to occur
+        """
+        # Re-sample data based on window size
+        if len(xs) > threshold:
+            rs_factor = len(xs) // (threshold // 2)
+            logging.debug("Re-sampling data with factor %d", rs_factor)
+
+            """
+            # TODO: One we support Scipy 1.2.1, we can use this function
+            xr = xs[::rs_factor]
+            # Add the peaks back into the data set so that features are displayed
+            # peaks, _ = scipy.signal.find_peaks(ys, height=0)
+            xr = numpy.append(xr, peaks)
+            xr = numpy.unique(xr)
+            xr.sort()
+            """
+            n = len(xs)
+            rem = n % rs_factor
+            new_shape = (n // rs_factor, rs_factor)
+
+            # Reshape the array into bins and take the max of each bin
+            xr = numpy.reshape(xs[:(n - rem)], new_shape)
+            xr = numpy.amax(xr, axis=1)
+
+            # in case there are remaining items left at the end (could not fit into
+            # an equally sized bin) add these to the end of the re-sampled dataset
+            rem_items = xs[(n - rem):n]
+            if len(rem_items) > 0:
+                xr = numpy.append(xr, max(rem_items))
+
+            yr = numpy.interp(xr, xs, ys)
+
+            return xr, yr
+        else:
+            return xs, ys
+
+    @limit_invocation(0.05)  # Max 20 Hz
+    def refresh_plot(self):
+        """
+        Refresh the displayed data in the plot.
+        """
+        if self._data_buffer is None:
+            return
+
+        (xst , yst) = self._data_buffer
+
+        # Using the selected horizontal range, define a window
+        # for display of the data.
+        lo, hi = self.display_xrange
+
+        # Find the index closest to the range extremes
+        lox = numpy.searchsorted(xst, lo, side="left")
+        hix = numpy.searchsorted(xst, hi, side="right")
+
+        # normal Case
+        if lox != hix:
+            xs = xst[lox:hix]
+            ys = yst[lox:hix]
+        # otherwise we are zoomed in so much that only a single point is visible.
+        # Therefore just display a single bar that fills the the panel
+        else:
+            xs = [(hi + lo) / 2]
+            ys = [yst[lox]]
+
+        # Add a few points onto the beginning and end of the array
+        # to prevent gaps in the data from appearing
+        if lox > 0 and xs[0] != lo:
+            xs = numpy.insert(xs, 0, xst[lox - 1])
+            ys = numpy.insert(ys, 0, yst[lox - 1])
+
+        if hix < len(xst) and xs[-1] != hi:
+            xs = numpy.append(xs, xst[hix])
+            ys = numpy.append(ys, yst[hix])
+
+        # Resample the plot (if necessary) for the view, and restack the data
+        xs, ys = self._resample_plot(xs, ys, self.ClientSize.x * 10)
+        temp_data = numpy.column_stack((xs, ys))
+
+        if temp_data.size == 0:
+            temp_data = numpy.empty((1, 2))
+
+        super(NavigableBarPlotCanvas, self).set_data(temp_data, self.unit_x,
+                      self.unit_y, self.display_xrange, self.display_yrange)
+
+        self.Refresh()
+
+    def set_ranges(self, x_range, y_range):
+        """
+        Set the ranges of the plot.
+        """
+        self.display_xrange = x_range
+        self.display_yrange = y_range
+
+        self.refresh_plot()
+
+    def on_size(self, evt):
+        # Reset the data display to ensure the data resampling is done
+        self.refresh_plot()
+        super(NavigableBarPlotCanvas, self).on_size(evt)
 
 
 class TwoDPlotCanvas(BitmapCanvas):
@@ -1165,9 +1391,15 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = None
         self.range_y = None
 
+        self._crosshair_ol = None
+
         self.markline_overlay = view_overlay.MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
+
+        # play/pause icon
+        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.add_view_overlay(self.play_overlay)
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
@@ -1224,6 +1456,8 @@ class TwoDPlotCanvas(BitmapCanvas):
 
     def clear(self):
         super(TwoDPlotCanvas, self).clear()
+        self.range_x = None
+        self.range_y = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
@@ -1241,18 +1475,30 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = view
         self._tab_data_model = tab_data
 
-    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None):
-        """ Set the data to be displayed
+        # handle cross hair
+        self.view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
 
-        TODO: Allow for both a horizontal and vertical domain
+    def _on_cross_hair_show(self, activated):
+        """ Activate the cross hair view overlay """
+        if activated:
+            if self._crosshair_ol is None:
+                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
+            self.add_view_overlay(self._crosshair_ol)
+        elif self._crosshair_ol:
+            self.remove_view_overlay(self._crosshair_ol)
+
+        self.Refresh(eraseBackground=False)
+
+    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None, flip=0):
+        """ Set the data to be displayed
+        flip (int): 0 for no flip, wx.HORZ and wx.VERT otherwise
         """
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, None, "Spatial Spectrum")])
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, flip, None, "")])
         self.unit_x = unit_x
         self.unit_y = unit_y
         self.range_x = range_x
         self.range_y = range_y
 
-        self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
@@ -1272,14 +1518,22 @@ class TwoDPlotCanvas(BitmapCanvas):
         :return: (int, int)
         """
         size = self.ClientSize
-        data_width = self.range_x[1] - self.range_x[0]
-        x = min(max(self.range_x[0], val[0]), self.range_x[1])
-        perc_x = (x - self.range_x[0]) / data_width
+        data_width = max(self.range_x) - min(self.range_x)
+        x = min(max(min(self.range_x), val[0]), max(self.range_x))
+        if self.range_x[1] > self.range_x[0]:
+            perc_x = (x - self.range_x[0]) / data_width
+        else:
+            perc_x = 1 - (x - self.range_x[1]) / data_width
         pos_x = perc_x * size[0]
 
-        data_height = self.range_y[1] - self.range_y[0]
-        y = min(max(self.range_y[0], val[1]), self.range_y[1])
-        perc_y = (self.range_y[1] - y) / data_height
+        data_height = max(self.range_y) - min(self.range_y)
+        y = min(max(min(self.range_y), val[1]), max(self.range_y))
+
+        if self.range_y[1] > self.range_y[0]:
+            perc_y = (self.range_y[1] - y) / data_height
+        else:
+            perc_y = 1 - (self.range_y[0] - y) / data_height
+
         pos_y = perc_y * size[1]
 
         return pos_x, pos_y
@@ -1292,20 +1546,26 @@ class TwoDPlotCanvas(BitmapCanvas):
         """
         size = self.ClientSize
         perc_x = pos[0] / size[0]
-        data_width = self.range_x[1] - self.range_x[0]
-        val_x = perc_x * data_width + self.range_x[0]
+        data_width = max(self.range_x) - min(self.range_x)
+        if self.range_x[1] > self.range_x[0]:
+            val_x = self.range_x[0] + perc_x * data_width
+        else:
+            val_x = self.range_x[1] - perc_x * data_width
 
         perc_y = pos[1] / size[1]
-        data_height = self.range_y[1] - self.range_y[0]
-        val_y = self.range_y[1] - perc_y * data_height
+        data_height = max(self.range_y) - min(self.range_y)
+        if self.range_y[1] > self.range_y[0]:
+            val_y = self.range_y[1] - perc_y * data_height
+        else:
+            val_y = self.range_y[1] + perc_y * data_height
 
         if snap:
             # TODO: should be just a matter of rounding down to the size of a pixel
             raise NotImplementedError("Doesn't know how to snap to value")
         else:
             # Clip the value
-            val_x = max(self.range_x[0], min(val_x, self.range_x[1]))
-            val_y = max(self.range_y[0], min(val_y, self.range_y[1]))
+            val_x = max(min(self.range_x), min(val_x, max(self.range_x)))
+            val_y = max(min(self.range_y), min(val_y, max(self.range_y)))
 
         return val_x, val_y
 
@@ -1366,7 +1626,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         """
 
         # Normally the view.streamtree should have only one image anyway
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
 
         # add the images in order
         ims = []

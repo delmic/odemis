@@ -19,8 +19,10 @@ from __future__ import division
 # If you import this module, it will ensure that wxPython follows the v4 API.
 # Note that it only converts the v4 -> v3 API that Odemis needs, nothing more.
 
+from past.builtins import basestring
 import wx
 import sys
+import io
 
 if wx.MAJOR_VERSION <= 3:
     # ComboBox is now in .adv
@@ -40,7 +42,7 @@ if wx.MAJOR_VERSION <= 3:
     class ImageClever(wx.Image):
 
         def __new__(cls, *args, **kwargs):
-            if isinstance(args[0], file):
+            if isinstance(args[0], (file, io.IOBase)):
                 return wx.ImageFromStream(*args)
             elif len(args) >= 2 and isinstance(args[0], int) and isinstance(args[1], int):
                 return wx.EmptyImage(*args, **kwargs)

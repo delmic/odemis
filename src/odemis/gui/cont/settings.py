@@ -27,31 +27,38 @@ user interface.
 
 from __future__ import division
 
+from past.builtins import long
+from future.utils import with_metaclass
 from abc import ABCMeta
 import collections
+import csv
 import logging
 from odemis import model, util
+from odemis.acq import calibration
 import odemis.dataio
 from odemis.gui import img
 from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS
+from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS, \
+    get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
+from odemis.gui.util import get_picture_folder
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
+import os
 import time
 import wx
 
 import odemis.gui.conf as guiconf
 
 
-class SettingsController(object):
+class SettingsController(with_metaclass(ABCMeta, object)):
     """ Settings base class which describes an indirect wrapper for FoldPanelItems
 
     :param fold_panel_item: (FoldPanelItem) Parent window
@@ -61,8 +68,6 @@ class SettingsController(object):
         match the cached values.
 
     """
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, fold_panel_item, default_msg, highlight_change=False, tab_data=None):
 
@@ -95,8 +100,9 @@ class SettingsController(object):
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries """
-        for entry in [e for e in self.entries if e.value_ctrl]:
-            entry.value_ctrl.Enable(enabled)
+        for entry in self.entries:
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
         config = guiconf.get_acqui_conf()
@@ -122,7 +128,8 @@ class SettingsController(object):
         :param va: (VigilantAttribute)
         :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
-
+        :return SettingEntry or None: the entry created, or None, if no entry was
+          created (eg, because the conf indicates CONTROL_NONE).
         """
 
         assert isinstance(va, VigilantAttributeBase)
@@ -131,6 +138,9 @@ class SettingsController(object):
         self.panel.clear_default_message()
 
         ne = create_setting_entry(self.panel, name, va, hw_comp, conf, self.on_setting_changed)
+        if ne is None:
+            return None
+
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -353,7 +363,7 @@ class SettingsBarController(object):
         # and it avoids pausing the settings controllers from other tabs.
 
         # build the default config value based on the global one + the role
-        self._va_config = get_hw_settings_config(tab_data.main.role)
+        self._hw_settings_config = tab_data.main.hw_settings_config
 
         # disable settings while there is a preparation process running
         self._tab_data_model.main.is_preparing.subscribe(self.on_preparation)
@@ -379,10 +389,6 @@ class SettingsBarController(object):
         entries = []
         for setting_controller in self.setting_controllers:
             ets = setting_controller.entries
-            if isinstance(ets, collections.Mapping):
-                # To handle StreamController.entries which is a dict
-                # TODO: make StreamController.entries a list and drop this
-                ets = ets.values()
             entries.extend(ets)
         return entries
 
@@ -401,10 +407,10 @@ class SettingsBarController(object):
         self.setting_controllers.append(setting_controller)
 
         vas_comp = getVAs(hw_comp)
-        vas_config = self._va_config.get(hw_comp.role, {}) # OrderedDict or dict
+        vas_config = get_hw_config(hw_comp, self._hw_settings_config)  # OrderedDict or dict
 
         # Re-order the VAs of the component in the same order as in the config
-        vas_names = util.sorted_according_to(vas_comp.keys(), vas_config.keys())
+        vas_names = util.sorted_according_to(list(vas_comp.keys()), list(vas_config.keys()))
 
         for name in vas_names:
             try:
@@ -484,11 +490,11 @@ class SecomSettingsController(SettingsBarController):
         # the user wouldn't want to have separate values... and also because
         # anyway we don't currently support local stream axes.
         if main_data.pinhole:
+            conf = get_hw_config(main_data.pinhole, self._hw_settings_config)
             for a in ("d",):
                 if a not in main_data.pinhole.axes:
                     continue
-                conf = self._va_config["pinhole"].get(a)
-                self._optical_panel.add_axis(a, main_data.pinhole, conf)
+                self._optical_panel.add_axis(a, main_data.pinhole, conf.get(a))
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
@@ -607,6 +613,10 @@ class AnalysisSettingsController(SettingsBarController):
             for key, value in file_info.metadata.items():
                 self._pnl_acqfile.add_metadata(key, value)
 
+            # Change default dir for the calibration files
+            for file_ctrl in (self._arfile_ctrl, self._spec_bckfile_ctrl, self._specfile_ctrl):
+                file_ctrl.default_dir = file_info.file_path
+
         self._pnl_acqfile.Refresh()
 
     # TODO: refactor into widgets.FileConnector
@@ -708,10 +718,220 @@ class SparcAlignSettingsController(SettingsBarController):
 
         if main_data.spectrograph:
             comp = main_data.spectrograph
+            conf = get_hw_config(comp, self._hw_settings_config)
             for a in ("wavelength", "grating", "slit-in"):
                 if a not in comp.axes:
                     logging.debug("Skipping non existent axis %s on component %s",
                                   a, comp.name)
                     continue
-                conf = self._va_config[comp.role].get(a)
-                self._spect_setting_cont.add_axis(a, comp, conf)
+                self._spect_setting_cont.add_axis(a, comp, conf.get(a))
+
+
+class CenterAlignSettingsController(SettingsBarController):
+    """
+    Controller, which creates the centering panel in the alignment tab and provides the user with the option to
+    select among different configurations regarding the mirror position. For example, the user can select the
+    configuration with the flipped mirror which is under the sample and placed upside-down.
+    """
+    def __init__(self, tab_panel, tab_data):
+        super(CenterAlignSettingsController, self).__init__(tab_data)
+        self.panel = tab_panel
+        mirror_lens = tab_data.main.lens
+
+        self.panel_center = SettingsPanel(self.panel.pnl_centering)
+        self.panel_center.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel.pnl_centering.GetSizer().Add(self.panel_center, 1, border=5,
+                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+
+        entry_mirrorPosition = create_setting_entry(self.panel_center, "Mirror type",
+                                                    mirror_lens.configuration,
+                                                    mirror_lens,
+                                                    conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                          "label": "Mirror type",
+                                                          "tooltip": "Change the type of the mirror"})
+
+        entry_mirrorPosition.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+
+        # remove border
+        self.panel_center.GetSizer().GetItem(0).SetBorder(0)
+        self.panel_center.Layout()
+
+
+class StreakCamAlignSettingsController(SettingsBarController):
+    """
+    Controller, which creates the streak panel in the alignment tab and
+    provides the necessary settings to align and calibrate a streak camera.
+    """
+    def __init__(self, tab_panel, tab_data):
+        super(StreakCamAlignSettingsController, self).__init__(tab_data)
+        self.panel = tab_panel
+        main_data = tab_data.main
+        self.streak_ccd = main_data.streak_ccd
+        self.streak_delay = main_data.streak_delay
+        self.streak_unit = main_data.streak_unit
+        self.streak_lens = main_data.streak_lens
+
+        self._calib_path = get_picture_folder()  # path to the trigger delay calibration folder
+
+        self.panel_streak = SettingsPanel(self.panel.pnl_streak)
+        self.panel_streak.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel.pnl_streak.GetSizer().Add(self.panel_streak, 1, border=5,
+                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+
+        entry_timeRange = create_setting_entry(self.panel_streak, "Time range",
+                                               self.streak_unit.timeRange,
+                                               self.streak_unit,
+                                               conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                     "label": "Time range",
+                                                     "tooltip": "Time needed by the streak unit for one sweep "
+                                                                "from top to bottom of the readout camera chip."}
+                                               )
+        entry_timeRange.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.ctrl_timeRange = entry_timeRange.value_ctrl
+
+        entry_triggerDelay = create_setting_entry(self.panel_streak, "Trigger delay",
+                                                  self.streak_delay.triggerDelay,
+                                                  self.streak_delay,
+                                                  conf={"control_type": odemis.gui.CONTROL_FLT,
+                                                        "label": "Trigger delay",
+                                                        "tooltip": "Change the trigger delay value to "
+                                                                   "center the image."},
+                                                  change_callback=self._onUpdateTriggerDelayMD)
+
+        entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
+
+        entry_magnification = create_setting_entry(self.panel_streak, "Magnification",
+                                                   self.streak_lens.magnification,
+                                                   self.streak_lens,
+                                                   conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                         "label": "Magnification",
+                                                         "tooltip": "Change the magnification of the input"
+                                                                    "optics for the streak camera system. \n"
+                                                                    "Values < 1: De-magnifying \n"
+                                                                    "Values > 1: Magnifying"})
+
+        entry_magnification.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.combo_magnification = entry_magnification.value_ctrl
+
+        # remove border
+        self.panel_streak.GetSizer().GetItem(0).SetBorder(0)
+        self.panel_streak.Layout()
+
+        self.panel.btn_open_streak_calib_file.Bind(wx.EVT_BUTTON, self._onOpenCalibFile)
+        self.panel.btn_save_streak_calib_file.Bind(wx.EVT_BUTTON, self._onSaveCalibFile)
+
+    def _onUpdateTriggerDelayMD(self, evt):
+        """
+        Callback method for trigger delay ctrl GUI element.
+        Overwrites the triggerDelay value in the MD after a new value was requested via the GUI.
+        """
+        evt.Skip()
+        cur_timeRange = self.streak_unit.timeRange.value
+        requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
+        # get a copy of  MD
+        trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        trigger2delay_MD[cur_timeRange] = requested_triggerDelay
+        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})
+        # Note: updateMetadata should here never raise an exception as the UnitFloatCtrl already
+        # catches errors regarding type and out-of-range inputs
+
+        # update txt displayed in GUI
+        self._onUpdateTriggerDelayGUI("Calibration not saved yet", odemis.gui.FG_COLOUR_WARNING)
+
+    def _onUpdateTriggerDelayGUI(self, text, colour=odemis.gui.FG_COLOUR_EDIT):
+        """
+        Updates the GUI elements regarding the new trigger delay value.
+        :parameter text (str): the text to show
+        :parameter colour (wx.Colour): the colour to use
+        """
+        self.panel.txt_StreakCalibFilename.Value = text
+        self.panel.txt_StreakCalibFilename.SetForegroundColour(colour)
+
+    def _onOpenCalibFile(self, event):
+        """
+        Loads a calibration file (*csv) containing the time range and the corresponding trigger delay
+        for streak camera calibration.
+        """
+        logging.debug("Open trigger delay calibration file for temporal acquisition.")
+
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a calibration file to load",
+                               defaultDir=self._calib_path,
+                               defaultFile="",
+                               style=wx.FD_OPEN,
+                               wildcard="csv files (*.csv)|*.csv")
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+
+        # get selected path + filename and update default directory
+        self._calib_path = dialog.GetDirectory()
+        path = dialog.GetPath()
+        filename = dialog.GetFilename()
+
+        # read file
+        with open(path, 'rb') as csvfile:
+            calibFile = csv.reader(csvfile, delimiter=':')
+
+            try:
+                tr2d_dict = calibration.get_time_range_to_trigger_delay(calibFile,
+                                                                        self.streak_unit.timeRange.choices,
+                                                                        self.streak_delay.triggerDelay.range)
+            except ValueError as error:
+                self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
+                logging.error("Failed loading %s: %s", filename, error)
+                return
+
+        # update the MD
+        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d_dict})
+
+        # update triggerDelay shown in GUI
+        cur_timeRange = self.streak_unit.timeRange.value
+        # find the corresponding trigger delay
+        key = odemis.util.find_closest(cur_timeRange, tr2d_dict.keys())
+        # Note: no need to check almost_equal again as we do that already when loading the file
+        self.streak_delay.triggerDelay.value = tr2d_dict[key]  # set the new value
+
+        self._onUpdateTriggerDelayGUI(filename)  # update txt displayed in GUI
+
+    def _onSaveCalibFile(self, event):
+        """
+        Saves a calibration file (*csv) containing the time range and the corresponding trigger delay
+        for streak camera calibration.
+        """
+        logging.debug("Save trigger delay calibration file for temporal acquisition.")
+
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a filename and destination to save the calibration file. "
+                                       "It is advisory to include the SEM voltage into the filename.",
+                               defaultDir=self._calib_path,
+                               defaultFile="",
+                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                               wildcard="csv files (*.csv)|*.csv")
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+
+        # get selected path + filename and update default directory
+        self._calib_path = dialog.GetDirectory()
+        path = dialog.GetPath()
+        filename = dialog.GetFilename()
+
+        # check if filename is provided with the correct extension
+        if os.path.splitext(filename)[1] != ".csv":
+            filename += ".csv"
+            path += ".csv"
+
+        # get a copy of the triggerDelay dict from MD
+        triggerDelay_dict = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+
+        with open(path, 'wb') as csvfile:
+            calibFile = csv.writer(csvfile, delimiter=':')
+            for key in triggerDelay_dict.keys():
+                calibFile.writerow([key, triggerDelay_dict[key]])
+
+        # update txt displayed in GUI
+        self._onUpdateTriggerDelayGUI(filename)

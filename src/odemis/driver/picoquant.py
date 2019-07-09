@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-import Queue
+import queue
 from ctypes import *
 import ctypes
 import logging
@@ -29,7 +29,7 @@ import random
 import threading
 import time
 from decorator import decorator
-
+from concurrent import futures
 
 # Based on phdefin.h
 MAXDEVNUM = 8
@@ -206,16 +206,21 @@ class PH300(model.Detector):
     Represents a PicoQuant PicoHarp 300.
     """
 
-    def __init__(self, name, role, device=None, children=None, daemon=None,
-                 disc_volt=None, zero_cross=None, **kwargs):
+    def __init__(self, name, role, device=None, dependencies=None, children=None, daemon=None,
+                 disc_volt=None, zero_cross=None, shutter_axes=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
+        dependencies (dict str -> Component): shutters components (shutter0 and shutter1 are valid)
         children (dict str -> kwargs): the names of the detectors (detector0 and
-         detector1 are valid) to the arguments.
+         detector1 are valid)
         disc_volt (2 (0 <= float <= 0.8)): discriminator voltage for the APD 0 and 1 (in V)
         zero_cross (2 (0 <= float <= 2e-3)): zero cross voltage for the APD0 and 1 (in V)
+        shutter_axes (dict str -> str, value, value): internal child role of the photo-detector ->
+          axis name, position when shutter is closed (ie protected), position when opened (receiving light).
         """
+        if dependencies is None:
+            dependencies = {}
         if children is None:
             children = {}
 
@@ -226,12 +231,15 @@ class PH300(model.Detector):
             self._dll = PHDLL()
         self._idx = self._openDevice(device)
 
+        # Lock to be taken to avoid multi-threaded access to the hardware
+        self._hw_access = threading.Lock()
+
         if disc_volt is None:
             disc_volt = [0, 0]
         if zero_cross is None:
             zero_cross = [0, 0]
 
-        super(PH300, self).__init__(name, role, daemon=daemon, **kwargs)
+        super(PH300, self).__init__(name, role, daemon=daemon, dependencies=dependencies, **kwargs)
 
         # TODO: metadata for indicating the range? cf WL_LIST?
 
@@ -256,15 +264,36 @@ class PH300(model.Detector):
         # It could also go into just separate DataFlow, but then it's difficult
         # to allow using these DataFlows in a standard way.
         self._detectors = {}
+        self._shutters = {}
+        self._shutter_axes = shutter_axes or {}
         for name, ckwargs in children.items():
             if name == "detector0":
-                i = 0
+                if "shutter0" in dependencies:
+                    shutter_name = "shutter0"
+                else:
+                    shutter_name = None
+                self._detectors[name] = PH300RawDetector(channel=0, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
             elif name == "detector1":
-                i = 1
+                if "shutter1" in dependencies:
+                    shutter_name = "shutter1"
+                else:
+                    shutter_name = None
+                self._detectors[name] = PH300RawDetector(channel=1, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
             else:
-                raise ValueError("")
-            self._detectors[name] = PH300RawDetector(channel=i, parent=self, daemon=daemon, **ckwargs)
-            self.children.value.add(self._detectors[name])
+                raise ValueError("Child %s not recognized, should be detector0 or detector1.")
+        for name, comp in dependencies.items():
+            if name == "shutter0":
+                if "shutter0" not in shutter_axes.keys():
+                    raise ValueError("'shutter0' not found in shutter_axes")
+                self._shutters['shutter0'] = comp
+            elif name == "shutter1":
+                if "shutter1" not in shutter_axes.keys():
+                    raise ValueError("'shutter1' not found in shutter_axes")
+                self._shutters['shutter1'] = comp
+            else:
+                raise ValueError("Dependency %s not recognized, should be shutter0 or shutter1.")
 
         # dwellTime = measurement duration
         dt_rng = (ACQTMIN * 1e-3, ACQTMAX * 1e-3)  # s
@@ -281,9 +310,8 @@ class PH300(model.Detector):
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
         pxd_ch = {2 ** i * tresbase * 1e-12 for i in range(BINSTEPSMAX)}
-        self.pixelDuration = model.FloatEnumerated(tres, pxd_ch, unit="s",
+        self.pixelDuration = model.FloatEnumerated(tres * 1e-12, pxd_ch, unit="s",
                                                    setter=self._setPixelDuration)
-        self._metadata[model.MD_PIXEL_DUR] = tres
 
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
@@ -313,7 +341,7 @@ class PH300(model.Detector):
         # * "S" to start
         # * "E" to end
         # * "T" to terminate
-        self._genmsg = Queue.Queue()
+        self._genmsg = queue.Queue()
         self._generator = threading.Thread(target=self._acquire,
                                            name="PicoHarp300 acquisition thread")
         self._generator.start()
@@ -372,7 +400,7 @@ class PH300(model.Detector):
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
         self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
-        return (mod.value, partnum.value, ver.value)
+        return mod.value, partnum.value, ver.value
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
@@ -480,7 +508,8 @@ class PH300(model.Detector):
         """
         # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
-        self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+        with self._hw_access:
+            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
 
     @autoretry
@@ -577,8 +606,8 @@ class PH300(model.Detector):
         # Update metadata
         # pxd = tresbase * (2 ** bs)
         pxd = self.GetResolution() * 1e-12  # ps -> s
-        self._metadata[model.MD_PIXEL_DUR] = pxd
-
+        tl = numpy.arange(self._shape[0]) * pxd + self.syncOffset.value
+        self._metadata[model.MD_TIME_LIST] = tl
         return pxd
 
     def _setSyncDiv(self, div):
@@ -589,7 +618,8 @@ class PH300(model.Detector):
         offset_ps = int(offset * 1e12)
         self.SetSyncOffset(offset_ps)
         offset = offset_ps * 1e-12  # convert the round-down in ps back to s
-        self._metadata[model.MD_TIME_OFFSET] = offset
+        tl = numpy.arange(self._shape[0]) * self.pixelDuration.value + offset
+        self._metadata[model.MD_TIME_LIST] = tl
         return offset
 
     # Acquisition methods
@@ -608,7 +638,7 @@ class PH300(model.Detector):
         """
         Read one message from the acquisition queue
         return (str): message
-        raises Queue.Empty: if no message on the queue
+        raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
         if msg not in ("S", "E", "T"):
@@ -633,7 +663,7 @@ class PH300(model.Detector):
                 state = self._get_acq_msg(block=False)
                 if state == "T":
                     raise StopIteration()
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
             if state == "S":
@@ -656,9 +686,32 @@ class PH300(model.Detector):
                 return True
             elif state == "T":
                 raise StopIteration()
-        except Queue.Empty:
+        except queue.Empty:
             pass
         return False
+
+    def _toggle_shutters(self, shutters, open):
+        """
+        Open/ close protection shutters.
+        shutters (list of string): the names of the shutters
+        open (boolean): True if shutters should open, False if they should close
+        """
+        fs = []
+        for sn in shutters:
+            axes = {}
+            logging.debug("Setting shutter %s to %s.", sn, open)
+            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
+            shutter = self._shutters[sn]
+            if open:
+                axes[ax_name] = open_pos
+            else:
+                axes[ax_name] = closed_pos
+            try:
+                fs.append(shutter.moveAbs(axes))
+            except Exception as e:
+                logging.error("Toggling shutters failed with exception %s", e)
+        for f in fs:
+            f.result()
 
     def _acquire(self):
         """
@@ -669,6 +722,9 @@ class PH300(model.Detector):
             while True:
                 # Wait until we have a start (or terminate) message
                 self._acq_wait_start()
+
+                # Open protection shutters
+                self._toggle_shutters(self._shutters.keys(), True)
 
                 # Keep acquiring
                 while True:
@@ -685,7 +741,6 @@ class PH300(model.Detector):
                     logging.debug("Starting new acquisition")
                     # check if any message received before starting again
                     if self._acq_should_stop():
-                        logging.debug("Acquisition stopped")
                         break
 
                     self.ClearHistMem()
@@ -717,7 +772,6 @@ class PH300(model.Detector):
                         self.StopMeas()
 
                     if must_stop:
-                        logging.debug("Acquisition stopped")
                         break
 
                     # Read data and pass it
@@ -725,12 +779,17 @@ class PH300(model.Detector):
                     da = model.DataArray(data, md)
                     self.data.notify(da)
 
+                logging.debug("Acquisition stopped")
+                self._toggle_shutters(self._shutters.keys(), False)
+
         except StopIteration:
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
-        else:
+        else:  # code unreachable
             logging.error("Acquisition thread ended without exception")
+        finally:
+            self._toggle_shutters(self._shutters.keys(), False)
 
         logging.debug("Acquisition thread ended")
 
@@ -764,7 +823,7 @@ class PH300RawDetector(model.Detector):
     Cannot be directly created. It must be done via PH300 child.
     """
 
-    def __init__(self, name, role, channel, parent, **kwargs):
+    def __init__(self, name, role, channel, parent, shutter_name=None, **kwargs):
         """
         channel (0 or 1): detector ID of the detector
         """
@@ -777,6 +836,8 @@ class PH300RawDetector(model.Detector):
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
         self._generator = None
 
+        self._shutter_name = shutter_name
+
     def terminate(self):
         self.stop_generate()
 
@@ -784,6 +845,11 @@ class PH300RawDetector(model.Detector):
         if self._generator is not None:
             logging.warning("Generator already running")
             return
+        # In principle, toggling the shutter values here might interfere with the
+        # shutter values set by the acquisition. However, in odemis, we never
+        # do both things at the same time, so it is not an issue.
+        if self._shutter_name:
+            self.parent._toggle_shutters([self._shutter_name], True)
         self._generator = util.RepeatingTimer(100e-3,  # Fixed rate at 100ms
                                               self._generate,
                                               "Raw detector reading")
@@ -791,6 +857,8 @@ class PH300RawDetector(model.Detector):
 
     def stop_generate(self):
         if self._generator is not None:
+            if self._shutter_name:
+                self.parent._toggle_shutters([self._shutter_name], False)
             self._generator.cancel()
             self._generator = None
 

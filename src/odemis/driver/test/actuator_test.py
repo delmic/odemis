@@ -29,7 +29,7 @@ from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator
+    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator
 from odemis.util import test
 import os
 import time
@@ -50,21 +50,21 @@ class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
     actuator_type = MultiplexActuator
 
     def setUp(self):
-        # create 2 children and then combine one axis each with MultiplexActuator
-        self.child1 = simulated.Stage("sstage1", "test", {"a", "b"})
-        self.child2 = simulated.Stage("sstage2", "test", {"cccc", "ddd"})
+        # create 2 dependencies and then combine one axis each with MultiplexActuator
+        self.dependency1 = simulated.Stage("sstage1", "test", {"a", "b"})
+        self.dependency2 = simulated.Stage("sstage2", "test", {"cccc", "ddd"})
         self.dev = self.actuator_type("stage", "stage",
-                                      children={"x": self.child1, "y": self.child2},
+                                      dependencies={"x": self.dependency1, "y": self.dependency2},
                                       axes_map={"x": "a", "y": "ddd"},
                                       )
 
     def test_speed(self):
         self.dev.speed.value = {"x": 0.1, "y": 0.1}
-        self.assertEqual(self.child2.speed.value["ddd"], 0.1)
+        self.assertEqual(self.dependency2.speed.value["ddd"], 0.1)
 
-        sc2 = self.child2.speed.value.copy()
+        sc2 = self.dependency2.speed.value.copy()
         sc2["ddd"] = 2
-        self.child2.speed.value = sc2
+        self.dependency2.speed.value = sc2
         self.assertEqual(self.dev.speed.value["y"], 2)
 
 
@@ -73,14 +73,14 @@ class MultiplexOneTest(unittest.TestCase, simulated_test.ActuatorTest):
     actuator_type = MultiplexActuator
 
     def setUp(self):
-        self.child = tmcm.TMCLController(name="test", role="test",
+        self.dependency = tmcm.TMCLController(name="test", role="test",
                                          port="/dev/fake3",
                                          axes=["a", "b"],
                                          ustepsize=[5.9e-9, 5.8e-9],
                                          rng=[[-1e-3, 1e-3], [0, 1e-3]],
                                          refproc="Standard")
         self.dev = self.actuator_type("stage", "stage",
-                                      children={"x": self.child, "y": self.child},
+                                      dependencies={"x": self.dependency, "y": self.dependency},
                                       axes_map={"x": "a", "y": "b"},
                                       ref_on_init={"x": 0.0001},
                                     )
@@ -88,19 +88,65 @@ class MultiplexOneTest(unittest.TestCase, simulated_test.ActuatorTest):
         self.dev.moveRel({"x": 1e-8, "y": 1e-8}).result()
 
 
+class LinearActuatorTest(unittest.TestCase):
+
+    actuator_type = LinearActuator
+
+    def setUp(self):
+        # create 2 dependencies and then combine one axis each with MultiplexActuator
+        kwargs = dict(name="test", role="stage", port="/dev/fake6",
+                      axes=["od", "fw"],
+                      ustepsize=[2.752e-5, 3.272e-5],
+                      rng=[[-1, 3], None],  # m, min/max
+                      refproc="Standard",
+                      refswitch={"od": 0, "fw": 0},
+                      inverted=["od"],
+                      do_axes={4: ["shutter0", 0, 1, 1], 5: ["shutter1", 0, 1, 1]},
+                      led_prot_do={4: 0, 5: 0})
+        self.dependency = tmcm.TMCLController(**kwargs)
+        self.dev = self.actuator_type("OD Filter", "tc-od-filter", {"density": self.dependency}, "od", offset=-3)
+
+    def test_normal_moveAbs(self):
+        move = {"density": 1}
+        f = self.dev.moveAbs(move)
+        f.result()  # wait
+        self.assertAlmostEqual(self.dev.position.value["density"], 1, places=4)
+
+    def test_unsupported_position(self):
+        move = {"density": 5}
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs(move)
+            f.result()  # wait
+
+    def test_move_rel(self):
+        pos = self.dev.position.value
+        f = self.dev.moveRel({"density": 0.5})
+        f.result()
+        self.assertAlmostEqual(self.dev.position.value["density"], pos["density"] + 0.5, places=4)
+
+    def test_reference(self):
+        f = self.dev.reference({"density"})
+        f.result()
+        self.assertAlmostEqual(self.dev.position.value["density"], 3, places=4)
+
+    # force to not use the default method from TestCase
+    def tearDown(self):
+        super(LinearActuatorTest, self).tearDown()
+
+
 class FixedPositionsTest(unittest.TestCase):
 
     actuator_type = FixedPositionsActuator
 
     def setUp(self):
-        # create 2 children and then combine one axis each with MultiplexActuator
-        self.child1 = simulated.Stage("sstage1", "test", {"a"})
+        # create 2 dependencies and then combine one axis each with MultiplexActuator
+        self.dependency1 = simulated.Stage("sstage1", "test", {"a"})
         self.dev_normal = self.actuator_type("stage", "stage",
-                                             {"x": self.child1}, "a", {0: "pos0", 0.01: "pos1",
+                                             {"x": self.dependency1}, "a", {0: "pos0", 0.01: "pos1",
                                                                        0.02: "pos2", 0.03: "pos3",
                                                                        0.04: "pos4", 0.05: "pos5"})
         self.dev_cycle = self.actuator_type("stage", "stage",
-                                            {"x": self.child1}, "a", {0: "pos0", 0.01: "pos1",
+                                            {"x": self.dependency1}, "a", {0: "pos0", 0.01: "pos1",
                                                                       0.02: "pos2", 0.03: "pos3",
                                                                       0.04: "pos4", 0.05: "pos5"}, cycle=0.06)
 
@@ -109,8 +155,7 @@ class FixedPositionsTest(unittest.TestCase):
         if not hasattr(self.dev_normal, "moveAbs"):
             self.skipTest("Actuator doesn't support absolute move")
 
-        move = {}
-        move["x"] = 0.01
+        move = {"x": 0.01}
         f = self.dev_normal.moveAbs(move)
         f.result()  # wait
         self.assertDictEqual(move, self.dev_normal.position.value,
@@ -121,8 +166,7 @@ class FixedPositionsTest(unittest.TestCase):
         if not hasattr(self.dev_normal, "moveAbs"):
             self.skipTest("Actuator doesn't support absolute move")
 
-        move = {}
-        move["x"] = 0.07
+        move = {"x": 0.07}
         with self.assertRaises(ValueError):
             f = self.dev_normal.moveAbs(move)
             f.result()  # wait
@@ -137,7 +181,6 @@ class FixedPositionsTest(unittest.TestCase):
         self.assertEqual(self.dev_cycle.position.value["x"], cur_pos)
 
         # find a different position
-        new_pos = cur_pos
         position = self.dev_cycle.axes["x"]
         for p in position.choices:
             if p != cur_pos:
@@ -387,182 +430,182 @@ class TestConvertStage(unittest.TestCase):
         """
         Test typical rotation stage for the SECOM v1 A/B alignment
         """
-        child = simulated.Stage("stage", "test", axes=["a", "b"])
-        stage = ConvertStage("inclined", "align", {"orig": child},
+        dependency = simulated.Stage("stage", "test", axes=["a", "b"])
+        stage = ConvertStage("inclined", "align", {"orig": dependency},
                              axes=["b", "a"], rotation=math.radians(-135))
 
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a":-2.1213203435596424e-06,
+        test.assert_pos_almost_equal(dependency.position.value, {"a":-2.1213203435596424e-06,
                                                          "b": 7.071067811865477e-07})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
     # @skip("skip")
     def test_move_rel(self):
-        child = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
 
         # no transformation
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"])
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # scaling
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 20e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
         # only one axis at a time (to check missing axis doesn't do weird move)
         f = stage.moveRel({"x": 1e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 0})
         f = stage.moveRel({"y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 20e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # rotation
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         self.assertEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x":-2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 20e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
     # @skip("skip")
     def test_move_abs(self):
-        child = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
 
         # no transformation
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"])
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # scaling
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
         # only one axis at a time (to check missing axis doesn't do weird move)
         f = stage.moveAbs({"x": 1e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # rotation
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x":-2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveAbs({"x": 1e-06})  # Test only move only one axis
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x":-2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
-        stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
 
 
 class TestAntiBacklashActuator(unittest.TestCase):
 
     def test_simple(self):
-        child = simulated.Stage("stage", "test", axes=["x", "y"])
-        stage = AntiBacklashActuator("absact", "align", {"orig": child},
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        stage = AntiBacklashActuator("absact", "align", {"orig": dependency},
                                      backlash={"x": 100e-6, "y": -80e-6})
 
         # moves should just go the same positions
@@ -571,37 +614,37 @@ class TestAntiBacklashActuator(unittest.TestCase):
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": -23e-06, "y": -15e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x":-23e-06, "y":-15e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x":-23e-06, "y":-15e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x":-23e-06, "y":-15e-06})
 
         # rel
         f = stage.moveAbs({"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
     def test_limited_backlash(self):
         """
         Test when backlash doesn't involve all axes
         """
-        child = simulated.Stage("stage", "test", axes=["a", "b"])
-        stage = AntiBacklashActuator("absact", "align", {"orig": child},
+        dependency = simulated.Stage("stage", "test", axes=["a", "b"])
+        stage = AntiBacklashActuator("absact", "align", {"orig": dependency},
                                      backlash={"a": 100e-6})
 
         # moves should just go the same positions
@@ -610,19 +653,19 @@ class TestAntiBacklashActuator(unittest.TestCase):
         f = stage.moveAbs({"a": 1e-06, "b": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveAbs({"b": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 0})
-        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 0})
         f = stage.moveAbs({"a": -23e-06, "b": -15e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a":-23e-06, "b":-15e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a":-23e-06, "b":-15e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"a":-23e-06, "b":-15e-06})
         f = stage.moveAbs({"a": -20e-06}) # negative position but positive move
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a":-20e-06, "b":-15e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a":-20e-06, "b":-15e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"a":-20e-06, "b":-15e-06})
 
         # rel
         f = stage.moveAbs({"a": 0})
@@ -630,35 +673,35 @@ class TestAntiBacklashActuator(unittest.TestCase):
         f = stage.moveRel({"a": 1e-06, "b": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": 0, "b": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": -1e-06, "b": -2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
-        test.assert_pos_almost_equal(child.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
     def test_error(self):
-        child = simulated.Stage("stage", "test", axes=["a", "b"])
+        dependency = simulated.Stage("stage", "test", axes=["a", "b"])
 
         # backlash on non-existing axis
         with self.assertRaises(ValueError):
-            stage = AntiBacklashActuator("absact", "align", {"orig": child},
+            stage = AntiBacklashActuator("absact", "align", {"orig": dependency},
                                          backlash={"a": 100e-6, "x": 50e-6})
 
         # move on non-existing axis
-        stage = AntiBacklashActuator("absact", "align", {"orig": child},
+        stage = AntiBacklashActuator("absact", "align", {"orig": dependency},
                                      backlash={"a": 100e-6, "b": 50e-6})
         with self.assertRaises(ValueError):
             stage.moveRel({"a": -5e-6, "x": 5e-6})
 
     def test_move_update(self):
-        child = simulated.Stage("stage", "test", axes=["z"])
+        dependency = simulated.Stage("stage", "test", axes=["z"])
         # Slow speed to give some chance of the move update to work
-        child.speed.value = {"z": 100e-6}
-        stage = AntiBacklashActuator("absact", "abs", {"orig": child},
+        dependency.speed.value = {"z": 100e-6}
+        stage = AntiBacklashActuator("absact", "abs", {"orig": dependency},
                                      backlash={"z": 100e-6})
 
         self.called = 0
@@ -682,7 +725,7 @@ class TestAntiBacklashActuator(unittest.TestCase):
         # see ~ 16 moves. If only an antibacklash at the last move
         # (or integrated in last move), we should see 11 or 12 moves.
         self.assertLessEqual(self.called, 12)
-        test.assert_pos_almost_equal(child.position.value, orig_pos)
+        test.assert_pos_almost_equal(dependency.position.value, orig_pos)
         stage.terminate()
 
     def _on_position(self, pos):
@@ -697,7 +740,7 @@ class TestCombinedSensorActuator(unittest.TestCase):
         self.csensor = simulated.Stage("sstage2", "test", {"b"})
         self.csensor.moveAbs({"b":-1e-3}).result()  # simulate
         self.dev = CombinedSensorActuator("stage", "stage",
-                                          children={"actuator": self.cact,
+                                          dependencies={"actuator": self.cact,
                                                     "sensor": self.csensor},
                                           axis_actuator="a",
                                           axis_sensor="b",
@@ -758,15 +801,15 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
                                                       # as it will fit most real samples best
                         }
 
-        # create one child
-        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+        # create one dependency
+        self.dependency1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
                                           axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
                                           unit=["rad", "rad"],
                                           refproc="Standard",
                                           )
 
         self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-                                                 children={"bla": self.child1, "blub": self.child1},
+                                                 dependencies={"bla": self.dependency1, "blub": self.dependency1},
                                                  axis_name=self.axis_name,
                                                  caxes_map=[self.axis1, self.axis2],
                                                  positions=self.positions,
@@ -777,10 +820,10 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
     def test_moveAbs(self):
         """test all possible positions"""
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # check all possible positions
-        # check children axes report expected positions (e.g. [float, float]
+        # check dependency axes report expected positions (e.g. [float, float]
         # check axis reports corresponding expected positions (e.g. "key")
         for pos in self.dev.axes[axis_name].choices:
             if pos == self.fallback:
@@ -791,9 +834,9 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
                 f = self.dev.moveAbs({axis_name: pos})
                 f.result()  # wait
                 self.assertEqual(self.dev.position.value[axis_name], pos)
-                self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pos][0]),
+                self.assertLess(abs(self.dependency1.position.value[self.axis1] - self.positions[pos][0]),
                                 self.atol[0] / 2.)
-                self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pos][1]),
+                self.assertLess(abs(self.dependency1.position.value[self.axis2] - self.positions[pos][1]),
                                 self.atol[1] / 2.)
 
     def test_unsupported_position(self):
@@ -802,7 +845,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         if unsupported position is requested, move combined actuator to known position
         """
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
         pos = "false_key"
         with self.assertRaises(ValueError):
             f = self.dev.moveAbs({axis_name: pos})  # move
@@ -814,26 +857,26 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
             f.result()  # wait
 
         # move to unsupported pos, check reports back fallback position
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
         # Note: reports continuously now as _updatePosition is continuously called
         pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
         pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
-        f1 = self.child1.moveAbs(pos1)
-        f2 = self.child1.moveAbs(pos2)
+        f1 = self.dependency1.moveAbs(pos1)
+        f2 = self.dependency1.moveAbs(pos2)
         f1.result()  # wait
         f2.result()
-        # if children axes are moved to unspecified position, check VA reports fallback position
+        # if dependency axes are moved to unspecified position, check VA reports fallback position
         self.assertEqual(self.dev.position.value[axis_name], self.fallback)
 
-        # move to a known position again, check that both children are at the right place
+        # move to a known position again, check that both dependencies are at the right place
         for pos in self.dev.axes[axis_name].choices:
             if pos != self.fallback:
                 f = self.dev.moveAbs({axis_name: pos})
                 f.result()  # wait
                 self.assertEqual(self.dev.position.value[axis_name], pos)
-                self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pos][0]),
+                self.assertLess(abs(self.dependency1.position.value[self.axis1] - self.positions[pos][0]),
                                 self.atol[0] / 2.)
-                self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pos][1]),
+                self.assertLess(abs(self.dependency1.position.value[self.axis2] - self.positions[pos][1]),
                                 self.atol[1] / 2.)
                 # only need to check one position
                 break
@@ -852,14 +895,14 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
     #             f = self.dev.moveAbs({axis_name: pos})  # move
     #             time.sleep(1)
     #             self.assertTrue(f.cancel())  # fails if for e.g. 10sec
-    #             cancel_pos = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+    #             cancel_pos = [self.dependency1.position.value[self.axis1], self.dependency1.position.value[self.axis2]]
     #             # check position requested is not reached
     #             self.assertNotEqual(cancel_pos, self.positions[pos])
     #             break
 
     def test_stop_move(self):
         """test stop movement while running"""
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # request to move to 3 different positions, stop after some time
         for i in range(3):
@@ -870,10 +913,10 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         time.sleep(0.1)
         self.dev.stop()
 
-        # check if position of children axes are still the same after some time: movement stopped
-        stop_pos_1 = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+        # check if position of dependency axes are still the same after some time: movement stopped
+        stop_pos_1 = [self.dependency1.position.value[self.axis1], self.dependency1.position.value[self.axis2]]
         time.sleep(5)
-        stop_pos_2 = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+        stop_pos_2 = [self.dependency1.position.value[self.axis1], self.dependency1.position.value[self.axis2]]
 
         # check position requested is not reached
         self.assertEqual(stop_pos_1, stop_pos_2)
@@ -881,10 +924,10 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
     def test_reference(self):
         """
         Try referencing each axis
-        check child reports its axis as referenced
+        check dependency reports its axis as referenced
         """
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # move to position different from zero and current position
         cur_pos = self.dev.position.value[axis_name]
@@ -896,13 +939,13 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
                 break
 
         # TODO
-        # check axis is not referenced if both axes of children axes are not referenceable
-        # print self.child1.referenced.value[self.axis1]
-        # if self.child1.referenced.value[self.axis1] is False \
-        #         and self.child1.referenced.value[self.axis2] is False:
+        # check axis is not referenced if both axes of dependency axes are not referenceable
+        # print self.dependency1.referenced.value[self.axis1]
+        # if self.dependency1.referenced.value[self.axis1] is False \
+        #         and self.dependency1.referenced.value[self.axis2] is False:
         #     print False
         #     self.assertFalse(self.dev.referenced.value[axis_name])
-        # # check axis is referenced if at least one axis of children axes is referenceable
+        # # check axis is referenced if at least one axis of dependency axes is referenceable
         # else:
         f = self.dev.reference({axis_name})
         f.result()
@@ -939,14 +982,14 @@ class TestCombinedFixedPositionActuatorCycle(unittest.TestCase):
                                                       # as it will fit most real samples best
                         }
 
-        # create one child
-        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+        # create one dependency
+        self.dependency1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
                                           axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
                                           unit=["rad", "rad"],
                                           refproc="Standard")
 
         self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-                                                 children={"axis1": self.child1, "axis2": self.child1},
+                                                 dependencies={"axis1": self.dependency1, "axis2": self.dependency1},
                                                  axis_name=self.axis_name,
                                                  caxes_map=[self.axis1, self.axis2],
                                                  positions=self.positions,
@@ -962,13 +1005,13 @@ class TestCombinedFixedPositionActuatorCycle(unittest.TestCase):
         f = self.dev.moveAbs({self.axis_name: pos})
         f.result()
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # move one axis to a position close to 2pi (6.283168347179586)
         # which is also close to zero and within tolerance
-        f = self.child1.moveAbs({"linear": math.pi * 2 - 3.392e-5/2.})
+        f = self.dependency1.moveAbs({"linear": math.pi * 2 - 3.392e-5 / 2.})
         f.result()
-        f = self.child1.moveAbs({"qwp": 0.0})
+        f = self.dependency1.moveAbs({"qwp": 0.0})
         f.result()
 
         # pos should be recognized as horizontal as it is close to zero and within tolerance
@@ -990,23 +1033,23 @@ class TestRotationActuator(unittest.TestCase):
         self.axis = "linear"
         self.axis_name = "rz"
 
-        # # create 1 child
-        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+        # # create 1 dependency
+        self.dependency1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
                                           axes=[self.axis], ustepsize=[3.392e-5],
                                           unit=["rad"],
                                           refproc="Standard",
                                           )
 
-        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis, ref_start=1)
+        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.dependency1}, self.axis, ref_start=1)
 
-        # TODO write test case for args ref_start=... monitor child position -> pass zero?
+        # TODO write test case for args ref_start=... monitor dependency position -> pass zero?
         
     def test_unsupported_position(self):
         """
         test if unsupported position is handled correctly
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # It's optional
         if not hasattr(self.dev_cycle, "moveAbs"):
@@ -1024,7 +1067,7 @@ class TestRotationActuator(unittest.TestCase):
         test if current position is requested nothing is done
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # test don't change position
         cur_pos = self.dev_cycle.position.value[axis_name]
@@ -1037,7 +1080,7 @@ class TestRotationActuator(unittest.TestCase):
         f = self.dev_cycle.moveAbs({axis_name: new_pos})
         f.result()
         # check absolute difference is smaller half the ustepsize
-        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos), self.child1._ustepsize[0]/2.)
+        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos), self.dependency1._ustepsize[0] / 2.)
 
     def test_cycle_moveRel(self):
         """
@@ -1045,7 +1088,7 @@ class TestRotationActuator(unittest.TestCase):
         test if current position is requested nothing is done
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # test don't change position
         cur_pos = self.dev_cycle.position.value[axis_name]
@@ -1058,7 +1101,7 @@ class TestRotationActuator(unittest.TestCase):
         f = self.dev_cycle.moveRel({axis_name: shift})
         f.result()
         # check absolute difference is smaller half the ustepsize
-        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - shift), self.child1._ustepsize[0]/2.)
+        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - shift), self.dependency1._ustepsize[0] / 2.)
 
     def test_offset_moveAbs(self):
         """
@@ -1067,7 +1110,7 @@ class TestRotationActuator(unittest.TestCase):
         only works for cycle = 2pi
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
@@ -1081,7 +1124,7 @@ class TestRotationActuator(unittest.TestCase):
                 # if referencing was correct position should not differ more than by
                 # half of the ustepsize from the wanted position
                 self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.child1._ustepsize[0] / 2.)
+                                self.dependency1._ustepsize[0] / 2.)
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
@@ -1095,7 +1138,7 @@ class TestRotationActuator(unittest.TestCase):
                 # if referencing was correct position should not differ more than by
                 # half of the ustepsize from the wanted position
                 self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.child1._ustepsize[0] / 2.)
+                                self.dependency1._ustepsize[0] / 2.)
 
     def test_cycle_offset_mounting(self):
         """
@@ -1104,7 +1147,7 @@ class TestRotationActuator(unittest.TestCase):
         value can be pos and neg within range of cycle/2
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         offset = "any_offset"
         # raise exception if offset value is not string and abs(value) not within range of cycle/2
@@ -1131,7 +1174,7 @@ class TestRotationActuator(unittest.TestCase):
             # move to zero + offset: report back zero
             f = self.dev_cycle.moveAbs({axis_name: 0})
             f.result()
-            # dev_cycle should have value 0 then child1 should have value 1 for offset 1
+            # dev_cycle should have value 0 then dependency1 should have value 1 for offset 1
             self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
                                    % self.dev_cycle._cycle, _offset_mounting
                                    % self.dev_cycle._cycle, 4)
@@ -1143,7 +1186,7 @@ class TestRotationActuator(unittest.TestCase):
             # check if position of actuator minus position requested is almost equal to mounting offset
             # almost equal to correct for quantized stepsize
             self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
-                                   % self.dev_cycle._cycle, self.child1.position.value[self.axis]
+                                   % self.dev_cycle._cycle, self.dependency1.position.value[self.axis]
                                    % self.dev_cycle._cycle, 4)
 
             # supported position + offset overrunning cycle: report position without offset
@@ -1154,7 +1197,7 @@ class TestRotationActuator(unittest.TestCase):
             # check if position of actuator minus position requested is almost equal to mounting offset
             # almost equal to correct for quantized stepsize
             self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
-                                   % self.dev_cycle._cycle, self.child1.position.value[self.axis]
+                                   % self.dev_cycle._cycle, self.dependency1.position.value[self.axis]
                                    % self.dev_cycle._cycle, 4)
 
             # move to unsupported position: report position without offset
@@ -1175,7 +1218,7 @@ class TestRotationActuator(unittest.TestCase):
     #     request a position, wait and cancel movement
     #     """
     #
-    #     axis_name = self.dev_cycle.axes.keys()[0]
+    #     axis_name = list(self.dev_cycle.axes.keys())[0]
     #
     #     cur_pos = self.dev_cycle.position.value[axis_name]
     #     new_pos = (cur_pos + random.uniform(0, 2*math.pi)) % self.dev_cycle._cycle
@@ -1186,7 +1229,7 @@ class TestRotationActuator(unittest.TestCase):
     def test_stop_move(self):
         """test stop movement while running"""
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # request to move to 3 different positions, stop after some time
         i=1
@@ -1198,10 +1241,10 @@ class TestRotationActuator(unittest.TestCase):
         time.sleep(1)
         self.dev_cycle.stop()
 
-        # check if position of children axes are still the same after some time: movement stopped
-        stop_pos_1 = [self.child1.position.value[self.axis]]
+        # check if position of dependency axes are still the same after some time: movement stopped
+        stop_pos_1 = [self.dependency1.position.value[self.axis]]
         time.sleep(5)
-        stop_pos_2 = [self.child1.position.value[self.axis]]
+        stop_pos_2 = [self.dependency1.position.value[self.axis]]
 
         # check position requested is not reached
         self.assertEqual(stop_pos_1, stop_pos_2)
@@ -1212,7 +1255,7 @@ class TestRotationActuator(unittest.TestCase):
         check axis is referenced
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # move to random position, check if axis was referenced
         new_pos = random.uniform(0, 2*math.pi)
@@ -1222,10 +1265,10 @@ class TestRotationActuator(unittest.TestCase):
         # now do reference
         f = self.dev_cycle.reference({axis_name})
         f.result()
-        # test if axis is referenced self.child1.position.value[self.axis1]
+        # test if axis is referenced self.dependency1.position.value[self.axis1]
         self.assertTrue(self.dev_cycle.referenced.value[axis_name])
         # check if position after referencing is zero
-        self.assertLess(abs(self.child1.position.value[self.axis]), self.child1._ustepsize[0] / 2.)
+        self.assertLess(abs(self.dependency1.position.value[self.axis]), self.dependency1._ustepsize[0] / 2.)
 
     def tearDown(self):
         self.dev_cycle.terminate()

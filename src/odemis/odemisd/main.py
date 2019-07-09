@@ -41,7 +41,10 @@ import stat
 import sys
 import threading
 import time
+import yaml
+from concurrent import futures
 
+DEFAULT_SETTINGS_FILE = "/etc/odemis-settings.yaml"
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
@@ -54,10 +57,12 @@ class BackendContainer(model.Container):
     A normal container which also terminates all the other containers when it
     terminates.
     """
-    def __init__(self, model_file, create_sub_containers=False,
+
+    def __init__(self, model_file, settings_file, create_sub_containers=False,
                  dry_run=False, name=model.BACKEND_NAME):
         """
         inst_file (file): opened file that contains the yaml
+        settings_file (file): opened file that contains the persistent data
         container (Container): container in which to instantiate the components
         create_sub_containers (bool): whether the leave components (components which
            have no children created separately) are running in isolated containers
@@ -67,6 +72,7 @@ class BackendContainer(model.Container):
         model.Container.__init__(self, name)
 
         self._model = model_file
+        self._settings = settings_file
         self._mdupdater = None
         self._inst_thread = None # thread running the component instantiation
         self._must_stop = threading.Event()
@@ -76,7 +82,8 @@ class BackendContainer(model.Container):
         # parse the instantiation file
         logging.debug("model instantiation file is: %s", self._model.name)
         try:
-            self._instantiator = modelgen.Instantiator(model_file, self, create_sub_containers, dry_run)
+            self._instantiator = modelgen.Instantiator(model_file, settings_file, self,
+                                                       create_sub_containers, dry_run)
             # save the model
             logging.info("model has been successfully parsed")
         except modelgen.ParseError as exp:
@@ -86,6 +93,60 @@ class BackendContainer(model.Container):
         except Exception:
             logging.exception("When instantiating file %s", self._model.name)
             raise IOError("Unexpected error at instantiation")
+
+        # Initialize persistent data, will be updated and written to the settings_file in the
+        # end and every time a va is changed.
+        self._persistent_listeners = []  # keep reference to persistent va listeners
+        self._persistent_data = self._instantiator.read_yaml(settings_file)
+
+    def _observe_persistent_va(self, comp, prop_name):
+        """
+        Listen to changes in persistent va, update the value of self._persistent_data
+        and write data to file.
+        comp (HwComponent): component
+        prop_name (str): name of va
+        """
+
+        def on_va_change(value, comp_name=comp.name, prop_name=prop_name):
+            self._persistent_data[comp_name]['properties'][prop_name] = value
+            self._write_persistent_data()
+
+        self._persistent_data.setdefault(comp.name, {}).setdefault('properties', {})
+        try:
+            va = getattr(comp, prop_name)
+            self._persistent_data[comp.name]['properties'][prop_name] = va.value
+        except AttributeError:
+            logging.warning("Persistent property %s not found for component %s." % (prop_name, comp.name))
+        else:     
+            va.subscribe(on_va_change, init=True)
+            self._persistent_listeners.append(on_va_change)
+
+    def _update_persistent_metadata(self):
+        """
+        Update all metadata in ._persistent_data and write values to settings file.
+        """
+        for comp in self._instantiator.components:
+            _, md_names = self._instantiator.get_persistent(comp.name)
+            md_values = comp.getMetadata()
+            for md in md_names:
+                self._persistent_data.setdefault(comp.name, {}).setdefault('metadata', {})
+                fullname = "MD_" + md
+                try:
+                    self._persistent_data[comp.name]['metadata'][md] = md_values[getattr(model, fullname)]
+                except KeyError:
+                    logging.warning("Persistent metadata %s not found on component %s" % (md, comp.name))
+        self._write_persistent_data()
+
+    def _write_persistent_data(self):
+        """
+        Write values for all persistent properties and metadata to the settings file.
+        """
+        if not self._settings or self._dry_run:
+            return
+
+        self._settings.truncate(0)  # delete previous file contents
+        self._settings.seek(0)  # go back to position 0
+        yaml.safe_dump(self._persistent_data, self._settings)
 
     def run(self):
         # Create the root
@@ -155,7 +216,7 @@ class BackendContainer(model.Container):
                             return
                         failed = set() # not recent anymore
 
-                logging.debug("Trying to instantiate comp: %s", ", ".join(nexts))
+                logging.debug("Trying to instantiate comps: %s", ", ".join(nexts))
 
                 for n in nexts:
                     ghosts = mic.ghosts.value.copy()
@@ -228,97 +289,134 @@ class BackendContainer(model.Container):
                 pass
             raise ValueError("Failed to instantiate component %s" % name)
         else:
-            children = self._instantiator.get_children(comp)
-            dchildren = self._instantiator.get_delegated_children(name)
-            newcmps = set(c for c in children if c.name in dchildren)
-            mic.alive.value = mic.alive.value | newcmps
+            new_cmps = self._instantiator.get_children(comp)
+
+            # Check it created at least all the expected children
+            new_names = {c.name for c in new_cmps}
+            exp_names = self._instantiator.get_children_names(name)
+            if exp_names - new_names:
+                logging.error("Component %s instantiated components %s, while expected %s",
+                              name, new_names, exp_names)
+                raise ValueError("Component %s didn't instantiate all components" % (name,))
+            elif new_names - exp_names:  # Too many?
+                logging.warning("Component %s instantiated extra unexpected components %s",
+                                name, new_names - exp_names)
+
+            mic.alive.value = mic.alive.value | new_cmps
             # update ghosts by removing all the new components
+            dchildren = self._instantiator.get_children_names(name)
             for n in dchildren:
                 del ghosts[n]
 
             mic.ghosts.value = ghosts
-            return newcmps
+
+            for c in new_cmps:
+                prop_names, _ = self._instantiator.get_persistent(c.name)
+                for prop_name in prop_names:
+                    self._observe_persistent_va(c, prop_name)
+            self._update_persistent_metadata()
+
+            return new_cmps
 
     def _terminate_all_alive(self):
         """
         Stops all the components that are currently alive (excepted the
           microscope)
-        It terminate the parents (aka "users") first as the instantiated children should
-         never need their parent but the parent might rely on the children.
-         Delegated children should be directly terminated by their creator, so
-         by the time we terminate them, it's a no-op.
+        It terminates the dependents (aka "users") first as the dependencies should
+         never need their dependent but the dependent might rely on the dependency.
+         Children will be terminated before their creator.
         It also stops the containers, once no component is running in them.
         """
         mic = self._instantiator.microscope
-        alive = set(mic.alive.value)
 
-        # create a "graph" child->parents
-        parents = {c: set() for c in alive}  # comp -> set of comps (all its parents)
-        for comp in alive:
-            # TODO: if a component was created by delegation, use its creator
-            # instead of itself as "used" by the other components, to ensure
-            # they might not be terminated too early.
-            try:
-                for child in comp.children.value:
-                    # TODO: do not add the creator
-                    parents[child].add(comp)
-            except Exception:
-                logging.warning("Failed to find children of component %s when terminating",
-                                comp.name, exc_info=True)
-
-        # TODO: for the components created by delegation, either terminate them
-        # before their parents, or don't do it at all (as the parent normally
-        # is in charge of it).
-
+        # alive component -> components which depends on it
+        self._dependents = {c: set() for c in set(mic.alive.value)}  # comp -> set of comps (all the comps that depend on it)
+        # Children will be terminated when their parents are terminated, so no need to keep them in .dependents
+        for comp in list(self._dependents.keys()):  # ._dependents will be modified, so we need a copy
+            for child in comp.children.value:
+                self._dependents.pop(child, None)
+        for comp in self._dependents:
+            deps = comp.dependencies.value
+            for dep in deps:
+                # if a component was created by delegation, use its creator
+                # instead of itself as "used" by the other components, to ensure
+                # they might not be terminated too early.
+                try:
+                    d = dep.parent or dep
+                    self._dependents[d].add(comp)
+                except Exception:
+                    # if a component died early due to accidents (e.g. a segfault), we might not be able to
+                    # access dep.parent
+                    logging.warning("Failed to find dependency %s of component %s when terminating.",
+                                    dep.name, comp.name, exc_info=True)
         # terminate all the components in order
-        while parents:
-            parent_less = tuple(c for c, p in parents.items() if not p)
-            if not parent_less:
-                # just pick a random component if some loop
+        terminating_comps = []  # components that are already terminated or in the process of terminating
+        executor = futures.ThreadPoolExecutor(max_workers=20)
+        fs_running = set()
+        while self._dependents:
+            independents = tuple(c for c, p in self._dependents.items() if not p and not c in terminating_comps)
+            if not independents and not fs_running:
+                # just pick a random component
                 logging.warning("All the components to terminate have parents: %s",
-                                parents)
-                parent_less = (tuple(parents.keys())[0],)
+                                self._dependents)
+                independents = tuple(self._dependents.keys())[:1]
 
-            for c in parent_less:
-                cname = c.name
-                logging.debug("Stopping comp %s", cname)
-                # TODO: update the .alive VA every time a component is stopped?
-                # maybe not necessary as we are finishing _everything_
-                try:
-                    # FIXME: don't try to terminate the children created by
-                    # delegation after terminating their parent (and container)
-                    # For now it just causes a warning message, but it'd be
-                    # better to not have the warning at all.
-                    c.terminate()
-                except Exception:
-                    logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+            for comp in independents:
+                terminating_comps.append(comp)
+                f = executor.submit(self._terminate_independent, comp)
+                fs_running.add(f)
 
-                # Terminate the container if that was the component for which it
-                # was created.
-                # TODO: check there is really no component still running in the
-                # container?
-                if cname in self._instantiator.sub_containers:
-                    container = self._instantiator.sub_containers[cname]
-                    logging.debug("Stopping container %s", container)
-                    try:
-                        container.terminate()
-                    except Exception:
-                        logging.warning("Failed to terminate container %r", container, exc_info=True)
-                    del self._instantiator.sub_containers[cname]
+            # Block until one future is completed, then continue looping
+            done, fs_running = futures.wait(fs_running, return_when=futures.FIRST_COMPLETED)
 
-                # remove from the graph
-                del parents[c]
-                for p in parents.values():
-                    p.discard(c)
-                alive.discard(c)
-                try:
-                    mic.alive.value = alive
-                except Exception:
-                    logging.warning("Failed to update the alive VA", exc_info=True)
+        logging.debug("Finished requesting termination of all components. Waiting for %s components to terminate." % len(fs_running))
+        futures.wait(fs_running, return_when=futures.ALL_COMPLETED)
+
+    def _terminate_independent(self, comp):
+        # First terminate the children
+        children = comp.children.value
+        for child in children:
+            self._terminate_component(child)
+        # Terminate component itself
+        self._terminate_component(comp)
+        del self._dependents[comp]  # children are already deleted from ._parents
+
+    def _terminate_component(self, c):
+        # remove from the graph
+        for p in self._dependents.values():
+            p.discard(c)
+
+        cname = c.name
+        logging.debug("Stopping comp %s", cname)
+        try:
+            c.terminate()
+        except Exception:
+            logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+
+        # Terminate the container if that was the component for which it
+        # was created.
+        # TODO: check there is really no component still running in the
+        # container?
+        if cname in self._instantiator.sub_containers:
+            container = self._instantiator.sub_containers[cname]
+            logging.debug("Stopping container %s", container)
+            try:
+                container.terminate()
+            except Exception:
+                logging.warning("Failed to terminate container %r", container, exc_info=True)
+            del self._instantiator.sub_containers[cname]
+
+        try:
+            self._instantiator.microscope.alive.value.discard(c)
+        except Exception:
+            logging.warning("Failed to update the alive VA", exc_info=True)
 
     def terminate(self):
         if self._must_stop.is_set():
             logging.info("Terminate already called, so not running it again")
+
+        # Save values of persistent properties and metadata
+        self._update_persistent_metadata()
 
         # Stop the component instantiator, to be sure it'll not restart the components
         self._must_stop.set()
@@ -363,11 +461,13 @@ class BackendRunner(object):
     CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
 
-    def __init__(self, model_file, daemon=False, dry_run=False, containement=CONTAINER_SEPARATED):
+    def __init__(self, model_file, settings_file, daemon=False, dry_run=False,
+                 containement=CONTAINER_SEPARATED):
         """
         containement (CONTAINER_*): the type of container policy to use
         """
         self.model = model_file
+        self.settings = settings_file
         self.daemon = daemon
         self.dry_run = dry_run
         self.containement = containement
@@ -470,7 +570,7 @@ class BackendRunner(object):
         else:
             create_sub_containers = False
 
-        self._container = BackendContainer(self.model, create_sub_containers,
+        self._container = BackendContainer(self.model, self.settings, create_sub_containers,
                                         dry_run=self.dry_run)
 
         try:
@@ -539,6 +639,12 @@ def main(args):
                          default=0, help="Set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
                          default="auto", help="Specify the log target (auto, stderr, filename)")
+    # The settings file is opened here because root privileges are dropped at some point after
+    # the initialization.
+    opt_grp.add_argument("--settings", dest='settings',
+                         type=argparse.FileType('a+'), help="Path to the settings file "
+                         "(stores values of persistent properties and metadata). "
+                         "Default is %s, if writable." % DEFAULT_SETTINGS_FILE)
     parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open,
                         help="Microscope model instantiation file (*.odm.yaml)")
 
@@ -618,13 +724,19 @@ def main(args):
         if options.model is None:
             raise ValueError("No microscope model instantiation file provided")
 
+        if options.settings is None:
+            try:
+                options.settings = open(DEFAULT_SETTINGS_FILE, "a+")
+            except IOError as ex:
+                logging.warning("%s. Will not be able to use persistent data", ex)
+
         if options.debug:
             cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
         else:
             cont_pol = BackendRunner.CONTAINER_SEPARATED
 
         # let's become the back-end for real
-        runner = BackendRunner(options.model, options.daemon,
+        runner = BackendRunner(options.model, options.settings, options.daemon,
                                dry_run=options.validate, containement=cont_pol)
         runner.run()
     except ValueError as exp:

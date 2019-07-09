@@ -22,7 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import absolute_import, division
 
-import Queue
+import queue
+from past.builtins import long
 import gc
 import logging
 import math
@@ -84,7 +85,7 @@ class SEM(model.HwComponent):
         self._acq_progress_lock = threading.Lock()
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
-        self._acq_cmd_q = Queue.Queue()
+        self._acq_cmd_q = queue.Queue()
         self._acquisition_must_stop = threading.Event()
         self._acquisitions = set()  # detectors currently active
         self.pre_res = None
@@ -230,7 +231,7 @@ class SEM(model.HwComponent):
         while True:
             try:
                 cmd = self._acq_cmd_q.get(block=block)
-            except Queue.Empty:
+            except queue.Empty:
                 break
 
             # Decode command
@@ -271,7 +272,7 @@ class SEM(model.HwComponent):
                     # write and read the raw data
                     try:
                         rdas = self._acquire_detectors(detectors)
-                    except CancelledError, e:
+                    except CancelledError as e:
                         # either because must terminate or just need to rest
                         logging.debug("Acquisition was cancelled %s", e)
                         continue
@@ -982,7 +983,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._prev_max_discard = self._max_discard
             self.max_discard = 0
             self._sync_event.subscribe(self)

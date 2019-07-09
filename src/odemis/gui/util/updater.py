@@ -27,9 +27,9 @@ import os
 import pkg_resources
 import subprocess
 import tempfile
-import urllib2
+from future.moves.urllib.request import Request, urlopen
+from future.moves.urllib.error import HTTPError
 import wx
-from urllib2 import HTTPError
 
 
 VERSION_FILE = "version.txt"
@@ -56,10 +56,16 @@ class WindowsUpdater:
         return (File): the opened File-like from urllib2
         raise HTTPError: in case of failure to find the file
         """
+        # Sadly our website has to block requests with user-agent that looks too
+        # much like bots and script-kiddies. That includes the default Python
+        # user-agent. IOW, it checks that the caller is clever enough to
+        # change the user-agent. So we have to show that we are "that" clever...
+        headers = {"User-Agent": "Mozilla/5.0 Odemis"}
         for url in VIEWER_ROOT_URLS:
             try:
                 web_url = url + fn
-                web_file = urllib2.urlopen(web_url, timeout=10)
+                req = Request(web_url, headers=headers)
+                web_file = urlopen(req, timeout=10)
                 break
             except HTTPError as err:
                 if err.getcode() == 404 and url != VIEWER_ROOT_URLS[-1]:
@@ -189,8 +195,8 @@ class WindowsUpdater:
     def run_installer(local_path):
         try:
             subprocess.call(local_path)
-        except WindowsError, (err_nr, _):
-            if err_nr == 740:
+        except WindowsError as ex:
+            if ex.winerror == 740:
                 os.startfile(local_path, "runas")
             else:
                 raise

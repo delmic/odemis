@@ -27,7 +27,7 @@ You first need to run the odemis backend with the SECOM config:
 odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 """
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import logging
@@ -127,7 +127,7 @@ def main(args):
         tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
         optical_scale = math.hypot(tab[0], tab[1])
         scale = electron_scale[0] / optical_scale
-        print scale
+        print(scale)
 
         # max_allowed_diff in pixels
         max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
@@ -138,7 +138,7 @@ def main(args):
         logging.debug("Calculating transformation...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
         logging.debug("Electron->Optical: ")
-        print calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation
+        print(calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation)
         final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
 
         logging.debug("Overlay done.")
@@ -162,7 +162,7 @@ def main(args):
         logging.debug("Generating images...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_electron_coordinates)
         logging.debug("Optical->Electron: ")
-        print calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation
+        print(calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation)
         overlay_coordinates = coordinates._TransformCoordinates(known_electron_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
 
         for ta in overlay_coordinates:

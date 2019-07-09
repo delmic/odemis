@@ -19,6 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 import logging
 import math
 from numpy import random
@@ -31,7 +33,7 @@ from odemis.dataio import hdf5
 from odemis.util import spot
 import operator
 import unittest
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -156,12 +158,12 @@ class TestMatchCoordinates(unittest.TestCase):
         self.electron_coordinates_3x3 = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
         self.electron_coordinates_10x10 = []
         self.electron_coordinates_40x40 = []
-        for i in xrange(10):
-            for j in xrange(10):
+        for i in range(10):
+            for j in range(10):
                 self.electron_coordinates_10x10.append((i + 1, j + 1))
 
-        for i in xrange(40):
-            for j in xrange(40):
+        for i in range(40):
+            for j in range(40):
                 self.electron_coordinates_40x40.append((i + 1, j + 1))
 
         # self.translation_x, self.translation_y = 1.3000132631489385, 2.3999740720548788
@@ -240,10 +242,9 @@ class TestMatchCoordinates(unittest.TestCase):
         shuffle(shuffled_coordinates)
         distorted_coordinates = []
         # Add noise to the coordinates
-        for i in xrange(len(shuffled_coordinates)):
-            distortion = ((uniform(-0.1, 0.1), uniform(-0.1, 0.1)))
-            distorted_coordinates.append(tuple(map(operator.add, shuffled_coordinates[i], distortion)))
-
+        for c in shuffled_coordinates:
+            distortion = (uniform(-0.1, 0.1), uniform(-0.1, 0.1))
+            distorted_coordinates.append(tuple(map(operator.add, c, distortion)))
         known_estimated_coordinates, known_optical_coordinates, max_dist = coordinates.MatchCoordinates(distorted_coordinates, electron_coordinates, 0.25, 0.25)
         # if known_estimated_coordinates != []:
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)
@@ -311,9 +312,9 @@ class TestMatchCoordinates(unittest.TestCase):
         shuffle(shuffled_coordinates)
         distorted_coordinates = []
         # Add noise to the coordinates
-        for i in xrange(len(shuffled_coordinates)):
+        for c in shuffled_coordinates:
             distortion = tuple((uniform(-0.1, 0.1), uniform(-0.1, 0.1)))
-            distorted_coordinates.append(tuple(map(operator.add, shuffled_coordinates[i], distortion)))
+            distorted_coordinates.append(tuple(map(operator.add, c, distortion)))
 
         known_estimated_coordinates, known_optical_coordinates, max_dist = coordinates.MatchCoordinates(distorted_coordinates, electron_coordinates, 0.25, 0.25)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)

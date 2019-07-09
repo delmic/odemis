@@ -25,42 +25,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
-from concurrent.futures import CancelledError
-from functools import partial
 import gc
 import logging
 import math
-import numpy
-from odemis import dataio, model
-from odemis.acq import calibration, leech
-from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
-from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
-    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
-    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
-    ScannedTCSettingsStream
-from odemis.driver.actuator import ConvertStage
-import odemis.gui
-from odemis.gui.comp.canvas import CAN_ZOOM
-from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
-from odemis.gui.cont import settings
-from odemis.gui.cont.actuators import ActuatorController
-from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
-from odemis.gui.cont.streams import StreamController
-from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
-    TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
-    TOOL_NONE, TOOL_DICHO
-from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
-    ScannerFoVAdapter
-from odemis.util import units, spot, limit_invocation
-from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
-import pkg_resources
 import time
+from concurrent.futures._base import CancelledError
+from functools import partial
+
+import numpy
+import pkg_resources
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -68,6 +42,7 @@ import wx
 import wx.html
 
 import odemis.acq.stream as acqstream
+import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.export as exportcont
 import odemis.gui.cont.streams as streamcont
@@ -75,10 +50,42 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
+from odemis import dataio, model
+from odemis.acq import calibration, leech
+from odemis.acq.align import AutoFocus
+from odemis.acq.align.autofocus import Sparc2AutoFocus
+from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
+    CLStream, EMStream, \
+    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
+    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
+    ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
+    PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
+    ScannedTemporalSettingsStream
+from odemis.driver.actuator import ConvertStage
+from odemis.gui.comp.canvas import CAN_ZOOM
+from odemis.gui.comp.scalewindow import ScaleWindow
+from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
+    get_hw_config
+from odemis.gui.cont import settings
+from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
+from odemis.gui.cont.streams import StreamController
+from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
+    TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
+    TOOL_NONE, TOOL_DICHO
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
+from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
+    ScannerFoVAdapter
+from odemis.util import units, spot, limit_invocation
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
               TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
+
 
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
@@ -480,7 +487,7 @@ class SecomStreamsTab(Tab):
         """
 
         # If both SEM and Optical are present (= SECOM & DELPHI)
-        if (main_data.ebeam and main_data.light):
+        if main_data.ebeam and main_data.light:
 
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
@@ -890,7 +897,7 @@ class SparcAcquisitionTab(Tab):
 
         viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
-            assert(isinstance(vp, (MicroscopeViewport, PlotViewport)))
+            assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
 
         # Connect the views
         # TODO: make them different depending on the hardware available?
@@ -910,11 +917,27 @@ class SparcAcquisitionTab(Tab):
              {"name": "Spectrum",
               "stream_classes": SpectrumStream,
               }),
-            (viewports[3],
-             {"name": "Monochromator",
-              "stream_classes": MonochromatorSettingsStream,
-              }),
         ])
+
+        # depending on HW choose which viewport should be connected to a stream
+        # Note: for now either streak camera HW or monochromator HW is added as a viewport
+        # TODO: for now only time correlator HW or streak cam HW handled
+        # So far there is no system having both HW available
+        if main_data.streak_ccd:
+            if main_data.monochromator:
+                logging.warning("Streak camera and monochromator HW present, but"
+                                "only streak camera viewport will be displayed.")
+            vpv[viewports[3]] = {
+                "name": "Temporal Spectrum",
+                "stream_classes": TemporalSpectrumStream,
+            }
+
+        else:
+            vpv[viewports[4]] = {
+                "name": "Monochromator",
+                "stream_classes": (MonochromatorSettingsStream, ScannedTemporalSettingsStream),
+            }
+
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
             vpv[viewports[0]]["fov_hw"] = main_data.ebeam
@@ -938,8 +961,12 @@ class SparcAcquisitionTab(Tab):
                 (panel.vp_sparc_bl, panel.lbl_sparc_view_bl)),
             (
                 panel.btn_sparc_view_br,
-                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),
+                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),  # default is now monochromator
         ])
+
+        # overwrite the view buttons
+        if main_data.streak_ccd:
+            buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
@@ -1581,24 +1608,30 @@ class AnalysisTab(Tab):
             assert(isinstance(vp, MicroscopeViewport))
         assert(isinstance(viewports[4], AngularResolvedViewport))
         assert(isinstance(viewports[5], PlotViewport))
-        assert(isinstance(viewports[6], SpatialSpectrumViewport))
+        assert(isinstance(viewports[6], LineSpectrumViewport))
+        assert(isinstance(viewports[7], TemporalSpectrumViewport))
+        assert(isinstance(viewports[8], ChronographViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {"name": "Optical",
               "stream_classes": (OpticalStream, SpectrumStream, CLStream),
+              "zPos": self.tab_data_model.zPos,
               }),
             (viewports[1],
              {"name": "SEM",
               "stream_classes": EMStream,
+              "zPos": self.tab_data_model.zPos,
               }),
             (viewports[2],
              {"name": "Combined 1",
               "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
+              "zPos": self.tab_data_model.zPos,
               }),
             (viewports[3],
              {"name": "Combined 2",
               "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
+              "zPos": self.tab_data_model.zPos,
               }),
             (viewports[4],
              {"name": "Angle-resolved",
@@ -1606,11 +1639,23 @@ class AnalysisTab(Tab):
               }),
             (viewports[5],
              {"name": "Spectrum plot",
-              "stream_classes": SpectrumStream,
+              "stream_classes": (SpectrumStream,),
+              "projection_class": SinglePointSpectrumProjection,
               }),
             (viewports[6],
-             {"name": "Spatial spectrum",
-              "stream_classes": (SpectrumStream, CLStream),
+             {"name": "Spectrum cross-section",
+              "stream_classes": (SpectrumStream,),
+              "projection_class": LineSpectrumProjection,
+              }),
+            (viewports[7],
+             {"name": "Temporal spectrum",
+              "stream_classes": (SpectrumStream,),
+              "projection_class": PixelTemporalSpectrumProjection,
+              }),
+            (viewports[8],
+             {"name": "Chronograph",
+              "stream_classes": (SpectrumStream,),
+              "projection_class": SinglePointTemporalProjection,
               }),
         ])
 
@@ -1756,7 +1801,9 @@ class AnalysisTab(Tab):
             self._stream_bar_controller.clear()
             # Clear any old plots
             self.panel.vp_inspection_plot.clear()
-            self.panel.vp_spatialspec.clear()
+            self.panel.vp_linespec.clear()
+            self.panel.vp_temporalspec.clear()
+            self.panel.vp_timespec.clear()
             self.panel.vp_angular.clear()
 
         gc.collect()
@@ -1798,15 +1845,13 @@ class AnalysisTab(Tab):
             # FIXME: This temporary "fix" only binds the first spectrum stream to the pixel and
             # line overlays. This is done because in the PlotViewport only the first spectrum stream
             # gets connected. See connect_stream in viewport.py, line 812.
-            # We need a clean way to connect both the overlays and the PlotViewport to the right
-            # spectrum stream when the view/stream tree changes.
+            # We need a clean way to connect the overlays
 
             spec_stream = spec_streams[0]
-
             sraw = spec_stream.raw[0]
 
             # We need to get the dimensions so we can determine the
-            # resolution. Remember that in Matrix notation, the
+            # resolution. Remember that in numpy notation, the
             # number of rows (is vertical size), comes first. So we
             # need to 'swap' the values to get the (x,y) resolution.
             height, width = sraw.shape[-2], sraw.shape[-1]
@@ -1820,7 +1865,8 @@ class AnalysisTab(Tab):
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
-                if hasattr(viewport.canvas, "line_overlay"):
+                # TODO: to be done by the MicroscopeViewport or DblMicroscopeCanvas (for each stream with a selected_line)
+                if hasattr(viewport.canvas, "line_overlay") and hasattr(spec_stream, "selected_line"):
                     ol = viewport.canvas.line_overlay
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(
@@ -1829,20 +1875,26 @@ class AnalysisTab(Tab):
                         spec_stream.selected_pixel
                     )
 
+            for s in spec_streams:
                 # Adjust the viewport layout (if needed) when a pixel or line is selected
-                spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-                spec_stream.selected_line.subscribe(self._on_line_select, init=True)
+                s.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                if hasattr(s, "selected_line"):
+                    s.selected_line.subscribe(self._on_line_select, init=True)
 
             # ########### Combined views and spectrum view visible
-
-            new_visible_views[0:2] = self._def_views[2:4]  # Combined
-            new_visible_views[2] = self.panel.vp_spatialspec.view
-            new_visible_views[3] = self.panel.vp_inspection_plot.view
+            if hasattr(spec_stream, "selected_time"):
+                new_visible_views[0] = self._def_views[2]  # Combined
+                new_visible_views[1] = self.panel.vp_timespec.view
+                new_visible_views[2] = self.panel.vp_inspection_plot.view
+                new_visible_views[3] = self.panel.vp_temporalspec.view
+            else:
+                new_visible_views[0:2] = self._def_views[2:4]  # Combined
+                new_visible_views[2] = self.panel.vp_linespec.view
+                self.tb.enable_button(TOOL_LINE, True)
+                new_visible_views[3] = self.panel.vp_inspection_plot.view
 
             # ########### Update tool menu
-
             self.tb.enable_button(TOOL_POINT, True)
-            self.tb.enable_button(TOOL_LINE, True)
 
         elif ar_streams:
 
@@ -1875,6 +1927,8 @@ class AnalysisTab(Tab):
         # Only show the panels that fit the current streams
         self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
 
+        self.tab_data_model.visible_views.value = new_visible_views
+
         # Load the Streams and their data into the model and views
         for s in streams:
             scont = self._stream_bar_controller.addStream(s, add_to_view=True)
@@ -1905,7 +1959,6 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.ar_cal.value)
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
-        self.tab_data_model.visible_views.value = new_visible_views
         # TODO: if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
 
@@ -2030,19 +2083,25 @@ class AnalysisTab(Tab):
 
         return fn
 
-    def _on_point_select(self, _):
+    def _on_point_select(self, point):
         """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
+        if None in point:
+            return  # No point selected => nothing to force
         # TODO: should we just switch to 2x2 as with the pixel and line selection?
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.focussedView.value = self.panel.vp_angular.view
 
-    def _on_pixel_select(self, _):
+    def _on_pixel_select(self, pixel):
         """ Switch the the 2x2 view when a pixel is selected """
+        if None in pixel:
+            return  # No pixel selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
-    def _on_line_select(self, _):
+    def _on_line_select(self, line):
         """ Switch the the 2x2 view when a line is selected """
+        if (None, None) in line:
+            return  # No line selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
@@ -2077,7 +2136,7 @@ class SecomAlignTab(Tab):
         # approximation is enough to do the calibration relatively quickly.
         if "a" in main_data.aligner.axes:
             self._aligner_xy = ConvertStage("converter-ab", "stage",
-                                            children={"orig": main_data.aligner},
+                                            dependencies={"orig": main_data.aligner},
                                             axes=["b", "a"],
                                             rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab
@@ -2636,9 +2695,9 @@ class SparcAlignTab(Tab):
                 # CCD size. Some of them contained (small) error in the mirror size,
                 # which will make this new display look a bit bigger.
                 m = lens.magnification.value
-                mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
+                mirror_ol.set_mirror_dimensions(lens.parabolaF.value / m,
                                                 lens.xMax.value / m,
-                                                lens.focusDistance.value / m,
+                                                -lens.focusDistance.value / m,
                                                 lens.holeDiameter.value / m)
             except (AttributeError, TypeError) as ex:
                 logging.warning("Failed to get mirror dimensions: %s", ex)
@@ -2784,7 +2843,7 @@ class SparcAlignTab(Tab):
             disp = (scount - vmin) / b
 
             # insert 0s at the beginning if the window is not (yet) full
-            dates = scount.metadata[model.MD_ACQ_DATE]
+            dates = scount.metadata[model.MD_TIME_LIST]
             dur = dates[-1] - dates[0]
             if dur == 0:  # only one tick?
                 dur = 1  # => make it 1s large
@@ -2887,7 +2946,7 @@ class SparcAlignTab(Tab):
 
 class Sparc2AlignTab(Tab):
     """
-    Tab for the mirror/fiber alignment on the SPARCv2. Note that the basic idea
+    Tab for the mirror/fiber/lens/streak-camera alignment on the SPARCv2. Note that the basic idea
     is similar to the SPARC(v1), but the actual procedure is entirely different.
     """
 
@@ -2905,10 +2964,43 @@ class Sparc2AlignTab(Tab):
             else:
                 self._moveLensToActive()
 
-        # Documentation text on the right panel for mirror alignment
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
+        if main_data.fibaligner:
+            # Reference and move the fiber aligner Y to its default position (if
+            # it has a favourite position, as the older versions didn't support
+            # referencing, so just stayed physically as-is).
+            fib_fav_pos = main_data.fibaligner.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+            if fib_fav_pos:
+                try:
+                    refd = main_data.fibaligner.referenced.value
+                    not_refd = {a for a in fib_fav_pos.keys() if not refd[a]}
+                    if any(not_refd):
+                        f = main_data.fibaligner.reference(not_refd)
+                        f.add_done_callback(self._moveFibAlignerToActive)
+                    else:
+                        self._moveFibAlignerToActive()
+                except Exception:
+                    logging.exception("Failed to move fiber aligner to %s", fib_fav_pos)
+
+        # Documentation text on the right panel for alignment
+        self.doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
         panel.html_moi_doc.SetBorders(0)
-        panel.html_moi_doc.LoadPage(doc_path)
+        panel.html_moi_doc.LoadPage(self.doc_path)
+
+        if model.hasVA(main_data.lens, "configuration"):
+            self._centering_settings_controller = settings.CenterAlignSettingsController(panel, tab_data)
+
+        if main_data.streak_ccd:
+            self._streak_settings_controller = settings.StreakCamAlignSettingsController(panel, tab_data)
+            self.streak_ccd = main_data.streak_ccd
+            self.streak_delay = main_data.streak_delay
+            self.streak_unit = main_data.streak_unit
+            self.streak_lens = main_data.streak_lens
+
+            # !!Note: In order to make sure the default value shown in the GUI corresponds
+            # to the correct trigger delay from the MD, we call the setter of the .timeRange VA,
+            # which sets the correct value for the .triggerDelay VA from MD-lookup
+            # Cannot be done in the driver, as MD from yaml is updated after initialization of HW!!
+            self.streak_unit.timeRange.value = self.streak_unit.timeRange.value
 
         # Create stream & view
         self._stream_controller = streamcont.StreamBarController(
@@ -2944,11 +3036,18 @@ class Sparc2AlignTab(Tab):
                     "stream_classes": acqstream.CameraCountStream,
                 }
             ),
+            (self.panel.vp_align_streak,
+             {
+                 "name": "Trigger delay calibration",
+                 "stream_classes": acqstream.StreakCamStream,
+             }
+             ),
         ))
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.view.show_crosshair.value = False
         self.panel.vp_align_center.view.show_crosshair.value = False
+        self.panel.vp_align_streak.view.show_crosshair.value = True
 
         # The streams:
         # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment
@@ -2990,7 +3089,8 @@ class Sparc2AlignTab(Tab):
                                 hwdetvas=hwdetvas,
                                 detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                         model.MD_ROTATION: 0}  # Force the CCD as-is
+                                         model.MD_ROTATION: 0},  # Force the CCD as-is
+                                acq_type=model.MD_AT_AR,  # For the merge slider icon
                                 )
             self._setFullFoV(ccd_stream, (2, 2))
             self._ccd_stream = ccd_stream
@@ -3022,11 +3122,12 @@ class Sparc2AlignTab(Tab):
                                 "Spectrograph line",
                                 main_data.ccd,
                                 main_data.ccd.data,
-                                main_data.brightlight,
+                                emitter=None,  # actually, the brightlight, but the autofocus procedure takes care of it
                                 focuser=ccd_focuser,
                                 detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),
-                                         model.MD_ROTATION: 0}
+                                         model.MD_ROTATION: 0},
+                                acq_type=model.MD_AT_SLIT,
                                 )
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
@@ -3054,19 +3155,29 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
             tab_data.autofocus_active.subscribe(self._onAutofocus)
 
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
-            panel.html_moi_doc.AppendToPage(doc_cnt)
         else:
             self.panel.pnl_focus.Show(False)
 
-        # Add autofocus in case there is a spectrometer after the optical fiber,
-        # and the spectrometer
-        # Consider the focuser is after the fiber, if the fiber aligner affects it
-        if (main_data.fibaligner and main_data.focus and
-            main_data.focus.name in main_data.fibaligner.affects.value):
-            if ccd_focuser:
-                logging.warning("Focus seems to both affect the 'ccd' and be after "
-                                "the optical fiber ('fiber-aligner').")
+        # Add autofocus in case there is a focusable spectrometer after the optical fiber.
+        # Pick the focuser which affects at least one component common with the
+        # fiber aligner.
+        fib_focuser = None
+        if main_data.fibaligner:
+            aligner_affected = set(main_data.fibaligner.affects.value)
+            for focuser in (main_data.spec_ded_focus, main_data.focus):
+                if focuser is None:
+                    continue
+                # Is there at least one component affected by the focuser which
+                # is also affected by the fibaligner?
+                if set(focuser.affects.value) & aligner_affected:
+                    fib_focuser = focuser
+                    break
+
+        if fib_focuser:
+            if ccd_focuser == fib_focuser:
+                # a ccd can never be after an optical fiber (only sp-ccd)
+                logging.warning("Focus %s seems to affect the 'ccd' but also be after "
+                                "the optical fiber ('fiber-aligner').", fib_focuser.name)
             # Bind autofocus
             # Note: we can use the same functions as for the ccd_focuser, because
             # we'll distinguish which autofocus to run based on the align_mode.
@@ -3104,8 +3215,6 @@ class Sparc2AlignTab(Tab):
             # To activate the SEM spot when the CCD plays
             mois.should_update.subscribe(self._on_ccd_stream_play)
 
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
-            panel.html_moi_doc.AppendToPage(doc_cnt)
         elif main_data.sp_ccd:
             # Hack: if there is no CCD, let's display at least the sp-ccd.
             # It might or not be useful. At least we can show the temperature.
@@ -3135,29 +3244,67 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.btn_bkg_acquire.Show(False)
 
+        self._ts_stream = None
+        if main_data.streak_ccd:
+            # Don't show the time range, as it's done by the StreakCamAlignSettingsController
+            streak_unit_vas = (get_local_vas(main_data.streak_unit, main_data.hw_settings_config)
+                               -{"timeRange"})
+            tsStream = acqstream.StreakCamStream(
+                                "Calibration trigger delay for streak camera",
+                                main_data.streak_ccd,
+                                main_data.streak_ccd.data,
+                                main_data.streak_unit,
+                                main_data.streak_delay,
+                                emitter=None,
+                                detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
+                                streak_unit_vas=streak_unit_vas,
+                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                         model.MD_ROTATION: 0},  # Force the CCD as-is
+                                )
+
+            self._setFullFoV(tsStream, (2, 2))
+            self._ts_stream = tsStream
+
+            streak = self._stream_controller.addStream(tsStream,
+                             add_to_view=self.panel.vp_align_streak.view)
+            streak.stream_panel.flatten()  # No need for the stream name
+
+            # Add the standard spectrograph axes (wavelength, grating, slit-in),
+            # but in-between inserts the special slit-in-big axis, which is a
+            # separate hardware.
+            # It allows to switch the slit of the spectrograph between "fully
+            # opened" and opened according to the slit-in (aka "closed").
+            def add_axis(axisname, comp):
+                hw_conf = get_hw_config(comp, main_data.hw_settings_config)
+                streak.add_axis_entry(axisname, comp, hw_conf.get(axisname))
+
+            add_axis("grating", main_data.spectrograph)
+            add_axis("wavelength", main_data.spectrograph)
+            add_axis("x", main_data.slit_in_big)
+            add_axis("slit-in", main_data.spectrograph)
+
+            # To activate the SEM spot when the camera plays
+            # (ebeam centered in image)
+            tsStream.should_update.subscribe(self._on_ccd_stream_play)
+
         if "lens-align" not in tab_data.align_mode.choices:
             self.panel.pnl_lens_mover.Show(False)
             # In such case, there is no focus affecting the ccd, so the
             # pnl_focus will also be hidden later on, by the ccd_focuser code
         else:
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
-            panel.html_moi_doc.AppendToPage(doc_cnt)
+            self.panel.btn_manualfocus.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
-        if "center-align" in tab_data.align_mode.choices:
+        if "center-align" not in tab_data.align_mode.choices:
+            self.panel.pnl_centering.Show(False)
+        else:
             # The center align view share the same CCD stream (and settings)
             self.panel.vp_align_center.view.addStream(ccd_stream)
 
             # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
-            mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
-            lens = main_data.lens
-            try:
-                mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
-                                                lens.xMax.value,
-                                                lens.focusDistance.value,
-                                                lens.holeDiameter.value)
-            except (AttributeError, TypeError) as ex:
-                logging.warning("Failed to get mirror dimensions: %s", ex)
-            mirror_ol.set_hole_position(tab_data.polePositionPhysical)
+            self.mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
+            self.lens = main_data.lens
+            self.lens.focusDistance.subscribe(self._onMirrorDimensions, init=True)
+            self.mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
 
             # TODO: As this view uses the same stream as lens-align, the view
@@ -3166,18 +3313,25 @@ class Sparc2AlignTab(Tab):
             # should be clever enough to detect this and not actually cause a
             # redraw.
 
+        # steak camera
+        if "streak-align" not in tab_data.align_mode.choices:
+            self.panel.pnl_streak.Show(False)
+        else:
+            self.panel.btn_manualfocus.Show(True)  # TODO only for streak cam now
+
         # chronograph of spectrometer if "fiber-align" mode is present
         self._speccnt_stream = None
+        self._fbdet2 = None
         if "fiber-align" in tab_data.align_mode.choices:
             # Need to pick the right/best component which receives light via the fiber
-            fbdet = None
+            photods = []
             fbaffects = main_data.fibaligner.affects.value
             # First try some known, good and reliable detectors
-            for d in (main_data.spectrometer, main_data.cld):
+            for d in (main_data.spectrometers + main_data.photo_ds):
                 if d is not None and d.name in fbaffects:
-                    fbdet = d
-                    break
-            else:
+                    photods.append(d)
+
+            if not photods:
                 # Take the first detector
                 for dname in fbaffects:
                     try:
@@ -3185,47 +3339,60 @@ class Sparc2AlignTab(Tab):
                     except LookupError:
                         logging.warning("Failed to find component %s affected by fiber-aligner", dname)
                         continue
-
                     if hasattr(d, "data") and isinstance(d.data, model.DataFlowBase):
-                        fbdet = d
-                        break
+                        photods.append(d)
 
-            if fbdet is not None:
-                logging.debug("Using %s as fiber alignment detector", fbdet.name)
-
+            if photods:
+                logging.debug("Using %s as fiber alignment detector", photods[0].name)
                 speccnts = acqstream.CameraCountStream("Spectrum average",
-                                       fbdet,
-                                       fbdet.data,
+                                       photods[0],
+                                       photods[0].data,
                                        emitter=None,
-                                       detvas=get_local_vas(fbdet, main_data.hw_settings_config),
+                                       detvas=get_local_vas(photods[0], main_data.hw_settings_config),
                                        )
                 speccnt_spe = self._stream_controller.addStream(speccnts,
                                     add_to_view=self.panel.vp_align_fiber.view)
+                if main_data.tc_od_filter:
+                    speccnt_spe.add_axis_entry("density", main_data.tc_od_filter)
+                    speccnt_spe.add_axis_entry("band", main_data.tc_filter)
                 speccnt_spe.stream_panel.flatten()
                 self._speccnt_stream = speccnts
                 speccnts.should_update.subscribe(self._on_ccd_stream_play)
+
+                if len(photods) > 1 and photods[0] in main_data.photo_ds and photods[1] in main_data.photo_ds:
+                    self._fbdet2 = photods[1]
+                    _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "", readonly=True)
+                    self._det2_cnt_ctrl.SetForegroundColour("#FFFFFF")
+                    f = self._det2_cnt_ctrl.GetFont()
+                    f.PointSize = 12
+                    self._det2_cnt_ctrl.SetFont(f)
+                    speccnts.should_update.subscribe(self._on_fbdet1_should_update)
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
         # Switch between alignment modes
         # * lens-align: first auto-focus spectrograph, then align lens1
-        # * spot-mirror-align: same GUI as lens-align, but without auto-focus or lens => just
         # * mirror-align: move x, y of mirror with moment of inertia feedback
-        # * goal-align: find the center of the AR image using a "Goal" image
+        # * center-align: find the center of the AR image using a mirror mask
         # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
+        # * streak-align: vertical and horizontal alignment of the streak camera,
+        #                 change of the mag due to changed input optics and
+        #                 calibration of the trigger delays for temporal resolved acq
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
             (panel.btn_align_fiber, "fiber-align"),
+            (panel.btn_align_streakcam, "streak-align"),
         ))
 
-        # The GUI mode to the optical path mode
+        # The GUI mode to the optical path mode (see acq.path.py)
         self._mode_to_opm = {
             "mirror-align": "mirror-align",
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
             "fiber-align": "fiber-align",
+            "streak-align": "streak-align",
         }
         # Note: ActuatorController hides the fiber alignment panel if not needed.
         for btn, mode in self._alignbtn_to_mode.items():
@@ -3263,6 +3430,16 @@ class Sparc2AlignTab(Tab):
         if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
+    def _on_fbdet1_should_update(self, should_update):
+        if should_update:
+            self._fbdet2.data.subscribe(self._on_fbdet2_data)
+        else:
+            self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
+
+    @wxlimit_invocation(0.5)
+    def _on_fbdet2_data(self, df, data):
+        self._det2_cnt_ctrl.SetValue("%s" % data[-1])
+
     def _layoutModeButtons(self):
         """
         Positions the mode buttons in a nice way: on one line if they fit,
@@ -3270,7 +3447,7 @@ class Sparc2AlignTab(Tab):
         """
         # If 3 buttons or less, keep them all on a single line, otherwise,
         # spread on two lines. (Works up to 6 buttons)
-        btns = self._alignbtn_to_mode.keys()
+        btns = list(self._alignbtn_to_mode.keys())
         if len(btns) == 1:
             btns[0].Show(False)  # No other choice => no need to choose
             return
@@ -3297,9 +3474,11 @@ class Sparc2AlignTab(Tab):
             b = stream.detBinning.value
         else:
             b = (1, 1)
-        max_res = stream.detResolution.range[1]
-        res = max_res[0] // b[0], max_res[1] // b[1]
-        stream.detResolution.value = stream.detResolution.clip(res)
+
+        if hasattr(stream, "detResolution"):
+            max_res = stream.detResolution.range[1]
+            res = max_res[0] // b[0], max_res[1] // b[1]
+            stream.detResolution.value = stream.detResolution.clip(res)
 
     def _addMoIEntries(self, cont):
         """
@@ -3343,7 +3522,24 @@ class Sparc2AlignTab(Tab):
             lpos = lm.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
             logging.exception("Lens-mover actuator has no metadata FAV_POS_ACTIVE")
+            return
         lm.moveAbs(lpos)
+
+    def _moveFibAlignerToActive(self, f=None):
+        """
+        Move the fiber aligner to its default active position
+        f (future): future of the referencing
+        """
+        if f:
+            f.result()  # to fail & log if the referencing failed
+
+        fiba = self.tab_data_model.main.fibaligner
+        try:
+            fpos = fiba.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            logging.exception("Fiber aligner actuator has no metadata FAV_POS_ACTIVE")
+            return
+        fiba.moveAbs(fpos)
 
     def _onClickAlignButton(self, evt):
         """ Called when one of the Mirror/Optical fiber button is pushed
@@ -3392,12 +3588,21 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
 
         # Things to do at the end of a mode
-        if mode != "fiber-align" and main.spec_sel:
-            main.spec_sel.position.unsubscribe(self._onFiberPos)
+        if mode != "fiber-align":
+            if main.spec_sel:
+                main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.fibaligner:
+                main.fibaligner.position.unsubscribe(self._onFiberPos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
-        f = main.opm.setPath(op_mode)
+        if mode == "fiber-align" and self._speccnt_stream:
+            # In case there are multiple detectors after the fiber-aligner, it's
+            # necessary to pass the actual detector that we want.
+            f = main.opm.setPath(op_mode, self._speccnt_stream.detector)
+        else:
+            f = main.opm.setPath(op_mode)
+        f.add_done_callback(self._on_align_mode_done)
 
         # Focused view must be updated before the stream to play is changed,
         # as the scheduler automatically adds the stream to the current view.
@@ -3407,10 +3612,16 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(True)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_focus.Enable(True)
+            self.panel.btn_autofocus.Enable(True)
+            self.panel.gauge_autofocus.Enable(True)
+
+            self.panel.btn_manualfocus.Enable(False)  # TODO used only for streak cam now, will be implemented soon
+
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
-
+            self.panel.pnl_streak.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -3419,23 +3630,28 @@ class Sparc2AlignTab(Tab):
             if self._moi_stream:
                 self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
+            self.panel.pnl_streak.Enable(False)
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
+            self.panel.pnl_centering.Enable(True)
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
+            self.panel.pnl_streak.Enable(False)
         elif mode == "fiber-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
             if self._speccnt_stream:
                 self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
@@ -3445,13 +3661,65 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_p_fibaligner_x.Enable(False)
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
+            self.panel.pnl_streak.Enable(False)
             # Note: it's OK to leave autofocus enabled, as it will wait by itself
             # for the fiber-aligner to be in place
             f.add_done_callback(self._on_fibalign_done)
+        elif mode == "streak-align":
+            self.tab_data_model.focussedView.value = self.panel.vp_align_streak.view
+            if self._ts_stream:
+                self._ts_stream.should_update.value = True
+                self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
+                self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_centering.Enable(False)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(True)
+            self.panel.btn_manualfocus.Enable(True)
+            self.panel.btn_autofocus.Enable(False)
+            self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
+            self.panel.pnl_streak.Enable(True)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
+
+        # clear documentation panel when different mode is requested
+        # only display doc for current mode selected
+        self.panel.html_moi_doc.LoadPage(self.doc_path)
+        if mode == "lens-align":
+            if self._specline_stream:
+                doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
+                self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+        elif mode == "mirror-align":
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+        elif mode == "center-align":
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_centering.html")
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+        elif mode == "fiber-align":
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_fiber.html")
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+        elif mode == "streak-align":
+            # add documentation for streak cam
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_streakcam.html")
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+        else:
+            logging.warning("Could not find alignment documentation for mode %s requested." % mode)
+
         # To adapt to the pnl_moi_settings showing on/off
         self.panel.html_moi_doc.Parent.Layout()
+
+    def _on_align_mode_done(self, f):
+        """Not essential but good for logging and debugging."""
+        try:
+            f.result()
+        except:
+            logging.exception("Failed changing alignment mode.")
+        else:
+            logging.debug("Optical path was updated.")
 
     def _on_fibalign_done(self, f):
         """
@@ -3479,7 +3747,9 @@ class Sparc2AlignTab(Tab):
 
         # Make sure the user can move the X axis only once at ACTIVE position
         if self.tab_data_model.main.spec_sel:
-            self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
+            self.tab_data_model.main.spec_sel.position.subscribe(self._onSpecSelPos)
+        if self.tab_data_model.main.fibaligner:
+            self.tab_data_model.main.fibaligner.position.subscribe(self._onFiberPos)
         self.panel.btn_m_fibaligner_x.Enable(True)
         self.panel.btn_p_fibaligner_x.Enable(True)
         self.panel.btn_m_fibaligner_y.Enable(True)
@@ -3498,7 +3768,8 @@ class Sparc2AlignTab(Tab):
         ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         moiupdate = self._moi_stream and self._moi_stream.should_update.value
-        self._spot_stream.is_active.value = any((ccdupdate, spcupdate, moiupdate))
+        streakccdupdate = self._ts_stream and self._ts_stream.should_update.value
+        self._spot_stream.is_active.value = any((ccdupdate, spcupdate, moiupdate, streakccdupdate))
 
     def _onClickFocus(self, evt):
         """
@@ -3507,61 +3778,95 @@ class Sparc2AlignTab(Tab):
         """
         self.tab_data_model.autofocus_active.value = not self.tab_data_model.autofocus_active.value
 
-    @call_in_wx_main
-    def _onAutofocus(self, active):
-        if active:
-            main = self.tab_data_model.main
-            align_mode = self.tab_data_model.align_mode.value
-            if align_mode == "lens-align":
-                s = self._specline_stream
-                focuser = s.focuser
-                opath = "spec-focus"
-                btn = self.panel.btn_autofocus
-                gauge = self.panel.gauge_autofocus
-            elif align_mode == "fiber-align":
-                s = None  # No stream to play
-                focuser = main.focus
-                opath = "spec-fiber-focus"
-                btn = self.panel.btn_fib_autofocus
-                gauge = self.panel.gauge_fib_autofocus
+    def _onManualFocus(self, event):
+        """
+        Called when manual focus btn receives an event.
+        """
+        main = self.tab_data_model.main
+        bl = main.brightlight
+        align_mode = self.tab_data_model.align_mode.value
+
+        if event.GetEventObject().GetValue():  # manual focus btn active
+            # # Disable autofocus if manual focus btn pushed
+            #         # self.panel.btn_autofocus.Enable(False)
+            #         # self.panel.gauge_autofocus.Enable(False)
+            if align_mode == "streak-align":
+                s = None
+                opath = "streak-focus"
             else:
-                logging.info("Autofocus requested outside of lens or fiber alignment mode, not doing anything")
+                self._stream_controller.pauseStreams()
+                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
                 return
 
-            # Get all the detectors affected by by the focuser
-            try:
-                spgr, dets, selector = self._getSpectrometerFocusingComponents(focuser)
-            except LookupError as ex:
-                logging.error("Failed to focus: %s", ex)
-                # TODO: just run the standard autofocus procedure instead?
-                return
+            # For streak-focus, it's not useful to use turnLightOn(), as the camera should not
+            # yet be receiving light anyway.
+            # TODO: if standard focus mode, call Sparc2AutoFocus(align_mode, main.opm, s, start_autofocus=False)
 
-            # Go to the special focus mode (=> close the slit & turn on the lamp)
-            fopm = main.opm.setPath(opath)
+            # Note: First close slit, then switch on calibration light
+            # Go to the special focus mode (=> close the slit)
+            f = main.opm.setPath(opath).result()
 
-            btn.SetLabel("Cancel")
-            self._stream_controller.pauseStreams()
+            # force wavelength 0
+            main.spectrograph.moveAbsSync({"wavelength": 0})
 
-            bl = main.brightlight
+            if align_mode != "streak-align":
+                self._stream_controller.pauseStreams()
+
+            # Turn on the light
             bl.power.value = bl.power.range[1]
             if s:
                 s.should_update.value = True  # the stream will set all the emissions to 1
             else:
                 bl.emissions.value = [1] * len(bl.emissions.value)
 
-            # Configure each detector with good settings
-            for d in dets:
-                if s and d.name == s.detector.name:
-                    # The stream takes care of configuring its detector, so no need
-                    continue
-                if model.hasVA(d, "binning"):
-                    d.binning.value = d.binning.clip((2, 2))
-                if model.hasVA(d, "exposureTime"):
-                    d.exposureTime.value = d.exposureTime.clip(0.2)
+        else:  # manual focus button is inactive
+            # Go back to previous mode (=> open the slit & turn off the lamp)
+            if align_mode == "streak-align":
+                s = None
+            # Note: First turn off calibration light, then open slit
+            bl.power.value = bl.power.range[0]
+            if s:
+                s.should_update.value = True  # the stream will set all the emissions to 0
+            else:
+                bl.emissions.value = [0] * len(bl.emissions.value)
 
-            fopm.result()  # TODO: don't block the GUI => make it part of the autofocus
-            # self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
-            self._autofocus_f = AutoFocusSpectrometer(spgr, focuser, dets, selector)
+            opath = self._mode_to_opm[align_mode]
+            f = main.opm.setPath(opath)
+            f.add_done_callback(self._on_align_mode_done)
+            f.result()  # TODO: don't block the GUI => make it part of the manual focus??
+            # if align_mode != "streak-align":
+            #     # Enable autofocus if manual focus btn not pushed
+            #     self.panel.btn_autofocus.Enable(True)
+            #     self.panel.gauge_autofocus.Enable(True)
+
+
+    @call_in_wx_main
+    def _onAutofocus(self, active):
+        # TODO disable manual focus while running autofocus
+        if active:
+            main = self.tab_data_model.main
+            align_mode = self.tab_data_model.align_mode.value
+            if align_mode == "lens-align":
+                focus_mode = "spec-focus"
+                # TODO: create one stream per detector
+                ss = [self._specline_stream]
+                btn = self.panel.btn_autofocus
+                gauge = self.panel.gauge_autofocus
+            elif align_mode == "fiber-align":
+                focus_mode = "spec-fiber-focus"
+                ss = []  # No stream to play
+                btn = self.panel.btn_fib_autofocus
+                gauge = self.panel.gauge_fib_autofocus
+            else:
+                logging.info("Autofocus requested outside of lens or fiber alignment mode, not doing anything")
+                return
+
+            # GUI stream bar controller pauses the stream
+            btn.SetLabel("Cancel")
+            self._stream_controller.pauseStreams()
+
+            # No manual autofocus for now
+            self._autofocus_f = Sparc2AutoFocus(focus_mode, main.opm, ss, start_autofocus=True)
             self._autofocus_align_mode = align_mode
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 
@@ -3580,91 +3885,22 @@ class Sparc2AlignTab(Tab):
                 return
             btn.SetLabel("Auto focus")
 
-    def _getSpectrometerFocusingComponents(self, focuser):
-        """
-        Finds the different components needed to run auto-focusing with the
-        given focuser.
-        focuser (Actuator): the focuser that will be used to change focus
-        return:
-            * spectrograph (Actuator): component to move the grating and wavelength
-            * detectors (list of Detectors): the detectors attached on the
-              spectrograph, which can be used for focusing
-            * selector (Actuator or None): the component to switch detectors
-        raise LookupError: if not all the components could be found
-        """
-        main = self.tab_data_model.main
-
-        dets = []
-        # "ccd", which is the detector of the stream, should be first, as it's
-        # normally on the "direct" output port (which the SR193 tends to prefer
-        # for focusing), and typically has a better performance for focus.
-        for r in ("ccd", "sp-ccd"):
-            try:
-                d = model.getComponent(role=r)
-            except LookupError:
-                continue
-            if r == "sp-ccd" and d.shape[1] == 1:
-                # Currently, the autofocus doesn't work correctly on spectrum
-                # (ie, resolution of X x 1), so skip it, and hope the focus is
-                # already correct.
-                # TODO: make the autofocus work also in such case.
-                logging.info("Will not focus on %s as it is 1D", d.name)
-                continue
-            if d.name in focuser.affects.value:
-                dets.append(d)
-
-        if not dets:
-            raise LookupError("Failed to find any detector for the spectrometer focusing")
-
-        # Get the spectrograph and selector based on the fact they affect the
-        # same detectors.
-        spgr = self._findSameAffects([main.spectrograph, main.spectrograph_ded],
-                                     dets)
-        if len(dets) <= 1:
-            selector = None  # we can keep it simple
-        else:
-            # TODO: make this code able to handle systems with multiple
-            # spectrographs (with a focus)
-            # Precisely, a selector would have multiple positions, with
-            # each position corresponding to one of the detectors
-            sels = [model.getComponent(role="spec-det-selector")]
-            selector = self._findSameAffects(sels, dets)
-
-        return spgr, dets, selector
-
-    def _findSameAffects(self, comps, affected):
-        """
-        Find a component that affects all the given components
-        comps (list of Component or None): set of components in which to look
-          for the "affecter"
-        affected (list of Component): set of affected components
-        return (Component): the first component that affects all the affected
-        raise LookupError: if no component found
-        """
-        naffected = set(c.name for c in affected)
-        for c in comps:
-            if c is not None and naffected <= set(c.affects.value):
-                return c
-        else:
-            raise LookupError("Failed to find a component that affects all %s" % (naffected,))
-
     def _on_autofocus_done(self, future):
-        align_mode = self._autofocus_align_mode
-        if align_mode == "lens-align" and not future.cancelled():
-            # Ensure the latest image in _specline_stream shows the slit focused,
-            # with the same grating as used in lens-align mode.
-            self.tab_data_model.main.opm.setPath("spec-focus").result()
-            self._specline_stream.detector.data.get(asap=False)
+        try:
+            future.result()
+        except CancelledError:
+            pass
+        except Exception:
+            logging.exception("Autofocus failed")
 
-        # Turn off the light
-        bl = self.tab_data_model.main.brightlight
-        bl.power.value = bl.power.range[0]
         # That VA will take care of updating all the GUI part
         self.tab_data_model.autofocus_active.value = False
         # Go back to normal mode. Note: it can be "a little weird" in case the
         # autofocus was stopped due to changing mode, but it should end-up doing
         # just twice the same thing, with the second time being a no-op.
         self._onAlignMode(self.tab_data_model.align_mode.value)
+
+        # TODO enable manual focus when done running autofocus
 
     def _onBkgAcquire(self, evt):
         """
@@ -3759,6 +3995,16 @@ class Sparc2AlignTab(Tab):
             self._moi_stream.is_active.value = True
         self.panel.vp_moi.canvas.fit_view_to_next_image = True
 
+    @call_in_wx_main
+    def _onMirrorDimensions(self, focusDistance):
+        try:
+            self.mirror_ol.set_mirror_dimensions(self.lens.parabolaF.value,
+                                                 self.lens.xMax.value,
+                                                 self.lens.focusDistance.value,
+                                                 self.lens.holeDiameter.value)
+        except (AttributeError, TypeError) as ex:
+            logging.warning("Failed to get mirror dimensions: %s", ex)
+
     def _onLensPos(self, pos):
         """
         Called when the lens is moved (and the tab is shown)
@@ -3771,11 +4017,23 @@ class Sparc2AlignTab(Tab):
         """
         Called when the mirror is moved (and the tab is shown)
         """
+        # HACK: This is actually a hack of a hack. Normally, the user can only
+        # access the alignment tab if the mirror is engaged, so it should never
+        # get close from the parked position. However, for maintenance, it's
+        # possible to hack the GUI and enable the tab even if the mirror is
+        # not engaged. In such case, if by mistake the mirror moves, we should
+        # not set the "random" position as the engaged position.
+        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
+                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        if dist_parked <= MIRROR_ONPOS_RADIUS:
+            logging.warning("Mirror seems parked, not updating FAV_POS_ACTIVE")
+            return
+
         # Save mirror position as the "calibrated" one
         m = self.tab_data_model.main.mirror
         m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
-    def _onFiberPos(self, pos):
+    def _onSpecSelPos(self, pos):
         """
         Called when the spec-selector (wrapper to the X axis of fiber-aligner)
           is moved (and the fiber align mode is active)
@@ -3788,8 +4046,28 @@ class Sparc2AlignTab(Tab):
 
         # Save the axis position as the "calibrated" one
         ss = self.tab_data_model.main.spec_sel
-        logging.debug("Updating the active fiber position to %s", pos)
+        logging.debug("Updating the active fiber X position to %s", pos)
         ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _onFiberPos(self, pos):
+        """
+        Called when the fiber-aligner is moved (and the fiber align mode is active),
+          for updating the Y position. (X pos is handled by _onSpecSelPos())
+        """
+        if not self.IsShown():
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active fiber position while outside of alignment tab")
+            return
+
+        # Update the fibaligner with the Y axis, if it supports it
+        fiba = self.tab_data_model.main.fibaligner
+        fib_fav_pos = fiba.getMetadata().get(model.MD_FAV_POS_ACTIVE, {})
+
+        # If old hardware, without FAV_POS: just do nothing
+        if fib_fav_pos and "y" in fib_fav_pos:
+            fib_fav_pos["y"] = pos["y"]
+            logging.debug("Updating the active fiber Y position to %s", fib_fav_pos)
+            fiba.updateMetadata({model.MD_FAV_POS_ACTIVE: fib_fav_pos})
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -3820,7 +4098,9 @@ class Sparc2AlignTab(Tab):
                 main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
-                main.spec_sel.position.unsubscribe(self._onFiberPos)
+                main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.fibaligner:
+                main.fibaligner.position.unsubscribe(self._onFiberPos)
 
             # Also fit to content now, so that next time the tab is displayed,
             # it's ready

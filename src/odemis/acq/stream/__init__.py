@@ -24,7 +24,7 @@ see http://www.gnu.org/licenses/.
 # This module contains classes that describe Streams, which are basically
 # Detector, Emitter and Dataflow associations.
 
-
+# Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
 
 from ._base import *
@@ -34,11 +34,17 @@ from ._static import *
 from ._sync import *
 from ._projection import *
 
-from abc import ABCMeta
+import sys
+import abc
+
+if sys.version_info >= (3, 4):
+    ABC = abc.ABC
+else:
+    ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 
 # Generic cross-cut types
-class OpticalStream:
-    __metaclass__ = ABCMeta
+class OpticalStream(ABC):
+    pass
 
 OpticalStream.register(CameraStream)
 OpticalStream.register(StaticFluoStream)
@@ -46,43 +52,50 @@ OpticalStream.register(StaticBrightfieldStream)
 OpticalStream.register(ScannedFluoMDStream)
 
 
-class EMStream:
+class EMStream(ABC):
     """All the stream types related to electron microscope"""
-    __metaclass__ = ABCMeta
+    pass
 
 EMStream.register(SEMStream)
 EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
 
 
-class CLStream:
+class CLStream(ABC):
     """
     All the stream types related to cathodoluminescence with one C dimension
     (otherwise, it's a SpectrumStream)
     """
-    __metaclass__ = ABCMeta
+    pass
 
 CLStream.register(CLSettingsStream)
 CLStream.register(StaticCLStream)
 # TODO, also include MonochromatorSettingsStream and SEMMDStream?
 
 
-class SpectrumStream:
-    __metaclass__ = ABCMeta
+class SpectrumStream(ABC):
+    pass
 
 SpectrumStream.register(SpectrumSettingsStream)
 SpectrumStream.register(StaticSpectrumStream)
 SpectrumStream.register(SEMSpectrumMDStream)
 
 
-class ARStream:
-    __metaclass__ = ABCMeta
+class TemporalSpectrumStream(ABC):
+    pass
+
+TemporalSpectrumStream.register(TemporalSpectrumSettingsStream)
+TemporalSpectrumStream.register(SEMTemporalSpectrumMDStream)
+
+
+class ARStream(ABC):
+    pass
 
 ARStream.register(ARSettingsStream)
 ARStream.register(StaticARStream)
 ARStream.register(SEMARMDStream)
 
-NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream,
+NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, TemporalSpectrumStream, MonochromatorSettingsStream,
                        ScannedTCSettingsStream, ScannedFluoMDStream, OverlayStream)
 
 
@@ -118,7 +131,7 @@ class StreamTree(object):
         assert(isinstance(streams, list))
 
         self.streams = []
-        self.flat = model.ListVA([], readonly=True)  # same content as .getStreams()
+        self.flat = model.ListVA([], readonly=True)  # same content as .getProjections()
         self.should_update = model.BooleanVA(False)
         self.kwargs = kwargs
 
@@ -168,7 +181,7 @@ class StreamTree(object):
             stream.should_update.subscribe(self.on_stream_update_changed, init=True)
 
         # Also update the flat streams list
-        curr_streams = self.getStreams()
+        curr_streams = self.getProjections()
         self.flat._value = curr_streams
         self.flat.notify(curr_streams)
 
@@ -178,7 +191,7 @@ class StreamTree(object):
         self.streams.remove(stream)
         self.on_stream_update_changed()
         # Also update the flat streams list
-        curr_streams = self.getStreams()
+        curr_streams = self.getProjections()
         self.flat._value = curr_streams
         self.flat.notify(curr_streams)
 
@@ -192,7 +205,7 @@ class StreamTree(object):
         else:
             self.should_update.value = False
 
-    def getStreams(self):
+    def getProjections(self):
         """ Return the list leafs (ie, Stream or DataProjection) used to compose the picture """
 
         streams = []
@@ -201,7 +214,7 @@ class StreamTree(object):
             if isinstance(s, (Stream, DataProjection)) and s not in streams:
                 streams.append(s)
             elif isinstance(s, StreamTree):
-                sub_streams = s.getStreams()
+                sub_streams = s.getProjections()
                 for sub_s in sub_streams:
                     if sub_s not in streams:
                         streams.append(sub_s)
@@ -250,19 +263,18 @@ class StreamTree(object):
 
         return images
 
-    def get_streams_by_type(self, stream_types):
+    def get_projections_by_type(self, stream_types):
         """
-        Return a flat list of streams of `stream_type` within the StreamTree
-          Note: if a node is a DataProjection, the corresponding Stream is returned
+        Return a flat list of projections or streams representing a stream
+        of `stream_type` within the StreamTree
         """
-        streams = []
+        projections = []
 
         for s in self.streams:
-            if isinstance(s, DataProjection):
-                s = s.stream
             if isinstance(s, StreamTree):
-                streams.extend(s.get_streams_by_type(stream_types))
-            elif isinstance(s, stream_types):
-                streams.append(s)
+                projections.extend(s.get_projections_by_type(stream_types))
+            elif (isinstance(s, stream_types) or
+                  (isinstance(s, DataProjection) and isinstance(s.stream, stream_types))):
+                projections.append(s)
 
-        return streams
+        return projections

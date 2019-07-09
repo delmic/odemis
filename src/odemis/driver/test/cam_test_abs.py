@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import gc
 import logging
@@ -52,11 +53,10 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               }
 
 
-class VirtualStaticTestCam(object):
+class VirtualStaticTestCam(with_metaclass(ABCMeta, object)):
     """
     For tests which don't need a camera ready
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -87,11 +87,10 @@ class VirtualStaticTestCam(object):
 
 # It doesn't inherit from TestCase because it should not be run by itself
 #class VirtualTestCam(unittest.TestCase):
-class VirtualTestCam(object):
+class VirtualTestCam(with_metaclass(ABCMeta, object)):
     """
     Abstract class for all the DigitalCameras
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -137,7 +136,7 @@ class VirtualTestCam(object):
             self.skipTest("Camera doesn't support setting temperature")
 
         ttemp = self.camera.targetTemperature.value
-        self.assertTrue(-300 < ttemp and ttemp < 100)
+        self.assertTrue(-300 < ttemp < 100)
         self.camera.targetTemperature.value = self.camera.targetTemperature.range[0]
         self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
 
@@ -249,6 +248,7 @@ class VirtualTestCam(object):
 
         number = 5
         self.left = number
+
         self.camera.data.subscribe(self.receive_image)
         for i in range(number):
             # end early if it's already finished
@@ -303,7 +303,13 @@ class VirtualTestCam(object):
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size[::-1])
-        self.assertGreaterEqual(duration, exposure / 2, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
+        # It should be about the exposure time. However, as the acquisition has
+        # started as soon as the previous image was received, it might take a
+        # tiny bit less than the exposure time (eg, a few ms less). On a real
+        # hardware, the overhead is usually much higher than these few ms, but
+        # for some simulators, that's important.
+        self.assertGreaterEqual(duration, exposure / 2 - 0.1,
+                                "Error execution took %f s, far less than exposure time %f." % (duration, exposure / 2))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
         for i in range(number):
@@ -388,12 +394,14 @@ class VirtualTestCam(object):
 
 #    @unittest.skip("simple")
     def test_binning(self):
-        if (not model.hasVA(self.camera, "binning") or
-            self.camera.binning.readonly):
+        if not model.hasVA(self.camera, "binning") or self.camera.binning.readonly:
             self.skipTest("Camera doesn't support setting binning")
 
         self.camera.binning.value = (1, 1)
-        max_binning = self.camera.binning.range[1]
+        if hasattr(self.camera.binning, "range"):
+            max_binning = self.camera.binning.range[1]
+        else:  # if binning-VA is VAEnumerated
+            max_binning = max(self.camera.binning.choices)
         new_binning = (2, 2)
         if new_binning >= max_binning:
             # if there is no binning 2, let's not try
@@ -472,11 +480,10 @@ class VirtualTestCam(object):
             pass # good!
 
 
-class VirtualTestSynchronized(object):
+class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -562,7 +569,7 @@ class VirtualTestSynchronized(object):
         # works with PVCam and Andorcam, but is probably different with other drivers :-(
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
         # it seems with the iVac, 20ms is enough to account for the overhead and extra image acquisition
-        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.1
+        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.2
         self.scanner.resolution.value = self.sem_size
         # pixel write/read setup is pretty expensive ~10ms
         expected_duration = numbert * (self.scanner.dwellTime.value + 0.01)
@@ -583,11 +590,14 @@ class VirtualTestSynchronized(object):
             if self.sem_left == 0:
                 break # just to make it quicker if it's quicker
 
+        self.ccd.data.unsubscribe(self.receive_ccd_image)
+        self.sed.data.unsubscribe(self.receive_sem_data)
+        self.ccd.data.synchronizedOn(None)
+
         logging.info("Took %g s", self.end_time - start)
         time.sleep(exp + readout)
         self.assertEqual(self.sem_left, 0)
         self.assertEqual(self.ccd_left, 0)
-        self.ccd.data.synchronizedOn(None)
 
         # check we can still get data normally
         d = self.ccd.data.get()

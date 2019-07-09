@@ -19,14 +19,15 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
+from __future__ import division, print_function
 
 from functools import partial
 import gc
 import logging
 from odemis import util
 from odemis.model import CancellableFuture
-from odemis.util import limit_invocation, TimeoutError, executeAsyncTask
+from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
+    perpendicular_distance
 from odemis.util import timeout
 import time
 import unittest
@@ -75,11 +76,11 @@ class Useless(object):
     Independent class for testing limit_invocation decorator
     """
     def __del__(self):
-        print "Useless %r is gone" % self
+        print("Useless %r is gone" % self)
 
     @limit_invocation(0.1)
     def doit(self, a, b=None):
-        print "doing it %s, %s" % (a, b)
+        print("doing it %s, %s" % (a, b))
 
 
 class TestTimeout(unittest.TestCase):
@@ -143,6 +144,33 @@ class AlmostEqualTestCase(unittest.TestCase):
         for i, eo in in_exp.items():
             o = util.almost_equal(*i)
             self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+
+class PerpendicularDistanceTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        """ Test distance using easy geometry """
+        a = (0, 0)
+        b = (1, 0)
+        # Move the point along another line segment at 1 unit away
+        for e in ((0, 1), (0.5, 1), (1, 1), (0.5, -1)):
+            dist = perpendicular_distance(a, b, e)
+            self.assertAlmostEqual(dist, 1)
+
+        # Move the point along the original segment itself => dist == 0
+        for e in ((0, 0), (0.5, 0), (1, 0)):
+            dist = perpendicular_distance(a, b, e)
+            self.assertAlmostEqual(dist, 0)
+
+    def test_null_line(self):
+        """ Test distance when the line is just a single point"""
+        a = (1, 0)
+        b = (1, 0)
+        e = (0, 0)
+        # Follow a segment at 1 unit away
+        dist = perpendicular_distance(a, b, e)
+        self.assertAlmostEqual(dist, 1)
+
 
 # Bounding box clipping test data generation
 def tp(trans, ps):

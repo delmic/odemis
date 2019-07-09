@@ -26,7 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, absolute_import
 
-import Queue
+import queue
 import collections
 from concurrent.futures import CancelledError
 from decorator import decorator
@@ -39,6 +39,7 @@ import sys
 import threading
 import time
 import weakref
+import types
 
 from . import weak
 
@@ -147,27 +148,37 @@ def rect_intersect(ra, rb):
 
 
 def perpendicular_distance(start, end, point):
-    """ Return the perpendicular distance between the line described by start and end, and point """
-
+    """
+    Computes the perpendicular distance between a line segment and a point (in 2D space).
+    start (float, float): beginning of the line segment
+    end (float, float): end of the line segment
+    point (float, float): point anywhere in space
+    return (0 <= float): distance
+    """
     x1, y1 = start
     x2, y2 = end
     x3, y3 = point
 
+    # Find the closest point on the segment
     px = x2 - x1
     py = y2 - y1
-
     v = px * px + py * py
-    u = ((x3 - x1) * px + (y3 - y1) * py) / float(v)
 
-    u = min(max(u, 0), 1)
+    if v == 0:
+        # If start and end are the same point => it's also the closest point
+        u = 0  # any value works
+    else:
+        u = ((x3 - x1) * px + (y3 - y1) * py) / v
+        u = min(max(u, 0), 1)
 
     x = x1 + u * px
     y = y1 + u * py
 
+    # Compute the distance between the external point and the closest point
     dx = x - x3
     dy = y - y3
+    return math.hypot(dx, dy)
 
-    return math.sqrt(dx*dx + dy*dy)
 
 INSIDE, LEFT, RIGHT, LOWER, UPPER = 0, 1, 2, 4, 8
 
@@ -276,6 +287,44 @@ def normalize_rect(rect):
     return type(rect)((l, t, r, b))
 
 
+def find_plot_content(xd, yd):
+    """
+    Locate the first leftmost non-zero value and the first rightmost non-zero
+    value for a set of points.
+    xd (list of floats): The X coordinates of the points, ordered.
+    yd (list of floats): The Y coordinates of the points.
+      Must be the same length as xd.
+    return (float, float): the horizontal range that fits the data content.
+      IOW, these are the xd value for the first and last non-null yd.
+    """
+    if len(xd) != len(yd):
+        raise ValueError("xd and yd should be the same length")
+
+    ileft = 0  # init value (useful in case len(yd) = 0)
+    for ileft in range(len(yd)):
+        if yd[ileft] != 0:
+            break
+
+    iright = len(yd) - 1  # init value (useful in case len(yd) <= 1)
+    for iright in range(len(yd) - 1, 0, -1):
+        if yd[iright] != 0:
+            break
+
+    # if ileft is > iright, then the data must be all 0.
+    if ileft >= iright:
+        return xd[0], xd[-1]
+
+    # If the empty portion on the edge is less than 5% of the full data
+    # width, show it anyway.
+    threshold = 0.05 * len(yd)
+    if ileft < threshold:
+        ileft = 0
+    if (len(yd) - iright) < threshold:
+        iright = len(yd) - 1
+
+    return xd[ileft], xd[iright]
+
+
 def _li_thread(delay, q):
 
     try:
@@ -304,7 +353,7 @@ def _li_thread(delay, q):
                     if t is None: # Sign that we should stop (object is gone)
                         return
                     # logging.debug("Overriding call with call at %f", t)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             try:
@@ -368,7 +417,7 @@ def limit_invocation(delay_s):
                         q = getattr(self, queue_name)
                     except AttributeError:
                         # Create everything need
-                        q = Queue.Queue()
+                        q = queue.Queue()
                         setattr(self, queue_name, q)
 
                         # Detect when instance of self is dereferenced
@@ -397,6 +446,58 @@ def limit_invocation(delay_s):
         return limit
     return li_dec
 
+
+def inspect_getmembers(object, predicate=None):
+    """
+    Fix for the corresponding function in inspect. If we modify __getattr__ of a function, inspect.getmembers()
+    doesn't work as intended (a TypeError is raised). The change consists of one line (highlighted below).
+    https://stackoverflow.com/questions/54478679/workaround-for-getattr-special-method-breaking-inspect-getmembers-in-pytho
+    """
+    # Line below adds inspect. reference to isclass()
+    if inspect.isclass(object):
+        # Line below adds inspect. reference to getmro()
+        mro = (object,) + inspect.getmro(object)
+    else:
+        mro = ()
+    results = []
+    processed = set()
+    names = dir(object)
+    # :dd any DynamicClassAttributes to the list of names if object is a class;
+    # this may result in duplicate entries if, for example, a virtual
+    # attribute with the same name as a DynamicClassAttribute exists
+    try:
+        for base in object.__bases__:
+            for k, v in base.__dict__.items():
+                if isinstance(v, types.DynamicClassAttribute):
+                    names.append(k)
+    #################################################################
+    ### Modification to inspect.getmembers: also catch TypeError here
+    #################################################################
+    except (AttributeError, TypeError):
+        pass
+    for key in names:
+        # First try to get the value via getattr.  Some descriptors don't
+        # like calling their __get__ (see bug #1785), so fall back to
+        # looking in the __dict__.
+        try:
+            value = getattr(object, key)
+            # handle the duplicate key
+            if key in processed:
+                raise AttributeError
+        except AttributeError:
+            for base in mro:
+                if key in base.__dict__:
+                    value = base.__dict__[key]
+                    break
+            else:
+                # could be a (currently) missing slot member, or a buggy
+                # __dir__; discard and move on
+                continue
+        if not predicate or predicate(value):
+            results.append((key, value))
+        processed.add(key)
+    results.sort(key=lambda pair: pair[0])
+    return results
 
 class TimeoutError(Exception):
     pass
@@ -449,12 +550,15 @@ class RepeatingTimer(threading.Thread):
     def run(self):
         # use the timeout as a timer
         try:
-            while not self._must_stop.wait(self.period):
+            wait_time = self.period
+            while not self._must_stop.wait(wait_time):
+                tstart = time.time()
                 try:
                     self.callback()
                 except weak.WeakRefLostError:
                     # it's gone, it's over
                     return
+                wait_time = max(0, (tstart + self.period) - time.time())
         except Exception:
             logging.exception("Failure while calling repeating timer '%s'", self.name)
         finally:

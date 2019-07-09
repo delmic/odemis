@@ -18,16 +18,16 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import copy
 import logging
 from odemis import model
-from odemis.driver import picoquant
+from odemis.driver import picoquant, simulated
 import os
 import time
 import unittest
-
+from odemis.driver import actuator, tmcm
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -38,10 +38,10 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 # arguments used for the creation of basic components
 CONFIG_DET0 = {"name": "APD0", "role": "cl-detector"}
 CONFIG_DET1 = {"name": "APD1", "role": "cl-detector2"}
+
 CONFIG_PH = {"name": "HP300", "role": "time-correlator", "device": None,
              "disc_volt": [0.1, 0.1], "zero_cross": [1e-3, 1e-3],
-             "children": {"detector0": CONFIG_DET0, "detector1": CONFIG_DET1}
-            }
+             "children": {"detector0": CONFIG_DET0, "detector1": CONFIG_DET1}}
 
 if TEST_NOHW:
     CONFIG_PH["device"] = "fake"
@@ -111,7 +111,7 @@ class TestPH300(unittest.TestCase):
         self._cnt = 0
         self._lastdata = None
         df.subscribe(self._on_det)
-        time.sleep(5)
+        time.sleep(8)  # consider some time for opening/ closing shutters in subclass
         df.unsubscribe(self._on_det)
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)
@@ -126,7 +126,7 @@ class TestPH300(unittest.TestCase):
         self.dev.dwellTime.value = dt
         df = self.dev.data
 
-        print self.dev.pixelDuration.choices
+        print(self.dev.pixelDuration.choices)
         for i, pxdr in zip(range(1, 5), self.dev.pixelDuration.choices):
             self.dev.pixelDuration.value = pxdr
             pxd = self.dev.pixelDuration.value
@@ -138,7 +138,11 @@ class TestPH300(unittest.TestCase):
 
             data = df.get()
             self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
-            self.assertEqual(data.metadata[model.MD_PIXEL_DUR], pxd)
+            tl = data.metadata[model.MD_TIME_LIST]
+            self.assertAlmostEqual(tl[0], so)
+            self.assertAlmostEqual(tl[1] - tl[0], pxd)
+            self.assertEqual(len(tl), data.shape[1])
+            self.assertEqual(len(tl), self.dev.resolution.value[0])
 
         for i in self.dev.syncDiv.choices:
             self.dev.syncDiv.value = i
@@ -162,6 +166,75 @@ class TestPH300(unittest.TestCase):
     def _on_rawdet(self, df, data):
         self._cnt += 1
         self._lastdata = data
+
+
+PH300_KWARGS = dict(name="Time Correlator", role='time-correlator', device=None,
+                    shutter_axes={"shutter0": ["x", 0, 1], "shutter1": ["x", 0, 1]})
+
+if TEST_NOHW:
+    PH300_KWARGS["device"] = "fake"
+
+
+class TestPH300_Shutters(TestPH300):
+    """
+    Tests PH300 with shutters.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tc_act = simulated.Stage("stage", "", ["shutter0", "shutter1"], {"shutter0": (0, 1), "shutter1": (0, 1)})
+        cls.shutter0 = actuator.MultiplexActuator("Shutter 0", "shutter0", {"x": cls.tc_act},
+                                              {"x": "shutter0"})
+        cls.shutter1 = actuator.MultiplexActuator("Shutter 1", "shutter1", {"x": cls.tc_act},
+                                              {"x": "shutter1"})
+
+        cls.dev = picoquant.PH300(children={'detector0': CONFIG_DET0, 'detector1': CONFIG_DET1},
+                                  dependencies={'shutter0': cls.shutter0, 'shutter1': cls.shutter1},
+                                  **PH300_KWARGS)
+
+        for child in cls.dev.children.value:
+            if child.name == CONFIG_DET0["name"]:
+                cls.det0 = child
+            elif child.name == CONFIG_DET1["name"]:
+                cls.det1 = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+        time.sleep(1)
+
+
+    def test_shutters(self):
+        # When acquiring, the shutters should open and close automatically once the acquisition is done
+        self._cnt = 0
+        self._lastdata = None
+        self.tc_act.speed.value = {'shutter0': 10, 'shutter1': 10}  # shutters are much faster than a stage
+        self.dev.data.subscribe(self._on_rawdet)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 1)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 1)
+        self.dev.data.unsubscribe(self._on_rawdet)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 0)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 0)
+        # Acquire on one detector alone and check if the right shutter opens
+        self.det0.data.subscribe(self._on_det)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 1)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 0)
+        self.det0.data.unsubscribe(self._on_det)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 0)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 0)
+
+        self.det1.data.subscribe(self._on_det)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 0)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 1)
+        self.det1.data.unsubscribe(self._on_det)
+        time.sleep(1)
+        self.assertEqual(self.tc_act.position.value['shutter0'], 0)
+        self.assertEqual(self.tc_act.position.value['shutter1'], 0)
 
 
 if __name__ == "__main__":

@@ -90,7 +90,7 @@ SPARC-MONASH: {
     init: {
         settle_time: 0.5,  # s, time for the gain to be fully active
     },
-    children: {
+    dependencies: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
@@ -99,8 +99,7 @@ SPARC-MONASH: {
 # Must be connected on PFI 8
 # Note: it also uses PFI 10 internally, so nothing should be connected to that pin
 "Monochromator PMT": { # the raw detector of the counting PMT for monochromator
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {
         source: 8,  # PFI number
@@ -111,7 +110,7 @@ SPARC-MONASH: {
 "Monochromator": {
     class: pmtctrl.PMT,
     role: monochromator,
-    children: {
+    dependencies: {
        "detector": "Monochromator PMT",
        "pmt-control": "Spectrograph",
     },
@@ -157,7 +156,7 @@ SPARC-MONASH: {
            inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
-    children: {
+    dependencies: {
         "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
@@ -200,7 +199,7 @@ SPARC-MONASH: {
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
-    children: {
+    dependencies: {
         "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Angular Camera", "CL Detector"]
@@ -216,7 +215,7 @@ SPARC-MONASH: {
     role: ar-spec-selector,
     # This is just to enforce PMT control to be initialized before the Fiber Flipper
     # since we need the relay reset to happen before the flipper is turned on
-    children: {"pmt-control": "CL PMT control unit"},
+    dependencies: {"pmt-control": "CL PMT control unit"},
     init: {sn: "37857201",
            axis: "rx",
            # inverted: ["rx"],
@@ -229,7 +228,7 @@ SPARC-MONASH: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 256],
     },
@@ -264,7 +263,7 @@ SPARC-MONASH: {
 "Spec CCD-PMT Flipper": {
     class: actuator.MultiplexActuator,
     role: spec-det-selector,
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
     },

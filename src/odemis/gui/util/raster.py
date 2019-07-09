@@ -22,13 +22,20 @@ This file is part of Odemis.
 """
 
 from __future__ import division
+from builtins import range  # For Python 2 & 3
 
 import math
 
 
-def rasterize_line((x0, y0), (x1, y1), width=1):
-    """ Return a list of points that form a line between the two given points """
-
+def rasterize_line(p0, p1, width=1):
+    """ Return a list of points that form a line between the two given points
+    p0 (int, int): x, y of the first point on the line
+    p1 (int, int): x, y of the last point on the line
+    return (list of (int, int)): all the points on the line segment, including p0,
+     and p1.
+    """
+    x0, y0 = p0
+    x1, y1 = p1
     points = []
 
     if width == 1:
@@ -41,7 +48,7 @@ def rasterize_line((x0, y0), (x1, y1), width=1):
         x, y = x0, y0
 
         while True:
-            points += [(x, y)]
+            points.append((x, y))
             if x == x1 and y == y1:
                 break
             e2 = err * 2
@@ -80,7 +87,10 @@ def rasterize_line((x0, y0), (x1, y1), width=1):
 
 
 def rasterize_rectangle(rectangle):
-    """ Return a list op points that form a rasterized rectangle """
+    """ Return a list of points that form a rasterized rectangle
+    retangle (4 x (int, int)): the x,y coordinates of each corner of the rectangle
+    return (list of (int, int)): all the points in the rectangle.
+    """
 
     if len(rectangle) != 4:
         raise ValueError("Incorrect number of vertices!")
@@ -98,16 +108,21 @@ def rasterize_rectangle(rectangle):
     points.extend(l3[:-1])
     points.extend(l4[:-1])
 
-    for x in xrange(min(r1[0], r2[0], r3[0], r4[0]), max(r1[0], r2[0], r3[0], r4[0])):
-        for y in xrange(min(r1[1], r2[1], r3[1], r4[1]), max(r1[1], r2[1], r3[1], r4[1])):
+    for x in range(min(r1[0], r2[0], r3[0], r4[0]), max(r1[0], r2[0], r3[0], r4[0])):
+        for y in range(min(r1[1], r2[1], r3[1], r4[1]), max(r1[1], r2[1], r3[1], r4[1])):
             if point_in_polygon((x, y), [r1, r2, r3, r4]):
                 points.append((x, y))
 
     return points
 
 
-def point_in_polygon((x, y), polygon):
-    """ Determine if the given x,y point is inside the polygon """
+def point_in_polygon(p, polygon):
+    """ Determine if the given point is inside the polygon
+    p (int, int): x, y of the point
+    polygon (4 x (int, int)): the x,y coordinates of each vertices of the polygon
+    return (bool): True if the point is within the polygon
+    """
+    x, y = p
 
     n = len(polygon)
     inside = False

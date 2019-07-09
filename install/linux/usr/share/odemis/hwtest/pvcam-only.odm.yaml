@@ -1,9 +1,8 @@
 Optical: {
     class: Microscope,
     role: optical,
-    emitters: ["Nikon Super Duper", "MultiBand Fixed Filter"],
-    detectors: [Pixis], # ST133
-    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    children: ["Nikon Super Duper", "MultiBand Fixed Filter", Pixis, "FakeRedStoneStage",
+              "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 "Nikon Super Duper": {
@@ -49,7 +48,7 @@ Pixis: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: [Pixis],
-    children: {"a": FakePIGCS, "b": FakePIGCS},
+    dependencies: {"a": FakePIGCS, "b": FakePIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
 #        inverted: ["a"]
@@ -62,7 +61,7 @@ Pixis: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: [Pixis],
-    children: {"z": FakePIGCS},
+    dependencies: {"z": FakePIGCS},
     init: {
         axes_map: {"z": "z"}
     },

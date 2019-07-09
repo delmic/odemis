@@ -42,7 +42,7 @@ SECOMv2: {
     role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
-    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
+    dependencies: {scanner: "SEM E-beam", detector0: "SEM Detector"}
 }
 
 # Connect:
@@ -98,7 +98,6 @@ SECOMv2: {
 }
 
 "EBeam control": {
-    creator: "SEM via API",
     role: null,
     init: {
         # Should be the same as the semcomedi
@@ -157,7 +156,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: ["Camera", "SEM E-beam"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "sx", "y": "sy"},
     },
@@ -167,7 +166,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Camera"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
     },
@@ -179,7 +178,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Camera"],
-    children: {"z": "Stage Actuators"},
+    dependencies: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
     },

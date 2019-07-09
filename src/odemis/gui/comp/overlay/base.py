@@ -32,6 +32,7 @@ They will *only* receive mouse events if they are active!
 
 from __future__ import division
 
+from future.utils import with_metaclass
 import cairo
 import logging
 import math
@@ -148,12 +149,11 @@ class Vec(tuple):
         return self[1]
 
 
-class Overlay(object):
+class Overlay(with_metaclass(ABCMeta, object)):
     """ This abstract Overlay class forms the base for a series of classes that
     allow for the drawing of images, text and shapes on top of a Canvas, while
     also facilitating the processing of various (mouse) events.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, cnvs, label=None):
         """
@@ -322,7 +322,6 @@ class Overlay(object):
             l.text_size = lw, lh
         else:
             x, y = l.render_pos
-            lw, lh = l.text_size
 
         # Draw Shadow
         if l.colour:
@@ -1108,8 +1107,7 @@ class WorldOverlay(Overlay):
         pass
 
 
-class SpotModeBase(object):
-    __metaclass__ = ABCMeta
+class SpotModeBase(with_metaclass(ABCMeta, object)):
 
     def __init__(self, cnvs, spot_va=None):
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)

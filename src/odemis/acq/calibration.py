@@ -22,7 +22,7 @@ from __future__ import division
 import logging
 import numpy
 from odemis import model
-from odemis.util import spectrum, img
+from odemis.util import spectrum, img, find_closest, almost_equal
 
 
 # AR calibration data is a background image. The file format expected is a
@@ -237,3 +237,49 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
         data = data * calib_fitted # will keep metadata from data
 
     return data
+
+
+def get_time_range_to_trigger_delay(data, timeRange_choices, triggerDelay_range):
+    """
+    Reads the time range and trigger delay values from a csv object.
+    Checks values for validity.
+    :parameter data: (csv.reader object) calibration file
+    :parameter timeRange_choices: (frozenset) choices possible for timeRange VA
+    :parameter triggerDelay_range: (tuple) range possible for trigger delay values
+    :return: (dict) new dictionary containing the loaded time range to trigger delay info
+    """
+    new_dict = {}
+
+    for timeRange, delay in data:
+
+        try:
+            timeRange = float(timeRange)
+            delay = float(delay)
+        except ValueError:
+            raise ValueError("Trigger delay %s and/or time range %s is not of type float. "
+                             "Please check calibration file for trigger delay." % (delay, timeRange))
+
+        # check delay in range allowed
+        if not triggerDelay_range[0] <= delay <= triggerDelay_range[1]:
+            raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1). "
+                             "Please check the calibration file for the trigger delay." % (delay, timeRange))
+
+        # check timeRange is in possible choices for timeRange on HW
+        choice = find_closest(timeRange, timeRange_choices)
+        if not almost_equal(timeRange, choice):
+            raise ValueError("Time range % s found in calibration file is not a possible choice "
+                             "for the time range of the streak unit. "
+                             "Please modify csv file so it fits the possible choices for the "
+                             "time range of the streak unit. "
+                             "Values in file must be of format timeRange:triggerDelay (per line)."
+                             % timeRange)
+
+        new_dict[timeRange] = delay
+
+    # check all time ranges are there
+    if len(new_dict) == len(timeRange_choices):
+        return new_dict
+    else:
+        raise ValueError("The total number of %s time ranges in the loaded calibration file does not "
+                         "match the requested number of %s time ranges."
+                         % (len(new_dict), len(timeRange_choices)))

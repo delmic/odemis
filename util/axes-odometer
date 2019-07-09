@@ -30,7 +30,6 @@ from __future__ import division, absolute_import, print_function
 import argparse
 from collections import OrderedDict
 import logging
-import os
 import re
 import sys
 import gzip

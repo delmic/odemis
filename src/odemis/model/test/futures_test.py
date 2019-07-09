@@ -127,7 +127,7 @@ class TestExecutor(unittest.TestCase):
             f.task_canceller = self._canceller
             f._must_stop = threading.Event()
             r_letter1, r_letter2 = random.choice('abcxyz'), random.choice('abcxyz')
-            f = self.executor.submitf(set([r_letter1, r_letter2]), f, self._cancellable_task, f, 2)
+            f = self.executor.submitf({r_letter1, r_letter2}, f, self._cancellable_task, f, 2)
             f.add_done_callback(self._on_end_task)
             fs.append(f)
         time.sleep(10 * 2 + 1)  # in the worst case, there is a dependency between every task, so 2*10
@@ -153,7 +153,7 @@ class TestExecutor(unittest.TestCase):
             f.task_canceller = self._canceller
             f._must_stop = threading.Event()
             r_letter1, r_letter2 = random.choice('abcxyz'), random.choice('abcxyz')
-            f = self.executor.submitf(set([r_letter1, r_letter2]), f, self._cancellable_task, f, 2)
+            f = self.executor.submitf({r_letter1, r_letter2}, f, self._cancellable_task, f, 2)
             f.add_done_callback(self._on_end_task)
             fs.append(f)
         time.sleep(0.1)

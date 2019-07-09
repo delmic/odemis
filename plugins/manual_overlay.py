@@ -54,7 +54,7 @@ class ManualOverlayPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(ManualOverlayPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Manual corrections...", self.start)
+        self.addMenu("Data correction/Overlay corrections...", self.start)
         self._dlg = None
 
     def start(self):
@@ -148,7 +148,7 @@ class ManualOverlayPlugin(Plugin):
         views.extend(self.main_app.main_data.tab.value.tab_data_model.views.value)
 
         for v in views:
-            for sp in v.stream_tree.getStreams():  # stream or projection
+            for sp in v.stream_tree.getProjections():  # stream or projection
                 if isinstance(sp, DataProjection):
                     s = sp.stream
                 else:

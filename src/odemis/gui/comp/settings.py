@@ -51,8 +51,6 @@ class SettingsPanel(wx.Panel):
         default_msg = kwargs.pop('default_msg', "")
         super(SettingsPanel, self).__init__(*args, **kwargs)
 
-        assert isinstance(self.Parent, FoldPanelItem)
-
         self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self.SetForegroundColour(gui.FG_COLOUR_MAIN)
 

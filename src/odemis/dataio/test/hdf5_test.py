@@ -45,6 +45,7 @@ class TestHDF5IO(unittest.TestCase):
     def tearDown(self):
         # clean up
         try:
+            pass
             os.remove(FILENAME)
         except Exception:
             pass
@@ -238,8 +239,8 @@ class TestHDF5IO(unittest.TestCase):
         im = f["Acquisition0/ImageData/Image"]
         self.assertEqual(im[1, 0, 0, 1, 1], step)
         self.assertEqual(im.shape, data3d.shape)
-        self.assertEqual(im.attrs["CLASS"], "IMAGE")
-        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
+        self.assertEqual(im.attrs["CLASS"], b"IMAGE")
+        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], b"IMAGE_GRAYSCALE")
 
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
@@ -254,6 +255,69 @@ class TestHDF5IO(unittest.TestCase):
         im = numpy.array(f["Acquisition1/ImageData/Image"])
         subim = im[0, 0, 0] # just one channel
         self.assertEqual(subim.shape, size[-1::-1])
+
+    def testExportSpatialCube(self):
+        """
+        Check it's possible to export 3D spatial data
+        """
+        dtype = numpy.uint16
+        size3d = (512, 256, 100)  # X, Y, Z
+        size = (512, 256)
+        metadata3d = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake spec",
+                    model.MD_DESCRIPTION: "test3d",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, 2e-5),  # m/px
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        metadata = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "",  # check empty unicode strings
+                    model.MD_DESCRIPTION: "test",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, 2e-5),  # m/px
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_DWELL_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        ldata = []
+        # 3D data generation (+ metadata): gradient along the Z
+        data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
+        end = 2 ** metadata3d[model.MD_BPP]
+        lin = numpy.linspace(0, end, size3d[2], dtype=dtype)
+        lin.shape = (size3d[2], 1, 1)  # to be able to copy it on the first dim
+        data3d[:] = lin
+        ldata.append(model.DataArray(data3d, metadata3d))
+
+        # an additional 2D data, for the sake of it
+        ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
+
+        # export
+        hdf5.export(FILENAME, ldata)
+
+        # check data by reading it back
+        rdata = hdf5.read_data(FILENAME)
+
+        imr = rdata[0]
+        if imr.ndim > 3:
+            # Check CT dims are 1 and remove them
+            for s in imr.shape[:-3]:
+                self.assertEqual(s, 1)
+            imr.shape = imr.shape[-3:]
+        self.assertEqual(imr.shape, size3d[::-1])
+
+        self.assertEqual(imr.metadata[model.MD_DESCRIPTION], metadata3d[model.MD_DESCRIPTION])
+        self.assertEqual(imr.metadata[model.MD_POS], metadata3d[model.MD_POS])
+        self.assertEqual(imr.metadata[model.MD_PIXEL_SIZE], metadata3d[model.MD_PIXEL_SIZE])
+        self.assertEqual(imr.metadata[model.MD_ACQ_DATE], metadata3d[model.MD_ACQ_DATE])
+
+        self.assertEqual(imr[0, 0, 0], 0)
+        self.assertEqual(imr[-1, 0, 0], end)
 
     def testExportRGB(self):
         """
@@ -337,7 +401,7 @@ class TestHDF5IO(unittest.TestCase):
 
         # check format
         im = f["Acquisition0/ImageData/Image"]
-        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
+        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], b"IMAGE_GRAYSCALE")
 
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
@@ -351,8 +415,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
@@ -421,11 +484,13 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[blue[::-1]].tolist(), [0, 0, 255])
         self.assertAlmostEqual(im.metadata[model.MD_POS], thumbnail.metadata[model.MD_POS])
 
-    def testReadMDSpec(self):
+    def testReadAndSaveMDSpec(self):
         """
-        Checks that we can read back the metadata of an image
+        Checks that we can save and read back the metadata of a spectrum image.
         """
-        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
+        # TODO: write testcase for WL_LIST and MD_POLYNOMIAL
+        # create 2 simple greyscale images (sem overview, Spec): XY, XYZTC (XY ebeam pos scanned, C Spec info)
+        sizes = [(512, 256), (100, 110, 1, 1, 200)]  # different sizes to ensure different acquisitions
         # Create fake current over time report
         cot = [[time.time(), 1e-12]]
         for i in range(1, 171):
@@ -433,14 +498,14 @@ class TestHDF5IO(unittest.TestCase):
 
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "test",
+                     model.MD_DESCRIPTION: "test spectrum",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 2), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (1e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
-                     model.MD_LENS_MAG: 1200, # ratio
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -448,12 +513,12 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      #model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                      model.MD_OUT_WL: "pass-through",
-                     model.MD_POS: (1e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_EBEAM_CURRENT_TIME: cot,
                     },
                     ]
@@ -461,20 +526,20 @@ class TestHDF5IO(unittest.TestCase):
         dtype = numpy.dtype("uint8")
         ldata = []
         for i, s in enumerate(sizes):
-            a = model.DataArray(numpy.zeros(s[::-1], dtype), metadata[i])
+            a = model.DataArray(numpy.random.randint(0, 200, s[::-1], dtype), metadata[i])
             ldata.append(a)
 
         # thumbnail : small RGB completely red
         tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
-        thumbnail[:, :, 1] += 255 # green
+        thumbnail[:, :, 1] += 255  # green
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
 
         # check it's here
-        st = os.stat(FILENAME) # this test also that the file is created
+        st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 0)
 
         # check data
@@ -506,9 +571,6 @@ class TestHDF5IO(unittest.TestCase):
                     self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
                 else:
                     self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
-            elif model.MD_WL_LIST in md:
-                wl = md[model.MD_WL_LIST]
-                self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 # Note: technically, it could be a list or tuple and still be fine
@@ -524,6 +586,129 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
 # TODO: test compatibility with Hyperspy for loading spectra (exported by Odemis)
+
+    def testReadAndSaveMDTempSpec(self):
+        """
+        Checks that we can save and read back the metadata of a temporal spectrum image
+        """
+        # create 2 simple greyscale images (sem overview, tempSpec): XY, XYZTC (XY ebeam pos scanned, TC tempSpec image)
+        sizes = [(512, 256), (100, 110, 1, 50, 60)]  # different sizes to ensure different acquisitions
+        # Create fake current over time report
+        cot = [[time.time(), 1e-12]]
+        for i in range(1, 171):
+            cot.append([cot[0][0] + i, i * 1e-12])
+
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test temporal spectrum",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
+                     },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake temp spec",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     # model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_TIME_LIST: [1e-9 * i for i in range(sizes[1][-2])],
+                     model.MD_STREAK_MCPGAIN: 3,
+                     model.MD_STREAK_MODE: True,
+                     model.MD_STREAK_TIMERANGE: 0.001,  # sec
+                     model.MD_TRIGGER_DELAY: 0.0000001,  # sec
+                     model.MD_TRIGGER_RATE: 1000000,  # Hz
+                     model.MD_OUT_WL: "pass-through",
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_EBEAM_CURRENT_TIME: cot,
+                     },
+                    ]
+        # create 2 simple greyscale images
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        for i, s in enumerate(sizes):
+            a = model.DataArray(numpy.random.randint(0, 200, s[::-1], dtype), metadata[i])
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
+            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+            if model.MD_LENS_MAG in md:
+                self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+
+            # None of the images are using light => no MD_IN_WL
+            self.assertFalse(model.MD_IN_WL in im.metadata,
+                             "Reporting excitation wavelength while there is none")
+
+            if model.MD_WL_POLYNOMIAL in md:
+                pn = md[model.MD_WL_POLYNOMIAL]
+                # 2 formats possible
+                if model.MD_WL_LIST in im.metadata:
+                    l = ldata[i].shape[0]
+                    npn = polynomial.Polynomial(pn,
+                                                domain=[0, l - 1],
+                                                window=[0, l - 1])
+                    wl = npn.linspace(l)[1]
+                    self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+                else:
+                    self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+            elif model.MD_WL_LIST in md:
+                wl = md[model.MD_WL_LIST]
+                self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_TIME_LIST in md:
+                tm = md[model.MD_TIME_LIST]
+                self.assertListEqual(im.metadata[model.MD_TIME_LIST], tm)
+            if model.MD_STREAK_TIMERANGE in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_TIMERANGE], md[model.MD_STREAK_TIMERANGE])
+            if model.MD_STREAK_MCPGAIN in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_MCPGAIN], md[model.MD_STREAK_MCPGAIN])
+            if model.MD_STREAK_MODE in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_MODE], md[model.MD_STREAK_MODE])
+            if model.MD_TRIGGER_DELAY in md:
+                self.assertEqual(im.metadata[model.MD_TRIGGER_DELAY], md[model.MD_TRIGGER_DELAY])
+            if model.MD_TRIGGER_RATE in md:
+                self.assertEqual(im.metadata[model.MD_TRIGGER_RATE], md[model.MD_TRIGGER_RATE])
+
+            if model.MD_EBEAM_CURRENT_TIME in md:
+                # Note: technically, it could be a list or tuple and still be fine
+                # but we know that hdf5 returns a list of list
+                cot = md[model.MD_EBEAM_CURRENT_TIME]
+                self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT_TIME], cot)
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
     def testReadAndSaveMDAR(self):
         """
@@ -885,7 +1070,7 @@ class TestHDF5IO(unittest.TestCase):
         # It should be within at least one of the bands
         owl = rmd[model.MD_OUT_WL]  # nm
         for eowl in emd[model.MD_OUT_WL]:
-            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+            if eowl[0] <= owl[0] and owl[1] <= eowl[-1]:
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))
@@ -901,7 +1086,7 @@ class TestHDF5IO(unittest.TestCase):
 
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake monochromator",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_DESCRIPTION: "test",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_HW_VERSION: "Unknown",
@@ -913,7 +1098,7 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "etd",
                      model.MD_ACQ_DATE: time.time(),
@@ -924,7 +1109,7 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "Anchor region",
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
@@ -978,7 +1163,7 @@ class TestHDF5IO(unittest.TestCase):
         """
         Checks that we can read back the metadata of an acquisition with time correlation
         """
-        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 5000)]
+        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 65000)]
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -997,8 +1182,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 16,
                      model.MD_BINNING: (1, 1),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-6),  # m/px
-                     model.MD_PIXEL_DUR: 1e-9,  # s
-                     model.MD_TIME_OFFSET:-20e-9,  # s, of the first time value
+                     model.MD_TIME_LIST: [1e-9 * i + 20e-9 for i in range(shapes[1][1])],
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_DWELL_TIME: 1.2,  # s
@@ -1010,8 +1194,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 16,
                      model.MD_BINNING: (1, 128),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
-                     model.MD_PIXEL_DUR: 10e-9,  # s
-                     model.MD_TIME_OFFSET:-500e-9,  # s, of the first time value
+                     model.MD_TIME_LIST: [10e-12 * i - 500e-12 for i in range(shapes[2][1])],
                      model.MD_OUT_WL: (500e-9, 600e-9),
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_DWELL_TIME: 1.2,  # s
@@ -1064,12 +1247,8 @@ class TestHDF5IO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            if model.MD_PIXEL_DUR in md:
-                pxd = md[model.MD_PIXEL_DUR]
-                self.assertEqual(im.metadata[model.MD_PIXEL_DUR], pxd)
-            if model.MD_TIME_OFFSET in md:
-                tof = md[model.MD_TIME_OFFSET]
-                self.assertEqual(im.metadata[model.MD_TIME_OFFSET], tof)
+            if model.MD_TIME_LIST in md:
+                self.assertIn(model.MD_TIME_LIST, list(im.metadata.keys()))
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

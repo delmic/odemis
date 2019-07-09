@@ -38,7 +38,12 @@ def get_global_settings_entries(settings_cont):
     settings_cont (SettingsBarController)
     return (list of SettingsEntry): all the SettingsEntry on the settings controller
     """
-    return settings_cont.entries
+    entries = []
+    for e in settings_cont.entries:
+        if hasattr(e, "vigilattr") and e.vigilattr is not None and not e.vigilattr.readonly:
+            entries.append(e)
+
+    return entries
 
 
 def get_local_settings_entries(stream_cont):
@@ -56,8 +61,10 @@ def get_local_settings_entries(stream_cont):
         if hasattr(stream_cont.stream, vaname):
             local_vas.add(getattr(stream_cont.stream, vaname))
 
-    for e in stream_cont.entries.values():
-        if hasattr(e, "vigilattr") and e.vigilattr in local_vas:
+    for e in stream_cont.entries:
+        if (hasattr(e, "vigilattr") and e.vigilattr in local_vas
+            and e.vigilattr is not None and not e.vigilattr.readonly
+           ):
             logging.debug("Added local setting %s", e.name)
             local_entries.append(e)
 
@@ -84,7 +91,7 @@ def apply_preset(preset):
     # => do it in order: binning | scale > resolution > translation
 
     def apply_presets_named(name):
-        for se, value in preset.items():
+        for se, value in list(preset.items()):  # need to create separate list because elements can be deleted
             if se.name == name:
                 logging.debug("Updating preset %s -> %s", se.name, value)
                 try:
@@ -133,6 +140,7 @@ def preset_hq(entries):
     ret = {}
     # TODO: also handle AxisEntry ?
     for entry in entries:
+        # TODO: not needed anymore?
         if (not hasattr(entry, "vigilattr") or entry.vigilattr is None or
             entry.vigilattr.readonly or entry.value_ctrl is None
            ):
@@ -145,7 +153,7 @@ def preset_hq(entries):
             # if resolution => get the best one
             try:
                 value = entry.vigilattr.range[1] # max
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 pass
 
         elif entry.name == "dwellTime":
@@ -179,10 +187,10 @@ def preset_hq(entries):
             prev_val = entry.vigilattr.value
             try:
                 value = entry.vigilattr.range[0]  # min
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 try:
                     value = min(entry.vigilattr.choices)
-                except (AttributeError, model.NotApplicableError):
+                except AttributeError:
                     pass
             # Compensate decrease in energy by longer exposure time
             et_entries = _get_entries(entries, entry.hw_comp, "exposureTime")
@@ -207,10 +215,10 @@ def preset_hq(entries):
             # the smallest, the less noise (and slower, but we don't care)
             try:
                 value = entry.vigilattr.range[0]  # min
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 try:
                     value = min(entry.vigilattr.choices)
-                except (AttributeError, model.NotApplicableError):
+                except AttributeError:
                     pass
         # rest => as is
 

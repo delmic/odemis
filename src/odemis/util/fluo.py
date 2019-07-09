@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # various functions to help with computations related to fluorescence microscopy
 
 from __future__ import division
+from past.builtins import basestring # For Python 2 & 3
 
 import collections
 import logging
@@ -232,7 +233,7 @@ def to_readable_band(band):
     # if multi-band => center, center... nm
     #   ex: 453, 568, 968 nm
     if isinstance(band, basestring):
-        return unicode(band)
+        return band
     if not isinstance(band[0], collections.Iterable):
         b = band
         center_nm = int(round(get_center(b) * 1e9))

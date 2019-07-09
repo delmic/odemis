@@ -28,11 +28,11 @@ MD_ACQ_DATE = "Acquisition date" # s since epoch
 MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus
-MD_PIXEL_SIZE = "Pixel size" # (m, m)
+MD_PIXEL_SIZE = "Pixel size"  # (m, m) or (m, m, m) if the data has XY or XYZ dimensions
 MD_SHEAR = "Shear"  # float, vertical shear (0, means no shearing)
 MD_FLIP = "Flip"
 MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
-MD_SAMPLES_PER_PIXEL = "Samples per pixel" # samples (number of samples acquired for each pixel) default: 1
+MD_INTEGRATION_COUNT = "Integration Count"  # number of samples/images acquired/integrated; default: 1
 MD_HW_VERSION = "Hardware version" # str
 MD_SW_VERSION = "Software version" # str
 MD_HW_NAME = "Hardware name" # str, product name of the hardware component (and s/n)
@@ -44,7 +44,9 @@ MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMO
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px, maximum resolution that can be acquire by the detector
 MD_SENSOR_TEMP = "Sensor temperature" # C
-MD_POS = "Centre position" # (m, m), location of the picture centre. X goes right, and Y goes up
+MD_POS = "Centre position"  # (m, m) or (m, m, m) if the data has XY or XYZ dimensions.
+# It's the location of the picture *centre*. X goes "right" (ie, pixel index increases),
+# Y goes "up" (ie, pixel index decreases), and Z goes "top" (ie, pixel index increases).
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
 MD_ROTATION = "Rotation" # radians (0<=float<2*PI) rotation applied to the image (from its center) counter-clockwise
 # Note that the following two might be a set of ranges
@@ -63,6 +65,12 @@ MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage" # V (float), voltage use
 MD_EBEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the electron beam (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)
 
+MD_STREAK_TIMERANGE = "Streak Time Range"  # (s) Time range for one streak/sweep
+MD_STREAK_MCPGAIN = "Streak MCP Gain"  # (int) Multiplying gain for microchannel plate
+MD_STREAK_MODE = "Streak Mode"  # (bool) Mode of streak camera (Focus (Off) or Operate (On))
+MD_TRIGGER_DELAY = "Streak Trigger Delay"  # (float) Delay A between ext. trigger and starting of the streak/sweeping
+MD_TRIGGER_RATE = "Streak Repetition Rate"  # (Hz) Repetition Rate of the trigger signal
+
 # This one is a kind of a hack, to store the evolution of the current over the time
 # of an acquisition.
 # tuple of (float, float) -> s since epoch, A
@@ -73,7 +81,9 @@ MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 # not be used simultaneously.
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
+MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 
+# Deprecrated: use MD_TIME_LIST
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
 MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
 
@@ -88,6 +98,9 @@ MD_AT_CL = "Cathodoluminescence"
 MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
+MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
+MD_AT_TEMPORAL = "Temporal"
+MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
@@ -126,6 +139,7 @@ MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
 MD_SHEAR_COR = "Shear cor"  # float, vertical shear to be subtracted from MD_SHEAR
+MD_BASELINE_COR = "Baseline cor"  # value, to be added to MD_BASELINE
 
 # The following metadata is the correction metadata for the Phenom image and
 # spot shift as calculated by delphi.DelphiCalibration.
@@ -133,6 +147,11 @@ MD_RESOLUTION_SLOPE = "Resolution slope"  # (float, float) resolution related SE
 MD_RESOLUTION_INTERCEPT = "Resolution intercept"  # (float, float) resolution related SEM image shift, intercept of linear fit
 MD_HFW_SLOPE = "HFW slope"  # (float, float) HFW related SEM image shift, slope of linear fit
 MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of HFW
+MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping time range to trigger delay in streak camera
+
+# The following metadata is for correction on the Nikon Confocal
+# dict (int (resolution X) -> dict (float (dwell time) -> tuple of 4 floats (correction factors)))
+MD_SHIFT_LOOKUP = "Pixel shift compensation table"
 
 # The following metadata is used to store specific known positions for the
 # actuators.

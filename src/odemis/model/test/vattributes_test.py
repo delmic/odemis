@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import long
 import logging
 import numpy
 from odemis import model
@@ -30,7 +31,6 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -63,6 +63,15 @@ class VigilantAttributeTest(unittest.TestCase):
 
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
+        
+    def test_del(self):
+        """
+        Test that the VA is properly deleted.
+        """
+        prop = model.IntVA(2)
+        ref = weakref.ref(prop)
+        del prop
+        self.assertEqual(ref(), None)
 
     def test_pretty_str(self):
         prop = model.IntVA(2)
@@ -188,7 +197,7 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertEqual(self.called, 12, "Called has value %s" % self.called)
 
         # Item assignment
-        prop.value = range(5) # +1
+        prop.value = list(range(5))  # +1
         prop.value[1] = 5 # +1
         prop.value[1] = 5 # +0
         self.assertEqual(prop.value, [0, 5, 2, 3, 4])
@@ -273,9 +282,9 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertIsInstance(prop2.value, int)
 
     def test_enumerated(self):
-        prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        prop = model.StringEnumerated("a", {"a", "c", "bfds"})
         self.assertEqual(prop.value, "a")
-        self.assertEqual(prop.choices, set(["a", "c", "bfds"]))
+        self.assertEqual(prop.choices, {"a", "c", "bfds"})
 
         self.called = 0
         prop.subscribe(self.callback_test_notify)
@@ -289,10 +298,10 @@ class VigilantAttributeTest(unittest.TestCase):
         except IndexError:
             pass # as it should be
 
-        prop.choices = set(["a", "c", "b", 5])
+        prop.choices = {"a", "c", "b", 5}
         assert(prop.value == "c")
         try:
-            prop.choices = set(["a", "b"])
+            prop.choices = {"a", "b"}
             self.fail("Assigning choices not containing current value should not be allowed.")
         except IndexError:
             pass # as it should be
@@ -317,6 +326,30 @@ class VigilantAttributeTest(unittest.TestCase):
         prop = model.VAEnumerated((1, 2), {(1, 2): "aaa", (3, 5): "doo"})
         for v in prop.choices:
             prop.value = v # they all should work
+
+        # It's also allowed to use tuples as choices, which contain no numbers
+        prop = model.VAEnumerated((1, 1), {(1, 1), (4, 4), (5, "aaa")})
+        prop.value = prop.clip((3, 3))
+        # should find the closest value
+        self.assertEqual(prop.value, (4, 4))
+        for v in prop.choices:
+            prop.value = v  # they all should work
+
+        prop = model.VAEnumerated((1, "aaa"), {(1, "aaa"), (3, "bbb"), (4, "ccc")})
+        prev_value = prop.value
+        prop.value = prop.clip((3, 3))
+        # should not find a closest value, but return old value
+        self.assertEqual(prop.value, prev_value)
+        for v in prop.choices:
+            prop.value = v  # they all should work
+
+        prop = model.VAEnumerated((1, "aaa"), {(1, "aaa"), (3, "bbb"), (4, "ccc")})
+        prev_value = prop.value
+        prop.value = prop.clip((5, "ddd"))
+        # should not find a closest value as not all values in tuple are numbers, but return old value
+        self.assertEqual(prop.value, prev_value)
+        for v in prop.choices:
+            prop.value = v  # they all should work
 
     def test_resolution(self):
         va = model.ResolutionVA((10,10), ((1,1), (100, 150)))
@@ -351,7 +384,7 @@ class VigilantAttributeTest(unittest.TestCase):
         """
         TupleContinuous
         """
-        va = model.TupleContinuous((0.1,10,.5), ((-1.3,12,0), (100.,150.,1.)), cls=(int, long, float))
+        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 12, 0), (100., 150., 1.)), cls=(int, long, float))
         self.assertEqual(va.value, (0.1,10,.5))
         self.assertEqual(va.range, ((-1.3,12,0), (100.,150.,1.)))
 

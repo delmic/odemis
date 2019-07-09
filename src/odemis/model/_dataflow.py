@@ -25,11 +25,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, print_function
 
+from past.builtins import basestring
 import Pyro4
-import inspect
 import logging
 import numpy
 from odemis.model import _metadata
+from odemis.util import inspect_getmembers
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
@@ -208,7 +209,7 @@ class DataFlow(DataFlowBase):
         Equivalent to __getstate__() of the proxy version
         """
         proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
-        return (proxy_state, _core.dump_roattributes(self), self.max_discard)
+        return proxy_state, _core.dump_roattributes(self), self.max_discard
 
     @property
     def max_discard(self):
@@ -372,13 +373,13 @@ class DataFlow(DataFlowBase):
                     # TODO: if it's just rotated, send the info to reconstruct it
                     # and avoid the memory copy
                     raise TypeError("Need C ordered array")
-                self.pipe.send(numpy.getbuffer(data), copy=False)
+                self.pipe.send(memoryview(data), copy=False)
             except TypeError:
                 # not all buffers can be sent zero-copy (e.g., has strides)
                 # try harder by copying (which removes the strides)
                 logging.debug("Failed to send data with zero-copy")
                 data = numpy.require(data, requirements=["C_CONTIGUOUS"])
-                self.pipe.send(numpy.getbuffer(data), copy=False)
+                self.pipe.send(memoryview(data), copy=False)
 
         # publish locally
         DataFlowBase.notify(self, data)
@@ -415,7 +416,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     def __getstate__(self):
         # must permit to recreate a proxy to a data-flow in a different container
         proxy_state = Pyro4.Proxy.__getstate__(self)
-        return (proxy_state, _core.dump_roattributes(self), self.max_discard)
+        return proxy_state, _core.dump_roattributes(self), self.max_discard
 
     def __setstate__(self, state):
         proxy_state, roattributes, self.max_discard = state
@@ -448,7 +449,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         # start the remote subscription
         if not self._thread:
             self._create_thread()
-        self._commands.send("SUB")
+        self._commands.send(b"SUB")
         self._commands.recv() # synchronise
 
         # send subscription to the actual dataflow
@@ -459,7 +460,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     def stop_generate(self):
         # stop the remote subscription
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-        self._commands.send("UNSUB") # asynchronous (necessary to not deadlock)
+        self._commands.send(b"UNSUB")  # asynchronous (necessary to not deadlock)
 
     def __del__(self):
         try:
@@ -472,7 +473,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
                                           "are still subscribers because dataflow '%s' is going out of context",
                                           self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-                    self._commands.send("STOP")
+                    self._commands.send(b"STOP")
                     self._thread.join(1)
                 self._commands.close()
                 # Not needed: called when garbage-collected and it's dangerous
@@ -541,16 +542,16 @@ class SubscribeProxyThread(threading.Thread):
                 # process commands
                 if self._commands in socks:
                     message = self._commands.recv()
-                    if message == "SUB":
-                        self._data.setsockopt(zmq.SUBSCRIBE, '')
+                    if message == b"SUB":
+                        self._data.setsockopt(zmq.SUBSCRIBE, b'')
                         logging.debug("Subscribed to remote dataflow %s", self.uri)
-                        self._commands.send("SUBD")
-                    elif message == "UNSUB":
-                        self._data.setsockopt(zmq.UNSUBSCRIBE, '')
+                        self._commands.send(b"SUBD")
+                    elif message == b"UNSUB":
+                        self._data.setsockopt(zmq.UNSUBSCRIBE, b'')
                         if logging:
                             logging.debug("Unsubscribed from remote dataflow %s", self.uri)
                         # no confirmation (async)
-                    elif message == "STOP":
+                    elif message == b"STOP":
                         return
                     else:
                         logging.warning("Received unknown message %s", message)
@@ -601,7 +602,7 @@ class SubscribeProxyThread(threading.Thread):
 
 def unregister_dataflows(self):
     # Only for the "DataFlow"s, the real objects, not the proxys
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlow)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, DataFlow)):
         value._unregister()
 
 def dump_dataflows(self):
@@ -614,7 +615,7 @@ def dump_dataflows(self):
     """
     dataflows = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, DataFlowBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         dataflows[name] = value
@@ -633,7 +634,7 @@ def DataFlowSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:
         # only return a proxy if the object is a registered pyro object
-        return (DataFlowProxy, (daemon.uriFor(self),), self._getproxystate())
+        return DataFlowProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 
@@ -717,7 +718,7 @@ class EventProxy(EventBase, Pyro4.Proxy):
 
 
 def unregister_events(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, Event)):
         daemon = getattr(value, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(value)
@@ -732,7 +733,7 @@ def dump_events(self):
     """
     events = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, EventBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, EventBase)):
         if not hasattr(value, "_pyroDaemon"):
             daemon.register(value)
         events[name] = value
@@ -753,7 +754,7 @@ def EventSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:
         # only return a proxy if the object is a registered pyro object
-        return (EventProxy, (daemon.uriFor(self),), self._getproxystate())
+        return EventProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 

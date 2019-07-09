@@ -3,16 +3,15 @@ How to install Odemis
 
 = Installing the dependencies =
 
-You need Ubuntu 12.04 (x86 - 32/64 bits). 
+You need Ubuntu 16.04 (x86 - 32/64 bits).
 The dependencies can be found in the file debian/control. Basically, they can be
 installed with:
-sudo apt-get install python-imaging python-yaml python-serial python-zmq \
+sudo apt-get install python-pil python-yaml python-serial python-zmq \
 python-concurrent.futures python-scipy python-decorator cgroup-bin \
-python-libtiff python-comedilib python-h5py \ # libhdf5-serial-1.8.4 \
-libtiff4-dev \ # or libtiff5-dev
+python-libtiff python-comedilib python-h5py libtiff5-dev python-future \
 python-pkg-resources python-netifaces python-cairo python-numpy python-scipy \
 python-decorator python-xdg python-suds python-matplotlib python-opencv \
-python-wxgtk3.0 python-serial python-evdev python-notify python-psutil \
+python-wxgtk4.0 python-serial python-evdev python-notify2 python-psutil \
 graphicsmagick cgroup-bin python2-pyro4 authbind python-setuptools cython
 
 Some of these packages need newer version than what is available in the default
@@ -24,42 +23,15 @@ sudo add-apt-repository ppa:delmic-soft/odemis
 
 Otherwise, follow the instructions below.
 
-== wxPython 3.0 ==
+== wxPython ==
 
-- Make sure the following dependencies are installed:
-sudo apt-get install libgtk2.0-dev freeglut3 freeglut3-dev freeglut3-dbg libgl1-mesa-glx libglu1-mesa libgl1-mesa-dev libglu1-mesa-dev libgstreamer0.10-dev libgconf2-dev libsdl1.2-dev zlib1g-dev libjpeg-dev libtiff4-dev python-gst0.10-dev python-dev
-
-Download wxPython 3.0 and untar:
-wget http://downloads.sourceforge.net/wxpython/wxPython-src-3.0.1.1.tar.bz2
-tar xf wxPython-src-3.0.1.1.tar.bz2
-
-- Compile:
-cd wxPython
-sudo python2.7 build-wxpython.py --build_dir=../build --install
-
-- *important!* Update library database:
-sudo ldconfig
-
-= H5Py 2.1 =
-This is require to support DimensionScales.
-
-sudo apt-get install libhdf5-serial-dev cython
-git clone git://github.com/h5py/h5py.git
-cd h5py
-python api_gen.py
-cd ..
-python setup.py build
-sudo python setup.py install
+The wxPython versions 3.0 and 4.0 are supported. However, version 4.0 compiled
+with GTK3 is known to have some small aspects issues, so GTK2 is prefered.
 
 = Installing Comedi =
-Used to access the DAQ board to connect to the SEM. The version of comedi
-provided in Ubuntu 12.04 is version 0.8. It should work, but if not you can also
-try to upgrade to 0.10. See below for the instructions. The driver is only
-tested on the NI PCI 6251, and will only work on a NI board or the comedi_test simulator
-(adaptation for other boards should be light, as long as Comedi support
-synchronous input/output).
 
-Once Comedi is installed. You need to calibrate the DAQ board (about once per year).
+Used to access the DAQ board to connect to the SEM. It's also used on some simulators,
+with the comedi_test driver. You need to calibrate the DAQ board (about once per year).
 
 For the NI PCI 6251:
 sudo comedi_soft_calibrate -f /dev/comedi0
@@ -67,38 +39,21 @@ sudo comedi_soft_calibrate -f /dev/comedi0
 For some other boards, which are calibrated in hardware, you need to do:
 sudo comedi_calibrate -f /dev/comedi0
 
-Warning: you probably want to ensure your kernel is >= 3.11 or has the following two
-patches, otherwise it might crash:
-http://article.gmane.org/gmane.linux.kernel.stable/57779/raw
-http://article.gmane.org/gmane.linux.kernel.stable/57796/raw
 
-== Installing comedilib 0.10.1 ==
-Ubuntu 12.04 has a too old version of comedi (v 0.8). Version 0.10 or higher is required.
-git clone git://comedi.org/git/comedi/comedilib.git
-sudo apt-get install autoconf libltdl-dev flex byacc python-dev swig
-cd comedilib
-./autogen.sh
-./configure
-make -j
-sudo make install
-
-== Installing comedi_calibrate ==
-git clone git://comedi.org/git/comedi/comedi_calibrate.git
-sudo apt-get install libboost-dev libboost-program-options-dev libgsl0-dev
-cd comedi_calibrate
-./autogen.sh
-./configure
-make -j
-sudo make install
-
-== Loading the comedi simulator driver ==
-Needs to be done after every boot.
+To load the comedi simulator driver, you can type the following (once, after every boot):
 sudo modprobe comedi comedi_num_legacy_minors=4
 sudo modprobe comedi_test
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+sudo comedi_config /dev/comedi1 comedi_test 100000,100000
 
-Note: if you use this simulator, you probably want to ensure you have a kernel >= 3.2.38 or
->= 3.5.7.4, as earlier versions are known to crash.
+In order for this change to be applied at every reboot, add the following lines to /etc/rc.local (before the "exit 0" line):
+sudo gedit /etc/rc.local
+
+modprobe comedi comedi_num_legacy_minors=4
+modprobe comedi_test
+comedi_config /dev/comedi0 comedi_test 1000000,1000000
+comedi_config /dev/comedi1 comedi_test 100000,100000
+
 
 = Installing Odemis =
 
@@ -109,7 +64,7 @@ git clone git://github.com/delmic/odemis.git
 
 Create a "odemis" group and add all the necessary users to it:
 sudo addgroup odemis
-sudo adduser replace_by_login_name odemis
+sudo adduser $(whoami) odemis
 
 (You need to log out to get the user in the new group)
 
@@ -118,107 +73,23 @@ cd odemis
 python ./setup.py build
 sudo ./setup.py install --root=/ --install-scripts=/usr/local/bin/ --install-data=/usr/ --single-version-externally-managed
 
-To get the fluorophores database, you can run this command:
+To get the fluorophores database (for the SECOM/DELPHI), you can run this command:
 ./util/getfluodb.py
 Then copy all the fluodb directory to /usr/share/odemis/fluodb/
 
 = Installing the vendor device drivers =
+Several hardware require a dedicated driver (provided by the hardware manufacturer).
+to be installed. That's the case in particular of the Andor cameras and spectrographs (libandor.so.2 and libatcore.so.3).
+The IDS uEye cameras (libueye_api.so.1) and the PicoQuant time-correlator (libph300.so) also need a driver.
 
-== Andor Clara camera ==
-
-Note that it's recommended to plug the USB cable to a separate USB hub (to
-ensure full bandwidth availability). To check this you can use:
-lsusb -t
-
-- Install the driver:
-  cd andor-2.97
-  sudo ./install_andor  # Install "5 (All USB products)"
-
-On Linux/Ubuntu you need to install libusb-dev (or have a link from libusb.so to
-libusb-0.1.so.4).
-
-Also the the permissions of all the files must be allowed for normal user:
-everything is installed by default as root only, so nothing can work from the
-normal user account. See /usr/local/*/*andor*
-TODO: come up with a nice command to change the owner of those files.
-Finally, fix /etc/udev/rules.d/andor.rules to read as:
-ATTRS{idVendor}=="136e", MODE="0666"
-
-For example:
-sudo gedit /etc/udev/rules.d/andor.rules
-# add the line and save the file
-sudo udevadm control --reload-rules
+Please refer to the manufacturer documentation on how to install these drivers.
 
 
-== Andor Neo camera (used for camera simulator too) ==
-
-- Install Andor SDK v3.7
-
-On Linux, the bitflow driver has to be reinstalled (recompiled) each time the
-kernel is updated. Note that it is only required if you are using the real camera,
-the simulator doesn't need this module.
-
-== Princeton Instruments PVCam cameras ==
-Pixis and cameras connected via a ST133 controller are supported (only via USB connection).
-
-The official driver is not working on new Linux kernels (> 2.6.31). You need to get the
-updated driver version.
-Either install pvcam-pilk-usb-dkms_1.0.3-1ubuntu1_all.deb:
-sudo apt-get install dkms
-sudo dpkg -i pvcam-pilk-usb-dkms_1.0.3-1ubuntu1_all.deb
-
-Or install it from source (needs to be recompiled after each kernel update):
-git clone https://github.com/delmic/pvcam-pilk.git
-cd pvcam-pilk/usb
-make
-sudo cp rspiusb.ko /lib/modules/$(uname -r)/updates/
-sudo depmod
-
-Note that the driver seems to not always work with USB3 ("SS"), so make sure
-the camera is connected to a USB2 slot. Also, it doesn't always work when
-plugged via a hub. So ensure that it is connected on USB plug directly linked
-to the motherboard. Use "lsusb -t" to check, and avoid the front panel USB
-plugs in general.
-
-Then install the libpvcam library from PI, as can be found on their site:
-wget ftp://ftp.piacton.com/Public/Software/Official/Linux/libpvcam.so.2.7.4.2
-sudo cp libpvcam.so.2.7.4.2 /usr/lib
-sudo ln -s libpvcam.so.2.7.4.2 /usr/lib/libpvcam.so
-
-== Physik Instrumente C-170 (Redstone) piezo-motor controllers ==
-
-Nothing specific. Make sure that the normal user has permissions to access the
-serial port. For example, if it is a USB serial port adapter check the
-permissions of /dev/ttyUSB0. Typically, you need to do this:
-sudo adduser replace_by_login_name dialout
-
-For Linux: make sure you copy the content of install/linux/ to / and run:
-sudo udevadm control --reload-rules
-
-== Physik Instrumente E-861 piezo-motor controllers ==
-
-Nothing specific. Plug one via the USB cable to the computer and the other ones
-in daisy chain to each other. At least one of the controller must have address
-1.
-
-For Linux: make sure you copy the content of install/linux/ to /:
-sudo install install/linux/etc/udev/rules.d/99-pi-fixed.rules /etc/udev/rules.d/
-and run:
-sudo udevadm control --reload-rules
-
-On old versions of Linux (before 3.2.7), you need to create a file
-/etc/udev/rules.d/99-usbftdi.rules with:
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbin/modprobe -q ftdi-sio product=0x1008 vendor=0x1a72"
-
-For newer versions of Linux, to force using a FTDI device, you need to do the following:
-sudo modprobe ftdi-sio
-sudo sh -c "echo 1a72 1008 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id"
-
-= Configuring the instantiation file =
-This file describes the available hardware for Odemis. Basically, it lists for each
+= Configuring the microscope file =
+The "microscope" file describes the available hardware for Odemis. Basically, it lists for each
 hardware, which driver to use and the parameters required. It's following the
-YAML format (similar to JSON). See the back-end specification for precise syntax
-and example files.
+YAML format (similar to JSON). See the back-end specification in the developer
+manual (in doc/develop) for precise syntax and, the example files in install/linux/usr/share/odemis .
 
 To get inspired when starting a new file, you can use "odemis-cli --scan" to
 detect some of the hardware connected.

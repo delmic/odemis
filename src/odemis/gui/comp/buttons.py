@@ -172,12 +172,15 @@ class BtnMixin(object):
         # system background
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
+        if bmpLabel is None:
+            self.bmpLabel = self._create_main_bitmap()
+
         # Clear the hovering attributes
         self.bmpHover = None
         self.hovering = None
 
         # Previous size, used to check if bitmaps should be recreated
-        self.previous_size = (0, 0)
+        self.previous_size = self.Size
 
         # Set the font size to the default. This will be overridden if another font (size) is
         # defined in the XRC file
@@ -217,10 +220,12 @@ class BtnMixin(object):
 
         self.Refresh()
 
-    def OnSize(self, _):
+    def OnSize(self, evt):
         if self.Size != self.previous_size and self.height:
             self._reset_bitmaps()
             self.previous_size = self.Size
+
+        super(BtnMixin, self).OnSize(evt)
 
     def SetLabel(self, label):
         super(BtnMixin, self).SetLabel(label)
@@ -409,18 +414,19 @@ class BtnMixin(object):
         dc.DrawBitmap(bmp, 0, 0, True)
         self.DrawText(dc, width, height)
 
-    def DrawText(self, dc, width, height, dx=0, dy=0):
+    def DrawText(self, dc, width, height, dx=0, dy=0, text_colour=None):
 
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
-        if self.fg_colour_set:
-            text_colour = self.GetForegroundColour()
-        else:
-            if self.IsEnabled():
-                text_colour = self.btns[self.face_colour]['text_colour']
+        if text_colour is None:
+            if self.fg_colour_set:
+                text_colour = self.GetForegroundColour()
             else:
-                text_colour = self.btns[self.face_colour]['text_col_dis']
+                if self.IsEnabled():
+                    text_colour = self.btns[self.face_colour]['text_colour']
+                else:
+                    text_colour = self.btns[self.face_colour]['text_col_dis']
 
         dc.SetTextForeground(text_colour)
 
@@ -503,7 +509,17 @@ class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
 
 
 class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
-    pass
+
+    def __init__(self, *args, **kwargs):
+        self.active_colour = kwargs.pop("active_colour", None)
+        super(ImageTextToggleButton, self).__init__(*args, **kwargs)
+
+    def DrawText(self, dc, width, height, dx=0, dy=0):
+        if self.active_colour and self.GetValue():
+            text_colour = self.active_colour
+        else:
+            text_colour = None
+        super(ImageTextToggleButton, self).DrawText(dc, width, height, dx=0, dy=0, text_colour=text_colour)
 
 
 class ImageStateButton(ImageToggleButton):
@@ -710,6 +726,7 @@ class TabButton(GraphicRadioButton):
 
     def DrawLabel(self, *args, **kwargs):
         super(TabButton, self).DrawLabel(*args, **kwargs)
+
 
 class ColourButton(ImageButton):
     """ An ImageButton that has a single colour background that can be altered """

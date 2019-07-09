@@ -26,6 +26,8 @@ This module contains functions that help in the generation of dynamic configurat
 
 from __future__ import division
 
+from builtins import str
+from past.builtins import basestring, long
 from collections import OrderedDict
 import collections
 import logging
@@ -35,7 +37,6 @@ from odemis import util
 import odemis.gui
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.model import NotApplicableError
 from odemis.util import fluo
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
@@ -78,7 +79,7 @@ def resolution_from_range(comp, va, conf, init=None):
                 break
 
         return OrderedDict(tuple((v, "%d x %d" % v) for v in sorted(choices)))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val)}
 
 
@@ -102,7 +103,7 @@ def binning_1d_from_2d(comp, va, conf):
     try:
         nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
         choices = {cur_val[0]}
-        minbin = max(va.range[0])
+        minbin = max(1, max(va.range[0]))  # Force minimum binning 1 (for scanners with scale < 1)
         maxbin = min(va.range[1])
         if "range_1d" in conf:
             conf_rng = conf["range_1d"]
@@ -128,7 +129,7 @@ def binning_1d_from_2d(comp, va, conf):
 
         choices = sorted(list(choices))
         return OrderedDict(tuple(((v, v), str(int(v))) for v in choices))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val[0])}
 
 
@@ -158,7 +159,7 @@ def binning_firstd_only(comp, va, conf):
 
         choices = sorted(list(choices))
         return OrderedDict(tuple(((v, cur_val[1]), str(int(v))) for v in choices))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val[0])}
 
 
@@ -170,7 +171,7 @@ def hfw_choices(comp, va, conf):
     """
     try:
         choices = va.choices
-    except (NotApplicableError, AttributeError):
+    except AttributeError:
         # Pick every x2, x5, x10, starting from the min value
         factors = (2, 5, 10)
         mn, mx = va.range
@@ -265,7 +266,7 @@ def determine_default_control(va):
             else:
                 # Combo boxes (drop down) are used otherwise
                 return odemis.gui.CONTROL_COMBO
-        except (AttributeError, NotApplicableError):
+        except AttributeError:
             pass
 
         try:
@@ -276,7 +277,7 @@ def determine_default_control(va):
             if isinstance(va.value, (int, long, float)):
                 # If the value is a number with a range, return the slider control
                 return odemis.gui.CONTROL_SLIDER
-        except (AttributeError, NotApplicableError):
+        except AttributeError:
             pass
 
         # Simple input => look at the type
@@ -399,7 +400,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # TODO: handle iterables
             minv, maxv = r
             minv, maxv = max(minv, setting_va.range[0]), min(maxv, setting_va.range[1])
-    except (AttributeError, NotApplicableError):
+    except AttributeError:
         pass
 
     # Ensure the range encompasses the current value
@@ -426,7 +427,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # TODO: handle iterables
             rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
-    except (AttributeError, NotApplicableError), e:
+    except AttributeError:
         pass
 
     # Ensure the choices are within the range (if both are given)
@@ -473,7 +474,7 @@ def format_choices(choices):
     # choice_fmt is an iterable of tuples: (choice, formatted choice)
     if isinstance(choices, dict):
         # In this case we assume that the values are already formatted
-        choices_formatted = choices.items()
+        choices_formatted = list(choices.items())
     elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
         try:
             choices = sorted(choices)
@@ -482,10 +483,10 @@ def format_choices(choices):
             if abs(choices[-1] / mn_non0) < 1000:
                 fmt, choices_si_prefix = utun.si_scale_list(choices)
                 fmt = [utun.to_string_pretty(c, 3) for c in fmt]
-                choices_formatted = zip(choices, fmt)
+                choices_formatted = list(zip(choices, fmt))
             else:
                 fmt = [to_string_si_prefix(c, sig=3) for c in choices]
-                return zip(choices, fmt), None
+                return list(zip(choices, fmt)), None
         except Exception:
             logging.exception("Formatting error for %s", choices)
             choices_formatted = [(c, choice_to_str(c)) for c in choices]
@@ -493,7 +494,7 @@ def format_choices(choices):
         choices_formatted = [(c, choice_to_str(c)) for c in choices]
 
     if not isinstance(choices, OrderedDict):
-        choices_formatted = sorted(choices_formatted)
+        choices_formatted = sorted(choices_formatted, key=lambda x: float('-inf') if x[0] is None else x[0])
 
     return choices_formatted, choices_si_prefix
 
@@ -521,7 +522,7 @@ def format_axis_choices(name, axis_def):
     unit = axis_def.unit
 
     if isinstance(choices, dict):
-        choices_formatted = choices.items()
+        choices_formatted = list(choices.items())
         # In this case, normally the values are already formatted, but for
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)
@@ -544,7 +545,7 @@ def format_axis_choices(name, axis_def):
             if abs(choices[-1] / mn_non0) < 1000:
                 fmt, choices_si_prefix = utun.si_scale_list(choices)
                 fmt = [utun.to_string_pretty(c, 3, unit) for c in fmt]
-                choices_formatted = zip(choices, fmt)
+                choices_formatted = list(zip(choices, fmt))
         except Exception:
             logging.exception("Formatting error for %s", choices)
         if choices_formatted is None:
@@ -612,7 +613,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         change_callback (callable): Callable to bind to the control's change event
 
     Returns:
-        SettingEntry
+        SettingEntry or None (if CONTROL_NONE)
 
     """
 
@@ -630,9 +631,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
     # Special case, early stop
     if control_type == odemis.gui.CONTROL_NONE:
-        # No value, not even a label, just an empty entry, so that the settings are saved
-        # during acquisition
-        return SettingEntry(name=name, va=va, hw_comp=hw_comp)
+        return None
 
     # Format label
     label_text = conf.get('label', label_to_human(name))
@@ -683,6 +682,9 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=set_ctrl, ctrl_2_va=text_get,
                                      events=wx.EVT_TEXT_ENTER)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_TEXT_ENTER, change_callback)
 
     elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
         val = va.value
@@ -765,6 +767,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             'choices': choices,
         }
 
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
         lbl_ctrl, value_ctrl = container.add_int_field(label_text, conf=ctrl_conf)
 
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
@@ -785,6 +792,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             'choices': choices,
             'accuracy': conf.get('accuracy', 5),
         }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
 
         lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
 
@@ -952,6 +964,11 @@ def create_axis_entry(container, name, comp, conf=None):
             'accuracy': conf.get('accuracy', 3),
         }
 
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
         lbl_ctrl, value_ctrl = container.add_float_slider(label_text, pos, ctrl_conf)
 
         # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
@@ -972,6 +989,11 @@ def create_axis_entry(container, name, comp, conf=None):
             'unit': unit,
             'accuracy': conf.get('accuracy', 3),
         }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
 
         lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
         axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,

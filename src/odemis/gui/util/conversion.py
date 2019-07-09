@@ -20,6 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import basestring
 from odemis.util.conversion import hex_to_rgb, frgb_to_rgb, hex_to_frgb, \
     rgb_to_frgb
 import wx

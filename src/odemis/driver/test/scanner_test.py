@@ -69,7 +69,7 @@ class TestScanner(unittest.TestCase):
             if child.name == CONFIG_SCANNER_INT["name"]:
                 cls.ebeam_int = child
         cls.scanner = CLASS(name="test", role="e-beam",
-                            children={"external": cls.ebeam_ext,
+                            dependencies={"external": cls.ebeam_ext,
                                       "internal": cls.ebeam_int})
 
     @classmethod

@@ -25,18 +25,19 @@ from __future__ import division
 from itertools import compress
 import logging
 import math
-from numpy import fft
 from numpy import histogram
 from numpy import unravel_index
 import numpy
 from odemis import model
 import operator
+from builtins import range
 
 from scipy.spatial import cKDTree
 
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 
+from odemis.util.spot import BandPassFilter
 from ..align import transform
 
 
@@ -65,7 +66,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     # Bold spots
     # Third parameter must be a length in pixels somewhat larger than a typical
     # spot
-    filtered_image = _BandPassFilter(filtered_image, 1, 20)
+    filtered_image = BandPassFilter(filtered_image, 1, 20)
 
     image = model.DataArray(filtered_image, data.metadata)  # TODO: why a DataArray?
     avg_intensity = numpy.average(image)
@@ -195,7 +196,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     filtered_subimages = []
     filtered_subimage_coordinates = []
 
-    for i in xrange(number_of_subimages):
+    for i in range(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
         # Remove subimage if its histogram implies a cosmic ray
         hist_list = hist.tolist()
@@ -213,7 +214,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     # If we still have more spots than expected we discard the ones
     # with "stranger" distances from their closest spots. Only applied
     # if we have an at least 2x2 grid.
-    if expected_spots >= 4 and len(clean_subimage_coordinates) > expected_spots:
+    if 4 <= expected_spots < len(clean_subimage_coordinates):
         points = numpy.array(clean_subimage_coordinates)
         tree = cKDTree(points, 5)
         distance, index = tree.query(clean_subimage_coordinates, 5)
@@ -223,7 +224,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
         avg_3 = numpy.average(list_distance[:, 3])
         avg_4 = numpy.average(list_distance[:, 4])
         diff_avg_list = numpy.array(list_distance[:, 1:5])
-        for i in xrange(0, len(list_distance), 1):
+        for i in range(len(list_distance)):
             diff_avg = [abs(list_distance[i, 1] - avg_1),
                         abs(list_distance[i, 2] - avg_2),
                         abs(list_distance[i, 3] - avg_3),
@@ -234,7 +235,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
         var_3 = numpy.average(diff_avg_list[:, 2])
         var_4 = numpy.average(diff_avg_list[:, 3])
 
-        for i in xrange(len(clean_subimage_coordinates)):
+        for i in range(len(clean_subimage_coordinates)):
             if (diff_avg_list[i, 0] <= var_1
                 or diff_avg_list[i, 1] <= var_2
                 or diff_avg_list[i, 2] <= var_3
@@ -280,7 +281,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     transformed_coordinates = [(c[0] - guess_center[0], c[1] - guess_center[1]) for c in guess_coordinates]
 
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
-    for step in xrange(MAX_STEPS_NUMBER):
+    for step in range(MAX_STEPS_NUMBER):
         # Calculate nearest point
         try:
             (estimated_coordinates, index1, e_wrong_points,
@@ -322,11 +323,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                           (max_diff, max_allowed_diff))
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
-    ordered_coordinates_index = zip(index1, electron_coordinates)
-    ordered_coordinates_index.sort()
-    ordered_coordinates = []
-    for i in xrange(len(ordered_coordinates_index)):
-        ordered_coordinates.append(ordered_coordinates_index[i][1])
+    ordered_coordinates = [ec for _, ec in sorted(zip(index1, electron_coordinates))]
 
     # Remove unknown coordinates
     known_ordered_coordinates = list(compress(ordered_coordinates, e_match_points))
@@ -553,35 +550,3 @@ def _FindInnerOutliers(x_coordinates):
     del x_coordinates[inner_outlier]
 
     return x_coordinates
-
-
-def _BandPassFilter(image, len_noise, len_object):
-    """
-    bandpass filter implementation.
-    Source: http://physics-server.uoregon.edu/~raghu/particle_tracking.html
-    """
-    b = len_noise
-    w = int(round(len_object))
-    N = 2 * w + 1
-
-    # Gaussian Convolution Kernel
-    sm = numpy.arange(0, N, dtype=numpy.float)
-    r = (sm - w) / (2 * b)
-    gx = numpy.power(math.e, -r ** 2) / (2 * b * math.sqrt(math.pi))
-    gx = numpy.reshape(gx, (gx.shape[0], 1))
-    gy = gx.conj().transpose()
-
-    # Boxcar average kernel, background
-    bx = numpy.zeros((1, N), numpy.float) + 1 / N
-    by = bx.conj().transpose()
-
-    # Convolution with the matrix and kernels
-    gxy = gx * gy
-    bxy = bx * by
-    kernel = fft.rfft2(gxy - bxy, image.shape)
-
-    res = fft.irfft2(fft.rfft2(image) * kernel)
-    arr_out = numpy.zeros((image.shape))
-    arr_out[w:-w, w:-w] = res[2 * w:, 2 * w:]
-    res = numpy.maximum(arr_out, 0)
-    return res

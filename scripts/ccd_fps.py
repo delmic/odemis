@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # odemis-cli --set-attr ccd binning 16,16
 # odemis-cli --set-attr ccd resolution 1,1
 
-from __future__ import division
+from __future__ import division, print_function
 
 import logging
 from odemis import model
@@ -60,7 +60,7 @@ def main(args):
             newn = n
             fps = newn - prev_n
             prev_n = newn
-            print "%d fps" % fps
+            print("%d fps" % fps)
     except KeyboardInterrupt:
         pass
     except Exception:

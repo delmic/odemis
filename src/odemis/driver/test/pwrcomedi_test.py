@@ -110,7 +110,7 @@ class TestLight(unittest.TestCase):
             em[i] = 1
             self.dev.emissions.value = em
             time.sleep(1)
-            self.assertGreater(self.dev.emissions.value, 0)  # Can't check for equality due to clamping
+            self.assertGreater(self.dev.emissions.value[i], 0)  # Can't check for equality due to clamping
 
             em[i] = 0.3
             self.dev.emissions.value = em

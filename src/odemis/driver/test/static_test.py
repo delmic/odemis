@@ -25,7 +25,6 @@ from odemis.driver import static, simcam
 from odemis.util import timeout
 import unittest
 
-
 # Simple test cases, for the very simple static components
 class TestLightFilter(unittest.TestCase):
     @timeout(1)
@@ -56,7 +55,54 @@ class TestOpticalLens(unittest.TestCase):
         mag = 10.
         comp = static.OpticalLens("test", "lens", mag, pole_pos=(512.3, 400))
         self.assertEqual(mag, comp.magnification.value)
+        comp.magnification.value = 1.5  # should be allowed
         comp.terminate()
+
+    def test_mag_choices(self):
+        mag_choices = [1, 1.5, 2.5]
+        comp = static.OpticalLens("test", "lens", 1, mag_choices=mag_choices)
+        self.assertEqual(1, comp.magnification.value)
+        self.assertEqual(comp.magnification.choices, set(mag_choices))
+        comp.magnification.value = 1.5  # should be allowed
+        with self.assertRaises(IndexError):
+            comp.magnification.value = 2.0
+        comp.terminate()
+
+    def test_configurations(self):
+        configurations = {"Mirror up": {"pole_pos": (458, 519),  "focus_dist": 0.5e-3},
+                          "Mirror down": {"pole_pos": (634, 652),  "focus_dist": -0.5e-3}}
+        comp = static.OpticalLens("test", "lens", 1, pole_pos=(458, 519),  focus_dist=0.5e-3,
+                                  configurations=configurations)
+        self.assertEqual(comp.configuration.choices, set(configurations))
+
+        #check the default configuration is "Mirror up"
+        self.assertEqual(comp.configuration.value, "Mirror up")
+
+        #change the configuration to "Mirror down" and check that the VAs that correspond to the attribute names are updated
+        comp.configuration.value = "Mirror down"
+        conf = configurations["Mirror down"]
+        self.assertEqual(comp.polePosition.value, conf["pole_pos"])
+        self.assertEqual(comp.focusDistance.value, conf["focus_dist"])
+
+        comp.configuration.value = "Mirror up"
+        conf = configurations["Mirror up"]
+        self.assertEqual(comp.polePosition.value, conf["pole_pos"])
+        self.assertEqual(comp.focusDistance.value, conf["focus_dist"])
+
+        comp.terminate()
+
+    def test_badconfigurations(self):
+        configurations= {"conf unknown": {"booo": 43e-5, "focus_dist": 6e-3}}
+
+        with self.assertRaises(ValueError):
+            comp = static.OpticalLens("test", "lens", 1, pole_pos=(458, 519), focus_dist=0.5e-3,
+                                      configurations=configurations)
+
+        configurations = {"conf missing": {"x_max": 43e-5, "focus_dist": 6e-3}}
+
+        with self.assertRaises(ValueError):
+            comp = static.OpticalLens("test", "lens", 1, pole_pos=(458, 519), focus_dist=0.5e-3,
+                                      configurations=configurations)
 
 
 class TestSpectrograph(unittest.TestCase):
@@ -67,7 +113,7 @@ class TestSpectrograph(unittest.TestCase):
         """
         wlp = [500e-9, 1/1e6]
         ccd = simcam.Camera("testcam", "ccd", image="andorcam2-fake-clara.tiff")
-        sp = static.Spectrograph("test", "spectrograph", wlp=wlp, children={"ccd": ccd})
+        sp = static.Spectrograph("test", "spectrograph", wlp=wlp, dependencies={"ccd": ccd})
         ptw = sp.getPixelToWavelength(ccd.shape[0], ccd.pixelSize.value[0])
         self.assertGreater(wlp[0], ptw[0])
         self.assertLess(wlp[0], ptw[-1])

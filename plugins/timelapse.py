@@ -72,7 +72,7 @@ class TimelapsePlugin(Plugin):
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
                 "HDF5 Files (*.h5)|*.h5",
         }),
         ("expectedDuration", {
@@ -169,7 +169,7 @@ class TimelapsePlugin(Plugin):
            last_st (list of streams): streams to be acquired at the end
         """
         if not self._dlg:
-            return []
+            return [], []
 
         live_st = (self._dlg.view.getStreams() +
                    self._dlg.hidden_view.getStreams())

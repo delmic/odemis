@@ -312,34 +312,34 @@ class ESP(model.Actuator):
 
     def _sendOrder(self, cmd):
         """
-        cmd (str): command to be sent to device (without the CR)
+        cmd (byte str): command to be sent to device (without the CR)
         """
-        cmd = cmd + "\r"
+        cmd = cmd + b"\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
-            self._serial.write(cmd.encode('ascii'))
+            logging.debug("Sending command %s", cmd.decode("latin1", "backslashreplace"))
+            self._serial.write(cmd)
 
     def _sendQuery(self, cmd):
         """
-        cmd (str): command to be sent to device (without the CR, but with the ?)
-        returns (str): answer received from the device (without \n or \r)
+        cmd (byte str): command to be sent to device (without the CR, but with the ?)
+        returns (byte str): answer received from the device (without \n or \r)
         raise:
             IOError if no answer is returned in time
         """
-        cmd = cmd + "\r"
+        cmd = cmd + b"\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
-            self._serial.write(cmd.encode('ascii'))
+            logging.debug("Sending command %s", cmd.decode("latin1", "backslashreplace"))
+            self._serial.write(cmd)
 
             self._serial.timeout = 1
-            ans = ''
-            while ans[-1:] != '\r':
+            ans = b''
+            while ans[-1:] != b'\r':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % ans.decode("latin1", "backslashreplace"))
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", ans.decode("latin1", "backslashreplace"))
 
             return ans.strip()
 
@@ -348,7 +348,7 @@ class ESP(model.Actuator):
 
     def GetErrorCode(self):
         # Checks the device error register
-        return int(self._sendQuery("TE?"))
+        return int(self._sendQuery(b"TE?"))
 
     def checkError(self):
         # Checks if an error occurred and raises an exception accordingly.
@@ -367,13 +367,13 @@ class ESP(model.Actuator):
         if len(err_q) > 0:
             for err in err_q[:-1]:
                 logging.warning("Discarding error %d", err)
-            raise ESPError("Error code %d" % err_q[-1], err_q[-1])
+            raise ESPError("Error code %d" % (err_q[-1],), err_q[-1])
 
     def SetAxisUnit(self, axis_num, unit):
         # Set the internal unit used by the controller
         if not unit in UNIT_DEF:
             raise ValueError("Unknown unit name %s" % (unit,))
-        self._sendOrder("%d SN %d" % (axis_num, UNIT_DEF[unit]))
+        self._sendOrder(b"%d SN %d" % (axis_num, UNIT_DEF[unit]))
 
     def MoveLimit(self, aid, limit):
         """
@@ -414,79 +414,79 @@ class ESP(model.Actuator):
         Requests a move to an absolute position. This is non-blocking.
         Converts to internal unit of the controller
         """
-        self._sendOrder("%d PA %f" % (axis_num, pos))
+        self._sendOrder(b"%d PA %f" % (axis_num, pos))
 
     def MoveRelPos(self, axis_num, rel):
         """
         Requests a move to a relative position. This is non-blocking.
         """
-        self._sendOrder("%d PR %f" % (axis_num, rel))  # 0 = absolute
+        self._sendOrder(b"%d PR %f" % (axis_num, rel))  # 0 = absolute
 
     def GetDesiredPos(self, axis_num):
         # Get the target position programmed into the controller
-        return float(self._sendQuery("%d DP?" % (axis_num,)))
+        return float(self._sendQuery(b"%d DP?" % (axis_num,)))
 
     def StopMotion(self, axis):
         # Stop the motion on the specified axis
-        self._sendOrder("%d ST" % (axis,))
+        self._sendOrder(b"%d ST" % (axis,))
 
     def MotorOn(self, axis):
         # Start the motor
-        self._sendOrder("%d MO" % (axis,))
+        self._sendOrder(b"%d MO" % (axis,))
 
     def MotorOff(self, axis):
         # Stop the motor
-        self._sendOrder("%d MF" % (axis,))
+        self._sendOrder(b"%d MF" % (axis,))
 
     def GetMotionDone(self, axis_n):
         # Return true or false based on if the axis is still moving.
-        done = int(self._sendQuery("%d MD?" % axis_n))
+        done = int(self._sendQuery(b"%d MD?" % axis_n))
         logging.debug("Motion done: %d", done)
         return bool(done)
 
     def GetPosition(self, axis_n):
         # Get the position of the axis
-        return float(self._sendQuery("%d TP?" % axis_n))
+        return float(self._sendQuery(b"%d TP?" % axis_n))
 
     def GetSpeed(self, axis_n):
         # Get the speed of the axis
-        return float(self._sendQuery("%d VA?" % axis_n))
+        return float(self._sendQuery(b"%d VA?" % axis_n))
 
     def SetSpeed(self, axis_n, speed):
         # Set the axis speed
-        self._sendOrder("%d VA %f" % (axis_n, speed,))
+        self._sendOrder(b"%d VA %f" % (axis_n, speed,))
 
     def GetAcceleration(self, axis_n):
         # Get axis accel
-        return float(self._sendQuery("%d AC?" % axis_n))
+        return float(self._sendQuery(b"%d AC?" % axis_n))
 
     def SetAcceleration(self, axis_n, ac):
         # Set axis accel
-        self._sendOrder("%d AC %f" % (axis_n, ac,))
+        self._sendOrder(b"%d AC %f" % (axis_n, ac,))
 
     def GetDeceleration(self, axis_n):
-        return float(self._sendQuery("%d AG?" % axis_n))
+        return float(self._sendQuery(b"%d AG?" % axis_n))
 
     def SetDeceleration(self, axis_n, dc):
-        self._sendOrder("%d AG %f" % (axis_n, dc,))
+        self._sendOrder(b"%d AG %f" % (axis_n, dc,))
 
     def GetIdentification(self, axis):
         """
         return (str): the identification string as-is for the first axis
         """
-        return self._sendQuery("%d ID?" % (axis,))
+        return self._sendQuery(b"%d ID?" % (axis,))
 
     def GetVersion(self):
         """
         return (str): the version string as-is
         """
-        return self._sendQuery("VE?")
+        return self._sendQuery(b"VE?")
 
     def SaveMem(self):
         """
         Instruct the controller to save the current settings to non-volatile memory
         """
-        self._sendOrder("SM")
+        self._sendOrder(b"SM")
 
     """
     High level commands (ie, Odemis Actuator API)
@@ -767,8 +767,8 @@ class ESPSimulator(object):
     def __init__(self, timeout=1):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = ""  # what the commands sends back to the "host computer"
-        self._input_buf = ""  # what we receive from the "host computer"
+        self._output_buf = b""  # what the commands sends back to the "host computer"
+        self._input_buf = b""  # what we receive from the "host computer"
 
         self._pos = [0, 0, 0]  # internal posiiton in mm
         self._start_pos = [0, 0, 0]  # mm
@@ -784,7 +784,7 @@ class ESPSimulator(object):
 
     def write(self, data):
         self._input_buf += data
-        msgs = self._input_buf.split("\r")
+        msgs = self._input_buf.split(b"\r")
         for m in msgs[:-1]:
             self._parseMessage(m)  # will update _output_buf
 
@@ -803,7 +803,7 @@ class ESPSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -835,14 +835,14 @@ class ESPSimulator(object):
             self._pos = cur_position
 
     def _sendAnswer(self, ans):
-        self._output_buf += "%s\r" % (ans,)
+        self._output_buf += b"%s\r" % (ans,)
         
     def _isMoving(self):
         return time.time() < self._current_move_finish
 
     def _doMove(self, axis, new_pos):
         # Check that the position is within the range.
-        if new_pos >= self._range[0] and new_pos <= self._range[1]:
+        if self._range[0] <= new_pos <= self._range[1]:
             self._target_pos[axis] = new_pos
             self._start_pos = copy.copy(self._pos)
             d = self._target_pos[axis] - self._start_pos[axis]
@@ -862,85 +862,84 @@ class ESPSimulator(object):
         msg (str): the message to parse (without the \r)
         return None: self._output_buf is updated if necessary
         """
-        logging.debug("SIM: parsing %s", msg)
+        logging.debug("SIM: parsing %s", msg.decode("latin1", "backslashreplace"))
         msg = msg.strip()  # remove leading and trailing whitespace
-        msg = "".join(msg.split())  # remove all space characters
+        msg = b"".join(msg.split())  # remove all space characters
         
-        if msg == "VE?":
-            self._sendAnswer("1.0")
+        if msg == b"VE?":
+            self._sendAnswer(b"1.0")
             
-        elif msg == "SM":
+        elif msg == b"SM":
             # save memory to non-volatile RAM
             pass
 
-        elif msg == "TE?":
+        elif msg == b"TE?":
             # Query error code. Return no error code
             if len(self._error_stack) > 0:
-                self._sendAnswer(self._error_stack.pop())  # pop the top element of the error stack
+                self._sendAnswer(b"%d" % self._error_stack.pop())  # pop the top element of the error stack
             else:
-                self._sendAnswer(0)  # no error
+                self._sendAnswer(b'0')  # no error
 
         # Query the axis ID number
-        elif re.match(r'\dID\?', msg):
-            self._sendAnswer("12345")
+        elif re.match(br'\dID\?', msg):
+            self._sendAnswer(b"12345")
 
         # Query absolute position
-        elif re.match(r'\dTP\?', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dTP\?', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
                 self._updateCurrentPosition()
-                self._sendAnswer(str(self._pos[axis - 1]))
+                self._sendAnswer(b"%f" % (self._pos[axis - 1],))
 
         # Query current target
-        elif re.match(r'\dDP\?', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dDP\?', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
-                self._sendAnswer(str(self._target_pos[axis - 1]))
+                self._sendAnswer(b"%f" % (self._target_pos[axis - 1],))
 
         # Query current speed
-        elif re.match(r'\dVA\?', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dVA\?', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
-                self._sendAnswer(str(self._speed[axis - 1]))
+                self._sendAnswer(b"%f" % (self._speed[axis - 1],))
 
         # Query current accel
-        elif re.match(r'\dAC\?', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dAC\?', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
-                self._sendAnswer(str(self._accel[axis - 1]))
+                self._sendAnswer(b"%f" % (self._accel[axis - 1],))
 
         # Query current decel
-        elif re.match(r'\dAG\?', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dAG\?', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
-                self._sendAnswer(str(self._decel[axis - 1]))
+                self._sendAnswer(b"%f" % (self._decel[axis - 1],))
 
         # Query motion done
-        elif re.match(r'\dMD\?', msg):
+        elif re.match(br'\dMD\?', msg):
             self._updateCurrentPosition()
             axis = int(msg[0])
-
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
                 if self._isMoving():
-                    self._sendAnswer(0)
+                    self._sendAnswer(b"0")
                 else:
-                    self._sendAnswer(1)
+                    self._sendAnswer(b"1")
 
         # Move to an absolute position
-        elif re.match(r'\dPA', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dPA', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -948,8 +947,8 @@ class ESPSimulator(object):
                 self._doMove(axis - 1, new_pos)
 
         # Move to a limit
-        elif re.match(r'\dMV', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dMV', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -960,8 +959,8 @@ class ESPSimulator(object):
                     self._doMove(axis - 1, self._range[0])
 
         # Home search
-        elif re.match(r'\dOR', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dOR', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -972,8 +971,8 @@ class ESPSimulator(object):
                     self._doMove(axis - 1, self._range[1])
 
         # Set home
-        elif re.match(r'\dSH', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dSH', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -987,8 +986,8 @@ class ESPSimulator(object):
                 logging.debug("SIM: Setting new home position %f for axis %d", origin, axis)
 
         # Move to a relative position
-        elif re.match(r'\dPR', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dPR', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -997,8 +996,8 @@ class ESPSimulator(object):
                 self._doMove(axis - 1, new_pos)
 
         # Set speed
-        elif re.match(r'\dVA', msg):
-            axis = int(msg[0])
+        elif re.match(br'\dVA', msg):
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -1006,7 +1005,7 @@ class ESPSimulator(object):
                 self._speed[axis - 1] = speed
 
         # Set unit
-        elif re.match(r'\dSN', msg):
+        elif re.match(br'\dSN', msg):
             # we don't need to do anything here
             pass
         

@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -58,7 +58,7 @@ KWARGS = {"name": "test", "role": "spectrograph", "port": PORT,
                 [2000, 150, "6e,34,80,b7,40,82,2e,40", "c1,f9,2d,6a,92,80,1a,3f",
                  "9a,99,99,99,99,89,72,40", "33,33,33,33,33,13,40,40", "b8,1e,85,eb,51,b8,f6,bf"],
             ],
-          "children": {"ccd": ccd}
+          "dependencies": {"ccd": ccd}
           }
 
 # @unittest.skip("faster")
@@ -72,8 +72,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
-            sem = CLASS(name, "spec", children={"ccd": ccd}, **kwargs)
+            sem = CLASS(name, "spec", dependencies={"ccd": ccd}, **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
 
     def test_creation(self):

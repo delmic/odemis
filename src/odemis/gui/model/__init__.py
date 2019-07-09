@@ -22,7 +22,9 @@ This file is part of Odemis.
 """
 from __future__ import division
 
-import Queue
+from future.utils import with_metaclass
+from past.builtins import basestring, long
+import queue
 from abc import ABCMeta
 import collections
 import logging
@@ -70,7 +72,7 @@ TOOL_RO_ANCHOR = 8 # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
 TOOL_AUTO_FOCUS = 9 # Run auto focus procedure on the (active) stream
 
-ALL_TOOL_MODES = set((
+ALL_TOOL_MODES = {
     TOOL_NONE,
     TOOL_ZOOM,
     TOOL_ROI,
@@ -81,7 +83,7 @@ ALL_TOOL_MODES = set((
     TOOL_SPOT,
     TOOL_RO_ANCHOR,
     TOOL_AUTO_FOCUS,
-    ))
+    }
 
 # "Actions" are also buttons on the toolbar, but with immediate effect:
 TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
@@ -119,6 +121,7 @@ class MainGUIData(object):
     # Mapping between the component role and the attribute name on the MainGUIData
     _ROLE_TO_ATTR = {
         "ccd": "ccd",
+        # ccd* -> ccds[]
         "se-detector": "sed",
         "bs-detector": "bsd",
         "ebic-detector": "ebic",
@@ -131,8 +134,9 @@ class MainGUIData(object):
         "tc-detector": "tc_detector",
         "tc-detector-live": "tc_detector_live",
         "spectrometer": "spectrometer",
-        "sp-ccd": "sp_ccd",
-        "spectrometer-integrated": "spectrometer_int",
+        # spectrometer* -> spectrometers[]
+        "sp-ccd": "sp_ccd",  # Only used for a hack in the Sparc2 align tab
+        # sp-ccd* -> sp_ccds[]
         "spectrograph": "spectrograph",
         "spectrograph-dedicated": "spectrograph_ded",
         "monochromator": "monochromator",
@@ -141,6 +145,7 @@ class MainGUIData(object):
         "stage": "stage",
         "scan-stage": "scan_stage",
         "focus": "focus",
+        "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
@@ -161,7 +166,15 @@ class MainGUIData(object):
         "e-beam": "ebeam",
         "chamber-light": "chamber_light",
         "overview-light": "overview_light",
-        "pol-analyzer": "pol_analyzer"
+        "pol-analyzer": "pol_analyzer",
+        "streak-cam": "streak_cam",
+        "streak-ccd": "streak_ccd",
+        "streak-unit": "streak_unit",
+        "streak-delay": "streak_delay",
+        "streak-lens": "streak_lens",
+        "tc-od-filter": "tc_od_filter",
+        "tc-filter": "tc_filter",
+        "slit-in-big": "slit_in_big"
     }
 
     def __init__(self, microscope):
@@ -183,7 +196,6 @@ class MainGUIData(object):
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
-        self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.time_correlator = None  # life-time measurement on SECOM-FLIM or SPARC
         self.tc_detector = None  # the raw detector of the time-correlator (for settings & rough 2D acquisition)
         self.tc_detector_live = None  # APD count live detector, for better data in FLIM live (optional)
@@ -206,9 +218,9 @@ class MainGUIData(object):
         self.pcd = None  # Probe current detector (to measure actual e-beam current)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.sp_ccd = None  # raw access to the spectrometer
-        self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
         self.spectrograph_ded = None  # spectrograph connected via an optical fiber (SPARCv2)
+        self.spec_ded_focus = None  # focus on spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
@@ -220,8 +232,22 @@ class MainGUIData(object):
         self.overview_focus = None  # focus of the overview CCD
         self.overview_light = None  # light of the overview CCD
         self.pol_analyzer = None  # polarization analyzer
+        self.streak_cam = None  # streak camera
+        self.streak_ccd = None  # readout camera of the streak camera
+        self.streak_unit = None  # streak unit of the streak camera
+        self.streak_delay = None  # delay generator of the streak camera
+        self.streak_lens = None  # input optics in front of the streak camera
+        self.tc_od_filter = None
+        self.tc_filter = None
+        self.slit_in_big = None
 
-        self.ebeamControlsMag = None
+        # Lists of detectors
+        self.ccds = []  # All the cameras which could be used for AR (SPARC)
+        self.sp_ccds = []  # All the cameras, which are only used for spectrometry (SPARC)
+        self.spectrometers = []  # All the spectrometers (SPARC)
+        self.photo_ds = []  # All the photo detectors on confocal SECOM or SPARC with time-resolved
+
+        self.ebeamControlsMag = None  # None (if no ebeam) or bool
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -233,21 +259,38 @@ class MainGUIData(object):
         if microscope:
             self.role = microscope.role
 
-            for c in microscope.children.value:
+            for c in model.getComponents():
+                if c.role is None:
+                    continue
                 try:
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
                 except KeyError:
-                    if c.role and c.role.startswith("photo-detector"):
-                        self.photo_ds.append(c)
-                    # Otherwise, just not interested by this component
+                    pass
 
-            # Spectrograph is not directly a child, but a sub-comp of spectrometer
-            # TODO: now it's also a direct child. Code can be removed once all installs have been updated
-            if self.spectrometer:
-                for child in self.spectrometer.children.value:
-                    if child.role == "spectrograph":
-                        self.spectrograph = child
+                # (also) add it to the detectors lists
+                if c.role.startswith("ccd"):
+                    self.ccds.append(c)
+                elif c.role.startswith("sp-ccd"):
+                    self.sp_ccds.append(c)
+                elif c.role.startswith("spectrometer"):
+                    self.spectrometers.append(c)
+                elif c.role.startswith("photo-detector"):
+                    self.photo_ds.append(c)
+
+                # Otherwise, just not interested by this component
+
+            # Sort the list of detectors by role in alphabetical order, to keep behaviour constant
+            for l in (self.photo_ds, self.ccds, self.sp_ccds, self.spectrometers):
+                l.sort(key=lambda c: c.role)
+
+            # Automatically pick the first of each list as the "main" detector
+            if self.ccd is None and self.ccds:
+                self.ccd = self.ccds[0]
+            if self.sp_ccd is None and self.sp_ccds:
+                self.sp_ccd = self.sp_ccds[0]
+            if self.spectrometer is None and self.spectrometers:
+                self.spectrometer = self.spectrometers[0]
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
@@ -367,7 +410,7 @@ class MainGUIData(object):
                               (name, len(self.tab.choices)))
 
 
-class MicroscopyGUIData(object):
+class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
     """Contains all the data corresponding to a GUI tab.
 
     In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
@@ -432,7 +475,6 @@ class MicroscopyGUIData(object):
                             focussedView VA)
 
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, main):
         self.main = main
@@ -582,6 +624,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # Whether to acquire the probe current (via a Leech)
         self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab
+#         self.autofocus_active = BooleanVA(False)
+
 
 class ChamberGUIData(MicroscopyGUIData):
 
@@ -589,10 +634,10 @@ class ChamberGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
-        # VA for autofocus procedure mode
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab.
         # It's not really recommended (and there is no toolbar button), but it's
         # possible to change the focus, and the menu is there, so why not.
-        self.autofocus_active = BooleanVA(False)
+#         self.autofocus_active = BooleanVA(False)
 
 
 class AnalysisGUIData(MicroscopyGUIData):
@@ -626,6 +671,28 @@ class AnalysisGUIData(MicroscopyGUIData):
         self.spec_bck_cal.subscribe(self._on_spec_bck_cal)
         self.spec_cal.subscribe(self._on_spec_cal)
 
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+        self.streams.subscribe(self._on_stream_change, init=True)
+
+    def _updateZParams(self):
+        # Calculate the new range of z pos
+        limits = []
+
+        for s in self.streams.value:
+            if model.hasVA(s, "zIndex"):
+                metadata = s.getRawMetadata()[0]  # take only the first
+                zcentre = metadata[model.MD_POS][2]
+                zstep = metadata[model.MD_PIXEL_SIZE][2]
+                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
+
+        if len(limits) > 1:
+            self.zPos.range = (min(limits), max(limits))
+            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1], self.zPos.value)
+        else:
+            self.zPos.range = (0, 0)
+
     def _on_ar_cal(self, fn):
         self._conf.set("calibration", "ar_file", fn)
 
@@ -634,6 +701,9 @@ class AnalysisGUIData(MicroscopyGUIData):
 
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
+
+    def _on_stream_change(self, streams):
+        self._updateZParams()
 
 
 class ActuatorGUIData(MicroscopyGUIData):
@@ -775,7 +845,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        amodes = ["lens-align", "mirror-align", "center-align", "fiber-align"]
+        amodes = ["lens-align", "mirror-align", "center-align", "streak-align", "fiber-align"]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -801,6 +871,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.fibaligner is None:
             amodes.remove("fiber-align")
+
+        if main.streak_ccd is None:
+            amodes.remove("streak-align")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
@@ -979,7 +1052,7 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, projection_class=RGBSpatialProjection, zPos=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -987,6 +1060,10 @@ class StreamView(View):
           streams in this view is allowed to show.
         :param fov_hw (None or Component): Component with a .horizontalFoV VA and
           a .shape. If not None, the view mpp (=mag) will be linked to that FoV.
+        :param projection_class (DataProjection):
+            Determines the projection used to display streams which have no .image
+        :param zPos (None or Float VA): Global position in Z coordinate for the view.
+          Used when a stream supports Z stack display, which is controlled by the focuser.
         """
 
         super(StreamView, self).__init__(name)
@@ -996,6 +1073,8 @@ class StreamView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
+        
+        self._projection_klass = projection_class
 
         # Two variations on adapting the content based on what the view shows.
         # They are only used as an _indication_ from the widgets, about what
@@ -1018,7 +1097,7 @@ class StreamView(View):
 
         # Will be created on the first time it's needed
         self._focus_thread = {}  # Focuser -> thread
-        self._focus_queue = {}  # Focuser -> Queue.Queue() of float (relative distance)
+        self._focus_queue = {}  # Focuser -> queue.Queue() of float (relative distance)
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -1061,6 +1140,9 @@ class StreamView(View):
         self.show_crosshair = model.BooleanVA(True)
         self.interpolate_content = model.BooleanVA(False)
 
+        if zPos is not None:
+            self.zPos = zPos
+
     def _onFovBuffer(self, fov):
         self._updateStreamsViewParams()
 
@@ -1080,7 +1162,7 @@ class StreamView(View):
             self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
         )
-        streams = self.stream_tree.getStreams()
+        streams = self.stream_tree.getProjections()
         for stream in streams:
             if hasattr(stream, 'rect'): # the stream is probably pyramidal
                 stream.rect.value = stream.rect.clip(view_rect)
@@ -1097,7 +1179,7 @@ class StreamView(View):
             return self._focus_queue[focuser]
         except KeyError:
             # Create a new thread and queue
-            q = Queue.Queue()
+            q = queue.Queue()
             self._focus_queue[focuser] = q
 
             t = threading.Thread(target=self._moveFocus, args=(q, focuser),
@@ -1162,10 +1244,10 @@ class StreamView(View):
                     while True:
                         ns = q.get(block=False)
                         shift += ns
-                except Queue.Empty:
+                except queue.Empty:
                     pass
 
-                logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
+                logging.debug(u"Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
                 if rng:
@@ -1174,10 +1256,11 @@ class StreamView(View):
                     req_shift = shift
                     shift = new_pos - pos
                     if abs(shift - req_shift) > 1e-9:
-                        logging.info("Restricting focus move to %f µm as it reached the end",
+                        logging.info(u"Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
                 time_last_move = time.time()
+
                 try:
                     if axis.canUpdate:
                         # Update the target position on the fly
@@ -1201,6 +1284,21 @@ class StreamView(View):
         return (float): actual distance moved by the focus in meter
         """
         # FIXME: "stop all axes" should also clear the queue
+
+        # If streams have a z-level, we calculate the shift differently.
+        
+        if hasattr(self, "zPos"):
+
+            # Multiplier found by testing based on the range of zPos
+            # Moving the mouse 400 px moves through the whole range.
+            k = abs(self.zPos.range[1] - self.zPos.range[0]) / 400
+            val = k * shift
+
+            old_pos = self.zPos.value
+            new_pos = self.zPos.clip(self.zPos.value + val)
+            self.zPos.value = new_pos
+            logging.debug("Moving zPos to %f in range %s", self.zPos.value, self.zPos.range)
+            return new_pos - old_pos
 
         # TODO: optimise by only updating focuser when the stream tree changes
         for s in self.getStreams():
@@ -1329,10 +1427,20 @@ class StreamView(View):
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
         """
-        ss = self.stream_tree.getStreams()
+        ss = self.stream_tree.getProjections()
         # ss is a list of either Streams or DataProjections, so need to convert
         # back to only streams.
         return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+
+    def getProjections(self):
+        """
+        :return: [Stream] list of streams that are displayed in the view
+
+        Do not modify directly, use addStream(), and removeStream().
+        Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
+        """
+        ss = self.stream_tree.getProjections()
+        return ss
 
     def addStream(self, stream):
         """
@@ -1351,9 +1459,8 @@ class StreamView(View):
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
         if not hasattr(stream, 'image'):
-            # if the stream is a StaticStream, create a RGBSpatialProjection for it
             logging.debug("Creating a projection for stream %s", stream)
-            stream = RGBSpatialProjection(stream)
+            stream = self._projection_klass(stream)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
@@ -1362,19 +1469,20 @@ class StreamView(View):
         with self._streams_lock:
             self.stream_tree.add_stream(stream)
 
+            # subscribe to the stream's image
+            if hasattr(stream, "image"):
+                stream.image.subscribe(self._onNewImage)
+
+                # if the stream already has an image, update now
+                if stream.image.value is not None:
+                    self._onNewImage(stream.image.value)
+            else:
+                logging.debug("No image found for stream %s", type(stream))
+
         if isinstance(stream, DataProjection):
             # sets the current mpp and viewport to the projection
             self._updateStreamsViewParams()
 
-        # subscribe to the stream's image
-        if hasattr(stream, "image"):
-            stream.image.subscribe(self._onNewImage)
-
-            # if the stream already has an image, update now
-            if stream.image.value is not None:
-                self._onNewImage(stream.image.value)
-        else:
-            logging.debug("No image found for stream %s", type(stream))
 
     def removeStream(self, stream):
         """
@@ -1384,7 +1492,7 @@ class StreamView(View):
         """
 
         with self._streams_lock:
-            for node in self.stream_tree.getStreams():
+            for node in self.stream_tree.getProjections():
                 ostream = node.stream if isinstance(node, DataProjection) else node
 
                 # check if the stream is still present on the stream list

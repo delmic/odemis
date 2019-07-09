@@ -105,11 +105,13 @@ class AnchoredEstimator(object):
         logging.info("Anchor region defined with scale=%s, res=%s, trans=%s",
                      self._scale, self._res, self._trans)
 
-        self._safety_bounds = (0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
-        self._min_bound = -self._safety_bounds[0] + (max(self._res[0],
-                                                         self._res[1]) / 2)
-        self._max_bound = self._safety_bounds[1] - (max(self._res[0],
-                                                        self._res[1]) / 2)
+        # Compute margin so that it's always possible to place the ROI within the
+        # scanner FoV: half the ROI resolution (at scale 1).
+        margin = ((self._res[0] * self._scale[0]) // 2,
+                  (self._res[1] * self._scale[1]) // 2)
+        trans_rng = scanner.translation.range
+        self._trans_range = ((trans_rng[0][0] + margin[0], trans_rng[0][1] + margin[1]),
+                             (trans_rng[1][0] - margin[0], trans_rng[1][1] - margin[1]))
 
     def acquire(self):
         """
@@ -251,16 +253,13 @@ class AnchoredEstimator(object):
         """
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         # we clip translation inside of bounds in case of huge drift
-        new_translation = (self._trans[0] - self.drift[0],
-                           self._trans[1] - self.drift[1])
-
-        if (abs(new_translation[0]) > self._safety_bounds[0] or
-            abs(new_translation[1]) > self._safety_bounds[1]):
+        trans = (self._trans[0] - self.drift[0],
+                 self._trans[1] - self.drift[1])
+        self._trans = (max(self._trans_range[0][0], min(trans[0], self._trans_range[1][0])),
+                       max(self._trans_range[0][1], min(trans[1], self._trans_range[1][1])))
+        if trans != self._trans:
             logging.warning("Generated image may be incorrect due to extensive "
-                            "drift of %s", new_translation)
-
-        self._trans = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
-                       numpy.clip(new_translation[1], self._min_bound, self._max_bound))
+                            "drift of %s clipped to %s", trans, self._trans)
 
         # always in this order
         self._emitter.scale.value = self._scale
@@ -295,19 +294,19 @@ def GuessAnchorRegion(whole_img, sample_region):
     masked_img = cannied_img
 
     # Clip between the bounds
-    left = sorted((0, sample_region[0] * whole_img.shape[0] -
-                   (dc_shape[0] / 2), whole_img.shape[0]))[1]
-    right = sorted((0, sample_region[2] * whole_img.shape[0] +
-                    (dc_shape[0] / 2), whole_img.shape[0]))[1]
-    top = sorted((0, sample_region[1] * whole_img.shape[1] -
-                  (dc_shape[1] / 2), whole_img.shape[1]))[1]
-    bottom = sorted((0, sample_region[3] * whole_img.shape[1] +
-                     (dc_shape[1] / 2), whole_img.shape[1]))[1]
-    masked_img[left:right, top:bottom].fill(0)
-    masked_img[0:(dc_shape[0] / 2), :].fill(0)
-    masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
-    masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
-    masked_img[:, masked_img.shape[1] - (dc_shape[1] / 2):masked_img.shape[1]].fill(0)
+    l = sorted((0, int(sample_region[0] * whole_img.shape[0] - dc_shape[0] / 2),
+                whole_img.shape[0]))[1]
+    r = sorted((0, int(sample_region[2] * whole_img.shape[0] + dc_shape[0] / 2),
+                whole_img.shape[0]))[1]
+    t = sorted((0, int(sample_region[1] * whole_img.shape[1] - dc_shape[1] / 2),
+                whole_img.shape[1]))[1]
+    b = sorted((0, int(sample_region[3] * whole_img.shape[1] + dc_shape[1] / 2),
+                whole_img.shape[1]))[1]
+    masked_img[l:r, t:b] = 0
+    masked_img[0:(dc_shape[0] // 2), :] = 0
+    masked_img[:, 0:(dc_shape[1] // 2)] = 0
+    masked_img[masked_img.shape[0] - (dc_shape[0] // 2):masked_img.shape[0], :] = 0
+    masked_img[:, masked_img.shape[1] - (dc_shape[1] // 2):masked_img.shape[1]] = 0
 
     # Find indices of edge pixels
     occurrences_indices = numpy.where(masked_img == 255)

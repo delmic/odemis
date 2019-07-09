@@ -30,8 +30,10 @@ import numpy
 from odemis import model
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
+from odemis.util.transform import Transform
 from odemis.util import executeAsyncTask
-from odemis.util.spot import FindCenterCoordinates
+from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
+from scipy.spatial import cKDTree as KDTree
 import threading
 import time
 
@@ -286,7 +288,7 @@ def FindSpot(image, sensitivity_limit=100):
             LookupError() if spot was not found
     """
     subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20, sensitivity_limit)
-    if subimages == []:
+    if not subimages:
         raise LookupError("No spot detected")
 
     spot_coordinates = [FindCenterCoordinates(i) for i in subimages]
@@ -307,6 +309,51 @@ def FindSpot(image, sensitivity_limit=100):
             max_pos = i
             max_intensity = image[x, y]
     return max_pos
+
+
+def FindGridSpots(image, repetition):
+    """
+    Find a grid of spots in an image.
+
+    Parameters
+    ----------
+    image : array like
+        Data array containing the greyscale image.
+    repetition : tuple of ints
+        Number of expected spots in (X, Y).
+
+    Returns
+    -------
+    spot_coordinates : array like
+        A 2D array of shape (N, 2) containing the coordinates of the spots.
+    translation : tuple of two floats
+    scaling : tuple of two floats
+    rotation : float
+
+    """
+    spot_positions = MaximaFind(image, repetition[0] * repetition[1])
+    if len(spot_positions) < repetition[0] * repetition[1]:
+        logging.warning('Not enough spots found, returning only the found spots.')
+        return spot_positions, None, None, None
+    # Estimate transformation
+    lattice_constants = EstimateLatticeConstant(spot_positions)
+    transformation_matrix = numpy.transpose(lattice_constants)
+    if numpy.linalg.det(lattice_constants) < 0.:
+        transformation_matrix = numpy.fliplr(transformation_matrix)
+    translation = numpy.mean(spot_positions, axis=0)
+    transform_to_spot_positions = Transform(translation=translation)
+    transform_to_spot_positions.transformation_matrix = transformation_matrix
+    # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
+    grid = GridPoints(*repetition)
+    spot_grid = transform_to_spot_positions.apply(grid)
+    tree = KDTree(spot_positions)
+    dd, ii = tree.query(spot_grid, k=1)
+
+    pos_sorted = spot_positions[ii.ravel(), :]
+    transformation = Transform.from_pointset(grid, pos_sorted)
+    spot_coordinates = transformation.apply(grid)
+
+    return spot_coordinates, translation, transformation.scaling, transformation.rotation
 
 
 def CropFoV(ccd, dfbkg=None):

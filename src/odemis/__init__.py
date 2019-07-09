@@ -41,7 +41,7 @@ def _get_version_git():
     try:
         out = subprocess.check_output(args=["git", "describe", "--tags", "--dirty", "--always"],
                                       cwd=rootdir)
-        ver = out.strip()
+        ver = out.strip().decode("utf-8", errors="replace")
         if ver.startswith("v"):
             ver = ver[1:]
         return ver
@@ -90,9 +90,10 @@ def get_version_simplified():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = u"Copyright © 2012-2018 Delmic"
+__copyright__ = u"Copyright © 2012-2019 Delmic"
 __authors__ = [u"Éric Piel", u"Rinze de Laat", u"Kimon Tsitsikas",
-               u"Philip Winkler", u"Anders Muskens", u"Sabrina Rossberger"]
+               u"Philip Winkler", u"Anders Muskens", u"Sabrina Rossberger",
+               u"Thera Pals"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms

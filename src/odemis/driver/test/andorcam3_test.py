@@ -38,6 +38,10 @@ CLASS = andorcam3.AndorCam3
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
               bitflow_install_dirs="/usr/share/bitflow/")
 
+KWARGS_EXTRA = dict(name="camera", role="ccd", device=0, transpose=[2, -1], max_bin=(16, 16),
+                    bitflow_install_dirs="/usr/share/bitflow/")
+
+
 class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
@@ -57,7 +61,7 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     Test the synchronizedOn(Event) interface, using the fake SEM
     """
     camera_type = CLASS
-    camera_kwargs = KWARGS
+    camera_kwargs = KWARGS_EXTRA
 
 # Notes on testing the reconnection (which is pretty impossible to do non-manually):
 # * Test both cable disconnect/reconnect and turning off/on

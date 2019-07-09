@@ -14,50 +14,62 @@ from __future__ import division
 
 import argparse
 import logging
+import math
 from odemis import model
 from odemis.dataio import tiff
 import sys
 
+GAIN_INIT = 110
+GAIN_DECREASE = 3  # Reduced every time the dwell time doubles
 
-GAIN_INIT = 100
-GAIN_DECREASE = 2  # Reduced every time the dwell time doubles
 
-MAX_DWELL_TIME = 42.6e-6# s
+def acquire_settings(scanner, det, res, zoom, dt):
+    max_res = scanner.resolution.range[1]
+    scale = [m / (r * zoom) for m, r in zip(max_res, res)]
+    scanner.scale.value = scale
+    scanner.resolution.value = res
+    scanner.dwellTime.value = dt
+    if not dt * 0.8 < scanner.dwellTime.value < dt * 1.01:
+        logging.info(u"Skipping acquisition @ res %s because dwell time %g µs isn't supported",
+                     res[0], dt * 1e6)
+        return None
+
+    im = det.data.get()
+    if det.protection.value:
+        logging.warning("Protection activated")
+        det.protection.value = False
+
+    return im
+
 
 def acquire(det, fn_beg):
     scanner = model.getComponent(role="laser-mirror")
 
-    max_res = scanner.resolution.range[1]
-    dwell_times = []
-    dt = scanner.dwellTime.range[0]
-    while dt < min(scanner.dwellTime.range[1], MAX_DWELL_TIME):
-        dwell_times.append(dt)
-        dt *= 2
+    min_dt = scanner.dwellTime.range[0]
 
-    for zoom in (1, 2, 4):
-        det.gain.value = GAIN_INIT + GAIN_DECREASE
-        for dt in dwell_times:
-            det.gain.value -= GAIN_DECREASE
+    for zoom in (1, 50, 1.1, 1.25, 1.5, 1.75, 2, 4, 8, 16, 20, 30):
+        for kdt in (1, 2, 4, 8, 12, 16, 24, 32, 40, 64, 80):
+            dt = min_dt * kdt
+            if dt > scanner.dwellTime.range[1]:
+                continue
+            det.gain.value = int(GAIN_INIT - math.log(kdt, 2) * GAIN_DECREASE)
             logging.info("Gain is now %g", det.gain.value)
             for xres in (64, 128, 256, 512, 1024, 2048):
                 #for yres in (64, 128, 256, 512, 1024, 2048):
                 yres = xres  # only square images
-                fn = "%s_z%d_d%g_r%dx%d.tiff" % (fn_beg, zoom, dt * 1e6, xres, yres)
-                res = (xres, yres)
-                scale = [m / (r * zoom) for m, r in zip(max_res, res)]
-                scanner.scale.value = scale
-                scanner.resolution.value = res
-                scanner.dwellTime.value = dt
-                if scanner.dwellTime.value > dt or scanner.dwellTime.value < dt * 0.8:
-                    logging.info("Skipping %s because it doesn't support dwell time", fn)
-                    continue
-
+                fn = "%s_z%g_d%g_r%dx%d.tiff" % (fn_beg, zoom, dt * 1e6, xres, yres)
                 logging.info("Acquiring %s", fn)
-                im = det.data.get()
-                if det.protection.value:
-                    logging.warning("Protection activated")
-                    det.protection.value = False
-                tiff.export(fn, im)
+                im = acquire_settings(scanner, det, (xres, yres), zoom, dt)
+                if im is not None:
+                    tiff.export(fn, im)
+
+    # Acquire at the end another time the first image, to check the drift
+    zoom = 1
+    dt = min_dt
+    xres = yres = 2048
+    im = acquire_settings(scanner, det, (xres, yres), zoom, dt)
+    fn = "%s_z%g_d%g_r%dx%d_after.tiff" % (fn_beg, zoom, dt * 1e6, xres, yres)
+    tiff.export(fn, im)
 
 
 def main(args):

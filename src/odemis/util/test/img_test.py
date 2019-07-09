@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import logging
 import numpy
@@ -30,7 +30,7 @@ import unittest
 from unittest.case import skip
 from odemis.dataio import tiff
 import os
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -164,7 +164,6 @@ class TestFindOptimalRange(unittest.TestCase):
         will look like just one column not null. But we still want the image
         to display between 0->255 in RGB.
         """
-        depth = 2 ** 32
         size = (512, 100)
         grey_img = numpy.zeros(size, dtype="uint32") + 3
         grey_img[0, :] = 0
@@ -441,7 +440,7 @@ class TestDataArray2RGB(unittest.TestCase):
     def test_fast(self):
         """Test the fast conversion"""
         data = numpy.ones((251, 200), dtype="uint16")
-        data[:, :] = range(200)
+        data[:, :] = numpy.arange(200)
         data[2, :] = 56
         data[200, 2] = 3
 
@@ -522,7 +521,7 @@ class TestDataArray2RGB(unittest.TestCase):
         irange = (25, 135)
         shape = (1024, 836)
         tint = (0, 73, 255)
-        data = numpy.random.random_integers(irange[0], irange[1], shape).astype(numpy.uint8)
+        data = numpy.random.randint(irange[0], irange[1] + 1, shape).astype(numpy.uint8)
         # to be really sure there is at least one of the min and max values
         data[0, 0] = irange[0]
         data[0, 1] = irange[1]
@@ -843,13 +842,12 @@ class TestMergeTiles(unittest.TestCase):
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (250, 200)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YX',
             model.MD_POS: POS,
             model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
 
         # export
@@ -881,13 +879,12 @@ class TestMergeTiles(unittest.TestCase):
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (2000, 1000)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YX',
             model.MD_POS: POS,
             model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
 
         # export
@@ -924,13 +921,12 @@ class TestMergeTiles(unittest.TestCase):
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (3, 2000, 1000)
-        dtype = numpy.uint8
         md = {
         model.MD_DIMS: 'YXC',
         model.MD_POS: POS,
         model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
-        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint8).reshape(size[::-1])
         print(arr.shape)
         data = model.DataArray(arr, metadata=md)
         

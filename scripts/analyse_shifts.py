@@ -59,11 +59,21 @@ def measure_shift(da, db, use_md=True):
         raise ValueError("Comparing images with different zooms levels %s on each axis is not supported" % (scale,))
 
     # Resample the smaller image to fit the resolution of the larger image
-    db_big = zoom(db, scale[0])
+    if scale[0] < 1:
+        # The "big" image has actually less pixels than the small FoV image
+        # => zoom the big image, and compensate later for the shift
+        logging.info("Rescaling large FoV image by scale %f", 1 / scale[0])
+        da_crop = zoom(da_crop, 1 / scale[0])
+        db_big = db
+        shift_ratio = scale[0]
+    else:
+        logging.info("Rescaling small FoV image by scale %f", scale[0])
+        db_big = zoom(db, scale[0])
+        shift_ratio = 1
     # Apply phase correlation
     shift_px = MeasureShift(da_crop, db_big, 10)
 
-    return shift_px
+    return shift_px[0] * shift_ratio, shift_px[1] * shift_ratio
 
 
 def get_data(fn):
@@ -110,7 +120,7 @@ def main(args):
         da = get_data(options.base)
         if not options.nomd:
             dafov = da.metadata[model.MD_PIXEL_SIZE][0] * da.shape[1]
-        print("filename\tzoom\tdwell time\tres X\tres Y\tshift X\tshift Y")
+        print("filename\tzoom\tdwell time (s)\tres X\tres Y\tshift X (base px)\tshift Y")
         for fn in options.compared:
             logging.info("Comparing %s", fn)
             try:

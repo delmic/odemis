@@ -39,6 +39,7 @@ import threading
 import traceback
 import wx
 from wx.lib.pubsub import pub
+import warnings
 
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.model as guimodel
@@ -118,7 +119,7 @@ class OdemisGUIApp(wx.App):
             gui.name = odemis.__shortname__
             try:
                 microscope = model.getMicroscope()
-            except (IOError, Pyro4.errors.CommunicationError), e:
+            except (IOError, Pyro4.errors.CommunicationError) as e:
                 logging.exception("Failed to connect to back-end")
                 msg = ("The Odemis GUI could not connect to the Odemis back-end:"
                        "\n\n{0}\n\n"
@@ -176,7 +177,7 @@ class OdemisGUIApp(wx.App):
             # 'full screen' view.
             # Also, Gnome's GDK library will start spewing error messages, saying
             # it cannot draw certain images, because the dimensions are 0x0.
-            self.main_frame.SetMinSize((1280, 550))
+            self.main_frame.SetMinSize((1000, 550))
             self.main_frame.Maximize()  # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
@@ -381,6 +382,15 @@ class OdemisGUIApp(wx.App):
         else:
             print("%s: %s\n%s" % (etype, value, trace))
 
+    def showwarning(self, message, category, filename, lineno, file=None, line=None):
+        """
+        Called when a warning is generated.
+        The default behaviour is to write it on stderr, which would lead to it
+        being shown as an error.
+        """
+        warn = warnings.formatwarning(message, category, filename, lineno, line)
+        logging.warning(warn)
+
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -486,9 +496,10 @@ def main(args):
     # Create application
     app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
 
-    # Change exception hook so unexpected exception
-    # get caught by the logger
+    # Change exception hook so unexpected exception get caught by the logger,
+    # and warnings are shown as warnings in the log.
     backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
+    warnings.showwarning = app.showwarning
 
     # Start the application
     app.MainLoop()

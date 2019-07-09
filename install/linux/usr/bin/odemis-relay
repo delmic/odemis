@@ -51,7 +51,7 @@ def main(args):
     ser.write(cmd)
     ans = ''
     char = None
-    while (char != '\n'):
+    while char != '\n':
         char = ser.read()
         ans += char
     logging.debug("Device identified itself as '%s'", ans.encode('string_escape'))

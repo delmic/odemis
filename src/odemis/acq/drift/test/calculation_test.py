@@ -20,15 +20,20 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-import logging
-import numpy
-import unittest
-import math
 
-from odemis.dataio import hdf5
-from odemis.acq.align.shift import MeasureShift
+import logging
+import math
 from numpy import fft
 from numpy import random
+import numpy
+from odemis.acq.align.shift import MeasureShift
+from odemis.dataio import hdf5
+import os
+import unittest
+
+
+DATA_DIR = os.path.dirname(__file__)
+
 
 # @unittest.skip("skip")
 class TestShiftCalculation(unittest.TestCase):
@@ -38,13 +43,13 @@ class TestShiftCalculation(unittest.TestCase):
     # @unittest.skip("skip")
     def setUp(self):
         # Input
-        self.data = hdf5.read_data("example_input.h5")
+        self.data = hdf5.read_data(os.path.join(DATA_DIR, "example_input.h5"))
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.small_data = self.data[0][350:400, 325:375]
 
         # Input drifted by known value
-        self.data_drifted = hdf5.read_data("example_drifted.h5")
+        self.data_drifted = hdf5.read_data(os.path.join(DATA_DIR, "example_drifted.h5"))
         C, T, Z, Y, X = self.data_drifted[0].shape
         self.data_drifted[0].shape = Y, X
 

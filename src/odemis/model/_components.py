@@ -21,17 +21,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
+from past.builtins import basestring
+
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
-import inspect
 import logging
+import math
 import odemis
-import urllib
+from future.moves.urllib.parse import quote
 import weakref
 
 from . import _core, _dataflow, _vattributes, _metadata
 from ._core import roattribute
+from odemis.util import inspect_getmembers
 
 
 class HwError(IOError):
@@ -56,7 +60,7 @@ def getVAs(component):
     returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
     """
     # like dump_vigilante_attributes, but doesn't register them
-    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    vas = inspect_getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
     return dict(vas)
 
 
@@ -81,7 +85,7 @@ def getDataFlows(component):
     returns (dict of name -> DataFlow): all the DataFlows in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    dfs = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
 
 
@@ -90,13 +94,12 @@ def getEvents(component):
     returns (dict of name -> Events): all the Events in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
+    evts = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
 
 
-class ComponentBase(object):
+class ComponentBase(with_metaclass(ABCMeta, object)):
     """Abstract class for a component"""
-    __metaclass__ = ABCMeta
 
 
 class Component(ComponentBase):
@@ -104,12 +107,14 @@ class Component(ComponentBase):
     Component to be shared remotely
     '''
 
-    def __init__(self, name, parent=None, children=None, daemon=None):
+    def __init__(self, name, parent=None, children=None, dependencies=None, daemon=None):
         """
         name (string): unique name used to identify the component
         parent (Component): the parent of this component, that will be in .parent
         children (dict str -> Component): the children of this component, that will
-            be in .children. Objects not instance of Component are skipped
+            be in .children. Objects not instance of Component are skipped.
+        dependencies (dict str -> Component): the dependencies of this component, that will
+            be in .dependencies.
         daemon (Pyro4.daemon): daemon via which the object will be registered.
             default=None => not registered
         """
@@ -117,18 +122,23 @@ class Component(ComponentBase):
         self._name = name
         if daemon:
             # registered under its name
-            daemon.register(self, urllib.quote(name))
+            daemon.register(self, quote(name))
 
         self._parent = None
         self.parent = parent  # calls the setter, which updates ._parent
 
-        if children is None:
-            children = {}
+        dependencies = dependencies or {}
+        children = children or {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
-        # It's up to the sub-class to set correctly the .parent of the children
+        # It's up to the sub-class to set correctly the .parent of the dependencies
+        for dep, c in dependencies.items():
+            if not isinstance(c, ComponentBase):
+                raise ValueError("Dependency %s is not a component." % dep)
+        cd = set (c for c in dependencies.values())
         cc = set(c for c in children.values() if isinstance(c, ComponentBase))
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
+        self.dependencies = _vattributes.VigilantAttribute(cd)
         self.children = _vattributes.VigilantAttribute(cc)
 
     def _getproxystate(self):
@@ -240,7 +250,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 
     def __str__(self):
         try:
-            return "Proxy of Component '%s'" % (self.name)
+            return "Proxy of Component '%s'" % (self.name,)
         except AttributeError:
             return super(ComponentProxy, self).__str__()
 
@@ -254,18 +264,17 @@ def ComponentSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:  # TODO might not be even necessary: They should be registering themselves in the init
         # only return a proxy if the object is a registered pyro object
-        return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
+        return ComponentProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 Pyro4.Daemon.serializers[Component] = ComponentSerializer
 
 
-class HwComponent(Component):
+class HwComponent(with_metaclass(ABCMeta, Component)):
     """
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, power_supplier=None, transp=None, *args, **kwargs):
         """
@@ -558,12 +567,11 @@ class Microscope(HwComponent):
         return self._model
 
 
-class Detector(HwComponent):
+class Detector(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a detector.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, transpose=None, transp=None, **kwargs):
         """
@@ -579,7 +587,7 @@ class Detector(HwComponent):
                 raise ValueError("Cannot specify transp and transpose simultaneously")
             # Convert transpose to trans
             transp = [abs(v) for v in transpose]
-            transp = [v * cmp(s, 0) for v, s in zip(transp, reversed(transpose))]
+            transp = [int(math.copysign(v, s)) for v, s in zip(transp, reversed(transpose))]
 
         HwComponent.__init__(self, name, role, transp=transp, **kwargs)
 
@@ -604,12 +612,11 @@ class Detector(HwComponent):
         return self._transposeSizeToUser(self._shape)
 
 
-class DigitalCamera(Detector):
+class DigitalCamera(with_metaclass(ABCMeta, Detector)):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         Detector.__init__(self, name, role, **kwargs)
@@ -734,12 +741,11 @@ class Axis(object):
         return "%s in %s%s%s" % (self.__class__.__name__, pos_str, abs_str, speed_str)
 
 
-class Actuator(HwComponent):
+class Actuator(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, axes=None, inverted=None, **kwargs):
         """
@@ -930,12 +936,11 @@ class Actuator(HwComponent):
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
 
 
-class PowerSupplier(HwComponent):
+class PowerSupplier(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a power supplier for one or multiple components.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
@@ -968,12 +973,11 @@ class PowerSupplier(HwComponent):
                 raise ValueError("Unknown component %s" % (component,))
 
 
-class Emitter(HwComponent):
+class Emitter(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an emitter.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)

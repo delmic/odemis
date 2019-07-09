@@ -42,7 +42,7 @@ SPARC-Spec: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -79,7 +79,7 @@ SPARC-Spec: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "External Spectrograph"},
+    dependencies: {"z": "External Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -91,7 +91,7 @@ SPARC-Spec: {
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "External Spectrograph"},
+    dependencies: {"rx": "External Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {

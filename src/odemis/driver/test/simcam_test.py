@@ -19,25 +19,20 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
+import numpy
 from odemis import model
-from odemis.driver import simcam
+from odemis.driver import simcam, simulated
 import time
 import unittest
 from unittest.case import skip
-import h5py as h5
-import numpy
-from PIL import Image, ImageDraw, ImageFont
-from odemis.dataio import hdf5 as h5
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = simcam.Camera
-CONFIG_FOCUS = {"name": "focus", "role": "overview-focus"}
-KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5",
-              children={"focus": CONFIG_FOCUS})
-KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5",
-              children={"focus": CONFIG_FOCUS})
+KWARGS_FOCUS = {"name": "focus", "role": "overview-focus", "axes": ["z"], "ranges": {"z": [0, 0.012]}}
+KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
+KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5")
 
 # TODO focus
 
@@ -46,10 +41,8 @@ class TestSimCam(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.camera = CLASS(**KWARGS)
-        for child in cls.camera.children.value:
-            if child.name == CONFIG_FOCUS["name"]:
-                cls.focus = child
+        cls.focus = simulated.Stage(**KWARGS_FOCUS)
+        cls.camera = CLASS(dependencies={"focus": cls.focus}, **KWARGS)
 
     @classmethod
     def tearDownClass(cls):
@@ -227,7 +220,13 @@ class TestSimCam(unittest.TestCase):
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.imshp)
-        self.assertGreaterEqual(duration, exposure / 2, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
+        # It should be about the exposure time. However, as the acquisition has
+        # started as soon as the previous image was received, it might take a
+        # tiny bit less than the exposure time (eg, a few ms less). On a real
+        # hardware, the overhead is usually much higher than these few ms, but
+        # here, that's important.
+        self.assertGreaterEqual(duration, exposure / 2 - 0.1,
+                                "Error execution took %f s, far less than exposure time %f." % (duration, exposure / 2))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
         for i in range(number):
@@ -315,10 +314,8 @@ class TestSimCamWithPolarization(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.camera = CLASS(**KWARGS_POL)
-        for child in cls.camera.children.value:
-            if child.name == CONFIG_FOCUS["name"]:
-                cls.focus = child
+        cls.focus = simulated.Stage(**KWARGS_FOCUS)
+        cls.camera = CLASS(dependencies={"focus": cls.focus}, **KWARGS_POL)
 
     @classmethod
     def tearDownClass(cls):

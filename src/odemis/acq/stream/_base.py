@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from past.builtins import long
 import collections
 import functools
 import gc
@@ -84,8 +85,7 @@ class Stream(object):
         emtvas (None or set of str): names of all the emitter VAs to be
           duplicated on the stream. They will be named .emtOriginalName
         raw (None or list of DataArrays or DataArrayShadow): raw data to be used
-          at initialisation. By default, it will contain no data. If it's a
-          DataArrayShadow, it will provide a 2D tuple as .raw.
+          at initialisation. By default, it will contain no data.
         acq_type (MD_AT_*): acquisition type associated with this stream (as in model._metadata)
         """
         self.name = model.StringVA(name)
@@ -109,13 +109,10 @@ class Stream(object):
         self._im_needs_recompute = threading.Event()
         self._init_thread()
 
-        # list of DataArray received and used to generate the image
+        # list of DataArray(Shadow) received and used to generate the image
         # every time it's modified, image is also modified
         if raw is None:
             self.raw = []
-        elif isinstance(raw[0], model.DataArrayShadow):
-            self._das = raw[0]
-            self.raw = (())
         else:
             self.raw = raw
 
@@ -154,6 +151,7 @@ class Stream(object):
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
+        self._dRangeLock = threading.Lock()
         self._drange = None  # min/max data range, or None if unknown
         self._drange_unreliable = True  # if current values are a rough guess (based on detector)
 
@@ -165,20 +163,23 @@ class Stream(object):
         # The drawback of not using the full image, is that some of the pixels are lost, so
         # maybe the max/min of the smaller image is different from the min/max of the full image.
         # And the histogram of both images will probably be a bit different also.
-        if hasattr(self, '_das'):
+        if raw and isinstance(raw[0], model.DataArrayShadow):
             # if the image is pyramidal, use the smaller image
-            drange_raw = self._getMergedRawImage(self._das.maxzoom)
+            drange_raw = self._getMergedRawImage(raw[0], raw[0].maxzoom)
         else:
             drange_raw = None
 
         # TODO: move to the DataProjection class
         self.auto_bc = model.BooleanVA(True)
+        self.auto_bc.subscribe(self._onAutoBC)
 
         # % of values considered outliers discarded in auto BC detection
         # Note: 1/256th is a nice value because on RGB, it means in degenerated
         # cases (like flat histogram), you still loose only one value on each
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
+        self.auto_bc_outliers.subscribe(self._onOutliers)
+
         self.tint = model.ListVA((255, 255, 255), unit="RGB")  # 3-int R,G,B
 
         # Used if auto_bc is False
@@ -191,9 +192,8 @@ class Stream(object):
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
+        self._updateDRange(drange_raw)  # sets intensityRange
         self._init_projection_vas()
-
-        self._updateDRange(drange_raw)
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
@@ -215,23 +215,13 @@ class Stream(object):
         # TODO: have this done by the child class, if needed.
         if self.raw:
             self._updateHistogram(drange_raw)
-            if isinstance(self.raw, list):
-                raw = self.raw[0]
-            else:
-                raw = self.raw
-            self._onNewData(None, raw)
-
-        # When True, the projected tiles cache should be invalidated
-        self._projectedTilesInvalid = False
+            self._onNewData(None, self.raw[0])
 
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
         """
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
-
-        self.auto_bc.subscribe(self._onAutoBC)
-        self.auto_bc_outliers.subscribe(self._onOutliers)
 
         # Don't call at init, so don't set metadata if default value
         self.tint.subscribe(self.onTint)
@@ -275,7 +265,7 @@ class Stream(object):
 
     def _getVAs(self, comp, va_names):
         if not isinstance(va_names, set):
-            raise ValueError("vas should be a set but got %s" % (va_names,))
+            raise ValueError(u"vas should be a set but got %s" % (va_names,))
 
         vas = {}
 
@@ -283,10 +273,10 @@ class Stream(object):
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
-                raise LookupError("Component %s has not attribute %s" %
+                raise LookupError(u"Component %s has not attribute %s" %
                                   (comp.name, vaname))
             if not isinstance(va, VigilantAttributeBase):
-                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                raise LookupError(u"Component %s attribute %s is not a VA: %s" %
                                   (comp.name, vaname, va.__class__.__name__))
 
             setattr(self, vaname, va)
@@ -321,17 +311,17 @@ class Stream(object):
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
-                raise LookupError("Component %s has not attribute %s" %
+                raise LookupError(u"Component %s has not attribute %s" %
                                   (comp.name, vaname))
             if not isinstance(va, VigilantAttributeBase):
-                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                raise LookupError(u"Component %s attribute %s is not a VA: %s" %
                                   (comp.name, vaname, va.__class__.__name__))
 
             # TODO: add a setter/listener that will automatically synchronise the VA value
             # as long as the stream is active
             vasetter = functools.partial(self._va_sync_setter, va)
             dupva = self._duplicateVA(va, setter=vasetter)
-            logging.debug("Duplicated VA '%s' with value %s", vaname, va.value)
+            logging.debug(u"Duplicated VA '%s' with value %s", vaname, va.value)
             # Collect the vas, so we can return them at the end of the method
             dup_vas[vaname] = dupva
 
@@ -354,11 +344,11 @@ class Stream(object):
         return: the real new value (as accepted by the original VA)
         """
         if self.is_active.value:  # only synchronised when the stream is active
-            logging.debug("updating VA (%s) to %s", origva, v)
+            logging.debug(u"Updating VA (%s) to %s", origva, v)
             origva.value = v
             return origva.value
         else:
-            logging.debug("not updating VA (%s) to %s", origva, v)
+            logging.debug(u"Not updating VA (%s) to %s", origva, v)
             return v
 
     def _va_sync_from_hw(self, lva, v):
@@ -370,7 +360,7 @@ class Stream(object):
         # Don't use the setter, directly put the value as-is. That avoids the
         # setter to again set the Hw VA, and ensure we always accept the Hw
         # value
-        logging.debug("updating local VA (%s) to %s", lva, v)
+        logging.debug(u"Updating local VA (%s) to %s", lva, v)
         if lva._value != v:
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
@@ -406,7 +396,7 @@ class Stream(object):
                 # TODO: distinguish model.IntContinuous, how?
                 vacls = model.FloatContinuous
             else:
-                raise NotImplementedError("Doesn't know how to duplicate VA %s"
+                raise NotImplementedError(u"Doesn't know how to duplicate VA %s"
                                           % (va,))
             kwargs["range"] = va.range
         else:
@@ -420,7 +410,8 @@ class Stream(object):
     # Order in which VAs should be set to ensure the values are kept as-is.
     # This should be the behaviour of the hardware component... but the driver
     # might be buggy, so beware!
-    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime")
+    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime",
+                "TimeRange", "StreakMode", "MCPGain")
     def _index_in_va_order(self, va_entry):
         """
         return the position of the VA name in VA_ORDER
@@ -442,10 +433,10 @@ class Stream(object):
           VA will be set to the hardware value.
         """
         if self._lvaupdaters:
-            logging.warning("Going to link Hw VAs, while already linked")
+            logging.warning(u"Going to link Hw VAs, while already linked")
 
         # Make sure the VAs are set in the right order to keep values
-        hwvas = self._hwvas.items()  # must be a list
+        hwvas = list(self._hwvas.items())  # must be a list
         hwvas.sort(key=self._index_in_va_order)
 
         for vaname, hwva in hwvas:
@@ -455,7 +446,7 @@ class Stream(object):
             try:
                 hwva.value = lva.value
             except Exception:
-                logging.debug("Failed to set VA %s to value %s on hardware",
+                logging.debug(u"Failed to set VA %s to value %s on hardware",
                               vaname, lva.value)
 
         # Immediately read the VAs back, to read the actual values accepted by the hardware
@@ -466,7 +457,7 @@ class Stream(object):
             try:
                 lva.value = hwva.value
             except Exception:
-                logging.debug("Failed to update VA %s to value %s from hardware",
+                logging.debug(u"Failed to update VA %s to value %s from hardware",
                               vaname, hwva.value)
 
             # Hack: There shouldn't be a resolution local VA, but for now there is.
@@ -509,7 +500,7 @@ class Stream(object):
         except AttributeError:
             hwva = getattr(self._emitter, vaname)
             if not isinstance(hwva, VigilantAttributeBase):
-                raise AttributeError("Emitter has not VA %s" % (vaname,))
+                raise AttributeError(u"Emitter has not VA %s" % (vaname,))
             return hwva
 
     def _getDetectorVA(self, vaname):
@@ -527,7 +518,7 @@ class Stream(object):
         except AttributeError:
             hwva = getattr(self._detector, vaname)
             if not isinstance(hwva, VigilantAttributeBase):
-                raise AttributeError("Detector has not VA %s" % (vaname,))
+                raise AttributeError(u"Detector has not VA %s" % (vaname,))
             return hwva
 
     def prepare(self):
@@ -552,7 +543,7 @@ class Stream(object):
 
         returns (model.ProgressiveFuture): Progress of preparation
         """
-        logging.debug("Preparing stream %s ...", self.name.value)
+        logging.debug(u"Preparing stream %s ...", self.name.value)
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
         self._prepared = True
@@ -562,7 +553,7 @@ class Stream(object):
         if self._opm is None:
             return model.InstantaneousFuture()
 
-        logging.debug("Setting optical path for %s", self.name.value)
+        logging.debug(u"Setting optical path for %s", self.name.value)
         f = self._opm.setPath(self)
         return f
 
@@ -586,27 +577,18 @@ class Stream(object):
         message (str or None): the status message
         """
         if level is None and message is not None:
-            logging.warning("Setting status with no level and message %s", message)
+            logging.warning(u"Setting status with no level and message %s", message)
 
         self.status._value = (level, message)
         self.status.notify(self.status.value)
 
     def onTint(self, value):
-        if isinstance(self.raw, list):
-            if len(self.raw) > 0:
-                raw = self.raw[0]
-            else:
-                raw = None
-        elif isinstance(self.raw, tuple):
-            raw = self._das
+        if self.raw:
+            raw = self.raw[0]
         else:
-            raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+            raw = None
 
         if raw is not None:
-            # If the image is pyramidal, the exported image is based on tiles from .raw.
-            # And the metadata from raw will be used to generate the metadata of the merged
-            # image from the tiles. So, in the end, the exported image metadata will be based
-            # on the raw metadata
             raw.metadata[model.MD_USER_TINT] = value
 
         self._shouldUpdateImage()
@@ -640,81 +622,83 @@ class Stream(object):
         # different 4th or 5th dimension). => just a generic version that tries
         # to handle all the cases.
 
-        if data is None:
-            if self.raw:
-                if isinstance(self.raw, list):
-                    data = self.raw[0]
-                elif isinstance(self.raw, tuple):
+        # Note: Add a lock to avoid calling this fct simultaneously. When starting
+        # Odemis, the image thread and the histogram thread call this method.
+        # It happened sometimes that self._drange_unreliable was already updated, while
+        # self._drange was not updated yet. This resulted in incorrectly updated min and max
+        # values for drange calc by the second thread as using the new
+        # self._drange_unreliable but the old self._drange values.
+        with self._dRangeLock:
+            if data is None and self.raw:
+                data = self.raw[0]
+                if isinstance(data, model.DataArrayShadow):
                     # if the image is pyramidal, use the smaller image
-                    data = self._getMergedRawImage(self.raw.maxzoom)
-                else:
-                    raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+                    data = self._getMergedRawImage(data, data.maxzoom)
 
-        # 2 types of drange management:
-        # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
-        # * dtype is float -> data.max
-        if data is not None:
-            if data.dtype.kind in "biu":
-                try:
-                    depth = 2 ** data.metadata[model.MD_BPP]
-                    if depth <= 1:
-                        logging.warning("Data reports a BPP of %d",
-                                        data.metadata[model.MD_BPP])
-                        raise ValueError()
-                    drange = (0, depth - 1)
-                except (KeyError, ValueError):
-                    drange = self._guessDRangeFromDetector()
+            # 2 types of drange management:
+            # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
+            # * dtype is float -> data.max
+            if data is not None:
+                if data.dtype.kind in "biu":
+                    try:
+                        depth = 2 ** data.metadata[model.MD_BPP]
+                        if depth <= 1:
+                            logging.warning("Data reports a BPP of %d", data.metadata[model.MD_BPP])
+                            raise ValueError()
+                        drange = (0, depth - 1)
+                    except (KeyError, ValueError):
+                        drange = self._guessDRangeFromDetector()
 
-                if drange is None:
-                    idt = numpy.iinfo(data.dtype)
-                    drange = (idt.min, idt.max)
-                elif data.dtype.kind == "i":  # shift the range for signed data
-                    depth = drange[1] + 1
-                    drange = (-depth // 2, depth // 2 - 1)
+                    if drange is None:
+                        idt = numpy.iinfo(data.dtype)
+                        drange = (idt.min, idt.max)
+                    elif data.dtype.kind == "i":  # shift the range for signed data
+                        depth = drange[1] + 1
+                        drange = (-depth // 2, depth // 2 - 1)
 
-                # If range is too big to be used as is => look really at the data
-                if (drange[1] - drange[0] > 4095 and
-                    (self._drange is None or
-                     self._drange_unreliable or
-                     self._drange[1] - self._drange[0] < drange[1] - drange[0])):
-                    mn = int(data.view(numpy.ndarray).min())
-                    mx = int(data.view(numpy.ndarray).max())
+                    # If range is too big to be used as is => look really at the data
+                    if (drange[1] - drange[0] > 4095 and
+                        (self._drange is None or
+                         self._drange_unreliable or
+                         self._drange[1] - self._drange[0] < drange[1] - drange[0])):
+                        mn = int(data.view(numpy.ndarray).min())
+                        mx = int(data.view(numpy.ndarray).max())
+                        if self._drange is not None and not self._drange_unreliable:
+                            # Only allow the range to expand, to avoid it constantly moving
+                            mn = min(mn, self._drange[0])
+                            mx = max(mx, self._drange[1])
+                        # Try to find "round" values. Either:
+                        # * mn = 0, mx = max rounded to next power of 2  -1
+                        # * mn = min, width = width rounded to next power of 2
+                        # => pick the one which gives the smallest width
+                        diff = max(2, mx - mn + 1)
+                        diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
+                        width0 = max(2, mx + 1)
+                        width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
+                        if diffrd < width0rd:
+                            drange = (mn, mn + diffrd - 1)
+                        else:
+                            drange = (0, width0rd - 1)
+                else:  # float
+                    # cast to ndarray to ensure a scalar (instead of a DataArray)
+                    drange = (data.view(numpy.ndarray).min(),
+                              data.view(numpy.ndarray).max())
                     if self._drange is not None and not self._drange_unreliable:
-                        # Only allow the range to expand, to avoid it constantly moving
-                        mn = min(mn, self._drange[0])
-                        mx = max(mx, self._drange[1])
-                    # Try to find "round" values. Either:
-                    # * mn = 0, mx = max rounded to next power of 2  -1
-                    # * mn = min, width = width rounded to next power of 2
-                    # => pick the one which gives the smallest width
-                    diff = max(2, mx - mn + 1)
-                    diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
-                    width0 = max(2, mx + 1)
-                    width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
-                    if diffrd < width0rd:
-                        drange = (mn, mn + diffrd - 1)
-                    else:
-                        drange = (0, width0rd - 1)
-            else: # float
-                # cast to ndarray to ensure a scalar (instead of a DataArray)
-                drange = (data.view(numpy.ndarray).min(),
-                          data.view(numpy.ndarray).max())
-                if self._drange is not None and not self._drange_unreliable:
-                    drange = (min(drange[0], self._drange[0]),
-                              max(drange[1], self._drange[1]))
+                        drange = (min(drange[0], self._drange[0]),
+                                  max(drange[1], self._drange[1]))
+
+                if drange:
+                    self._drange_unreliable = False
+            else:
+                # no data, give a large estimate based on the detector
+                drange = self._guessDRangeFromDetector()
+                self._drange_unreliable = True
 
             if drange:
-                self._drange_unreliable = False
-        else:
-            # no data, give a large estimate based on the detector
-            drange = self._guessDRangeFromDetector()
-            self._drange_unreliable = True
-
-        if drange:
-            # This VA will clip its own value if it is out of range
-            self.intensityRange.range = ((drange[0], drange[0]),
-                                         (drange[1], drange[1]))
-        self._drange = drange
+                # This VA will clip its own value if it is out of range
+                self.intensityRange.range = ((drange[0], drange[0]),
+                                             (drange[1], drange[1]))
+            self._drange = drange
 
     def _guessDRangeFromDetector(self):
         try:
@@ -748,16 +732,8 @@ class Stream(object):
             # The main thing to pay attention is that the data range is identical
             if self.histogram._edges != self._drange:
                 self._updateHistogram()
-            irange = img.findOptimalRange(self.histogram._full_hist,
-                                          self.histogram._edges,
-                                          self.auto_bc_outliers.value / 100)
-            # clip is needed for some corner cases with floats
-            irange = self.intensityRange.clip(irange)
-            self.intensityRange.value = irange
-        else:
-            # just use the values requested by the user
-            irange = sorted(self.intensityRange.value)
 
+        irange = sorted(self.intensityRange.value)
         return irange
 
     def _find_metadata(self, md):
@@ -870,28 +846,29 @@ class Stream(object):
                 im_needs_recompute.clear()
                 stream._updateImage()
         except Exception:
-            logging.exception("image update thread failed")
+            logging.exception("Image update thread failed")
 
         gc.collect()
 
-    def _getMergedRawImage(self, z):
+    def _getMergedRawImage(self, das, z):
         """
-        Returns the merged image based on z and .rect, using the raw tiles (not projected)
+        Returns the entire raw data of DataArrayShadow at a given zoom level
+        das (DataArrayShadow): shadow of the raw data
         z (int): Zoom level index
         return (DataArray): The merged image
         """
         # calculates the size of the merged image
-        width_zoomed = self._das.shape[1] / (2 ** z)
-        height_zoomed = self._das.shape[0] / (2 ** z)
+        width_zoomed = das.shape[1] / (2 ** z)
+        height_zoomed = das.shape[0] / (2 ** z)
         # calculates the number of tiles on both axes
-        num_tiles_x = int(math.ceil(width_zoomed / self._das.tile_shape[1]))
-        num_tiles_y = int(math.ceil(height_zoomed/ self._das.tile_shape[0]))
+        num_tiles_x = int(math.ceil(width_zoomed / das.tile_shape[1]))
+        num_tiles_y = int(math.ceil(height_zoomed / das.tile_shape[0]))
 
         tiles = []
         for x in range(num_tiles_x):
             tiles_column = []
             for y in range(num_tiles_y):
-                tile = self._das.getTile(x, y, z)
+                tile = das.getTile(x, y, z)
                 tiles_column.append(tile)
             tiles.append(tiles_column)
 
@@ -901,40 +878,35 @@ class Stream(object):
         """ Recomputes the image with all the raw data available
         """
         # logging.debug("Updating image")
-        if not self.raw and isinstance(self.raw, list):
+        if not self.raw:
             return
 
         try:
-            # if .raw is a list of DataArray, .image is a complete image
-            if isinstance(self.raw, list):
-                data = self.raw[0]
-                bkg = self.background.value
-                if bkg is not None:
-                    try:
-                        data = img.Subtract(data, bkg)
-                    except Exception as ex:
-                        logging.info("Failed to subtract background data: %s", ex)
-
-                dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-                ci = dims.find("C")  # -1 if not found
-                # is RGB
-                if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
-                    try:
-                        rgbim = img.ensureYXC(data)
-                        rgbim.flags.writeable = False
-                        # merge and ensures all the needed metadata is there
-                        rgbim.metadata = self._find_metadata(rgbim.metadata)
-                        rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
-                        self.image.value = rgbim
-                    except Exception:
-                        logging.exception("Updating %s image", self.__class__.__name__)
-                else: # is grayscale
-                    if data.ndim != 2:
-                        data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
-                    self.image.value = self._projectXY2RGB(data, self.tint.value)
-            else:
+            if not isinstance(self.raw, list):
                 raise AttributeError(".raw must be a list of DA/DAS")
 
+            data = self.raw[0]
+            bkg = self.background.value
+            if bkg is not None:
+                try:
+                    data = img.Subtract(data, bkg)
+                except Exception as ex:
+                    logging.info("Failed to subtract background data: %s", ex)
+
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            ci = dims.find("C")  # -1 if not found
+            # is RGB
+            if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
+                rgbim = img.ensureYXC(data)
+                rgbim.flags.writeable = False
+                # merge and ensures all the needed metadata is there
+                rgbim.metadata = self._find_metadata(rgbim.metadata)
+                rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
+                self.image.value = rgbim
+            else:  # is grayscale
+                if data.ndim != 2:
+                    data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
+                self.image.value = self._projectXY2RGB(data, self.tint.value)
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
@@ -950,13 +922,19 @@ class Stream(object):
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
         if enabled:
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
 
     def _onOutliers(self, outliers):
         if self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
+
+    def _recomputeIntensityRange(self):
+        irange = img.findOptimalRange(self.histogram._full_hist,
+                                      self.histogram._edges,
+                                      self.auto_bc_outliers.value / 100)
+        # clip is needed for some corner cases with floats
+        irange = self.intensityRange.clip(irange)
+        self.intensityRange.value = irange
 
     def _setIntensityRange(self, irange):
         # Not much to do, but force int if the data is int
@@ -968,27 +946,24 @@ class Stream(object):
         return irange
 
     def _onIntensityRange(self, irange):
-        # If auto_bc is active, it updates intensities (from _updateImage()),
-        # so no need to refresh image again.
-        if not self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+        self._shouldUpdateImage()
 
     def _updateHistogram(self, data=None):
         """
         data (DataArray): the raw data to use, default to .raw[0] - background
           (if present).
+        If will also update the intensityRange if auto_bc is enabled.
         """
         # Compute histogram and compact version
         if data is None:
-            if isinstance(self.raw, tuple):  # Pyramidal => use the smallest
-                data = self._getMergedRawImage(self._das.maxzoom)
-            elif not self.raw or not isinstance(self.raw, list):
-                logging.debug("Not computing histogram as .raw is ")
+            if not self.raw:
+                logging.debug("Not computing histogram as .raw is empty")
                 return
-            else:  # the normal case: .raw is a list of DataArrays
-                data = self.raw[0]
+
+            data = self.raw[0]
+            if isinstance(data, model.DataArrayShadow):
+                # Pyramidal => use the smallest version
+                data = self._getMergedRawImage(data, data.maxzoom)
 
             # We only do background subtraction when automatically selecting raw
             bkg = self.background.value
@@ -1009,8 +984,13 @@ class Stream(object):
             chist = hist
         self.histogram._full_hist = hist
         self.histogram._edges = edges
-        # Read-only VA, so we need to go around...
+        # First update the value, before the intensityRange subscribers are called...
         self.histogram._value = chist
+
+        if self.auto_bc.value:
+            self._recomputeIntensityRange()
+
+        # Notify last, so intensityRange is correct when subscribers get the new histogram
         self.histogram.notify(chist)
 
     def _onNewData(self, dataflow, data):
@@ -1019,11 +999,13 @@ class Stream(object):
         #     logging.debug("Receive raw %g s after acquisition",
         #                   time.time() - data.metadata[model.MD_ACQ_DATE])
 
-        if not self.raw and isinstance(self.raw, list):
-            self.raw.append(data)
-        else:
-            if isinstance(self.raw, list):
+        if isinstance(self.raw, list):
+            if not self.raw:
+                self.raw.append(data)
+            else:
                 self.raw[0] = data
+        else:
+            logging.error("%s .raw is not a list, so can store new data", self)
 
         self._shouldUpdateImage()
 
@@ -1050,4 +1032,11 @@ class Stream(object):
         pxs = md[model.MD_PIXEL_SIZE]
         c = md[model.MD_POS]
         w, h = shape[1] * pxs[0], shape[0] * pxs[1]
-        return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+        return c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2
+
+    def getRawMetadata(self):
+        """
+        Gets the raw metadata structure from the stream.
+        A list of metadata dicts is returned.
+        """
+        return [None if data is None else data.metadata for data in self.raw]

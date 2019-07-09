@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import collections
 import logging
@@ -62,7 +62,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             sem = CLASS(name, "filter", **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
 
@@ -117,7 +117,6 @@ class TestFW102c(unittest.TestCase):
         self.assertEqual(self.dev.position.value["band"], cur_pos)
 
         # find a different position
-        new_pos = cur_pos
         bands = self.dev.axes["band"]
         for p in bands.choices:
             if p != cur_pos:

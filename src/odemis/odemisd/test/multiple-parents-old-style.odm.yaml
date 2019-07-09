@@ -1,0 +1,71 @@
+# Microscope file which uses multiple parents for a component:
+# * one parent (SEM Scan Interface) creates the component (CL PMT)
+# * one parent (CL Detector) uses the component
+
+SPARC2: {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "CL Detector"],
+}
+
+# Both 'SEM Scan Interface' and 'CL Detector' have 'CL PMT' as a child
+"SEM Scan Interface": {
+    class: semcomedi.SEMComedi,
+    role: null,
+    init: {device: "/dev/comedi0"},
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "CL PMT",
+    }
+}
+
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: {
+        settle_time: 0.1,
+    },
+    children: {
+       "detector": "CL PMT",
+       "pmt-control": "CL PMT control unit",
+    },
+}
+
+"CL PMT": {
+    # Internal child of SEM Scan Interface, so no class but instead a creator
+    creator: "SEM Scan Interface",
+    role: null,
+    init: {
+        channel: 1,
+        limits: [3, 0],
+    },
+}
+
+# Required components to make CL Detector and SEM Scan Interface work
+"CL PMT control unit": {
+    class: pmtctrl.PMTControl,
+    role: null,
+    init: {
+        port: "/dev/fake", # for simulator
+        prot_time: 0.0002,  # s
+        prot_curr: 50.e-6,  # A
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SEM ExtXY, so no class
+    role: e-beam,
+    init: {
+        channels: [1, 0],
+        limits: [[0, 5], [0, 5]],  # V
+        park: [0, 0], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
+    },
+    properties: {
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        dwellTime: 10.e-6, # s
+        magnification: 100, # (ratio)
+    },
+    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
+}

@@ -29,7 +29,7 @@ from decorator import decorator
 import logging
 from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS
+    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
 from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
@@ -378,7 +378,7 @@ class StreamPanelHeader(wx.Control):
         dlg = wx.ColourDialog(self, cldata)
 
         if dlg.ShowModal() == wx.ID_OK:
-            colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
+            colour = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
             logging.debug("Colour %r selected", colour)
             # Setting the VA will automatically update the button's colour
             self.Parent.stream.tint.value = colour
@@ -758,7 +758,7 @@ class StreamPanel(wx.Panel):
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
-                                                   label="Auto")
+                                                   label="Auto", active_colour=FG_COLOUR_RADIO_ACTIVE)
         btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
@@ -806,14 +806,14 @@ class StreamPanel(wx.Panel):
         # accuracy to avoid rounding.
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
-        tooltip_txt = "Value mapped to black"
+        tooltip_txt = "Values below are mapped to black [cts/px]."
         lbl_lowi.SetToolTip(tooltip_txt)
 
         txt_lowi = FloatTextCtrl(self._panel, -1,
                                  self.stream.intensityRange.value[0],
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
-                                 key_step=1, accuracy=6)
+                                 key_step_min=1, accuracy=6)
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
 
@@ -821,13 +821,13 @@ class StreamPanel(wx.Panel):
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
 
-        tooltip_txt = "Value mapped to white"
+        tooltip_txt = "Values above are mapped to white [cts/px]."
         lbl_highi.SetToolTip(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,
                                   self.stream.intensityRange.value[1],
                                   style=wx.NO_BORDER, size=(-1, 14),
                                   min_val=hist_min, max_val=hist_max,
-                                  key_step=1, accuracy=6)
+                                  key_step_min=1, accuracy=6)
         txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_highi.SetToolTip(tooltip_txt)
@@ -865,6 +865,8 @@ class StreamPanel(wx.Panel):
 
     def _add_slider(self, klass, label_text, value, conf):
         """ Add a slider of type 'klass' to the settings panel """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, **conf)
@@ -931,6 +933,8 @@ class StreamPanel(wx.Panel):
         return self._add_num_field(UnitFloatCtrl, label_text, value, conf)
 
     def _add_num_field(self, klass, label_text, value, conf):
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, style=wx.NO_BORDER, **conf)
@@ -1032,10 +1036,12 @@ class StreamPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = GraphicalRadioButtonControl(self._panel, -1, style=wx.NO_BORDER,
-                                                 **conf if conf else {})
+                                                 **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
@@ -1295,8 +1301,9 @@ class StreamBar(wx.Panel):
         acq.stream.CameraStream,
         acq.stream.ARSettingsStream,
         acq.stream.SpectrumSettingsStream,
+        acq.stream.ScannedTemporalSettingsStream,
+        acq.stream.TemporalSpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
-        acq.stream.MomentOfInertiaLiveStream,
         acq.stream.CameraCountStream,
         acq.stream.ScannedTCSettingsStream
     )

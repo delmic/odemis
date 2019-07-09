@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+from past.builtins import basestring, unicode
 
 import collections
 import h5py
@@ -80,6 +81,48 @@ CAN_SAVE_PYRAMID = False
 # h5py doesn't implement explicitly HDF5 image, and is not willing to cf:
 # http://code.google.com/p/h5py/issues/detail?id=157
 
+# Enums used in SVI HDF5
+# State: how "trustable" is the value
+
+
+ST_INVALID = 111
+ST_DEFAULT = 112
+ST_ESTIMATED = 113
+ST_REPORTED = 114
+ST_VERIFIED = 115
+_dtstate = h5py.special_dtype(enum=('i', {
+     "Invalid": ST_INVALID, "Default": ST_DEFAULT, "Estimated": ST_ESTIMATED,
+     "Reported": ST_REPORTED, "Verified": ST_VERIFIED}))
+
+# MicroscopeMode
+MM_NONE = 0
+MM_TRANSMISSION = 1
+MM_REFLECTION = 2
+MM_FLUORESCENCE = 3
+_dtmm = h5py.special_dtype(enum=('i', {
+     "None": MM_NONE, "Transmission": MM_TRANSMISSION ,
+     "Reflection": MM_REFLECTION, "Fluorescence": MM_FLUORESCENCE}))
+_dictmm = h5py.check_dtype(enum=_dtmm)
+# MicroscopeType
+MT_NONE = 111
+MT_WIDEFIELD = 112
+MT_CONFOCAL = 113
+MT_4PIEXCITATION = 114
+MT_NIPKOWDISKCONFOCAL = 115
+MT_GENERICSENSOR = 118
+_dtmt = h5py.special_dtype(enum=('i', {
+    "None": MT_NONE, "WideField": MT_WIDEFIELD, "Confocal": MT_CONFOCAL,
+    "4PiExcitation": MT_4PIEXCITATION, "NipkowDiskConfocal": MT_NIPKOWDISKCONFOCAL,
+    "GenericSensor": MT_GENERICSENSOR}))
+_dictmt = h5py.check_dtype(enum=_dtmt)
+# ImagingDirection
+ID_UPWARD = 0
+ID_DOWNWARD = 1
+ID_BOTH = 2
+_dtid = h5py.special_dtype(enum=('i', {
+    "Upward": ID_UPWARD, "Downward": ID_DOWNWARD, "Both": ID_BOTH}))
+_dictid = h5py.check_dtype(enum=_dtid)
+
 
 def _create_image_dataset(group, dataset_name, image, **kwargs):
     """
@@ -132,16 +175,16 @@ def _read_image_dataset(dataset):
     if len(dataset.shape) < 2:
         raise IOError("Image has a shape of %s" % (dataset.shape,))
 
-    if dataset.attrs.get("IMAGE_VERSION") != "1.2":
+    if dataset.attrs.get("IMAGE_VERSION") != b"1.2":
         logging.info("Trying to read an HDF5 image of unsupported version")
 
     # conversion is almost entirely different depending on subclass
-    subclass = dataset.attrs.get("IMAGE_SUBCLASS", "IMAGE_GRAYSCALE")
+    subclass = dataset.attrs.get("IMAGE_SUBCLASS", b"IMAGE_GRAYSCALE")
 
     image = model.DataArray(dataset[...])
-    if subclass == "IMAGE_GRAYSCALE":
+    if subclass == b"IMAGE_GRAYSCALE":
         pass
-    elif subclass == "IMAGE_TRUECOLOR":
+    elif subclass == b"IMAGE_TRUECOLOR":
         if len(dataset.shape) != 3:
             raise IOError("Truecolor image has a shape of %s" % (dataset.shape,))
 
@@ -151,14 +194,14 @@ def _read_image_dataset(dataset):
             # TODO: guess il_mode from the shape
             raise IOError("Interlace mode missing")
 
-        cm = dataset.attrs.get("IMAGE_COLORMODEL", "RGB") # optional attr
-        if cm != "RGB":
+        cm = dataset.attrs.get("IMAGE_COLORMODEL", b"RGB") # optional attr
+        if cm != b"RGB":
             raise NotImplementedError("Unable to handle images of colormodel '%s'" % cm)
 
-        if il_mode == "INTERLACE_PLANE":
+        if il_mode == b"INTERLACE_PLANE":
             # colour is first dim
             image.metadata[model.MD_DIMS] = "CYX"
-        elif il_mode == "INTERLACE_PIXEL":
+        elif il_mode == b"INTERLACE_PIXEL":
             image.metadata[model.MD_DIMS] = "YXC"
         else:
             raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
@@ -167,9 +210,9 @@ def _read_image_dataset(dataset):
         raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
     # TODO: support DISPLAY_ORIGIN
-    dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL")
-    if dorig != "UL":
-        logging.warning("Image rotation %d not handled", dorig)
+    dorig = dataset.attrs.get("DISPLAY_ORIGIN", b"UL")
+    if dorig != b"UL":
+        logging.warning("Image rotation %s not handled", dorig)
 
     return image
 
@@ -206,6 +249,16 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
 
+        try:
+            group["ZOffset"] = pos[2]
+            _h5svi_set_state(group["ZOffset"], ST_REPORTED)
+
+        except IndexError:
+            group["ZOffset"] = 0
+            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
+
+        group["ZOffset"].attrs["UNIT"] = "m"  # our extension
+
     # If ids.CLASS is set and the wrong padding type attach_scale() fails.
     # As a workaround, we temporarily remove it
     # It's caused by the way attach_scale check whether the ids is
@@ -238,11 +291,9 @@ def _add_image_info(group, dataset, image):
     # Moreover, in Odemis we store two types of time:
     # * MD_ACQ_DATE, which is the (absolute) time at which the acquisition
     #   was performed. It's stored in TOffset as a float of s since epoch.
-    # * MD_TIME_OFFSET, which is the (relative) time of the first element of
+    # * MD_TIME_LIST, which is the (relative) time of each element of
     #   the time dimension compared to the acquisition event (eg, energy
-    #   release on the sample). It's stored in the TOffsetRelative in s.
-    # Finally, there is MD_PIXEL_DUR which is the duration between each
-    # element on the time dimension scale.
+    #   release on the sample). It's stored in the DimensionScaleT in s.
     # TODO: in retrospective, it would have been more logical to store the
     # relative time in TOffset, and the acquisition date (which is not essential
     # to the data) in PhysicalData/AcquisitionDate.
@@ -259,11 +310,6 @@ def _add_image_info(group, dataset, image):
             _h5svi_set_state(group["TOffset"], ST_DEFAULT)
         group["TOffset"].attrs["UNIT"] = "s"  # our extension
 
-        if model.MD_TIME_OFFSET in image.metadata:
-            group["TOffsetRelative"] = image.metadata[model.MD_TIME_OFFSET]
-            _h5svi_set_state(group["TOffsetRelative"], ST_REPORTED)
-            group["TOffsetRelative"].attrs["UNIT"] = "s"  # our extension
-
         # Scale
         if model.MD_PIXEL_SIZE in image.metadata:
             # DimensionScales are not clearly explained in the specification to
@@ -272,6 +318,7 @@ def _add_image_info(group, dataset, image):
             # Huygens seems to consider it's in m
             xpos = dims.index("X")
             ypos = dims.index("Y")
+
             pxs = image.metadata[model.MD_PIXEL_SIZE]
             group["DimensionScaleX"] = pxs[0]
             group["DimensionScaleX"].attrs["UNIT"] = "m"  # our extension
@@ -279,45 +326,50 @@ def _add_image_info(group, dataset, image):
             group["DimensionScaleY"] = pxs[1]
             group["DimensionScaleY"].attrs["UNIT"] = "m"
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
+
             # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
             dataset.dims.create_scale(group["DimensionScaleY"], "Y")
             dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
             dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
 
+            if "Z" in dims:
+                zpos = dims.index("Z")
+                try:
+                    group["DimensionScaleZ"] = pxs[2]  # m
+                    _h5svi_set_state(group["DimensionScaleZ"], ST_REPORTED)
+                except IndexError:
+                    # That makes Huygens happy
+                    group["DimensionScaleZ"] = 0  # m
+                    _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
+
+                group["DimensionScaleZ"].attrs["UNIT"] = "m"
+                dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+                dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
+
         # Unknown data, but SVI needs them to take the scales into consideration
         if "Z" in dims:
-            zpos = dims.index("Z")
-            group["ZOffset"] = 0.0
-            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
-            group["DimensionScaleZ"] = 1e-3  # m
-            group["DimensionScaleZ"].attrs["UNIT"] = "m"
-            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
-            _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-            dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
-
             # Put here to please Huygens
             # Seems to be the coverslip position, ie, the lower and upper glass of
-            # the sample. Not clear what's the relation with ZOffset.
+            # the sample. They are typically the very min and max of ZOffset.
             group["PrimaryGlassMediumInterfacePosition"] = 0.0  # m?
             _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
             group["SecondaryGlassMediumInterfacePosition"] = 1.0  # m?
             _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
-        if "T" in dims:
-            tpos = dims.index("T")
+        if "T" in dims and model.MD_TIME_LIST in image.metadata:
             try:
-                v = image.metadata[model.MD_PIXEL_DUR]
-                s = ST_REPORTED
-            except KeyError:
-                # Just to put something
-                v = 1.0  # s
-                s = ST_DEFAULT
-            group["DimensionScaleT"] = v  # s
-            group["DimensionScaleT"].attrs["UNIT"] = "s"
-            dataset.dims.create_scale(group["DimensionScaleT"], "T")
-            _h5svi_set_state(group["DimensionScaleT"], s)
-            dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
+                tpos = dims.index("T")
+                # A list of values in seconds, for each pixel in the T dim
+                group["DimensionScaleT"] = image.metadata[model.MD_TIME_LIST]
+                group["DimensionScaleT"].attrs["UNIT"] = "s"
+                dataset.dims.create_scale(group["DimensionScaleT"], "T")
+                # pass state as a numpy.uint, to force it being a single value (instead of a list)
+                _h5svi_set_state(group["DimensionScaleT"], numpy.uint(ST_REPORTED))
+                dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
+            except Exception as ex:
+                logging.warning("Failed to record time information, "
+                                "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
         if ("C" in dims and
@@ -339,12 +391,13 @@ def _add_image_info(group, dataset, image):
 
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 dataset.dims.create_scale(group["DimensionScaleC"], "C")
-                _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
+                # pass state as a numpy.uint, to force it being a single value (instead of a list)
+                _h5svi_set_state(group["DimensionScaleC"], numpy.uint(ST_REPORTED))
                 cpos = dims.index("C")
                 dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
-            except Exception:
+            except Exception as ex:
                 logging.warning("Failed to record wavelength information, "
-                                "it will not be saved.")
+                                "it will not be saved: %s", ex)
 
         # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
         # angle in radians (according to the right-hand rule)
@@ -376,7 +429,17 @@ def _read_image_info(group):
     md = {}
     # Offset
     try:
+        # Try 2D
         pos = (float(group["XOffset"][()]), float(group["YOffset"][()]))
+        # Try 3D
+        try:
+            state = _h5svi_get_state(group["ZOffset"])
+
+            if state == ST_REPORTED:
+                pos = (pos[0], pos[1], float(group["ZOffset"][()]))
+
+        except KeyError:
+            pass
         md[model.MD_POS] = pos
     except KeyError:
         pass
@@ -391,23 +454,23 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse TOffset info", exc_info=True)
 
-    try:
-        toffset = float(group["TOffsetRelative"][()])
-        md[model.MD_TIME_OFFSET] = toffset
-    except KeyError:
-        pass
-    except Exception:
-        logging.warning("Failed to parse TOffsetRelative info", exc_info=True)
-
     # Scale pixel size
     try:
-        pxs = [None, None]
+        px_x, px_y, px_z = None, None, None
         for dim in dataset.dims:
             if dim.label == "X" and dim:
-                pxs[0] = float(dim[0][()])
+                px_x = float(dim[0][()])
             if dim.label == "Y" and dim:
-                pxs[1] = float(dim[0][()])
-        # TODO: add scale for Z ??
+                px_y = float(dim[0][()])
+            if dim.label == "Z" and dim:
+                state = _h5svi_get_state(dim[0])
+                if state == ST_REPORTED:
+                    px_z = float(dim[0][()])
+
+        if px_z is None:
+            pxs = [px_x, px_y]
+        else:
+            pxs = [px_x, px_y, px_z]
 
         if pxs == [None, None]:
             logging.debug("No pixel size metadata provided")
@@ -418,50 +481,113 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse XY scale", exc_info=True)
 
-    # Time scale
+    # Time dimensions: If the data has a T dimension larger than 1, it has a list of
+    # time stamps (one per pixel).
+    # Odemis v2.8 (and earlier): For time correlator data, the T dimension was also of
+    # length 1, which is also the case for most other data sets. However, the difference
+    # is that the metadata includes MD_TIME_OFFSET (saved as "TOffsetRelative" in h5) and
+    # MD_PIXEL_DUR (saved as T dim). Based on pixel duration (time for one px) and the
+    # pixel offset (time of the 1.px), the time stamps for the following px are calculated.
     try:
-        for dim in dataset.dims:
+        for i, dim in enumerate(dataset.dims):
             if dim.label == "T" and dim:
                 state = _h5svi_get_state(dim[0])
-                if state != ST_REPORTED:
+                # For a short while (in Odemis 2.10 alpha), the metadata was
+                # recorded with one state per value, in such case, let's assume
+                # it's interesting metadata.
+                if not isinstance(state, list) and state != ST_REPORTED:
                     # Only set as real metadata if it was actual information
                     break
-                pxd = float(dim[0][()])
-                md[model.MD_PIXEL_DUR] = pxd
-    except Exception:
-        logging.warning("Failed to parse T scale", exc_info=True)
 
-    # Wavelength is only if the data has a C dimension and it has two numbers
-    # that represent the range of the monochromator bandwidth or the offset and
-    # scale (linear polynomial) or it has a list of wavelengths (one per pixel).
-    # To distinguish between polynomial and monochromator wavelength we just
-    # check if the shape of the dataset equals to 1, which implies single-pixel
-    # data coming from the monochromator.
+                # add time list to metadata, containing info on time stamp per px if available
+                if dim[0].shape == (dataset.shape[i],):
+                    md[model.MD_TIME_LIST] = dim[0][...].tolist()
+
+                # handle old data acquired with Odemis v2.8 and earlier,
+                # which still has pixel_duration and time_offset in MD
+                elif dim[0].shape == ():  # T has only one entry
+                    try:
+                        toffset = float(group["TOffsetRelative"][()])
+                    except KeyError:
+                        break
+                    state = _h5svi_get_state(dim[0])
+                    if state != ST_REPORTED:
+                        # Only set as real metadata if it was actual information
+                        break
+                    pxd = float(dim[0][()])
+                    # create TIME_LIST based on time_offset and pixel_dur
+                    md[model.MD_TIME_LIST] = numpy.arange(pxd, pxd * (dataset.shape[i] + 1),
+                                                          (toffset + pxd)).tolist()
+
+    except Exception:
+        logging.warning("Failed to parse T dimension.", exc_info=True)
+
+    # Color dimension: If the data has a C dimension larger than 1, it has a list of
+    # wavelength values (one per pixel).
+
+    # Odemis v2.2 (and earlier): For monochromator and spectrograph data, the C dimension
+    # is calculated based on the C offset (wl offset) and polynomial coefficients saved in the C dim.
+    # Theoretically, multiple coefficients (higher orders) can be contained in C dim.
+    # However, practically only data with first order coefficients "b" (linear) were recorded
+    # (wl = a + bx). As a result, C dim is always of length 1.
+
+    # Distinguishing between polynomial and monochromator data is done by checking the shape
+    # of the data set. For monochromator data the shape equals 1, which implies single-pixel data.
+
+    # Monochromator: The coefficient saved in C dim corresponds to the wavelength range covered by
+    # the pixel size (bandwidth) of the single px detector. The metadata includes MD_OUT_WL
+    # (bandwidth of the monochromator), which is a tuple of (wl offset, wl offset + bandwidth).
+
+    # Spectrograph: The metadata includes MD_WL_POLYNOMIAL (conversion from px to wl), where
+    # the first entry corresponds to the wl offset "a" and the second to the coefficient "b" for the
+    # polynomial of first order (wl = a + bx).
+    # Based on polynomial the wavelength values for all px can be calculated elsewhere
+    # (see odemis.util.spectrum.get_wavelength_per_pixel).
+
     # Note that not all data has information, for example RGB images, or
-    # fluorescence images have no scale (but the SVI flavour has several
-    # metadata related in the PhysicalData group).
+    # fluorescence images have no dimension scale (dim = None)
+    # (but the SVI flavour has several metadata related in the PhysicalData group).
     try:
         for i, dim in enumerate(dataset.dims):
             if dim.label == "C" and dim:
+                state = _h5svi_get_state(dim[0])
+                # Until Odemis 2.10, the metadata was recorded with one state per
+                # value, in such case, let's assume it's interesting metadata.
+                if not isinstance(state, list) and state != ST_REPORTED:
+                    # Only set as real metadata if it was actual information
+                    break
+
+                # add wl list to metadata, containing info on wavelength value per px if available
                 if dim[0].shape == (dataset.shape[i],):
-                    md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
-                elif dim[0].shape == ():
+                    md[model.MD_WL_LIST] = dim[0][...].tolist()
+
+                # handle old data acquired with Odemis v2.2 and earlier,
+                # which still has WL_POLYNOMIAL (spectrograph) or OUT_WL (monochromator) in MD
+                elif dim[0].shape == ():  # C has only one entry
                     if isinstance(group["COffset"], basestring):
                         # Only to support some files saved with Odemis 2.3-alpha
                         logging.warning("COffset is a string, not officially supported")
-                        md[model.MD_OUT_WL] = group["COffset"]
+                        out_wl = group["COffset"]
+                        if not isinstance(out_wl, unicode):
+                            out_wl = out_wl.decode("utf-8", "replace")
+                        md[model.MD_OUT_WL] = out_wl
                     else:
-                        pn = [float(group["COffset"][()]),
-                              float(dim[0][()])]
+                        # read polynomial: first is C offset, second coefficient polynomial first order (linear)
+                        pn = [float(group["COffset"][()]), float(dim[0][()])]
+                        # check if monochromator data (1-px detector)
                         if dataset.shape[i] == 1:
                             # To support some files saved with Odemis 2.2
                             # Now MD_OUT_WL is only mapped to EmissionWavelength
-                            logging.info("Updating MD_OUT_WL from DimensionScaleC, only supported in backward compatible mode")
+                            logging.info("Updating MD_OUT_WL from DimensionScaleC, "
+                                         "only supported in backward compatible mode")
+                            # monochromator bandwidth: (wl offset, wl offset + wl range covered by px)
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
+                        # spectrograph etc. (wl offset, linear coefficient polynomial)
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
+
     except Exception:
-        logging.warning("Failed to parse C scale", exc_info=True)
+        logging.warning("Failed to parse C dimension.", exc_info=True)
 
     try:
         rot = group["Rotation"]
@@ -524,261 +650,111 @@ def _parse_physical_data(pdgroup, da):
         md = d.metadata
         try:
             cd = pdgroup["ChannelDescription"][i]
-            md[model.MD_DESCRIPTION] = cd.decode("utf-8", "replace")
+            # For Python 2, where it returns a "str", which are actually UTF-8 encoded bytes
+            if not isinstance(cd, unicode):
+                cd = cd.decode("utf-8", "replace")
+            md[model.MD_DESCRIPTION] = cd
         except (KeyError, IndexError, UnicodeDecodeError):
             # maybe Title is more informative... but it's not per channel
             try:
                 title = pdgroup["Title"][()]
-                md[model.MD_DESCRIPTION] = title.decode("utf-8", "replace")
+                if not isinstance(cd, unicode):
+                    title = title.decode("utf-8", "replace")
+                md[model.MD_DESCRIPTION] = title
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
-        # MicroscopeMode helps us to find out the bandwidth of the wavelength
-        # and it's also a way to keep it stable, if saving the data again.
-        h_width = 1e-9  # 1 nm : default is to just almost keep the value
-        try:
-            mm = pdgroup["MicroscopeMode"][i]
-            if mm == MM_FLUORESCENCE:
-                h_width = 10e-9  # 10 nm => narrow band
-            if mm == MM_TRANSMISSION:  # we set it for brightfield
-                h_width = 100e-9  # 100 nm => large band
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["ExcitationWavelength"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            xwl = float(ds[i])  # in m
-            md[model.MD_IN_WL] = (xwl - h_width, xwl + h_width)
-        except (TypeError, KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionWavelength"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            if isinstance(ds[i], basestring):
-                md[model.MD_OUT_WL] = ds[i]
-            elif len(ds.shape) == 1:  # Only one value per channel
-                ewl = float(ds[i])  # in m
-                # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
-                # more precision in C scale (now explicitly saved as tuple here)
-                if model.MD_OUT_WL not in md:
-                    md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
-            else:  # full band for each channel
-                md[model.MD_OUT_WL] = tuple(ds[i])
-        except (TypeError, KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["Magnification"]
-            mag = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_LENS_MAG] = mag
-        except (KeyError, IndexError, ValueError):
-            pass
+        read_metadata(pdgroup, i, md, "ExcitationWavelength", model.MD_IN_WL, converter=float)
+        read_metadata(pdgroup, i, md, "EmissionWavelength", model.MD_OUT_WL, converter=float)
+        read_metadata(pdgroup, i, md, "Magnification", model.MD_LENS_MAG, converter=float)
 
         # Our extended metadata
-        try:
-            ds = pdgroup["Baseline"]
-            oft = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_BASELINE] = oft
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["IntegrationTime"]
-            it = float(ds[i])  # s
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_EXP_TIME] = it
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["RefractiveIndexLensImmersionMedium"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            ri = float(ds[i])  # ratio
-            md[model.MD_LENS_RI] = ri
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["NumericalAperture"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            na = float(ds[i])  # ratio
-            md[model.MD_LENS_NA] = na
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["AccelerationVoltage"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            evolt = float(ds[i])  # V
-            md[model.MD_EBEAM_VOLTAGE] = evolt
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionCurrent"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            ecurrent = float(ds[i])  # A
-            md[model.MD_EBEAM_CURRENT] = ecurrent
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionCurrentOverTime"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            # It should contain an array of float of Nx2, where the second dim
-            # contains time (s since epoch) & current (A)
-            cot = ds[i].tolist()  # A
-            md[model.MD_EBEAM_CURRENT_TIME] = cot
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["PolePosition"]
-            pp = tuple(ds[i])  # px
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_POLE] = pp
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["XMax"]
-            xm = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_XMAX] = xm
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["HoleDiameter"]
-            hd = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_HOLE_DIAMETER] = hd
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["FocusDistance"]
-            fd = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_FOCUS_DISTANCE] = fd
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["ParabolaF"]
-            pf = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_PARABOLA_F] = pf
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["Polarization"]
-            pol = str(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_MODE] = pol
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["QuarterWavePlate"]
-            posqwp = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_POS_QWP] = posqwp
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["LinearPolarizer"]
-            poslinpol = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_POS_LINPOL] = poslinpol
-        except (KeyError, IndexError, ValueError):
-            pass
+        read_metadata(pdgroup, i, md, "Baseline", model.MD_BASELINE, converter=float)
+        read_metadata(pdgroup, i, md, "IntegrationTime", model.MD_EXP_TIME, converter=float)
+        read_metadata(pdgroup, i, md, "RefractiveIndexLensImmersionMedium", model.MD_LENS_RI, converter=float,
+                      bad_states=(ST_INVALID, ST_DEFAULT))
+        read_metadata(pdgroup, i, md, "NumericalAperture", model.MD_LENS_NA, converter=float,
+                      bad_states=(ST_INVALID, ST_DEFAULT))
+        read_metadata(pdgroup, i, md, "AccelerationVoltage", model.MD_EBEAM_VOLTAGE, converter=float,
+                      bad_states=(ST_INVALID, ST_DEFAULT))
+        read_metadata(pdgroup, i, md, "EmissionCurrent", model.MD_EBEAM_CURRENT, converter=float,
+                      bad_states=(ST_INVALID, ST_DEFAULT))
+        read_metadata(pdgroup, i, md, "EmissionCurrentOverTime", model.MD_EBEAM_CURRENT_TIME,
+                      converter=numpy.ndarray.tolist,
+                      bad_states=(ST_INVALID, ST_DEFAULT))
+        # angle resolved
+        read_metadata(pdgroup, i, md, "PolePosition", model.MD_AR_POLE, converter=tuple)
+        read_metadata(pdgroup, i, md, "XMax", model.MD_AR_XMAX, converter=float)
+        read_metadata(pdgroup, i, md, "HoleDiameter", model.MD_AR_HOLE_DIAMETER, converter=float)
+        read_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE, converter=float)
+        read_metadata(pdgroup, i, md, "ParabolaF", model.MD_AR_PARABOLA_F, converter=float)
+        # polarization analyzer
+        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE, converter=str)
+        read_metadata(pdgroup, i, md, "QuarterWavePlate", model.MD_POL_POS_QWP, converter=float)
+        read_metadata(pdgroup, i, md, "LinearPolarizer", model.MD_POL_POS_LINPOL, converter=float)
+        # streak camera
+        read_metadata(pdgroup, i, md, "TimeRange", model.MD_STREAK_TIMERANGE, converter=float)
+        read_metadata(pdgroup, i, md, "MCPGain", model.MD_STREAK_MCPGAIN, converter=float)
+        read_metadata(pdgroup, i, md, "StreakMode", model.MD_STREAK_MODE, converter=bool)
+        read_metadata(pdgroup, i, md, "TriggerDelay", model.MD_TRIGGER_DELAY, converter=float)
+        read_metadata(pdgroup, i, md, "TriggerRate", model.MD_TRIGGER_RATE, converter=float)
 
     return das
 
-# Enums used in SVI HDF5
-# State: how "trustable" is the value
 
+def read_metadata(pdgroup, c_index, md, name, md_key, converter, bad_states=(ST_INVALID,)):
+    """
+    Reads the metadata associated to an image for a specific color channel.
+    :parameter pdgroup: (HDF Group) the group "PhysicalData" associated to an image
+    :parameter c_index: color channel index (C dim)
+    :parameter md: (dict) metadata associated with the image data
+    :parameter name: (str) name of the metadata in the HDF5 file
+    :parameter md_key: (str) metadata key to be stored
+    :parameter converter: (function(ndarray) -> value) used to convert from the value read 
+        from the file to standard metadata type.
+    :parameter bad_states: (tuple) specifies bad states for a value, in which case the value
+        will not be stored in the metadata.
+    """
+    try:
+        ds = pdgroup[name]
 
-ST_INVALID = 111
-ST_DEFAULT = 112
-ST_ESTIMATED = 113
-ST_REPORTED = 114
-ST_VERIFIED = 115
-_dtstate = h5py.special_dtype(enum=('i', {
-     "Invalid": ST_INVALID, "Default": ST_DEFAULT, "Estimated": ST_ESTIMATED,
-     "Reported": ST_REPORTED, "Verified": ST_VERIFIED}))
+        state = _h5svi_get_state(ds)
+        if state and (state[c_index] in bad_states):
+            raise ValueError("State %d indicate that metadata is not useful" % state[c_index])
 
-# MicroscopeMode
-MM_NONE = 0
-MM_TRANSMISSION = 1
-MM_REFLECTION = 2
-MM_FLUORESCENCE = 3
-_dtmm = h5py.special_dtype(enum=('i', {
-     "None": MM_NONE, "Transmission": MM_TRANSMISSION ,
-     "Reflection": MM_REFLECTION, "Fluorescence": MM_FLUORESCENCE}))
-_dictmm = h5py.check_dtype(enum=_dtmm)
-# MicroscopeType
-MT_NONE = 111
-MT_WIDEFIELD = 112
-MT_CONFOCAL = 113
-MT_4PIEXCITATION = 114
-MT_NIPKOWDISKCONFOCAL = 115
-MT_GENERICSENSOR = 118
-_dtmt = h5py.special_dtype(enum=('i', {
-    "None": MT_NONE, "WideField": MT_WIDEFIELD, "Confocal": MT_CONFOCAL,
-    "4PiExcitation": MT_4PIEXCITATION, "NipkowDiskConfocal": MT_NIPKOWDISKCONFOCAL,
-    "GenericSensor": MT_GENERICSENSOR}))
-_dictmt = h5py.check_dtype(enum=_dtmt)
-# ImagingDirection
-ID_UPWARD = 0
-ID_DOWNWARD = 1
-ID_BOTH = 2
-_dtid = h5py.special_dtype(enum=('i', {
-    "Upward": ID_UPWARD, "Downward": ID_DOWNWARD, "Both": ID_BOTH}))
-_dictid = h5py.check_dtype(enum=_dtid)
+        # special case
+        if md_key in (model.MD_IN_WL, model.MD_OUT_WL):
+            # MicroscopeMode helps us to find out the bandwidth of the wavelength
+            # and it's also a way to keep it stable, if saving the data again.
+            h_width = 1e-9  # 1 nm : default is to just almost keep the value
+            try:
+                mm = pdgroup["MicroscopeMode"][c_index]
+                if mm == MM_FLUORESCENCE:
+                    h_width = 10e-9  # 10 nm => narrow band
+                if mm == MM_TRANSMISSION:  # we set it for brightfield
+                    h_width = 100e-9  # 100 nm => large band
+            except Exception as ex:
+                logging.debug(ex)
+
+            if md_key == model.MD_IN_WL:
+                md[md_key] = (converter(ds[c_index]) - h_width, converter(ds[c_index]) + h_width)  # in m
+            elif md_key == model.MD_OUT_WL:
+                if isinstance(ds[c_index], basestring):
+                    md[model.MD_OUT_WL] = ds[c_index]
+                elif len(ds.shape) == 1:  # Only one value per channel
+                    ewl = converter(ds[c_index])  # in m
+                    # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
+                    # more precision in C scale (now explicitly saved as tuple here)
+                    if md_key not in md:
+                        md[md_key] = (ewl - h_width, ewl + h_width)
+                else:  # full band for each channel
+                    md[md_key] = tuple(ds[c_index])
+
+        else:
+            md[md_key] = converter(ds[c_index])
+
+    except Exception as ex:
+        logging.info("Skipped reading MD %s: %s" % (name, ex))
 
 
 def _h5svi_set_state(dataset, state):
@@ -828,13 +804,12 @@ def _h5py_enum_commit(group, name, dtype):
     enum_type.commit(group.id, name)
     # TODO: return the TypeEnumID created?
 
-
 def _add_image_metadata(group, image, mds):
     """
     Adds the basic metadata information about an image (scale and offset)
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
     image (DataArray): image (with global metadata)
-    mds (None or list of dict): metadata for each channel
+    mds (None or list of dict): metadata for each color channel (C dim)
     """
     gp = group.create_group("PhysicalData")
 
@@ -894,6 +869,8 @@ def _add_image_metadata(group, image, mds):
         elif not isinstance(ewl, collections.Iterable) and typ > 1:
             ewls[i] = (ewl,) * typ
 
+    if isinstance(ewls[0], basestring):
+        ewls = numpy.array(ewls, dtype=dtvlen_str)
     gp["EmissionWavelength"] = ewls  # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
 
@@ -908,11 +885,11 @@ def _add_image_metadata(group, image, mds):
     _h5svi_set_state(gp["Baseline"], state)
 
     # MicroscopeMode
-    _h5py_enum_commit(gp, "MicroscopeModeEnumeration", _dtmm)
+    _h5py_enum_commit(gp, b"MicroscopeModeEnumeration", _dtmm)
     # MicroscopeType
-    _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", _dtmt)
+    _h5py_enum_commit(gp, b"MicroscopeTypeEnumeration", _dtmt)
     # ImagingDirection
-    _h5py_enum_commit(gp, "ImagingDirectionEnumeration", _dtid)
+    _h5py_enum_commit(gp, b"ImagingDirectionEnumeration", _dtid)
     mm, mt, id = [], [], []
     # MicroscopeMode: if IN_WL => fluorescence/brightfield, otherwise SEM (=Reflection?)
     for md in mds:
@@ -1019,20 +996,6 @@ def _add_image_metadata(group, image, mds):
 
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
-    for md in mds:
-        if model.MD_DWELL_TIME in md:
-            its.append(md[model.MD_DWELL_TIME])
-            st_its.append(ST_REPORTED)
-        elif model.MD_EXP_TIME in md:
-            its.append(md[model.MD_EXP_TIME])
-            st_its.append(ST_REPORTED)
-        else:
-            its.append(0)
-            st_its.append(ST_INVALID)
-    if not all(st == ST_INVALID for st in st_its):
-        gp["IntegrationTime"] = its
-        _h5svi_set_state(gp["IntegrationTime"], st_its)
-
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
@@ -1048,92 +1011,102 @@ def _add_image_metadata(group, image, mds):
     # ParabolaF: parabola_parameter=1/4f
     # (only meaningful for AR/SPARC)
     pf, st_pf = [], []
+
     # Polarization: position (string) of polarization analyzer
     # (only meaningful for AR/SPARC with polarization analyzer)
     pol, st_pol = [], []
     # Polarization: position (float) of quarter wave plate
-    # (only meaningful for AR/SPARC with polarization analyzer)
     posqwp, st_posqwp = [], []
     # Polarization: position (float) of linear polarizer
-    # (only meaningful for AR/SPARC with polarization analyzer)
     poslinpol, st_poslinpol = [], []
 
+    # Streak camera info (only meaningful for SPARC with streak camera)
+    # Streak unit: time range (float) for streaking
+    timeRange, st_timeRange = [], []
+    # Streak unit: MCPGain (float)
+    MCPGain, st_MCPGain = [], []
+    # Streak unit: streak mode (bool)
+    streakMode, st_streakMode = [], []
+    # Streak delay generator: trigger delay (float) for starting to streak
+    triggerDelay, st_triggerDelay = [], []
+    # Streak delay generator: trigger rate (float) (aka blanking rate of ebeam)
+    triggerRate, st_triggerRate = [], []
+
     for md in mds:
-        if model.MD_AR_POLE in md:
-            pp.append(md[model.MD_AR_POLE])
-            st_pp.append(ST_REPORTED)
+        # dwell time ebeam or exposure time # if both not there -> append_metadata() will set entry to invalid
+        if model.MD_DWELL_TIME in md:
+            append_metadata(st_its, its, md, model.MD_DWELL_TIME, default_value=0)
         else:
-            pp.append((0, 0))
-            st_pp.append(ST_INVALID)
-        if model.MD_AR_XMAX in md:
-            xm.append(md[model.MD_AR_XMAX])
-            st_xm.append(ST_REPORTED)
-        else:
-            xm.append(0)
-            st_xm.append(ST_INVALID)
-        if model.MD_AR_HOLE_DIAMETER in md:
-            hd.append(md[model.MD_AR_HOLE_DIAMETER])
-            st_hd.append(ST_REPORTED)
-        else:
-            hd.append(0)
-            st_hd.append(ST_INVALID)
-        if model.MD_AR_FOCUS_DISTANCE in md:
-            fd.append(md[model.MD_AR_FOCUS_DISTANCE])
-            st_fd.append(ST_REPORTED)
-        else:
-            fd.append(0)
-            st_fd.append(ST_INVALID)
-        if model.MD_AR_PARABOLA_F in md:
-            pf.append(md[model.MD_AR_PARABOLA_F])
-            st_pf.append(ST_REPORTED)
-        else:
-            pf.append(0)
-            st_pf.append(ST_INVALID)
+            append_metadata(st_its, its, md, model.MD_EXP_TIME, default_value=0)
+        # angle resolved
+        append_metadata(st_pp, pp, md, model.MD_AR_POLE, default_value=(0, 0))
+        append_metadata(st_xm, xm, md, model.MD_AR_XMAX, default_value=0)
+        append_metadata(st_hd, hd, md, model.MD_AR_HOLE_DIAMETER, default_value=0)
+        append_metadata(st_fd, fd, md, model.MD_AR_FOCUS_DISTANCE, default_value=0)
+        append_metadata(st_pf, pf, md, model.MD_AR_PARABOLA_F, default_value=0)
+        # polarization analyzer
+        append_metadata(st_pol, pol, md, model.MD_POL_MODE)
+        append_metadata(st_posqwp, posqwp, md, model.MD_POL_POS_QWP, default_value=0)
+        append_metadata(st_poslinpol, poslinpol, md, model.MD_POL_POS_LINPOL, default_value=0)
+        # streak camera
+        append_metadata(st_timeRange, timeRange, md, model.MD_STREAK_TIMERANGE)
+        append_metadata(st_MCPGain, MCPGain, md, model.MD_STREAK_MCPGAIN)
+        append_metadata(st_streakMode, streakMode, md, model.MD_STREAK_MODE)
+        append_metadata(st_triggerDelay, triggerDelay, md, model.MD_TRIGGER_DELAY)
+        append_metadata(st_triggerRate, triggerRate, md, model.MD_TRIGGER_RATE)
 
-        if model.MD_POL_MODE in md:
-            pol.append(md[model.MD_POL_MODE])
-            st_pol.append(ST_REPORTED)
-        else:
-            pol.append("")
-            st_pol.append(ST_INVALID)
-        if model.MD_POL_POS_QWP in md:
-            posqwp.append(md[model.MD_POL_POS_QWP])
-            st_posqwp.append(ST_REPORTED)
-        else:
-            posqwp.append(0)
-            st_posqwp.append(ST_INVALID)
-        if model.MD_POL_POS_LINPOL in md:
-            poslinpol.append(md[model.MD_POL_POS_LINPOL])
-            st_poslinpol.append(ST_REPORTED)
-        else:
-            poslinpol.append(0)
-            st_poslinpol.append(ST_INVALID)
+    # integration time
+    set_metadata(gp, "IntegrationTime", st_its, its)
+    # angle resolved
+    set_metadata(gp, "PolePosition", st_pp, pp)
+    set_metadata(gp, "XMax", st_xm, xm)
+    set_metadata(gp, "HoleDiameter", st_hd, hd)
+    set_metadata(gp, "FocusDistance", st_fd, fd)
+    set_metadata(gp, "ParabolaF", st_pf, pf)
+    # polarization analyzer
+    set_metadata(gp, "Polarization", st_pol, pol)
+    set_metadata(gp, "QuarterWavePlate", st_posqwp, posqwp)
+    set_metadata(gp, "LinearPolarizer", st_poslinpol, poslinpol)
+    # streak camera
+    set_metadata(gp, "TimeRange", st_timeRange, timeRange)
+    set_metadata(gp, "MCPGain", st_MCPGain, MCPGain)
+    set_metadata(gp, "StreakMode", st_streakMode, streakMode)
+    set_metadata(gp, "TriggerDelay", st_triggerDelay, triggerDelay)
+    set_metadata(gp, "TriggerRate", st_triggerRate, triggerRate)
 
-    if not all(st == ST_INVALID for st in st_pp):
-        gp["PolePosition"] = pp
-        _h5svi_set_state(gp["PolePosition"], st_pp)
-    if not all(st == ST_INVALID for st in st_xm):
-        gp["XMax"] = xm
-        _h5svi_set_state(gp["XMax"], st_xm)
-    if not all(st == ST_INVALID for st in st_hd):
-        gp["HoleDiameter"] = hd
-        _h5svi_set_state(gp["HoleDiameter"], st_hd)
-    if not all(st == ST_INVALID for st in st_fd):
-        gp["FocusDistance"] = fd
-        _h5svi_set_state(gp["FocusDistance"], st_fd)
-    if not all(st == ST_INVALID for st in st_pf):
-        gp["ParabolaF"] = pf
-        _h5svi_set_state(gp["ParabolaF"], st_pf)
 
-    if not all(st == ST_INVALID for st in st_pol):
-        gp["Polarization"] = pol
-        _h5svi_set_state(gp["Polarization"], st_pol)
-    if not all(st == ST_INVALID for st in st_posqwp):
-        gp["QuarterWavePlate"] = posqwp
-        _h5svi_set_state(gp["QuarterWavePlate"], st_posqwp)
-    if not all(st == ST_INVALID for st in st_poslinpol):
-        gp["LinearPolarizer"] = poslinpol
-        _h5svi_set_state(gp["LinearPolarizer"], st_poslinpol)
+def append_metadata(status_list, value_list, md, md_key, default_value=""):
+    """
+    Fetches the metadata of an image and appends it to the list of values.
+    :parameter status_list: (list) containing the states of the values
+    :parameter value_list: (list) containing the values of the specified metadata
+    :parameter md: (dict) metadata of the DataArray
+    :parameter md_key: (str) metadata key to read the value from
+    :parameter default_value: value that is appended to the list of values when the md key is not present
+    """
+    if md_key in md:
+        value_list.append(md[md_key])
+        status_list.append(ST_REPORTED)
+    else:
+        value_list.append(default_value)
+        status_list.append(ST_INVALID)
+
+
+def set_metadata(gp, name, status_list, value_list):
+    """
+    Sets the list of values and the list of states containing the values for all color channels
+    for the HDF group associated with the image.
+    :parameter gp: (HDF Group) the group "PhysicalData" associated to an image
+    :parameter name: (str) gp name as in h5 file
+    :parameter status_list: (list) containing the states of the values
+    :parameter value_list: (list) containing the values of the specified metadata
+    """
+    if not all(st == ST_INVALID for st in status_list):
+        if isinstance(value_list[0], basestring):
+            dtvlen_str = h5py.special_dtype(vlen=str)
+            value_list = numpy.array(value_list, dtype=dtvlen_str)
+        gp[name] = value_list
+        _h5svi_set_state(gp[name], status_list)
 
 
 def _add_svi_info(group):
@@ -1161,7 +1134,7 @@ def _add_acquistion_svi(group, data, mds, **kwargs):
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
-    _h5py_enum_commit(group, "StateEnumeration", _dtstate)
+    _h5py_enum_commit(group, b"StateEnumeration", _dtstate)
 
     # TODO: use scaleoffset to store the number of bits used (MD_BPP)
     ids = _create_image_dataset(gi, "Image", data, **kwargs)
@@ -1263,11 +1236,13 @@ def _adjustDimensions(da):
 
     # reorder dimensions so that they are in the expected order
     if dims != dim_goal:
+        # TODO: from numpy 1.11, it's possible to use numpy.moveaxis()
         # roll the axes until they fit
         for i, d in enumerate(dim_goal):
             p = dims.index(d)
             da = numpy.rollaxis(da, p, i)
-            dims[:i] + d + dims[i:p] + dims[p + 1:] # roll dims
+            dims = dims[:i] + d + dims[i:p] + dims[p + 1:]  # roll dims
+        assert dims == dim_goal
 
     md.update({model.MD_DIMS: dims})
     da = model.DataArray(da, md)
@@ -1308,6 +1283,7 @@ def _groupImages(das):
             # TODO: might need to be more clever for some metadata (eg, ACQ_DATE)
             gmd = {}
             map(gmd.update, md)
+
             gdata = model.DataArray(gdata, gmd)
 
             acq.append(gdata)
@@ -1353,7 +1329,7 @@ def _thumbFromHDF5(filename):
     # scan for images
     for name, ds in grp.items():
         # an image? (== has the attribute CLASS: IMAGE)
-        if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
+        if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == b"IMAGE":
             try:
                 da = _read_image_dataset(ds)
             except Exception:

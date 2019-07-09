@@ -21,7 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Queue
+import queue
+from past.builtins import long
 import collections
 import functools
 import gc
@@ -268,7 +269,7 @@ class SEMComedi(model.HwComponent):
         # self._acquisition_data_lock = threading.Lock()
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
-        self._acq_cmd_q = Queue.Queue()
+        self._acq_cmd_q = queue.Queue()
         # TODO: The .wait() of this event is never used, which is a sign it's
         # probably not useful anymore => just check if _acquisitions is empty?
         self._acquisition_must_stop = threading.Event()
@@ -319,9 +320,7 @@ class SEMComedi(model.HwComponent):
         self._new_position_thread = None
         self._new_position_thread_pipe = [] # list to communicate with the current thread
 
-        self._acquisition_thread = threading.Thread(target=self._acquisition_run,
-                                                    name="SEM acquisition thread")
-        self._acquisition_thread.start()
+        self._acquisition_thread = None
 
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -889,7 +888,7 @@ class SEMComedi(model.HwComponent):
         else:
             comedi.get_cmd_generic_timed(self._device, subdevice,
                                          wcmd, nchans, period_ns)
-        return (wcmd.scan_begin_arg == period_ns)
+        return wcmd.scan_begin_arg == period_ns
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,
@@ -1002,7 +1001,7 @@ class SEMComedi(model.HwComponent):
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.error("Going to try to read very large buffer of %g MB, "
+            logging.error(u"Going to try to read very large buffer of %g MB, "
                           "with osr = %d and dpr = %d.",
                           pixelsz / 2 ** 20, osr, dpr)
 
@@ -1020,7 +1019,7 @@ class SEMComedi(model.HwComponent):
             # newPosition trigger.
             maxlines = 1
 
-        logging.debug("Reading %d lines at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading %d lines at a time: %d samples/read every %g µs",
                       maxlines, maxlines * data.shape[1] * osr * len(rchannels),
                       period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
@@ -1095,7 +1094,7 @@ class SEMComedi(model.HwComponent):
 
         # TODO: as we do point per point, we could do the margin (=settle time)
         # shorter than a standard point
-        logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading one pixel at a time: %d samples/read every %g µs",
                       dpr * osr * len(rchannels), period * 1e6)
         wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
         # read one pixel at a time
@@ -1135,7 +1134,7 @@ class SEMComedi(model.HwComponent):
         # Note: we could optimize slightly more by grouping dpr up to max_dpr
         # but would make the code more complex and anyway it's already huge
         # acquisitions.
-        logging.debug("Reading one sub-pixel at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading one sub-pixel at a time: %d samples/read every %g µs",
                       osr * nrchans, (period / dpr) * 1e6)
         px_rbuf = numpy.empty((dpr, nrchans), dtype=adtype) # intermediary sum for mean
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
@@ -1205,8 +1204,8 @@ class SEMComedi(model.HwComponent):
             # methods will have enough effect to stop the acquisition
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-            logging.debug("Not generating new write command for %d scans on "
-                          "channels %r with period = %d ns",
+            logging.debug(u"Not generating new write command for %d scans on "
+                          u"channels %r with period = %d ns",
                           nwscans, wchannels, period_ns)
             logging.debug("Generating a new read command for %d scans", nrscans)
 
@@ -1405,7 +1404,7 @@ class SEMComedi(model.HwComponent):
           lines at a time.
         """
         maxlines = min(wdata.shape[0], maxlines)
-        logging.debug("Reading %d lines at a time: %d samples/counter every %g µs",
+        logging.debug(u"Reading %d lines at a time: %d samples/counter every %g µs",
                       maxlines, maxlines * wdata.shape[1] * dpr,
                       period * 1e6)
         rshape = (wdata.shape[0], wdata.shape[1] - margin)
@@ -1555,8 +1554,8 @@ class SEMComedi(model.HwComponent):
         if period < 10e-6:
             # don't even try: that's the time it'd take to have just one loop
             # doing nothing
-            logging.error("Cannot generate newPosition events at such a "
-                          "small period of %s µs", period * 1e6)
+            logging.error(u"Cannot generate newPosition events at such a "
+                          u"small period of %s µs", period * 1e6)
             return
 
         self._new_position_thread_pipe = []
@@ -1588,8 +1587,8 @@ class SEMComedi(model.HwComponent):
             self._scanner.newPosition.notify()
 
         if failures:
-            logging.warning("Failed to trigger newPosition in time %d times, "
-                            "last trigger was %g µs late.", failures, -left * 1e6)
+            logging.warning(u"Failed to trigger newPosition in time %d times, "
+                            u"last trigger was %g µs late.", failures, -left * 1e6)
 
     def _cancel_new_position_notifier(self):
         logging.debug("cancelling npnotifier")
@@ -1613,7 +1612,10 @@ class SEMComedi(model.HwComponent):
 
             # If something went wrong with the thread, report also here
             if self._acquisition_thread is None:
-                raise IOError("Acquisition thread is gone, cannot acquire")
+                logging.info("Starting acquisition thread")
+                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                            name="SEM acquisition thread")
+                self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
         """
@@ -1637,7 +1639,7 @@ class SEMComedi(model.HwComponent):
         while True:
             try:
                 cmd = self._acq_cmd_q.get(block=block)
-            except Queue.Empty:
+            except queue.Empty:
                 break
 
             # Decode command
@@ -1795,7 +1797,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
@@ -1880,7 +1882,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
@@ -2371,7 +2373,7 @@ class MMapReader(Reader):
             raise IOError("Failed to read all the %d expected values" % self.count)
         elif self.remaining != 0:
             raise IOError("Read only %d values from the %d expected" %
-                          (self.count - self.remaining / self.buf.itemsize), self.count)
+                          ((self.count - self.remaining / self.buf.itemsize), self.count))
 
         return self.buf
 
@@ -2711,7 +2713,7 @@ class Scanner(model.Emitter):
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
 
-        self._scan_state_req = Queue.Queue()
+        self._scan_state_req = queue.Queue()
         self._scanning_ready = threading.Event()
         self._scan_state = True  # To force changing the digital output when the state go to False
         t = threading.Thread(target=self._scan_state_mng_run,
@@ -2990,7 +2992,7 @@ class Scanner(model.Emitter):
                     timeout = stopt - now
                     try:
                         msg = q.get(timeout=timeout)
-                    except Queue.Empty:
+                    except queue.Empty:
                         # time to stop the encoder => just do the loop again
                         continue
                 else:  # time to stop
@@ -3165,7 +3167,20 @@ class Scanner(model.Emitter):
             center = (lim[0] + lim[1]) / 2
             width = lim[1] - lim[0]
             ratio = (shape[i] * scale[i]) / area_shape[i]
-            assert ratio <= 1 # cannot be bigger than the whole area
+            if ratio > 1.000001:  # cannot be bigger than the whole area
+                raise ValueError("Scan area too big: %s * %s > %s" %
+                                 (shape, scale, area_shape))
+            elif ratio > 1:
+                # Note: in theory, it'd be impossible for the ratio to be > 1,
+                # however, due to floating error, it might happen that a scale
+                # a tiny bit too big is allowed. For example:
+                # shape = 5760, res = 1025, scale = 5.619512195121952
+                # int(shape/scale) * scale == 5760.000000000001
+                logging.warning("Scan area appears too big due to floating error (ratio=%g), limiting to maximum",
+                                ratio)
+                # scale[i] = area_shape[i] / shape[i]
+                ratio = 1
+
             # center_comp is to ensure the point scanned of each pixel is at the
             # center of the area of each pixel
             center_comp = (shape[i] - 1) / shape[i]
@@ -3175,11 +3190,13 @@ class Scanner(model.Emitter):
             roi_lim = (center + shift - roi_hwidth,
                        center + shift + roi_hwidth)
             if lim[0] < lim[1]:
-                assert roi_lim[0] <= roi_lim[1]
-                assert roi_lim[0] >= lim[0] and roi_lim[1] <= lim[1]
-            else:
-                assert roi_lim[0] >= roi_lim[1]
-                assert roi_lim[0] <= lim[0] and roi_lim[1] >= lim[1]
+                if not lim[0] <= roi_lim[0] <= roi_lim[1] <= lim[1]:
+                    raise ValueError("ROI limit %s > limit %s, with area %s * %s" %
+                                     (roi_lim, lim, shape, scale))
+            else:  # inverted scan direction
+                if not lim[0] >= roi_lim[0] >= roi_lim[1] >= lim[1]:
+                    raise ValueError("ROI limit %s > limit %s, with area %s * %s" %
+                                     (roi_lim, lim, shape, scale))
             roi_limits.append(roi_lim)
         logging.debug("ranges X = %sV, Y = %sV, for shape %s + margin %d",
                       roi_limits[1], roi_limits[0], shape, margin)
@@ -3689,7 +3706,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._prev_max_discard = self._max_discard
             self.max_discard = 0
             self._sync_event.subscribe(self)

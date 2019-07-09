@@ -505,7 +505,7 @@ class MFF(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        return self._executor.submit(self._doMovePos, pos.values()[0])
+        return self._executor.submit(self._doMovePos, list(pos.values())[0])
 
     def stop(self, axes=None):
         self._executor.cancel()

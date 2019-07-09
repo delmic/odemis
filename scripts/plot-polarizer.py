@@ -6,15 +6,42 @@ Created on 24 Sep 2018
 @author: Éric Piel
 
 This is a script to acquire light at different polarizer angles, and plots the
-brightness for the each angles.
+brightness for the each angles. Based on the analysis of the output, it should
+be possible to reliably estimate the rotation offset needed for the two polarizer
+hardware.
+
+Linear polarizer (role="lin-pol"):
+The linear polarizer needs to be tested WITHOUT the quarter-wave-plate mounted.
+The source needs to adjusted such that it provides horizontally (linear)
+polarized light. After alignment the transmitting axis of the linear polarizer
+should be horizontal, which corresponds to a position of 0 degrees (maximum
+transmission).
+
+run as:
+./scripts/plot-polarizer.py --polarizer linear --output linear.tsv
+# Now, compensate the offset with:
+odemis-cli --update-metadata lin-pol POS_COR 0.1 # rad
+
+Quarter-wave-plate (role="qwp"):
+The quarter-wave-plates needs to be tested WITH the linear polarizer hardware
+mounted. The linear polarizer needs to be calibrated before the qwp. The source
+needs to be adjusted such that it provides right-handed-circular (RHC) polarized
+light. The linear polarizer will be automatically set to 45 degrees (=positive
+diagonal), which is essential to measure the correct position of the qwp when
+using RHC light. The qwp will transform the RHC light into linear polarized
+light, which will be 100% transmitted by the linear polarizer at a particular
+QWP angle. After alignment the fast axis of the qwp should be horizontal, which
+corresponds to a position of 0 degrees (maximum transmission).
 
 run as:
 ./scripts/plot-polarizer.py --polarizer qwp --output qwp.tsv
-./scripts/plot-polarizer.py --polarizer linear --output linear.tsv
+# Now compensate the offset with:
+odemis-cli --update-metadata quarter-wave-plate POS_COR -0.15 # rad
 
 
-The configuration used is the settings of the hardware just _before_ starting
-the script.
+When running, the settings of the CCD are not changed, so the settings used are
+the one set just before starting the script.
+
 """
 
 from __future__ import division
@@ -50,7 +77,7 @@ def acquire_angles(polarizer, angles):
             i += 1
             logging.info("Request move to target position %.8f rad (%d/%d)",
                          a, i, len(angles))
-            polarizer.moveAbs({'rz': a}).result()
+            polarizer.moveAbs({'rz': a % (2 * math.pi)}).result()
             brightness.append(numpy.average(ccd.data.get()))
     finally:
         # return to original position
@@ -78,14 +105,19 @@ def main(args):
         if "." not in options.filename[-5:]:
             raise ValueError("Output argument must contain extension, "
                              "but got '%s'" % (options.filename,))
+
         if options.polarizer == "linear":
             role = "lin-pol"
-            amax = math.pi  # 180°
         else: # qwp
+            # Search for qwp = 0 by optimizing RHC
             role = "quarter-wave-plate"
-            amax = math.pi / 2  # 90°
+            logging.info("Moving the linear polarizer to positive diagonal")
+            linpol = model.getComponent(role="lin-pol")
+            linpol.moveAbsSync({"rz": math.radians(45)})
+
         polarizer = model.getComponent(role=role)
-        angles = numpy.linspace(0, amax, 90)
+        # 180° (every 2°) + 25% to check it's indeed repeating
+        angles = numpy.arange(0, math.pi * 1.25, math.radians(2))
         brightness = acquire_angles(polarizer, angles)
         logging.debug("Acquired brightness: %s", brightness)
         

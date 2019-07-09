@@ -3,9 +3,7 @@
 SPARC-FAKE-TUD: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY", "Nikon Lens"],
-    detectors: ["SED ExtXY", "Clara"],
-    actuators: ["MirrorMover", "OLStage"],
+    children: ["EBeam ExtXY", "Nikon Lens", "SED ExtXY", "Clara", "MirrorMover", "OLStage"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -131,7 +129,7 @@ PIGCS: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: [Clara, "EBeam ExtXY"],
-    children: {"x": PIGCS, "y": PIGCS},
+    dependencies: {"x": PIGCS, "y": PIGCS},
     init: {
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x", "y"],

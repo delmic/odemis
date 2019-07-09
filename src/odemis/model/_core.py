@@ -21,15 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
 import collections
-import inspect
 import logging
 import multiprocessing
 import os
 import threading
-import urllib
+from future.moves.urllib.parse import quote
+from odemis.util import inspect_getmembers
 
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
@@ -48,6 +49,11 @@ Pyro4.config.THREADPOOL_MINTHREADS = 16 # TODO: still need 48, because it can bl
 Pyro4.config.THREADPOOL_MAXTHREADS = 128
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
+
+# maximum call time for the instantiation (which can be extra long for some hardware)
+# and the standard call (normally, the long ones return a future).
+INIT_TIMEOUT = 300  # s
+CALL_TIMEOUT = 30  # s
 
 # TODO needs a different value on Windows
 # TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
@@ -186,7 +192,7 @@ def get_roattributes(self):
     list all roattributes of an instance
     Note: this only works on an original class, not on a proxy
     """
-    members = inspect.getmembers(self.__class__)
+    members = inspect_getmembers(self.__class__)
     return [name for name, obj in members if isinstance(obj, roattribute)]
 
 
@@ -210,8 +216,7 @@ def load_roattributes(self, roattributes):
         setattr(self, a, value)
 
     # save the list in case we need to pickle the object again
-    self._odemis_roattributes = roattributes.keys()
-
+    self._odemis_roattributes = list(roattributes.keys())
 
 # Container management functions and class
 
@@ -234,19 +239,19 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the new component instantiated
         """
         try:
-            # HACK: we know that children can contain components, which are pretty
+            # HACK: we know that dependencies should contain components, which are pretty
             # much always PyroProxies. In case, the component run in the same
             # container, get the direct reference, to make it faster.
             # The best would be that Pyro takes care of this automatically for all Proxies
-            children = kwargs["children"]
-            if isinstance(children, collections.Mapping):
-                logging.debug("Looking to simplify children entry %s", children)
-                children = {k: _getMostDirectObject(self, v) for k, v in children.items()}
-                kwargs["children"] = children
+            dependencies = kwargs["dependencies"]
+            if isinstance(dependencies, collections.Mapping):
+                logging.debug("Looking to simplify dependencies entry %s", dependencies)
+                dependencies = {k: _getMostDirectObject(self, v) for k, v in dependencies.items()}
+                kwargs["dependencies"] = dependencies
         except KeyError:
             pass
         except Exception:
-            logging.warning("Exception while trying to unwrap children", exc_info=True)
+            logging.warning("Exception while trying to unwrap dependencies", exc_info=True)
 
         return self.daemon.instantiate(klass, kwargs)
 
@@ -265,7 +270,7 @@ class Container(Pyro4.core.Daemon):
         assert "/" not in name
         self._name = name
         # all the sockets are in the same directory so it's independent from the PWD
-        self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
+        self.ipc_name = BASE_DIRECTORY + "/" + quote(name) + ".ipc"
 
         if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable
             logging.error("Directory " + BASE_DIRECTORY + " is not accessible, "
@@ -333,7 +338,7 @@ class Container(Pyro4.core.Daemon):
             try:
                 # If the component already auto-registered, unregister it, so
                 # that it can try again later
-                self.unregister(urllib.quote(kwargs["name"]))
+                self.unregister(quote(kwargs["name"]))
             except Exception:
                 pass
             raise
@@ -345,6 +350,7 @@ class Container(Pyro4.core.Daemon):
          container.
         component (Component)
         """
+        assert isinstance(component._pyroId, basestring)
         self.rootId = component._pyroId
 
 
@@ -360,8 +366,8 @@ def getContainer(name, validate=True):
         raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
 
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
-    container._pyroTimeout = 120  # s
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:" + BASE_DIRECTORY + "/" + quote(name) + ".ipc")
+    container._pyroTimeout = CALL_TIMEOUT
     container._pyroOneway.add("terminate")
 
     # A proxy doesn't connect until the first remote call, check the connection
@@ -376,7 +382,7 @@ def getObject(container_name, object_name):
     raises an exception if no such object or container exist
     """
     container = getContainer(container_name, validate=False)
-    return container.getObject(urllib.quote(object_name))
+    return container.getObject(quote(object_name))
 
 
 def createNewContainer(name, validate=True, in_own_process=True):
@@ -433,15 +439,27 @@ def createInNewContainer(container_name, klass, kwargs):
     """
     container = createNewContainer(container_name, validate=False)
     try:
-        comp = container.instantiate(klass, kwargs)
-    except Exception as exp:
+        comp = createInContainer(container, klass, kwargs)
+    except Exception:
+        # TODO: we might want to do something special in case of TimeoutError,
+        # as the component might be blocked or still running (slowly). Killing
+        # the container process could be better than leaving it as-is.
         try:
-            container.terminate()
+            container.terminate()  # Non blocking
         except Exception:
             logging.exception("Failed to stop the container %s after component failure",
                               container_name)
-        raise exp
+        raise
     return container, comp
+
+
+def createInContainer(container, klass, kwargs):
+    # Temporarily put a longer timeout
+    container._pyroTimeout = INIT_TIMEOUT
+    try:
+        return container.instantiate(klass, kwargs)
+    finally:
+        container._pyroTimeout = CALL_TIMEOUT
 
 
 def _manageContainer(name, isready=None):

@@ -1,20 +1,30 @@
-****************************************
+*****************
 Acquisition layer
-****************************************
+*****************
 
 Streams
 =======
 
 In its essence, a *Stream* represents one type of acquisition, corresponding to
 the coupling of an emitter and a detector. It provides two main functionalities.
-First, it allows to acquire new data (either with the "is_active" VA, or the "acquire"
-method). Second, it can "project" (ie, convert) the raw data acquired (*.raw*) into a
-visible object (*.image*) for the user according to various criteria.
+First, it allows to acquire new data (either with the ``is_active`` VigilanteAttribute (VA),
+or the ``acquire()`` method).
+Second, it can "project" (ie, convert) the raw data acquired (*.raw*) into a
+visible object (``.image``) for the user according to various criteria.
+
+Some streams (typically, the StaticStreams) do not provide by themselves this projection functionality.
+In such case, they do not have a ``.image`` VA.
+In order to visualize such stream, a *DataProjection* must be instantiated with
+the stream. This provides the flexibility to select which type of projection is
+needed. For example, on a SpectrumStream (which has 3 dimensions, X, Y and C),
+one could use a *RGBSpatialProjection* to see the average intensity on each
+pixel, or a *SinglePointSpectrumProjection* to see the spectrum plot at a given
+pixel.
+
 Note that in order to separate streams from an acquisition type point-of-view,
 most of the streams are also inheriting from one of the extra abstract classes:
-OpticalStream, EMStream, CLStream, SpectrumStream, ARStream.
+OpticalStream, EMStream, CLStream, SpectrumStream, TemporalSpectrumStream, ARStream.
 
-|
 **.raw:**
 
 List of DataArray containing the latest raw data acquired by the Stream.
@@ -24,7 +34,6 @@ List of DataArray containing the latest raw data acquired by the Stream.
 It's a VA containing a DataArray representing the .raw in a form useful for the user.
 For a standard image, the data should be projected to a RGB 2D image (XYC).
 
-|
 The basic stream class is *Stream* (/acq/stream/_base.py).
 
 The following subclasses exist:
@@ -34,8 +43,8 @@ The following subclasses exist:
     3. **RepetitionStream(LiveStream)** (/acq/stream/_helper.py)
     4. **StaticStream(Stream)** (/acq/stream/_static.py)
 
-|
-1. **LiveStream(Stream):**
+LiveStream(Stream)
+------------------
 
    Abstract class for any stream that can do continuous acquisition. It is mainly used for displaying detector data.
    For every acquisition type it always has an equivalent in *_static.py*
@@ -104,8 +113,8 @@ The following subclasses exist:
       
           If a light is given, it will turn it on during acquisition.
 
-|
-2. **MultipleDetectorStream(Stream):**
+MultipleDetectorStream(Stream)
+------------------------------
 
    Abstract class for all specialized streams which are actually a combination
    of multiple streams acquired simultaneously. The main difference from a
@@ -139,14 +148,6 @@ The following subclasses exist:
           It handles acquisition, but not rendering (so .image always returns an empty
           image).
 
-        - *MomentOfInertiaMDStream(SEMCCDMDStream):*
-
-          Multiple detector Stream made of SEM + CCD, with direct computation of the
-          moment of inertia (MoI) and spot size of the CCD images. The MoI is
-          assembled into one big image for the CCD.
-          Used by the MomentOfInertiaLiveStream to provide display in the mirror
-          alignment mode for SPARCv2.
-
     - **SEMMDStream(MultipleDetectorStream):**
 
       Same as SEMCCDMDStream, but expects two SEM streams: the first one is the
@@ -156,8 +157,8 @@ The following subclasses exist:
 
       Stream to acquire multiple ScannedFluoStreams simultaneously.
 
-|
-3. **RepetitionStream(LiveStream):**
+RepetitionStream(LiveStream)
+----------------------------
 
    Abstract class for streams which are actually a set of multiple acquisitions
    repeated over a grid.
@@ -167,8 +168,6 @@ The following subclasses exist:
    It uses the *is_active* VA (as the other LiveStreams). It will start an acquisition useful for configuring the settings by the user.
 
     - **CCDSettingsStream(RepetitionStream):**
-
-      TODO
 
         - *SpectrumSettingsStream(CCDSettingsStreamStream):*
 
@@ -187,14 +186,7 @@ The following subclasses exist:
           See StaticARStream for displaying a stream, and CameraStream for displaying
           just the current AR view.
 
-        - *MomentOfInertiaLiveStream(CCDSettingsStream):*
-
-          Special stream to acquire AR view and display moment of inertia live.
-          Also provides spot size information.
-
     - **PMTSettingsStream(RepetitionStream):**
-
-      TODO
 
         - *MonochromatorSettingsStream(PMTSettingsStream):*
 
@@ -220,8 +212,8 @@ The following subclasses exist:
       metadata has to be applied to all the other optical images acquired.
       See img.mergeMetadata() for merging the metadata.
 
-|
-4. **StaticStream(Stream):**
+StaticStream(Stream)
+--------------------
 
    Stream containing one static image (passed as a DataArray). It's mainly for displaying data from a file,
    and also for testing and displaying static images.
@@ -274,6 +266,7 @@ The following subclasses exist:
       As it's possible that positions on the SEM are relatively random, and it
       is convenient to have a simple format when only one SEM pixel is scanned,
       we've picked the following convention:
+
         * each CCD image is a separate DataArray
         * each CCD image contains metadata about the SEM position (MD_POS, in m)
           pole (MD_AR_POLE, in px), and acquisition time (MD_ACQ_DATE)
@@ -288,12 +281,17 @@ The following subclasses exist:
 
     - **StaticSpectrumStream(StaticStream):**
 
-      A Spectrum stream which displays only one static image/data.
+      A stream which displays only a static image/data with spectrum and/or time dimension.
 
       The main difference from the normal streams is that the data is 3D (a cube)
-      The metadata should have a MD_WL_POLYNOMIAL or MD_WL_LIST
-      Note that the data received should be of the (numpy) shape CYX or C11YX.
-      When saving, the data will be converted to CTZYX (where TZ is 11).
+      or 4D (hypercube).
+      The metadata should have a MD_WL_POLYNOMIAL or MD_WL_LIST, or MD_TIME_LIST.
+      Note that the data received should be of the (numpy) shape CYX, TYX or CT1YX.
+      
+      It requires the use of a *DataProjection* to be visualized. The compatible
+      projections are: RGBSpartialProjection, LineSpectrumProjection, 
+      MeanSpectrumProjection, PixelTemporalSpectrumProjection,
+      SinglePointSpectrumProjection, and SinglePointTemporalProjection.
 
       The histogram corresponds to the data after calibration, and selected via
       the spectrumBandwidth VA.
@@ -308,13 +306,15 @@ The following subclasses exist:
           The spectrum efficiency compensation data is None or a DataArray. See also acq.calibration.py.
         * *.fitToRGB*: This VA keeps track of whether the (per bandwidth) display should be split intro 3 sub-bands,
           which are applied to RGB (map color).
+          It's only present if the data has a spectrum dimension.
         * *.selected_pixel*: This VA is used to keep track of any selected pixel within the data for the
           display of a spectrum (wavelength: x-axis; intensity: y-axis).
-          The *.get_pixel_spectrum* method uses this VA.
         * *.selected_line*: This VA is used to keep track of any selected line within the data for the
           display of a spectrum. The first point and the second point are in pixels. It must be 2 elements long.
           The spectrum displays the different wavelengths (y-axis) for each pixel on the line selected (x-axis).
-          The *.get_line_spectrum* method uses this VA.
+        * *.selected_time*: This VA is used to keep track of the time pixel selected within the data for the
+          display of a chronograph (time: x-axis; intensity: y-axis).
+          It's only present if the data has a time dimension. 
         * *.peak_method*: This VA is used to keep track of which method is used to fit the peak of a spectrum
           (Gaussian, Lorentzian).
           None if spectrum peak fitting curve is not displayed (Peak method index).
@@ -327,9 +327,6 @@ The following subclasses exist:
         * *.spectrumBandwidth*: This VA is used to keep track of the thickness of the spectral range selected for display.
           For each selected pixel it maps the selected spectral (wavelength) range from the
           hypercube into one pixel value.
-
-
-
-
+          It's only present if the data has a spectrum dimension.
 
 

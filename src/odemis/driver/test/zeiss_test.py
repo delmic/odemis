@@ -110,7 +110,8 @@ class TestSEM(unittest.TestCase):
         ebeam.horizontalFoV.value = orig_fov
         self.assertAlmostEqual(orig_fov, ebeam.horizontalFoV.value)
 
-#    @skip("skip")
+    # probeCurrent not currently supported by the driver (because it didn't work??)
+    @skip("skip")
     def test_probe_current(self):
         ebeam = self.scanner
 

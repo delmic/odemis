@@ -67,7 +67,7 @@ class ViewPortController(object):
 
         assert not self._data_model.views.value  # should still be empty
 
-        self._viewports = viewports.keys()
+        self._viewports = list(viewports.keys())
         self._create_views_fixed(viewports)
 
         # First view is focused
@@ -316,7 +316,6 @@ class OverviewController(object):
             tab_data.streams.subscribe(self._on_current_stream)
 
         # Global overview image (Delphi)
-        overview_stream = None
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
@@ -360,7 +359,7 @@ class OverviewController(object):
         ax_x = self.main_data.stage.axes["x"]
         ax_y = self.main_data.stage.axes["y"]
         mpp = max(MAX_OVV_SIZE / shape[0], MAX_OVV_SIZE / shape[1])
-        if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
+        if hasattr(ax_x, "range") and hasattr(ax_y, "range"):
             max_x = ax_x.range[1] - ax_x.range[0]
             max_y = ax_y.range[1] - ax_y.range[0]
             if max_x < MAX_OVV_SIZE and max_y < MAX_OVV_SIZE:

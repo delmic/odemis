@@ -19,13 +19,15 @@ You should have received a copy of the GNU General Public License along with Ode
 # This script collects multiple fluorescence images at high frame rate in order
 # to provide input for high-resolution reconstruction algorithm.
 
+from __future__ import division
 
-import Queue
+import queue
 import argparse
 import logging
 from odemis import dataio, model
 from odemis.gui.util import get_picture_folder
 from odemis.util import fluo
+
 import os
 import sys
 import threading
@@ -62,7 +64,7 @@ class HRAcquirer(object):
         self._n = 0
         self._startt = 0  # starting time of acquisition
 
-        self._q = Queue.Queue()  # queue of tuples (str, DataArray) for saving data
+        self._q = queue.Queue()  # queue of tuples (str, DataArray) for saving data
         # TODO: find the right number of threads, based on CPU numbers (but with
         # python threading that might be a bit overkill)
         for i in range(4):

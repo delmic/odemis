@@ -19,6 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 import logging
 import math
 from numpy import fft
@@ -26,14 +28,13 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq.align import spot
-from odemis.dataio import hdf5
+from odemis.dataio import hdf5, tiff
 from odemis.driver.actuator import ConvertStage
-from odemis.util import test
+from odemis.util import test, mock
 import os
-import threading
 import time
 import unittest
-import weakref
+
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -42,6 +43,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
+
 
 class TestSpotAlignment(unittest.TestCase):
     """
@@ -73,9 +75,10 @@ class TestSpotAlignment(unittest.TestCase):
 
         # Used for OBJECTIVE_MOVE type
         cls.aligner_xy = ConvertStage("converter-ab", "stage",
-                                      children={"orig": cls.align},
+                                      dependencies={"orig": cls.align},
                                       axes=["b", "a"],
                                       rotation=math.radians(45))
+
 
     @classmethod
     def tearDownClass(cls):
@@ -106,7 +109,7 @@ class TestSpotAlignment(unittest.TestCase):
         Test CenterSpot
         """
         escan = self.ebeam
-        ccd = FakeCCD(self, self.align)
+        ccd = FakeCCD(self.fake_img, self.align)
         f = spot.CenterSpot(ccd, self.aligner_xy, escan, 10, spot.OBJECTIVE_MOVE)
         res, tab = f.result()
 
@@ -114,57 +117,15 @@ class TestSpotAlignment(unittest.TestCase):
         err_mrg = max(2 * pixelSize[0], 1e-06)  # m
         self.assertLessEqual(res, err_mrg)
 
-class FakeCCD(model.HwComponent):
+
+class FakeCCD(mock.FakeCCD):
     """
     Fake CCD component that returns an image shifted with respect to the
     LensAligner position.
     """
-    def __init__(self, testCase, align):
-        """
-        Fake CCD is given a good clear image as base image
-        align (Component): stage with axes a and b, used read the shift to simulate
-        """
-        super(FakeCCD, self).__init__("ccdshift", "ccd")
-        self.testCase = testCase
-        self.align = align
-        self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
-
-        self.data = CCDDataFlow(self)
-        self._acquisition_thread = None
-        self._acquisition_lock = threading.Lock()
-        self._acquisition_init_lock = threading.Lock()
-        self._acquisition_must_stop = threading.Event()
-
-        self.fake_img = self.testCase.fake_img
-
-    def start_acquire(self, callback):
-        with self._acquisition_lock:
-            self._wait_acquisition_stopped()
-            target = self._acquire_thread
-            self._acquisition_thread = threading.Thread(target=target,
-                    name="FakeCCD acquire flow thread",
-                    args=(callback,))
-            self._acquisition_thread.start()
-
-    def stop_acquire(self):
-        with self._acquisition_lock:
-            with self._acquisition_init_lock:
-                self._acquisition_must_stop.set()
-
-    def _wait_acquisition_stopped(self):
-        """
-        Waits until the acquisition thread is fully finished _iff_ it was requested
-        to stop.
-        """
-        # "if" is to not wait if it's already finished
-        if self._acquisition_must_stop.is_set():
-            logging.debug("Waiting for thread to stop.")
-            self._acquisition_thread.join(10)  # 10s timeout for safety
-            if self._acquisition_thread.isAlive():
-                logging.exception("Failed to stop the acquisition thread")
-                # Now let's hope everything is back to normal...
-            # ensure it's not set, even if the thread died prematurely
-            self._acquisition_must_stop.clear()
+    def __init__(self, fake_img, aligner):
+        super(FakeCCD, self).__init__(fake_img)
+        self.align = aligner
 
     def _simulate_image(self):
         """
@@ -198,44 +159,70 @@ class FakeCCD(model.HwComponent):
             output = model.DataArray(abs(sim_img), self.fake_img.metadata)
             return output
 
-    def _acquire_thread(self, callback):
-        """
-        Thread that simulates the CCD acquisition.
-        """
-        try:
-            while not self._acquisition_must_stop.is_set():
-                # dummy
-                duration = 1
-                if self._acquisition_must_stop.wait(duration):
-                    break
-                callback(self._simulate_image())
-        except:
-            logging.exception("Unexpected failure during image acquisition")
-        finally:
-            logging.debug("Acquisition thread closed")
-            self._acquisition_must_stop.clear()
 
-class CCDDataFlow(model.DataFlow):
+class TestFindGridSpots(unittest.TestCase):
     """
-    This is an extension of model.DataFlow. It receives notifications from the
-    FakeCCD component once the fake output is generated. This is the dataflow to
-    which the CCD acquisition streams subscribe.
+    Unit test class to test the behavior of FindGridSpots in odemis.util.spot.
     """
-    def __init__(self, ccd):
-        model.DataFlow.__init__(self)
-        self.component = weakref.ref(ccd)
 
-    def start_generate(self):
-        try:
-            self.component().start_acquire(self.notify)
-        except ReferenceError:
-            pass
+    def test_find_grid_close_to_image_edge(self):
+        """
+        Create an image with a grid of 8 by 8 spots near the edge of the image. Then test if the spots are found
+        in the correct coordinates.
+        """
+        # # set a grid of 8 by 8 points to 1 at the top left of the image
+        image = numpy.zeros((256, 256))
+        image[4:100:12, 4:100:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(4, 100, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
+        # set a grid of 8 by 8 points to 1 at the bottom right of the image
+        image = numpy.zeros((256, 300))
+        image[168:253:12, 212:297:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(168, 253, 12)
+        yv = numpy.arange(212, 297, 12)
+        xx, yy = numpy.meshgrid(yv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
 
-    def stop_generate(self):
-        try:
-            self.component().stop_acquire()
-        except ReferenceError:
-            pass
+    def test_find_grid(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        self.assertAlmostEqual(rotation, 0, places=4)
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(54, 150, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=2)
+        numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_find_grid_on_image(self):
+        """
+        Load an image with known spot coordinates, test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        grid_spots = numpy.load(os.path.join(TEST_IMAGE_PATH, "multiprobe01_grid_spots.npz"))
+        filename = os.path.join(TEST_IMAGE_PATH, "multiprobe01.tiff")
+        img = tiff.open_data(filename).content[0].getData()
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(img, (14, 14))
+        numpy.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'])
+        numpy.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, grid_spots['scaling'], decimal=3)
+        self.assertAlmostEqual(rotation, grid_spots['rotation'])
 
 
 if __name__ == '__main__':

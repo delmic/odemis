@@ -19,23 +19,29 @@ This file is part of Odemis.
 """
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
-from ConfigParser import NoOptionError
-import ConfigParser
+try:
+    import ConfigParser
+    from ConfigParser import NoOptionError
+except ImportError:  # Python 3 naming
+    import configparser as ConfigParser
+    from configparser import NoOptionError
 import logging
 import math
 import os.path
-import time
 
 from odemis.dataio import tiff
 from odemis.acq.align import delphi
 from odemis.gui.util import get_picture_folder, get_home_folder
+import sys
+from past.builtins import unicode
 
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 
-class Config(object):
+class Config(with_metaclass(ABCMeta, object)):
     """ Abstract configuration super class
 
     Configurations are built around the :py:class:`ConfigParser.SafeConfigParser` class.
@@ -43,8 +49,6 @@ class Config(object):
     The main difference is that the filename is fixed, and changes are automatically saved.
 
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractproperty
     def file_name(self):
@@ -73,9 +77,9 @@ class Config(object):
         if os.path.exists(self.file_path):
             self.config.read(self.file_path)
         else:
-            logging.warn(u"Using default %s configuration",
+            logging.info(u"Using default %s configuration",
                          self.__class__.__name__)
-            self.use_default()
+            self.config = self.default
 
             # Create the file and save the default configuration, so the user
             # will be able to see the option exists. The drawback is that if we
@@ -98,32 +102,60 @@ class Config(object):
         self.config.write(f)
         f.close()
 
-    def use_default(self):
-        """ Assign the default configuration to the main one """
-        self.config = self.default
-
     def set(self, section, option, value):
-        """ Set the value of an option """
+        """ Set the value of an option in the given section
+        section (string)
+        option (string)
+        value (string or unicode): if unicode, it's encoded as UTF-8
+        """
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
+        value = self._ensure_str_format(value)
         self.config.set(section, option, value)
         self.write()
 
     def set_many(self, section, option_value_list):
+        """ Set the values of options in the given section
+        section (string)
+        option_value_list (dict string->string or unicode): option name -> value
+          (if the value is unicode, it's encoded as UTF-8)
+        """
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
         for option, value in option_value_list:
+            value = self._ensure_str_format(value)
             self.config.set(section, option, value)
         self.write()
 
     def get(self, section, option):
-        """ Get the value of an option """
+        """ Get the value of an option in the given section
+        section (string)
+        option (string)
+        returns (unicode): the value is converted from UTF-8
+        """
         try:
-            return self.config.get(section, option)
+            # Try to convert back from UTF-8 (and if it's not working, don't fail
+            # but replace it by U+FFFD)
+            ret = self.config.get(section, option)
+            if isinstance(ret, bytes):  # python2
+                return ret.decode("utf-8", "replace")
+            else:  # python3
+                return ret
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             return self.default.get(section, option)
+
+    def _ensure_str_format(self, s):
+        """
+        The value argument of ConfigParser requires a unicode str in python3 and a byte str
+        in python2. This function makes sure a string is in the right format.
+        """
+        if sys.version_info[0] >= 3 and isinstance(s, bytes):
+            s = s.decode("utf-8")
+        elif sys.version_info[0] < 3 and isinstance(s, unicode):
+            s = s.encode("utf-8")
+        return s
 
 
 class GeneralConfig(Config):
@@ -207,7 +239,7 @@ class AcquisitionConfig(Config):
         self.default.set("acquisition", "last_format", tiff.FORMAT)
         self.default.set("acquisition", "last_extension", tiff.EXTENSIONS[0])
 
-        # fn_ptn is a string representing a filename pattern. It may contain placeholders
+        # fn_ptn is a (unicode) string representing a filename pattern. It may contain placeholders
         # surrounded by curly braces such as {datelng}, {daterev}, {count}, ...
         # These placeholders are replaced by the actual date/time/count when a filename is
         # generated. The placeholder options and the related code can be found in
@@ -217,7 +249,7 @@ class AcquisitionConfig(Config):
         # 'test-{datelng}-{cnt}' will be generated and fn_count will be set to '05'. This
         # pattern is used to suggest a new filename after the acquisition
         # is completed.
-        self.default.set("acquisition", "fn_ptn", "{datelng}-{timelng}")
+        self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
 
         self.default.add_section("export")
@@ -236,6 +268,8 @@ class AcquisitionConfig(Config):
 
     @last_path.setter
     def last_path(self, last_path):
+        # Note that paths (or filenames) which end with a space have their name
+        # trimmed when read back, so they will not be recorded properly.
         self.set("acquisition", "last_path", last_path)
 
     @property
