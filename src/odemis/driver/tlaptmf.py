@@ -37,7 +37,7 @@ import math
 from odemis import model
 import odemis
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import serial
 import struct
@@ -303,7 +303,7 @@ class MFF(model.Actuator):
             while True:
                 trials += 1
                 try:
-                    logging.debug("Sending: '%s'", ", ".join("%02X" % ord(c) for c in com))
+                    logging.debug("Sending: '%s'", ", ".join("%02X" % c for c in bytearray(com)))
                     self._serial.write(com)
 
                     if isinstance(msg, APTReq):  # read the response
@@ -374,15 +374,15 @@ class MFF(model.Actuator):
             for i in range(6):
                 char = self._serial.read() # empty if timeout
                 if not char:
-                    raise IOError("Controller timed out, after receiving '%s'" % msg)
+                    raise IOError("Controller timed out, after receiving '%s'" % to_str_escape(msg))
 
                 msg += char
         finally:
             self._serial.timeout = old_timeout
 
         mid = struct.unpack("<H", msg[0:2])[0]
-        if not (ord(msg[4]) & 0x80): # short message
-            logging.debug("Received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
+        if not (ord(msg[4:5]) & 0x80): # short message
+            logging.debug("Received: '%s'", ", ".join("%02X" % c for c in bytearray(msg)))
             return mid, msg[2:4]
 
         # long message
@@ -390,11 +390,11 @@ class MFF(model.Actuator):
         for i in range(length):
             char = self._serial.read() # empty if timeout
             if not char:
-                raise IOError("Controller timed out, after receiving '%s'" % msg)
+                raise IOError("Controller timed out, after receiving '%s'" % to_str_escape(msg))
 
             msg += char
 
-        logging.debug("Received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
+        logging.debug("Received: '%s'", ", ".join("%02X" % c for c in bytearray(msg)))
         return mid, msg[6:]
 
     # Low level functions
@@ -416,8 +416,8 @@ class MFF(model.Actuator):
         sn, modl, typ, fmv, notes, hwv, state, nc = values
 
         # remove trailing 0's
-        modl = modl.rstrip("\x00")
-        notes = notes.rstrip("\x00")
+        modl = modl.rstrip(b"\x00").decode('latin1')
+        notes = notes.rstrip(b"\x00").decode('latin1')
 
         # Convert firmware version to a string
         fmvs = "%d.%d.%d" % ((fmv & 0xff0000) >> 16,
@@ -671,8 +671,8 @@ class MFF102Simulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         # internal values
         self._state = {"jog": 1, # 1 or 2
@@ -680,7 +680,7 @@ class MFF102Simulator(object):
         self._end_motion = 0 # time at which the current motion end(ed)
         self._add = 0x50 # the address of this device
         self._sn = 37000001
-        self._model = "MPP002"
+        self._model = b"MPP002"
         self._fmv = 0x020304
         self._hwv = 2
         self._nchans = 1
@@ -703,7 +703,7 @@ class MFF102Simulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -719,7 +719,7 @@ class MFF102Simulator(object):
             # read the first (required) 6 bytes
             msg = self._input_buf[0:7]
 
-            if ord(msg[4]) & 0x80: # long message
+            if ord(msg[4:5]) & 0x80: # long message
                 length = struct.unpack("<H", msg[2:4])[0]
                 if len(self._input_buf) < 6 + length:
                     return # not yet all the message received
@@ -755,21 +755,21 @@ class MFF102Simulator(object):
         process the msg, and put the result in the output buffer
         msg (str): raw message (including header)
         """
-        logging.debug("Simulator received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
+        logging.debug("Simulator received: '%s'", ", ".join("%02X" % c for c in bytearray(msg)))
 
         mid = struct.unpack("<H", msg[0:2])[0]
-        dest = ord(msg[4]) & 0x7f
+        dest = ord(msg[4:5]) & 0x7f
         if dest != self._add:
             logging.debug("Simulator (add = %X) skipping message for %X",
                           self._add, dest)
             return
-        src = ord(msg[5]) & 0x7f
+        src = ord(msg[5:6]) & 0x7f
         
         res = None
         try:
             if mid == HW_REQ_INFO.id:
                 data = struct.pack('<I8sHI48s12xHHH', self._sn, self._model, 2,
-                                   self._fmv, "APT Fake Filter Flipper",
+                                   self._fmv, b"APT Fake Filter Flipper",
                                    self._hwv, 0, self._nchans)
                 res = self._createMessage(HW_REQ_INFO.rid, src, self._add, data=data)
             elif mid == HW_STOP_UPDATEMSGS.id:
