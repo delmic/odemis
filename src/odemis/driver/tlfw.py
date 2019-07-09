@@ -144,15 +144,16 @@ class FW102c(model.Actuator):
             # check whether it looks like a FW102C
             try:
                 # If any garbage was previously received, make it discarded.
-                self._serial.write("\r")
+                self._serial.write(b"\r")
                 # can have some \x00 bytes at the beginning + "CMD_NOT_DEFINED"
                 self._flushInput()
                 idn = self.GetIdentification()
                 if re.match(self.re_idn, idn):
                     self._idn = idn
                     return n # found it!
-            except Exception:
-                logging.debug("Port %s doesn't seem to have a FW102C device connected", n)
+            except Exception as ex:
+                logging.debug("Port %s doesn't seem to have a FW102C device connected. " +
+                              "Identification failed with exception: %s", n, ex)
         else:
             raise HwError("Failed to find a filter wheel FW102C on ports '%s'. "
                           "Check that the device is turned on and connected to "
@@ -186,24 +187,27 @@ class FW102c(model.Actuator):
 
             # Shouldn't be necessary, but just in case
             skipped = self._serial.read(1000) # More than 1000 chars => give up
-            logging.debug("Skipping input %s", skipped.encode('string_escape'))
+            # decode with backslashreplace to avoid failing with random non-ascii characters
+            # backslashreplace doesn't seem to be working in python2 with utf-8 or ascii, so use latin-1
+            logging.debug("Skipping input %s", skipped.decode("latin1", "backslashreplace"))
 
-    re_err = r"Command error (.*)"
+    re_err = br"Command error (.*)"
     def _sendQuery(self, com):
         """
         Send a command which expects an answer
-        com (string): command to send (not including the ? and the \r)
-        return (string): the answer without newline and suffix ("> ")
+        com (byte string): command to send (not including the ? and the \r)
+        return (byte string): the answer without newline and suffix ("> ")
         raises
             IOError: if there is a timeout
             TLFWError: if the hardware reports an error
         """
         # TODO: handle IOError and automatically try to reconnect (cf LLE)
 
+        assert isinstance(com, bytes), 'com argument needs to be a byte string'
         assert(len(com) <= 50) # commands cannot be long
-        full_com = com + "\r"
+        full_com = com + b"\r"
         with self._ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com.decode("latin1", "backslashreplace"))
             self._serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -214,17 +218,17 @@ class FW102c(model.Actuator):
             while True:
                 char = self._serial.read() # empty if timeout
                 if not char: # should always finish by a "> "
-                    raise IOError("Controller timeout, after receiving '%s'" % line.encode('string_escape'))
+                    raise IOError("Controller timeout, after receiving '%s'" % line.decode("latin1", "backslashreplace"))
 
                 # normal char
                 line += char
-                if line[-2:] == "> ":
+                if line[-2:] == b"> ":
                     break
 
-            logging.debug("Received: '%s'", line.encode('string_escape'))
+            logging.debug("Received: '%s'", line.decode("latin1", "backslashreplace"))
 
         # remove echo + suffix + new line
-        line = line[len(full_com):-2].rstrip("\r")
+        line = line[len(full_com):-2].rstrip(b"\r")
 
         # if it's an error message => raise an error
         m = re.match(self.re_err, line)
@@ -237,7 +241,7 @@ class FW102c(model.Actuator):
     def _sendCommand(self, com):
         """
         Send a command which does not expect any answer
-        com (string): command to send (not including the ? and the \r)
+        com (byte string): command to send (not including the ? and the \r)
         return when the command is finished processed
         raises
             IOError: if there is a timeout
@@ -251,13 +255,13 @@ class FW102c(model.Actuator):
         return (str): model name as reported by the device
         """
         # answer is like "THORLABS FW102C/FW212C Filter Wheel version 1.04"
-        return self._sendQuery("*idn?")
+        return self._sendQuery(b"*idn?").decode("latin1", "backslashreplace")
 
     def GetMaxPosition(self):
         """
         return (1<int): maximum number of positions available (eg, 6, 12)
         """
-        ans = self._sendQuery("pcount?")
+        ans = self._sendQuery(b"pcount?")
         return int(ans)
 
     def GetPosition(self):
@@ -266,14 +270,14 @@ class FW102c(model.Actuator):
         Note: might be different from the last position set if the user has
          manually changed it.
         """
-        ans = self._sendQuery("pos?")
+        ans = self._sendQuery(b"pos?")
         return int(ans)
 
     def GetSpeed(self):
         """
         return (0 or 1): current "speed" of the wheel, the bigger the faster
         """
-        ans = self._sendQuery("speed?")
+        ans = self._sendQuery(b"speed?")
         return int(ans)
 
     def SetPosition(self, pos):
@@ -296,7 +300,7 @@ class FW102c(model.Actuator):
         prev_timeout = self._serial.timeout
         try:
             self._serial.timeout = maxdur
-            self._sendCommand("pos=%d" % pos)
+            self._sendCommand(b"pos=%d" % pos)
         finally:
             self._serial.timeout = prev_timeout
         logging.debug("Move to pos %d finished", pos)
@@ -438,15 +442,15 @@ class FW102cSimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         # internal values (same as command names)
-        self._state = {"speed": 1,
-                       "trig": 0,
-                       "pos": 3,
-                       "pcount": 6,
-                       "sensors": 0,
+        self._state = {b"speed": 1,
+                       b"trig": 0,
+                       b"pos": 3,
+                       b"pcount": 6,
+                       b"sensors": 0,
                        }
 
     def write(self, data):
@@ -455,7 +459,7 @@ class FW102cSimulator(object):
         self._output_buf += data
 
         # process each commands separated by "\r"
-        commands = self._input_buf.split("\r")
+        commands = self._input_buf.split(b"\r")
         self._input_buf = commands.pop() # last one is not complete yet
         for c in commands:
             self._processCommand(c)
@@ -473,7 +477,7 @@ class FW102cSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -485,44 +489,44 @@ class FW102cSimulator(object):
         process the command, and put the result in the output buffer
         com (str): command
         """
-        logging.debug("Simulator received command %s", com)
+        logging.debug("Simulator received command %s", com.decode("latin1", "backslashreplace"))
         out = None
         try:
-            if com == "*idn?":
-                out = "THORLABS FW102C/FW212C Fake Filter Wheel version 1.01"
-            elif com.endswith("?"):
+            if com == b"*idn?":
+                out = b"THORLABS FW102C/FW212C Fake Filter Wheel version 1.01"
+            elif com.endswith(b"?"):
                 name = com[:-1]
                 val = self._state[name]
-                out = "%d" % val
-            elif com.startswith("pos="):
+                out = b"%d" % val
+            elif com.startswith(b"pos="):
                 val = int(com[4:])
-                if not 1 <= val <= self._state["pcount"]:
+                if not 1 <= val <= self._state[b"pcount"]:
                     raise ValueError("%d" % val)
 
                 # simulate a move
-                curpos = self._state["pos"]
+                curpos = self._state[b"pos"]
                 p1, p2 = sorted([val, curpos])
                 dist = min(p2 - p1, (6 + p1) - p2)
-                if self._state["speed"] == 0:
+                if self._state[b"speed"] == 0:
                     dur = 2
                 else:
                     dur = 1
                 time.sleep(dist * dur)
-                self._state["pos"] = val
+                self._state[b"pos"] = val
                 # no output
             else:
                 # TODO: set of speed, trig, sensors,
-                logging.debug("Command '%s' unknown", com)
-                raise KeyError("%s" % com)
+                logging.debug("Command '%s' unknown", com.decode("latin1", "backslashreplace"))
+                raise KeyError("%s" % com.decode("latin1", "backslashreplace"))
         except ValueError:
-            out = "Command error CMD_ARG_INVALID\n"
+            out = b"Command error CMD_ARG_INVALID\n"
         except KeyError:
-            out = "Command error CMD_NOT_DEFINED\n"
+            out = b"Command error CMD_NOT_DEFINED\n"
 
         # add the response end
         if out is None:
-            out = ""
+            out = b""
         else:
-            out += "\r"
-        out += "> "
+            out += b"\r"
+        out += b"> "
         self._output_buf += out
