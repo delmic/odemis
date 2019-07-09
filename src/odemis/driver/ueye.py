@@ -1248,7 +1248,7 @@ class Camera(model.DigitalCamera):
 
         ds_str = subprocess.check_output(["/etc/init.d/ueyeusbdrc", "status"])
         logging.debug("Daemon status is '%s'", ds_str.strip())
-        if "not" in ds_str:
+        if b"not" in ds_str:
             logging.info("Attempting to restart the daemon")
             ret = subprocess.call(["sudo", "/usr/sbin/service", "ueyeusbdrc", "stop"])
             if ret != 0:
