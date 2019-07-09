@@ -590,7 +590,7 @@ class TMCLController(model.Actuator):
         rep (buffer of 9 bytes)
         """
         ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', rep)
-        s = "%d, %d, %d, %d, %d (%d)" % (ra, rt, status, rn, rval, chk)
+        s = b"%d, %d, %d, %d, %d (%d)" % (ra, rt, status, rn, rval, chk)
         return s
 
     def _resynchonise(self):
@@ -603,7 +603,7 @@ class TMCLController(model.Actuator):
             self._serial.flushInput()
             garbage = self._serial.read(1000)
             if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage.encode('string_escape'))
+                logging.debug("Received unexpected bytes '%s'", garbage.decode('latin1', 'backslashreplace'))
             if len(garbage) == 1000:
                 # Probably a sign that it's not the device we are expecting
                 logging.warning("Lots of garbage sent from device")
@@ -616,12 +616,12 @@ class TMCLController(model.Actuator):
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it's unlikely to ever do anything more.
             msg = b"\x00" * 9  # a 9-byte message
-            logging.debug("Sending '%s'", msg.encode('string_escape'))
+            logging.debug("Sending '%s'", msg.decode('latin1', 'backslashreplace'))
             self._serial.write(msg)
             self._serial.flush()
             res = self._serial.read(10)  # See if the device is trying to talk too much
             if len(res) == 9:  # answer should be 9 bytes
-                logging.debug("Received (for sync) %s", self._reply_to_str(res))
+                logging.debug("Received (for sync) %s", self._reply_to_str(res).decode('latin1', 'backslashreplace'))
                 ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
                 if status == 1:  # Wrong checksum (=> got too many bytes)
                     # On some devices the timeout of the previous read is enough
@@ -637,7 +637,7 @@ class TMCLController(model.Actuator):
                 else:
                     logging.debug("Device message has wrong checksum")
             else:
-                logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
+                logging.debug("Device replied unexpected message: %s", res.decode('latin1', 'backslashreplace'))
 
             raise IOError("Device did not answer correctly to any sync message")
 
@@ -694,7 +694,7 @@ class TMCLController(model.Actuator):
         # Compute header
         s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
 
-        logging.debug("Encoded user config as '%s'", s.encode('string_escape'))
+        logging.debug("Encoded user config as '%s'", s.decode('latin1', 'backslashreplace'))
 
         # Write s as a series of uint32 into the user area
         assert(len(s) // 4 <= 56)
@@ -732,7 +732,7 @@ class TMCLController(model.Actuator):
             d = self.GetGlobalParam(2, i + 1)
             s += struct.pack(">i", d)
 
-        logging.debug("Read user config as '%s%s'", sh.encode('string_escape'), s.encode('string_escape'))
+        logging.debug("Read user config as '%s%s'", sh.decode('latin1', 'backslashreplace'), s.decode('latin1', 'backslashreplace'))
 
         # Compute checksum (= sum of everything on 16 bits)
         hpres = numpy.frombuffer(s, dtype=numpy.uint16)
@@ -1650,7 +1650,7 @@ class TMCLController(model.Actuator):
         dependences = set(shift.keys())
 
         # Check if the distance is big enough to make sense
-        for an, v in shift.items():
+        for an, v in list(shift.items()):
             if an in self._name_to_do_axis:
                 raise NotImplementedError("Relative move on digital output axis not supported " +
                                           "(requested on axis %s)" % an)
@@ -2188,8 +2188,8 @@ class TMCMSimulator(object):
     def __init__(self, timeout=0, naxes=3, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         self._naxes = naxes
 
@@ -2272,7 +2272,7 @@ class TMCMSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -2284,7 +2284,6 @@ class TMCMSimulator(object):
         struct.pack_into('>BBBBiB', msg, 0, 2, self._id, status, inst, val, 0)
         # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
-
         self._output_buf += msg.tostring()
 
     def _parseMessage(self, msg):
@@ -2334,7 +2333,7 @@ class TMCMSimulator(object):
             end = now + abs(pos - val) / self._getMaxSpeed(mot)
             self._astates[mot][0] = val
             self._axis_move[mot] = (now, end, pos)
-            self._sendReply(inst, val=val)
+            self._sendReply(inst, val=int(val))
         elif inst == 5: # Set axis parameter
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
@@ -2368,7 +2367,7 @@ class TMCMSimulator(object):
                 rval = 0  # no error
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
-            self._sendReply(inst, val=rval)
+            self._sendReply(inst, val=int(rval))
         elif inst == 8:  # Restore axis param
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4)  # invalid value
@@ -2430,7 +2429,7 @@ class TMCMSimulator(object):
                 return
             # Change internal do value
             if mot == 2:
-                self._do_states[typ] = val
+                self._do_states[typ] = int(val)
             self._sendReply(inst)
         elif inst == 15: # Get IO
             if not 0 <= mot <= 2:
