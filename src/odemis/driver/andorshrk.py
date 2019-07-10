@@ -122,7 +122,7 @@ class ShamrockDLL(CDLL):
         """
         # everything returns SHAMROCK_SUCCESS on correct usage
         if result not in ShamrockDLL.ok_code:
-            errmsg = create_string_buffer(ERRORLENGTH)
+            errmsg = create_string_buffer(ERRORLENGTH).decode('latin1')
             self.ShamrockGetFunctionReturnDescription(result, errmsg, len(errmsg))
             raise ShamrockError(result,
                                 "Call to %s failed with error %d: %s" %
@@ -639,7 +639,7 @@ class Shamrock(model.Actuator):
         serial = create_string_buffer(64) # hopefully always fit! (normally 6 bytes)
         with self._hw_access:
             self._dll.ShamrockGetSerialNumber(self._device, serial)
-        return serial.value
+        return serial.value.decode('latin1')
 
     # Probably not needed, as ShamrockGetCalibration returns everything already
     # computed
@@ -755,7 +755,7 @@ class Shamrock(model.Actuator):
         logging.debug("Grating %d is %f, %s, %d, %d", grating,
                       Lines.value, Blaze.value, Home.value, Offset.value)
 
-        return Lines.value * 1e3, Blaze.value, Home.value, Offset.value
+        return Lines.value * 1e3, Blaze.value.decode('latin1'), Home.value, Offset.value
 
     def SetWavelength(self, wavelength):
         """
@@ -991,7 +991,7 @@ class Shamrock(model.Actuator):
         info = create_string_buffer(64)  # TODO: what's a good size? The SDK doc says nothing
         with self._hw_access:
             self._dll.ShamrockGetFilterInfo(self._device, pos, info)
-        return info.value
+        return info.value.decode('latin1')
 
     def FilterIsPresent(self):
         present = c_int()
@@ -1685,10 +1685,10 @@ class Shamrock(model.Actuator):
         serial = create_string_buffer(64)
         for n in range(self.GetNumberDevices()):
             self._dll.ShamrockGetSerialNumber(n, serial)
-            if serial.value == sn:
+            if serial.value.decode('latin1') == sn:
                 return n
             else:
-                logging.info("Skipping Andor Shamrock with S/N %s", serial.value)
+                logging.info("Skipping Andor Shamrock with S/N %s", serial.value.decode('latin1', 'backslashreplace'))
         else:
             raise HwError("Cannot find Andor Shamrock with S/N %s, check it is "
                           "turned on and connected." % (sn,))
@@ -1709,7 +1709,7 @@ class Shamrock(model.Actuator):
             dll.ShamrockGetSerialNumber(i, serial)
             logging.debug("Found Shamrock %d with SN %s", i, serial.value)
             dev.append(("Andor Shamrock",
-                        {"device": serial.value})
+                        {"device": serial.value.decode('latin1')})
                       )
 
         return dev
@@ -1751,10 +1751,10 @@ class FakeShamrockDLL(object):
 
     def __init__(self, ccd=None):
         # gratings: l/mm, blaze, home, offset, min wl, max wl
-        self._gratings = [(299.9, "300.0", 1000, -200, 0.0, 5003.6),
+        self._gratings = [(299.9, b"300.0", 1000, -200, 0.0, 5003.6),
                           # (601.02, "500.0", 10000, 26, 0.0, 1578.95),
-                          (0.0, "Mirror", 10000, 26, 0.0, 0.0),
-                          (1200.1, "500.0", 30000, -65, 0.0, 808.65)]
+                          (0.0, b"Mirror", 10000, 26, 0.0, 0.0),
+                          (1200.1, b"500.0", 30000, -65, 0.0, 808.65)]
 
         self._ct = 1
         self._cw = 300.2 # current wavelength (nm)
@@ -1772,12 +1772,12 @@ class FakeShamrockDLL(object):
         # filter wheel
         self._filter = 1  # current position
         # filter info: pos - 1 -> str
-        self._filters = ("Filter 1",
-                         "Filter 2",
-                         "Filter 3",
-                         "",
-                         "Filter 5",
-                         "",
+        self._filters = (b"Filter 1",
+                         b"Filter 2",
+                         b"Filter 3",
+                         b"",
+                         b"Filter 5",
+                         b"",
                          )
 
         # slits: int (id) -> float (position in µm)
@@ -1832,7 +1832,7 @@ class FakeShamrockDLL(object):
         nodevices.value = 1
 
     def ShamrockGetSerialNumber(self, device, serial):
-        serial.value = "SR193fake"
+        serial.value = b"SR193fake"
 
     def ShamrockEepromGetOpticalParams(self, device, p_fl, p_ad, p_ft):
         fl = _deref(p_fl, c_float)
