@@ -175,7 +175,7 @@ class ESP(model.Actuator):
         self.referenced = model.VigilantAttribute({a: False for a in axes}, readonly=True)
 
         self._hwVersion = str(self._id)
-        self._swversion = self._version
+        self._swVersion = self._version
 
         # Get the position in object coord with the offset applied.
 
@@ -743,8 +743,12 @@ class ESP(model.Actuator):
                     self._waitEndMove(future, (aid,), time.time() + 100)  # block until it's over
                     self.SetHome(aid, 0.0)  # set negative limit as origin
                     self.referenced._value[a] = True
-            except CancelledError as ex:
-                logging.info("Referencing cancelled: %s", ex)
+            except CancelledError:
+                # FIXME: if the referencing is stopped, the device refuses to
+                # move until referencing is run (and successful).
+                # => Need to put back the device into a mode where at least
+                # relative moves work.
+                logging.warning("Referencing cancelled, device will not move until another referencing")
                 future._was_stopped = True
                 raise
             except Exception:
