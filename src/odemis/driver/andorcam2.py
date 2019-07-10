@@ -1121,7 +1121,7 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetVersionInfo(AndorV2DLL.AT_DeviceDriverVersion, driver_str,
                                    c_uint32(sizeof(driver_str)))
 
-        return driver_str.value, sdk_str.value
+        return driver_str.value.decode('latin1'), sdk_str.value.decode('latin1')
 
     def WaitForAcquisition(self, timeout=None):
         """
@@ -1518,7 +1518,7 @@ class AndorCam2(model.DigitalCamera):
         except AndorV2Error:
             serial_str = "" # unknown
 
-        return "%s %s%s" % (model_name, headmodel.value, serial_str)
+        return "%s %s%s" % (model_name, headmodel.value.decode('latin1'), serial_str)
 
     def getSwVersion(self):
         """
@@ -2636,14 +2636,14 @@ class FakeAndorV2DLL(object):
 
     def GetVersionInfo(self, vertype, ver_str, str_size):
         if vertype == AndorV2DLL.AT_SDKVersion:
-            ver_str.value = "2.1"
+            ver_str.value = b"2.1"
         elif vertype == AndorV2DLL.AT_DeviceDriverVersion:
-            ver_str.value = "2.2"
+            ver_str.value = b"2.2"
         else:
             raise AndorV2Error(20066, "Argument out of bounds")
 
     def GetHeadModel(self, model_str):
-        model_str.value = "FAKECDD 1024"
+        model_str.value = b"FAKECDD 1024"
 
     def GetSoftwareVersion(self, p_eprom, p_coffile, p_vxdrev, p_vxdver,
                            p_dllrev, p_dllver):
