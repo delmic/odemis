@@ -431,7 +431,7 @@ class FakeDG1000Z(object):
                               self.name, frequency, amplitude_pp, dc_bias, phase_shift)
             except TypeError:   # could not unpack message
                 self._error_state = True
-                logging.exception('%s: Error Setting square wave %s', self.name, cmd.decode('latin1', 'backslashreplace'))
+                logging.exception('%s: Error Setting square wave %s', self.name, msg.decode('latin1', 'backslashreplace'))
         elif re.match(b":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
             # Try to unpack the command to see if the format is correct
             try:
@@ -440,7 +440,7 @@ class FakeDG1000Z(object):
             except TypeError:   # could not unpack message
                 self._error_state = True
                 logging.exception('%s: Error Setting duty cycle %s', self.name,
-                                  cmd.decode('latin1', 'backslashreplace'))
+                                  msg.decode('latin1', 'backslashreplace'))
         else:
             self._error_state = True
             logging.exception('%s: Error state set for message: %s', self.name,
