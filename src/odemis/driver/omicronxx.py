@@ -37,11 +37,12 @@ import logging
 from odemis import model
 import odemis
 from odemis.model import HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import re
 import serial
 import time
+import sys
 
 
 class OXXError(Exception):
@@ -123,7 +124,7 @@ class USBAccesser(object):
             data = self._serial.read(100)
             if len(data) < 100:
                 break
-            logging.debug("Flushing data %s", data.encode('string_escape'))
+            logging.debug("Flushing data %s", to_str_escape(data))
 
     def sendCommand(self, com):
         """
@@ -132,8 +133,8 @@ class USBAccesser(object):
         return (string): the report without prefix ("!") nor carriage return.
         """
         assert(len(com) <= 50)
-        full_com = "?" + com + "\r"
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        full_com = ("?" + com + "\r").encode('latin1')
+        logging.debug("Sending: '%s'", to_str_escape(full_com))
         self._serial.write(full_com)
 
         # ensure everything is received, before expecting an answer
@@ -143,43 +144,43 @@ class USBAccesser(object):
         while True:
             line = self.readMessage()
             if line[0] == "$": # ad-hoc message => we don't care
-                logging.debug("Skipping ad-hoc message '%s'", line.encode('string_escape'))
+                logging.debug("Skipping ad-hoc message '%s'", to_str_escape(line))
             else:
                 break
 
         if not line[0] == "!":
             raise IOError("Answer prefix (!) not found.")
         if line.startswith("!UK"): # !UK or !UK[n]
-            raise OXXError("Unknown command (%s)." % com)
+            raise OXXError("Unknown command (%s)." % to_str_escape(com))
 
         return line[1:]
 
     def readMessage(self):
         """
         Reads one message from the device (== any character until \r)
-        return bytes: the message (raw, without the ending \r)
+        return str: the message (raw, without the ending \r)
         raise: IOError in case of timeout
         """
         line = b""
         char = self._serial.read() # empty if timeout
-        while char and char != "\r":
+        while char and char != b"\r":
             # FIXME: it seems that flushing the input doesn't work. It's
             # still possible to receives 0's at the beginning.
             # This is a kludge to workaround that
-            if not line and char == "\x00":
+            if not line and char == b"\x00":
                 logging.debug("Discarding null byte")
-                char = ""
+                char = b""
 
             # normal char
             line += char
             char = self._serial.read()
-        logging.debug("Received: '%s'", line.encode('string_escape'))
+        logging.debug("Received: '%s'", to_str_escape(line))
 
         # Check it's a valid answer
         if not char: # should always finish by a "\r"
             raise IOError("Controller timeout.")
 
-        return line
+        return line.decode('latin1')
 
 
 class DevxX(object):
@@ -367,8 +368,7 @@ class DevxX(object):
         fullcom = "%s%s" % (com, self._com_chan)
         ans = self.acc.sendCommand(fullcom)
         if not ans.startswith(fullcom):
-            raise IOError("Expected answer to start with %s but got %s" %
-                          (fullcom, ans.encode('string_escape')))
+            raise IOError("Expected answer to start with %s but got %s" % (fullcom, to_str_escape(ans)))
         return ans[len(fullcom):]
 
     def _setValue(self, com, val=None):
@@ -385,18 +385,18 @@ class DevxX(object):
         ans = self.acc.sendCommand("%s%s%s" % (com, self._com_chan, val))
         if not ans.startswith(com):
             raise IOError("Expected answer to start with %s but got %s" %
-                          (com, ans.encode('string_escape')))
+                          (com, to_str_escape(ans)))
         status = ans[len(com) + len(self._com_chan):]
         if not status:
             logging.warning("Answer too short after setting %s: %s",
-                            com, ans.encode('string_escape'))
+                            com, to_str_escape(ans))
         elif status[0] == "x":
             raise OXXError("Failed to set %s to %s" % (com, val))
         elif status[0] == ">":
             pass
         else:
             logging.warning("Unexpected answer after setting %s: %s",
-                            com, ans.encode('string_escape'))
+                            com, to_str_escape(ans))
 
     # Wrappers from each command into a method
     def GetFirmware(self):
@@ -411,7 +411,7 @@ class DevxX(object):
             m = re.match(r"(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
             modl, devid, fw = m.group("model"), int(m.group("devid")), m.group("fw")
         except Exception:
-            raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode firmware answer '%s'" % to_str_escape(ans))
 
         return modl, devid, fw
 
@@ -435,7 +435,7 @@ class DevxX(object):
             wl = int(m.group("wl")) * 1e-9 # m
             power = int(m.group("power")) * 1e-3 # W
         except Exception:
-            raise ValueError("Failed to decode spec info answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode spec info answer '%s'" % to_str_escape(ans))
 
         # Convert the bitmask into a set of int
         subdev = set()
@@ -890,8 +890,8 @@ class HubxXSimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = ""  # what the commands sends back to the "host computer"
-        self._input_buf = ""  # what we receive from the "host computer"
+        self._output_buf = b""  # what the commands sends back to the "host computer"
+        self._input_buf = b""  # what we receive from the "host computer"
 
         # For simulating a "small error" (calling reset will fix it)
         self._error = 0x0001  # In error state, but it's now fine
@@ -903,7 +903,7 @@ class HubxXSimulator(object):
 
     def write(self, data):
         self._input_buf += data
-        msgs = self._input_buf.split("\r")
+        msgs = self._input_buf.split(b"\r")
         for m in msgs[:-1]:
             self._parseMessage(m)  # will update _output_buf
 
@@ -922,29 +922,29 @@ class HubxXSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
         del self._output_buf
         del self._input_buf
 
-    def _sendAnswer(self, com, chan=None, ans=""):
+    def _sendAnswer(self, com, chan=None, ans=b""):
         if chan is None:
             rep = com + ans
         else:
-            rep = "%s[%d]%s" % (com, chan, ans)
-        self._output_buf += "!%s\r" % (rep,)
+            rep = b"%s[%d]%s" % (com, chan, ans)
+        self._output_buf += b"!%s\r" % (rep,)
 
     def _parseMessage(self, msg):
         """
-        msg (str): the message to parse (without the \r)
+        msg (byte str): the message to parse (without the \r)
         return None: self._output_buf is updated if necessary
         """
         logging.debug("SIM: parsing %s", msg)
-        m = re.match(r"\?(?P<com>[A-Za-z]{3})(\[(?P<chan>\d+)\])?((?P<args>.*))", msg)
+        m = re.match(br"\?(?P<com>[A-Za-z]{3})(\[(?P<chan>\d+)\])?((?P<args>.*))", msg)
         if not m:
-            logging.error("Received unexpected message %s", msg)
+            logging.error("Received unexpected message %s", to_str_escape(msg))
             return
 
         com = m.group("com")
@@ -954,90 +954,89 @@ class HubxXSimulator(object):
             chan = None
 
         if m.group("args"):
-            args = m.group("args").split("\xa7")
+            args = m.group("args").split(b"\xa7")
         else:
             args = None
-
         logging.debug("SIM: decoded message as %s [%s] %s", com, chan, args)
 
         # decode the command
-        if com == "GFw":
-            self._sendAnswer("GFw", chan, "LEDHUB\xa720\xa710.FAKE")
-        elif com == "GSN":
-            self._sendAnswer("GSN", chan, "123456.7")
-        elif com == "GAS":
+        if com == b"GFw":
+            self._sendAnswer(b"GFw", chan, b"LEDHUB\xa720\xa710.FAKE")
+        elif com == b"GSN":
+            self._sendAnswer(b"GSN", chan, b"123456.7")
+        elif com == b"GAS":
             if self._error:
-                self._sendAnswer("GAS", chan, "00C9")  # Error
+                self._sendAnswer(b"GAS", chan, b"00C9")  # Error
             else:
-                self._sendAnswer("GAS", chan, "02C2")  # Device on (bit 1) + Led ready (bit 6)
-        elif com == "GFB":
-            self._sendAnswer("GFB", chan, "%04X" % self._error)
-        elif com == "GLF":
-            self._sendAnswer("GLF", chan, "0201")  # External interlock
-        elif com == "RsC":
+                self._sendAnswer(b"GAS", chan, b"02C2")  # Device on (bit 1) + Led ready (bit 6)
+        elif com == b"GFB":
+            self._sendAnswer(b"GFB", chan, b"%04X" % self._error)
+        elif com == b"GLF":
+            self._sendAnswer(b"GLF", chan, b"0201")  # External interlock
+        elif com == b"RsC":
             # Hack to send both a confirmation and a $end command
-            self._sendAnswer("RsC", chan, ">\r$RsC")
+            self._sendAnswer(b"RsC", chan, b">\r$RsC")
             self._error = 0
-        elif com == "GOM":
-            self._sendAnswer("GOM", chan, "FCFB")
-        elif com == "SOM":
+        elif com == b"GOM":
+            self._sendAnswer(b"GOM", chan, b"FCFB")
+        elif com == b"SOM":
             if len(args) == 1:
                 om = int(args[0], 16)
                 # We don't care actually
-                self._sendAnswer("SOM", chan, ">")
+                self._sendAnswer(b"SOM", chan, b">")
             else:
-                self._sendAnswer("UK")  # wrong instruction
-        elif com == "GMP":
+                self._sendAnswer(b"UK")  # wrong instruction
+        elif com == b"GMP":
             if chan is None:
                 pw = 0
             else:
                 _, pw = self._csi[chan]
-            self._sendAnswer("GMP", chan, "%d" % (pw,))
-        elif com == "GWH":
-            self._sendAnswer("GWH", chan, "23")
+            self._sendAnswer(b"GMP", chan, b"%d" % (pw,))
+        elif com == b"GWH":
+            self._sendAnswer(b"GWH", chan, b"23")
         elif com == "MTD":
-            self._sendAnswer("MTD", chan, "35.6")
-        elif com == "MTA":
-            self._sendAnswer("MTA", chan, "28.3")
-        elif com == "GSI":
+            self._sendAnswer(b"MTD", chan, b"35.6")
+        elif com == b"MTA":
+            self._sendAnswer(b"MTA", chan, b"28.3")
+        elif com == b"GSI":
             if chan is None:
                 # Master -> return the sub devices
                 mdev = sum(1 << (n - 1) for n in self._csi.keys())
-                self._sendAnswer("GSI", chan, "[m%d]0\xa70" % (mdev,))
+                self._sendAnswer(b"GSI", chan, b"[m%d]0\xa70" % (mdev,))
             else:
-                self._sendAnswer("GSI", chan, "%d\xa7%d" % self._csi[chan])
-        elif com == "LOf":
-            self._sendAnswer("LOf", chan, ">")
-        elif com == "LOn":
-            self._sendAnswer("LOn", chan, ">")
-        elif com == "POf":
-            self._sendAnswer("POf", chan, ">")
-        elif com == "POn":
-            self._sendAnswer("POn", chan, ">")
-        elif com == "SLP":
+                self._sendAnswer(b"GSI", chan, b"%d\xa7%d" % self._csi[chan])
+        elif com == b"LOf":
+            self._sendAnswer(b"LOf", chan, b">")
+        elif com == b"LOn":
+            self._sendAnswer(b"LOn", chan, b">")
+        elif com == b"POf":
+            self._sendAnswer(b"POf", chan, b">")
+        elif com == b"POn":
+            self._sendAnswer(b"POn", chan, b">")
+        elif com == b"SLP":
             if chan in self._csi and len(args) == 1:
                 pw = int(args[0], 16)
                 _, mpw = self._csi[chan]
                 # self._cpw[chan] = mpw * pw / 0xfff
-                self._sendAnswer("SLP", chan, ">")
+                self._sendAnswer(b"SLP", chan, b">")
             else:
-                self._sendAnswer("UK")  # wrong instruction
-        elif com == "SPP":
+                self._sendAnswer(b"UK")  # wrong instruction
+        elif com == b"SPP":
             if chan in self._csi and len(args) == 1:
                 per = float(args[0])
                 _, mpw = self._csi[chan]
                 # self._cpw[chan] = mpw * per / 100
-                self._sendAnswer("SPP", chan, ">")
+                self._sendAnswer(b"SPP", chan, b">")
             else:
-                self._sendAnswer("UK")  # wrong instruction
-        elif com == "TPP":
+                self._sendAnswer(b"UK")  # wrong instruction
+        elif com == b"TPP":
             if chan in self._csi and len(args) == 1:
                 per = float(args[0])
                 _, mpw = self._csi[chan]
                 # self._cpw[chan] = mpw * per / 100
-                self._sendAnswer("TPP", chan, ">")
+                self._sendAnswer(b"TPP", chan, b">")
             else:
-                self._sendAnswer("UK")  # wrong instruction
+                self._sendAnswer(b"UK")  # wrong instruction
         else:
-            logging.warning("SIM: Unsupported instruction %s", com)
-            self._sendAnswer("UK")  # unknown instruction
+            logging.warning("SIM: Unsupported instruction %s", to_str_escape(com))
+            self._sendAnswer(b"UK")  # unknown instruction
