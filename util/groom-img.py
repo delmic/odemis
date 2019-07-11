@@ -22,9 +22,8 @@ parser = argparse.ArgumentParser(description='Recursively compile all PNG images
                                              'module')
 #parser.add_argument("-o", "--optimize", help="Optimize PNG images", action='store_true')
 parser.add_argument("-s", "--skiplarge", help="Skip 'large' files", action='store_true')
+parser.add_argument("dir", help="Base directory (default to src/)", default="src/", nargs="?")
 args = parser.parse_args()
-
-base_dir = os.path.join(os.path.dirname(__file__), "../src/")
 
 # PNG optimisation
 
@@ -32,7 +31,7 @@ base_dir = os.path.join(os.path.dirname(__file__), "../src/")
 if not cmd_exists('pngcrush'):
     print("Pngcrush not found, can't optimize!")
 else:
-    for dirpath, dirnames, filenames in os.walk(base_dir):
+    for dirpath, dirnames, filenames in os.walk(args.dir):
         print("** Optimizing", dirpath)
 
         for f in [fn for fn in filenames if fn[-4:] == '.png']:
