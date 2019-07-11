@@ -113,13 +113,36 @@ MD_POL_POS_QWP = "Position quarter wave plate"  # rad, position of the quarter w
 MD_POL_POS_LINPOL = "Position linear polarizer"  # rad, position of the linear polarizer
 
 # MD_POL_MODE values
-MD_POL_NONE = "pass-through"  # no (specific) polarization
-MD_POL_HORIZONTAL = "horizontal"  # (string) polarization analyzer position
-MD_POL_VERTICAL = "vertical"  # (string) polarization analyzer position
-MD_POL_POSDIAG = "posdiag"  # (string) polarization analyzer position
-MD_POL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
-MD_POL_RHC = "rhc"  # (string) polarization analyzer position
-MD_POL_LHC = "lhc"  # (string) polarization analyzer position
+MD_POL_NONE = "pass-through"  # (str) no (specific) polarization
+MD_POL_HORIZONTAL = "horizontal"  # (str) polarization analyzer position
+MD_POL_VERTICAL = "vertical"  # (str) polarization analyzer position
+MD_POL_POSDIAG = "posdiag"  # (str) polarization analyzer position
+MD_POL_NEGDIAG = "negdiag"  # (str) polarization analyzer position
+MD_POL_RHC = "rhc"  # (str) polarization analyzer position
+MD_POL_LHC = "lhc"  # (str) polarization analyzer position
+MD_POL_S0 = "S0"  # (str) Stokes parameter sample plane S0
+MD_POL_S1 = "S1"  # (str) Stokes parameter sample plane S1
+MD_POL_S2 = "S2"  # (str) Stokes parameter sample plane S2
+MD_POL_S3 = "S3"  # (str) Stokes parameter sample plane S3
+MD_POL_S1N = "S1N"  # (str) Stokes parameter sample plane S1 normalized by S0
+MD_POL_S2N = "S2N"  # (str) Stokes parameter sample plane S2 normalized by S0
+MD_POL_S3N = "S3N"  # (st) Stokes parameter sample plane S3 normalized by S0
+MD_POL_DS0 = "DS0"  # (string) Stokes parameter detector plane DS0
+MD_POL_DS1 = "DS1"  # (str) Stokes parameter detector plane DS1
+MD_POL_DS2 = "DS2"  # (str) Stokes parameter detector plane DS2
+MD_POL_DS3 = "DS3"  # (str) Stokes parameter detector plane DS3
+MD_POL_DS1N = "DS1N"  # (str) Stokes parameter detector plane DS1 normalized by DS0
+MD_POL_DS2N = "DS2N"  # (str) Stokes parameter detector plane DS2 normalized by DS0
+MD_POL_DS3N = "DS3N"  # (str) Stokes parameter detector plane DS3 normalized by DS0
+MD_POL_EPHI = "Ephi"  # (str) Electrical field amplitude Ephi
+MD_POL_ETHETA = "Etheta"  # (str) Electrical field amplitude Etheta
+MD_POL_EX = "Ex"  # (str) Electrical field amplitude Ex
+MD_POL_EY = "Ey"  # (str) Electrical field amplitude Ey
+MD_POL_EZ = "Ez"  # (str) Electrical field amplitude Ez
+MD_POL_DOP = "DOP"  # (str) Degree of polarization DOP
+MD_POL_DOLP = "DOLP"  # (str) Degree of linear polarization DOLP
+MD_POL_DOCP = "DOCP"  # (str) Degree of circular polarization DOCP
+MD_POL_UP = "UP"  # (str) Degree of unpolarized light UP
 
 MD_DET_TYPE = "Detector type"
 # The following tags are to be used as the values of MD_DET_TYPE

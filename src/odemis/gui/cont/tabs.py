@@ -60,7 +60,8 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
-    ScannedTemporalSettingsStream
+    ScannedTemporalSettingsStream, \
+    ARRawProjection, ARPolarimetryProjection
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -1611,6 +1612,7 @@ class AnalysisTab(Tab):
         assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
         assert(isinstance(viewports[8], ChronographViewport))
+        assert(isinstance(viewports[9], AngularResolvedViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
@@ -1636,6 +1638,7 @@ class AnalysisTab(Tab):
             (viewports[4],
              {"name": "Angle-resolved",
               "stream_classes": ARStream,
+              "projection_class": ARRawProjection,
               }),
             (viewports[5],
              {"name": "Spectrum plot",
@@ -1656,6 +1659,11 @@ class AnalysisTab(Tab):
              {"name": "Chronograph",
               "stream_classes": (SpectrumStream,),
               "projection_class": SinglePointTemporalProjection,
+              }),
+            (viewports[9],
+             {"name": "Polarimetry",  # polarimetry analysis (if ar with polarization)
+              "stream_classes": ARStream,
+              "projection_class": ARPolarimetryProjection,
               }),
         ])
 
@@ -1805,6 +1813,7 @@ class AnalysisTab(Tab):
             self.panel.vp_temporalspec.clear()
             self.panel.vp_timespec.clear()
             self.panel.vp_angular.clear()
+            self.panel.vp_angular_pol.clear()
 
         gc.collect()
         if filename is None:
@@ -1910,10 +1919,20 @@ class AnalysisTab(Tab):
 
             # ########### Combined views and Angular view visible
 
-            new_visible_views[0] = self._def_views[1] # SEM only
-            new_visible_views[1] = self._def_views[2] # Combined 1
+            new_visible_views[0] = self._def_views[1]  # SEM only
+            new_visible_views[1] = self._def_views[2]  # Combined 1
             new_visible_views[2] = self.panel.vp_angular.view
-            new_visible_views[3] = self._def_views[3] # Combined 2
+
+            # Note: Acquiring multiple AR streams is not supported/suggested in the same acquisition,
+            # but there are ways that the user would get in such state. Either by having multiple AR
+            # streams at acquisition, or adding extra acquisitions in the same analysis tab. The rule
+            # then is: Don't raise errors in such case (but it's fine if the view is not good).
+            for ar_stream in ar_streams:
+                if hasattr(ar_stream, "polarimetry"):
+                    new_visible_views[3] = self.panel.vp_angular_pol.view
+                    break
+                else:
+                    new_visible_views[3] = self._def_views[3]  # Combined 2
 
             # ########### Update tool menu
 

@@ -86,6 +86,7 @@ except ImportError:
 #    weave.inline(code, ["data", "ret", "irange", "tintr"])
 #    return ret
 
+
 def findOptimalRange(hist, edges, outliers=0):
     """
     Find the intensity range fitting best an image based on the histogram.
@@ -143,6 +144,20 @@ def findOptimalRange(hist, edges, outliers=0):
     rng = (a + b * idxrng[0], a + b * idxrng[1])
     return rng
 
+
+def getOutliers(data, outliers=0):
+    """
+    Finds the minimum and maximum values when discarding a given percentage of outliers.
+    :param data: (DataArray) The data containing the image.
+    :param outliers: (0<float<0.5) Ratio of outliers to discard (on each side).
+                      0 discards no value, 0.5 discards every value (and so returns the median).
+    :return: (tuple of 2 values) The range (min and max value).
+    """
+    hist, edges = histogram(data)
+
+    return findOptimalRange(hist, edges, outliers)
+
+
 def compactHistogram(hist, length):
     """
     Make a histogram smaller by summing bins together
@@ -179,6 +194,7 @@ def compactHistogram(hist, length):
 #  weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
 # * see cython?
 # for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
+
 
 def histogram(data, irange=None):
     """
@@ -575,6 +591,7 @@ def Subtract(a, b):
         # TODO handle under/over-flows with integer types (127 - (-1) => -128)
         return a - b
 
+
 # TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):
     """
@@ -654,6 +671,7 @@ def mergeMetadata(current, correction=None):
         if k in current:
             del current[k]
 
+
 def getTilesSize(tiles):
     """
     Get the size in pixels of the image formed by the tiles
@@ -671,6 +689,7 @@ def getTilesSize(tiles):
         width += tiles_column[0].shape[1]
 
     return height, width
+
 
 def getCenterOfTiles(tiles, result_shape):
     """ Calculates the center of the result image
@@ -715,6 +734,7 @@ def getCenterOfTiles(tiles, result_shape):
     image_pos = center_tile_w - dist_centers_w
     return tuple(image_pos)
 
+
 def mergeTiles(tiles):
     """"
     Merge tiles into one DataArray
@@ -750,6 +770,7 @@ def mergeTiles(tiles):
 
     return result
 
+
 # TODO: rename without _
 def _getBoundingBox(content):
     """
@@ -777,3 +798,4 @@ def _getBoundingBox(content):
         md_pos[1] - half_shape_wc[1],
     )
     return rect
+

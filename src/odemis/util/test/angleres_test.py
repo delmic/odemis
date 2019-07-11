@@ -22,6 +22,9 @@ If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import numpy
+
+from odemis.model import MD_POL_MODE, MD_POL_S1
+
 from odemis.util.img import ensure2DImage
 
 from odemis import model
@@ -29,10 +32,12 @@ from odemis.dataio import hdf5
 from odemis.util import angleres
 import unittest
 
+from odemis.util.img import RGB2Greyscale
+
 
 class TestAngleResolvedDataConversion(unittest.TestCase):
     """
-    Test AngleResolved2Polar and AngleResolved2Rectangular
+    Test AngleResolved2Polar, AngleResolved2Rectangular and Rectangular2Polar.
     """
     def setUp(self):
         data = hdf5.read_data("ar-example-input.h5")
@@ -176,7 +181,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
     def test_uint16_input_rect_intensity(self):
         """
-        Tests for input of DataArray with uint16 ndarray to rectangular projection checking the that
+        Tests for input of DataArray with uint16 ndarray to rectangular projection checking that the
         expected intensity values are at the correct theta/phi position in the rectangular and polar representation.
         This test case is optimized for the current input image. If ever changed, this test case might fail!
         """
@@ -237,7 +242,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         Tests for input of DataArray with int8 ndarray.
         """
         data = self.data
-        # scipy.misc.bytescale(data)
+        # scipy.misc.bytescale(data)  # for debug
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
@@ -416,10 +421,32 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
+    def test_uint16_input_rect2polar(self):
+        """
+        Tests for input of DataArray with uint16 ndarray from rectangular projection to polar projection.
+        """
+        data = self.data
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        data[0].metadata[MD_POL_MODE] = MD_POL_S1  # add necessary metadata
+
+        # convert to rectangular
+        data_rect = angleres.AngleResolved2Rectangular(data[0], (100, 400))
+        # convert from rectangular to polar
+        result = angleres.Rectangular2Polar(data_rect, 201)
+        result_polar_1 = RGB2Greyscale(result)
+
+        # convert input data directly to polar representation
+        result_polar_2 = angleres.AngleResolved2Polar(data[0], 201)
+
+        self.assertEqual(result.shape, (201, 201, 3))
+        self.assertEqual(result_polar_2.shape, result_polar_1.shape)
+
 
 if __name__ == "__main__":
-#     import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
+    # for debug:
+    # import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
     unittest.main()
-#    suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
-#    unittest.TextTestRunner(verbosity=2).run(suite)
+    # suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
+    # unittest.TextTestRunner(verbosity=2).run(suite)
 
