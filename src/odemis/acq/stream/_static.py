@@ -449,9 +449,9 @@ class StaticARStream(StaticStream):
         """
         # Note: Need a copy of the link to the dict. If self._polar is reset while
         # still running this method, the dict might get new entries again, though it should be empty.
-        polar = self._polar
-        if pos in polar:
-            polard = polar[pos]
+        polar_cache = self._polar
+        if pos in polar_cache:
+            polard = polar_cache[pos]
         else:
             # Compute the polar representation
             data = self._pos[pos]
@@ -499,7 +499,7 @@ class StaticARStream(StaticStream):
                 polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
 
                 # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
-                polar[pos] = polard
+                polar_cache[pos] = polard
             except Exception:
                 logging.exception("Failed to convert to azimuthal projection")
                 return data  # display it raw as fallback
