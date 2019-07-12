@@ -360,7 +360,7 @@ def main(args):
 # Plugin version for the GUI
 class MonoScanPlugin(Plugin):
     name = "Monochromator Scan"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Éric Piel"
     __license__ = "GNU General Public License 2"
 
@@ -498,6 +498,10 @@ class MonoScanPlugin(Plugin):
 
         # Show the window, and wait until the acquisition is over
         ans = dlg.ShowModal()
+
+        # Save the current folder
+        conf = get_acqui_conf()
+        conf.last_path = os.path.dirname(self.filename.value)
 
         # The window is closed
         if ans == 0:
