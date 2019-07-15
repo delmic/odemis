@@ -194,17 +194,16 @@ of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
 #.  Install wheel, so we can install binary packages using pip:
     ``pip install wheel``.
 #.  Install futures using ``pip install futures``
-#.  Install Yaml using ``pip install pyaml``
+#.  Install Python future using ``pip install future``
+#.  Install Yaml using ``pip install PyYAML``
 #.  Install 0MQ using ``pip install pyzmq``
 #.  Install the decorator module using ``pip install decorator``
+#.  Install Pillow, a repackaged version of PIL: ``pip install Pillow``
+#.  Install wxPython using ``pip install wxPython==4.0.6``
 #.  Install Delmic's special version of Pyro4:
     ``pip install git+https://github.com/delmic/Pyro4.git``
 #.  Install Numpy using ``pip install numpy-1.9.2+mkl-cp27-none-win32.whl``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
-#.  Install wxPython3.0 using
-    ``pip install wxPython_common-3.0.2.0-py2-none-any.whl`` followed by
-    ``pip install wxPython-3.0.2.0-cp27-none-win32.whl``, downloaded from
-    http://www.lfd.uci.edu/~gohlke/pythonlibs/#wxpython
 #.  Install using ``pip install libtiff-0.4.2-cp27-cp27m-win32.whl``, downloaded
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 #.  ``pip install scipy-0.15.1-cp27-none-win32.whl``, downloaded from
@@ -221,7 +220,6 @@ of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
     and ``zlib1.dll`` from this location.
 #.  Install PyCairo using ``easy_install -Z py2cairo-1.10.0.win32-py2.7.exe`` and
     copy all DLL files to ``%Windows%\SysWOW64``
-#.  Install Pillow, a repackaged version of PIL: ``pip install Pillow``
 
 Building Cython module(s)
 -------------------------
