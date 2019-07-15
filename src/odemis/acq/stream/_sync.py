@@ -43,7 +43,7 @@ from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_DIMS
 from odemis.model import hasVA
-from odemis.util import img, units, spot, executeAsyncTask
+from odemis.util import img, units, spot, executeAsyncTask, almost_equal
 import queue
 import random
 import threading
@@ -385,18 +385,19 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         Computes the pixel size (based on the repetition, roi and FoV of the
           e-beam). The RepetitionStream does provide a .pixelSize VA, which
           should contain the same value, but that VA is for use by the GUI.
-        return (float): pixel size in m. Warning: it's just one value, as both
-         X and Y dimensions are always the same.
+        return (float, float): pixel size in m.
         """
         epxs = self._emitter.pixelSize.value
         rep = self.repetition.value
         roi = self.roi.value
         eshape = self._emitter.shape
-        phy_size_x = (roi[2] - roi[0]) * epxs[0] * eshape[0]  # one dim is enough
-        phy_size_y = (roi[3] - roi[1]) * epxs[1] * eshape[1]  # one dim is enough
+        phy_size_x = (roi[2] - roi[0]) * epxs[0] * eshape[0]
+        phy_size_y = (roi[3] - roi[1]) * epxs[1] * eshape[1]
+        pxsx = phy_size_x / rep[0]
         pxsy = phy_size_y / rep[1]
-        logging.debug("pxs guessed = %s, %s", pxsy, phy_size_x / rep[0])
-        return phy_size_x / rep[0]
+        logging.debug("px size guessed = %s x %s", pxsx, pxsy)
+
+        return (pxsx, pxsy)
 
     def _getSpotPositions(self):
         """
@@ -576,8 +577,10 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         # Note: we don't rely on the MD_PIXEL_SIZE, because if the e-beam was in
         # spot mode (res 1x1), the scale is not always correct, which gives an
         # incorrect metadata.
-        pxsx = self._getPixelSize()
-        pxs = pxsx / sub_shape[0], pxsx / sub_shape[1]
+        pxs = self._getPixelSize()
+
+        pxs = pxs[0] / sub_shape[0], pxs[1] / sub_shape[1]
+
         trep = rep[0] * sub_shape[0], rep[1] * sub_shape[1]
         center = (tl[0] + (pxs[0] * (trep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (trep[1] - 1)) / 2)
@@ -847,15 +850,18 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # Largest (square) resolution the dwell time permits
             rng = self._emitter.dwellTime.range
             pxs = self._getPixelSize()
+            if not almost_equal(pxs[0], pxs[1]):  # TODO: support fuzzing for rectangular pxs
+                logging.warning("Pixels are not squares. Found pixel size of %s x %s", pxs[0], pxs[1])
+
             max_tile_shape_dt = int(math.sqrt(exp / (rng[0] * 2)))
             # Largest resolution the SEM scale permits (assuming min scale = 1)
             sem_pxs = self._emitter.pixelSize.value
-            max_tile_shape_scale = int(pxs / sem_pxs[0])
+            max_tile_shape_scale = int(pxs[0] / sem_pxs[0])
 
             # the min of both is the real maximum we can do
             ts = max(1, min(max_tile_shape_dt, max_tile_shape_scale))
             tile_shape = (ts, ts)
-            subpxs = pxs / ts
+            subpxs = pxs[0] / ts
             dt = (exp / numpy.prod(tile_shape)) / 2
             scale = (subpxs / sem_pxs[0], subpxs / sem_pxs[1])
 
@@ -1560,12 +1566,13 @@ class SEMMDStream(MultipleDetectorStream):
         # used only for the GUI. Instead, recompute it based on the ROI and repetition.
         epxs = self._emitter.pixelSize.value
         pxs = self._getPixelSize()
-        scale = (pxs / epxs[0], pxs / epxs[1])
+
+        scale = (pxs[0] / epxs[0], pxs[1] / epxs[1])
 
         cscale = self._emitter.scale.clip(scale)
         if cscale != scale:
-            logging.warning("Pixel size requested (%f m) < SEM pixel size (%f m)",
-                            pxs, epxs[0])
+            logging.warning("Pixel size requested (%f x %f m) < SEM pixel size (%f m)",
+                            pxs[0], pxs[1], epxs[0])
 
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).

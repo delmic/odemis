@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Jun 2013
+Edited June 2019
 
-@author: Éric Piel
+@author: Éric Piel, Sabrina Rossberger
 
 This is a script to acquire a set of images from the CCD from various e-beam
 spots on the sample along a grid.
@@ -14,54 +15,69 @@ run as:
 ./secom_cl --xrep 45 --yrep 5 --prefix filename-prefix
 
 --prefix indicates the beginning of the filename.
-The files are saved in TIFF, with the y, x positions (in nm) in the name.
+The files are saved in TIFF, with the y, x positions of the ebeam (in nm) in the name,
+the total number of ebeam positions in x and y, the physical distance between positions in x and y
+and the type of the acquisition.
 
-'''
+"""
 
 from __future__ import division
 
-import argparse
 from collections import OrderedDict
+from concurrent.futures._base import CancelledError
 import copy
-import itertools
 import logging
 import math
 import numpy
+
+from odemis.util.filename import guess_pattern, create_filename, update_counter
+
+from odemis.gui.util import call_in_wx_main
+
+from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
+
+from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE
+
 from odemis import dataio, model, util, gui
-from odemis.acq import stream
+from odemis import acq
+from odemis.acq import stream, leech
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import img
 import os.path
-import sys
-import threading
-import time
+
+import odemis.acq.stream as acqstream
 
 
 # Exposure time of the AR CCD
-EXP_TIME = 1 # s
+EXP_TIME = 1  # s
 # Binning for the AR CCD
-BINNING = (1, 1) # px, px
+BINNING = (1, 1)  # px, px
 
 # file format
 FMT = "TIFF"
 # Filename format
-FN_FMT = u"%(prefix)s_grid=%(xres)dx%(yres)d_stepsize=%(stepsize).2fnm_n=%(idx)03d.tiff"
+FN_FMT = u"%(prefix)s_grid=%(xres)dx%(yres)d_stepsize=%(xstepsize)dx%(ystepsize)dnm_n=%(xpos)dx%(ypos)d_%(type)s.tiff"
+
 
 def get_ccd_md(ccd):
     """
-    Returns the Metadata associated with the ccd, including fine alignment corrections.
+    Returns the Metadata associated with the optical detector, including the fine alignment corrections.
+    :param ccd: (DigitalCamera) The optical detector.
     """
     # The only way to get the right info is to look at what metadata the
     # images will get
     md = copy.copy(ccd.getMetadata())
-    img.mergeMetadata(md) # apply correction info from fine alignment
+    img.mergeMetadata(md)  # apply correction info from fine alignment
 
     return md
 
+
 def get_ccd_pxs(ccd):
     """
-    Returns the (theoretical) pixelsize of the CCD (projected on the sample).
+    Calculates the pixel size of the optical detector (projected on the sample).
+    :param ccd: (DigitalCamera) The optical detector.
+    :returns: (float, float) The pixel size of the optical detector.
     """
     md = get_ccd_md(ccd)
 
@@ -72,13 +88,15 @@ def get_ccd_pxs(ccd):
 
     return pxs
 
+
 def get_ccd_fov(ccd):
     """
-    Returns the (theoretical) field of view of the CCD.
-    returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
+    Calculates the (theoretical) field of view of the optical detector.
+    :param ccd: (DigitalCamera) The optical detector.
+    :returns: (tuple of 4 floats) Position in physical coordinates m (l, t, b, r).
     """
     pxs = get_ccd_pxs(ccd)
-    center = (0, 0)
+    center = (0, 0)  # TODO use the fine alignment shift
     shape = ccd.shape[0:2]
     width = (shape[0] * pxs[0], shape[1] * pxs[1])
     logging.info("CCD width: " + str(width))
@@ -86,40 +104,43 @@ def get_ccd_fov(ccd):
     logging.info("CCD pxs: " + str(pxs))
     logging.info("CCD center: " + str(pxs))
 
-    phys_rect = [center[0] - width[0] / 2, # left
-                 center[1] - width[1] / 2, # top
-                 center[0] + width[0] / 2, # right
-                 center[1] + width[1] / 2] # bottom
+    phys_rect = [center[0] - width[0] / 2,  # left
+                 center[1] - width[1] / 2,  # top
+                 center[0] + width[0] / 2,  # right
+                 center[1] + width[1] / 2]  # bottom
 
     return phys_rect
 
-def get_sem_fov(ebeam):
+
+def get_sem_fov(emitter):
     """
-    Returns the (theoretical) scanning area of the SEM. Works even if the
+    Calculates the (theoretical) scanning area of the SEM. Works even if the
     SEM has not sent any image yet.
-    returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
+    :param emitter: (Emitter) The e-beam scanner.
+    :returns: (tuple of 4 floats) Position in physical coordinates m (l, t, b, r).
     """
     center = (0, 0)
 
-    sem_width = (ebeam.shape[0] * ebeam.pixelSize.value[0],
-                 ebeam.shape[1] * ebeam.pixelSize.value[1])
-    sem_rect = [center[0] - sem_width[0] / 2, # left
-                center[1] - sem_width[1] / 2, # top
-                center[0] + sem_width[0] / 2, # right
-                center[1] + sem_width[1] / 2] # bottom
+    sem_width = (emitter.shape[0] * emitter.pixelSize.value[0],
+                 emitter.shape[1] * emitter.pixelSize.value[1])
+    sem_rect = [center[0] - sem_width[0] / 2,  # left
+                center[1] - sem_width[1] / 2,  # top
+                center[0] + sem_width[0] / 2,  # right
+                center[1] + sem_width[1] / 2]  # bottom
     # TODO: handle rotation?
 
     return sem_rect
 
-def convert_roi_ratio_to_phys(escan, roi):
+
+def convert_roi_ratio_to_phys(emitter, roi):
     """
-    Convert the ROI in relative coordinates (to the SEM FoV) into physical
-     coordinates
-    roi (4 floats): ltrb positions relative to the FoV
-    return (4 floats): physical ltrb positions
+    Convert the ROI in relative coordinates (to the SEM FoV) into physical coordinates.
+    :param emitter: (Emitter) The e-beam scanner.
+    :param roi: (4 floats) ltrb positions relative to the FoV.
+    :returns: (4 floats) Physical ltrb positions.
     """
-    sem_rect = get_sem_fov(escan)
-    sem_rect = [x*1.5 for x in sem_rect] # Hack to allow for rotated SEM
+    sem_rect = get_sem_fov(emitter)
+    # sem_rect = [x*1.5 for x in sem_rect]  # Hack to allow for rotated SEM
     logging.info("SEM FoV = %s", sem_rect)
     phys_width = (sem_rect[2] - sem_rect[0],
                   sem_rect[3] - sem_rect[1])
@@ -133,11 +154,12 @@ def convert_roi_ratio_to_phys(escan, roi):
 
     return phys_rect
 
+
 def convert_roi_phys_to_ccd(ccd, roi):
     """
-    Convert the ROI in physical coordinates into a CCD ROI (in pixels)
-    roi (4 floats): ltrb positions in m
-    return (4 ints or None): ltrb positions in pixels, or None if no intersection
+    Convert the ROI in physical coordinates into a optical detector (ccd) ROI (in pixels).
+    :param roi: (4 floats) The roi (ltrb) position in m.
+    :returns: (4 ints or None) The roi (ltrb) position in pixels, or None if no intersection.
     """
     ccd_rect = get_ccd_fov(ccd)
     logging.info("CCD FoV = %s", ccd_rect)
@@ -179,15 +201,18 @@ def convert_roi_phys_to_ccd(ccd, roi):
     return trunc_roi
 
 
-def sem_roi_to_ccd(escan, ccd, roi, margin=0):
+def sem_roi_to_ccd(emitter, detector, roi, margin=0):
     """
     Converts a ROI defined in the SEM referential a ratio of FoV to a ROI
     which should cover the same physical area in the optical FoV.
-    roi (0<=4 floats<=1): ltrb of the ROI
-    return (0<=4 int): ltrb pixels on the CCD, when binning == 1
+    :param emitter: (Emitter) The e-beam scanner.
+    :param detector: (DigitalCamera) The optical detector.
+    :param roi: (0<=4 floats<=1) left-top-right-bottom pixels of the ROI.
+    :param margin: (float) Extra space around the optical FoV, that should be not cropped.
+    :returns: (0<=4 int) left-top-right-bottom pixels on the detector, when binning == 1.
     """
     # convert ROI to physical position
-    phys_rect = convert_roi_ratio_to_phys(escan, roi)
+    phys_rect = convert_roi_ratio_to_phys(emitter, roi)
     logging.info("ROI defined at ({:.3e}, {:.3e}, {:.3e}, {:.3e}) m".format(*phys_rect))
 
     # Add the margin
@@ -196,321 +221,439 @@ def sem_roi_to_ccd(escan, ccd, roi, margin=0):
     logging.info("ROI with margin defined at ({:.3e}, {:.3e}, {:.3e}, {:.3e}) m".format(*phys_rect))
 
     # convert physical position to CCD
-    ccd_roi = convert_roi_phys_to_ccd(ccd, phys_rect)
+    ccd_roi = convert_roi_phys_to_ccd(detector, phys_rect)
     if ccd_roi is None:
         logging.error("Failed to find the ROI on the CCD, will use the whole CCD")
-        ccd_roi = (0, 0) + ccd.resolution.value
+        ccd_roi = (0, 0) + detector.resolution.value
     else:
         logging.info("Will use the CCD ROI %s", ccd_roi)
 
     return ccd_roi
 
 
-class GridAcquirer(object):
-
-    def __init__(self, res, roi_margin=0):
+class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
+    """
+    A cl settings stream, for a set of points (on the SEM).
+    The live view is just the raw CCD image.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
         """
-        res (int, int): number of pixel in X and Y
-        roi_margin (0 <= float): extra margin (in m) around the SEM area to
-           select the CCD ROI.
+        :param detector: (DigitalCamera) The optical detector (ccd).
+        :param dataflow: (DataFlow) The dataflow of the detector.
+        :param emitter: (Emitter) The component that generates energy and
+                        also controls the position of the energy (the e-beam of the SEM).
         """
-        self.res = res
-        self.escan = model.getComponent(role="e-beam")
-        try:
-            self.edet = model.getComponent(role="se-detector")
-        except LookupError:
-            self.edet = model.getComponent(role="bs-detector")
-        self.ccd = model.getComponent(role="ccd")
-        self.roi_margin = roi_margin
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_CL
 
-        self._must_stop = False
+        # Skip the RepetitionStream.__init__ because it gets confused with pixelSize being
+        # two floats.
+        acqstream.LiveStream.__init__(self, name, detector, dataflow, emitter)
 
-        self._ccd_data = []
-        self._ccd_data_received = threading.Event()
-        self._sem_data = []
-        self._sem_data_received = threading.Event()
+        self._scanner = emitter
 
-        self._hw_settings = None
+        # Region of acquisition (ROI) + repetition is sufficient, but pixel size is nicer for the user.
+        # As the settings are over-specified, whenever ROI, repetition, or pixel
+        # size changes, one (or more) other VA is updated to keep everything
+        # consistent. In addition, there are also hardware constraints, which
+        # must also be satisfied. The main rules followed are:
+        #  * Try to keep the VA which was changed (by the user) as close as
+        #    possible to the requested value (within hardware limits).
+        # So in practice, the three setters behave in this way:
+        #  * region of acquisition set: ROI (as requested) + repetition (current) → PxS (updated)
+        #  * pixel size set: PxS (as requested) + ROI (current) → repetition (updated)
+        #    The ROA is adjusted to ensure the repetition is a round number and acceptable by the hardware.
+        #  * repetition set: Rep (as requested) + ROI (current) → PxS (updated)
+        #    The repetition is adjusted to fit the hardware limits
 
-    def save_hw_settings(self):
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1)
+        # We overwrite the VA provided by LiveStream to define a setter.
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, float),
+                                         setter=self._setROI)
 
-        res = self.escan.resolution.value
-        scale = self.escan.scale.value
-        trans = self.escan.translation.value
-        dt = self.escan.dwellTime.value
-        self._hw_settings = (res, scale, trans, dt)
+        # Start with pixel size to fit 1024 px, as it's typically a sane value
+        # for the user (and adjust for the hardware).
+        spxs = emitter.pixelSize.value  # m, size at scale = 1
+        sshape = emitter.shape  # px, max number of pixels scanned
+        phy_size_x = spxs[0] * sshape[0]  # m
+        phy_size_y = spxs[1] * sshape[1]  # m
+        pxs = (phy_size_x / 1024, phy_size_y / 1024)
 
-    def resume_hw_settings(self):
-        res, scale, trans, dt = self._hw_settings
+        roi, rep, pxs = self._updateROIAndPixelSize(self.roi.value, pxs)
 
-        # order matters!
-        self.escan.scale.value = scale
-        self.escan.resolution.value = res
-        self.escan.translation.value = trans
-        self.escan.dwellTime.value = dt
+        # The number of pixels acquired in each dimension. It will be assigned to the resolution
+        # of the emitter (but cannot be directly set, as one might want to use the emitter while
+        # configuring the stream).
+        self.repetition = model.ResolutionVA(rep,
+                                             emitter.resolution.range,
+                                             setter=self._setRepetition)
 
-    def calc_xy_pos(self):
+        # The size of the pixel (IOW, the distance between the center of two
+        # consecutive pixels or the "pitch"). Value can vary for vertical and horizontal direction.
+        # The actual range is dynamic, as it changes with the magnification.
+        self.pixelSize = model.TupleContinuous(pxs,
+                                               range=((0, 0), (1, 1)),
+                                               unit="m",
+                                               cls=(int, float),
+                                               setter=self._setPixelSize)
+
+        # Typical user wants density much lower than SEM.
+        self.pixelSize.value = tuple(numpy.array(self.pixelSize.value) * 50)
+
+        # Maximum margin is half the CCD FoV.
+        ccd_rect = get_ccd_fov(detector)
+        max_margin = max(ccd_rect[2] - ccd_rect[0], ccd_rect[3] - ccd_rect[1]) / 2
+        # roi_margin (0 <= float): extra margin (in m) around the SEM area to select the CCD ROI.
+        self.roi_margin = model.FloatContinuous(0, (0, max_margin), unit="m")
+
+        # Exposure time of each pixel is the exposure time of the detector.
+        # The dwell time of the emitter will be adapted before the acquisition.
+
+        # Update the pixel size whenever SEM magnification changes.
+        # This allows to keep the ROI at the same place in the SEM FoV.
+        # Note: This is to be done only if the user needs to manually update the magnification.
+        self.magnification = self._scanner.magnification
+        self._prev_mag = self.magnification.value
+        self.magnification.subscribe(self._onMagnification)
+
+    def _setPixelSize(self, pxs):
         """
-        Compute the X and Y positions of the ebeam
-        Note: contrarily to usual, the Y is scanned fast, and X slowly
-        returns: xyps (list of float,float): X/Y positions in the ebeam coordinates
-                 pixelsize (float, float): pixelsize in m
+        Ensures pixel size is within the current allowed range, try to keep sames ROI and update repetition.
+        :param pxs: (float, float) The requested pixel size.
+        :returns: (float, float) The new (valid) pixel size.
         """
-        # position is expressed in pixels, within the .translation ranges
-        rngs = self.escan.translation.range
-        # Note: currently the semcomedi driver doesn't allow to move to the very
-        # border, even if when fuzzing is disabled, so need to remove one pixel
-        widths = [rngs[1][0] - rngs[0][0] - 1, rngs[1][1] - rngs[0][1] - 1]
-        stepsize = min(widths[0] / (self.res[0] - 1), widths[1] / (self.res[1] - 1))
-        stepsizem = self.convert_xy_pos_to_m(stepsize, stepsize)
-        logging.info("stepsize = %g nm", stepsizem[0] * 1e9)
+        roi, rep, pxs = self._updateROIAndPixelSize(self.roi.value, pxs)
 
-        xps = []
-        if self.res[0] == 1:
-            xps.append(0)
-        else:
-            for n in range(self.res[0]):  # n: 0, 1 ,2 ,3 ,4 N_X-1
-                x = n - ((self.res[0] - 1) / 2)  # distance from the iteration center => -2, -1, 0, 1, 2
-                xps.append(stepsize * x)
+        # update roi and rep without going through the checks
+        self.roi._value = roi
+        self.roi.notify(roi)
+        self.repetition._value = rep
+        self.repetition.notify(rep)
 
-        yps = []
-        if self.res[1] == 1:
-            yps.append(0)
-        else:
-            for n in range(self.res[1]):
-                y = n - ((self.res[1] - 1) / 2)  # distance from the iteration center
-                yps.append(stepsize * y)
+        return pxs
 
-        return list(itertools.product(xps, yps)), stepsizem
-
-    def convert_xy_pos_to_m(self, x, y):
+    def _setRepetition(self, repetition):
         """
-        Convert a X and Y positions in m from the center
-        Note: the SEM magnification must be calibrated
-        x, y (floats)
-        returns: xm, ym (floats): distance from the center in m
+        Find a fitting repetition, try to keep the same ROI and update pixel size. Try using the current ROI by making
+        sure that the repetition is ints (pixelSize and roi changes are notified but the setter is not called).
+        :param repetition: (tuple of 2 ints) The requested repetition (might be clamped).
+        :returns: (tuple of 2 ints): The new (valid) repetition.
         """
-        pxs = self.escan.pixelSize.value
-        return x * pxs[0], y * pxs[1]
+        roi = self.roi.value
+        spxs = self._scanner.pixelSize.value
+        sshape = self._scanner.shape
+        phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
 
-    def start_spot(self):
+        # Clamp the repetition to be sure it's correct (it'll be clipped against the scanner
+        # resolution later on, to be sure it's compatible with the hardware).
+        rep = self.repetition.clip(repetition)
+
+        # If ROI is undefined => link repetition and pxs as if ROI is full
+        if roi == acqstream.UNDEFINED_ROI:
+            pxs = (phy_size[0] / rep[0], phy_size[1] / rep[1])
+            roi, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
+            self.pixelSize._value = pxs
+            self.pixelSize.notify(pxs)
+            return rep
+
+        # The basic principle is that the center and surface of the ROI stay.
+        # We only adjust the X/Y ratio and the pixel size based on the new repetition.
+
+        prev_rep = self.repetition.value
+        prev_pxs = self.pixelSize.value
+
+        # Keep area and adapt ROI (to the new repetition ratio).
+        pxs = (prev_pxs[0] * prev_rep[0] / rep[0], prev_pxs[1] * prev_rep[1] / rep[1])
+        roi = self._adaptROI(roi, rep, pxs)
+        logging.debug("Estimating roi = %s, rep = %s, pxs = %s", roi, rep, pxs)
+
+        roi, rep, pxs = self._updateROIAndPixelSize(roi, pxs)
+        # update roi and pixel size without going through the checks
+        self.roi._value = roi
+        self.roi.notify(roi)
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
+
+        return rep
+
+    def _getPixelSizeRange(self):
         """
-        Start spot mode
+        Calculates the min and max value possible for the pixel size at the current magnification.
+        :returns: (tuple of tuple of 2 floats) Min and max values of the pixel size [m].
         """
-        # put a not too short dwell time to avoid acquisition to keep repeating,
-        # and not too long to avoid using too much memory for acquiring one point.
-        # Note: on the Delphi, the dwell time in spot mode is longer than what
-        # is reported (fixed to ~50ms)
-        dt = self.ccd.exposureTime.value / 2
-        self.escan.dwellTime.value = self.escan.dwellTime.clip(dt)
+        # Two things to take care of:
+        # * current pixel size of the scanner (which depends on the magnification)
+        # * merge horizontal/vertical dimensions into one fits-all
 
-        # only one point
-        self.escan.scale.value = (1, 1)  # just to be sure
-        self.escan.resolution.value = (1, 1)
+        # The current scanner pixel size is the minimum size
+        spxs = self._scanner.pixelSize.value
+        min_pxs = spxs
+        min_scale = self._scanner.scale.range[0]
+        if min_scale < (1, 1):
+            # Pixel size can be smaller if not scanning the whole FoV
+            min_pxs = tuple(numpy.array(min_pxs) * numpy.array(min_scale))
+        shape = self._scanner.shape
+        # The maximum pixel size is if we acquire a single pixel for the whole FoV
+        max_pxs = (spxs[0] * shape[0], spxs[1] * shape[1])
 
-        # subscribe to the data forever, which will keep the spot forever, but synchronised
-        self.edet.data.synchronizedOn(self.edet.softwareTrigger)  # Wait for a trigger between each "scan" (of 1x1)
-        self.edet.data.subscribe(self._receive_sem_data)
+        return min_pxs, max_pxs
 
-    def move_spot(self, x, y):
+    def _setROI(self, roi):
         """
-        Move spot to a given position.
-        It should already be started in spot mode
-        x, y (floats): X, Y position
+        Ensures that the ROI is always an exact number of pixels, keep the current repetition
+        and update the pixel size.
+        :param roi: (tuple of 4 floats) The requested ROI (ltbr).
+        :returns: (tuple of 4 floats) The new (valid) ROI (ltbr).
         """
-        self._sem_data = []
-        self._sem_data_received.clear()
+        pxs = self.pixelSize.value
 
-        # Move the spot
-        self.escan.translation.value = (x, y)
-        # checks the hardware has accepted it
-        act_tr = self.escan.translation.value
-        if math.hypot(x - act_tr[0], y - act_tr[1]) > 1e-3:  # Anything below a thousand of a pixel is just float error
-            logging.warning("Trans = %s instead of %s, will wait a bit" % (act_tr, (x, y)))
-            # FIXME: why could waiting help? the semcomedi driver immediately sets the value
-            time.sleep(0.1)
-            act_tr = self.escan.translation.value
-            if math.hypot(x - act_tr[0], y - act_tr[1]) > 1e-3:  # Anything below a thousand of a pixel is just float error
-                raise IOError("Trans = %s instead of %s" % (act_tr, (x, y)))
+        old_roi = self.roi.value
+        if old_roi != acqstream.UNDEFINED_ROI and roi != acqstream.UNDEFINED_ROI:
+            old_size = (old_roi[2] - old_roi[0], old_roi[3] - old_roi[1])
+            new_size = (roi[2] - roi[0], roi[3] - roi[1])
 
-        self.edet.softwareTrigger.notify()  # Go! (for one acquisition, and then the spot will stay there)
+            # -> keep old rep
+            # -> Adjust ROI and pxs to be the same area as requested ROI
+            rep = self.repetition.value
+            scale = numpy.array(new_size) / numpy.array(old_size)
+            # Rep should stay the same, adjust pxs based on requested area.
+            pxs = (pxs[0] * scale[0], pxs[1] * scale[1])
+            roi = self._adaptROI(roi, rep, pxs)
 
-    def stop_spot(self):
+        roi, rep, pxs = self._updateROIAndPixelSize(roi, pxs)
+        # update repetition without going through the checks
+        self.repetition._value = rep
+        self.repetition.notify(rep)
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
+
+        return roi
+
+    def _updateROIAndPixelSize(self, roi, pxs):
         """
-        Stop spot mode
+        Adapt the ROI and pixel size so that they are correct. It checks that they are within bounds
+        and if not, make them fit in the bounds by adapting the repetition.
+        :param roi: (4 floats) The ROI requested (might be slightly changed).
+        :param pxs: (float, float) The requested pixel size.
+        :returns:
+                  (4 floats) The new ROI (ltbr).
+                  (2 ints) The new repetition.
+                  (2 floats) The new pixel size.
         """
-        # unsubscribe to the data, it will automatically stop the spot
-        self.edet.data.unsubscribe(self._receive_sem_data)
-        self.edet.data.synchronizedOn(None)
+        # If ROI is undefined => link rep and pxs as if the ROI was full
+        if roi == acqstream.UNDEFINED_ROI:
+            _, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
+            return roi, rep, pxs
 
-    def _receive_sem_data(self, df, data):
+        # compute the ROI.
+        roi = self._fitROI(roi)
+
+        # Compute the pixel size for a given scanner px size and ensure it's within range.
+        spxs = self._scanner.pixelSize.value  # px size of scanner for given magnification (pitch size)
+        scale = numpy.array([pxs[0] / spxs[0], pxs[1] / spxs[1]])
+        min_scale = numpy.array(self._scanner.scale.range[0])
+        max_scale = numpy.array([self._scanner.shape[0], self._scanner.shape[1]])
+        # calculate scaling between scanner px size and px size (pitch, distance between ebeam positions)
+        scale = numpy.maximum(min_scale, numpy.minimum(scale, max_scale))
+        pxs = tuple(scale * numpy.array(spxs))  # tuple (x, y)
+
+        # Compute the repetition (ints) that fits the ROI with the requested pixel size.
+        sshape = self._scanner.shape
+        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
+        rep = (int(round(sshape[0] * roi_size[0] / scale[0])),
+               int(round(sshape[1] * roi_size[1] / scale[1])))
+
+        logging.debug("First trial with roi = %s, rep = %s, pxs = %s", roi, rep, pxs)
+
+        # Ensure it's really compatible with the hardware
+        rep = self._scanner.resolution.clip(rep)
+
+        # Update the ROI so that it's exactly "pixel size * repetition", while keeping its center fixed.
+        roi = self._adaptROI(roi, rep, pxs)
+        roi = self._fitROI(roi)
+
+        # Double check we didn't end up with scale out of range.
+        pxs_range = self._getPixelSizeRange()
+        if not pxs_range[0][0] <= pxs[0] <= pxs_range[1][0] or not pxs_range[0][1] <= pxs[1] <= pxs_range[1][1]:
+            logging.error("Computed impossibly small pixel size %s, with range %s", pxs, pxs_range)
+            # TODO: revert to some *acceptable* values for ROI + rep + PxS?
+
+        logging.debug("Computed roi = %s, rep = %s, pxs = %s", roi, rep, pxs)
+
+        return tuple(roi), tuple(rep), tuple(pxs)
+
+    def _adaptROI(self, roi, rep, pxs):
         """
-        Store SEM data (when scanning spot mode typically)
+        Computes the ROI, so that it's exactly "pixel size * repetition", while keeping its center fixed
+        :param roi: (4 floats) The current ROI, just to know its center.
+        :param rep: (2 ints) The repetition (e-beam positions).
+        :param pxs: (float, float) The pixel size (pitch size, distance between 2 e-beam positions).
+        :returns: (4 floats) The adapted roi (ltrb).
         """
-        self._sem_data.append(data)
-        self._sem_data_received.set()
-        if data.shape != (1,1):
-            logging.warning("SEM data shape is %s while expected a spot", data.shape)
+        # Rep + PxS (+ center of ROI) -> ROI
+        roi_center = ((roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2)
+        spxs = self._scanner.pixelSize.value
+        sshape = self._scanner.shape
+        phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
+        roi_size = (rep[0] * pxs[0] / phy_size[0],
+                    rep[1] * pxs[1] / phy_size[1])
+        roi = (roi_center[0] - roi_size[0] / 2,
+               roi_center[1] - roi_size[1] / 2,
+               roi_center[0] + roi_size[0] / 2,
+               roi_center[1] + roi_size[1] / 2)
 
-    def stop_acquisition(self):
-        self._must_stop = True
-        logging.debug("Cancelling acquisition")
+        return roi
 
-    def start_ccd(self):
-        self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
-        self.ccd.data.subscribe(self._receive_ccd_data)
-
-    def stop_ccd(self):
-        self.ccd.data.unsubscribe(self._receive_ccd_data)
-        self.ccd.data.synchronizedOn(None)
-
-    def _receive_ccd_data(self, df, data):
+    def _onMagnification(self, mag):
         """
-        Store CCD data
+        Called when the SEM magnification is updated. Update the pixel size so that the ROI stays at
+        the same place in the SEM FoV and with the same repetition.
+        The bigger the magnification is, the smaller should be the pixel size.
+        :param mag: (float) The new magnification.
         """
-        self._ccd_data.append(data)
-        self._ccd_data_received.set()
+        ratio = self._prev_mag / mag
+        self._prev_mag = mag
+        self.pixelSize._value = tuple(numpy.array(self.pixelSize._value) * ratio)
+        self.pixelSize.notify(self.pixelSize._value)
 
-    def acquire_ccd(self, x, y, ccd_roi_idx):
+
+class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
+    """
+    Multiple detector Stream made of SEM + SECOM CL acquisition.
+    It handles acquisition, but not rendering (so .image always returns an empty image).
+    """
+    def __init__(self, name, streams):
         """
-        Acquire an image from the CCD while having the e-beam at a spot position
-        x, y (floats): spot position in the ebeam coordinates
-        ccd_roi_idx: slice to crop the CCD image
-        return (model.DataArray of shape (Y,X), model.DataArray of shape (1,1)):
-          the CCD image and the SEM data (at the spot)
+        :param streams: ([Stream]) The streams to acquire.
         """
-        self.move_spot(x, y)
+        super(SECOMCLSEMMDStream, self).__init__(name, streams)
 
-        # Start next CCD acquisition
-        self._ccd_data = []
-        self._ccd_data_received.clear()
-        self.ccd.softwareTrigger.notify()
+        self.filename = model.StringVA("a.tiff")
+        self.firstOptImg = None  # save the first optical image for display in analysis tab
 
-        # Wait for the CCD
-        expt = self.ccd.exposureTime.value
-        if not self._ccd_data_received.wait(expt * 2 + 2):
-            raise IOError("Timed out: No CCD data received in time")
-
-        if len(self._ccd_data) != 1:
-            logging.warning("Received %d CCD data, while expected 1", len(self._ccd_data))
-        d = self._ccd_data[0]
-        d = d[ccd_roi_idx]  # crop
-
-        if not self._sem_data_received.wait(3):
-            logging.warning("No SEM data received, 3s after the CCD data")
-        if len(self._sem_data) > 1:
-            logging.warning("Received %d SEM data, while expected just 1", len(self._sem_data))
-
-        return d, self._sem_data[0]
-
-    def acquire_grid(self, fn_prefix):
+    def _runAcquisition(self, future):
         """
-        returns (int): number of positions acquired
+        Acquires images from the multiple detectors via software synchronisation.
+        Acquires images via moving the ebeam.
+        :param future: (ProgressiveFuture) The current future running for the whole acquisition.
+        :returns: (list of DataArrays): All the data acquired (self.raw).
         """
-        xyps, stepsizem = self.calc_xy_pos()
-        logging.debug("Will scan on X/Y positions %s", xyps)
+        self.ccd_roi = sem_roi_to_ccd(self._emitter, self._ccd, self.roi.value, self._sccd.roi_margin.value)
 
-        self.save_hw_settings()
+        return super(SECOMCLSEMMDStream, self)._runAcquisition(future)
 
-        # Uses the whole FoV of the CCD (and later we will crop it)
-        # TODO: use translation and resolution to do the cropping
-        self.ccd.resolution.value = self.ccd.resolution.range[1]
-        expt = self.ccd.exposureTime.value
-
-        # TODO: allow to select the ROI
-        ccd_roi = sem_roi_to_ccd(self.escan, self.ccd, (0, 0, 1, 1), self.roi_margin)
-        ccd_roi = [ccd_roi[0], ccd_roi[1],
-                   ccd_roi[2], ccd_roi[3]]
-        logging.info("ccd roi: %s", ccd_roi)
-        ccd_roi_idx = (slice(ccd_roi[1], ccd_roi[3] + 1),
-                       slice(ccd_roi[0], ccd_roi[2] + 1))  # + 1 to include the corners of the ROI
-
-        sed_linear = []
-        self.start_spot()
-        self.start_ccd()
-        n_pos = 0
-        try:
-            for x, y in xyps:
-                xm, ym = self.convert_xy_pos_to_m(x, y)
-                logging.info("Acquiring at position (%+f, %+f)", xm * 1e9, ym * 1e9)
-
-                startt = time.time()
-                d, sed = self.acquire_ccd(x, y, ccd_roi_idx)
-                endt = time.time()
-                logging.debug("Took %g s (expected = %g s)", endt - startt, expt)
-
-                sed_linear.append(sed)
-                self.save_data(d, prefix=fn_prefix, xres=self.res[0], yres=self.res[1],
-                               stepsize=stepsizem[0] * 1e9, idx=n_pos)
-                n_pos += 1
-                if self._must_stop:
-                    logging.info("Stopping on request, after %d acquisitions", n_pos)
-                    return
-        finally:
-            self.stop_ccd()
-            self.stop_spot()
-            self.resume_hw_settings()
-
-        logging.debug("Assembling SEM data")
-        fullsed = numpy.array(sed_linear)
-        fullsed.shape = self.res  # numpy scans the last dim first
-        fullsed = fullsed.T  # Get X as last dim, which is the numpy/Odemis convention
-        md = sed_linear[0].metadata.copy()
-        center, pxs = self._get_center_pxs(self.res, (1, 1), sed_linear[0], stepsizem)
-        md.update({model.MD_POS: center,
-                   model.MD_PIXEL_SIZE: pxs})
-
-        fullsed = model.DataArray(fullsed, md)
-        self.save_data(fullsed, prefix=fn_prefix + "_sem", xres=self.res[0], yres=self.res[1],
-                       stepsize=stepsizem[0] * 1e9, idx=0)
-
-    # From odemis.acq.stream._sync.MultipleDetectorStream
-    def _get_center_pxs(self, rep, sub_shape, datatl, pxs):
+    def _preprocessData(self, n, data, i):
         """
-        Computes the center and pixel size of the entire data based on the
-        top-left data acquired.
-        rep (int, int): number of pixels (tiles) in X, Y
-        sub_shape (int, int): number of sub-pixels in a pixel
-        datatl (DataArray): first data array acquired
-        pxs (float, float): the pixel in m of a pixel
-        return:
-            center (tuple of floats): position in m of the whole data
-            pxs (tuple of floats): pixel size in m of the sub-pixels
+        Pre-process the raw data, just after it was received from the detector.
+        :param n: (0<=int) The detector/stream index.
+        :param data: (DataArray) The data as received from the detector, from _onData(),
+                     and with MD_POS updated to the current position of the e-beam.
+        :param i: (int, int) The iteration number in X, Y.
+        :returns: (value) The value as needed by _onCompletedData.
         """
-        # Compute center of area, based on the position of the first point (the
-        # position of the other points can be wrong due to drift correction)
-        center_tl = datatl.metadata[model.MD_POS]
-        dpxs = datatl.metadata[model.MD_PIXEL_SIZE]
-        tl = (center_tl[0] - (dpxs[0] * (datatl.shape[-1] - 1)) / 2,
-              center_tl[1] + (dpxs[1] * (datatl.shape[-2] - 1)) / 2)
-        logging.debug("Computed center of top-left pixel at at %s", tl)
+        if n != self._ccd_idx:
+            return super(SECOMCLSEMMDStream, self)._preprocessData(n, data, i)
 
-        # Note: we don't rely on the MD_PIXEL_SIZE, because if the e-beam was in
-        # spot mode (res 1x1), the scale is not always correct, which gives an
-        # incorrect metadata.
-        sub_pxs = pxs[0] / sub_shape[0], pxs[1] / sub_shape[1]
-        trep = rep[0] * sub_shape[0], rep[1] * sub_shape[1]
-        center = (tl[0] + (sub_pxs[0] * (trep[0] - 1)) / 2,
-                  tl[1] - (sub_pxs[1] * (trep[1] - 1)) / 2)
-        logging.debug("Computed data width to be %s x %s, with center at %s",
-                      pxs[0] * rep[0], pxs[1] * rep[1], center)
+        ccd_roi = self.ccd_roi
+        data = data[ccd_roi[1]: ccd_roi[3] + 1, ccd_roi[0]: ccd_roi[2] + 1]  # crop
 
-        if numpy.prod(datatl.shape) > 1:
-            # pxs and dpxs ought to be identical
-            if not util.almost_equal(sub_pxs[0], dpxs[0]):
-                logging.warning("Expected pixel size of %s, but data has %s",
-                                sub_pxs, dpxs)
+        cpos = self._get_center_pos(data, self.ccd_roi)
+        sname = self._streams[n].name.value
 
-        return center, sub_pxs
+        data.metadata[model.MD_DESCRIPTION] = sname
+        # update center position of optical image (should be the same for all optical images)
+        data.metadata[model.MD_POS] = cpos
+
+        # Hack: To avoid memory issues, we save the optical image immediately after being acquired.
+        # Thus, we do not keep all the images in cache until the end of the acquisition.
+        fn = self.filename.value
+        logging.debug("Will save CL data to %s", fn)
+        fn_prefix, fn_ext = os.path.splitext(self.filename.value)
+
+        self.save_data(data,
+                       prefix=fn_prefix,
+                       xres=self.repetition.value[0],
+                       yres=self.repetition.value[1],
+                       xstepsize=self._getPixelSize()[0] * 1e9,
+                       ystepsize=self._getPixelSize()[1] * 1e9,
+                       xpos=i[1]+1,  # start counting with 1
+                       ypos=i[0]+1,
+                       type="optical"
+                       )
+
+        # Return something, but not the data to avoid data being cached.
+        return model.DataArray(numpy.array([0]))
+
+    def _onCompletedData(self, n, raw_das):
+        """
+        Called at the end of an entire acquisition. It should assemble the data and append it to ._raw .
+        :param n: (0<=int) The index of the detector.
+        :param raw_das: (list) List of data acquired for given detector n.
+        """
+        if n != self._ccd_idx:
+            return super(SECOMCLSEMMDStream, self)._onCompletedData(n, raw_das)
+
+        # self._raw: first entry is sem-array, second onwards is cl-arrays
+        self._raw.extend(raw_das)  # append cl arrays
+
+    def _get_center_pos(self, data, crop_roi):
+        """
+        Calculate the center of the region of acquisition based on the center of the optical detector (ccd).
+        :param data: () TODO
+        :param crop_roi: () TODO
+        :returns: (float, float) The center of the region of acquisition.
+        """
+        center_det_abs = self._ccd.getMetadata()[model.MD_POS]  # absolute position in space
+        res_det = self._ccd.resolution.value  # detector shape/binning
+        pxs = data.metadata[model.MD_PIXEL_SIZE]  # including the binning
+        # TODO: pixel size cor
+
+        center_roa = numpy.array(((crop_roi[0] + (crop_roi[2] - crop_roi[0])/2) * pxs[0],
+                                  (crop_roi[1] + (crop_roi[3] - crop_roi[1])/2) * -pxs[1]))
+        center_det = numpy.array((0.5 * res_det[0] * pxs[0],
+                                  0.5 * res_det[1] * -pxs[1]))
+        shift = center_roa - center_det  # in [m]
+        center_roa_abs = center_det_abs + shift
+
+        return tuple(center_roa_abs)
+
+    def _getPixelSize(self):
+        """
+        Computes the pixel size (based on the repetition, roi and FoV of the
+        e-beam). The RepetitionStream does provide a .pixelSize VA, which
+        should contain the same value, but that VA is for use by the GUI.
+        :returns: (float, float) The pixel size in m.
+        """
+        epxs = self._emitter.pixelSize.value
+        rep = self.repetition.value
+        roi = self.roi.value
+        eshape = self._emitter.shape
+        phy_size_x = (roi[2] - roi[0]) * epxs[0] * eshape[0]
+        phy_size_y = (roi[3] - roi[1]) * epxs[1] * eshape[1]
+        pxsy = phy_size_y / rep[1]
+        pxsx = phy_size_x / rep[0]
+        logging.debug("px size guessed = %s x %s", pxsx, pxsy)
+
+        return (pxsx, pxsy)
 
     def save_data(self, data, **kwargs):
         """
-        Saves the data into a file
-        data (model.DataArray or list of model.DataArray): the data to save
-        kwargs (dict (str->value)): values to substitute in the file name
+        Saves the data into a file.
+        :param data: (model.DataArray or list of model.DataArray) The data to save.
+        :param kwargs: (dict (str->value)) The values to substitute in the file name.
         """
+        # export to single tiff files
         exporter = dataio.get_converter(FMT)
+
         fn = FN_FMT % kwargs
+
+        # Save first image for display in analysis tab
+        if (kwargs["xpos"], kwargs["ypos"]) == (1, 1):
+            self.firstOptImg = fn
 
         if os.path.exists(fn):
             # mostly to warn if multiple ypos/xpos are rounded to the same value
@@ -522,26 +665,21 @@ class GridAcquirer(object):
 
 
 class CLAcqPlugin(Plugin):
+    """
+    This is a script to acquire a set of optical images from the detector (ccd) for various e-beam
+    spots on the sample along a grid. Can also be used as a plugin.
+    """
     name = "CL acquisition for SECOM"
-    __version__ = "1.1"
-    __author__ = u"Éric Piel, Lennard Voortman"
+    __version__ = "2.0"
+    __author__ = u"Éric Piel, Lennard Voortman, Sabrina Rossberger"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
-        ("xres", {
-            "label": "Horiz. repetition",
-            "control_type": gui.CONTROL_INT,  # no slider
-            "accuracy": None,  # never simplify the numbers
+        ("repetition", {
         }),
-        ("yres", {
-            "label": "Vert. repetition",
-            "control_type": gui.CONTROL_INT,  # no slider
-            "accuracy": None,  # never simplify the numbers
-        }),
-        ("stepsize", {
-            "control_type": gui.CONTROL_READONLY,
+        ("pixelSize", {
         }),
         ("exposureTime", {
             "range": (1e-6, 180),
@@ -557,91 +695,204 @@ class CLAcqPlugin(Plugin):
         ("filename", {
             "control_type": gui.CONTROL_SAVE_FILE,
         }),
+        ("period", {
+            "label": "Drift corr. period",
+            "tooltip": u"Maximum time after running a drift correction (anchor region acquisition)",
+            "control_type": gui.CONTROL_SLIDER,
+            "scale": "log",
+            "range": (1, 300),  # s, the VA allows a wider range, not typically needed
+            "accuracy": 2,
+        }),
+        ("tool", {
+            "label": "Selection tools",
+            "control_type": gui.CONTROL_RADIO,
+            "choices": {TOOL_NONE: u"drag", TOOL_ROA: u"ROA", TOOL_RO_ANCHOR: u"drift"},
+        }),
+        ("expectedDuration", {
+        }),
     ))
 
     def __init__(self, microscope, main_app):
+        """
+        :param microscope: (Microscope or None) The main back-end component.
+        :param main_app: (wx.App) The main GUI component.
+        """
         super(CLAcqPlugin, self).__init__(microscope, main_app)
+
         # Can only be used with a microscope
         if not microscope:
             return
         else:
             # Check which stream the microscope supports
-            main_data = self.main_app.main_data
-            if not (main_data.ccd and main_data.ebeam):
+            self.main_data = self.main_app.main_data
+            if not (self.main_data.ccd and self.main_data.ebeam):
                 return
 
-        self.exposureTime = main_data.ccd.exposureTime
-        self.binning = main_data.ccd.binning
+        self.exposureTime = self.main_data.ccd.exposureTime
+        self.binning = self.main_data.ccd.binning
         # Trick to pass the component (ccd to binning_1d_from_2d())
         self.vaconf["binning"]["choices"] = (lambda cp, va, cf:
-                       gui.conf.util.binning_1d_from_2d(main_data.ccd, va, cf))
-        self.xres = model.IntContinuous(10, (1, 1000), unit="px")
-        self.yres = model.IntContinuous(10, (1, 1000), unit="px")
-        self.stepsize = model.FloatVA(1e-6, unit="m")  # Just to show
-        # Maximum margin is half the CCD FoV
-        ccd_rect = get_ccd_fov(main_data.ccd)
-        max_margin = max(ccd_rect[2] - ccd_rect[0], ccd_rect[3] - ccd_rect[1]) / 2
-        self.roi_margin = model.FloatContinuous(0, (0, max_margin), unit="m")
-        self.filename = model.StringVA("a.tiff")
+                                             gui.conf.util.binning_1d_from_2d(self.main_data.ccd, va, cf))
 
-        self.xres.subscribe(self._update_stepsize)
-        self.yres.subscribe(self._update_stepsize)
+        self.conf = get_acqui_conf()
+        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
+        self.exposureTime.subscribe(self._update_exp_dur)
 
         self.addMenu("Acquisition/CL acquisition...", self.start)
 
-    def _get_new_filename(self):
-        conf = get_acqui_conf()
-        return os.path.join(
-            conf.last_path,
-            # u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
-            u"%s.tiff" % (time.strftime("%Y%m%d-%H%M%S"),)
-        )
+        self._optical_stream = acqstream.BrightfieldStream(
+                                    "Optical",
+                                    self.main_data.ccd,
+                                    self.main_data.ccd.data,
+                                    emitter=None,
+                                    focuser=self.main_data.focus)
+        self._secom_cl_stream = SECOMCLSettingsStream(
+                                "Secom-CL",
+                                self.main_data.ccd,
+                                self.main_data.ccd.data,
+                                self.main_data.ebeam)
+        self._sem_stream = acqstream.SEMStream(
+                                "Secondary electrons concurrent",
+                                self.main_data.sed,
+                                self.main_data.sed.data,
+                                self.main_data.ebeam)
+
+        self._secom_sem_cl_stream = SECOMCLSEMMDStream("SECOM SEM CL", [self._sem_stream,
+                                                                        self._secom_cl_stream])
+
+        self._driftCorrector = leech.AnchorDriftCorrector(self.main_data.ebeam,
+                                                          self.main_data.sed)
+
+        self.filename = self._secom_sem_cl_stream.filename  # duplicate VA
+        self.filename.subscribe(self._on_filename)
+
+    def _on_filename(self, fn):
+        """
+        Store path and pattern in conf file.
+        :param fn: (str) The filename to be stored.
+        """
+        # Store the directory so that next filename is in the same place
+        p, bn = os.path.split(fn)
+        if p:
+            self.conf.last_path = p
+
+        # Save pattern
+        self.conf.fn_ptn, self.conf.fn_count = guess_pattern(fn)
+
+    def _update_filename(self):
+        """
+        Set filename from pattern in conf file.
+        """
+        fn = create_filename(self.conf.last_path, self.conf.fn_ptn, '.tiff', self.conf.fn_count)
+        self.conf.fn_count = update_counter(self.conf.fn_count)
+
+        # Update the widget, without updating the pattern and counter again
+        self.filename.unsubscribe(self._on_filename)
+        self.filename.value = fn
+        self.filename.subscribe(self._on_filename)
 
     def _get_sem_survey(self):
         """
-        Finds the SEM survey stream in the acquisition tab
-        return (SEMStream or None): None if not found
+        Finds the SEM stream in the acquisition tab.
+        :returns: (SEMStream or None) None if not found.
         """
         tab_data = self.main_app.main_data.tab.value.tab_data_model
         for s in tab_data.streams.value:
             if isinstance(s, stream.SEMStream):
                 return s
 
-        logging.warning("No SEM survey stream found")
+        logging.warning("No SEM stream found")
         return None
 
-    def _update_stepsize(self, _=None):
+    def _update_exp_dur(self, _=None):
         """
-        Update the stepsize based on X/Y repetition
+        Called when VA that affects the expected duration is changed.
         """
+        strs = [self._survey_stream, self._secom_sem_cl_stream]
 
-        escan = self.main_app.main_data.ebeam
-        # Copy-paste of calc_xy_pos()
-        rngs = escan.translation.range
-        res = self.xres.value, self.yres.value
-        # Note: currently the semcomedi driver doesn't allow to move to the very
-        # border, even if when fuzzing is disabled, so need to remove one pixel
-        widths = (rngs[1][0] - rngs[0][0] - 1, rngs[1][1] - rngs[0][1] - 1)
+        dur = acq.estimateTime(strs)
+        logging.debug("Estimating %g s acquisition for %d streams", dur, len(strs))
+        # Use _set_value as it's read only
+        self.expectedDuration._set_value(math.ceil(dur), force_write=True)
 
-        if res == (1, 1):
-            # When there is only one pixel, step size doesn't mean anything
-            logging.info("Cannot compute pixel size when rep = 1x1")
-            return
+    def _on_dc_roi(self, roi):
+        """
+        Called when the Anchor region changes.
+        Used to enable/disable the drift correction period control.
+        :param roi: (4 x 0<=float<=1) The anchor region selected (tlbr).
+        """
+        enabled = (roi != acqstream.UNDEFINED_ROI)
 
-        stepsize = min(w / (r - 1) for w, r in zip(widths, res) if r > 1)
-        pxs = escan.pixelSize.value
-        self.stepsize.value = stepsize * pxs[0]
+        # The driftCorrector should be a leech if drift correction is enabled
+        dc = self._driftCorrector
+        if enabled:
+            if dc not in self._sem_stream.leeches:
+                self._sem_stream.leeches.append(dc)
+        else:
+            try:
+                self._sem_stream.leeches.remove(dc)
+            except ValueError:
+                pass  # It was already not there
+
+    @call_in_wx_main
+    def _on_rep(self, rep):
+        """
+        Force the ROI in the canvas to show the e-beam positions.
+        :param rep: (int, int) The repetition (e-beam positions) to be displayed.
+        """
+        self._dlg.viewport_l.canvas.show_repetition(rep, RepetitionSelectOverlay.FILL_POINT)
 
     def start(self):
-        self.filename.value = self._get_new_filename()
-        self._update_stepsize()
+        """
+        Displays the plugin window.
+        """
+        self._update_filename()
+        str_ctrl = self.main_app.main_data.tab.value.streambar_controller
+        str_ctrl.pauseStreams()
 
         dlg = AcquisitionDialog(self, "CL acquisition",
                                 "Acquires a CCD image for each e-beam spot.\n")
+        self._dlg = dlg
+        self._survey_stream = self._get_sem_survey()
+
+        dlg.SetSize((1500, 1000))
+
+        # Hack to force the canvas to have a region of acquisition (ROA) and anchor region (drift) overlay.
+        dlg._dmodel.tool.choices = {
+            TOOL_NONE,
+            TOOL_ROA,
+            TOOL_RO_ANCHOR,
+        }
+
+        dlg._dmodel.roa = self._secom_cl_stream.roi  # region of acquisition selected (x_tl, y_tl, x_br, y_br)
+        dlg._dmodel.fovComp = self.main_data.ebeam  # size (x, y) of sem image for given magnification
+        dlg._dmodel.driftCorrector = self._driftCorrector
+        dlg.viewport_l.canvas.view = None
+        dlg.viewport_l.canvas.setView(dlg.view, dlg._dmodel)
+        dlg.viewport_r.canvas.allowed_modes = {}
+        dlg.viewport_r.canvas.view = None
+        dlg.viewport_r.canvas.setView(dlg.view_r, dlg._dmodel)
+
+        self.repetition = self._secom_cl_stream.repetition  # ebeam positions to acquire
+        self.repetition.subscribe(self._on_rep, init=True)
+        self.pixelSize = self._secom_cl_stream.pixelSize  # pixel size per ebeam pos
+        self.roi_margin = self._secom_cl_stream.roi_margin
+        self.period = self._driftCorrector.period  # time between to drift corrections
+        self.tool = dlg._dmodel.tool  # tools to select ROA and anchor region for drift correction
+        self._driftCorrector.roi.subscribe(self._on_dc_roi, init=True)
+
+        # subscribe to update estimated acquisition time
+        self.repetition.subscribe(self._update_exp_dur, init=True)
+        self.period.subscribe(self._update_exp_dur)
+        self._driftCorrector.roi.subscribe(self._update_exp_dur)
+
         dlg.addSettings(self, self.vaconf)
-        # dlg.addStream(self._get_sem_survey) # TODO: add survey + ROI selection tool
+        dlg.addStream(self._survey_stream)
+        dlg.addStream(self._optical_stream)
+
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self._acquire, face_colour='blue')
+
         ans = dlg.ShowModal()
 
         if ans == 0:
@@ -651,71 +902,109 @@ class CLAcqPlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        self._dlg = None
         dlg.Destroy()
 
+    def save_hw_settings(self):
+        """
+        Saves the current e-beam settings (only e-beam!).
+        """
+        res = self.main_data.ebeam.resolution.value
+        scale = self.main_data.ebeam.scale.value
+        trans = self.main_data.ebeam.translation.value
+        dt = self.main_data.ebeam.dwellTime.value
+        self._hw_settings = (res, scale, trans, dt)
+
+    def resume_hw_settings(self):
+        """
+        Restores the saved e-beam settings.
+        """
+        res, scale, trans, dt = self._hw_settings
+
+        # order matters!
+        self.main_data.ebeam.scale.value = scale
+        self.main_data.ebeam.resolution.value = res
+        self.main_data.ebeam.translation.value = trans
+        self.main_data.ebeam.dwellTime.value = dt
+
     def _acquire(self, dlg):
-        str_ctrl = self.main_app.main_data.tab.value.streambar_controller
-        str_ctrl.pauseStreams()
+        """
+        Starts the synchronized acquisition, pauses the currently playing streams and exports the
+        acquired SEM data. Opens the survey, concurrent and first optical image in the analysis tab.
+        :param dlg: (AcquisitionDialog) The plugin window.
+        """
+        self._dlg.streambar_controller.pauseStreams()
+        self.save_hw_settings()
 
-        acquirer = GridAcquirer((self.xres.value, self.yres.value), self.roi_margin.value)
+        self.fns = []
 
-        estt = self.xres.value * self.yres.value * (acquirer.ccd.exposureTime.value + 0.1) * 1.1
-        f = model.ProgressiveFuture(end=time.time() + estt)
-        f.task_canceller = lambda f: acquirer.stop_acquisition()  # To allow cancelling while it's running
-        f.set_running_or_notify_cancel()  # Indicate the work is starting now
-        dlg.showProgress(f)
+        strs = [self._survey_stream, self._secom_sem_cl_stream]
 
+        fn = self.filename.value
         fn_prefix, fn_ext = os.path.splitext(self.filename.value)
+
         try:
-            acquirer.acquire_grid(fn_prefix)
-        except Exception:
-            logging.exception("Failed to acquire the data")
+            f = acq.acquire(strs)
+            dlg.showProgress(f)
+            das, e = f.result()  # blocks until all the acquisitions are finished
+        except CancelledError:
+            pass
         finally:
-            f.set_result(None)  # Indicate it's over
+            self.resume_hw_settings()
+
+        if not f.cancelled() and das:
+            if e:
+                logging.warning("SECOM CL acquisition failed: %s", e)
+            logging.debug("Will save CL data to %s", fn)
+
+            # export the SEM images
+            self.save_data(das,
+                           prefix=fn_prefix,
+                           xres=self.repetition.value[0],
+                           yres=self.repetition.value[1],
+                           xstepsize=self.pixelSize.value[0] * 1e9,
+                           ystepsize=self.pixelSize.value[1] * 1e9,
+                           idx=0)
+
+            # Open analysis tab, with 3 files
+            self.showAcquisition(self._secom_sem_cl_stream.firstOptImg)
+            analysis_tab = self.main_data.getTabByName('analysis')
+            for fn_img in self.fns:
+                analysis_tab.load_data(fn_img, extend=True)
 
         dlg.Close()
 
+    def save_data(self, data, **kwargs):
+        """
+        Saves the data into a file.
+        :param data: (model.DataArray or list of model.DataArray) The data to save.
+        :param kwargs: (dict (str->value)) Values to substitute in the file name.
+        """
+        # export to single tiff files
+        exporter = dataio.get_converter(FMT)
 
-def main(args):
-    """
-    Handles the command line arguments
-    args is the list of arguments passed
-    return (int): value to return to the OS as program exit code
-    """
+        for d in data[:2]:  # only care about the sem ones, the optical images are already saved
+            if d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
+                kwargs["type"] = "drift"
+            elif d.metadata.get(model.MD_DESCRIPTION) == "Secondary electrons concurrent":
+                kwargs["type"] = "concurrent"
+            else:
+                kwargs["type"] = "survey"
 
-    # arguments handling
-    parser = argparse.ArgumentParser(description=
-                         "Automated CL acquisition at multiple spot locations")
+            kwargs["xpos"] = 0
+            kwargs["ypos"] = 0
+            fn = FN_FMT % kwargs
 
-    parser.add_argument("--xrep", "-x", dest="xrep", type=int, required=True,
-                        help="number of spots horizontally")
-    parser.add_argument("--yrep", "-y", dest="yrep", type=int, required=True,
-                        help="number of spots vertically")
-    parser.add_argument("--prefix", "-p", dest="prefix", required=True,
-                        help="prefix for the name of the files")
+            # The data is normally ordered: survey, concurrent, drift
+            # => first 2 files are the ones we care about
+            if kwargs["idx"] < 2:
+                self.fns.append(fn)
 
-    logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
+            if os.path.exists(fn):
+                # mostly to warn if multiple ypos/xpos are rounded to the same value
+                logging.warning("Overwriting file '%s'.", fn)
+            else:
+                logging.info("Saving file '%s", fn)
 
-    options = parser.parse_args(args[1:])
-    fn_prefix = options.prefix
-    xrep = options.xrep
-    yrep = options.yrep
-
-    try:
-        acquirer = GridAcquirer((xrep, yrep))
-        # configure CCD
-        acquirer.ccd.exposureTime.value = EXP_TIME
-        acquirer.ccd.binning.value = BINNING
-
-        acquirer.acquire_grid(fn_prefix)
-    except Exception:
-        logging.exception("Unexpected error while performing action.")
-        return 127
-
-    return 0
-
-if __name__ == '__main__':
-    ret = main(sys.argv)
-    logging.shutdown()
-    exit(ret)
-
+            exporter.export(fn, d)
+            kwargs["idx"] += 1
