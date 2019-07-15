@@ -609,11 +609,12 @@ class OpticalPathManager(object):
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
-            try:
-                # move actuator
-                fmoves.append((comp.moveAbs(mv), comp, mv))
-            except AttributeError:
-                logging.warning("%s not an actuator", comp_role)
+            if mv:
+                try:
+                    # move actuator
+                    fmoves.append((comp.moveAbs(mv), comp, mv))
+                except AttributeError:
+                    logging.warning("%s not an actuator, but tried to move to %s", comp_role, mv)
 
         # Now take care of the selectors based on the target detector
         fmoves.extend(self.selectorsToPath(target.name))
