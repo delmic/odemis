@@ -1013,11 +1013,7 @@ class FineAlignController(object):
         self._faf_connector = None
 
         try:
-            # DEBUG
-            try:
-                trans_val, cor_md = future.result()
-            except Exception:
-                cor_md = {}, {}
+            trans_val, cor_md = future.result()
             opt_md, sem_md = cor_md
 
             # Save the optical correction metadata straight into the CCD
