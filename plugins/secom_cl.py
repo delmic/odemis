@@ -734,12 +734,7 @@ class CLAcqPlugin(Plugin):
         self.vaconf["binning"]["choices"] = (lambda cp, va, cf:
                                              gui.conf.util.binning_1d_from_2d(self.main_data.ccd, va, cf))
 
-        self.conf = get_acqui_conf()
-        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
-        self.exposureTime.subscribe(self._update_exp_dur)
-
-        self.addMenu("Acquisition/CL acquisition...", self.start)
-
+        self._survey_stream = None
         self._optical_stream = acqstream.BrightfieldStream(
                                     "Optical",
                                     self.main_data.ccd,
@@ -763,8 +758,14 @@ class CLAcqPlugin(Plugin):
         self._driftCorrector = leech.AnchorDriftCorrector(self.main_data.ebeam,
                                                           self.main_data.sed)
 
+        self.conf = get_acqui_conf()
+        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
+        self.exposureTime.subscribe(self._update_exp_dur)
+
         self.filename = self._secom_sem_cl_stream.filename  # duplicate VA
         self.filename.subscribe(self._on_filename)
+
+        self.addMenu("Acquisition/CL acquisition...", self.start)
 
     def _on_filename(self, fn):
         """
@@ -808,6 +809,9 @@ class CLAcqPlugin(Plugin):
         """
         Called when VA that affects the expected duration is changed.
         """
+        if self._survey_stream is None:
+            return
+
         strs = [self._survey_stream, self._secom_sem_cl_stream]
 
         dur = acq.estimateTime(strs)
@@ -903,6 +907,7 @@ class CLAcqPlugin(Plugin):
             logging.warning("Got unknown return code %s", ans)
 
         self._dlg = None
+        self._survey_stream = None
         dlg.Destroy()
 
     def save_hw_settings(self):
