@@ -9,7 +9,7 @@ import socket
 # You need to be root to bind to port 23
 port = 23
 # Magic packet to which the controller will answer back
-magic = "\xff\x04\x02\xfb"
+magic = b"\xff\x04\x02\xfb"
 
 def scan():
 
@@ -28,14 +28,14 @@ def scan():
                 pass # no INET or no "broadcast"
     except ImportError:
         logging.info("No netifaces module, will fall back to generic broadcast")
-        bdc.add("<broadcast>")
+        bdc.add(b"<broadcast>")
 
     for bdcaddr in bdc:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.bind(('', port))  # bind before connect
+            s.bind((b'', port))  # bind before connect
 
             logging.debug("Broadcasting on %s:%d", bdcaddr, port)
             s.sendto(magic, (bdcaddr, port))
@@ -48,16 +48,19 @@ def scan():
                 elif data == magic:
                     logging.debug("Skipping our own packet")
                     continue
-                elif data.startswith("\xfe") and len(data) > 25: # That should be an answer packet
+                elif data.startswith(b"\xfe") and len(data) > 25: # That should be an answer packet
                     try:
                         # Look for the hostname (default is like "8742-15433\x00")
-                        end_hn = data.index("\x00", 19)
+                        end_hn = data.index(b"\x00", 19)
                         hn = data[19:end_hn]
-                        print("%s\t%s\t%d" % (hn, addr, p))
+                        print(b"%s\t%s\t%d" % (hn, addr, p))
                     except Exception:
-                        logging.exception("Failed to decode packet %r from %s", data, addr)
+                        logging.exception("Failed to decode packet %r from %s",
+                                          data.decode("latin1", "backslashreplace"),
+                                          addr)
                 else:
-                    logging.debug("Skipping unknown packet %r from %s", data, addr)
+                    logging.debug("Skipping unknown packet %r from %s", data.decode("latin1", "backslashreplace"),
+                                  addr)
         except socket.timeout:
             pass
         finally:
