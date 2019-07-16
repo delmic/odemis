@@ -27,7 +27,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 
 # first, add everything from comedi as is
-import comedi as _comedi
+# The current python3 version contains a packaging bug in some debian/ubuntu versions,
+# therefore we need to import it differently
+# cf https://bugs.launchpad.net/ubuntu/+source/comedilib/+bug/1797258
+try:
+    from comedi import comedi as _comedi
+except ImportError:
+    import comedi as _comedi
 
 import inspect
 import logging
