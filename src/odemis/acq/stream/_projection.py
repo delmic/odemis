@@ -1329,7 +1329,7 @@ class LineSpectrumProjection(RGBProjection):
             return None, None
 
         if model.hasVA(self.stream, "selected_time"):
-            t = self.stream._tl_px_values.index(self.stream.selected_time.value)
+            t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
         else:
             t = 0
 
@@ -1618,7 +1618,7 @@ class SinglePointSpectrumProjection(DataProjection):
 
         x, y = self.stream.selected_pixel.value
         if model.hasVA(self.stream, "selected_time"):
-            t = self.stream._tl_px_values.index(self.stream.selected_time.value)
+            t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
         else:
             t = 0
         spec2d = self.stream.calibrated.value[:, t, 0, :, :]  # same data but remove useless dims
@@ -1702,7 +1702,7 @@ class SinglePointTemporalProjection(DataProjection):
             return None
         
         x, y = self.stream.selected_pixel.value
-        c = self.stream._wl_px_values.index(self.stream.selected_wavelength.value)
+        c = numpy.searchsorted(self.stream._wl_px_values, self.stream.selected_wavelength.value)
         chrono2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
 
         md = {model.MD_DIMS: "T"}
