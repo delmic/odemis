@@ -2617,8 +2617,8 @@ class Scanner(model.Emitter):
           If True, it is set to high when scanning, with False, the output is
           inverted.
           If a str is provided, a VA with that name will be created, and will
-          allow to force the TTL to high (True) or low (False), with None (auto)
-          being the default.
+          allow to force the TTL to enabled (True) or disabled (False), with
+          None (auto) being the default.
         fastpart (boolean): if True, will park immediately after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
         max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
@@ -3042,15 +3042,9 @@ class Scanner(model.Emitter):
                 try:
                     if value is None:
                         # Put it as the _set_scan_state would
-                        if s == self._scan_state:
-                            v = 1
-                        else:
-                            v = 0
-                    else:  # Use the value as is (True == high)
-                        if value:
-                            v = 1
-                        else:
-                            v = 0
+                        v = int(s == self._scan_state)
+                    else:  # Use the value as is (and invert it if s == False)
+                        v = int(s == value)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
@@ -3095,10 +3089,7 @@ class Scanner(model.Emitter):
                     logging.debug("Skipping digital output port %d set to manual", c)
                     continue
                 try:
-                    if s == scanning:
-                        v = 1
-                    else:
-                        v = 0
+                    v = int(s == scanning)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
