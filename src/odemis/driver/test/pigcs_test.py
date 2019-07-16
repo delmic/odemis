@@ -407,6 +407,7 @@ class TestActuator(unittest.TestCase):
             self.skipTest("Actuator doesn't support move updates")
 
         self.called = 0
+        time.sleep(0.01)
         orig_pos = stage.position.value
 
         for i in range(10):
