@@ -456,7 +456,16 @@ class StaticARStream(StaticStream):
             # Compute the polar representation
             data = self._pos[pos]
             try:
-                if numpy.prod(data.shape) > (1280 * 1080):
+                # Get bg image, if existing. It must match the polarization (defaulting to MD_POL_NONE).
+                bg_image = self._getBackground(data.metadata.get(MD_POL_MODE, MD_POL_NONE))
+
+                if bg_image is None:
+                    # Simple version: remove the background value
+                    data_bg_corr = polar.ARBackgroundSubtract(data)
+                else:
+                    data_bg_corr = img.Subtract(data, bg_image)  # metadata from data
+
+                if numpy.prod(data_bg_corr.shape) > (1280 * 1080):
                     # AR conversion fails with very large images due to too much
                     # memory consumed (> 2Gb). So, rescale + use a "degraded" type that
                     # uses less memory. As the display size is small (compared
@@ -464,39 +473,30 @@ class StaticARStream(StaticStream):
                     # affect much the output.
                     logging.info("AR image is very large %s, will convert to "
                                  "azimuthal projection in reduced precision.",
-                                 data.shape)
-                    y, x = data.shape
+                                 data_bg_corr.shape)
+                    y, x = data_bg_corr.shape
                     if y > x:
                         small_shape = 1024, int(round(1024 * x / y))
                     else:
                         small_shape = int(round(1024 * y / x)), 1024
                     # resize
-                    data = img.rescale_hq(data, small_shape)
+                    data_bg_corr = img.rescale_hq(data_bg_corr, small_shape)
                     dtype = numpy.float16
                 else:
                     dtype = None  # just let the function use the best one
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                size = min(min(data.shape) * 2, 1134)
+                size = min(min(data_bg_corr.shape) * 2, 1134)
 
                 # TODO: First compute quickly a low resolution and then
                 # compute a high resolution version.
                 # TODO: could use the size of the canvas that will display
                 # the image to save some computation time.
 
-                # Get bg image, if existing. It must match the polarization (defaulting to MD_POL_NONE).
-                bg_image = self._getBackground(data.metadata.get(MD_POL_MODE, MD_POL_NONE))
-
-                if bg_image is None:
-                    # Simple version: remove the background value
-                    data0 = polar.ARBackgroundSubtract(data)
-                else:
-                    data0 = img.Subtract(data, bg_image)  # metadata from data
-
                 # Warning: allocates lot of memory, which will not be free'd until
                 # the current thread is terminated.
-                polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
+                polard = polar.AngleResolved2Polar(data_bg_corr, size, hole=False, dtype=dtype)
 
                 # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
                 polar_cache[pos] = polard
