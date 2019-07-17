@@ -1,3 +1,13 @@
+odemis (2.9.5-1) precise; urgency=medium
+
+  * New version: 2.9.5
+  * Main bug fixes:
+   - Line spectrum export to CSV didn't contain wavelength information
+   - AR projection failed
+   - Large AR projections with background failed
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 17 Jul 2019 11:24:45 +0200
+
 odemis (2.9.4-1) precise; urgency=medium
 
   * New version 2.9.4
