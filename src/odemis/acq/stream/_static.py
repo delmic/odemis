@@ -564,7 +564,8 @@ class StaticSpectrumStream(StaticStream):
 
         # This is for "average spectrum" projection
         # cached list of wavelength for each pixel pos
-        self._wl_px_values, unit_bw = spectrum.get_spectrum_range(image)
+        wl, unit_bw = spectrum.get_spectrum_range(image)
+        self._wl_px_values = numpy.array(wl, copy=False)  # Force it to be a numpy array
         min_bw, max_bw = self._wl_px_values[0], self._wl_px_values[-1]
         cwl = (max_bw + min_bw) / 2
         width = (max_bw - min_bw) / 12
@@ -578,7 +579,8 @@ class StaticSpectrumStream(StaticStream):
         # Is there time data?
         if image.shape[1] > 1:
             # cached list of timestamps for each position in the time dimension
-            self._tl_px_values, unit_t = spectrum.get_time_range(image)
+            tl, unit_t = spectrum.get_time_range(image)
+            self._tl_px_values = numpy.array(tl, copy=False)  # Force it to be a numpy array
             min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
 
             # Allow the select the time as any value within the range, and the
