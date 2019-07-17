@@ -1673,10 +1673,10 @@ class SEMComedi(model.HwComponent):
                 self._check_cmd_q(block=False)
 
                 # Ensures we don't wait _again_ for synchronised DataFlows on error
+                self._scanner.indicate_scan_state(True)
                 if nfailures == 0:
                     detectors = tuple(self._acq_wait_detectors_ready())  # ordered
                 if detectors:
-                    self._scanner.indicate_scan_state(True)
                     # write and read the raw data
                     try:
                         if any(isinstance(d, CountingDetector) for d in detectors):
@@ -2597,7 +2597,7 @@ class Scanner(model.Emitter):
     """
     def __init__(self, name, role, parent, channels, limits, settle_time,
                  hfw_nomag, park=None, scanning_ttl=None, fastpark=False,
-                 max_res=None, **kwargs):
+                 max_res=None, scan_active_delay=None, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
           the fast scanned axis, Y is the slow scanned axis.
@@ -2606,17 +2606,20 @@ class Scanner(model.Emitter):
           voltage for the max value of X.
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
+        scan_active_delay (None or 0<=float): minimum time (s) to wait before starting
+          to scan, to "warm-up" when going from non-scanning state to scanning.
         hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders
           (lower/upper limit in X) if magnification is 1 (in m)
         park (None or 2-tuple of (0<=float)): voltage of resting position,
           if None, it will default to top-left corner.
         scanning_ttl (None or dict of int -> (bool or bool, str)): list of
-          digital output ports to indicate the ebeam should be enabled/scanning
-          (if True) or should  be disabled/parked (if False).
+          digital output ports to indicate the ebeam is scanning or not.
+          If True, it is set to high when scanning, with False, the output is
+          inverted.
           If a str is provided, a VA with that name will be created, and will
-          allow to force the TTL to high (True) or low (False), with None (auto)
-          being the default.
-        fastpart (boolean): if True, will park immediatly after finishing a scan
+          allow to force the TTL to enabled (True) or disabled (False), with
+          None (auto) being the default.
+        fastpart (boolean): if True, will park immediately after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
         max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
           By default it uses 4096 x 4096.
@@ -2632,6 +2635,10 @@ class Scanner(model.Emitter):
             raise ValueError("Settle time of %g s for e-beam scanner '%s' is too long"
                              % (settle_time, name))
         self._settle_time = settle_time
+
+        if scan_active_delay is not None and not 0 <= scan_active_delay < 1000:
+            raise ValueError("scan_active_delay must be >= 0 and < 1000 s" % (scan_active_delay,))
+        self._scan_active_delay = scan_active_delay
 
         if len(channels) != len(set(channels)):
             raise ValueError("Duplicated channels %r on device '%s'"
@@ -2714,8 +2721,8 @@ class Scanner(model.Emitter):
         self._can_generate_raw_directly = True
 
         self._scan_state_req = queue.Queue()
-        self._scanning_ready = threading.Event()
         self._scan_state = True  # To force changing the digital output when the state go to False
+        self._scanning_ready = threading.Event()  # The scan_state is True & waited long enough
         t = threading.Thread(target=self._scan_state_mng_run,
                              name="Scanning state manager")
         self._scanning_mng = t
@@ -2998,6 +3005,7 @@ class Scanner(model.Emitter):
                 else:  # time to stop
                     # the queue should be empty (with some high likelyhood)
                     self._set_scan_state(False)
+                    self._scanning_ready.clear()
                     stopt = None
                     continue
 
@@ -3034,15 +3042,9 @@ class Scanner(model.Emitter):
                 try:
                     if value is None:
                         # Put it as the _set_scan_state would
-                        if s == self._scan_state:
-                            v = 1
-                        else:
-                            v = 0
-                    else:  # Use the value as is (True == high)
-                        if value:
-                            v = 1
-                        else:
-                            v = 0
+                        v = int(s == self._scan_state)
+                    else:  # Use the value as is (and invert it if s == False)
+                        v = int(s == value)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
@@ -3053,7 +3055,8 @@ class Scanner(model.Emitter):
 
     def indicate_scan_state(self, scanning, delay=0):
         """
-        Indicate the ebeam scanning state (via the digital output ports)
+        Indicate the ebeam scanning state (via the digital output ports).
+        When changing to True, blocks until the scanning is ready.
         scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
           parked.
         delay (0 <= float): time to the state to be set to False (if state
@@ -3062,10 +3065,10 @@ class Scanner(model.Emitter):
         if scanning:
             if delay > 0:
                 raise ValueError("Cannot delay starting the scan")
-            self._scanning_ready.clear()
+
             self._scan_state_req.put(True)
-            if not self._scan_state:  # If it's already on, no need to wait more
-                self._scanning_ready.wait()
+            self._scanning_ready.wait()
+
         else:
             self._scan_state_req.put(time.time() + delay)
 
@@ -3086,15 +3089,16 @@ class Scanner(model.Emitter):
                     logging.debug("Skipping digital output port %d set to manual", c)
                     continue
                 try:
-                    if s == scanning:
-                        v = 1
-                    else:
-                        v = 0
+                    v = int(s == scanning)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
                 except Exception:
                     logging.warning("Failed to change digital output port %d", c, exc_info=True)
+
+            if scanning and self._scan_active_delay:
+                logging.debug("Waiting for %g s for the beam to be ready", self._scan_active_delay)
+                time.sleep(self._scan_active_delay)
 
     def get_scan_data(self, nrchans):
         """

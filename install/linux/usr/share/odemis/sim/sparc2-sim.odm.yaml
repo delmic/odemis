@@ -72,6 +72,7 @@ SPARC2: {
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
         settle_time: 5.e-6, # s
+        scan_active_delay: 0.5, # s
         hfw_nomag: 0.25, # m
     },
     properties: {
