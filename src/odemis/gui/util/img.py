@@ -1271,6 +1271,7 @@ def line_to_export_data(stream, raw):
         data = spectrum.T  # switch axes
         if unit == "m":
             data.metadata[model.MD_WL_LIST] = spectrum_range
+        data.metadata[model.MD_DIMS] = "CX"
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return data
     else:
