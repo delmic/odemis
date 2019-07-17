@@ -807,7 +807,7 @@ class DelayGenerator(model.HwComponent):
 
         triggerDelay = self.GetTriggerDelay()
         range_trigDelay = self._getTriggerDelayRange()
-        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay)
+        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay, unit="s")
 
         # read only VAs TODO Burst Mode, Setting, Trig. Mode, delay B?
 
@@ -1774,8 +1774,8 @@ class StreakCamera(model.HwComponent):
             return str(input_value)
         elif isinstance(input_value, float):
             value = '{:.11f}'.format(input_value)
-            # important remove all additional zeros: otherwise RemoteEx error!
-            return value.rstrip("0")
+            # important remove all additional zeros and 0. -> 0: otherwise RemoteEx error!
+            return value.rstrip("0").rstrip(".")
         else:
             logging.debug("Requested conversion of input type %s is not supported.", type(input))
 
