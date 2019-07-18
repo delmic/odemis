@@ -678,6 +678,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
                      model.MD_POS: (13.7e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_EBEAM_CURRENT_TIME: cot,
 
                      # model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
@@ -747,6 +748,8 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_TRIGGER_DELAY], md[model.MD_TRIGGER_DELAY])
             if model.MD_TRIGGER_RATE in md:
                 self.assertEqual(im.metadata[model.MD_TRIGGER_RATE], md[model.MD_TRIGGER_RATE])
+            if model.MD_INTEGRATION_COUNT in md:
+                self.assertEqual(im.metadata[model.MD_INTEGRATION_COUNT], md[model.MD_INTEGRATION_COUNT])
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 ocot = md[model.MD_EBEAM_CURRENT_TIME]

@@ -164,9 +164,9 @@ class TestSimStreakCam(unittest.TestCase):
         self.assertNotEqual(prev_exp, cur_exp)
 
         # set value > 1 sec
-        self.readoutcam.exposureTime.value = 2  # 2s
+        self.readoutcam.exposureTime.value = 1  # 1s
         cur_exp = self.readoutcam.exposureTime.value
-        self.assertEqual(cur_exp, 2)
+        self.assertEqual(cur_exp, 1)
 
         # request value, which is not in range of VA
         with self.assertRaises(IndexError):
@@ -328,7 +328,7 @@ class TestSimStreakCam(unittest.TestCase):
         self.readoutcam.binning.value = (2, 2)
         self.streakunit.streakMode.value = False
         size = self.readoutcam.resolution.value
-        self.readoutcam.exposureTime.value = 2  # s
+        self.readoutcam.exposureTime.value = 1  # s
         exp_time = self.readoutcam.exposureTime.value
         triggerRate = 100  # fake starting value
 

@@ -204,47 +204,47 @@ class AnchoredEstimator(object):
         return anchor_time
 
     @staticmethod
-    def estimateCorrectionPeriod(period, dwell_time, repetitions):
+    def estimateCorrectionPeriod(period, t, repetitions):
         """
-        Convert the correction period (as a time) into a number of pixel
-        period (float): maximum time between acquisition of the anchor region
-          in seconds.
-        dwell_time (float): integration time of each pixel in the drift-
-          corrected acquisition.
-        repetitions (tuple of 2 ints): number of pixel in the entire drift-
-          corrected acquisition.
-          First value is the fastest dimension scanned (X).
-        return (iterator yielding 0<int): iterator which yields number of pixels
-          until next correction
+        Convert the correction period (as a time) into a number of acquisitions.
+        :param period: (float) Maximum time between acquisition of the anchor region in seconds.
+        :param t: (float) Time spend for acquiring one data at the fastest dimension.
+        :param repetitions: (tuple of 2 ints) Number of iterations for the two fastest axes in the
+                                              entire drift-corrected acquisition. First value is the
+                                              fastest dimension scanned. Usually it is the
+                                              number of px (ebeam) positions. Sometimes fastest dimension
+                                              can be e.g. number of images to integrate.
+        :returns (iterator yielding 0<int): Iterator which yields number of acquisitions until
+                                            next correction.
         """
         # TODO: implement more clever calculation
-        pxs_dc_period = []
-        pxs = int(period // dwell_time) # number of pixels per period
-        pxs_per_line = repetitions[0]
-        if pxs >= pxs_per_line:
-            # Correct every (pxs // pxs_per_line) lines
-            pxs_dc_period.append((pxs // pxs_per_line) * pxs_per_line)
-        elif pxs <= 1: # also catches cases that would be 1,1,2,1,...
+        acq_dc_period = []
+        acq = int(period // t)  # number of acquisitions per period
+        acq_per_fastest_dim = repetitions[0]
+        if acq >= acq_per_fastest_dim:
+            # Correct every (acq // acq_per_fastest_dim) acquisitions
+            acq_dc_period.append((acq // acq_per_fastest_dim) * acq_per_fastest_dim)
+        elif acq <= 1:  # also catches cases that would be 1,1,2,1,...
             # Correct every pixel
-            pxs_dc_period.append(1)
+            acq_dc_period.append(1)
         else:
             # Correct every X or X+1 pixel
             # number of acquisition per line
-            nacq = int((pxs_per_line * dwell_time) // period)
-            # average duration of a period when fitted to the line
-            avgp = pxs_per_line / nacq
-            tot_pxi = 0 # total pixels rounded down
+            nacq = int((acq_per_fastest_dim * t) // period)
+            # average duration of a period when fitted to the fastest dimension of total acquisition
+            avgp = acq_per_fastest_dim / nacq
+            tot_acq = 0  # total acquisitions rounded down
             for i in range(1, nacq):
-                prev_tot_pxi = tot_pxi
+                prev_tot_pxi = tot_acq
                 tot_pxi = int(avgp * i)
-                pxs_dc_period.append(tot_pxi - prev_tot_pxi)
+                acq_dc_period.append(tot_pxi - prev_tot_pxi)
             else:
                 # last one explicit, to avoid floating point errors
-                pxs_dc_period.append(pxs_per_line - tot_pxi)
+                acq_dc_period.append(acq_per_fastest_dim - tot_acq)
 
-        logging.debug("Drift correction will be performed every %s pixels",
-                      pxs_dc_period)
-        return itertools.cycle(pxs_dc_period)
+        logging.debug("Drift correction will be performed every %s sub acquisitions", acq_dc_period)
+
+        return itertools.cycle(acq_dc_period)
 
     def _updateSEMSettings(self):
         """

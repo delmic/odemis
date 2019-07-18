@@ -96,7 +96,7 @@ class ReadoutCamera(model.DigitalCamera):
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
-        range_exp = [0.00001, 10]  # 10us to 10s
+        range_exp = [0.00001, 1]  # 10us to 1s
         self._exp_time = 0.1  # 100 msec
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value

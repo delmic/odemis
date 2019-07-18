@@ -35,7 +35,7 @@ from numpy.core import umath
 from odemis import model
 import odemis
 from odemis.model import roattribute, oneway
-from odemis.util import driver
+from odemis.util import driver, get_best_dtype_for_acc
 import os
 import re
 import threading
@@ -110,26 +110,6 @@ NI_AO_TRIG_AI_START1 = 19  # Trigger number for AI Start1 (= beginning of a comm
 
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2
-
-# helper functions
-def get_best_dtype_for_acc(idtype, count):
-    """
-    Computes the smallest dtype that allows to accumulate all the _count_ integers
-    idtype (dtype): dtype of the input (the raw data that is accumulated)
-    count (int): number of values accumulated
-    returns (dtype): the best fitting dtype
-    """
-    maxval = numpy.iinfo(idtype).max * count
-    # TODO: this could probably be simplified with numpy.min_scalar_type()
-    if maxval <= numpy.iinfo(numpy.uint32).max:
-        adtype = numpy.uint32
-    elif maxval <= numpy.iinfo(numpy.uint64).max:
-        adtype = numpy.uint64
-    else:
-        logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
-        adtype = numpy.float64 # might accumulate errors
-
-    return adtype
 
 
 class CancelledError(Exception):

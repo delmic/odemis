@@ -788,6 +788,11 @@ def _updateMDFromOME(root, das):
                 pass
 
             try:
+                mdp[model.MD_INTEGRATION_COUNT] = float(ple.attrib["IntegrationCount"])  # s
+            except (KeyError, ValueError):
+                pass
+
+            try:
                 # We assume it's in meters, as we write it (but there is no official unit)
                 psx = float(ple.attrib["PositionX"])
                 psy = float(ple.attrib["PositionY"])
@@ -1493,6 +1498,11 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             # save it as is (it's the time each pixel receives "energy")
             exp = da.metadata[model.MD_DWELL_TIME]
             plane.attrib["ExposureTime"] = "%.15f" % exp
+
+        # integration count: number of samples/images per px (ebeam) position
+        if model.MD_INTEGRATION_COUNT in da.metadata:
+            exp = da.metadata[model.MD_INTEGRATION_COUNT]
+            plane.attrib["IntegrationCount"] = "%d" % exp
 
         # Note that Position has no official unit, which prevents Tiling to be
         # usable. In one OME-TIFF official example of tiles, they use pixels

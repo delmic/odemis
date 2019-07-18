@@ -336,7 +336,6 @@ HW_SETTINGS_CONFIG = {
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
-                "range": (0.00001, 10.0),
                 "type": "float",
                 "tooltip": u"Readout camera exposure time.",
             }),
@@ -707,6 +706,17 @@ STREAM_SETTINGS_CONFIG = {
 #         )),
     stream.TemporalSpectrumSettingsStream:
         OrderedDict((
+            ("integrationTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "tooltip": u"Readout camera exposure time.",
+            }),
+            ("integrationCounts", {
+                "tooltip": u"Number of images that are integrated, if requested exposure"
+                           u"time exceeds the camera exposure time limit.",
+            }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
@@ -716,7 +726,8 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+                "tooltip": u"Opening size of the spectrograph input slit.\n"
+                           u"A wide opening means more light and a worse resolution.",
             }),
             ("band", {  # from filter
                 "label": "Filter",
@@ -742,6 +753,17 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.ARSettingsStream:
         OrderedDict((
+            ("integrationTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "tooltip": u"Optical detector (CCD) exposure time.",
+            }),
+            ("integrationCounts", {
+                "tooltip": u"Number of images that are integrated, if requested exposure"
+                           u" time exceeds the detector limit.",
+            }),
             ("polarization", {
                 "control_type": odemis.gui.CONTROL_COMBO,
             }),

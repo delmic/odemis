@@ -27,7 +27,6 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from abc import ABCMeta, abstractmethod
-from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
@@ -41,11 +40,10 @@ from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME, MD_DIMS
+    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS
 from odemis.model import hasVA
-from odemis.util import img, units, spot, executeAsyncTask, almost_equal
+from odemis.util import units, executeAsyncTask, almost_equal, get_best_dtype_for_acc
 import queue
-import random
 import threading
 import time
 
@@ -225,7 +223,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
     def estimateAcquisitionTime(self):
         # Time required without drift correction
-        total_time = self._estimateRawAcquisitionTime()
+        total_time = self._estimateRawAcquisitionTime()  # Note: includes image integration
 
         rep = self.repetition.value
         npixels = numpy.prod(rep)
@@ -241,7 +239,18 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
         # Estimate time spent for the leeches
         for l in self.leeches:
-            l_time = l.estimateAcquisitionTime(dt, (len(pol_pos), rep[1], rep[0]))
+            shape = (len(pol_pos), rep[1], rep[0])
+            # estimate acq time for leeches is based on two fastest axis
+            if hasattr(self._sccd, "integrationTime"):
+                # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
+                integration_count = int(math.ceil(self._sccd.integrationTime.value / self._ccd.exposureTime.value))
+                if integration_count != self._sccd.integrationCounts.value:
+                    logging.debug("Integration count of %d, does not match integration count of %d as expected",
+                                  integration_count, self._sccd.integrationCounts.value)
+                if integration_count > 1:
+                    shape = (len(pol_pos), rep[1], rep[0], integration_count)  # overwrite shape
+
+            l_time = l.estimateAcquisitionTime(dt, shape)
             total_time += l_time
             logging.debug("Estimated overhead time for leech %s: %g s / %g s",
                           type(l), l_time, total_time)
@@ -709,42 +718,44 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         md[MD_AD_LIST] = tuple(d.metadata[MD_ACQ_DATE] for d in data_list)
         return model.DataArray(anchor_data, metadata=md)
 
-    def _startLeeches(self, px_time, shape):
+    def _startLeeches(self, img_time, tot_num, shape):
         """
         A leech can be drift correction (dc) and/or probe/sample current (pca).
         During the leech time the drift correction and/or the probe current measurements are conducted.
-        Start a counter np (= next pixel) until a leech is called.
-        Leech is called after a well specified number of acquired pixel positions.
-        :param px_time (0<float): estimated time spend for one pixel
-        :param shape (tuple of int): last and second last dimension are the number of pixel positions to be acquired.
-                                    Other dimensions can be multiple images that are acquired per pixel position
-                                    (e.g. for polarimetry).
-        :return:
-            leech_np (list of 0<int or None): for each leech, number of pixels before the leech should be
-                                              executed again. It's automatically updated inside the list.
-                                              (np = next pixels)
-            leech_time_ppx (float): extra time needed on average for a single pixel for all leches (s)
+        Start a counter nimg (= next image) until a leech is called.
+        Leech is called after a well specified number of acquired images.
+        :param img_time: (0<float) Estimated time spend for one image.
+        :param tot_num: (int) Total number of images to acquire.
+        :param shape: (tuple of int): Dimensions are sorted from slowest to fasted axis for acquisition.
+                                    It always includes the number of pixel positions to be acquired (y, x).
+                                    Other dimensions can be multiple images that are acquired per pixel
+                                    (ebeam) position (e.g. for polarimetry or image integration ->
+                                    (# pol pos, # y, # x, # image integration)).
+        :returns:
+            leech_nimg (list of 0<int or None): For each leech, number of images before the leech should be
+                                                executed again. It's automatically updated inside the list.
+                                                (nimg = next image)
+            leech_time_pimg (float): Extra time needed on average for a single image for all leches (s).
         """
 
-        leech_np = []
+        leech_nimg = []  # contains number of images until leech should be executed again
         leech_time = 0  # how much time leeches will cost
         for l in self.leeches:
             try:
-                leech_time += l.estimateAcquisitionTime(px_time, shape)
-                np = l.start(px_time, shape)  # np = next pixel = counter until execution
+                leech_time += l.estimateAcquisitionTime(img_time, shape)
+                nimg = l.start(img_time, shape)  # nimg = next image = counter until execution
             except Exception:
-                logging.exception("Leech %s failed to start, will be disabled for this acquisition", l)
-                np = None
+                logging.exception("Leech %s failed to start, will be disabled for this sub acquisition", l)
+                nimg = None
                 if self._dc_estimator is l:
                     # Make sure to avoid all usages of this special leech
                     self._dc_estimator = None
-            leech_np.append(np)
+            leech_nimg.append(nimg)
 
-        # extra time needed on average for a single pixel (ebeam pos) for all leches (s)
-        tot_num = numpy.prod(shape)
-        leech_time_ppx = leech_time / tot_num  # s/px
+        # extra time needed on average for a single image for all leches (s)
+        leech_time_pimg = leech_time / tot_num  # s/px
 
-        return leech_np, leech_time_ppx
+        return leech_nimg, leech_time_pimg
 
     def _stopLeeches(self):
         """
@@ -762,14 +773,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
     moving the SEM spot and starts a new CCD acquisition at each spot. It brings
     a bit more overhead than linking directly the event of the SEM to the CCD
     detector trigger, but it's very reliable.
+    If the "integration time" requested is longer than the maximum exposure time of the detector,
+    image integration will be performed.
     """
 
     def __init__(self, name, streams):
         """
-        streams (list of Streams): in addition to the requirements of
-          MultipleDetectorStream, there should be precisely two streams. The
-          first one MUST be controlling the SEM e-beam, while the last stream
-          should be have a Camera as detector (ie, with .exposureTime).
+        :param streams (list of Streams): In addition to the requirements of
+                    MultipleDetectorStream, there should be precisely two streams. The
+                    first one MUST be controlling the SEM e-beam, while the last stream
+                    should be have a camera as detector (ie, with .exposureTime).
         """
 
         # TODO: Support multiple SEM streams.
@@ -802,8 +815,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
     def _estimateRawAcquisitionTime(self):
         """
-        return (float): time in s for acquiring the whole image, without drift
-         correction
+        :returns (float): Time in s for acquiring the whole image, without drift correction.
         """
         try:
             # Each pixel x the exposure time (of the detector) + readout time +
@@ -815,25 +827,47 @@ class SEMCCDMDStream(MultipleDetectorStream):
             res = self._sccd._getDetectorVA("resolution").value
             readout = numpy.prod(res) / ro_rate
 
-            exp = self._sccd._getDetectorVA("exposureTime").value
+            if hasattr(self._sccd, "integrationTime"):
+                exp = self._sccd.integrationTime.value  # get the total exp time
+                readout *= self._sccd.integrationCounts.value
+
+            else:
+                exp = self._sccd._getDetectorVA("exposureTime").value
+
             dur_image = (exp + readout + 0.03) * 1.20
             duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
             return duration
+
         except Exception:
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
+
             return Stream.estimateAcquisitionTime(self)
 
     def _adjustHardwareSettings(self):
         """
-        Read the SEM and CCD stream settings and adapt the SEM scanner
-        accordingly.
-        return (float): estimated time for a whole CCD image
+        Read the SEM and CCD stream settings and adapt the SEM scanner accordingly.
+        :returns: exp + readout (float): Estimated time for a whole (but not integrated) CCD image.
+                  integration_count (int): Number of images to integrate to match the requested exposure time.
         """
-        exp = self._sccd._getDetectorVA("exposureTime").value  # s
+        if model.hasVA(self._sccd, "integrationTime"):
+            # calculate exposure time to be set on detector
+            exp = self._sccd.integrationTime.value / self._sccd.integrationCounts.value  # get the exp time from stream
+            self._ccd.exposureTime.value = self._ccd.exposureTime.clip(exp)  # set the exp time on the HW VA
+            # calculate the integrationCount using the actual value from the HW, to be safe in case the HW sets a
+            # slightly different value, than the stream VA shows
+            integration_count = int(math.ceil(self._sccd.integrationTime.value / self._ccd.exposureTime.value))
+            if integration_count != self._sccd.integrationCounts.value:
+                logging.debug("Integration count of %d, does not match integration count of %d as expected",
+                              integration_count, self._sccd.integrationCounts.value)
+        else:
+            # stream has exposure time
+            exp = self._sccd._getDetectorVA("exposureTime").value  # s
+            integration_count = 1
+
         rep_size = self._sccd._getDetectorVA("resolution").value
         readout = numpy.prod(rep_size) / self._sccd._getDetectorVA("readoutRate").value
 
@@ -884,16 +918,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # CCD to be sure it is not slowing thing down.
             self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
 
-        return exp + readout
+        return exp + readout, integration_count
 
     def _onCompletedData(self, n, raw_das):
         """
         Called at the end of an entire acquisition. It should assemble the data
         and append it to ._raw .
         Override if you need to process the data in a different way.
-        n (0<=int): the detector/stream index
-        raw_das (list of DataArray): data as received from the detector.
-           The data is ordered, with X changing fast, then Y slow
+        :param n (0<=int): The detector/stream index.
+        :param raw_das (list of DataArray): Data as received from the detector.
+                        The data is ordered, with X changing fast, then Y slow
         """
 
         # Default is to assume the data is 2D and assemble it.
@@ -906,12 +940,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
     def _runAcquisition(self, future):
         """
-        Acquires images from the multiple detectors via software synchronisation.
+        Acquires images from multiple detectors via software synchronisation.
         Select whether the ebeam is moved for scanning or the sample stage.
+        :param future: Current future running for the whole acquisition.
         """
 
         if hasattr(self, "useScanStage") and self.useScanStage.value:
-            # TODO does not support polarimetry so far
+            # TODO does not support polarimetry or image integration so far
             return self._runAcquisitionScanStage(future)
         else:
             return self._runAcquisitionEbeam(future)
@@ -921,22 +956,23 @@ class SEMCCDMDStream(MultipleDetectorStream):
         Acquires images from the multiple detectors via software synchronisation.
         Acquires images via moving the ebeam.
         Warning: can be quite memory consuming if the grid is big
-        returns (list of DataArray): all the data acquired
-        raises:
+        :param future: Current future running for the whole acquisition.
+        :returns (list of DataArray): All the data acquired.
+        :raises:
           CancelledError() if cancelled
           Exceptions if error
         """
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
             self._acq_done.clear()
-            px_time = self._adjustHardwareSettings()
-            dwell_time = self._emitter.dwellTime.value
+            img_time, integration_count = self._adjustHardwareSettings()
+            dwell_time = self._emitter.dwellTime.value * integration_count  # total time of ebeam spent on one pos/pixel
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             spot_pos = self._getSpotPositions()  # list of center positions for each point of the ROI
             logging.debug("Generating %dx%d spots for %g (dt=%g) s",
-                          spot_pos.shape[1], spot_pos.shape[0], px_time, dwell_time)
+                          spot_pos.shape[1], spot_pos.shape[0], img_time, dwell_time)
             rep = self.repetition.value  # (int, int): number of pixels in the ROI (X, Y)
-            tot_num = numpy.prod(rep)  # total number of images to acquire
+            tot_num = numpy.prod(rep) * integration_count  # total number of images to acquire
             sub_pxs = self._emitter.pixelSize.value  # sub-pixel size
 
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
@@ -993,7 +1029,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 if self._acquireAllPol.value:
                     pos_polarizations = POL_POSITIONS
                     logging.debug("Will acquire the following polarization positions: %s" % list(pos_polarizations))
-                    tot_num *= len(pos_polarizations)  # tot num of images to acquire by num of images per ebeam pos
+                    # tot number of ebeam pos to acquire taking the number of images per ebeam pos into account
+                    tot_num *= len(pos_polarizations)
                 else:
                     pos_polarizations = [self._polarization.value]
                     logging.debug("Will acquire the following polarization position: %s" % pos_polarizations)
@@ -1003,8 +1040,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
                               % time_move_pol_left)
                 time_move_pol_left = time_move_pol_once * len(pos_polarizations)
 
-            # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, (len(pos_polarizations), rep[1], rep[0]))
+            # Initialize leeches: Shape should be slowest axis to fastest axis
+            # (pol pos, rep y, rep x, images to integrate).
+            # Polarization analyzer pos is slowest and image integration fastest.
+            # Estimate acq time for leeches is based on two fastest axis.
+            if integration_count > 1:
+                shape = (len(pos_polarizations), rep[1], rep[0], integration_count)
+            else:
+                shape = (len(pos_polarizations), rep[1], rep[0])
+
+            leech_nimg, leech_time_pimg = self._startLeeches(img_time, tot_num, shape)
 
             n = 0  # number of images acquired so far
 
@@ -1040,14 +1085,19 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                   self._emitter.scale.value)
 
                     # time left for leeches
-                    leech_time_left = (tot_num - n + 1) * leech_time_ppx
+                    leech_time_left = (tot_num - n + 1) * leech_time_pimg
                     # extra time needed taking leeches into account and moving polarizer HW if present
                     extra_time = leech_time_left + time_move_pol_left
 
-                    # acquire
-                    self._acquireImage(n, px_idx, px_time, sem_time, sub_pxs,
-                                       tot_num, leech_np, extra_time, future)
-                    n += 1
+                    # acquire images
+                    for i in range(integration_count):
+                        self._acquireImage(n, px_idx, img_time, sem_time, sub_pxs,
+                                           tot_num, leech_nimg, extra_time, future)
+
+                        n += 1  # number of images acquired so far
+
+                    # integrate/sum images
+                    self._integrateImages(integration_count)
 
                     logging.debug("Done acquiring image number %s out of %s." % (n, tot_num))
 
@@ -1094,20 +1144,84 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._current_future = None
             self._acq_done.set()
 
-    def _waitForImage(self, px_time):
+    def _integrateImages(self, n):
         """
-        Wait for the detector to acquire the image
-        :param det_idx (int): index of detector-stream in streams
-        :param px_time (0<float): estimated time spend for one pixel
-        :return (bool): True if acquisition timed out
+        Integrate/sum the last n acquired images in self._acq_data and replace by the
+        integrated image. If values overflow, clip the image. If number of images = 1,
+        no image integration necessary.
+        :param n: (int) Number of images that need to be integrated (summed).
+        """
+        # check if we need to integrate images
+        if n == 1:
+            return
+
+        for stream_idx, das in enumerate(self._acq_data):
+            # get the metadata from last image (should be the same for all images)
+            md = das[-1].metadata
+            det_type = md.get(model.MD_DET_TYPE, model.MD_DT_INTEGRATING)
+            # get the images, which need to be averaged/integrated
+            data2process = das[-n:]
+            orig_dtype = data2process[0].dtype
+
+            if det_type == model.MD_DT_NORMAL:  # SEM
+                # logging.debug("Average %s images", n)
+                # get the images corresponding to the last acquisition and average
+                data = numpy.mean(data2process, axis=0).astype(orig_dtype)
+
+            else:
+                if not det_type == model.MD_DT_INTEGRATING:  # optical
+                    logging.warning("Unknown detector type %s for image integration. "
+                                    "Will perform image integration anyways.", det_type)
+
+                # logging.debug("Integrate %s images", n)
+                best_dtype = get_best_dtype_for_acc(orig_dtype, n)  # avoid saturation and overflow
+                data = numpy.sum(data2process, axis=0, dtype=best_dtype)
+
+                if model.MD_BASELINE in md:
+                    baseline = md[model.MD_BASELINE]
+                    # Subtract baseline (aka black level) to avoid it from being multiplied.
+                    # Remove baseline from n-1 images, keep one baseline as bg level.
+
+                    minv = float(data.min())
+
+                    # If the baseline is too high compared to the actual black, we
+                    # could end up subtracting too much, and values would underflow
+                    # => be extra careful and never subtract more than min value.
+                    baseline_sum = n * baseline  # sum of baselines for n images.
+                    extra_bl = (n - 1) * baseline  # sum of baselines for n-1 images, keep one baseline as bg level.
+                    # check if we underflow the data values
+                    if extra_bl > minv:
+                        extra_bl = minv
+                        logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
+                                     baseline, n, extra_bl)
+
+                    # Same as "data -= extra_bl", but also works if extra_bl < 0
+                    numpy.subtract(data, extra_bl, out=data, casting="unsafe")
+                    md[model.MD_BASELINE] = baseline_sum - extra_bl
+
+            if MD_DWELL_TIME in md:
+                md[model.MD_DWELL_TIME] *= n  # total time ebeam stayed on same pixel/position
+            if MD_EXP_TIME in md:
+                md[model.MD_EXP_TIME] *= n
+            md[model.MD_INTEGRATION_COUNT] = n
+
+            # replace images, which needed to be averaged/integrated, with averaged/integrated image
+            self._acq_data[stream_idx][-n:] = [model.DataArray(data, md)]
+
+    def _waitForImage(self, img_time):
+        """
+        Wait for the detector to acquire the image.
+        :param det_idx (int): Index of detector-stream in streams.
+        :param img_time (0<float): Estimated time spend for one image to be acquired.
+        :return (bool): True if acquisition timed out.
         """
 
         # A big timeout in the wait can cause up to 50 ms latency.
         # => after waiting the expected time only do small waits
 
         start = time.time()
-        endt = start + px_time * 3 + 5
-        timedout = not self._acq_complete[self._ccd_idx].wait(px_time + 0.01)
+        endt = start + img_time * 3 + 5
+        timedout = not self._acq_complete[self._ccd_idx].wait(img_time + 0.01)
         if timedout:
             logging.debug("Waiting a bit more for detector %d to acquire image." % self._ccd_idx)
             while time.time() < endt:
@@ -1118,23 +1232,22 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         return timedout
 
-    def _acquireImage(self, n, px_idx, px_time, sem_time, sub_pxs,
-                      tot_num, leech_np, extra_time, future):
+    def _acquireImage(self, n, px_idx, img_time, sem_time, sub_pxs,
+                      tot_num, leech_nimg, extra_time, future):
         """
-        acquires image from detector
-        :param n (int): number of points (pixel positions) acquired so far
-        :param px_idx (int, int): current scanning position of ebeam
-        :param px_time (0<float): expected time spend for one pixel
-        :param sem_time (0<float): expected time spend for all sub-pixel
-               (=px_time if not fuzzing, and < px_time if fuzzing)
-        :param sub_pxs (float, float): sub-pixel size when acquiring in fuzzy-mode
-        :param tot_num (int): total number of images
-        :param leech_np (list of 0<int or None): for each leech, number of pixels before the leech should be
-                executed again. It's automatically updated inside the list. (np = next pixels)
-        :param extra_time (float): # extra time needed taking leeches into account and moving polarizer HW if present
-        :param future: current future running for the whole acquisition
+        Acquires the image from the detector.
+        :param n (int): Number of points (pixel/ebeam positions) acquired so far.
+        :param px_idx (int, int): Current scanning position of ebeam.
+        :param img_time (0<float): Expected time spend for one image.
+        :param sem_time (0<float): Expected time spend for all sub-pixel.
+               (=img_time if not fuzzing, and < img_time if fuzzing)
+        :param sub_pxs (float, float): Sub-pixel size when acquiring in fuzzy-mode.
+        :param tot_num (int): Total number of images.
+        :param leech_nimg (list of 0<int or None): For each leech, number of images before the leech should be
+                executed again. It's automatically updated inside the list. (nimg = next image).
+        :param extra_time (float): Extra time needed taking leeches into account and moving polarizer HW if present.
+        :param future: Current future running for the whole acquisition.
         """
-
         failures = 0  # keeps track of acquisition failures
         while True:  # Done only once normally, excepted in case of failures
             start = time.time()
@@ -1168,27 +1281,27 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._trigger.notify()
 
             # wait for detector to acquire image
-            timedout = self._waitForImage(px_time)
+            timedout = self._waitForImage(img_time)
 
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
             # Check whether it went fine (= not too long and not too short)
             dur = time.time() - start
-            if timedout or dur < px_time * 0.95:
+            if timedout or dur < img_time * 0.95:
                 if timedout:
                     # Note: it can happen we don't receive the data if there
                     # no more memory left (without any other warning).
                     # So we log the memory usage here too.
                     memu = udriver.readMemoryUsage()
                     # Too bad, need to use VmSize to get any good value
-                    logging.warning("Acquisition of repetition stream for "
+                    logging.warning("Acquisition of repetition stream for "  # TODO also image instead of px?
                                     "pixel %s timed out after %g s. "
                                     "Memory usage is %d. Will try again",
-                                    px_idx, px_time * 3 + 5, memu)
+                                    px_idx, img_time * 3 + 5, memu)
                 else:  # too fast to be possible (< the expected time - 5%)
                     logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
-                                    px_time, dur)
+                                    img_time, dur)
                 failures += 1
                 if failures >= 3:
                     # In three failures we just give up
@@ -1233,16 +1346,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # Check if it's time to run a leech
             for li, l in enumerate(self.leeches):
-                if leech_np[li] is None:
+                if leech_nimg[li] is None:
                     continue
-                leech_np[li] -= 1
-                if leech_np[li] == 0:
+                leech_nimg[li] -= 1
+                if leech_nimg[li] == 0:
                     try:
-                        np = l.next([d[-1] for d in self._acq_data])
+                        nimg = l.next([d[-1] for d in self._acq_data])
+                        logging.debug("Ran leech %s successfully. Will run next leech after %s acquisitions.", l, nimg)
                     except Exception:
-                        logging.exception("Leech %s failed, will retry next pixel", l)
-                        np = 1  # try again next pixel
-                    leech_np[li] = np
+                        logging.exception("Leech %s failed, will retry next image", l)
+                        nimg = 1  # try again next pixel
+                    leech_nimg[li] = nimg
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
@@ -1281,9 +1395,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
         #  * Repeat until all the points have been scanned
         #  * Move back the stage to center
 
-        # TODO does not support polarimetry so far
+        # TODO does not support polarimetry and image integration so far
         if self._analyzer is not None:
             raise NotImplementedError("Scan Stage is not yet supported with polarimetry hardware.")
+
+        if hasVA(self._sccd, "integrationTime"):
+            if self._sccd.integrationTime.value > self._sccd.exposureTime.range[1]:
+                raise NotImplementedError("Requested exposure time is longer than the maximum exposure time of the "
+                                          "detector. Image integration is not yet supported for scan stage "
+                                          "acquisitions.")
 
         sstage = self._sstage
         try:
@@ -1316,7 +1436,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
 
             # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, (rep[1], rep[0]))
+            leech_np, leech_time_ppx = self._startLeeches(px_time, tot_num, (rep[1], rep[0]))
 
             # Synchronise the CCD on a software trigger
             self._ccd_df.synchronizedOn(self._trigger)
@@ -1606,7 +1726,7 @@ class SEMMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
 
             # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, (rep[1], rep[0]))
+            leech_np, leech_time_ppx = self._startLeeches(px_time, tot_num, (rep[1], rep[0]))
 
             # number of spots scanned so far
             spots_sum = 0
@@ -1791,6 +1911,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         md = data_list[0].metadata.copy()
         md[MD_DIMS] = "CTZYX"
         return model.DataArray(spec_data, metadata=md)
+
 
 class SEMTemporalMDStream(MultipleDetectorStream):
     """

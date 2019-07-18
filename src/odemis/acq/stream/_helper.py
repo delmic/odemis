@@ -32,7 +32,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
-from odemis.util import img, almost_equal
+from odemis.util import img, almost_equal, get_best_dtype_for_acc
 import time
 
 from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
@@ -94,6 +94,21 @@ class RepetitionStream(LiveStream):
         #  * Rep set: Rep (as requested) + ROI (current) → PxS (updated)
         #    The repetition is adjusted to fit the hardware limits
 
+        # If no local exposureTime VA is requested, automatically provide an integrationTime VA,
+        # which allows longer exposure by doing image integration.
+        if "exposureTime" not in kwargs.get("detvas", {}) and model.hasVA(detector, "exposureTime"):
+            self._hwExpTime = self.detector.exposureTime.value
+            # Number of images that need to be acquired for the requested exposure time.
+            # If not integration time, default is 1 image.
+            self.integrationCounts = model.VigilantAttribute(1, readonly=True)
+
+            # increase exposure time range to perform image integration
+            # TODO: for now we specify a max integration time by using a fixed multiple of the exp time, but max 24h
+            integrationTimeRange = (detector.exposureTime.range[0], max((detector.exposureTime.range[1]*10000, 86400)))
+            self.integrationTime = model.FloatContinuous(detector.exposureTime.value,
+                                                         integrationTimeRange, unit="s",
+                                                         setter=self._setIntegrationTime)
+
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
         # We overwrite the VA provided by LiveStream to define a setter.
@@ -149,6 +164,172 @@ class RepetitionStream(LiveStream):
             magva.subscribe(self._onMagnification)
         except AttributeError:
             pass
+
+    # overrides method in _live.py
+    def _onNewData(self, dataflow, data):
+        """
+        Called when a new image has arrived from the detector.
+        Usually the dataflow subscribes to onNewData.
+        :param dataflow: (model.Dataflow) The dataflow.
+        :param data: (model.DataArray). The new image that has arrived from the detector.
+        """
+        if hasattr(self, "integrationTime"):
+            self.raw = (self.raw + [data])[-self.integrationCounts.value:]
+        else:
+            self.raw = [data]
+
+        self._shouldUpdateHistogram()
+        self._shouldUpdateImage()
+
+    # overrides method in _base.py??
+    def _updateImage(self):
+        """
+        Recomputes the image with all the raw data available.
+        """
+        if not self.raw:
+            return
+
+        try:
+            if not isinstance(self.raw, list):
+                raise AttributeError(".raw must be a list of DA/DAS")
+
+            # integrate images for display
+            if hasattr(self, "integrationTime"):
+                data = self._integrateImages()
+            else:
+                data = self.raw[0]
+
+            if data.ndim != 2:
+                data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
+            self.image.value = self._projectXY2RGB(data, self.tint.value)
+
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
+    def _integrateImages(self):
+        """
+        Integrate/sum the acquired images in self.raw for live display while running a stream.
+        Values cannot overflow (are never clipped).
+        """
+        logging.debug("Integrate %s images", len(self.raw))
+        # Note: In beginning number of images in .raw can be smaller than self.integrationCounts.value
+        md = self.raw[0].metadata
+        orig_dtype = self.raw[0].dtype
+        best_dtype = get_best_dtype_for_acc(orig_dtype, len(self.raw))  # avoid saturation and overflow
+        data = numpy.sum(self.raw, axis=0, dtype=best_dtype)
+        md[model.MD_INTEGRATION_COUNT] = len(self.raw)
+
+        return model.DataArray(data, md)
+
+    def _updateHistogram(self, data=None):
+        """
+        Recomputes the histogram with all the raw data available.
+        The intensityRange will be also updated if auto_bc is enabled.
+        :param data: (DataArray) The raw data to use.
+        """
+        # Compute histogram and compact version
+        if data is None:
+            if not self.raw:
+                logging.debug("Not computing histogram as .raw is empty")
+                return
+
+            if hasattr(self, "integrationTime"):
+                data = self._integrateImages()
+            else:
+                data = self.raw[0]
+
+        # Depth can change at each image (depends on hardware settings)
+        self._updateDRange(data)
+
+        # Initially, _drange might be None, in which case it will be guessed
+        hist, edges = img.histogram(data, irange=self._drange)
+        if hist.size > 256:
+            chist = img.compactHistogram(hist, 256)
+        else:
+            chist = hist
+        self.histogram._full_hist = hist
+        self.histogram._edges = edges
+        # First update the value, before the intensityRange subscribers are called...
+        self.histogram._value = chist
+
+        if self.auto_bc.value:
+            self._recomputeIntensityRange()
+
+        # Notify last, so intensityRange is correct when subscribers get the new histogram.
+        self.histogram.notify(chist)
+
+    def _setIntegrationTime(self, value):
+        """
+        Set the local integration time VA.
+        :parameter value: (float) Integration time to be set.
+        :return: (float) Current integration time on VA.
+        """
+        self._intTime2NumImages(value)
+
+        return value
+
+        # Override Stream._is_active_setter() in _base.py
+    def _is_active_setter(self, active):
+        """
+        Called when stream is activated/played. Links integration time VA with
+        detector exposure time VA when stream is active and unlink when inactive.
+        :param active: (boolean) True if stream is playing.
+        :returns: (boolean) If stream is playing or not.
+        """
+        active = super(RepetitionStream, self)._is_active_setter(active)
+        if hasattr(self, "integrationTime"):
+            if active:
+                # reset raw data to not integrate images from previous acq with new acq
+                self.raw = []
+                self._linkIntTime2HwExpTime()
+            else:
+                self._unlinkIntTime2HwExpTime()
+
+        return active
+
+    def _linkIntTime2HwExpTime(self):
+        """"
+        Subscribe integration VA: link VA to detector exposure time VA.
+        """
+        self._intTime2NumImages(self.integrationTime.value)
+        try:
+            logging.debug("Set exposure time on detector to %s and number of "
+                          "images that need to be integrated is %s.", self._hwExpTime, self.integrationCounts.value)
+            self.detector.exposureTime.value = self._hwExpTime
+        except Exception:
+            logging.exception("Failed to set exposure time %s on detector.", self._hwExpTime)
+        self.integrationTime.subscribe(self._onIntegrationTime)
+
+    def _unlinkIntTime2HwExpTime(self):
+        """
+        Unsubscribe integration time VA: unlink VA from detector exposure time VA.
+        """
+        self.integrationTime.unsubscribe(self._onIntegrationTime)
+
+    def _onIntegrationTime(self, intTime):
+        """
+        Callback, which calculates and updates the exposure time on the detector.
+        Only called when stream is active.
+        :param intTime: (float) Integration time requested via the stream VA (in GUI).
+        """
+        # set the exp time on the detector
+        self.detector.exposureTime.value = self._hwExpTime
+
+    def _intTime2NumImages(self, intTime):
+        """
+        Updates .integrationCounts and ._hwExpTime based on the integration time and the maximum exposure time
+        of the detector. If not, it calculates how many images need to be integrated (summed) to
+        result in an acquisition with the requested integration time. Also, the new exposure time
+        to be set on the hardware for the image integration is calculated. If the requested
+        integration time is in range of the detector, the exp time is not modified and number of images
+        to be recorded is one.
+        :param intTime: (float) Integration time requested via the stream VA (GUI).
+        """
+        hwExpTimeMax = self.detector.exposureTime.range[1]
+        n = int(math.ceil(intTime / hwExpTimeMax))
+        self._hwExpTime = intTime / n
+
+        self.integrationCounts._set_value(n, force_write=True)
 
     @property
     def scanner(self):
@@ -584,7 +765,8 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
     The live view is just the raw readout camera image.
     """
     def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
-                 streak_unit_vas, **kwargs):  # init of TemporalSpectrumSettingsSteam
+                 streak_unit_vas, **kwargs):
+
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
 
@@ -617,6 +799,10 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
 
     # Override Stream.__find_metadata() in _base.py
     def _find_metadata(self, md):
+        """
+        Find the useful metadata for a 2D spatial projection from the metadata of a raw image.
+        :returns: (dict) Metadata dictionary (MD_* -> value).
+        """
         md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
         if model.MD_TIME_LIST in self.raw[0].metadata:
             md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
@@ -624,8 +810,14 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
             md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
         return md
 
-    # Override Stream._is_active_setter() in _base.py
+    # Override Stream._is_active_setter() in RepetitionStream class and in _base.py
     def _is_active_setter(self, active):
+        """
+        Called when stream is activated/played. Adapts the MCPGain VA range depending
+        on whether the stream is active or not.
+        :param active: (boolean) True if stream is playing.
+        :returns: (boolean) If stream is playing or not.
+        """
         self.active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
         if self.active:
             # make the full MCPGain range available when stream is active
@@ -637,19 +829,25 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         return self.active
 
     def _resetMCPGainHW(self):
-        """"Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
+        """"
+        Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive.
+        """
         self.streak_unit.MCPGain.value = 0
 
     def _OnStreakSettings(self, value):
-        """Callback, which sets MCPGain GUI VA = 0,
-        if .timeRange and/or .streakMode GUI VAs have changed."""
+        """
+        Callback, which sets MCPGain GUI VA = 0,
+        if .timeRange and/or .streakMode GUI VAs have changed.
+        """
         self.detMCPGain.value = 0  # set GUI VA 0
         self._OnMCPGain(value)  # update the .MCPGain VA
 
     def _OnMCPGain(self, _=None):
-        """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
+        """
+        Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
         only values <= current value are allowed.
-        If stream is active the full range is available."""
+        If stream is active the full range is available.
+        """
         if not self.active:
             self.detMCPGain.range = (0, self.detMCPGain.value)
 
@@ -801,6 +999,7 @@ class ARSettingsStream(CCDSettingsStream):
     See StaticARStream for displaying a stream with polar projection.
     """
     def __init__(self, name, detector, dataflow, emitter, analyzer=None, **kwargs):
+
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
 
@@ -829,8 +1028,13 @@ class ARSettingsStream(CCDSettingsStream):
 
     # onActive & projection: same as the standard LiveStream
 
-    # Override Stream._is_active_setter() in _base.py
+    # Override Stream._is_active_setter() in RepetitionStream class and _base.py
     def _is_active_setter(self, active):
+        """
+        Called when stream is activated/played. Additionally, links/unlinks the hardware axes.
+        :param active: (boolean) True if stream is playing.
+        :returns: (boolean) If stream is playing or not.
+        """
         active = super(ARSettingsStream, self)._is_active_setter(active)
         if active:
             self._linkHwAxes()
@@ -855,7 +1059,7 @@ class ARSettingsStream(CCDSettingsStream):
             # and update the polarization VA whenever the axis has moved
 
     def _unlinkHwAxes(self):
-        """"unsubscribe polarization VA: unlink VA from hardware axis"""
+        """"Unsubscribe polarization VA: unlink VA from hardware axis."""
         if self.analyzer:
             self.polarization.unsubscribe(self._onPolarization)
 
@@ -868,6 +1072,10 @@ class ARSettingsStream(CCDSettingsStream):
         f.add_done_callback(self._onPolarizationMove)
 
     def _onPolarizationMove(self, f):
+        """
+         Callback method, which checks that the move is actually finished.
+        :param f: (future)
+        """
         try:
             f.result()
         except Exception:
