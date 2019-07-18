@@ -611,6 +611,7 @@ class StreakUnit(model.HwComponent):
 
         timeRange = self.GetTimeRange()
         choices = set(self._getStreakUnitTimeRangeChoices())
+        timeRange = util.find_closest(timeRange, choices)  # make sure value is in choices
         self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
 
         # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
