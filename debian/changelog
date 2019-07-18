@@ -1,3 +1,60 @@
+odemis (2.10.0-1) xenial; urgency=medium
+
+  * New version: 2.10
+  * Main new features:
+    - Support for time-resolved acquisition (SPARC)
+    - Support for temporal-spectrum acquisition (SPARC)
+    - Can visualize polarized angle-resolved as Stokes parameters and degree of polarization
+    - Possibility to zoom in/out the spectrum and time plots
+    - Plugin to remove spikes from spectrum data (SPARC)
+    - Plugin to acquire large-area spectra (SPARC)
+  * Main improvements and bug fixes:
+    - Support for SPARCs with 4 spectrometers
+    - Warn if SECOM fine alignment measures unexpected magnification
+    - Tile acquisition plugin can run fine alignment after each tile (SECOM/DELPHI)
+    - GUI doesn't freeze when starting autofocus (SPARC)
+    - SPARC autofocus waits for the calibration light to turn on before starting
+    - Allow to change the tint of the StaticCLStream
+    - Support for IDS uEye GigE camera
+    - Support for PI E709 actuator controllers
+    - Support for Andor Kymera 328
+    - Support for Hamamatsu Streakcam
+    - Support for wheel-based Optical Density filters
+    - Extended support for PicoQuant PicoHarp300
+    - SECOM CL plugin accepts ROA, drift correction and non-square pixels.
+    - Support for TMCM axes controlled via digital output
+    - TMCM axes referenced are detected even after a back-end restart
+    - Microscope files now distinguish between "children" components and "dependency" components
+    - GUI doesn't show peak fitting warnings as errors
+    - Option to wait for blanker/external signal stability in SEM external scan 
+    - Can display image from Catmaid server
+    - Debian package also works on Ubuntu 18.04
+    - More information about the system is sent in bug reports
+  * Improvements and bug fixes already present in v2.9 branch:
+    - Fix Windows Viewer not building with wxPython4
+    - Persistent metadata could be overridden by default metadata
+    - Fix referencing on TMCM sometimes timing out too early
+    - Andor shamrock with a mirror "grating" only really accepts center wavelength 0
+    - Previous HDF5 time-correlator acquisitions were not read back properly
+    - In some cases, the microscope file could be missing from the bug report
+    - On an acquisition with a Z stack, going to Z=0 via the Z index didn't have any effect
+    - In the GUI, if an axis move (eg, wavelength) was rejected by the hardware,
+      it would be shown as if it succeeded.
+    - AR export to CSV was mirrored on the phi axis
+    - Large AR projections with background failed
+    - Polarized AR export to CSV would not always correspond to the selected polarization
+    - Display of AR polarized images would sometimes not appear for some polarizations
+    - Andor Shamrock could report a communication issue if the CCD settings were changed while changing the grating
+    - Fix rare case where GUI could crash during SECOM/DELPHI acquisition
+    - Don't raise an error when changing CCD fan speed fails (SECOM)
+    - Changing the Fluorescence stream tint didn't always work (SECOM)
+    - OmicronxX could miss some answer from the hardware (SECOM)
+    - MultiplexActuator didn't report the very first position change
+    - plugin cli-rgb failed to estimate the acquisition time if drift correction was selected
+
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 18 Jul 2019 09:57:24 +0200
+
 odemis (2.9.0-1) precise; urgency=medium
 
   * New version: 2.9
