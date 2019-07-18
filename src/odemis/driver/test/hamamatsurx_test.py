@@ -325,12 +325,12 @@ class TestHamamatsurxCam(unittest.TestCase):
 
     def test_TimeRange(self):
         """Test time range VA for sweeping of streak unit."""
-        for timeRange in self.streakunit.timeRange.choices:
+        for timeRange in self.streakunit.timeRange.choices:  # values different from yaml due to floating point issues
             # change timeRange VA to value in range
-            self.streakunit.timeRange.value = util.find_closest(timeRange, self.streakunit.timeRange.choices)
+            self.streakunit.timeRange.value = timeRange
             self.assertAlmostEqual(self.streakunit.timeRange.value, timeRange)
 
-            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)  # TODO MD not updated when HW VA changes?
             if tr2d:
                 key = util.find_closest(timeRange, tr2d.keys())
                 # check that the corresponding trigger delay is set when changing the .timeRange VA
@@ -349,6 +349,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         self.assertFalse(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
         self.streakunit.streakMode.value = True
         self.assertTrue(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
+        # TODO add test case to check model.MD_TIME_RANGE_TO_DELAY is updated, when implemented
 
     ### Acquisition commands #####################################################
 

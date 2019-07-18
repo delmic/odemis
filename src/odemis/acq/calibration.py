@@ -261,8 +261,9 @@ def get_time_range_to_trigger_delay(data, timeRange_choices, triggerDelay_range)
 
         # check delay in range allowed
         if not triggerDelay_range[0] <= delay <= triggerDelay_range[1]:
-            raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1). "
-                             "Please check the calibration file for the trigger delay." % (delay, timeRange))
+            raise ValueError("Trigger delay %s corresponding to time range %s is not in range %s. "
+                             "Please check the calibration file for the trigger delay." %
+                             (delay, timeRange, triggerDelay_range))
 
         # check timeRange is in possible choices for timeRange on HW
         choice = find_closest(timeRange, timeRange_choices)
