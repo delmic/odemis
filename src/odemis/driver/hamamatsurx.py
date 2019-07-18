@@ -426,17 +426,15 @@ class ReadoutCamera(model.DigitalCamera):
         that some data was received. The image is then received from the device via the dataport IP socket or
         the vertical scaling table is received, which corresponds to a time range for a single sweep.
         It corrects the vertical time information. The table contains the actual timestamps for each px.
+        The camera should already be prepared with a RingBuffer.
         """
-
-        # TODO need to check that there is an ringbuffer available!?
-
         logging.debug("Starting data thread.")
-        time.sleep(1)
-        is_receiving_image = False
+        time.sleep(1)  # TODO: why? => Document.
+
+        is_receiving_image = False  # used during synchronised acquisition
 
         try:
             while True:
-
                 if self._sync_event and not is_receiving_image:
                     timeout = 2
                     start = time.time()
@@ -456,21 +454,18 @@ class ReadoutCamera(model.DigitalCamera):
                         pass
 
                 rargs = self.parent.queue_img.get(block=True)  # block until receive something
-                logging.debug("Received message %s", rargs)
+                logging.debug("Received img message %s", rargs)
 
                 if rargs is None:  # if message is None end the thread
                     return
 
-                # synchronized mode
-                if self._sync_event:
+                if self._sync_event:  # synchronized mode
                     if rargs == "start":
                         logging.info("Received event trigger")
                         continue
                     else:
                         logging.info("Get the synchronized image.")
-
-                # non-sync mode
-                else:
+                else:  # non-sync mode
                     while not self.parent.queue_img.empty():
                         # keep reading to check if there might be a newer image for display
                         # in case we are too slow with reading
@@ -481,7 +476,7 @@ class ReadoutCamera(model.DigitalCamera):
                     logging.info("No more images in queue, so get the image.")
 
                 if rargs == "F":  # Flush => the previous images are from the previous acquisition
-                    logging.debug("Acquisiton was stopped so flush previous images.")
+                    logging.debug("Acquisition was stopped so flush previous images.")
                     continue
 
                 reception_time_image = time.time()
@@ -508,8 +503,8 @@ class ReadoutCamera(model.DigitalCamera):
                 image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
                 image.shape = (int(img_info[1]), int(img_info[0]))
 
-                logging.debug("Requested image number %s, received image number %s from buffer."
-                              % (img_num, img_num_actual))
+                logging.debug("Requested image number %s, received image number %s from buffer.",
+                              img_num, img_num_actual)
 
                 # get the scaling table to correct the time axis
                 # TODO only request scaling table if corresponding MD not available for this time range
@@ -909,7 +904,6 @@ class StreakCamera(model.HwComponent):
         self.queue_img = queue.Queue(maxsize=0)
 
         self.should_listen = True  # used in readCommandResponse thread
-        self._waitForCorrectResponse = True  # used in sendCommand
         self._getReadoutCamInfo = False  # nasty trick to get cam info
 
         # start thread, which keeps reading the commandport response continuously
@@ -1034,17 +1028,11 @@ class StreakCamera(model.HwComponent):
            IOError: if error during the communication (such as the protocol is
               not respected)
         """
+        # set timeout for waiting for command response
+        timeout = kwargs.pop("timeout", 5)  # default = 5s
         command = "%s(%s)\r" % (func, ",".join(args))
 
-        last_error_code = None
-        last_error_fct = None
-        last_error_msg = None
-
         with self._lock_command:  # lock this code, when finished lock is automatically released
-
-            # set timeout for waiting for command response
-            timeout = kwargs.pop("timeout", 5)  # default = 5s
-
             # send command to socket
             try:
                 logging.debug("Sending: '%s'", command.encode('string_escape'))
@@ -1061,37 +1049,35 @@ class StreakCamera(model.HwComponent):
                 except (socket.error, socket.timeout) as err:
                     raise model.HwError(err, "Could not connect to RemoteEx.")
 
-            while self._waitForCorrectResponse:  # wait for correct response until Timeout
+            latest_response = None
+            while True:  # wait for correct response until Timeout
                 try:
                     # if not receive something after timeout
                     response = self.queue_command_responses.get(timeout=timeout)
                 except queue.Empty:
-                    if last_error_code:
+                    if latest_response:
                         # log the last error code received before timeout
-                        logging.error("Last error code for function %s before timeout was %s with message %s."
-                                  % (last_error_fct, last_error_code, last_error_msg))
-                    raise util.TimeoutError("No answer received after %s sec for command %s."
+                        logging.error("Latest response before timeout was '%s'",
+                                      latest_response.encode('string_escape'))
+                    raise util.TimeoutError("No answer received after %s s for command %s."
                                             % (timeout, command.encode('string_escape')))
 
+                # save the latest response in case we don't receive any other response before timeout
+                latest_response = response
+
+                # TODO: also check the timeout here, in case a lot of messages arrive, but never the right one.
                 try:
                     error_code, rfunc, rargs = int(response[0]), response[1], response[2:]
-                except Exception as msg:
-                    raise IOError("Received response, which is not according to the known protocol."
-                                  "Error message was %s" % msg)
+                except Exception as ex:
+                    raise IOError("Unexpected response %s: %s" % (response, ex))
 
                 # check if the response corresponds to the command sent before
                 # the response corresponding to a command always also includes the command name
-                if rfunc.lower() == func.lower():  # fct name not case sensitive
-                    logging.debug("Hamamatsu streak camera RemoteEx response: %s." % response)
-                else:
-                    # save the last error message and code in case we don't receive any other response before timeout
-                    last_error_code = error_code
-                    last_error_fct = rfunc
-                    last_error_msg = rargs
-                    logging.debug("Hamamatsu streak camera RemoteEx response not as expected. "
-                                  "Will wait some more time.")
+                if rfunc.lower() != func.lower():  # fct name not case sensitive
+                    logging.debug("Response not about function %s, will wait some more time.", func)
                     continue  # continue listening to receive the correct response for the sent command or timeout
 
+                logging.debug("Interpreted response: %s.", response)
                 if error_code:  # != 0, response corresponds to command, but an error occurred
                     logging.error(RemoteExError(error_code))
                     raise RemoteExError(error_code)
@@ -1117,7 +1103,7 @@ class StreakCamera(model.HwComponent):
                     continue
 
                 responses += returnValue
-                logging.debug("RemoteEx response: %s.", responses)
+                logging.debug("Received: '%s'", responses.encode('string_escape'))
 
                 resp_splitted = responses.split("\r")
                 # split responses, overwrite var responses with the remaining messages (usually empty)
@@ -1166,7 +1152,6 @@ class StreakCamera(model.HwComponent):
                         self._getReadoutCamInfo = False
 
                     if error_code in (4, 5):
-                        logging.debug("Received message %s from RemoteEx software." % rargs)
                         if error_code == 4 and rfunc == "Livemonitor":
                             self.queue_img.put(rargs)  # only put msg in queue when it notifies about an image
                         # Note: all other messages with error_code 4 or 5 are currently discarded
