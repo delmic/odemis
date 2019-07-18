@@ -294,6 +294,9 @@ class ESP(model.Actuator):
 
                 try:
                     ve = self.GetVersion()
+                    if not re.match(r"ESP301 Version \d\.\d\.\d (1[0-2]|[1-9])\/(3[01]|[12][0-9]|[1-9])\/(99|[0-9]?[0-9])", ve):
+                        raise IOError("Device at %s is not an ESP301 controller" % ports)
+
                 except ESPError as e:
                     # Can happen if the device has received some weird characters
                     # => try again (now that it's flushed)
@@ -871,7 +874,7 @@ class ESPSimulator(object):
         msg = b"".join(msg.split())  # remove all space characters
         
         if msg == b"VE?":
-            self._sendAnswer(b"1.0")
+            self._sendAnswer(b"ESP301 Version 3.0.1 6/1/99")
             
         elif msg == b"SM":
             # save memory to non-volatile RAM
