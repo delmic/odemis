@@ -294,7 +294,7 @@ class ESP(model.Actuator):
 
                 try:
                     ve = self.GetVersion()
-                    if ve.upper().find("ESP301") == -1:
+                    if not "ESP301" in ve.upper():
                         raise IOError("Device at %s is not an ESP301 controller. Reported version string: %s" % (ports, ve))
 
                 except ESPError as e:
