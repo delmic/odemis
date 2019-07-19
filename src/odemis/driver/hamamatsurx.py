@@ -1050,7 +1050,7 @@ class StreakCamera(model.HwComponent):
                 except (socket.error, socket.timeout) as err:
                     raise model.HwError(err, "Could not connect to RemoteEx.")
 
-            latest_response = None
+            latest_response = None  # None or tuple of str
             while True:  # wait for correct response until Timeout
                 try:
                     # if not receive something after timeout
@@ -1059,7 +1059,7 @@ class StreakCamera(model.HwComponent):
                     if latest_response:
                         # log the last error code received before timeout
                         logging.error("Latest response before timeout was '%s'",
-                                      latest_response.encode('string_escape'))
+                                      latest_response)
                     raise util.TimeoutError("No answer received after %s s for command %s."
                                             % (timeout, command.encode('string_escape')))
 
