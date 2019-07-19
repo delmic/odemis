@@ -469,7 +469,7 @@ class TriGlideDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libTriGlide.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaracttriglide.so", RTLD_GLOBAL)
 
     def __getitem__(self, name):
         try:
