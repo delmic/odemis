@@ -451,10 +451,10 @@ class AxisLegend(wx.Panel):
             label = units.readable_str(val, self.unit, sig)
 
             if i == 0 and self._lo_ellipsis:
-                label = u"…" + label
+                label = u"…"
 
             if i == len(self._tick_list) - 1 and self._hi_ellipsis:
-                label = label + u"…"
+                label = u"…"
 
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
