@@ -294,8 +294,8 @@ class ESP(model.Actuator):
 
                 try:
                     ve = self.GetVersion()
-                    if not re.match(r"ESP301 Version \d\.\d\.\d (1[0-2]|[1-9])\/(3[01]|[12][0-9]|[1-9])\/(99|[0-9]?[0-9])", ve):
-                        raise IOError("Device at %s is not an ESP301 controller" % ports)
+                    if ve.upper().find("ESP301") == -1:
+                        raise IOError("Device at %s is not an ESP301 controller. Reported version string: %s" % (ports, ve))
 
                 except ESPError as e:
                     # Can happen if the device has received some weird characters
