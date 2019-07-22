@@ -170,7 +170,8 @@ class PIRedStone(object):
         for sc in com.split(","):
             assert(len(sc) < 10)
 
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        com = com.encode('latin1')
+        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
 
@@ -186,7 +187,8 @@ class PIRedStone(object):
         """
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        com = com.encode('latin1')
+        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
         self.serial.write(com)
 
         char = self.serial.read() # empty if timeout
@@ -206,10 +208,11 @@ class PIRedStone(object):
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
 
-        logging.debug("Receive: %s", report.encode('string_escape'))
+        logging.debug("Receive: %s", report.decode('latin1', 'backslashreplace'))
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
+        report = report.decode('latin1') if sys.version_info[0] >= 3 else report
         return report.lstrip(prefix).rstrip(suffix)
 
     def recoverTimeout(self):
@@ -737,7 +740,7 @@ class PIRedStone(object):
 # Special classes for testing purpose when there is no real controller available
 class FakeSerial(object):
     def __init__(self, name):
-        self.file = open(name, "w+")
+        self.file = open(name, "wb+")
 
     def read(self):
         return self.file.read()
@@ -758,7 +761,8 @@ class FakePIRedStone(PIRedStone):
         # Should normally never be called
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        com = com.encode('latin1')
+        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
         self.serial.write(com)
 
         return ""
