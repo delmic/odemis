@@ -166,6 +166,8 @@ class SEM(model.HwComponent):
                 try:
                     self.NullCommand()  # stop if it's not the right hardware before disturbing it
                     idn = self.GetVersion()
+                    if not "smartsem" in idn.lower():
+                        raise IOError("Device doesn't seem to be a Zeiss SmartSEM, identified as: %s" % (idn,))
                 except RemconError:
                     # Can happen if the device has received some weird characters
                     # => try again (now that it's flushed)
@@ -234,7 +236,7 @@ class SEM(model.HwComponent):
         """
         Null command to check whether it's the right hardware before disturbing it
         """
-        return self._SendCmd('')
+        return self._SendCmd(b'')
 
     def GetVersion(self):
         """
