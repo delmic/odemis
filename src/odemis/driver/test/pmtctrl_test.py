@@ -109,20 +109,20 @@ class TestPMTControl(unittest.TestCase):
 
     def test_send_cmd(self):
         # Send proper command
-        ans = self.dev._sendCommand("VOLT 0.7")
-        self.assertEqual(ans, '')
+        ans = self.dev._sendCommand(b"VOLT 0.7")
+        self.assertEqual(ans, b'')
 
         # Send wrong command
         with self.assertRaises(IOError):
-            self.dev._sendCommand("VOLT??")
+            self.dev._sendCommand(b"VOLT??")
 
         # Set value out of range
         with self.assertRaises(IOError):
-            self.dev._sendCommand("VOLT 8.4")
+            self.dev._sendCommand(b"VOLT 8.4")
 
         # Send proper set and get command
-        self.dev._sendCommand("VOLT 0.3")
-        ans = self.dev._sendCommand("VOLT?")
+        self.dev._sendCommand(b"VOLT 0.3")
+        ans = self.dev._sendCommand(b"VOLT?")
         ans_f = float(ans)
         self.assertAlmostEqual(ans_f, 0.3)
 
@@ -210,7 +210,7 @@ class TestPMT(unittest.TestCase):
         self.pmt.data.subscribe(self.receive_image)
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and catch the warning message
-        self.control._sendCommand("SWITCH 0")
+        self.control._sendCommand(b"SWITCH 0")
         self.is_received.wait()
         self.assertTrue(h.matches(message="PMT protection was triggered during acquisition."))
         # Protection should be reset after acquisition is done
@@ -227,7 +227,7 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and then decrease the gain, so the protection is
         # expected to be reset
-        self.control._sendCommand("SWITCH 0")
+        self.control._sendCommand(b"SWITCH 0")
         self.pmt.gain.value = 0.5
         self.is_received.wait()
         self.assertFalse(h.matches(message="PMT protection was triggered during acquisition."))

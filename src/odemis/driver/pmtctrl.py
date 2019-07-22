@@ -323,21 +323,21 @@ class PMTControl(model.PowerSupplier):
         self.supplied.notify(self.supplied.value)
 
     def _getIdentification(self):
-        return self._sendCommand("*IDN?")
+        return self._sendCommand(b"*IDN?").decode('latin1', 'backslashreplace')
 
     def _setGain(self, value):
-        self._sendCommand("VOLT %f" % (value,))
+        self._sendCommand(b"VOLT %f" % (value,))
 
         return self._getGain()
 
     def _setProtectionCurrent(self, value):
-        self._sendCommand("PCURR %f" % (value * 1e6,))  # in µA
+        self._sendCommand(b"PCURR %f" % (value * 1e6,))  # in µA
 
     def _setProtectionTime(self, value):
-        self._sendCommand("PTIME %f" % (value,))
+        self._sendCommand(b"PTIME %f" % (value,))
 
     def _getGain(self):
-        ans = self._sendCommand("VOLT?")
+        ans = self._sendCommand(b"VOLT?")
         try:
             value = float(ans)
         except ValueError:
@@ -347,27 +347,27 @@ class PMTControl(model.PowerSupplier):
 
     def _setPowerSupply(self, value):
         if value:
-            self._sendCommand("PWR 1")
+            self._sendCommand(b"PWR 1")
         else:
-            self._sendCommand("PWR 0")
+            self._sendCommand(b"PWR 0")
 
         return value
 
     def _getPowerSupply(self):
-        ans = self._sendCommand("PWR?")
-        return ans == "1"
+        ans = self._sendCommand(b"PWR?")
+        return ans == b"1"
 
     def _setProtection(self, value):
         if value:
-            self._sendCommand("SWITCH 0")
+            self._sendCommand(b"SWITCH 0")
         else:
-            self._sendCommand("SWITCH 1")
+            self._sendCommand(b"SWITCH 1")
 
         return value
 
     def _getProtection(self):
-        ans = self._sendCommand("SWITCH?")
-        return ans == "0"
+        ans = self._sendCommand(b"SWITCH?")
+        return ans == b"0"
 
     # These two methods are strictly used for the SPARC system in Monash. Use
     # them to send a high/low signal via the PMT Control Unit to the relay, thus
@@ -376,15 +376,15 @@ class PMTControl(model.PowerSupplier):
     def setRelay(self, value):
         # When True, the relay contact is connected
         if value:
-            self._sendCommand("RELAY 1")
+            self._sendCommand(b"RELAY 1")
         else:
-            self._sendCommand("RELAY 0")
+            self._sendCommand(b"RELAY 0")
 
         return value
 
     def getRelay(self):
-        ans = self._sendCommand("RELAY?")
-        if ans == "1":
+        ans = self._sendCommand(b"RELAY?")
+        if ans == b"1":
             status = True
         else:
             status = False
@@ -393,22 +393,22 @@ class PMTControl(model.PowerSupplier):
 
     def _sendCommand(self, cmd):
         """
-        cmd (str): command to be sent to PMT Control unit.
-        returns (str): answer received from the PMT Control unit
+        cmd (byte str): command to be sent to PMT Control unit.
+        returns (byte str): answer received from the PMT Control unit
         raises:
             IOError: if an ERROR is returned by the PMT Control firmware.
         """
-        cmd = cmd + "\n"
+        cmd = cmd + b"\n"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", cmd.decode('latin1', 'backslashreplace'))
             self._serial.write(cmd)
 
-            ans = ''
+            ans = b''
             char = None
-            while char != '\n':
+            while char != b'\n':
                 char = self._serial.read()
                 if not char:
-                    logging.error("Timeout after receiving %s", ans.encode('string_escape'))
+                    logging.error("Timeout after receiving %s", ans.decode('latin1', 'backslashreplace'))
                     # TODO: See how you should handle a timeout before you raise
                     # an HWError
                     raise HwError("PMT Control Unit connection timeout. "
@@ -416,9 +416,9 @@ class PMTControl(model.PowerSupplier):
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
-            if ans.startswith("ERROR"):
-                raise PMTControlError(ans.split(' ', 1)[1])
+            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
+            if ans.startswith(b"ERROR"):
+                raise PMTControlError(ans.split(b' ', 1)[1])
 
             return ans.rstrip()
 
@@ -441,7 +441,7 @@ class PMTControl(model.PowerSupplier):
         # Try to read until timeout to be extra safe that we properly flushed
         while True:
             char = ser.read()
-            if char == '':
+            if char == b'':
                 break
         logging.debug("Nothing left to read, PMT Control Unit can safely initialize.")
 
@@ -536,7 +536,7 @@ class PMTControlError(IOError):
 
 
 # Ranges similar to real PMT Control firmware
-IDN = "Delmic Analog PMT simulator 1.0"
+IDN = b"Delmic Analog PMT simulator 1.0"
 
 
 class PMTControlSimulator(object):
@@ -547,8 +547,8 @@ class PMTControlSimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         self.timeout = timeout
         self._f = tempfile.TemporaryFile()  # for fileno
-        self._output_buf = ""  # what the PMT Control Unit sends back to the "host computer"
-        self._input_buf = ""  # what PMT Control Unit receives from the "host computer"
+        self._output_buf = b""  # what the PMT Control Unit sends back to the "host computer"
+        self._input_buf = b""  # what PMT Control Unit receives from the "host computer"
 
         # internal values
         self._gain = MIN_VOLT
@@ -579,7 +579,7 @@ class PMTControlSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -592,7 +592,7 @@ class PMTControlSimulator(object):
         """
         while len(self._input_buf) >= 1:
             # read until '\n'
-            sep = self._input_buf.index('\n')
+            sep = self._input_buf.index(b'\n')
             msg = self._input_buf[0:sep + 1]
 
             # remove the bytes we've just read
@@ -605,88 +605,88 @@ class PMTControlSimulator(object):
         process the msg, and put the result in the output buffer
         msg (str): raw message (including header)
         """
-        wspaces = msg.count(' ')
-        qmarks = msg.count('?')
+        wspaces = msg.count(b' ')
+        qmarks = msg.count(b'?')
         tokens = msg.split()
         if ((wspaces > 0) and (qmarks > 0)) or (wspaces > 1) or (qmarks > 1):
-            res = "ERROR: Cannot parse this command\n"
+            res = b"ERROR: Cannot parse this command\n"
         elif wspaces:
             value = float(tokens[1])
-            if tokens[0] == "PWR":
+            if tokens[0] == b"PWR":
                 if (value != 0) and (value != 1):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     if value:
                         self._powerSupply = True
                     else:
                         self._powerSupply = False
-                    res = '\n'
-            elif tokens[0] == "SWITCH":
+                    res = b'\n'
+            elif tokens[0] == b"SWITCH":
                 if (value != 0) and (value != 1):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     if value:
                         self._protection = False
                     else:
                         self._protection = True
-                    res = '\n'
-            elif tokens[0] == "VOLT":
+                    res = b'\n'
+            elif tokens[0] == b"VOLT":
                 if (value < MIN_VOLT) or (value > MAX_VOLT):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     self._gain = value
-                    res = '\n'
-            elif tokens[0] == "PCURR":
+                    res = b'\n'
+            elif tokens[0] == b"PCURR":
                 if (value < MIN_PCURR) or (value > MAX_PCURR):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     self._prot_curr = value
-                    res = '\n'
-            elif tokens[0] == "PTIME":
+                    res = b'\n'
+            elif tokens[0] == b"PTIME":
                 if (value < MIN_PTIME) or (value > MAX_PTIME):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     self._prot_time = value
-                    res = '\n'
-            elif tokens[0] == "RELAY":
+                    res = b'\n'
+            elif tokens[0] == b"RELAY":
                 if (value != 0) and (value != 1):
-                    res = "ERROR: Out of range set value\n"
+                    res = b"ERROR: Out of range set value\n"
                 else:
                     if value:
                         self._contact = True
                     else:
                         self._contact = False
-                    res = '\n'
+                    res = b'\n'
             else:
-                res = "ERROR: Cannot parse this command\n"
+                res = b"ERROR: Cannot parse this command\n"
         elif qmarks:
-            if tokens[0] == "*IDN?":
-                res = IDN + '\n'
-            elif tokens[0] == "PWR?":
+            if tokens[0] == b"*IDN?":
+                res = IDN + b'\n'
+            elif tokens[0] == b"PWR?":
                 if self._powerSupply:
-                    res = "1" + '\n'
+                    res = b"1\n"
                 else:
-                    res = "0" + '\n'
-            elif tokens[0] == "VOLT?":
-                res = str(self._gain) + '\n'
-            elif tokens[0] == "PCURR?":
-                res = str(self._prot_curr) + '\n'
+                    res = b"0\n"
+            elif tokens[0] == b"VOLT?":
+                res = b'%f\n' % self._gain
+            elif tokens[0] == b"PCURR?":
+                res = b'%f\n' % self._prot_curr
             elif tokens[0] == "PTIME?":
-                res = str(self._prot_time) + '\n'
-            elif tokens[0] == "SWITCH?":
+                res = str(self._prot_time) + b'\n'
+            elif tokens[0] == b"SWITCH?":
                 if self._protection:
-                    res = "0" + '\n'
+                    res = b"0" + b'\n'
                 else:
-                    res = "1" + '\n'
-            elif tokens[0] == "RELAY?":
+                    res = b"1" + b'\n'
+            elif tokens[0] == b"RELAY?":
                 if self._contact:
-                    res = "1" + '\n'
+                    res = b"1\n"
                 else:
-                    res = "0" + '\n'
+                    res = b"0\n"
             else:
-                res = "ERROR: Cannot parse this command\n"
+                res = b"ERROR: Cannot parse this command\n"
         else:
-            res = "ERROR: Cannot parse this command\n"
+            res = b"ERROR: Cannot parse this command\n"
 
         # add the response end
         if res is not None:
