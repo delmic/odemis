@@ -581,7 +581,7 @@ class TMCLController(model.Actuator):
         instr (buffer of 9 bytes)
         """
         target, n, typ, mot, val, chk = struct.unpack('>BBBBiB', instr)
-        s = "%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
+        s = b"%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
         return s
 
     @staticmethod
@@ -603,7 +603,7 @@ class TMCLController(model.Actuator):
             self._serial.flushInput()
             garbage = self._serial.read(1000)
             if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage.encode('string_escape'))
+                logging.debug("Received unexpected bytes '%s'", garbage.decode('latin1', 'backslashreplace'))
             if len(garbage) == 1000:
                 # Probably a sign that it's not the device we are expecting
                 logging.warning("Lots of garbage sent from device")
@@ -616,7 +616,7 @@ class TMCLController(model.Actuator):
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it's unlikely to ever do anything more.
             msg = b"\x00" * 9  # a 9-byte message
-            logging.debug("Sending '%s'", msg.encode('string_escape'))
+            logging.debug("Sending '%s'", msg.decode('latin1', 'backslashreplace'))
             self._serial.write(msg)
             self._serial.flush()
             res = self._serial.read(10)  # See if the device is trying to talk too much
@@ -637,7 +637,7 @@ class TMCLController(model.Actuator):
                 else:
                     logging.debug("Device message has wrong checksum")
             else:
-                logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
+                logging.debug("Device replied unexpected message: %s", res.decode('latin1', 'backslashreplace'))
 
             raise IOError("Device did not answer correctly to any sync message")
 
@@ -694,7 +694,7 @@ class TMCLController(model.Actuator):
         # Compute header
         s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
 
-        logging.debug("Encoded user config as '%s'", s.encode('string_escape'))
+        logging.debug("Encoded user config as '%s'", s.decode('latin1', 'backslashreplace'))
 
         # Write s as a series of uint32 into the user area
         assert(len(s) // 4 <= 56)
@@ -732,7 +732,8 @@ class TMCLController(model.Actuator):
             d = self.GetGlobalParam(2, i + 1)
             s += struct.pack(">i", d)
 
-        logging.debug("Read user config as '%s%s'", sh.encode('string_escape'), s.encode('string_escape'))
+        logging.debug("Read user config as '%s%s'", sh.decode('latin1', 'backslashreplace'),
+                      s.decode('latin1', 'backslashreplace'))
 
         # Compute checksum (= sum of everything on 16 bits)
         hpres = numpy.frombuffer(s, dtype=numpy.uint16)
@@ -1650,7 +1651,7 @@ class TMCLController(model.Actuator):
         dependences = set(shift.keys())
 
         # Check if the distance is big enough to make sense
-        for an, v in shift.items():
+        for an, v in list(shift.items()):
             if an in self._name_to_do_axis:
                 raise NotImplementedError("Relative move on digital output axis not supported " +
                                           "(requested on axis %s)" % an)
@@ -2188,8 +2189,8 @@ class TMCMSimulator(object):
     def __init__(self, timeout=0, naxes=3, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         self._naxes = naxes
 
@@ -2272,7 +2273,7 @@ class TMCMSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -2281,7 +2282,7 @@ class TMCMSimulator(object):
 
     def _sendReply(self, inst, status=100, val=0):
         msg = numpy.empty(9, dtype=numpy.uint8)
-        struct.pack_into('>BBBBiB', msg, 0, 2, self._id, status, inst, val, 0)
+        struct.pack_into('>BBBBiB', msg, 0, 2, self._id, status, inst, int(val), 0)
         # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
 
