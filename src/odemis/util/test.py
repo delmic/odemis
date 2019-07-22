@@ -25,11 +25,12 @@ import os
 import resource
 import subprocess
 import time
+import sys
 
 
 # ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
 # -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
+ODEMISD_CMD = [sys.executable, os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 
 
