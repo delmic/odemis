@@ -847,13 +847,12 @@ class StreakCamAlignSettingsController(SettingsBarController):
             trigger2delay_MD[key] = requested_triggerDelay
         else:
             trigger2delay_MD[cur_timeRange] = requested_triggerDelay
-            logging.warning("A new time range %s was added to the MD, which is not consistent with the timeRanges"
-                            " specified in the yaml file.", cur_timeRange)
+            logging.warning("A new entry %s was added to MD_TIME_RANGE_TO_DELAY, "
+                            "which is not in the device .timeRange choices.", cur_timeRange)
 
         # check the number of keys in the dict is same as choices for VA
         if len(trigger2delay_MD.keys()) != len(self.streak_unit.timeRange.choices):
-            logging.warning("The number of %s time ranges in the trigger delay MD does not match with the number of %s "
-                            "choices specified in the yaml file.",
+            logging.warning("MD_TIME_RANGE_TO_DELAY has %d entries, while the device .timeRange has %d choices.",
                             len(trigger2delay_MD.keys()), len(self.streak_unit.timeRange.choices))
 
         self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})

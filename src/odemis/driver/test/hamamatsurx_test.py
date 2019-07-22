@@ -330,7 +330,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.streakunit.timeRange.value = timeRange
             self.assertAlmostEqual(self.streakunit.timeRange.value, timeRange)
 
-            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)  # TODO MD not updated when HW VA changes?
+            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
             if tr2d:
                 key = util.find_closest(timeRange, tr2d.keys())
                 # check that the corresponding trigger delay is set when changing the .timeRange VA
