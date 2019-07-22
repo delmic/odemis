@@ -38,6 +38,11 @@ logging.getLogger().setLevel(logging.INFO)
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
+if TEST_NOHW:
+    CLASS = pi.FakePIRedStone  # (serial controller) simulator
+else:
+    CLASS = pi.PIRedStone
+
 if os.name == "nt":
     PORT = "COM1"
 else:
@@ -56,13 +61,12 @@ class TestPIRedStoneStatic(unittest.TestCase):
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
-        adds = pi.PIRedStone.scan(PORT)
-        if not TEST_NOHW:
-            self.assertGreater(len(adds), 0)
+        adds = CLASS.scan(PORT)
+        self.assertGreater(len(adds), 0)
 
-        ser = pi.PIRedStone.openSerialPort(PORT)
+        ser = CLASS.openSerialPort(PORT)
         for add in adds:
-            cont = pi.PIRedStone(ser, add)
+            cont = CLASS(ser, add)
             self.assertTrue(cont.selfTest(), "Controller self test failed.")
 
     def test_scan(self):
