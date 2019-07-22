@@ -813,11 +813,12 @@ class DelayGenerator(model.HwComponent):
         if model.MD_TIME_RANGE_TO_DELAY in md:
             for timeRange, delay in md[model.MD_TIME_RANGE_TO_DELAY].items():
                 if not isinstance(delay, numbers.Real):
-                    raise ValueError("Trigger delay %s corresponding to time range %s is not of type float."
+                    raise ValueError("Trigger delay %s corresponding to time range %s is not of type float. "
                                      "Please check calibration file for trigger delay." % (delay, timeRange))
-                if not 0 <= delay <= 1:
-                    raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1)."
-                                     "Please check the calibration file for the trigger delay." % (delay, timeRange))
+                if not self.triggerDelay.range[0] <= delay <= self.triggerDelay.range[1]:
+                    raise ValueError("Trigger delay %s corresponding to time range %s is not in range %s. "
+                                     "Please check the calibration file for the trigger delay."
+                                     % (delay, timeRange, self.triggerDelay.range))
 
         super(DelayGenerator, self).updateMetadata(md)
 
@@ -841,7 +842,7 @@ class DelayGenerator(model.HwComponent):
         logging.debug("Reporting trigger delay %s for delay generator.", value)
         self._metadata[model.MD_TRIGGER_DELAY] = value
 
-        return value
+        return self.GetTriggerDelay()
 
     def _getTriggerDelayRange(self):
         """
@@ -851,6 +852,7 @@ class DelayGenerator(model.HwComponent):
         """
         min_time = 0
         max_time = float(self.parent.DevParamInfoEx(self.location, "Delay A")[-1])
+        max_time = min(max_time, 10)  # don't report too high range
         range_time = (min_time, max_time)
 
         return range_time

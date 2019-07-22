@@ -838,7 +838,23 @@ class StreakCamAlignSettingsController(SettingsBarController):
         requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
         # get a copy of  MD
         trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
-        trigger2delay_MD[cur_timeRange] = requested_triggerDelay
+
+        # check if key already exists (prevent creating new key due to floating point issues)
+        key = util.find_closest(cur_timeRange, trigger2delay_MD.keys())
+        if util.almost_equal(key, cur_timeRange):
+            # Replace the current delay value with the requested for an already existing timeRange in the dict.
+            # This avoid duplication of keys, which are only different because of floating point issues.
+            trigger2delay_MD[key] = requested_triggerDelay
+        else:
+            trigger2delay_MD[cur_timeRange] = requested_triggerDelay
+            logging.warning("A new entry %s was added to MD_TIME_RANGE_TO_DELAY, "
+                            "which is not in the device .timeRange choices.", cur_timeRange)
+
+        # check the number of keys in the dict is same as choices for VA
+        if len(trigger2delay_MD.keys()) != len(self.streak_unit.timeRange.choices):
+            logging.warning("MD_TIME_RANGE_TO_DELAY has %d entries, while the device .timeRange has %d choices.",
+                            len(trigger2delay_MD.keys()), len(self.streak_unit.timeRange.choices))
+
         self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})
         # Note: updateMetadata should here never raise an exception as the UnitFloatCtrl already
         # catches errors regarding type and out-of-range inputs
@@ -891,7 +907,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
                 logging.error("Failed loading %s: %s", filename, error)
                 return
 
-        # update the MD
+        # update the MD: overwrite the complete dict
         self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d_dict})
 
         # update triggerDelay shown in GUI
