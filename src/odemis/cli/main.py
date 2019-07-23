@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 from past.builtins import basestring
+from builtins import str
 import argparse
 import codecs
 import collections
@@ -72,7 +73,6 @@ def scan(cls=None):
     """
     # FIXME: need to work when /var/run/odemisd is not available:
     # => fail to create the container.
-
     # only here, to avoid importing everything for other commands
     from odemis import driver
     num = 0
@@ -300,7 +300,7 @@ def print_vattribute(name, va, pretty):
         if pretty:
             str_range = u" (range: %s → %s)" % (varange[0], varange[1])
         else:
-            str_range = u"\trange:%s" % unicode(varange)
+            str_range = u"\trange:%s" % str(varange)
     except AttributeError:
         str_range = u""
 
@@ -313,7 +313,7 @@ def print_vattribute(name, va, pretty):
             else:
                 str_choices = u" (choices: %s)" % u", ".join([str(c) for c in vachoices])
         else:
-            str_choices = u"\tchoices:%s" % unicode(vachoices)
+            str_choices = u"\tchoices:%s" % str(vachoices)
     except AttributeError:
         str_choices = ""
 

@@ -44,7 +44,7 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISCLI_CMD = ["python2", "-m", "odemis.cli.main"]
+ODEMISCLI_CMD = [sys.executable, "-m", "odemis.cli.main"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 
