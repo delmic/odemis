@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from builtins import str
 import queue
 import logging
 from odemis import model, util, dataio
@@ -42,7 +43,7 @@ class ReadoutCamera(model.DigitalCamera):
         # TODO image focus and operate mode
         # get the fake images
         try:
-            image_filename = unicode(image)
+            image_filename = str(image)
             # ensure relative path is from this file
             if not os.path.isabs(image):
                 image_filename = os.path.join(os.path.dirname(__file__), image)

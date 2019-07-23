@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # * limit the memory to about 3G. For example add highmem=3500M to the kernel
 #   command line (in /etc/default/grub)
 
-
 from __future__ import division
 
 from past.builtins import long
@@ -652,7 +651,7 @@ class AndorCam3(model.DigitalCamera):
         """
         Return a unicode string corresponding to the given property
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         len_str = c_int()
         self.atcore.AT_GetStringMaxLength(self.handle, prop, byref(len_str))
         string = create_unicode_buffer(len_str.value)
@@ -660,11 +659,11 @@ class AndorCam3(model.DigitalCamera):
         return string.value
 
     def SetInt(self, prop, value):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         self.atcore.AT_SetInt(self.handle, prop, c_longlong(value))
 
     def GetInt(self, prop):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = c_longlong()
         self.atcore.AT_GetInt(self.handle, prop, byref(result))
         return int(result.value) # int => use int instead of long if possible
@@ -674,7 +673,7 @@ class AndorCam3(model.DigitalCamera):
         Return the max of an integer property.
         Return (int)
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = c_longlong()
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result))
         return result.value
@@ -684,18 +683,18 @@ class AndorCam3(model.DigitalCamera):
         Return the (min, max) of an integer property.
         Return (2-tuple int)
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = (c_longlong(), c_longlong())
         self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
         return result[0].value, result[1].value
 
     def SetFloat(self, prop, value):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         self.atcore.AT_SetFloat(self.handle, prop, c_double(value))
 
     def GetFloat(self, prop):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = c_double()
         self.atcore.AT_GetFloat(self.handle, prop, byref(result))
         return result.value
@@ -705,14 +704,14 @@ class AndorCam3(model.DigitalCamera):
         Return the (min, max) of an float property.
         Return (2-tuple float)
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = (c_double(), c_double())
         self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
         return result[0].value, result[1].value
 
     def SetBool(self, prop, value):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         if value:
             int_val = c_int(1)
         else:
@@ -720,7 +719,7 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_SetBool(self.handle, prop, int_val)
 
     def GetBool(self, prop):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = c_int()
         if not self.handle:  # TODO: apply this to all API calls. As a decorator?
             raise HwError("Device not opened")
@@ -731,7 +730,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         implemented = c_int()
         self.atcore.AT_IsImplemented(self.handle, prop, byref(implemented))
         return implemented.value != 0
@@ -740,7 +739,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         writable = c_int()
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
         return writable.value != 0
@@ -749,7 +748,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         available = c_int()
         self.atcore.AT_IsEnumIndexAvailable(self.handle, prop, idx, byref(available))
         return available.value != 0
@@ -758,12 +757,12 @@ class AndorCam3(model.DigitalCamera):
         """
         Set a unicode string corresponding for the given property
         """
-        assert(isinstance(prop, unicode))
-        assert(isinstance(value, unicode))
+        assert(isinstance(prop, str))
+        assert(isinstance(value, str))
         self.atcore.AT_SetEnumString(self.handle, prop, value)
 
     def GetEnumIndex(self, prop):
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         result = c_longlong()
         self.atcore.AT_GetEnumIndex(self.handle, prop, byref(result))
         return result.value
@@ -772,14 +771,14 @@ class AndorCam3(model.DigitalCamera):
         """
         Select the current index of an enumerated property
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         self.atcore.AT_SetEnumIndex(self.handle, prop, idx)
 
     def GetEnumStringByIndex(self, prop, index):
         """
         Return a unicode string corresponding to the given property and index
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         string = create_unicode_buffer(128) # no way to know the max size
         self.atcore.AT_GetEnumStringByIndex(self.handle, prop, index, string, len(string))
         return string.value
@@ -792,7 +791,7 @@ class AndorCam3(model.DigitalCamera):
          availability of a value.
         return (list of str or None)
         """
-        assert(isinstance(prop, unicode))
+        assert(isinstance(prop, str))
         num_values = c_int()
         self.atcore.AT_GetEnumCount(self.handle, prop, byref(num_values))
         implemented = c_int()

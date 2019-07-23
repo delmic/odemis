@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from builtins import str
 from concurrent.futures._base import CancelledError
 import copy
 import gc
@@ -368,10 +369,10 @@ class AcquisitionDialog(xrcfr_acq):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
         path, base = os.path.split(name)
-        self.txt_destination.SetValue(unicode(path))
+        self.txt_destination.SetValue(str(path))
         # show the end of the path (usually more important)
         self.txt_destination.SetInsertionPointEnd()
-        self.txt_filename.SetValue(unicode(base))
+        self.txt_filename.SetValue(str(base))
 
     def on_preset(self, evt):
         preset_name = self.cmb_presets.GetValue()
