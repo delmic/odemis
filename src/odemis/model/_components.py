@@ -113,8 +113,8 @@ class Component(ComponentBase):
         parent (Component): the parent of this component, that will be in .parent
         children (dict str -> Component): the children of this component, that will
             be in .children. Objects not instance of Component are skipped.
-        dependencies (dict str -> Component): the dependencies of this component, that will
-            be in .dependencies.
+        dependencies (dict str -> Component): the dependencies of this component,
+           that will be in .dependencies.
         daemon (Pyro4.daemon): daemon via which the object will be registered.
             default=None => not registered
         """
@@ -129,12 +129,11 @@ class Component(ComponentBase):
 
         dependencies = dependencies or {}
         children = children or {}
-        # Do not add non-Component, so that it's compatible with passing a kwargs
-        # It's up to the sub-class to set correctly the .parent of the dependencies
         for dep, c in dependencies.items():
             if not isinstance(c, ComponentBase):
-                raise ValueError("Dependency %s is not a component." % dep)
-        cd = set (c for c in dependencies.values())
+                raise ValueError("Dependency %s is not a component: %s" % (dep, c))
+        cd = set(dependencies.values())
+        # It's up to the sub-class to set correctly the .parent of the children
         cc = set(c for c in children.values() if isinstance(c, ComponentBase))
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
