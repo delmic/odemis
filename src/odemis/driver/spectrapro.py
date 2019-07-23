@@ -51,10 +51,8 @@ def hextof(s):
     if len(s) != 23:
         raise ValueError("Cannot convert %s to a float" % (s,))
 
-    d = b""
     try:
-        for c in s.split(","):
-            d += chr(int(c, 16))
+        d = bytearray(int(c, 16) for c in s.split(","))
         return struct.unpack("<d", d)[0]
     except (ValueError, struct.error):
         raise ValueError("Cannot convert %s to a float" % (s,))
@@ -339,8 +337,8 @@ class SpectraPro(model.Actuator):
 
         assert(1 < len(com) <= 100) # commands cannot be long
         com += "\r"
-
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        com = com.encode('latin1')
+        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
         # send command until it succeeds
         while True:
             try:
@@ -353,26 +351,26 @@ class SpectraPro(model.Actuator):
                     raise
 
         # read response until timeout or known end of response
-        response = ""
+        response = b""
         timeend = time.time() + timeout
         while ((time.time() <= timeend) and
-               not (response.endswith(" ok\r\n") or response.endswith("? \r\n"))):
+               not (response.endswith(b" ok\r\n") or response.endswith(b"? \r\n"))):
             self._serial.timeout = max(0.1, timeend - time.time())
             char = self._serial.read()
             if not char: # timeout
                 break
             response += char
 
-        logging.debug("Received: %s", response.encode('string_escape'))
-        if response.endswith(" ok\r\n"):
-            return response[:-5]
+        logging.debug("Received: %s", response.decode('latin1', 'backslashreplace'))
+        if response.endswith(b" ok\r\n"):
+            return response[:-5].decode('latin1')
         else:
             # if the device hasn't answered anything, it might have been disconnected
             if len(response) == 0:
                 if self._try_recover:
                     self._tryRecover()
                 else:
-                    raise IOError("Device timeout after receiving '%s'." % response.encode('string_escape'))
+                    raise IOError("Device timeout after receiving '%s'." % response.decode('latin1', 'backslashreplace'))
             else: # just non understood command
                 # empty the serial port
                 self._serial.timeout = 0.1
@@ -381,7 +379,7 @@ class SpectraPro(model.Actuator):
                     raise IOError("Device keeps sending data")
                 response += garbage
                 raise SPError("Sent '%s' and received error: '%s'" %
-                              (com.encode('string_escape'), response.encode('string_escape')))
+                              (com.decode('latin1', 'backslashreplace'), response.decode('latin1', 'backslashreplace')))
 
     def _tryRecover(self):
         # no other access to the serial port should be done
@@ -1001,13 +999,13 @@ class SPSimulator(object):
         self._turret = 1
         self._grating = 2
         self._wavelength = 0 # nm
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
     def write(self, data):
         self._input_buf += data
         # process each commands separated by "\r"
-        commands = self._input_buf.split("\r")
+        commands = self._input_buf.split(b"\r")
         self._input_buf = commands.pop() # last one is not complete yet
         for c in commands:
             self._processCommand(c)
@@ -1032,63 +1030,63 @@ class SPSimulator(object):
         com (str): command
         """
         out = None # None means error
-        if com == "?turret":
-            out = "%d" % self._turret
-        elif com == "?grating":
-            out = "%d" % self._grating
-        elif com == "?nm":
-            out = "%.2f nm" % self._wavelength
-        elif com == "model":
-            out = "SP-2-300i"
-        elif com == "serial":
-            out = "12345"
-        elif com == "no-echo":
-            out = "" # echo is always disabled anyway
-        elif com == "?gratings":
-            out = (" 1  150 g/mm BLZ=  500NM \r\n"
-                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
-                   " 3 1200 g/mm BLZ= 700NM \r\n"
-                   " 4  Not Installed    \r\n")
-        elif com.endswith("goto"):
-            m = re.match("(\d+.\d+) goto", com)
+        if com == b"?turret":
+            out = b"%d" % self._turret
+        elif com == b"?grating":
+            out = b"%d" % self._grating
+        elif com == b"?nm":
+            out = b"%.2f nm" % self._wavelength
+        elif com == b"model":
+            out = b"SP-2-300i"
+        elif com == b"serial":
+            out = b"12345"
+        elif com == b"no-echo":
+            out = b"" # echo is always disabled anyway
+        elif com == b"?gratings":
+            out = (b" 1  150 g/mm BLZ=  500NM \r\n"
+                   b"\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   b" 3 1200 g/mm BLZ= 700NM \r\n"
+                   b" 4  Not Installed    \r\n")
+        elif com.endswith(b"goto"):
+            m = re.match(b"(\d+.\d+) goto", com)
             if m:
                 new_wl = max(0, min(float(m.group(1)), 5000)) # clamp value silently
                 move = abs(self._wavelength - new_wl)
                 self._wavelength = new_wl
-                out = ""
+                out = b""
                 time.sleep(move / 500) # simulate 500nm/s speed
-        elif com.endswith("turret"):
-            m = re.match("(\d+) turret", com)
+        elif com.endswith(b"turret"):
+            m = re.match(b"(\d+) turret", com)
             if m:
                 self._turret = int(m.group(1))
-                out = ""
-        elif com.endswith("grating"):
-            m = re.match("(\d+) grating", com)
+                out = b""
+        elif com.endswith(b"grating"):
+            m = re.match(b"(\d+) grating", com)
             if m:
                 self._grating = int(m.group(1))
-                out = ""
+                out = b""
                 time.sleep(2) # simulate long move
-        elif com.endswith("mono-eestatus"):
-            out = ("\r\nSP-2-300i \r\nserial number 12345 \r\n"
-                   "turret  1 \r\ngrating 1 \r\ng/t     3 \r\n\r\n"
-                   " 1  150 g/mm BLZ=  500NM \r\n"
-                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
-                   " 3 1200 g/mm BLZ=  700NM \r\n"
-                   " 4  Not Installed     \r\n"
-                   "\r\n           0       1       2       3       4       5       6       7       8\r\n"
-                   "offset       27 1536018 3072000       0 1536000 3072000       0 1536000 3072000\r\nadjust   979505  979820  980000  980000  980000  980000  980000  980000  980000\r\n"
-                   "delay 0 \r\nwavelength      0.000\r\nrate          100.000\r\ndouble 0 \r\nbacklash 25600 \r\noptions 0110310 \r\n"
-                   "focal length 300 \r\nhalf angle 15.20 \r\ndetector angle 1.38 \r\n"
-                   "date code 06/03/2008 \r\nboard serial number 085138715 \r\ngear 581632 25425 \r\n90 deg 1152000 \r\nmath sine\r\ngoto at 17000 pps \r\n25600 steps/rev\r\n"
-                   "                 on #2   on #3  off #1  off #2  off #3  off #4   on #1   mono\r\nchan                 8      10       2       2       2       2      12      14\r\nstop             10485   10485   10485   10485   10485   10485    5242     100\r\naccel                8       8       8       8       8       8       8       8\r\nlraf                 8       8       8       8       8       8       8       3\r\nhraf                 8       8       8       8       8       8       8      70\r\nmper                32      32      32      32      32      32      32      32\r\n                  on #2    on #3   off #1   off #2   off #3   off #4    on #1\r\nmotor app            22        0        0        0        0        0       51\r\nmotor min pos         0        0        0        0        0        0        1\r\nmotor max pos         1        0        0        0        0        0        6\r\nmotor speed         200      200      200      200      200      200      800\r\nmotor offset          0        0        0        0        0        0        0\r\nmotor s/rev         400      400      400      400      400      400     2800\r\nmotor positions \r\n        0             0        0        0        0        0        0        0\r\n        1           -70        0        0        0        0        0      467\r\n        2             0        0        0        0        0        0      933\r\n        3             0        0        0        0        0        0     1400\r\n        4             0        0        0        0        0        0     1867\r\n        5             0        0        0        0        0        0     2333\r\n        6             0        0        0        0        0        0        0\r\n        7             0        0        0        0        0        0        0\r\n        8             0        0        0        0        0        0        0\r\n        9             0        0        0        0        0        0        0\r\n\r\n           0           1           2           3           4           5           6           7           8\r\nleft edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\ncenter pixel \r\n       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000\r\nright edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\nomega        0       0       0       0\r\nphi          0       0       0       0\r\namp          0       0       0       0\r\n"
+        elif com.endswith(b"mono-eestatus"):
+            out = (b"\r\nSP-2-300i \r\nserial number 12345 \r\n"
+                   b"turret  1 \r\ngrating 1 \r\ng/t     3 \r\n\r\n"
+                   b" 1  150 g/mm BLZ=  500NM \r\n"
+                   b"\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   b" 3 1200 g/mm BLZ=  700NM \r\n"
+                   b" 4  Not Installed     \r\n"
+                   b"\r\n           0       1       2       3       4       5       6       7       8\r\n"
+                   b"offset       27 1536018 3072000       0 1536000 3072000       0 1536000 3072000\r\nadjust   979505  979820  980000  980000  980000  980000  980000  980000  980000\r\n"
+                   b"delay 0 \r\nwavelength      0.000\r\nrate          100.000\r\ndouble 0 \r\nbacklash 25600 \r\noptions 0110310 \r\n"
+                   b"focal length 300 \r\nhalf angle 15.20 \r\ndetector angle 1.38 \r\n"
+                   b"date code 06/03/2008 \r\nboard serial number 085138715 \r\ngear 581632 25425 \r\n90 deg 1152000 \r\nmath sine\r\ngoto at 17000 pps \r\n25600 steps/rev\r\n"
+                   b"                 on #2   on #3  off #1  off #2  off #3  off #4   on #1   mono\r\nchan                 8      10       2       2       2       2      12      14\r\nstop             10485   10485   10485   10485   10485   10485    5242     100\r\naccel                8       8       8       8       8       8       8       8\r\nlraf                 8       8       8       8       8       8       8       3\r\nhraf                 8       8       8       8       8       8       8      70\r\nmper                32      32      32      32      32      32      32      32\r\n                  on #2    on #3   off #1   off #2   off #3   off #4    on #1\r\nmotor app            22        0        0        0        0        0       51\r\nmotor min pos         0        0        0        0        0        0        1\r\nmotor max pos         1        0        0        0        0        0        6\r\nmotor speed         200      200      200      200      200      200      800\r\nmotor offset          0        0        0        0        0        0        0\r\nmotor s/rev         400      400      400      400      400      400     2800\r\nmotor positions \r\n        0             0        0        0        0        0        0        0\r\n        1           -70        0        0        0        0        0      467\r\n        2             0        0        0        0        0        0      933\r\n        3             0        0        0        0        0        0     1400\r\n        4             0        0        0        0        0        0     1867\r\n        5             0        0        0        0        0        0     2333\r\n        6             0        0        0        0        0        0        0\r\n        7             0        0        0        0        0        0        0\r\n        8             0        0        0        0        0        0        0\r\n        9             0        0        0        0        0        0        0\r\n\r\n           0           1           2           3           4           5           6           7           8\r\nleft edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\ncenter pixel \r\n       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000\r\nright edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\nomega        0       0       0       0\r\nphi          0       0       0       0\r\namp          0       0       0       0\r\n"
                    )
         else:
-            logging.error("SIM: Unknown command %s", com)
+            logging.error("SIM: Unknown command %s", com.decode('latin1', 'backslashreplace'))
 
         # add the response end
         if out is None:
-            out = " %s? \r\n" % com
+            out = b" %s? \r\n" % com
         else:
-            out = " " + out + "  ok\r\n"
+            out = b" " + out + b"  ok\r\n"
         self._output_buf += out
 
