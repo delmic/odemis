@@ -1807,15 +1807,6 @@ def _genResizedShapes(data):
     return resized_shapes
 
 
-def _ensure_fs_encoding(filename):
-    if not isinstance(filename, unicode):
-        logging.info("Got filename encoded as a string, while should be "
-                     "unicode: %r", filename)
-        return filename # hope it's the correct encoding
-    else:
-        return filename.encode(sys.getfilesystemencoding())
-
-
 def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
     """
     f (libtiff file handle): Handle of a TIFF file
@@ -1870,7 +1861,6 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
     multiple_files (boolean): whether the data is distributed across multiple
       files or not.
     '''
-    filename = _ensure_fs_encoding(filename)
     if isinstance(data, list):
         if multiple_files:
             if thumbnail is not None:
@@ -1933,7 +1923,6 @@ def open_data(filename):
     # TODO: support filename to be a File or Stream (but it seems very difficult
     # to do it without looking at the .filename attribute)
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
-    filename = _ensure_fs_encoding(filename)
     return AcquisitionDataTIFF(filename)
 
 
