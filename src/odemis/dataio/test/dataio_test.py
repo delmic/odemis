@@ -44,7 +44,7 @@ class TestDataIO(unittest.TestCase):
         fmts = get_available_formats()
         for fmt in fmts:
             fmt_mng = get_converter(fmt)
-            self.assertGreaterEqual(fmt_mng.EXTENSIONS, 1)
+            self.assertGreaterEqual(len(fmt_mng.EXTENSIONS), 1)
 
     def test_find_fittest_converter_write(self):
         # input args -> format name
