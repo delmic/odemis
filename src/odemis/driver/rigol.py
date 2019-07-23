@@ -89,8 +89,6 @@ class WaveGenerator(model.Emitter):
         val (str): the value of the command string. e.g. "1,2,3,4"
         Returns true if successful.
         '''
-        logging.debug("Sending command %s %s", cmd.encode('string_escape'),
-                      val.encode('string_escape'))
         ret = self._accesser.sendOrderCommand(cmd, val)
 
         return ret
@@ -99,8 +97,6 @@ class WaveGenerator(model.Emitter):
         """
         Same as accesser's sendQueryCommand, but with error recovery
         """
-        logging.debug("Sending command %s", cmd.encode('string_escape'))
-
         trials = 0
         while True:
             try:
@@ -259,8 +255,8 @@ class IPAccesser(object):
         if not self._is_connected:
             raise IOError("Device %s not connected." % (self._host,))
 
-        msg = "%s %s\n" % (cmd, val)
-
+        msg = ("%s %s\n" % (cmd, val)).encode('ascii')
+        logging.debug("Sending command %s", msg.decode('latin1', 'backslashreplace'))
         with self._net_access:
             self.socket.sendall(msg)
 
@@ -268,47 +264,50 @@ class IPAccesser(object):
         """
         Sends one command, and expect a reply
         cmd (str): command to send, including the ?
-
+        returns:
+            ans (str): response of the driver
         raises:
             IOError: if problem with sending/receiving data over the connection
         """
         if not self._is_connected:
             raise IOError("Device %s not connected." % (self._host,))
 
-        msg = "%s\n" % cmd
+        msg = ("%s\n" % cmd).encode('ascii')
+        logging.debug("Sending command %s", msg.decode('latin1', 'backslashreplace'))
 
         with self._net_access:
             self.socket.sendall(msg)
 
             # read the answer
             end_time = time.time() + 0.5
-            ans = ""
+            ans = b""
             while True:
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.decode('latin1', 'backslashreplace')))
 
                 if not data:
                     logging.debug("Received empty message")
 
                 ans += data
                 # does it look like we received a full answer?
-                if "\n" in ans:
+                if b"\n" in ans:
                     break
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.decode('latin1', 'backslashreplace')))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.encode('string_escape'))
+        logging.debug("Received: %s", ans.decode('latin1', 'backslashreplace'))
 
-        ans, left = ans.split("\n", 1)  # remove the end of line characters
+        ans, left = ans.split(b"\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.encode('string_escape'))
+                          left.decode('latin1', 'backslashreplace'))
+        ans = ans.decode('latin1')
         return ans
 
 
@@ -321,7 +320,7 @@ class FakeDG1000Z(object):
 
         # parameters
         self._error_state = False
-        self._output_buffer = ''
+        self._output_buffer = b''
         self.name = "SimWG"
         logging.debug('%s: Starting simulated device', self.name)
         self._frequency = 1000
@@ -357,8 +356,8 @@ class FakeDG1000Z(object):
         if self._output_buffer: # check if there is data in the buffer
             connection.sendall(self._output_buffer)
             logging.debug('%s: Sending transmission: %s', self.name,
-                          self._output_buffer.encode('string_escape'))
-            self._output_buffer = ''  # clear the buffer
+                          self._output_buffer.decode('latin1', 'backslashreplace'))
+            self._output_buffer = b''  # clear the buffer
 
     def _listen(self):
         '''
@@ -382,7 +381,7 @@ class FakeDG1000Z(object):
                         data = data.strip()
                         # determine a command
                         for line in data.splitlines():
-                            logging.debug('%s: Received: %s' % (self.name, line.encode('string_escape')))
+                            logging.debug('%s: Received: %s' % (self.name, line.decode('latin1', 'backslashreplace')))
                             self._decodeMessage(line)
                             time.sleep(0.105) # wait a little before responding
                             self._sendBuffer(connection)
@@ -401,48 +400,48 @@ class FakeDG1000Z(object):
         '''
         msg = msg.strip()  # clean whitespace from message
 
-        if msg == '':   # Empty message
+        if msg == b'':   # Empty message
             logging.warning('%s: Empty message received', self.name)
             return
 
-        if msg == ":SYST:ERR?":  # Error query
+        if msg == b":SYST:ERR?":  # Error query
             logging.debug('%s: Error state requested: %d', self.name, self._error_state)
             if self._error_state:
-                self._output_buffer += '113,"Invalid command"\n'
+                self._output_buffer += b'113,"Invalid command"\n'
             else:
-                self._output_buffer += '0,"No error"\n'
-        elif msg == "*IDN?":    # Request identifier command
-            self._output_buffer += 'SimRigol\n'
+                self._output_buffer += b'0,"No error"\n'
+        elif msg == b"*IDN?":    # Request identifier command
+            self._output_buffer += b'SimRigol\n'
             logging.debug('%s: Return identifier', self.name)
-        elif re.match(":SOUR(1|2):FREQ?", msg):
-            self._output_buffer += '%E\n' % (self._frequency,)
-        elif re.match(":OUTP(1|2) ON", msg):  # Channel 1 on command
+        elif re.match(b":SOUR(1|2):FREQ?", msg):
+            self._output_buffer += b'%E\n' % (self._frequency,)
+        elif re.match(b":OUTP(1|2) ON", msg):  # Channel 1 on command
             self._error_state = False
             logging.debug('%s: Set output on', self.name)
-        elif re.match(":OUTP(1|2) OFF", msg):  # Channel 1 off command
+        elif re.match(b":OUTP(1|2) OFF", msg):  # Channel 1 off command
             self._error_state = False
             logging.debug('%s: Set output off', self.name)
-        elif re.match(":SOUR(1|2):APPL:SQU", msg):  # Apply square wave command
+        elif re.match(b":SOUR(1|2):APPL:SQU", msg):  # Apply square wave command
             # Try to unpack the command to see if the format is correct
             try:
-                cmd, para = msg.split(" ")
-                frequency, amplitude_pp, dc_bias, phase_shift = [float(s) for s in para.split(',')]
+                cmd, para = msg.split(b" ")
+                frequency, amplitude_pp, dc_bias, phase_shift = [float(s) for s in para.split(b',')]
                 self._frequency = frequency
                 logging.debug('%s: Set square wave %f Hz, %f Vpp, %f V bias, %f degrees',
                               self.name, frequency, amplitude_pp, dc_bias, phase_shift)
             except TypeError:   # could not unpack message
                 self._error_state = True
-                logging.exception('%s: Error Setting square wave %s', self.name, cmd.encode('string_escape'))
-        elif re.match(":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
+                logging.exception('%s: Error Setting square wave %s', self.name, msg.decode('latin1', 'backslashreplace'))
+        elif re.match(b":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
             # Try to unpack the command to see if the format is correct
             try:
-                cmd, para = msg.split(" ")
+                cmd, para = msg.split(b" ")
                 logging.debug('%s: Setting duty cycle to %f %%', self.name, float(para))
             except TypeError:   # could not unpack message
                 self._error_state = True
                 logging.exception('%s: Error Setting duty cycle %s', self.name,
-                                  cmd.encode('string_escape'))
+                                  msg.decode('latin1', 'backslashreplace'))
         else:
             self._error_state = True
             logging.exception('%s: Error state set for message: %s', self.name,
-                              msg.encode('string_escape'))
+                              msg.decode('latin1', 'backslashreplace'))
