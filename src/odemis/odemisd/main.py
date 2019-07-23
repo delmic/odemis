@@ -350,36 +350,46 @@ class BackendContainer(model.Container):
                     logging.warning("Failed to find dependency %s of component %s when terminating.",
                                     dep.name, comp.name, exc_info=True)
         # terminate all the components in order
-        terminating_comps = []  # components that are already terminated or in the process of terminating
+        terminating_comps = set()  # components that are already terminated or in the process of terminating
         executor = futures.ThreadPoolExecutor(max_workers=20)
         fs_running = set()
         while self._dependents:
             independents = tuple(c for c, p in self._dependents.items() if not p and not c in terminating_comps)
             if not independents and not fs_running:
                 # just pick a random component
-                logging.warning("All the components to terminate have parents: %s",
-                                self._dependents)
-                independents = tuple(self._dependents.keys())[:1]
+                independents = tuple(set(self._dependents.keys()) - terminating_comps)[:1]
+                if independents:
+                    logging.warning("All the components to terminate have parents: %s",
+                                    self._dependents)
+                else:
+                    # That's a sign that some component failed to end => give up
+                    logging.warning("Already tried terminating all the components, but still some left: %s",
+                                    self._dependents.keys())
+                    return
 
             for comp in independents:
-                terminating_comps.append(comp)
+                terminating_comps.add(comp)
                 f = executor.submit(self._terminate_independent, comp)
                 fs_running.add(f)
 
             # Block until one future is completed, then continue looping
             done, fs_running = futures.wait(fs_running, return_when=futures.FIRST_COMPLETED)
 
-        logging.debug("Finished requesting termination of all components. Waiting for %s components to terminate." % len(fs_running))
+        logging.debug("Finished requesting termination of all components, waiting for %s components to terminate.",
+                      len(fs_running))
         futures.wait(fs_running, return_when=futures.ALL_COMPLETED)
 
     def _terminate_independent(self, comp):
-        # First terminate the children
-        children = comp.children.value
-        for child in children:
-            self._terminate_component(child)
-        # Terminate component itself
-        self._terminate_component(comp)
-        del self._dependents[comp]  # children are already deleted from ._parents
+        try:
+            # First terminate the children
+            children = comp.children.value
+            for child in children:
+                self._terminate_component(child)
+            # Terminate component itself
+            self._terminate_component(comp)
+            del self._dependents[comp]  # children are already deleted from ._parents
+        except Exception:
+            logging.warning("Failed to terminate component %s", comp.name, exc_info=True)
 
     def _terminate_component(self, c):
         # remove from the graph
@@ -388,10 +398,7 @@ class BackendContainer(model.Container):
 
         cname = c.name
         logging.debug("Stopping comp %s", cname)
-        try:
-            c.terminate()
-        except Exception:
-            logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+        c.terminate()
 
         # Terminate the container if that was the component for which it
         # was created.
