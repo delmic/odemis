@@ -162,11 +162,6 @@ class ReadoutCamera(model.DigitalCamera):
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
-        # Note: no function to get current acqMode.
-        # Note: Acquisition mode, needs to be before exposureTime!
-        # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
-        self.acqMode = "Live"
-
         range_exp = self._getCamExpTimeRange()
         self._exp_time = self.GetCamExpTime()
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
@@ -347,8 +342,11 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Start an acquisition.
         """
+        # Note: no function to get current acqMode.
+        # Note: Acquisition mode, needs to be before exposureTime!
+        # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
         if self._sync_event is None:  # do not care about synchronization, start acquire
-            self.parent.StartAcquisition(self.acqMode)
+            self.parent.StartAcquisition("Live")
 
     def _stop(self):
         """
@@ -380,11 +378,8 @@ class ReadoutCamera(model.DigitalCamera):
         self._sync_event = event
 
         if self._sync_event:
-            self.acqMode = "SingleLive"
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
-        else:
-            self.acqMode = "Live"
 
     @oneway
     def onEvent(self):
@@ -447,13 +442,25 @@ class ReadoutCamera(model.DigitalCamera):
                     try:
                         event_time = self.queue_events.popleft()
                         logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
-                        self.parent.AcqStart(self.acqMode)
+                        self.parent.AcqStart("SingleLive")  # should never be a different
                         is_receiving_image = True
                     except IndexError:
                         # No event (yet) => fine
                         pass
 
-                rargs = self.parent.queue_img.get(block=True)  # block until receive something
+                if self._sync_event:
+                    timeout = max(self.exposureTime.value * 2, 1)  # wait at least 1s
+                else:
+                    timeout = None
+
+                try:
+                    rargs = self.parent.queue_img.get(block=True, timeout=timeout)  # block until receive something
+                except queue.Empty:
+                    logging.warning("Failed to receive image from streak ccd. Timed out after %f s. Will try again.",
+                                    timeout)
+                    is_receiving_image = False
+                    continue
+
                 logging.debug("Received img message %s", rargs)
 
                 if rargs is None:  # if message is None end the thread
@@ -542,8 +549,7 @@ class ReadoutCamera(model.DigitalCamera):
                 dataarray = model.DataArray(image, md)
                 self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
 
-                if self._sync_event:
-                    is_receiving_image = False
+                is_receiving_image = False
 
         except Exception:
             logging.exception("Hamamatsu streak camera TCP/IP image thread failed.")
@@ -1174,6 +1180,12 @@ class StreakCamera(model.HwComponent):
         """
         # Note: sync acquisition calls directly AcqStart
 
+        # restart thread in case it was terminated
+        if not self._readoutcam.t_image.isAlive():
+            self.AcqLiveMonitor("RingBuffer", nbBuffers=3)
+            self._readoutcam.t_image = threading.Thread(target=self._readoutcam._getDataFromBuffer)
+            self._readoutcam.t_image.start()
+
         try:
             self.AcqStart(AcqMode)
         except RemoteExError as ex:
@@ -1357,10 +1369,6 @@ class StreakCamera(model.HwComponent):
                       Acquire: Acquire mode
                       AI: Analog integration
                       PC: Photon counting"""
-        if not self._readoutcam.t_image.isAlive():  # restart thread in case it was terminated
-            self.AcqLiveMonitor("RingBuffer", nbBuffers=10)
-            self._readoutcam.t_image = threading.Thread(target=self._readoutcam._getDataFromBuffer)
-            self._readoutcam.t_image.start()
         self.sendCommand("AcqStart", AcqMode)
 
     def AcqStatus(self):
