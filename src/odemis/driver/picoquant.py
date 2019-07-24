@@ -386,7 +386,7 @@ class PH300(model.Detector):
     def GetLibraryVersion(self):
         ver_str = create_string_buffer(8)
         self._dll.PH_GetLibraryVersion(ver_str)
-        return ver_str.value
+        return ver_str.value.decode('latin1')
 
     def Initialise(self, mode):
         """
@@ -400,12 +400,13 @@ class PH300(model.Detector):
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
         self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
-        return mod.value, partnum.value, ver.value
+        return (mod.value.decode('latin1'), partnum.value.decode('latin1'),
+                ver.value.decode('latin1'))
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
         self._dll.PH_GetSerialNumber(self._idx, sn_str)
-        return sn_str.value
+        return sn_str.value.decode('latin1')
 
     def Calibrate(self):
         logging.debug("Calibrating device %d", self._idx)
@@ -935,7 +936,7 @@ class FakePHDLL(object):
     def __init__(self):
         self._idx = 0
         self._mode = None
-        self._sn = "10234567"
+        self._sn = b"10234567"
         self._base_res = 4  # ps
         self._bins = 0 # binning power
         self._syncdiv = 0
@@ -958,12 +959,12 @@ class FakePHDLL(object):
         self._mode = None
 
     def PH_GetHardwareInfo(self, i, mod, partnum, ver):
-        mod.value = "FakeHarp 300"
-        partnum.value = "12345"
-        ver.value = "2.0"
+        mod.value = b"FakeHarp 300"
+        partnum.value = b"12345"
+        ver.value = b"2.0"
 
     def PH_GetLibraryVersion(self, ver_str):
-        ver_str.value = "3.00"
+        ver_str.value = b"3.00"
 
     def PH_GetSerialNumber(self, i, sn_str):
         sn_str.value = self._sn
