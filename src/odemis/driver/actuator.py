@@ -619,7 +619,7 @@ class ConvertStage(model.Actuator):
         # canUpdate.
         axes_def = {"x": self._dependency.axes[axes[0]],
                     "y": self._dependency.axes[axes[1]]}
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+        model.Actuator.__init__(self, name, role, dependencies=dependencies, axes=axes_def, **kwargs)
 
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
