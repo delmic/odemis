@@ -65,13 +65,15 @@ def get_dataio_imports():
 def get_wx_imports():
     # Special hooks-wx-lib.pubsub doesn't work properly if these modules are not 
     # collected explicitly
-    return collect_submodules('pubsub.core.kwargs') + \
-            collect_submodules('pubsub.core.arg1') + \
-            ["pubsub.core.publisherbase", "pubsub.core.listenerbase" ]
+    # Use this version if wxPython doesn't have pubsub
+    #return collect_submodules('pubsub.core.kwargs') + \
+    #        collect_submodules('pubsub.core.arg1') + \
+    #        ["pubsub.core.publisherbase", "pubsub.core.listenerbase" ]
     # Put it back, once wxpython 4 has an internal pubsub again
-    #return collect_submodules('wx.lib.pubsub.core.kwargs') + \
-    #	   collect_submodules('wx.lib.pubsub.core.arg1') + \
-    #	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase" ]
+    return collect_submodules('wx.lib.pubsub.core.kwargs') + \
+    	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase" ]
+           #collect_submodules('wx.lib.pubsub.core.arg1') + \
+           #collect_submodules('wx.lib.pubsub.core.utils') + \
 
 def get_libtiff_imports():
     # tiff_h_x_y_z needs administrator rights to be generated, so import it here
@@ -147,6 +149,7 @@ a = Analysis(
     hiddenimports=[
         'cairo',
         'Queue',
+        'queue',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
     ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports(),
     hookspath=[],
