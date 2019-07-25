@@ -53,7 +53,7 @@ def get_best_dtype_for_acc(idtype, count):
     :param count: (int) Number of values/images to be accumulated/integrated.
     :returns: (adtype) The best fitting dtype.
     """
-    if idtype.kind not in "i":
+    if idtype.kind not in "ui":
         return idtype
     else:
         maxval = numpy.iinfo(idtype).max * count
