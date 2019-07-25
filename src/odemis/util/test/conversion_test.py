@@ -30,7 +30,7 @@ from odemis.util.conversion import \
     convert_to_object, \
     reproduce_typed_value, \
     get_img_transformation_matrix, \
-    get_tile_md_pos, get_img_transformation_md
+    get_tile_md_pos, get_img_transformation_md, ensure_tuple
 import unittest
 
 
@@ -124,6 +124,21 @@ class TestConversion(unittest.TestCase):
             out = reproduce_typed_value(ex_val, str_val)
             self.assertEqual(out, expo,
                  "Testing with %s / '%s' -> %s" % (ex_val, str_val, out))
+
+    def test_ensure_tuple(self):
+        obj = [1, [2, 3], (["5", u"678"],), 9]
+        exp_out = (1, (2, 3), (("5", u"678"),), 9)
+        out = ensure_tuple(obj)
+        self.assertEqual(out, exp_out)
+
+        # Should return the same thing
+        obj = 42
+        out = ensure_tuple(obj)
+        self.assertEqual(out, obj)
+
+        obj = (1, 2, 3)
+        out = ensure_tuple(obj)
+        self.assertEqual(out, obj)
 
     def test_reproduceTypedValue_bad(self):
         """

@@ -288,7 +288,7 @@ def ensure_tuple(v):
       otherwise it will be returned as is
     return (tuple or object): same a v, but a tuple if v was iterable
     """
-    if isinstance(v, collections.Iterable):
+    if isinstance(v, collections.Iterable) and not isinstance(v, basestring):
         # convert to a tuple, with each object contained also converted
         return tuple(ensure_tuple(i) for i in v)
     else:
