@@ -23,7 +23,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.model import CancellableThreadPoolExecutor, HwError, isasync
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import re
 import serial
@@ -187,9 +187,7 @@ class FW102c(model.Actuator):
 
             # Shouldn't be necessary, but just in case
             skipped = self._serial.read(1000) # More than 1000 chars => give up
-            # decode with backslashreplace to avoid failing with random non-ascii characters
-            # backslashreplace doesn't seem to be working in python2 with utf-8 or ascii, so use latin-1
-            logging.debug("Skipping input %s", skipped.decode("latin1", "backslashreplace"))
+            logging.debug("Skipping input %s", to_str_escape(skipped))
 
     re_err = br"Command error (.*)"
     def _sendQuery(self, com):
@@ -207,7 +205,7 @@ class FW102c(model.Actuator):
         assert(len(com) <= 50) # commands cannot be long
         full_com = com + b"\r"
         with self._ser_access:
-            logging.debug("Sending: '%s'", full_com.decode("latin1", "backslashreplace"))
+            logging.debug("Sending: '%s'", to_str_escape(full_com))
             self._serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -218,14 +216,14 @@ class FW102c(model.Actuator):
             while True:
                 char = self._serial.read() # empty if timeout
                 if not char: # should always finish by a "> "
-                    raise IOError("Controller timeout, after receiving '%s'" % line.decode("latin1", "backslashreplace"))
+                    raise IOError("Controller timeout, after receiving '%s'" % to_str_escape(line))
 
                 # normal char
                 line += char
                 if line[-2:] == b"> ":
                     break
 
-            logging.debug("Received: '%s'", line.decode("latin1", "backslashreplace"))
+            logging.debug("Received: '%s'", to_str_escape(line))
 
         # remove echo + suffix + new line
         line = line[len(full_com):-2].rstrip(b"\r")
@@ -255,7 +253,7 @@ class FW102c(model.Actuator):
         return (str): model name as reported by the device
         """
         # answer is like "THORLABS FW102C/FW212C Filter Wheel version 1.04"
-        return self._sendQuery(b"*idn?").decode("latin1", "backslashreplace")
+        return to_str_escape(self._sendQuery(b"*idn?").decode("latin1")
 
     def GetMaxPosition(self):
         """
@@ -489,7 +487,7 @@ class FW102cSimulator(object):
         process the command, and put the result in the output buffer
         com (str): command
         """
-        logging.debug("Simulator received command %s", com.decode("latin1", "backslashreplace"))
+        logging.debug("Simulator received command %s", to_str_escape(com))
         out = None
         try:
             if com == b"*idn?":
@@ -516,8 +514,8 @@ class FW102cSimulator(object):
                 # no output
             else:
                 # TODO: set of speed, trig, sensors,
-                logging.debug("Command '%s' unknown", com.decode("latin1", "backslashreplace"))
-                raise KeyError("%s" % com.decode("latin1", "backslashreplace"))
+                logging.debug("Command '%s' unknown", to_str_escape(com))
+                raise KeyError("%s" % to_str_escape(com))
         except ValueError:
             out = b"Command error CMD_ARG_INVALID\n"
         except KeyError:

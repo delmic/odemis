@@ -32,15 +32,16 @@ from odemis import model
 import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
+from odemis.util import to_str_escape
 import os
 import random
 import re
 import socket
 from subprocess import CalledProcessError
 import subprocess
+import sys
 import threading
 import time
-import sys
 
 
 class NewFocusError(Exception):
@@ -212,7 +213,7 @@ class PM8742(model.Actuator):
             m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp_str)
             modl, fw, sn = m.groups()
         except Exception:
-            raise IOError("Failed to decode firmware answer '%s'" % resp.decode("latin1", "backslashreplace"))
+            raise IOError("Failed to decode firmware answer '%s'" % to_str_escape(resp))
 
         return modl, fw, sn
 
@@ -320,7 +321,7 @@ class PM8742(model.Actuator):
             return True
         else:
             raise IOError("Failed to decode answer about motion '%s'" % 
-                          resp.decode("latin1", "backslashreplace"))
+                          to_str_escape(resp))
 
     def AbortMotion(self):
         """
@@ -353,7 +354,7 @@ class PM8742(model.Actuator):
             no, msg = int(m.group("no")), m.group("msg")  # group takes unicode str even on byte str input
         except Exception:
             raise IOError("Failed to decode error info '%s'" %
-                          resp.decode("latin1", "backslashreplace"))
+                          to_str_escape(resp))
 
         if no == 0:
             return None
@@ -779,14 +780,14 @@ class IPAccesser(object):
             str_axis = b"%d" % axis
 
         if not 1 <= len(cmd) <= 10:
-            raise ValueError("Command %s is very likely wrong" % (cmd.decode("latin1", "backslashreplace"),))
+            raise ValueError("Command %s is very likely wrong" % (to_str_escape(cmd),))
 
         # Note: it also accept a N> prefix to specify the controller number,
         # but we don't support multiple controllers (for now)
         msg = b"%s%s%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.decode("latin1", "backslashreplace"))
+            logging.debug("Sending: '%s'", to_str_escape(msg))
             self.socket.sendall(msg)
 
     def sendQueryCommand(self, cmd, val=b"", axis=None):
@@ -805,14 +806,14 @@ class IPAccesser(object):
             str_axis = b"%d" % axis
 
         if not 1 <= len(cmd) <= 10:
-            raise ValueError("Command %s is very likely wrong" % (cmd.decode("latin1", "backslashreplace"),))
+            raise ValueError("Command %s is very likely wrong" % (to_str_escape(cmd),))
 
         # Note: it also accept a N> prefix to specify the controller number,
         # but we don't support multiple controllers (for now)
         msg = b"%s%s?%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.decode("latin1", "backslashreplace"))
+            logging.debug("Sending: '%s'", to_str_escape(msg))
             self.socket.sendall(msg)
 
             # read the answer
@@ -823,7 +824,7 @@ class IPAccesser(object):
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.decode("latin1", "backslashreplace")))
+                                  (self._host, to_str_escape(msg)))
 
                 if not data:
                     logging.debug("Received empty message")
@@ -835,15 +836,15 @@ class IPAccesser(object):
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.decode("latin1", "backslashreplace")))
+                                  (self._host, to_str_escape(msg)))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.decode("latin1", "backslashreplace"))
+        logging.debug("Received: %s", to_str_escape(ans))
 
         ans, left = ans.split(b"\r\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.decode("latin1", "backslashreplace"))
+                          to_str_escape(left))
         return ans
 
     def flushInput(self):
@@ -939,7 +940,7 @@ class PM8742Simulator(object):
 
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
-        logging.debug("SIM: Sending %s", ret.decode("latin1", "backslashreplace"))
+        logging.debug("SIM: Sending %s", to_str_escape(ret))
         return ret
 
     def settimeout(self, t):
@@ -977,14 +978,14 @@ class PM8742Simulator(object):
         # decode command into axis | command | (query | value) (xxCC?nn)
         m = re.match(b"(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
         if not m:
-            logging.warning("SIM: failed to decode '%s'", msg.decode("latin1", "backslashreplace"))
+            logging.warning("SIM: failed to decode '%s'", to_str_escape(msg))
             self._push_error(6) # COMMAND DOES NOT EXIST
             return
 
         axis, cmd, val = m.groups()
         isquery = (val == b"?")
-        logging.debug("Decoded command to %s %s %s", axis.decode("latin1", "backslashreplace"),
-                      cmd.decode("latin1", "backslashreplace"), val.decode("latin1", "backslashreplace"))
+        logging.debug("Decoded command to %s %s %s", to_str_escape(axis),
+                      to_str_escape(cmd), to_str_escape(val))
 
         # axis must be integer => so directly convert to integer and check it
         if axis:
@@ -1024,7 +1025,7 @@ class PM8742Simulator(object):
                     self._push_error(7) # PARAMETER OUT OF RANGE
                     return
         except KeyError:
-            logging.error("SIM doesn't know command %s", cmd.decode("latin1", "backslashreplace"))
+            logging.error("SIM doesn't know command %s", to_str_escape(cmd))
             self._push_error(6) # COMMAND DOES NOT EXIST
             return
 

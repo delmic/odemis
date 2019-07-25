@@ -30,7 +30,7 @@ import numbers
 from odemis import model
 import odemis
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import re
 import serial
@@ -338,7 +338,7 @@ class SpectraPro(model.Actuator):
         assert(1 < len(com) <= 100) # commands cannot be long
         com += "\r"
         com = com.encode('latin1')
-        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending: %s", to_str_escape(com))
         # send command until it succeeds
         while True:
             try:
@@ -361,7 +361,7 @@ class SpectraPro(model.Actuator):
                 break
             response += char
 
-        logging.debug("Received: %s", response.decode('latin1', 'backslashreplace'))
+        logging.debug("Received: %s", to_str_escape(response))
         if response.endswith(b" ok\r\n"):
             return response[:-5].decode('latin1')
         else:
@@ -370,7 +370,7 @@ class SpectraPro(model.Actuator):
                 if self._try_recover:
                     self._tryRecover()
                 else:
-                    raise IOError("Device timeout after receiving '%s'." % response.decode('latin1', 'backslashreplace'))
+                    raise IOError("Device timeout after receiving '%s'." % to_str_escape(response))
             else: # just non understood command
                 # empty the serial port
                 self._serial.timeout = 0.1
@@ -379,7 +379,7 @@ class SpectraPro(model.Actuator):
                     raise IOError("Device keeps sending data")
                 response += garbage
                 raise SPError("Sent '%s' and received error: '%s'" %
-                              (com.decode('latin1', 'backslashreplace'), response.decode('latin1', 'backslashreplace')))
+                              (to_str_escape(com), to_str_escape(response)))
 
     def _tryRecover(self):
         # no other access to the serial port should be done
@@ -1081,7 +1081,7 @@ class SPSimulator(object):
                    b"                 on #2   on #3  off #1  off #2  off #3  off #4   on #1   mono\r\nchan                 8      10       2       2       2       2      12      14\r\nstop             10485   10485   10485   10485   10485   10485    5242     100\r\naccel                8       8       8       8       8       8       8       8\r\nlraf                 8       8       8       8       8       8       8       3\r\nhraf                 8       8       8       8       8       8       8      70\r\nmper                32      32      32      32      32      32      32      32\r\n                  on #2    on #3   off #1   off #2   off #3   off #4    on #1\r\nmotor app            22        0        0        0        0        0       51\r\nmotor min pos         0        0        0        0        0        0        1\r\nmotor max pos         1        0        0        0        0        0        6\r\nmotor speed         200      200      200      200      200      200      800\r\nmotor offset          0        0        0        0        0        0        0\r\nmotor s/rev         400      400      400      400      400      400     2800\r\nmotor positions \r\n        0             0        0        0        0        0        0        0\r\n        1           -70        0        0        0        0        0      467\r\n        2             0        0        0        0        0        0      933\r\n        3             0        0        0        0        0        0     1400\r\n        4             0        0        0        0        0        0     1867\r\n        5             0        0        0        0        0        0     2333\r\n        6             0        0        0        0        0        0        0\r\n        7             0        0        0        0        0        0        0\r\n        8             0        0        0        0        0        0        0\r\n        9             0        0        0        0        0        0        0\r\n\r\n           0           1           2           3           4           5           6           7           8\r\nleft edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\ncenter pixel \r\n       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000\r\nright edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\nomega        0       0       0       0\r\nphi          0       0       0       0\r\namp          0       0       0       0\r\n"
                    )
         else:
-            logging.error("SIM: Unknown command %s", com.decode('latin1', 'backslashreplace'))
+            logging.error("SIM: Unknown command %s", to_str_escape(com))
 
         # add the response end
         if out is None:

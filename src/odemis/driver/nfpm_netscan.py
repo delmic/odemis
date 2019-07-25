@@ -56,11 +56,10 @@ def scan():
                         print(b"%s\t%s\t%d" % (hn, addr, p))
                     except Exception:
                         logging.exception("Failed to decode packet %r from %s",
-                                          data.decode("latin1", "backslashreplace"),
+                                          data,
                                           addr)
                 else:
-                    logging.debug("Skipping unknown packet %r from %s", data.decode("latin1", "backslashreplace"),
-                                  addr)
+                    logging.debug("Skipping unknown packet %r from %s", data, addr)
         except socket.timeout:
             pass
         finally:
