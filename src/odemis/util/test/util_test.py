@@ -27,7 +27,7 @@ import logging
 from odemis import util
 from odemis.model import CancellableFuture
 from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance
+    perpendicular_distance, to_str_escape
 from odemis.util import timeout
 import time
 import unittest
@@ -144,6 +144,38 @@ class AlmostEqualTestCase(unittest.TestCase):
         for i, eo in in_exp.items():
             o = util.almost_equal(*i)
             self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+
+class StrEscapeTestCase(unittest.TestCase):
+# TODO:unit tests with line = b"\00a\xffb\nc\x82d'e"
+# line = b"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
+# ul = u"\x00aÿb\nc\x82d'e我\ua348"
+# ul = line.decode("latin1")
+    BYTES = b"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
+    BYTES_ESC = r"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
+    UNICODE = u"\x00aÿb\nc\x82d'e我\ua348"
+    UNICODE_ESC = r"\x00a\xffb\nc\x82d'e\u6211\ua348"
+
+    def test_fixed(self):
+        s_esc = to_str_escape(self.BYTES)
+        self.assertEqual(s_esc, self.BYTES_ESC)
+
+        s_esc = to_str_escape(self.UNICODE)
+        self.assertEqual(s_esc, self.UNICODE_ESC)
+
+    def test_short(self):
+        s_esc = to_str_escape(b"")
+        self.assertEqual(s_esc, "")
+
+        s_esc = to_str_escape(u"")
+        self.assertEqual(s_esc, "")
+
+    def test_long(self):
+        s_esc = to_str_escape(self.BYTES * 1000)
+        self.assertEqual(s_esc, self.BYTES_ESC * 1000)
+
+        s_esc = to_str_escape(self.UNICODE * 1000)
+        self.assertEqual(s_esc, self.UNICODE_ESC * 1000)
 
 
 class PerpendicularDistanceTestCase(unittest.TestCase):
