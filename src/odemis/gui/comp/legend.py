@@ -418,12 +418,15 @@ class AxisLegend(wx.Panel):
             return
 
         # shared function with the export method
-        self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, self.ClientSize, self._orientation, self._tick_spacing)
         csize = self.ClientSize
+        self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, csize, self._orientation, self._tick_spacing)
 
-        if self.lock_va is not None and self.lock_va.value == False:
+        if self.lock_va is not None:
             if self._orientation == wx.HORIZONTAL:
                 csize.x -= 24
+
+            elif self._orientation == wx.VERTICAL:
+                self._tick_list = [(pos, val) for (pos, val) in self._tick_list if pos > 24]
 
         # If min and max are very close, we need more significant numbers to
         # ensure the values displayed are different (ex 17999 -> 18003)
