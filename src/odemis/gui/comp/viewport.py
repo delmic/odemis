@@ -1427,37 +1427,39 @@ class NavigablePlotViewport(PlotViewport):
         down.
 
         """
-        if self._dragging:
+        if not self._dragging:
+            evt.Skip()
+            return
 
-            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
-                     self.canvas.pos_y_to_val_y(evt.Position[1]))
+        v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                 self.canvas.pos_y_to_val_y(evt.Position[1]))
 
-            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
+        self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                      v_pos[1] - self.drag_init_pos[1])
 
-            (lo, hi) = self.hrange.value
-            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
-            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
-            if lo < self.canvas.data_xrange[0]:
-                lo = self.canvas.data_xrange[0]
-                hi = self.canvas.display_xrange[1]
-            if hi > self.canvas.data_xrange[1]:
-                hi = self.canvas.data_xrange[1]
-                lo = self.canvas.display_xrange[0]
-            self.hrange.value = (lo, hi)
+        (lo, hi) = self.hrange.value
+        lo += (self.drag_shift[0] * self._hdrag_scale_factor)
+        hi += (self.drag_shift[0] * self._hdrag_scale_factor)
+        if lo < self.canvas.data_xrange[0]:
+            lo = self.canvas.data_xrange[0]
+            hi = self.canvas.display_xrange[1]
+        if hi > self.canvas.data_xrange[1]:
+            hi = self.canvas.data_xrange[1]
+            lo = self.canvas.display_xrange[0]
+        self.hrange.value = (lo, hi)
 
-            (lo, hi) = self.vrange.value
-            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
-            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
+        (lo, hi) = self.vrange.value
+        lo += (self.drag_shift[1] * self._vdrag_scale_factor)
+        hi += (self.drag_shift[1] * self._vdrag_scale_factor)
 
-            if lo < self.canvas.data_yrange[0]:
-                lo = self.canvas.data_yrange[0]
-                hi = self.canvas.display_yrange[1]
-            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
-                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
-                lo = self.canvas.display_yrange[0]
+        if lo < self.canvas.data_yrange[0]:
+            lo = self.canvas.data_yrange[0]
+            hi = self.canvas.display_yrange[1]
+        if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
+            hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
+            lo = self.canvas.display_yrange[0]
 
-            self.vrange.value = (lo, hi)
+        self.vrange.value = (lo, hi)
 
 
 class PointSpectrumViewport(NavigablePlotViewport):
