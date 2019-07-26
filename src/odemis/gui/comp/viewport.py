@@ -1255,6 +1255,10 @@ class NavigablePlotViewport(PlotViewport):
             self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
             self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
 
+        # automatically disable autoscaling (by locking) when the user zooms in
+        if self.canvas.display_xrange != self.canvas.data_xrange:
+            self.hrange_lock.value = True
+
     def set_vrange(self, vrange):
         """
         Setter for VA vrange
@@ -1276,6 +1280,10 @@ class NavigablePlotViewport(PlotViewport):
         if self.canvas.has_data():
             self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
             self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
+
+        # automatically disable autoscaling (by locking) when the user zooms in
+        if self.canvas.display_yrange != self.canvas.data_yrange:
+            self.vrange_lock.value = True
 
     def on_hlegend_scroll(self, evt=None):
         """ Scroll event for the bottom legend.
