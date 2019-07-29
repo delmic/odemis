@@ -480,7 +480,7 @@ class Stream(object):
         #     hwva.subscribe(updater, init=True)
 
     def _unlinkHwVAs(self):
-        for vaname, updater in self._lvaupdaters.items():
+        for vaname, updater in list(self._lvaupdaters.items()):
             hwva = self._hwvas[vaname]
             hwva.unsubscribe(updater)
             del self._lvaupdaters[vaname]
