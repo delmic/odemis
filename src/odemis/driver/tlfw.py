@@ -253,7 +253,7 @@ class FW102c(model.Actuator):
         return (str): model name as reported by the device
         """
         # answer is like "THORLABS FW102C/FW212C Filter Wheel version 1.04"
-        return to_str_escape(self._sendQuery(b"*idn?").decode("latin1")
+        return to_str_escape(self._sendQuery(b"*idn?"))
 
     def GetMaxPosition(self):
         """
