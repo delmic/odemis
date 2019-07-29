@@ -20,19 +20,20 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 from concurrent.futures import CancelledError, TimeoutError
+import copy
 import fcntl
 import glob
-import serial
 import logging
+from odemis import model
+from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor, isasync
+from odemis.util import driver, to_str_escape
 import os
+import re
+import serial
 import threading
 import time
-import copy
-import re
-from odemis import model
-from odemis.util import driver
-from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor, isasync
 
 # Unit definitions
 UNIT_DEF = {
@@ -319,7 +320,7 @@ class ESP(model.Actuator):
         """
         cmd = cmd + b"\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.decode("latin1", "backslashreplace"))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
     def _sendQuery(self, cmd):
@@ -331,7 +332,7 @@ class ESP(model.Actuator):
         """
         cmd = cmd + b"\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.decode("latin1", "backslashreplace"))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
             self._serial.timeout = 1
@@ -339,10 +340,10 @@ class ESP(model.Actuator):
             while ans[-1:] != b'\r':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.decode("latin1", "backslashreplace"))
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 ans += char
 
-            logging.debug("Received answer %s", ans.decode("latin1", "backslashreplace"))
+            logging.debug("Received answer %s", to_str_escape(ans))
 
             return ans.strip()
 
@@ -869,7 +870,7 @@ class ESPSimulator(object):
         msg (str): the message to parse (without the \r)
         return None: self._output_buf is updated if necessary
         """
-        logging.debug("SIM: parsing %s", msg.decode("latin1", "backslashreplace"))
+        logging.debug("SIM: parsing %s", to_str_escape(msg))
         msg = msg.strip()  # remove leading and trailing whitespace
         msg = b"".join(msg.split())  # remove all space characters
         

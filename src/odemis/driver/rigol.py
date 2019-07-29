@@ -16,14 +16,14 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from __future__ import division
+
 import logging
-
 from odemis import model
-
-import time
+from odemis.util import to_str_escape
 import re
-import threading
 import socket
+import threading
+import time
 
 DEFAULT_PORT = 5555 # Default TCP/IP port for the device
 PERIOD_RNG = (4e-8, 10)  # s, = 25 MHz -> 0.1Hz
@@ -256,7 +256,7 @@ class IPAccesser(object):
             raise IOError("Device %s not connected." % (self._host,))
 
         msg = ("%s %s\n" % (cmd, val)).encode('ascii')
-        logging.debug("Sending command %s", msg.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending command %s", to_str_escape(msg))
         with self._net_access:
             self.socket.sendall(msg)
 
@@ -273,7 +273,7 @@ class IPAccesser(object):
             raise IOError("Device %s not connected." % (self._host,))
 
         msg = ("%s\n" % cmd).encode('ascii')
-        logging.debug("Sending command %s", msg.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending command %s", to_str_escape(msg))
 
         with self._net_access:
             self.socket.sendall(msg)
@@ -286,7 +286,7 @@ class IPAccesser(object):
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.decode('latin1', 'backslashreplace')))
+                                  (self._host, to_str_escape(msg)))
 
                 if not data:
                     logging.debug("Received empty message")
@@ -298,15 +298,15 @@ class IPAccesser(object):
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.decode('latin1', 'backslashreplace')))
+                                  (self._host, to_str_escape(msg)))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.decode('latin1', 'backslashreplace'))
+        logging.debug("Received: %s", to_str_escape(ans))
 
         ans, left = ans.split(b"\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.decode('latin1', 'backslashreplace'))
+                          to_str_escape(left))
         ans = ans.decode('latin1')
         return ans
 
@@ -356,7 +356,7 @@ class FakeDG1000Z(object):
         if self._output_buffer: # check if there is data in the buffer
             connection.sendall(self._output_buffer)
             logging.debug('%s: Sending transmission: %s', self.name,
-                          self._output_buffer.decode('latin1', 'backslashreplace'))
+                          to_str_escape(self._output_buffer))
             self._output_buffer = b''  # clear the buffer
 
     def _listen(self):
@@ -381,7 +381,7 @@ class FakeDG1000Z(object):
                         data = data.strip()
                         # determine a command
                         for line in data.splitlines():
-                            logging.debug('%s: Received: %s' % (self.name, line.decode('latin1', 'backslashreplace')))
+                            logging.debug('%s: Received: %s' % (self.name, to_str_escape(line)))
                             self._decodeMessage(line)
                             time.sleep(0.105) # wait a little before responding
                             self._sendBuffer(connection)
@@ -431,7 +431,7 @@ class FakeDG1000Z(object):
                               self.name, frequency, amplitude_pp, dc_bias, phase_shift)
             except TypeError:   # could not unpack message
                 self._error_state = True
-                logging.exception('%s: Error Setting square wave %s', self.name, msg.decode('latin1', 'backslashreplace'))
+                logging.exception('%s: Error Setting square wave %s', self.name, to_str_escape(msg))
         elif re.match(b":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
             # Try to unpack the command to see if the format is correct
             try:
@@ -440,8 +440,8 @@ class FakeDG1000Z(object):
             except TypeError:   # could not unpack message
                 self._error_state = True
                 logging.exception('%s: Error Setting duty cycle %s', self.name,
-                                  msg.decode('latin1', 'backslashreplace'))
+                                  to_str_escape(msg))
         else:
             self._error_state = True
             logging.exception('%s: Error state set for message: %s', self.name,
-                              msg.decode('latin1', 'backslashreplace'))
+                              to_str_escape(msg))

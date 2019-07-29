@@ -29,7 +29,7 @@ import math
 from odemis import model
 import odemis
 from odemis.model import isasync
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import serial
 import sys
@@ -171,7 +171,7 @@ class PIRedStone(object):
             assert(len(sc) < 10)
 
         com = com.encode('latin1')
-        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending: %s", to_str_escape(com))
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
 
@@ -188,7 +188,7 @@ class PIRedStone(object):
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
         com = com.encode('latin1')
-        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending: %s", to_str_escape(com))
         self.serial.write(com)
 
         char = self.serial.read() # empty if timeout
@@ -208,7 +208,7 @@ class PIRedStone(object):
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
 
-        logging.debug("Receive: %s", report.decode('latin1', 'backslashreplace'))
+        logging.debug("Receive: %s", to_str_escape(report))
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
@@ -762,7 +762,7 @@ class FakePIRedStone(PIRedStone):
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
         com = com.encode('latin1')
-        logging.debug("Sending: %s", com.decode('latin1', 'backslashreplace'))
+        logging.debug("Sending: %s", to_str_escape(com))
         self.serial.write(com)
 
         return ""

@@ -28,7 +28,7 @@ import odemis
 from odemis.driver import andorcam2
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis import util
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import signal
 import threading
@@ -1688,7 +1688,7 @@ class Shamrock(model.Actuator):
             if serial.value.decode('latin1') == sn:
                 return n
             else:
-                logging.info("Skipping Andor Shamrock with S/N %s", serial.value.decode('latin1', 'backslashreplace'))
+                logging.info("Skipping Andor Shamrock with S/N %s", to_str_escape(serial.value))
         else:
             raise HwError("Cannot find Andor Shamrock with S/N %s, check it is "
                           "turned on and connected." % (sn,))

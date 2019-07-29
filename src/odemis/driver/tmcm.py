@@ -42,7 +42,7 @@ from odemis import model, util
 import odemis
 from odemis.model import (isasync, ParallelThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.util import driver, TimeoutError
+from odemis.util import driver, TimeoutError, to_str_escape
 import os
 import random
 import re
@@ -603,7 +603,7 @@ class TMCLController(model.Actuator):
             self._serial.flushInput()
             garbage = self._serial.read(1000)
             if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage.decode('latin1', 'backslashreplace'))
+                logging.debug("Received unexpected bytes '%s'", to_str_escape(garbage))
             if len(garbage) == 1000:
                 # Probably a sign that it's not the device we are expecting
                 logging.warning("Lots of garbage sent from device")
@@ -616,7 +616,7 @@ class TMCLController(model.Actuator):
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it's unlikely to ever do anything more.
             msg = b"\x00" * 9  # a 9-byte message
-            logging.debug("Sending '%s'", msg.decode('latin1', 'backslashreplace'))
+            logging.debug("Sending '%s'", to_str_escape(msg))
             self._serial.write(msg)
             self._serial.flush()
             res = self._serial.read(10)  # See if the device is trying to talk too much
@@ -637,7 +637,7 @@ class TMCLController(model.Actuator):
                 else:
                     logging.debug("Device message has wrong checksum")
             else:
-                logging.debug("Device replied unexpected message: %s", res.decode('latin1', 'backslashreplace'))
+                logging.debug("Device replied unexpected message: %s", to_str_escape(res))
 
             raise IOError("Device did not answer correctly to any sync message")
 
@@ -694,7 +694,7 @@ class TMCLController(model.Actuator):
         # Compute header
         s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
 
-        logging.debug("Encoded user config as '%s'", s.decode('latin1', 'backslashreplace'))
+        logging.debug("Encoded user config as '%s'", to_str_escape(s))
 
         # Write s as a series of uint32 into the user area
         assert(len(s) // 4 <= 56)
@@ -732,8 +732,7 @@ class TMCLController(model.Actuator):
             d = self.GetGlobalParam(2, i + 1)
             s += struct.pack(">i", d)
 
-        logging.debug("Read user config as '%s%s'", sh.decode('latin1', 'backslashreplace'),
-                      s.decode('latin1', 'backslashreplace'))
+        logging.debug("Read user config as '%s%s'", to_str_escape(sh), to_str_escape(s))
 
         # Compute checksum (= sum of everything on 16 bits)
         hpres = numpy.frombuffer(s, dtype=numpy.uint16)

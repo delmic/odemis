@@ -28,6 +28,7 @@ import numpy
 from odemis import model
 from odemis import util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, CancellableFuture
+from odemis.util import to_str_escape
 import os
 import re
 import serial
@@ -191,7 +192,7 @@ class SEM(model.HwComponent):
         """
         cmd = cmd + self.eol
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.decode('latin1', 'backslashreplace'))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
             # Acknowledge
@@ -204,10 +205,10 @@ class SEM(model.HwComponent):
             while ans[-len(self.eol):] != self.eol:
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.decode('latin1', 'backslashreplace'))
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 else:
                     ans += char
-            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
+            logging.debug("Received answer %s", to_str_escape(ans))
 
             # Status
             stat = self._serial.read()  # Success/fail
@@ -217,10 +218,10 @@ class SEM(model.HwComponent):
             while ans[-len(self.eol):] != self.eol:
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.decode('latin1', 'backslashreplace'))
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 else:
                     ans += char
-            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
+            logging.debug("Received answer %s", to_str_escape(ans))
 
             value = ans[1:-len(self.eol)]
             if stat == RS_SUCCESS:
@@ -928,7 +929,7 @@ class RemconSimulator(object):
 
         com = l[0]
         args = l[1:]
-        logging.debug("SIM: decoded message as %s %s", com.decode('latin1', 'backslashreplace'), args)
+        logging.debug("SIM: decoded message as %s %s", to_str_escape(com), args)
 
         # decode the command
         if com == b"VER?":

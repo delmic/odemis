@@ -26,7 +26,7 @@ import glob
 import logging
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase, isasync, HwError, CancellableThreadPoolExecutor
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import serial
 import sys
@@ -323,7 +323,7 @@ class PMTControl(model.PowerSupplier):
         self.supplied.notify(self.supplied.value)
 
     def _getIdentification(self):
-        return self._sendCommand(b"*IDN?").decode('latin1', 'backslashreplace')
+        return self._sendCommand(b"*IDN?").decode('latin1')
 
     def _setGain(self, value):
         self._sendCommand(b"VOLT %f" % (value,))
@@ -400,7 +400,7 @@ class PMTControl(model.PowerSupplier):
         """
         cmd = cmd + b"\n"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.decode('latin1', 'backslashreplace'))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
             ans = b''
@@ -408,7 +408,7 @@ class PMTControl(model.PowerSupplier):
             while char != b'\n':
                 char = self._serial.read()
                 if not char:
-                    logging.error("Timeout after receiving %s", ans.decode('latin1', 'backslashreplace'))
+                    logging.error("Timeout after receiving %s", to_str_escape(ans))
                     # TODO: See how you should handle a timeout before you raise
                     # an HWError
                     raise HwError("PMT Control Unit connection timeout. "
@@ -416,7 +416,7 @@ class PMTControl(model.PowerSupplier):
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
-            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
+            logging.debug("Received answer %s", to_str_escape(ans))
             if ans.startswith(b"ERROR"):
                 raise PMTControlError(ans.split(b' ', 1)[1])
 
