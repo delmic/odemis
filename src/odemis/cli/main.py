@@ -948,10 +948,12 @@ def main(args):
         for l in options.setattr:
             if len(l) < 3 or (len(l) - 1) % 2 == 1:
                 logging.error("--set-attr expects component name and then a even number of arguments")
+                return 127
     if options.upmd:
         for l in options.upmd:
             if len(l) < 3 or (len(l) - 1) % 2 == 1:
                 logging.error("--update-metadata expects component name and then a even number of arguments")
+                return 127
 
     logging.debug("Trying to find the backend")
     status = get_backend_status()
