@@ -1089,7 +1089,9 @@ def val_y_to_pos_y(val_y, client_size, range_y):
 
 
 def bar_plot(ctx, data, range_x, range_y, client_size, fill_colour):
-    """ Do a bar plot of the current `_data` """
+    """ Do a bar plot of the current `_data` 
+    data needs to be a list or ndarray, not an iterator
+    """
 
     if len(data) < 2:
         return
@@ -1344,7 +1346,7 @@ def chronogram_to_export_data(proj, raw, vp=None):
             range_x = (min_x, max_x)
             range_y = (min_y, max_y)
 
-        bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
+        bar_plot(ctx, list(data), range_x, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
         # can easily change the bar plot or the scale bar colour
@@ -1897,7 +1899,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
     legend_ctx.set_font_size(small_font)
     legend_y_pos = legend_height
 
-    sorted_im = sorted(images, key=lambda im: im.metadata['date'])
+    sorted_im = sorted(images, key=lambda im: im.metadata['date'] if im.metadata['date'] else 0)
     for im in sorted_im:
         s = im.metadata['stream']
         md = im.metadata['metadata']
@@ -2310,7 +2312,8 @@ def images_to_export_data(streams, view_hfw, view_pos,
 
     # Create legend for print-ready
     if not raw:  # png, tiff
-        date = max(im.metadata['date'] for im in images)
+        dates = [im.metadata['date'] if im.metadata['date'] else 0 for im in images]
+        date = max(dates)
         legend_rgb = draw_legend_multi_streams(images, buffer_size, buffer_scale,
                                                view_hfw[0], date, img_file=logo)
         data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
