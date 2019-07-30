@@ -177,7 +177,7 @@ class ActuatorController(object):
             logging.warning("No known key binding for microscope %s", role)
             return
         # Remove keys for axes not available
-        for key, (actuator, axis, _) in self.key_bindings.items():
+        for key, (actuator, axis, _) in list(self.key_bindings.items()):
             if not (actuator, axis) in self._tab_data_model.axes:
                 del self.key_bindings[key]
 

@@ -313,7 +313,7 @@ class Container(Pyro4.core.Daemon):
         # unregister every object still around, to be sure everything gets
         # deallocated from the memory (but normally, it's up to the client to
         # terminate() every component before)
-        for obj in self.objectsById.values():
+        for obj in list(self.objectsById.values()):
             if hasattr(obj, "_unregister"):
                 try:
                     obj._unregister()

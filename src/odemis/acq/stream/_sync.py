@@ -1466,7 +1466,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.debug("Scan stage pos: %s (including drift of %s)", cspos, drift_shift)
 
                 # Remove unneeded moves, to not lose time with the actuator doing actually (almost) nothing
-                for a, p in cspos.items():
+                for a, p in list(cspos.items()):
                     if prev_spos[a] == p:
                         del cspos[a]
 

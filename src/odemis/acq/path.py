@@ -314,7 +314,7 @@ class OpticalPathManager(object):
         self._last_mode = None  # previous mode that was set
 
         # Removes modes which are not supported by the current microscope
-        for m, (det, conf) in self._modes.items():
+        for m, (det, conf) in list(self._modes.items()):
             try:
                 comp = self._getComponent(det)
             except LookupError:

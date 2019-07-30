@@ -372,7 +372,7 @@ class AcquisitionTask(object):
         # the OverlayStream.
         opt_cor_md = None
         sem_cor_md = None
-        for s, data in raw_data.items():
+        for s, data in list(raw_data.items()):
             if isinstance(s, OverlayStream):
                 if opt_cor_md or sem_cor_md:
                     logging.warning("Multiple OverlayStreams found")
