@@ -541,6 +541,13 @@ parameters for your new driver.
 Do not forget to commit your code using ``git add ...`` and ``git commit -a``.
 Optionally, send your extension to Delmic as a git patch or a github merge request.
 
+Sometimes, on Linux, a driver needs to be associated to a udev rule. udev only
+reloads the list of rules at boot time. So, when changing the rules, you can
+force it to reload them with::
+
+    sudo udevadm control --reload-rules
+
+
 Adding a feature to the Graphical User Interface
 ================================================
 
