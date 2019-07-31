@@ -55,7 +55,7 @@ class TestCatmaid(unittest.TestCase):
         Test requesting different tiles from the virtualflybrain server.
         """
         # test for a url with a specified project id and stack id
-        url = 'catmaids://fafb.catmaid.virtualflybrain.org/?pid=2&sid0=2'
+        url = 'catmaids://fafb.catmaid.virtualflybrain.org/?pid=1&sid0=1'
         acquisition = open_data(url)
         acquisition = acquisition.content[0]
         size = (1024, 1024)
