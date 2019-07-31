@@ -742,6 +742,10 @@ def main(args):
         else:
             cont_pol = BackendRunner.CONTAINER_SEPARATED
 
+        # Opening a file in append mode positions the stream at the end of the file in python3
+        if options.settings:
+            options.settings.seek(0)
+
         # let's become the back-end for real
         runner = BackendRunner(options.model, options.settings, options.daemon,
                                dry_run=options.validate, containement=cont_pol)
