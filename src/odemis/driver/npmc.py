@@ -386,32 +386,32 @@ class ESP(model.Actuator):
         """
         if not limit in ("+", "-"):
             raise ValueError("Asked to move %d to %s limit. Only + or - allowed." % (aid, limit,))
-        self._sendOrder("%d MV %s" % (aid, limit))
+        self._sendOrder(b"%d MV %s" % (aid, limit))
 
     def LockKeypad(self, lock_type):
         """
         Lock keypad on device from preventing bad user input
         lock_type (KEYPAD_*)
         """
-        self._sendOrder("LC %d" % (lock_type,))
+        self._sendOrder(b"LC %d" % (lock_type,))
 
     def HomeSearch(self, aid, search_type):
         """
         Searches for home using a search type (int 0,1,2,3,4,5,6) as per manual
         """
-        self._sendOrder("%d OR %d" % (aid, search_type))
+        self._sendOrder(b"%d OR %d" % (aid, search_type))
 
     def SetHome(self, aid, value):
         """
         Set the position value to use at the origin (home)
         """
-        self._sendOrder("%d SH %f" % (aid, value))
+        self._sendOrder(b"%d SH %f" % (aid, value))
 
     def SaveMemory(self):
         """
         Save configuration to non - volatile memory
         """
-        self._sendOrder("SM")
+        self._sendOrder(b"SM")
 
     def MoveAbsPos(self, axis_num, pos):
         """
@@ -936,7 +936,7 @@ class ESPSimulator(object):
         # Query motion done
         elif re.match(br'\dMD\?', msg):
             self._updateCurrentPosition()
-            axis = int(msg[0])
+            axis = int(msg[:1])
             if axis > 3:
                 self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
@@ -1018,7 +1018,7 @@ class ESPSimulator(object):
             pass
         
         # Lock keypad
-        elif re.match(r'LC\d', msg):
+        elif re.match(br'LC\d', msg):
             val = int(msg[2:])
             if val not in (KEYPAD_ALL_LOCKED, KEYPAD_LOCK_EXCEPT_STOP, KEYPAD_UNLOCK):
                 self._addError(ERR_PARAMETER_OUT_OF_RANGE)
