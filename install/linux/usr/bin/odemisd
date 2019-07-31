@@ -48,4 +48,4 @@ fi
 
 
 export PYTHONPATH
-$RUNNER python2.7 -m $BACKEND "$@"
+$RUNNER ${PYTHON_INTERPRETER:-/usr/bin/python} -m $BACKEND "$@"

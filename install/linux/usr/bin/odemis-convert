@@ -5,4 +5,4 @@
 
 export PYTHONPATH
 
-python2.7 -m $CLI_CONVERT "$@"
+${PYTHON_INTERPRETER:-/usr/bin/python} -m $CLI_CONVERT "$@"
