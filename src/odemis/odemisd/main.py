@@ -445,7 +445,7 @@ class BackendContainer(model.Container):
 
         # In case of instantiation failure, some containers might have no
         # component, but we still need to end them.
-        for cname, c in self._instantiator.sub_containers.items():
+        for cname, c in list(self._instantiator.sub_containers.items()):
             logging.debug("Stopping container %s, which was running without component %s",
                           c, cname)
             try:

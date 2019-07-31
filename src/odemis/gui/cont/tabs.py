@@ -2755,7 +2755,7 @@ class SparcAlignTab(Tab):
                                   panel.btn_align_fiber: "fiber-align"}
 
         # Remove the modes which are not supported by the current hardware
-        for btn, mode in self._alignbtn_to_mode.items():
+        for btn, mode in list(self._alignbtn_to_mode.items()):
             if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
             else:

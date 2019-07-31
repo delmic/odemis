@@ -952,7 +952,7 @@ class DelphiStateController(SecomStateController):
         # TODO: just move "stage" instead, to make the position update properly
         referenced = self._main_data.aligner.referenced.value
         pos = {"x": 0, "y": 0}
-        for a in pos.keys():
+        for a in list(pos.keys()):
             if not referenced.get(a, False):
                 del pos[a]
         self._main_data.aligner.moveAbs(pos)

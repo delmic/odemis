@@ -105,7 +105,7 @@ def list_hw_settings(escan, ccd):
     rot = escan.rotation.value
 
     mdsem = escan.getMetadata()
-    for k in mdsem.keys():
+    for k in list(mdsem.keys()):
         if k not in MD_CALIB_SEM:
             del mdsem[k]
 
