@@ -40,6 +40,13 @@ from scipy.ndimage import zoom
 import threading
 import time
 
+import pkg_resources
+opencv_v2 = pkg_resources.parse_version(cv2.__version__) < pkg_resources.parse_version("3.0")
+
+if opencv_v2:
+    HOUGH_GRADIENT = cv2.cv.CV_HOUGH_GRADIENT
+else:
+    HOUGH_GRADIENT = cv2.HOUGH_GRADIENT
 
 logger = logging.getLogger(__name__)
 CALIB_DIRECTORY = u"delphi-calibration-report"  # delphi calibration report directory
@@ -1170,7 +1177,7 @@ def FindCircleCenter(image, radius, max_diff, darkest=False):
     radius_px = radius / pixelSize[0]
     mn = int(radius_px - max_diff)
     mx = int(radius_px + max_diff)
-    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=mn,
+    circles = cv2.HoughCircles(img, HOUGH_GRADIENT, dp=1, minDist=mn,
                                param1=50, param2=15, minRadius=mn, maxRadius=mx)
 
     # TODO: not reliable. hole on SEM image returns ~50 circles!
@@ -1224,7 +1231,10 @@ def FindRingCenter(image):
     # tiff.export("test_contour.tiff", model.DataArray(edge_image))
 
     # Convert the edges into points
-    contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    if opencv_v2:
+        contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    else:
+        _, contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     if not contours:
         # TODO: try a different threshold?
         raise LookupError("Failed to find any contours of the circle")
