@@ -111,7 +111,7 @@ def scan(cls=None):
                     if not devices:
                         logging.info("No device found")
                     for name, args in devices:
-                        print("%s.%s: '%s' init=%r" % (module_name, cls_name, name, str(args)))
+                        print("%s.%s: '%s' init=%r" % (module_name, cls_name, name, args))
 
     if cls and not cls_found:
         raise ValueError("Failed to find class %s" % cls)
