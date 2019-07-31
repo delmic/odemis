@@ -331,19 +331,10 @@ class MeanWeaver(object):
 
             # Create weight matrix with decreasing values from its center that
             # has the same size as the tile.
-            hh, hw = numpy.divide(roi.shape, 2)  # half-height, half-width
-            # Deal with even/odd tile sizes
-            sz = roi.shape
-            if sz[1] % 2 == 0:
-                x = numpy.arange(-hw, hw, 1)
-            else:
-                x = numpy.arange(-hw, hw + 1, 1)
-
-            if sz[0] % 2 == 0:
-                y = numpy.arange(-hh, hh, 1)
-            else:
-                y = numpy.arange(-hh, hh + 1, 1)
-
+            sz = numpy.array(roi.shape)
+            hh, hw = sz / 2  # half-height, half-width
+            x = numpy.linspace(-hw, hw, sz[1])
+            y = numpy.linspace(-hh, hh, sz[0])
             xx, yy = numpy.meshgrid((x / hw) ** 6, (y / hh) ** 6)
             w = numpy.maximum(xx, yy)
             # Hardcoding a weight function is quite arbitrary and might result in
