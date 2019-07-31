@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, print_function
 
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 from builtins import str
 import argparse
 import codecs
@@ -901,10 +901,10 @@ def main(args):
                          metavar=("<component>", "data-flow"),
                          help="display and update an image on the screen (default data-flow is \"data\")")
 
-    options = parser.parse_args(args[1:])
-
     # To allow printing unicode even with pipes
     ensure_output_encoding()
+
+    options = parser.parse_args(args[1:])
 
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
@@ -1017,7 +1017,10 @@ def main(args):
                 dataflows = ["data"]
             else:
                 dataflows = options.acquire[1:]
-            filename = options.output.decode(sys.getfilesystemencoding())
+            if isinstance(options.output, unicode):  # python3
+                filename = options.output
+            else:  # python2
+                filename = options.output.decode(sys.getfilesystemencoding())
             acquire(component, dataflows, filename)
         elif options.live is not None:
             component = options.live[0]
