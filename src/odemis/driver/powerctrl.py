@@ -27,7 +27,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import serial
 import sys
@@ -261,17 +261,17 @@ class PowerControlUnit(model.PowerSupplier):
         raises:
             IOError: if an ERROR is returned by the Power Control firmware.
         """
-        cmd = cmd + "\n"
+        cmd = (cmd + "\n").encode('latin1')
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s" % to_str_escape(cmd))
             self._serial.write(cmd)
 
-            ans = ''
+            ans = b''
             char = None
-            while char != '\n':
+            while char != b'\n':
                 char = self._serial.read()
                 if not char:
-                    logging.error("Timeout after receiving %s", ans.encode('string_escape'))
+                    logging.error("Timeout after receiving %s", to_str_escape(ans))
                     # TODO: See how you should handle a timeout before you raise
                     # an HWError
                     raise HwError("Power Control Unit connection timeout. "
@@ -279,7 +279,8 @@ class PowerControlUnit(model.PowerSupplier):
                 # Handle ERROR coming from Power control unit firmware
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", to_str_escape(ans))
+            ans = ans.decode('latin1')
             if ans.startswith("ERROR"):
                 raise PowerControlError(ans.split(' ', 1)[1])
 
@@ -397,7 +398,7 @@ class PowerControlError(IOError):
     """
     pass
 
-IDN = "Delmic Analog Power Control simulator 1.0"
+IDN = b"Delmic Analog Power Control simulator 1.0"
 MASK = 1  # mask for the first bit
 
 
@@ -409,12 +410,12 @@ class PowerControlSimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         self.timeout = timeout
         self._f = tempfile.TemporaryFile()  # for fileno
-        self._output_buf = ""  # what the Power Control Unit sends back to the "host computer"
-        self._input_buf = ""  # what Power Control Unit receives from the "host computer"
+        self._output_buf = b""  # what the Power Control Unit sends back to the "host computer"
+        self._input_buf = b""  # what Power Control Unit receives from the "host computer"
         self._i2crcv = 0  # fake expander response byte
-        self._ids = ["233c23f40100005a", "238abe69010000c8"]
+        self._ids = [b"233c23f40100005a", b"238abe69010000c8"]
         self._mem = numpy.chararray(shape=(2, 512), itemsize=2)  # fake eeproms
-        self._mem[:] = '00'
+        self._mem[:] = b'00'
 
     def fileno(self):
         return self._f.fileno()
@@ -437,7 +438,7 @@ class PowerControlSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -450,7 +451,7 @@ class PowerControlSimulator(object):
         """
         while len(self._input_buf) >= 1:
             # read until '\n'
-            sep = self._input_buf.index('\n')
+            sep = self._input_buf.index(b'\n')
             msg = self._input_buf[0:sep + 1]
 
             # remove the bytes we've just read
@@ -463,73 +464,73 @@ class PowerControlSimulator(object):
         process the msg, and put the result in the output buffer
         msg (str): raw message (including header)
         """
-        res = ""
-        wspaces = msg.count(' ')
-        qmarks = msg.count('?')
+        res = b""
+        wspaces = msg.count(b' ')
+        qmarks = msg.count(b'?')
         tokens = msg.split()
         if ((wspaces > 1) and (qmarks > 0)) or (wspaces > 3) or (qmarks > 1):
-            res = "ERROR: Cannot parse this command\n"
+            res = b"ERROR: Cannot parse this command\n"
         elif qmarks:
-            if tokens[0] == "*IDN?":
-                res = IDN + '\n'
-            elif tokens[0] == "PWR?":
+            if tokens[0] == b"*IDN?":
+                res = IDN + b'\n'
+            elif tokens[0] == b"PWR?":
                 pin = int(tokens[1])
                 if (pin < 0) or (pin > 7):
-                    res = "ERROR: Out of range pin number\n"
+                    res = b"ERROR: Out of range pin number\n"
                 else:
                     ans = (self._i2crcv >> pin) & MASK
-                    res = str(ans) + '\n'
+                    res = b'%d\n' % ans
             else:
-                res = "ERROR: Cannot parse this command\n"
+                res = b"ERROR: Cannot parse this command\n"
         elif wspaces:
-            if tokens[0] == "PWR":
+            if tokens[0] == b"PWR":
                 pin = int(tokens[1])
                 val = int(tokens[2])
                 if (pin < 0) or (pin > 7):
-                    res = "ERROR: Out of range pin number\n"
+                    res = b"ERROR: Out of range pin number\n"
                 else:
                     self._i2crcv = (self._i2crcv & ~(1 << pin)) | ((val << pin) & (1 << pin))
-                    res = '\n'
-            elif tokens[0] == "WMEM":
+                    res = b'\n'
+            elif tokens[0] == b"WMEM":
                 id = tokens[1]
                 address = tokens[2]
                 data = tokens[3]
                 if len(id)%2 == 1:
-                    res = "ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
+                    res = b"ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
                 elif len(address) % 2 == 1:
-                    res = "ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
+                    res = b"ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
                 elif len(data) % 2 == 1:
-                    res = "ERROR: Invalid number of hexadecimal data characters. Must be an even number.\n"
+                    res = b"ERROR: Invalid number of hexadecimal data characters. Must be an even number.\n"
                 else:
                     id_ind = self._ids.index(id)
                     addr = int(address, 16)
                     for i in range(len(data) // 2):
                         self._mem[id_ind, addr + i] = data[i * 2:i * 2 + 2]
-                    res = '\n'
-            elif tokens[0] == "RMEM":
+                    res = b'\n'
+            elif tokens[0] == b"RMEM":
                 id = tokens[1]
                 address = tokens[2]
                 length = int(tokens[3])
                 if len(id) % 2 == 1:
-                    res = "ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
+                    res = b"ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
                 elif len(address) % 2 == 1:
-                    res = "ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
+                    res = b"ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
                 else:
                     id_ind = self._ids.index(id)
                     addr = int(address, 16)
                     for i in range(length):
                         res += self._mem[id_ind, addr + i]
-                    res += '\n'
+                    res += b'\n'
             else:
-                res = "ERROR: Cannot parse this command\n"
-        elif tokens[0] == "SID":
+                res = b"ERROR: Cannot parse this command\n"
+        elif tokens[0] == b"SID":
             for id in self._ids:
                 res += id
                 if id != self._ids[-1]:
-                    res += ","
-            res += '\n'
+                    res += b","
+            res += b'\n'
         else:
-            res = "ERROR: Cannot parse this command\n"
+            res = b"ERROR: Cannot parse this command\n"
 
         # add the response end
         if res is not None:
