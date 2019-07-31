@@ -538,12 +538,15 @@ class AndorCam2(model.DigitalCamera):
         # Strong cooling for low (image) noise
         if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
             if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-                ranges = self.GetTemperatureRange()
+                trange = self.GetTemperatureRange()
             else:
-                ranges = (-275, 100)
-            self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit=u"°C",
+                trange = (-275, 25)
+            self._hw_temp_range = trange
+            # Always support 25°C, to disable the cooling
+            trange = (trange[0], max(trange[1], 25))
+            self.targetTemperature = model.FloatContinuous(trange[0], trange, unit=u"°C",
                                                            setter=self._setTargetTemperature)
-            self._setTargetTemperature(ranges[0], force=True)
+            self._setTargetTemperature(trange[0], force=True)
 
             try:
                 # Stop cooling on shutdown. That's especially important for
@@ -1430,10 +1433,19 @@ class AndorCam2(model.DigitalCamera):
             return float(temp)
 
         temp = int(round(temp))
+        # If the temperature is above the maximum cooling temperature, either
+        # clamp to the maximum, or set it to 25°C to indicate the cooling is
+        # disabled
+        if temp > self._hw_temp_range[1]:
+            if temp < 20:
+                temp = self._hw_temp_range[1]
+            else:
+                temp = 25
+
         self.select()
         try:
-            self.atcore.SetTemperature(temp)
-            if temp > 20:
+            self.atcore.SetTemperature(min(temp, self._hw_temp_range[1]))
+            if temp >= 20:
                 self.atcore.CoolerOFF()
             else:
                 self.atcore.CoolerON()
@@ -2679,7 +2691,7 @@ class FakeAndorV2DLL(object):
         mint = _deref(p_mint, c_int)
         maxt = _deref(p_maxt, c_int)
         mint.value = -200
-        maxt.value = 50
+        maxt.value = -10
 
     def IsInternalMechanicalShutter(self, p_intshut):
         intshut = _deref(p_intshut, c_int)
