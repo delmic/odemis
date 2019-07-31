@@ -30,6 +30,11 @@ from scipy import ndimage
 from odemis import model
 from odemis.util import img
 
+if int(cv2.__version__[0]) <= 2:
+    cv2.ORB_create = cv2.ORB
+    # Sift is not installed by default, check first if it's available
+    if hasattr(cv2, 'SIFT'):
+        cv2.SIFT_create = cv2.SIFT
 
 # The brute-force matcher works in theory a bit better than the Flann-based one,
 # but slower. In practice, it doesn't seem to show better results, and if they
@@ -61,12 +66,12 @@ def FindTransform(ima, imb, fd_type=None):
     # TODO: try BRISK, AZAKE and other detectors?
     if fd_type is None:
         for fd in ("SIFT", "ORB"):
-            if hasattr(cv2, fd):
+            if hasattr(cv2, "%s_create" % fd):
                 fd_type = fd
                 break
 
     if fd_type == "ORB":
-        feature_detector = cv2.ORB()
+        feature_detector = cv2.ORB_create()
         if USE_BF:
             matcher = cv2.BFMatcher(normType=cv2.NORM_HAMMING)
         else:
@@ -81,7 +86,7 @@ def FindTransform(ima, imb, fd_type=None):
 #         contrastThreshold = 0.04
 #         edgeThreshold = 10
 #         sigma = 1.6  # TODO: no need for Gaussian as preprocess already does it?
-        feature_detector = cv2.SIFT(nfeatures=2000)  # avoid going crazy on keypoints
+        feature_detector = cv2.SIFT_create(nfeatures=2000)  # avoid going crazy on keypoints
         if USE_BF:
             matcher = cv2.BFMatcher(normType=cv2.NORM_L2)
         else:
