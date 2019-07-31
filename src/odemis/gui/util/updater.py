@@ -93,7 +93,7 @@ class WindowsUpdater:
         except IOError as err:
             logging.warn("Error on remote version check (%s)", err)
 
-        return web_version
+        return web_version.decode('latin1')
 
     def check_for_update(self):
         """ Check if a newer version is available online and offer to update """
