@@ -235,9 +235,9 @@ class AnchoredEstimator(object):
             avgp = acq_per_fastest_dim / nacq
             tot_acq = 0  # total acquisitions rounded down
             for i in range(1, nacq):
-                prev_tot_pxi = tot_acq
-                tot_pxi = int(avgp * i)
-                acq_dc_period.append(tot_pxi - prev_tot_pxi)
+                prev_tot_acq = tot_acq
+                tot_acq = int(avgp * i)
+                acq_dc_period.append(tot_acq - prev_tot_acq)
             else:
                 # last one explicit, to avoid floating point errors
                 acq_dc_period.append(acq_per_fastest_dim - tot_acq)
