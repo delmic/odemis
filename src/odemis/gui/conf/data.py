@@ -85,6 +85,9 @@ HW_SETTINGS_CONFIG = {
             # just here to enforce the order
             ("gain", {}),
             ("readoutRate", {}),
+            ("emGain", {
+                "label": "EM gain",
+            }),
             ("shutterMinimumPeriod", { # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
                 "scale": "cubic",
@@ -115,9 +118,6 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("verticalClockVoltage", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("emGain", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("countConvert", {
@@ -289,6 +289,9 @@ HW_SETTINGS_CONFIG = {
             # just here to enforce the order
             ("gain", {}),
             ("readoutRate", {}),
+            ("emGain", {
+                "label": "EM gain",
+            }),
             ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
                 "scale": "cubic",
@@ -319,9 +322,6 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("verticalClockVoltage", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("emGain", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("countConvert", {
@@ -391,6 +391,9 @@ HW_SETTINGS_CONFIG = {
             }),
             ("gain", {}),
             ("readoutRate", {}),
+            ("emGain", {
+                "label": "EM gain",
+            }),
             ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
                 "scale": "cubic",
@@ -421,9 +424,6 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("verticalClockVoltage", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("emGain", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("countConvert", {
@@ -630,6 +630,19 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Just for cropping => keep things simple for user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "emGain": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+    },
+    "secom": {
+        # what we don't want to display:
+        r"ccd.*":
+        {
+            "emGain": {
+                # The only SECOMs with EM CCDs use the automatic mode ("None")
+                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
     },
