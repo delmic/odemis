@@ -329,7 +329,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         """
         Called after the Nth acquisition has been performed.
         :param das: (list of DataArrays) The data which has just been acquired. It
-                    might be modified by this function.  TODO unused?  please comment
+                    might be modified by this function.
         :returns: (1<=int or None) How many sub-acquisitions before .next() should be called
                   Note: it may return more sub-acquisitions than what still needs to be acquired.
         """
