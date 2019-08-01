@@ -670,13 +670,18 @@ class AndorCam2(model.DigitalCamera):
             # => create choices as None, 0, 3, 50, 100...
             emgrng = self.GetEMGainRange()
             emgc = set(i for i in range(0, emgrng[1], 50) if i > emgrng[0])
-            emgc.add(None)
+            if self._lut_emgains:
+                emgc.add(None)
+                emgain = None
+            else:
+                # 50 is normally safe, and forces the EM gain active, so count convert works
+                emgain = min(50, emgrng[1])
             emgc.add(0)  # to disable the EMCCD mode
             emgc.add(emgrng[0])
             emgc.add(emgrng[1])
-            self.emGain = model.VAEnumerated(None, choices=emgc,
+            self.emGain = model.VAEnumerated(emgain, choices=emgc,
                                              setter=self._setEMGain)
-            self._setEMGain(None)  # To force the EM gain active, so that count convert works
+            self._setEMGain(emgain)
         elif self._lut_emgains:
             raise ValueError("Camera doesn't support EM gain")
 
@@ -766,7 +771,7 @@ class AndorCam2(model.DigitalCamera):
 #        self.atcore.SetFilterMode(2) # 2 = on
 #        metadata['Filter'] = "Cosmic Ray filter"
 
-        # EM Gain set in "Real Gain" values
+        # Try to set the EM Gain as "Real Gain" values
         if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
             # 3 = Real Gain mode (seems to be the best, but not always available)
             # 2 = Linear mode (similar, but without aging compensation)
