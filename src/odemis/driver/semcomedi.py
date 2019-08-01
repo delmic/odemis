@@ -1920,6 +1920,8 @@ class SEMComedi(model.HwComponent):
             # need to be done explicitly to catch exceptions
             self._reader.close()
             self._writer.close()
+            if hasattr(self, "_actual_writer"):
+                self._actual_writer.close()
 
     def selfTest(self):
         # let's see if we can write some data
