@@ -360,7 +360,7 @@ def main(args):
 # Plugin version for the GUI
 class MonoScanPlugin(Plugin):
     name = "Monochromator Scan"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = u"Éric Piel"
     __license__ = "GNU General Public License 2"
 
@@ -549,7 +549,8 @@ class MonoScanPlugin(Plugin):
 
             self.showAcquisition(fn)
 
-        dlg.Destroy()
+        dlg.Close()
+
 
 if __name__ == '__main__':
     ret = main(sys.argv)
