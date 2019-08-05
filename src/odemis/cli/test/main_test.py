@@ -24,10 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from PIL import Image
-try:
-    import StringIO
-except ImportError:  # Python 3 naming
-    import io as StringIO
+from io import BytesIO
 import logging
 from odemis import model
 import odemis
@@ -63,9 +60,8 @@ class TestWithoutBackend(unittest.TestCase):
         """
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
-            
             cmdline = "cli --help"
             ret = main.main(cmdline.split())
         except SystemExit as exc:
@@ -73,7 +69,7 @@ class TestWithoutBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
         
         output = out.getvalue()
-        self.assertTrue("optional arguments" in output)
+        self.assertTrue(b"optional arguments" in output)
     
 #    @skip("Simple")
     def test_error_command_line(self):
@@ -91,7 +87,7 @@ class TestWithoutBackend(unittest.TestCase):
     def test_scan(self):
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = "cli --log-level=2 --scan"
@@ -104,7 +100,7 @@ class TestWithoutBackend(unittest.TestCase):
         # AndorCam3 SimCam should be there for sure (if libandor3-dev is installed)
         # self.assertTrue("andorcam3.AndorCam3" in output)
 
-        self.assertTrue("andorcam2.FakeAndorCam2" in output)
+        self.assertTrue(b"andorcam2.FakeAndorCam2" in output)
 
     def test_error_scan(self):
         try:
@@ -152,7 +148,7 @@ class TestWithBackend(unittest.TestCase):
     def test_list(self):
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = "cli --list"
@@ -162,8 +158,8 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        self.assertTrue("Light Engine" in output)
-        self.assertTrue("Camera" in output)
+        self.assertTrue(b"Light Engine" in output)
+        self.assertTrue(b"Camera" in output)
 
     def test_check(self):
         try:
@@ -176,7 +172,7 @@ class TestWithBackend(unittest.TestCase):
     def test_list_prop(self):
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--list-prop", "Light Engine"]
@@ -186,9 +182,9 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        self.assertTrue("role" in output)
-        self.assertTrue("swVersion" in output)
-        self.assertTrue("power" in output)
+        self.assertTrue(b"role" in output)
+        self.assertTrue(b"swVersion" in output)
+        self.assertTrue(b"power" in output)
 
     def test_encoding(self):
         """Check no problem happens due to unicode encoding to ascii"""
@@ -201,12 +197,12 @@ class TestWithBackend(unittest.TestCase):
     
     def test_set_attr(self):
         # to read attribute power
-        regex = re.compile("\spower\s.*value:\s*([.0-9]+)")
+        regex = re.compile(b"\spower\s.*value:\s*([.0-9]+)")
         
         # read before
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--list-prop", "Light Engine"]
@@ -222,7 +218,7 @@ class TestWithBackend(unittest.TestCase):
         # set the new value
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--set-attr", "Light Engine", "power", "0"]
@@ -234,7 +230,7 @@ class TestWithBackend(unittest.TestCase):
         # read the new value
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--list-prop", "Light Engine"]
@@ -251,7 +247,7 @@ class TestWithBackend(unittest.TestCase):
         # set a dict, which is a bit complicated structure
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--set-attr", "Sample Stage", "speed", "x: 0.5, y: 0.2"]
@@ -265,7 +261,7 @@ class TestWithBackend(unittest.TestCase):
         # test move and also multiple move requests
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = ["cli", "--move", "Sample Stage", "x", "5", "--move", "Sample Stage", "y", "-0.2"]
@@ -277,7 +273,7 @@ class TestWithBackend(unittest.TestCase):
     def test_position(self):
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
 
             cmdline = ["cli", "--position", "Sample Stage", "x", "50e-6"]
@@ -291,7 +287,7 @@ class TestWithBackend(unittest.TestCase):
         # just check that referencing correctly reports this
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
 
             cmdline = ["cli", "--reference", "Sample Stage", "x"]
@@ -303,7 +299,7 @@ class TestWithBackend(unittest.TestCase):
     def test_stop(self):
         try:
             # change the stdout
-            out = StringIO.StringIO()
+            out = BytesIO()
             sys.stdout = out
             
             cmdline = "cli --stop"
@@ -313,7 +309,8 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
     
     def test_acquire(self):
-        picture_name = "test.tiff"
+        # utf-8 bytes on Python 2, unicode on Python 3
+        picture_name = "TÈßt.tiff"
         size = (1024, 1024)
         
         # change resolution
