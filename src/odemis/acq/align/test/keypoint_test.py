@@ -78,8 +78,13 @@ class TestKeypoint(unittest.TestCase):
         sem_img = preprocess(sem_img, image_pair[1][1], image_pair[1][2],
                              image_pair[1][3], image_pair[1][4], True)
         # execute the algorithm to find the transform between the images
-        tmat, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
-
+        try:
+            tmat, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
+        except ValueError:
+            if not hasattr(cv2, 'SIFT') and not hasattr(cv2, 'SIFT_create'):
+                self.skipTest("Test only works with SIFT, not with ORB.")
+            else:
+                raise AssertionError("Failed to find transform between images.")
         # uncomment this if you want to see the keypoint images
         '''tem_painted_kp = cv2.drawKeypoints(tem_img, tem_kp, None, color=(0,255,0), flags=0)
         sem_painted_kp = cv2.drawKeypoints(sem_img, sem_kp, None, color=(0,255,0), flags=0)
