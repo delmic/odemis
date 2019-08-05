@@ -502,6 +502,14 @@ class TestARExport(unittest.TestCase):
         Check that all images are exported.
         """
 
+        try:
+            import arpolarimetry
+        except:
+            # In case arpolarimetry is not present, the StaticARStream will not have a .polarimetry
+            # attribute, so .image of the projection will not be updated and the testcase fails with a
+            # timeout error.
+            self.skipTest("Arpolarimetry package is not installed.")
+
         # Create AR data
         metadata = []
         qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
