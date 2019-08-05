@@ -22,7 +22,7 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.model import HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import random
 import re
@@ -206,9 +206,9 @@ class Ammeter(model.Detector):
         """
         cmd (str): command to be sent to device (without the CR)
         """
-        cmd = cmd + "\r"
+        cmd = (cmd + "\r").encode('ascii')
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
     def _sendQuery(self, cmd, timeout=1):
@@ -219,22 +219,22 @@ class Ammeter(model.Detector):
         raise:
             IOError if no answer is returned in time
         """
-        cmd = cmd + "\r"
+        cmd = (cmd + "\r").encode('ascii')
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
             self._serial.timeout = timeout
-            ans = ''
-            while ans[-1:] != '\r':
+            ans = b''
+            while ans[-1:] != b'\r':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", to_str_escape(ans))
 
-            return ans.rstrip()
+            return ans.rstrip().decode('latin1')
 
     # Wrapper for the actual firmware functions
     def GetIdentification(self):
@@ -405,8 +405,8 @@ class K6485Simulator(object):
     def __init__(self, timeout=1, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = ""  # what the commands sends back to the "host computer"
-        self._input_buf = ""  # what we receive from the "host computer"
+        self._output_buf = b""  # what the commands sends back to the "host computer"
+        self._input_buf = b""  # what we receive from the "host computer"
 
         self._lfr = 50
         self._nplc = 5
@@ -416,7 +416,7 @@ class K6485Simulator(object):
 
     def write(self, data):
         self._input_buf += data
-        msgs = self._input_buf.split("\r")
+        msgs = self._input_buf.split(b"\r")
         for m in msgs[:-1]:
             self._parseMessage(m)  # will update _output_buf
 
@@ -435,7 +435,7 @@ class K6485Simulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -446,15 +446,15 @@ class K6485Simulator(object):
         self._errorq.append(err)
 
     def _sendAnswer(self, ans):
-        self._output_buf += "%s\r" % (ans,)
+        self._output_buf += b"%s\r" % (ans,)
 
     def _parseMessage(self, msg):
         """
         msg (str): the message to parse (without the \r)
         return None: self._output_buf is updated if necessary
         """
-        logging.debug("SIM: parsing %s", msg)
-        m = re.match(r"(?P<com>\*?[A-Za-z:]+\??)\W*(?P<args>.*)", msg)
+        logging.debug("SIM: parsing %s", to_str_escape(msg))
+        m = re.match(br"(?P<com>\*?[A-Za-z:]+\??)\W*(?P<args>.*)", msg)
         if not m:
             logging.error("Received unexpected message %s", msg)
             return
@@ -466,41 +466,41 @@ class K6485Simulator(object):
         else:
             args = None
 
-        logging.debug("SIM: decoded message as %s %s", com, args)
+        logging.debug("SIM: decoded message as %s %s", to_str_escape(com), args)
 
         # decode the command
-        if com == "*IDN?":
-            self._sendAnswer("KEITHLEY INSTRUMENTS INC.,MODEL 6485,123456,C01   Sep 27 2017 12:22:00/A02  /J")
-        elif com == "*CLS":
+        if com == b"*IDN?":
+            self._sendAnswer(b"KEITHLEY INSTRUMENTS INC.,MODEL 6485,123456,C01   Sep 27 2017 12:22:00/A02  /J")
+        elif com == b"*CLS":
             pass
-        elif com == "*STB?":
-            self._sendAnswer("0")  # It's all fine
-        elif com == "STAT:QUE?":
+        elif com == b"*STB?":
+            self._sendAnswer(b"0")  # It's all fine
+        elif com == b"STAT:QUE?":
             if not self._errorq:
-                self._sendAnswer("0,\"No error\"")
+                self._sendAnswer(b"0,\"No error\"")
             else:
                 err = self._errorq.pop(0)
-                self._sendAnswer("%d,\"Error %d\"" % (err, err))
-        elif com == "CONF:CURR":
+                self._sendAnswer(b"%d,\"Error %d\"" % (err, err))
+        elif com == b"CONF:CURR":
             pass
-        elif com == ":CURR:RANG:AUTO":
+        elif com == b":CURR:RANG:AUTO":
             pass
-        elif com == "SYST:LFR?":
-            self._sendAnswer("%g" % self._lfr)
-        elif com == ":NPLC?":
-            self._sendAnswer("%g" % self._nplc)
-        elif com == ":NPLC":
+        elif com == b"SYST:LFR?":
+            self._sendAnswer(b"%g" % self._lfr)
+        elif com == b":NPLC?":
+            self._sendAnswer(b"%g" % self._nplc)
+        elif com == b":NPLC":
             if not args:
                 self._addError(6)
             else:
                 self._nplc = float(args)
-        elif com in ("MEAS:CURR?", "READ?"):
+        elif com in (b"MEAS:CURR?", b"READ?"):
             dur = (self._nplc / self._lfr) * 3 + 0.01
             time.sleep(dur)
             ts = time.time() - self._time_start
             val = random.uniform(-1e-9, 1e-9)
-            self._sendAnswer("%EA,%E,%E" % (val, ts, 0))
+            self._sendAnswer(b"%EA,%E,%E" % (val, ts, 0))
         else:
-            logging.warning("SIM: Unsupported instruction %s", com)
+            logging.warning(b"SIM: Unsupported instruction %s", to_str_escape(com))
             # TODO: add an error to the queue
             self._addError(1)
