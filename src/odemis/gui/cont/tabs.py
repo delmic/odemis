@@ -1724,6 +1724,7 @@ class AnalysisTab(Tab):
         )
         self._settings_controller.setter_ar_file = self.set_ar_background
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
+        self._settings_controller.setter_temporalspec_bck_file = self.set_temporalspec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
         self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
@@ -1840,7 +1841,21 @@ class AnalysisTab(Tab):
         all_streams = streams + self.tab_data_model.streams.value
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
+
+        # all spectrum streams including spectrum, temporal spectrum and time correlator (chronograph)
         spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
+        self.temporalspectrum_streams = []
+        self.spectrum_streams = []
+        self.timecorrelator_streams = []
+        # sort spec streams
+        for s in spec_streams:
+            if hasattr(s, "selected_wavelength") and hasattr(s, "selected_time"):
+                self.temporalspectrum_streams.append(s)
+            elif hasattr(s, "selected_wavelength") and not hasattr(s, "selected_time"):
+                self.spectrum_streams.append(s)
+            elif not hasattr(s, "selected_wavelength") and hasattr(s, "selected_time"):
+                self.timecorrelator_streams.append(s)
+
         ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
 
         new_visible_views = list(self._def_views)  # Use a copy
@@ -1944,7 +1959,8 @@ class AnalysisTab(Tab):
             self.tb.enable_button(TOOL_LINE, False)
 
         # Only show the panels that fit the current streams
-        self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
+        self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(self.spectrum_streams) > 0,
+                                                         len(self.temporalspectrum_streams) > 0)
 
         self.tab_data_model.visible_views.value = new_visible_views
 
@@ -1955,7 +1971,7 @@ class AnalysisTab(Tab):
             scont.stream_panel.show_remove_btn(extend)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
-        if spec_streams:
+        if self.spectrum_streams:
             try:
                 self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
             except ValueError:
@@ -1963,6 +1979,15 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.spec_bck_cal.value)
                 self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
 
+        if self.temporalspectrum_streams:
+            try:
+                self.set_temporalspec_background(self.tab_data_model.temporalspec_bck_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.temporalspec_bck_cal.value)
+                self.tab_data_model.temporalspec_bck_cal.value = u""  # remove the calibration
+
+        if self.spectrum_streams or self.temporalspectrum_streams:
             try:
                 self.set_spec_comp(self.tab_data_model.spec_cal.value)
             except ValueError:
@@ -2032,9 +2057,10 @@ class AnalysisTab(Tab):
 
     def set_spec_background(self, fn):
         """
-        Load the data from a spectrum (background) file and apply to streams
-        return (unicode): the filename as it has been accepted
-        raise ValueError if the file is not correct or calibration cannot be applied
+        Load the data from a spectrum (background) file and apply to streams.
+        :param fn: (str) The file name for the background image.
+        :return (unicode): The filename as it has been accepted.
+        :raise ValueError: If the file is not correct or calibration cannot be applied.
         """
         try:
             if fn == u"":
@@ -2045,20 +2071,51 @@ class AnalysisTab(Tab):
                 converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
-                cdata = calibration.get_spectrum_data(data)
+                cdata = calibration.get_spectrum_data(data)  # get the background image (can be an averaged image)
 
-            spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, acqstream.SpectrumStream)]
-
-            for strm in spec_strms:
-                strm.background.value = cdata
+            for strm in self.spectrum_streams:
+                strm.background.value = cdata  # update the background VA on the stream -> recomputes image displayed
 
         except Exception as err:
-            logging.info("Failed using file %s as spectrum background", fn, exc_info=True)
-            msg = "File '%s' not suitable for spectrum background:\n\n%s"
+            logging.info("Failed using file %s as background for currently loaded data", fn, exc_info=True)
+            msg = "File '%s' not suitable as background for currently loaded data:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
                                    "Unusable spectrum background file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+            raise ValueError("File '%s' not suitable" % fn)
+
+        return fn
+
+    def set_temporalspec_background(self, fn):
+        """
+        Load the data from a temporal spectrum (background) file and apply to streams.
+        :param fn: (str) The file name for the background image.
+        :return: (unicode) The filename as it has been accepted.
+        :raise: ValueError, if the file is not correct or calibration cannot be applied.
+        """
+        try:
+            if fn == u"":
+                logging.debug("Clearing temporal spectrum background")
+                cdata = None
+            else:
+                logging.debug("Loading temporal spectrum background")
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
+                data = converter.read_data(fn)
+                # will raise exception if doesn't contain good calib data
+                cdata = calibration.get_temporalspectrum_data(data)
+
+            for strm in self.temporalspectrum_streams:
+                strm.background.value = cdata
+
+        except Exception as err:
+            logging.info("Failed using file %s as background for currently loaded file", fn, exc_info=True)
+            msg = "File '%s' not suitable as background for currently loaded file:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable temporal spectrum background file",
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()

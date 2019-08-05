@@ -515,7 +515,7 @@ class StaticARStream(StaticStream):
             return bg_data
 
 
-class StaticSpectrumStream(StaticStream):
+class StaticSpectrumStream(StaticStream):  # TODO update doc string!!!
     """
     A Spectrum stream which displays only one static image/data.
     The main difference from the normal streams is that the data is 3D (a cube)
@@ -570,6 +570,7 @@ class StaticSpectrumStream(StaticStream):
         cwl = (max_bw + min_bw) / 2
         width = (max_bw - min_bw) / 12
 
+        # TODO should be only available if data has spectrum dimension (e.g. chronograph)
         # The selected wavelength for a temporal spectrum display
         self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
                                                    range=(min_bw, max_bw),
@@ -631,7 +632,7 @@ class StaticSpectrumStream(StaticStream):
             self.fitToRGB.subscribe(self.onFitToRGB)
 
         # the raw data after calibration
-        self.calibrated = model.VigilantAttribute(image)
+        self.calibrated = model.VigilantAttribute(image)  # TODO is this the one shown in the view instead of .image?
 
         if "acq_type" not in kwargs:
             if image.shape[0] > 1 and image.shape[1] > 1:
@@ -755,15 +756,25 @@ class StaticSpectrumStream(StaticStream):
     # as the data is static.
     def _updateCalibratedData(self, bckg=None, coef=None):
         """
-        Try to update the data with new calibration. The two parameters are
+        Try to update the data with a new calibration. The two parameters are
         the same as compensate_spectrum_efficiency(). The input data comes from
         .raw and the calibrated data is saved in .calibrated
-        bckg (DataArray or None)
-        coef (DataArray or None)
-        raise ValueError: if the data and calibration data are not valid or
+        Spectrum data can be of two types:
+            - mirror (no wl info)
+            - grating (wl info)
+        Temporal spectrum data can be of four types:
+            - mirror + focus mode (no wl and time info)
+            - mirror + operate mode (no wl but time info)
+            - grating + focus mode (wl but no time info)
+            - grating + operate mode (wl and time info)
+        Chronograph data can be only of one type, with no wl but time info. So far no bg correction is
+            supported for chronograph data. Spectrum efficiency correction do not apply for this type of data.
+        :param bckg: (DataArray or None) The background image.
+        :param coef: (DataArray or None) The spectrum efficiency correction data.
+        :raise ValueError: If the data and calibration data are not valid or
           compatible. In that case the current calibrated data is unchanged.
         """
-        data = self.raw[0]
+        data = self.raw[0]  # only one image in .raw for spectrum, temporal spectrum and chronograph
 
         if data is None:
             self.calibrated.value = None
@@ -774,18 +785,67 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = data
             return
 
-        if not (set(data.metadata.keys()) &
-                {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
-            raise ValueError("Spectrum data contains no wavelength information")
+        if bckg is not None:
+            # Check that the bg matches the data.
+            if data.shape[0:2] != bckg.shape[0:2]:
+                raise ValueError("Background should have the same shape as the data, but got %s != %s" %
+                                 (bckg.shape[0:2], data.shape[0:2]))
 
-        # will raise an exception if incompatible
-        calibrated = calibration.compensate_spectrum_efficiency(data, bckg, coef)
-        self.calibrated.value = calibrated
+            # if temporal spectrum data:
+            if model.MD_STREAK_MODE in data.metadata.keys():
+                # Check that the data and the bg image were acquired with the same streak mode.
+                if data.metadata[model.MD_STREAK_MODE] != bckg.metadata[model.MD_STREAK_MODE]:
+                    raise ValueError("Background should have the same streak mode as the data, but got %d != %d" %
+                                     (bckg.metadata[model.MD_STREAK_MODE], data.metadata[model.MD_STREAK_MODE]))
+                # Check that the time range of the data matches with the bg image.
+                if data.metadata[model.MD_STREAK_TIMERANGE] != bckg.metadata[model.MD_STREAK_TIMERANGE]:
+                    raise ValueError("Background should have the same time range as the data, but got %s != %s" %
+                                     (bckg.metadata[model.MD_STREAK_TIMERANGE], data.metadata[model.MD_STREAK_TIMERANGE]))
+
+        # Check if we have any wavelength information.
+        if not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+
+            # no spectrum and no time info: spectrum data acquired with mirror or wrong data
+            # TODO why do we not support bg correction for spectrum data acq with mirror??
+            if data.shape[-4] == 1:
+                raise ValueError("Data contains no wavelength and no time information")
+
+            # it is a chronograph, no spectrum efficiency compensation and bg correction to do
+            elif data.shape[-5] <= 1 and data.shape[-4] > 1:
+                raise ValueError("Do not support any background correction or spectrum efficiency "
+                                 "compensation for chronograph data")
+
+            else:  # temporal spectrum data, but acquired in mirror mode (with/without time info)
+                if bckg is not None:
+                    # check that bg data also doesn't contain wl info
+                    if set(bckg.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
+                        raise ValueError("Found MD_WL_* metadata in background image, but "
+                                         "data does not provide any wavelength information.")
+                    logging.debug("Data contains no wavelength information, but is temporal spectrum data. "
+                                  "Will only compensate for background, but will not perform spectrum efficiency "
+                                  "correction.")
+                    if coef is not None:
+                        raise ValueError("Cannot apply spectrum correction as "
+                                         "data does not provide any wavelength information.")
+                    self.calibrated.value = img.Subtract(data, bckg)
+                else:
+                    if coef is not None:
+                        raise ValueError("Cannot apply spectrum correction as "
+                                         "data does not provide any wavelength information.")
+                    self.calibrated.value = data
+        else:
+            # it is either spectrum data or temporal spectrum with wl info (with/without time info)
+            # # Check that bg data also contains wl info.
+            # if not (set(bckg.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            # will raise an exception if incompatible, e.g. no wl info in bg data
+            calibrated = calibration.compensate_spectrum_efficiency(data, bckg, coef)
+            self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
         """
-        Setter of the spectrum background
-        raises ValueError if it's impossible to apply it (eg, no wavelength info)
+        Setter of the background.
+        :param bckg: ()
+        :raises ValueError if it's impossible to apply it (eg, no wavelength info)
         """
         # If the coef data is wrong, this function will fail with an exception,
         # and the value never be set.
