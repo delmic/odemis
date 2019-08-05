@@ -20,13 +20,13 @@ import glob
 import logging
 from logging.handlers import BufferingHandler
 from odemis import model
-from odemis.driver import pmtctrl
-from odemis.driver import semcomedi
+from odemis.driver import pmtctrl, semcomedi, picoquant
 import os
 import threading
 import time
 import unittest
 from unittest.case import skip
+import random
 
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
@@ -46,6 +46,20 @@ else:
 # Control unit used for PMT testing
 CLASS_CTRL = pmtctrl.PMTControl
 KWARGS_CTRL = KWARGS
+
+# Time-correlator Control (photon signal detector)
+class FakePH300(model.Component):
+    def __init__(self, name):
+        self._shutters = {'shutter1': False}
+        model.Component.__init__(self, name)
+    def _toggle_shutters(self, shutters, open):
+        for s in shutters:
+            self._shutters[s] = open
+    def GetCountRate(self, channel):
+        return random.randint(0, 5000)
+
+CLASS_TR_CTRL = picoquant.PH300RawDetector
+KWARGS_TR_CTRL = dict(name="Photon counter signal", role="photo-detector", parent=FakePH300("fake"), channel=0, shutter_name='shutter1')
 
 CLASS_PMT = pmtctrl.PMT
 
@@ -247,6 +261,62 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.pmt.data.active, False)
         self.is_received.set()
 
+class TestTCPMT(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = semcomedi.SEMComedi(**CONFIG_SEM2)
+        cls.control = CLASS_TR_CTRL(**KWARGS_TR_CTRL)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_BSD["name"]:
+                cls.bsd = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+        cls.pmt = CLASS_PMT(name="test", role="detector",
+                                 dependencies={"detector": cls.bsd,
+                                           "pmt-signal": cls.control})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pmt.terminate()
+        cls.sem.terminate()
+        cls.control.terminate()
+
+    def setUp(self):
+        # reset resolution and dwellTime
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
+
+    def test_simple_acquisition(self):
+        self.is_received = threading.Event()
+        # Protection should be on before start acquisition
+        self.assertEqual(self.control.parent._shutters['shutter1'], False)
+        self.assertEqual(self.pmt.data.active, False)
+        self.pmt.data.subscribe(self.receive_image)
+        # Protection should be off upon acquisition start
+        self.assertEqual(self.control.parent._shutters['shutter1'], True)
+        self.assertEqual(self.pmt.data.active, True)
+        self.is_received.wait()
+        self.assertEqual(self.image.shape, self.size[-1:-3:-1])
+        self.assertIn(model.MD_DWELL_TIME, self.image.metadata)
+        # Protection should be reset after acquisition is done
+        self.assertEqual(self.control.parent._shutters['shutter1'], False)
+
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df
+        """
+        self.image = image
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+
+        dataflow.unsubscribe(self.receive_image)
+        self.is_received.set()
 
 class TestHandler(BufferingHandler):
     def __init__(self, matcher):

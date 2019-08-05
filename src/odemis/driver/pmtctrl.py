@@ -63,7 +63,11 @@ class PMT(model.Detector):
     def __init__(self, name, role, dependencies, settle_time=0, **kwargs):
         '''
         dependencies (dict string->model.HwComponent): the dependencies
-            There must be exactly two dependencies "pmt-control" and "detector".
+            There must a dependency "detector" and at least one of the dependencies
+            "pmt-control" and "pmt-signal".
+            "pmt-control" takes a PMTControl or spectrograph object, "pmt-signal" an
+            extra detector to be activated during the acquisition
+            (eg, for shutter control)
         settle_time (0 < float): time to wait after turning on the gain to have
           it fully working.
         Raise an ValueError exception if the dependencies are not compatible
@@ -97,38 +101,50 @@ class PMT(model.Detector):
         for key, value in pmtEvents.items():
             setattr(self, key, value)
 
-        ctrl = dependencies["pmt-control"]
-        if not isinstance(ctrl, ComponentBase):
-            raise ValueError("Dependency pmt-control is not a component.")
-        self._control = ctrl
+        if "pmt-control" in dependencies:
+            ctrl = dependencies["pmt-control"]
+            self._control = ctrl
+            if not isinstance(ctrl, ComponentBase):
+                raise ValueError("Dependency pmt-control is not a component.")
+            # Duplicate control unit VAs
+            # In case of counting PMT these VAs are not available since a
+            # spectrograph is given instead of the control unit.
+            try:
+                if model.hasVA(ctrl, "gain"):
+                    gain = ctrl.gain.range[0]
+                    self.gain = model.FloatContinuous(gain, ctrl.gain.range, unit="V",
+                                                      setter=self._setGain)
+                    self._last_gain = gain
+                    self._setGain(gain)  # Just start with no gain
+                if model.hasVA(ctrl, "powerSupply"):
+                    self.powerSupply = ctrl.powerSupply
+                    # Turn on the controller
+                    self.powerSupply.value = True
+            except IOError:
+                # FIXME: needs to be handled directly by PMTControl (at least automatic reconnect)
+                raise HwError("PMT Control Unit connection timeout. "
+                              "Please turn off and on the power to the box and "
+                              "then restart Odemis.")
+                    # Protection VA should be available anyway
+            if not model.hasVA(ctrl, "protection"):
+                raise ValueError("Given component appears to be neither a PMT control "
+                              "unit or a spectrograph since protection VA is not "
+                              "available.")
+        else:
+            self._control = None
+        
 
-        self.data = PMTDataFlow(self, self._pmt, self._control)
+        if "pmt-signal" in dependencies:
+            self._signal = dependencies["pmt-signal"]
+            if not isinstance(self._signal, ComponentBase):
+                raise ValueError("Dependency pmt-signal is not a component.")
+            if not hasattr(self._signal, "data") or not isinstance(self._signal.data, model.DataFlowBase):
+                raise ValueError("Dependency pmt-signal doesn't have an attribute .data of type DataFlow.")
+        else:
+            self._signal = None
 
-        # Duplicate control unit VAs
-        # In case of counting PMT these VAs are not available since a
-        # spectrograph is given instead of the control unit.
-        try:
-            if model.hasVA(ctrl, "gain"):
-                gain = ctrl.gain.range[0]
-                self.gain = model.FloatContinuous(gain, ctrl.gain.range, unit="V",
-                                                  setter=self._setGain)
-                self._last_gain = gain
-                self._setGain(gain)  # Just start with no gain
-            if model.hasVA(ctrl, "powerSupply"):
-                self.powerSupply = ctrl.powerSupply
-                # Turn on the controller
-                self.powerSupply.value = True
-        except IOError:
-            # FIXME: needs to be handled directly by PMTControl (at least automatic reconnect)
-            raise HwError("PMT Control Unit connection timeout. "
-                          "Please turn off and on the power to the box and "
-                          "then restart Odemis.")
+        self.data = PMTDataFlow(self, self._pmt, self._control, self._signal)
 
-        # Protection VA should be available anyway
-        if not model.hasVA(ctrl, "protection"):
-            raise ValueError("Given component appears to be neither a PMT control "
-                          "unit or a spectrograph since protection VA is not "
-                          "available.")
 
     def terminate(self):
         if hasattr(self, "powerSupply"):
@@ -157,19 +173,25 @@ class PMT(model.Detector):
 
 
 class PMTDataFlow(model.DataFlow):
-    def __init__(self, detector, pmt, control):
+    def __init__(self, detector, pmt, control, signal):
         """
         detector (Detector): the detector that the dataflow corresponds to
+        control (PMTControl): pmt control unit
+        signal (model.Detector): extra detector to be activated during the acquisition
+            (eg, for shutter control)
         """
         model.DataFlow.__init__(self)
         self.component = detector
         self._pmt = pmt
         self._control = control
+        self._signal = signal
         self.active = False
 
     def start_generate(self):
-        # Reset protection first
-        self._control.protection.value = False
+        if self._control:  # reset protection
+            self._control.protection.value = False
+        if self._signal:  # requesting the DataFlow to be ready
+            self._signal.data.subscribe(self._on_signal)
         logging.info("Activating PMT, and waiting %f s for gain settling", self.component._settle_time)
         time.sleep(self.component._settle_time)
         self._pmt.data.subscribe(self._newFrame)
@@ -177,9 +199,10 @@ class PMTDataFlow(model.DataFlow):
 
     def stop_generate(self):
         self._pmt.data.unsubscribe(self._newFrame)
-
-        # Set protection after stopping
-        self._control.protection.value = True
+        if self._control:  # set protection
+            self._control.protection.value = True
+        if self._signal:  # requesting the DataFlow to be ready
+            self._signal.data.unsubscribe(self._on_signal)
         self.active = False
 
     def synchronizedOn(self, event):
@@ -190,10 +213,12 @@ class PMTDataFlow(model.DataFlow):
         """
         Get the new frame from the detector
         """
-        if self._control.protection.value:
+        if self._control and self._control.protection.value:
             logging.warning("PMT protection was triggered during acquisition.")
         model.DataFlow.notify(self, data)
-
+  
+    def _on_signal(self, df, data):
+        pass
 
 # Min and max gain values in V
 MIN_VOLT = 0
