@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 2 Jul 2019
@@ -102,3 +103,8 @@ class TestFocusTrackerCO(unittest.TestCase):
         # check that a ValueError is raised when trying to set a negative value.
         with self.assertRaises(ValueError):
             self.focus_tracker.updateMetadata({model.MD_GAIN_P: -10})
+
+
+if __name__ == "__main__":
+    # import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()
