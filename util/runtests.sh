@@ -82,8 +82,12 @@ if [ "$skippedfiles" != "" ]; then
     echo "$skippedfiles"
 fi
 
+run_unittests()
+{
+interpreter=$1
+
 echo -e "\n\n==============================================="
-echo "Running unit tests"
+echo "Running unit tests in $interpreter"
 echo "Running unit tests on $(date)" > "$TESTLOG"
 
 # run each test script and save the output
@@ -98,7 +102,7 @@ for f in $testfiles; do
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
-        timeout -k 30 $MAXTIME python $f --verbose >> "$TESTLOG" 2>&1
+        timeout -k 30 $MAXTIME $interpreter $f --verbose >> "$TESTLOG" 2>&1
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
@@ -131,6 +135,10 @@ fi
 
 # try to clean up a bit
 sudo odemis-stop
+}
+
+run_unittests python2
+run_unittests python3
 
 # Run the integration tests
 TESTLOG=./integtest-full-$DATE.log
@@ -149,7 +157,8 @@ SIMPATH="$ODEMIS_DIR/install/linux/usr/share/odemis/sim/"
 
 ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
 if [ -d "$ODMPATH" ]; then
-    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
+    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" --interpreter "/usr/bin/python2" "$ODMPATH"/*/ >> "$TESTLOG-python2" 2>&1
+    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" --interpreter "/usr/bin/python3" "$ODMPATH"/*/ >> "$TESTLOG-python3" 2>&1
 fi
 
 # TODO: run GUI standalone tests by trying to load every test data file that we have.

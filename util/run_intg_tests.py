@@ -50,8 +50,8 @@ ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
 CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
-CMD_START = ["%s/install/linux/usr/bin/odemis-start" % ODEMIS_PATH, "-n", "-l"]
-CMD_GUI = ["%s/install/linux/usr/bin/odemis-gui" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
+CMD_START = ["%s/src/odemis/odemisd/start.py" % ODEMIS_PATH, "-n", "-l"]
+CMD_GUI = ["%s/src/odemis/gui/main.py" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
 
 
 class OdemisThread(threading.Thread):
@@ -126,11 +126,12 @@ def wait_backend_ready():
     return True
 
 
-def test_config(sim_conf, path_root, logpath):
+def test_config(sim_conf, path_root, logpath, interpreter):
     """ Test one running a backend and GUI with a given microscope file
     sim_conf (str): full filename of the microscope file to start
     path_root (str): beginning of the sim_conf, which is not useful for the user
     logpath (str): directory where to store the log files
+    interpreter (str): python interpreter
     return (bool): True if no error running the whole system, False otherwise
     """
     assert sim_conf.startswith(path_root)
@@ -152,14 +153,14 @@ def test_config(sim_conf, path_root, logpath):
         pass
 
     logging.info("Starting %s backend", sim_conf)
-    cmd = CMD_START + [dlog_path, sim_conf]
+    cmd = [interpreter] + CMD_START + [dlog_path, sim_conf]
     backend = OdemisThread("Backend %s" % sim_conf_fn, cmd)
     backend.start()
 
     # Wait for the back end to load
     if wait_backend_ready():
         logging.info("Starting %s GUI", sim_conf)
-        cmd = CMD_GUI + [os.path.abspath(guilog_path)]
+        cmd = [interpreter] + CMD_GUI + [os.path.abspath(guilog_path)]
         gui = OdemisThread("GUI %s" % sim_conf_fn, cmd)
         gui.start()
 
@@ -251,6 +252,8 @@ def main(args):
 
     parser.add_argument("--log-path", dest="logpath", default="/tmp/",
                         help="Directory where the logs will be saved")
+    parser.add_argument("--interpreter", dest="interpreter", default="/usr/bin/python",
+                        help="Python interpreter (/usr/bin/python2 or /usr/bin/python3)")
     parser.add_argument("paths", nargs='*',
                         help="Paths to search for microscope files that will be used "
                              "to start the backend. Only the files ending with -sim.odm.yaml are tested")
@@ -285,7 +288,7 @@ def main(args):
         for sim_conf in sim_conf_files:
             logging.info("Testing %s", sim_conf)
             try:
-                passed = test_config(sim_conf, proot, options.logpath)
+                passed = test_config(sim_conf, proot, options.logpath, options.interpreter)
                 if passed:
                     print("OK", file=sys.stderr)
                 else:
