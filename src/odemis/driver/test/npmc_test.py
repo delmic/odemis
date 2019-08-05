@@ -41,8 +41,7 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 # arguments used for the creation of basic components
 CONFIG = {"name": "Delay Stage",
           "role": "delay-stage",
-          "port": "/dev/fake",
-          # "port": "/dev/ttyUSB0", Use this for the real hardware
+          "port": "/dev/ttyUSB0",  # Adjust for the real hardware
           "axes": {
                 'x': {
                     'number': 1,
@@ -113,6 +112,14 @@ class TestNPMC(unittest.TestCase):
     def tearDownClass(cls):
         cls.dev.updateMetadata({model.MD_POS_COR: {'x': 0}})
         cls.dev.terminate()  # free up socket.
+
+    def test_simple(self):
+        """
+        Test just that the connection worked
+        """
+        self.assertIn("x", self.dev.axes)
+        self.assertIn("x", self.dev.position.value)
+        self.assertIn("ESP", self.dev.swVersion)
 
     def test_position_abs(self):
         """
