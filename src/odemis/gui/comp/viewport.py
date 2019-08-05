@@ -1255,10 +1255,6 @@ class NavigablePlotViewport(PlotViewport):
             self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
             self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
 
-        # automatically disable autoscaling (by locking) when the user zooms in
-        if self.canvas.display_xrange != self.canvas.data_xrange:
-            self.hrange_lock.value = True
-
     def set_vrange(self, vrange):
         """
         Setter for VA vrange
@@ -1280,10 +1276,6 @@ class NavigablePlotViewport(PlotViewport):
         if self.canvas.has_data():
             self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
             self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
-
-        # automatically disable autoscaling (by locking) when the user zooms in
-        if self.canvas.display_yrange != self.canvas.data_yrange:
-            self.vrange_lock.value = True
 
     def on_hlegend_scroll(self, evt=None):
         """ Scroll event for the bottom legend.
@@ -1318,6 +1310,7 @@ class NavigablePlotViewport(PlotViewport):
             hi = self.canvas.data_xrange[1]
 
         self.hrange.value = (lo, hi)
+        self.hrange_lock.value = True  # disable autoscaling when the user zooms in
 
     def on_vlegend_scroll(self, evt=None):
         """ Scroll event for the left legend.
@@ -1351,6 +1344,7 @@ class NavigablePlotViewport(PlotViewport):
         hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
 
         self.vrange.value = (lo, hi)
+        self.vrange_lock.value = True  # disable autoscaling when the user zooms in
 
     def on_drag_start(self, evt):
         """ Start a dragging procedure """
@@ -1398,6 +1392,7 @@ class NavigablePlotViewport(PlotViewport):
                 lo = self.canvas.display_xrange[0]
 
             self.hrange.value = (lo, hi)
+            self.hrange_lock.value = True  # disable autoscaling when the user drags the scale
 
     def on_vlegend_motion(self, evt):
         """ Process mouse motion
@@ -1427,6 +1422,7 @@ class NavigablePlotViewport(PlotViewport):
                 lo = self.canvas.display_yrange[0]
 
             self.vrange.value = (lo, hi)
+            self.vrange_lock.value = True  # disable autoscaling when the user drags the scale
 
     def on_canvas_motion(self, evt):
         """ Process mouse motion
@@ -1468,6 +1464,7 @@ class NavigablePlotViewport(PlotViewport):
             lo = self.canvas.display_yrange[0]
 
         self.vrange.value = (lo, hi)
+        self.vrange_lock.value = True  # disable autoscaling when the user drags the scale
 
 
 class PointSpectrumViewport(NavigablePlotViewport):
