@@ -19,7 +19,7 @@ Vcs-Browser: https://github.com/delmic/odemis
 Package: odemis
 Architecture: any
 Depends: python (>= 2.7.1),
-         python-wxgtk3.0,
+         python-wxgtk4.0,
          python-pkg-resources,
          python-future,
          python-decorator,
@@ -57,7 +57,7 @@ Depends: python (>= 2.7.1),
          cgroup-bin,
 # On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
          python-gi,
-         python-requests
+         python-requests,
 # just to take screenshots during bug report
          graphicsmagick,
          odemis-doc,
