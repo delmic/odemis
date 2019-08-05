@@ -28,7 +28,7 @@ import glob
 import logging
 from odemis import model
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
-from odemis.util import driver, TimeoutError
+from odemis.util import driver, TimeoutError, to_str_escape
 import os
 # import random
 import re
@@ -387,7 +387,7 @@ class Controller(object):
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if _stem:
-            self._channels = set(bytes(v) for v in range(1, 17))  # allow commands to work on any axis
+            self._channels = set("%d" % v for v in range(1, 17))  # allow commands to work on any axis
             return
         if axes is None:
             raise ValueError("Need to have at least one axis configured")
@@ -464,7 +464,7 @@ class Controller(object):
     def _sendQueryCommand(self, com):
         """
         Send a command and return its report
-        com (string): the command to send (without address prefix but with \n)
+        com (string or list of strings): the command to send (without address prefix but with \n)
         return (string or list of strings): the report without prefix
            (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line
         """
@@ -478,21 +478,21 @@ class Controller(object):
                     raise
 
                 success = self.recoverTimeout()
-                if isinstance(com, basestring):
-                    full_com = com
-                else:
+                if isinstance(com, list):
                     full_com = "".join(com)
+                else:
+                    full_com = com
 
                 if success:
                     logging.warning("Controller %s timeout after '%s', but recovered.",
-                                    self.address, full_com.encode('string_escape'))
+                                    self.address, to_str_escape(full_com))
                     # try one more time (and it has to work this time)
                     lines = self.busacc.sendQueryCommand(self.address, com)
                 else:
                     logging.error("Controller %s timeout after '%s', not recovered.",
-                                  self.address, full_com.encode('string_escape'))
+                                  self.address, to_str_escape(full_com))
                     raise IOError("Controller %s timeout after '%s', not recovered." %
-                                  (self.address, full_com.encode('string_escape')))
+                                  self.address, to_str_escape(full_com))
 
         return lines
 
@@ -638,12 +638,12 @@ class Controller(object):
 
     def GetParameter(self, axis, param):
         """
-        axis (bytes): axis number
+        axis (str): axis number
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
-        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %s %d not available" % (axis, param))
@@ -677,14 +677,14 @@ class Controller(object):
 
     def SetParameter(self, axis, param, val, check=True):
         """
-        axis (bytes): axis number
+        axis (str): axis number
         param (0<int): parameter id (cf p.35)
         val (str): value to set (if not a string, it will be converted)
         check (bool): if True, will check whether the hardware raised an error
         Raises ValueError if hardware complains
         """
         # SPA (Set Volatile Memory Parameters)
-        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
         assert(0 <= param)
         self._sendOrderCommand("SPA %s 0x%X %s\n" % (axis, param, val))
         if check:
@@ -696,12 +696,12 @@ class Controller(object):
     def GetParameterNonVolatile(self, axis, param):
         """
         Read the value of the parameter in the non-volatile memory
-        axis (bytes): axis number
+        axis (str): axis number
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
         # SEP? (Get Non-Volatile Memory Parameters)
-        assert(isinstance(axis, bytes) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %s %d not available" % (axis, param))
@@ -729,7 +729,7 @@ class Controller(object):
         Returns the value for a command with axis.
         Ex: POS? 1 -> 1=25.3
         com (str): the 4 letter command (including the ?)
-        axis (bytes): axis number
+        axis (str): axis number
         returns (int or float or str): value returned depending on the type detected
         """
         assert(axis in self._channels)
@@ -741,7 +741,7 @@ class Controller(object):
         try:
             value_str = resp.split("=")[1]
         except IndexError:
-            raise ValueError("Failed to parse answer from %s %s: '%s'" % (com, axis, resp))
+            raise ValueError("Failed to parse answer from %s %s: %r" % (com, axis, resp))
         try:
             value = int(value_str)
         except ValueError:
@@ -758,7 +758,7 @@ class Controller(object):
          the ends of the axis).
         Note: It's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (bytes): axis number
+        axis (str): axis number
         returns (bool)
         """
         # LIM? (Indicate Limit Switches)
@@ -771,7 +771,7 @@ class Controller(object):
          the "middle" of the axis).
         Note: apparently it's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (bytes): axis number
+        axis (str): axis number
         returns (bool)
         """
         # TRS? (Indicate Reference Switch)
@@ -780,7 +780,7 @@ class Controller(object):
 
     def GetMotionStatus(self, check=True):
         """
-        returns (set of bytes): the set of moving axes
+        returns (set of str): the set of moving axes
         Note: it seems the controller doesn't report moves when using OL via PID
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -801,7 +801,7 @@ class Controller(object):
         mv_axes = set()
         while bitmap > 0:
             if bitmap & 1:
-                mv_axes.add(bytes(i))
+                mv_axes.add("%s" % i)
             i += 1
             bitmap >>= 1
         # if axes labels are not digits convert the mv_axes to characters.
@@ -828,10 +828,10 @@ class Controller(object):
         """
         # "\x07" (Request Controller Ready Status)
         # returns 177 if ready, 178 if not
-        ans = self._sendQueryCommand("\x07")
-        if ans == "\xb1":
+        ans = self._sendQueryCommand("\x07").encode('latin1')
+        if ans == b"\xb1":
             return True
-        elif ans == "\xb0":
+        elif ans == b"\xb0":
             return False
 
         logging.warning("Controller %s replied unknown ready status '%s'", self.address, ans)
@@ -841,7 +841,7 @@ class Controller(object):
         """
         Report whether the given axis has been referenced
         Note: setting position with RON disabled will also put it in this mode
-        axis (bytes): axis number
+        axis (str): axis number
         returns (bool)
         """
         # FRF? (Get Referencing Result)
@@ -852,7 +852,7 @@ class Controller(object):
         """
         Report whether the given axis is considered on target (for closed-loop
           moves only)
-        axis (bytes): axis number
+        axis (str): axis number
         returns (bool)
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -869,7 +869,7 @@ class Controller(object):
             r = lresp[1]
             ss = r.split("=")
             if len(ss) != 2:
-                raise ValueError("Failed to parse answer from %s: '%s'" %
+                raise ValueError("Failed to parse answer from %s: %r" %
                                  (com, lresp))
             return ss[1] == "1"
         else:
@@ -902,7 +902,7 @@ class Controller(object):
         """
         Call relaxing procedure. Reduce voltage, to increase lifetime and needed
           to change between modes
-        axis (bytes): axis number
+        axis (str): axis number
         """
         # RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
         # Also needed to change between nanostepping and analog
@@ -913,7 +913,7 @@ class Controller(object):
         """
         Stop motion with deceleration
         Note: see Stop
-        axis (bytes): axis number,
+        axis (str): axis number,
         """
         # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
@@ -950,7 +950,7 @@ class Controller(object):
     def GetServo(self, axis):
         """
         Return whether the servo is active or not
-        axis (bytes): axis number
+        axis (str): axis number
         return (bool): True if the servo is active (closed-loop)
         """
         # SVO? (Get Servo State)
@@ -959,14 +959,14 @@ class Controller(object):
         ans = self._sendQueryCommand("SVO? %s\n" % (axis,))
         ss = ans.split("=")
         if len(ss) != 2:
-            raise IOError("Failed to parse answer from SVO?: '%s'" % (ans,))
+            raise IOError("Failed to parse answer from SVO?: %r" % (ans,))
         return ss[1] == "1"
 
     def SetServo(self, axis, activated):
         """
         Activate or de-activate the servo.
         Note: only activate it if there is a sensor (cf .HasRefSwitch and ._hasRefSwitch)
-        axis (bytes): axis number
+        axis (str): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
         # SVO (Set Servo State)
@@ -985,7 +985,7 @@ class Controller(object):
         """
         Select the reference mode.
         Note: only useful for closed-loop moves
-        axis (bytes): axis number
+        axis (str): axis number
         absolute (bool): If True, absolute moves can be used, but needs to have
           been referenced.
           If False only relative moves can be used, but only needs a sensor to
@@ -1007,7 +1007,7 @@ class Controller(object):
         Moves an axis for a number of steps. Can be done only with servo off.
         If the axis is already moving, the number of steps to perform is
         reset to the new number. IOW, it is not added up.
-        axis (bytes): axis number
+        axis (str): axis number
         steps (float): number of steps to do (can be a float). If negative, goes
           the opposite direction. 1 step is about 10µm.
         """
@@ -1022,7 +1022,7 @@ class Controller(object):
         Set the amplitude of one step (in nanostep mode). It affects the velocity
         of OLMoveStep.
         Note: probably it's best to set it to 55 and use OVL to change speed.
-        axis (bytes): axis number
+        axis (str): axis number
         amplitude (0<=float<=55): voltage applied (the more the further)
         """
         # SSA (Set Step Amplitude) : for nanostepping
@@ -1034,7 +1034,7 @@ class Controller(object):
         """
         Get the amplitude of one step (in nanostep mode).
         Note: mostly just for self-test
-        axis (bytes): axis number
+        axis (str): axis number
         returns (0<=float<=55): voltage applied
         """
         # SSA? (Get Step Amplitude), returns something like:
@@ -1047,7 +1047,7 @@ class Controller(object):
     def OLAnalogDriving(self, axis, amplitude):
         """
         Use analog mode to move the axis by a given amplitude.
-        axis (bytes): axis number
+        axis (str): axis number
         amplitude (-55<=float<=55): Amplitude of the move. It's only a small move.
           55 is approximately 5 um.
         """
@@ -1059,7 +1059,7 @@ class Controller(object):
     def GetOLVelocity(self, axis):
         """
         Get velocity for open-loop montion.
-        axis (bytes): axis number
+        axis (str): axis number
         return float: velocity in step-cycles/s
         """
         assert(axis in self._channels)
@@ -1068,7 +1068,7 @@ class Controller(object):
     def SetOLVelocity(self, axis, velocity):
         """
         Set velocity for open-loop nanostepping motion.
-        axis (bytes): axis number
+        axis (str): axis number
         velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
         """
         # OVL (Set Open-Loop Velocity)
@@ -1079,16 +1079,15 @@ class Controller(object):
     def GetOLAcceleration(self, axis):
         """
         Get acceleration for open-loop montion.
-        axis (bytes): axis number
+        axis (str): axis number
         return float: acceleration in step-cycles/s²
         """
-        assert(axis in self._channels)
         return self._readAxisValue("OAC?", axis)
 
     def SetOLAcceleration(self, axis, value):
         """
         Set open-loop acceleration of given axis.
-        axis (bytes): axis number
+        axis (str): axis number
         value (0<float): acceleration in step-cycles/s². Default is 2000
         """
         # OAC (Set Open-Loop Acceleration)
@@ -1099,7 +1098,7 @@ class Controller(object):
     def SetOLDeceleration(self, axis, value):
         """
         Set the open-loop deceleration.
-        axis (bytes): axis number
+        axis (str): axis number
         value (0<float): deceleration in step-cycles/s². Default is 2000
         """
         # ODC (Set Open-Loop Deceleration)
@@ -1112,7 +1111,7 @@ class Controller(object):
         """
         Start an absolute move of an axis to specific position.
          Can only be done with servo on and referenced.
-        axis (bytes): axis number
+        axis (str): axis number
         pos (float): position in "user" unit
         """
         # MOV (Set Target Position)
@@ -1125,7 +1124,7 @@ class Controller(object):
          Can only be done with servo on and referenced.
         If the axis is moving, the target position is updated, and so the moves
         will add up.
-        axis (bytes): axis number
+        axis (str): axis number
         shift (float): change of position in "user" unit
         """
         # MVR (Set Target Relative To Current Position)
@@ -1137,7 +1136,7 @@ class Controller(object):
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (bytes): axis number
+        axis (str): axis number
         lim (-1 or 1): -1 for negative limit and 1 for positive limit
         """
         # FNL (Fast Reference Move To Negative Limit)
@@ -1154,7 +1153,7 @@ class Controller(object):
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (bytes): axis number
+        axis (str): axis number
         """
         # FRF (Fast Reference Move To Reference Switch)
         assert(axis in self._channels)
@@ -1184,7 +1183,7 @@ class Controller(object):
     def GetAutoZero(self, axis):
         """
         Return the status of the Auto Zero procedure for the given axis
-        axis (bytes): axis number
+        axis (str): axis number
         return (bool): True if successfull, False otherwise
         """
         ans = self._readAxisValue("ATZ?", axis)
@@ -1193,7 +1192,7 @@ class Controller(object):
     def GetPosition(self, axis):
         """
         Get the position (in "user" units)
-        axis (bytes): axis number
+        axis (str): axis number
         return (float): pos can be negative
         Note: after referencing, a constant is added by the controller
         """
@@ -1204,7 +1203,7 @@ class Controller(object):
         """
         Get the target position (in "user" units)
         Note: only works for closed loop controllers
-        axis (bytes): axis number
+        axis (str): axis number
         return (float): pos can be negative
         """
         # MOV? (Get Target Position)
@@ -1214,7 +1213,7 @@ class Controller(object):
         """
         Assign a position value (in "user" units) for the current location.
         No move is performed.
-        axis (bytes): axis number
+        axis (str): axis number
         pos (float): pos can be negative
         """
         # POS (SetRealPosition)
@@ -1223,7 +1222,7 @@ class Controller(object):
     def GetMinPosition(self, axis):
         """
         Get the minimum reachable position (in "user" units)
-        axis (bytes): axis number
+        axis (str): axis number
         return (float): pos can be negative
         """
         # TMN? (Get Minimum Commandable Position)
@@ -1232,7 +1231,7 @@ class Controller(object):
     def GetMaxPosition(self, axis):
         """
         Get the maximum reachable position (in "user" units)
-        axis (bytes): axis number
+        axis (str): axis number
         return (float): pos can be negative
         """
         # TMX? (Get Maximum Commandable Position)
@@ -1242,7 +1241,7 @@ class Controller(object):
     def GetCLVelocity(self, axis):
         """
         Get velocity for closed-loop motion.
-        axis (bytes): axis number
+        axis (str): axis number
         """
         # VEL (Get Closed-Loop Velocity)
         assert(axis in self._channels)
@@ -1251,7 +1250,7 @@ class Controller(object):
     def SetCLVelocity(self, axis, velocity):
         """
         Set velocity for closed-loop motion.
-        axis (bytes): axis number
+        axis (str): axis number
         velocity (0<float): velocity in units/s
         """
         # VEL (Set Closed-Loop Velocity)
@@ -1262,7 +1261,7 @@ class Controller(object):
     def GetCLAcceleration(self, axis):
         """
         Get acceleration for closed-loop motion.
-        axis (bytes): axis number
+        axis (str): axis number
         """
         # VEL (Get Closed-Loop Acceleration)
         assert(axis in self._channels)
@@ -1271,7 +1270,7 @@ class Controller(object):
     def SetCLAcceleration(self, axis, value):
         """
         Set closed-loop acceleration of given axis.
-        axis (bytes): axis number
+        axis (str): axis number
         value (0<float): acceleration in units/s²
         """
         # ACC (Set Closed-Loop Acceleration)
@@ -1282,7 +1281,7 @@ class Controller(object):
     def SetCLDeceleration(self, axis, value):
         """
         Set the closed-loop deceleration.
-        axis (bytes): axis number
+        axis (str): axis number
         value (0<float): deceleration in units/s²
         """
         # DEC (Set Closed-Loop Deceleration)
@@ -1388,7 +1387,7 @@ class Controller(object):
         """
         Moves an axis for a given distance. While it's moving, data will be
         recorded. Can be done only if not referenced.
-        axis (bytes): axis number
+        axis (str): axis number
         shift (float): relative distance in user unit
         """
         assert(axis in self._channels)
@@ -1425,7 +1424,7 @@ class Controller(object):
         """
         Save move information for interpolating the position
         To be called when a new move is started
-        axis (bytes): the channel
+        axis (str): the channel
         shift (float): relative change in position (im m)
         duration (0<float): time it will take (in s)
         """
@@ -1492,7 +1491,7 @@ class Controller(object):
         Changes the move speed of the motor (for the next move).
         Note: in open-loop mode, it's very approximate.
         speed (0<float<10): speed in m/s.
-        axis (bytes): the axis
+        axis (str): the axis
         """
         assert (axis in self._channels)
         assert (self.speed_rng[axis][0] <= speed <= self.speed_rng[axis][1])
@@ -1508,7 +1507,7 @@ class Controller(object):
         """
         Move on a given axis for a given distance.
         It's asynchronous: the method might return before the move is complete.
-        axis (bytes): the axis
+        axis (str): the axis
         distance (float): the distance of move in m (can be negative)
         returns (float): approximate distance actually moved
         """
@@ -1518,7 +1517,7 @@ class Controller(object):
         """
         Move on a given axis to a given position.
         It's asynchronous: the method might return before the move is complete.
-        axis (bytes): the axis
+        axis (str): the axis
         position (float): the target position in m (can be negative)
         returns (float): approximate distance actually moved
         """
@@ -1557,7 +1556,7 @@ class Controller(object):
         """
         Wait until the motion of all the given axis is finished.
         Note: there is a 5 s timeout
-        axes (None or set of bytes): axes to check whether for move, or all if None
+        axes (None or set of str): axes to check whether for move, or all if None
         """
         timeout = 5 # s
         end = time.time() + timeout
@@ -1663,7 +1662,7 @@ class CLAbsController(Controller):
         super(CLAbsController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
         # For _getPositionCached()
-        self._lastpos = {}  # axis (bytes) -> (pos (float), timestamp (float))
+        self._lastpos = {}  # axis (str) -> (pos (float), timestamp (float))
 
         # It's pretty much required to reference the axes, and fast and
         # normally not dangerous (travel range is very small).
@@ -1764,7 +1763,7 @@ class CLAbsController(Controller):
     def getPosition(self, axis, maxage=0):
         """
         Find current position as reported by the sensor
-        axis (bytes)
+        axis (str)
         maxage (0 < float): maximum time (in s) since last reading before the
           position will be re-read from the hardware.
         return (float): the current position of the given axis
@@ -2007,7 +2006,7 @@ class CLRelController(Controller):
         That means during this time it's not possible to move the axes.
         Referencing is lost.
         Should only be called when no move is taking place.
-        axis (bytes): the axis
+        axis (str): the axis
         """
         with self._pos_lock[axis]:
             self.SetServo(axis, False)
@@ -2025,7 +2024,7 @@ class CLRelController(Controller):
     def _startServo(self, axis):
         """
         Turn on the servo and the suplly power of the encoder.
-        axis (bytes): the axis
+        axis (str): the axis
         """
         with self._pos_lock[axis]:
             # Param 0x56 is only for C-867 and newer E-861 and allows to control encoder power
@@ -2245,7 +2244,7 @@ class CLRelController(Controller):
         Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
-        axis (bytes): the axis
+        axis (str): the axis
         """
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
@@ -2399,7 +2398,7 @@ class CLRelController(Controller):
         """
         Start a referencing move. Use isMoving() or isReferenced() to know if
         the move is over. Position will change, as well as absolute positions.
-        axis (bytes)
+        axis (str)
         """
         self._acquireAxis(axis)
 
@@ -2545,7 +2544,7 @@ class OLController(Controller):
         Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
-        axis (bytes): the axis
+        axis (str): the axis
         """
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
@@ -2843,8 +2842,7 @@ class Bus(model.Actuator):
         controllers = {} # address -> kwargs (axes, dist_to_steps, min_dist, vpms...)
         for axis, (add, channel, isCL) in axes.items():
             if isinstance(channel, int):
-                channel = str(channel)
-            channel = channel.encode("ascii")  # bytes
+                channel = "%d" % channel # str
             if add not in controllers:
                 controllers[add] = {"axes": {}}
             kwc = controllers[add]
@@ -3431,7 +3429,7 @@ class Bus(model.Actuator):
             bdc = ['<broadcast>']
 
         for bdcaddr in bdc:
-            for port, msg, ansstart in ((50000, "PI", "PI"), (30718, "\x00\x00\x00\xf8", "\x00\x00\x00\xf9")):
+            for port, msg, ansstart in ((50000, b"PI", b"PI"), (30718, b"\x00\x00\x00\xf8", b"\x00\x00\x00\xf9")):
                 # Special protocol by PI (reversed-engineered):
                 # * Broadcast "PI" on a (known) port
                 # * Listen for an answer
@@ -3455,7 +3453,7 @@ class Bus(model.Actuator):
                             # (in practice, it seems to always be 50000)
                             found.add((fulladdr[0], 50000))
                         else:
-                            logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
+                            logging.info("Received %s from %s", to_str_escape(data), fulladdr)
                 except socket.timeout:
                     pass
                 except socket.error:
@@ -3539,15 +3537,15 @@ class SerialBusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-            self.serial.write(full_com)
+            logging.debug("Sending: '%s'", full_com)
+            self.serial.write(full_com.encode('ascii'))
             # We don't flush, as it will be done anyway if an answer is needed
 
     def sendQueryCommand(self, addr, com):
         """
         Send a command and return its report (raw)
         addr (None or 1<=int<=16): address of the controller
-        com (string): the command to send (without address prefix but with \n)
+        com (string or list of strings): the command to send (without address prefix but with \n)
         return (string or list of strings): the report without prefix
            (e.g.,"0 1") nor newline.
            If answer is multiline: returns a list of each line
@@ -3572,19 +3570,19 @@ class SerialBusAccesser(object):
 
         if addr is None:
             full_com = "".join(com)
-            prefix = ""
+            prefix = b""
         else:
             full_com = "".join("%d %s" % (addr, c) for c in com)
-            prefix = "0 %d " % addr
+            prefix = b"0 %d " % addr
 
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-            self.serial.write(full_com)
+            logging.debug("Sending: '%s'", to_str_escape(full_com))
+            self.serial.write(full_com.encode('ascii'))
 
             # ensure everything is received, before expecting an answer
             self.serial.flush()
 
-            ans = ""  # received data not yet processed
+            ans = b""  # received data not yet processed
             ret = []  # one answer per command
             continuing = False
             while True:
@@ -3594,11 +3592,12 @@ class SerialBusAccesser(object):
                                         "plugged in and turned on." % addr)
                 ans += char
 
-                anssplited = ans.split("\n")
+                anssplited = ans.split(b"\n")
                 # if the answer finishes with \n, last split is empty
                 anssplited, ans = anssplited[:-1], anssplited[-1]
                 if anssplited:
-                    logging.debug("Received: '%s'", "\n".join(anssplited).encode('string_escape'))
+                    anssplited_str = [to_str_escape(i) for i in anssplited]
+                    logging.debug("Received: '%s'", "\n".join(anssplited_str))
 
                 for l in anssplited:
                     if not continuing:
@@ -3608,20 +3607,20 @@ class SerialBusAccesser(object):
                             l = l[len(prefix):]
                         else:
                             # Maybe the previous line was actually continuing (but the hardware is strange)?
-                            if ret and ret[-1] == "":
-                                logging.debug("Reconcidering previous line as beginning of multi-line")
+                            if ret and ret[-1] == b"":
+                                logging.debug("Reconsidering previous line as beginning of multi-line")
                                 ret = ret[:-1]
                             else:
-                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                logging.debug("Failed to decode answer '%s'", to_str_escape(l))
                                 raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
 
-                    if l[-1:] == " ":  # multi-line
+                    if l[-1:] == b" ":  # multi-line
                         continuing = True
-                        lines.append(l[:-1])  # remove the space indicating multi-line
+                        lines.append(l[:-1].decode("latin1"))  # remove the space indicating multi-line
                     else:
                         # End of the answer for that command
                         continuing = False
-                        lines.append(l)
+                        lines.append(l.decode("latin1"))
                         if len(lines) == 1:
                             ret.append(lines[0])
                         else:
@@ -3655,7 +3654,7 @@ class SerialBusAccesser(object):
                 data = self.serial.read(100)
                 if len(data) < 100:
                     break
-                logging.debug("Flushing data %s", data.encode('string_escape'))
+                logging.debug("Flushing data %s", to_str_escape(data))
 
 
 class IPBusAccesser(object):
@@ -3679,7 +3678,7 @@ class IPBusAccesser(object):
 
             # Get the master controller version
             version = self.sendQueryCommand(master, "*IDN?\n")
-            self.driverInfo = "%s" % (version.encode('string_escape'),)
+            self.driverInfo = "%s" % (version,)
 
     def terminate(self):
         self.socket.close()
@@ -3698,8 +3697,8 @@ class IPBusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-            self.socket.sendall(full_com)
+            logging.debug("Sending: '%s'", full_com)
+            self.socket.sendall(full_com.encode('ascii'))
 
     def sendQueryCommand(self, addr, com):
         """
@@ -3728,14 +3727,15 @@ class IPBusAccesser(object):
             assert(len(c) <= 100)  # commands can be quite long (with floats)
 
         if addr is None:
-            full_com = "".join(com)
-            prefix = ""
+            full_com = "".join(com)  # can be a list of str, so don't try to join with b""
+            prefix = b""
         else:
             full_com = "".join("%d %s" % (addr, c) for c in com)
-            prefix = "0 %d " % addr
+            prefix = b"0 %d " % addr
+        full_com = full_com.encode('latin1')
 
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", to_str_escape(full_com))
             self.socket.sendall(full_com)
 
             # Read the answer
@@ -3746,7 +3746,7 @@ class IPBusAccesser(object):
             # it can answer "0 1 \n", which is an empty answer. But some
             # controllers answer "1 HLP\n" with "0 1 \nBla bla \nBla\n"
             end_time = time.time() + 0.5
-            ans = ""  # received data not yet processed
+            ans = b""  # received data not yet processed
             ret = []  # one answer per command
             continuing = False
             while True:
@@ -3766,10 +3766,10 @@ class IPBusAccesser(object):
                     time.sleep(0.01)
                     continue
 
-                logging.debug("Received: '%s'", data.encode('string_escape'))
+                logging.debug("Received: '%s'", to_str_escape(data))
                 ans += data
 
-                anssplited = ans.split("\n")
+                anssplited = ans.split(b"\n")
                 # if the answer finishes with \n, last split is empty
                 anssplited, ans = anssplited[:-1], anssplited[-1]
 
@@ -3783,22 +3783,22 @@ class IPBusAccesser(object):
                         else:
                             # Maybe the previous line was actually continuing (but the hardware is strange)?
                             if ret and ret[-1] == "":
-                                logging.debug("Reconcidering previous line as beginning of multi-line")
+                                logging.debug("Reconsidering previous line as beginning of multi-line")
                                 ret = ret[:-1]
                             else:
                                 # TODO: maybe we got some garbage data from before,
                                 # check if there is already data available that fits the
                                 # prefix. (=> keep reading but with a short timeout)
-                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                logging.debug("Failed to decode answer '%s'", to_str_escape(l))
                                 raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
 
-                    if l[-1:] == " ":  # multi-line
+                    if l[-1:] == b" ":  # multi-line
                         continuing = True
-                        lines.append(l[:-1])  # remove the space indicating multi-line
+                        lines.append(l[:-1].decode('latin1'))  # remove the space indicating multi-line
                     else:
                         # End of the answer for that command
                         continuing = False
-                        lines.append(l)
+                        lines.append(l.decode('latin1'))
                         if len(lines) == 1:
                             ret.append(lines[0])
                         else:
@@ -3829,7 +3829,7 @@ class IPBusAccesser(object):
                 end = time.time() + 1
                 while True:
                     data = self.socket.recv(4096)
-                    logging.debug("Flushing data '%s'", data.encode('string_escape'))
+                    logging.debug("Flushing data '%s'", to_str_escape(data))
                     if time.time() > end:
                         logging.warning("Still trying to flush data after 1 s")
                         return
@@ -3854,8 +3854,8 @@ class E861Simulator(object):
     1 axis, open-loop only, very limited behaviour
     Same interface as the serial port
     """
-    _idn = "(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
-    _csv = "2.0"
+    _idn = b"(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
+    _csv = b"2.0"
     def __init__(self, port, baudrate=9600, timeout=0, address=1,
                  closedloop=False, *args, **kwargs):
         """
@@ -3884,8 +3884,8 @@ class E861Simulator(object):
         self._target = self._position  # m
         self._start_move = 0
 
-        self._output_buf = "" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         # special trick to only answer if baudrate is correct
         if baudrate != 38400:
@@ -3930,7 +3930,7 @@ class E861Simulator(object):
         self._ref_mode = 1
         self._errno = 0 # last error set
 
-    _re_command = ".*?[\n\x04\x05\x07\x08\x18\x24]"
+    _re_command = b".*?[\n\x04\x05\x07\x08\x18\x24]"
     def write(self, data):
         self._input_buf += data
         # process each commands separated by a "\n" or is short command
@@ -3980,20 +3980,20 @@ class E861Simulator(object):
 
     # TODO: some commands are read-only
     # Command name -> parameter number
-    _com_to_param = {# "LIM": 0x32, # LIM actually report the opposite of 0x32
-                     "TRS": 0x14,
-                     "CST": 0x3c,
-                     "TMN": 0x30,
-                     "TMX": 0x15,
-                     "VEL": 0x49,
-                     "ACC": 0x0B,
-                     "DEC": 0x0C,
-                     "OVL": 0x7000201,
-                     "OAC": 0x7000202,
-                     "ODC": 0x7000206,
-                     "SSA": 0x7000003,
+    _com_to_param = {b"LIM": 0x32, # LIM actually report the opposite of 0x32
+                     b"TRS": 0x14,
+                     b"CST": 0x3c,
+                     b"TMN": 0x30,
+                     b"TMX": 0x15,
+                     b"VEL": 0x49,
+                     b"ACC": 0x0B,
+                     b"DEC": 0x0C,
+                     b"OVL": 0x7000201,
+                     b"OAC": 0x7000202,
+                     b"ODC": 0x7000206,
+                     b"SSA": 0x7000003,
     }
-    _re_addr_com = r"((?P<addr>\d+) (0 )?)?(?P<com>.*)"
+    _re_addr_com = br"((?P<addr>\d+) (0 )?)?(?P<com>.*)"
     def _processCommand(self, com):
         """
         process the command, and put the result in the output buffer
@@ -4006,44 +4006,44 @@ class E861Simulator(object):
         assert m # anything left over should be in com
         if m.group("addr"):
             addr = int(m.group("addr"))
-            prefix = "0 %d " % addr
+            prefix = b"0 %d " % addr
         else:
             addr = 1 # default is address == 1
-            prefix = ""
+            prefix = b""
 
         if addr != self._address and addr != 255: # message is for us?
 #             logging.debug("Controller %d skipping message for %d",
 #                           self._address, addr)
             return
         logging.debug("Fake controller %d processing command '%s'",
-                      self._address, com.encode('string_escape'))
+                      self._address, to_str_escape(com))
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)
-        args = [a for a in com.split(" ") if bool(a)]
+        args = [a for a in com.split(b" ") if bool(a)]
         logging.debug("Command decoded: %s", args)
 
         if self._errno:
             # if errno is not null, most commands don't work any more
-            if com not in ["*IDN?", "RBT", "ERR?", "CSV?"]:
+            if com not in [b"*IDN?", b"RBT", b"ERR?", b"CSV?"]:
                 logging.debug("received command %s while errno = %d",
-                              com.encode('string_escape'), self._errno)
+                              to_str_escape(com), self._errno)
                 return
 
         # TODO: to support more commands, we should have a table, with name of
         # the command + type of arguments (+ number of optional args)
         try:
-            if com == "*IDN?": # identification
+            if com == b"*IDN?": # identification
                 out = self._idn
-            elif com == "CSV?": # command set version
+            elif com == b"CSV?": # command set version
                 out = self._csv
-            elif com == "ERR?": # last error number
-                out = "%d" % self._errno
+            elif com == b"ERR?": # last error number
+                out = b"%d" % self._errno
                 self._errno = 0 # reset error number
-            elif com == "RBT": # reboot
+            elif com == b"RBT": # reboot
                 self._init_mem()
                 time.sleep(0.1)
-            elif com == "\x04": # Query Status Register Value
+            elif com == b"\x04": # Query Status Register Value
                 # return hexadecimal bitmap of moving axes
                 # TODO: to check, much more info returned
                 val = 0
@@ -4051,25 +4051,25 @@ class E861Simulator(object):
                     val |= 0x400  # first axis moving
                 if self._servo:
                     val |= 0x1000  # servo on
-                out = "0x%x" % val
-            elif com == "\x05": # Request Motion Status
+                out = b"0x%x" % val
+            elif com == b"\x05": # Request Motion Status
                 # return hexadecimal bitmap of moving axes
                 if time.time() > self._end_move:
                     val = 0
                 else:
                     val = 1 # first axis moving
-                out = "%x" % val
-            elif com == "\x07": # Request Controller Ready Status
+                out = b"%x" % val
+            elif com == b"\x07": # Request Controller Ready Status
                 if self._ready:  # TODO: when is it not ready?? (for a little while after changing servo mode)
-                    out = "\xb1"
+                    out = b"\xb1"
                 else:
-                    out = "\xb0"
-            elif com == "\x18" or com == "STP": # Stop immediately
+                    out = b"\xb0"
+            elif com == b"\x18" or com == b"STP": # Stop immediately
                 self._end_move = 0
                 self._errno = 10 # PI_CNTR_STOP
-            elif args[0].startswith("HLT"): # halt motion with deceleration: axis (optional)
+            elif args[0].startswith(b"HLT"): # halt motion with deceleration: axis (optional)
                 self._end_move = 0
-            elif args[0].startswith("RNP"):  # relax
+            elif args[0].startswith(b"RNP"):  # relax
                 pass
             elif args[0][:3] in self._com_to_param:
                 param = self._com_to_param[args[0][:3]]
@@ -4077,27 +4077,27 @@ class E861Simulator(object):
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
-                if args[0][3:4] == "?" and len(args) == 2: # query
-                    out = "%s=%s" % (args[1], self._parameters[param])
+                if args[0][3:4] == b"?" and len(args) == 2: # query
+                    out = ("%s=%s" % (args[1], self._parameters[param])).encode('ascii')
                 elif len(args[0]) == 3 and len(args) == 3: # set
                     # convert according to the current type of the parameter
                     typeval = type(self._parameters[param])
                     self._parameters[param] = typeval(args[2])
                 else:
                     raise SimulatedError(15)
-            elif args[0] == "SPA?" and len(args) == 3: # GetParameter: axis, address
+            elif args[0] == b"SPA?" and len(args) == 3: # GetParameter: axis, address
                 # TODO: when no arguments -> list all parameters
                 axis, addr = int(args[1]), int(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 try:
-                    out = "%d=%s" % (addr, self._parameters[addr])
+                    out = ("%s=%s" % (addr, self._parameters[addr])).encode('ascii')
                 except KeyError:
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
-            elif args[0] == "SPA" and len(args) == 4: # SetParameter: axis, address, value
+            elif args[0] == b"SPA" and len(args) == 4: # SetParameter: axis, address, value
                 axis = int(args[1])
-                if args[2].startswith("0x"):
+                if args[2].startswith(b"0x"):
                     addr = int(args[2][2:], 16)
                 else:
                     addr = int(args[2])
@@ -4112,50 +4112,50 @@ class E861Simulator(object):
                 except KeyError:
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
-            elif args[0] == "SEP?" and len(args) == 3:  # GetParameterNonVolatile: axis, address
+            elif args[0] == b"SEP?" and len(args) == 3:  # GetParameterNonVolatile: axis, address
                 # TODO: when no arguments -> list all parameters
                 axis, addr = int(args[1]), int(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 try:
-                    out = "%d=%s" % (addr, self._parameters[addr])
+                    out = ("%d=%s" % (addr, self._parameters[addr])).encode('ascii')
                 except KeyError:
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
-            elif args[0] == "LIM?" and len(args) == 2: # Get Limit Switches
+            elif args[0] == b"LIM?" and len(args) == 2: # Get Limit Switches
                 axis = int(args[1])
                 if axis == 1:
                     # opposite of param 0x32
-                    out = "%s=%s" % (args[1], 1 - self._parameters[0x32])
+                    out = b"%s=%d" % (args[1], 1 - self._parameters[0x32])
                 else:
                     self._errno = 15
-            elif args[0] == "SVO" and len(args) == 3: # Set Servo State
+            elif args[0] == b"SVO" and len(args) == 3: # Set Servo State
                 axis, state = int(args[1]), int(args[2])
                 if axis == 1:
                     self._servo = state
                 else:
                     self._errno = 15
-            elif args[0] == "RON" and len(args) == 3: # Set Reference mode
+            elif args[0] == b"RON" and len(args) == 3: # Set Reference mode
                 axis, state = int(args[1]), int(args[2])
                 if axis == 1:
                     self._ref_mode = state
                 else:
                     self._errno = 15
-            elif args[0] == "OSM" and len(args) == 3: # Open-Loop Step Moving
+            elif args[0] == b"OSM" and len(args) == 3: # Open-Loop Step Moving
                 axis, steps = int(args[1]), float(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
-                speed = self._parameters[self._com_to_param["OVL"]]
+                speed = self._parameters[self._com_to_param[b"OVL"]]
                 duration = abs(steps) / speed
                 logging.debug("Simulating a move of %f s", duration)
                 self._end_move = time.time() + duration # current move stopped
-            elif args[0] == "MOV" and len(args) == 3: # Closed-Loop absolute move
+            elif args[0] == b"MOV" and len(args) == 3: # Closed-Loop absolute move
                 axis, pos = int(args[1]), float(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
-                speed = self._parameters[self._com_to_param["VEL"]]
+                speed = self._parameters[self._com_to_param[b"VEL"]]
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - pos
                 duration = abs(distance) / speed + 0.05
@@ -4164,13 +4164,13 @@ class E861Simulator(object):
                 self._end_move = self._start_move + duration
                 self._position = cur_pos
                 self._target = pos
-            elif args[0] == "MVR" and len(args) == 3: # Closed-Loop relative move
+            elif args[0] == b"MVR" and len(args) == 3: # Closed-Loop relative move
                 axis, distance = int(args[1]), float(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
-                speed = self._parameters[self._com_to_param["VEL"]]
+                speed = self._parameters[self._com_to_param[b"VEL"]]
                 duration = abs(distance) / speed + 0.05
                 logging.debug("Simulating a move of %f s", duration)
                 cur_pos = self._get_cur_pos_cl()
@@ -4182,51 +4182,51 @@ class E861Simulator(object):
 #                 # Introduce an error from time to time, just to try the error path
 #                 if random.randint(0, 10) == 0:
 #                     raise SimulatedError(7)
-            elif args[0] == "POS" and len(args) == 3: # Closed-Loop position set
+            elif args[0] == b"POS" and len(args) == 3: # Closed-Loop position set
                 axis, pos = int(args[1]), float(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 self._position = pos
-            elif args[0] == "POS?" and len(args) == 2: # Closed-Loop position query
+            elif args[0] == b"POS?" and len(args) == 2: # Closed-Loop position query
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
 #                 if 0 == random.randint(0, 20):  # To test with issue about generated garbage
 #                     self._output_buf += "\n\x8a\xea\x82r\x82\xa2\x9a\xa2\xca\x8a\n"
 #                 else:
-                out = "%s=%s" % (args[1], self._get_cur_pos_cl())
-            elif args[0] == "MOV?" and len(args) == 2:  # Closed-Loop target position query
+                out = b"%s=%f" % (args[1], self._get_cur_pos_cl())
+            elif args[0] == b"MOV?" and len(args) == 2:  # Closed-Loop target position query
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
-                out = "%s=%s" % (args[1], self._target)
-            elif args[0] == "SVO?" and len(args) == 2:  # Servo on?
+                out = b"%s=%f" % (args[1], self._target)
+            elif args[0] == b"SVO?" and len(args) == 2:  # Servo on?
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
-                out = "%s=%s" % (args[1], "1" if self._servo else "0")
-            elif args[0] == "ONT?" and len(args) == 2: # on target
+                out = b"%s=%s" % (args[1], b"1" if self._servo else b"0")
+            elif args[0] == b"ONT?" and len(args) == 2: # on target
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
                 ont = time.time() > self._end_move
-                out = "%s=%d" % (args[1], 1 if ont else 0)
-            elif args[0] == "FRF?" and len(args) == 2: # is referenced?
+                out = b"%s=%d" % (args[1], 1 if ont else 0)
+            elif args[0] == b"FRF?" and len(args) == 2: # is referenced?
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
-                out = "%s=%d" % (args[1], self._referenced)
-            elif args[0] == "FRF" and len(args) == 2: # reference to ref switch
+                out = b"%s=%d" % (args[1], self._referenced)
+            elif args[0] == b"FRF" and len(args) == 2: # reference to ref switch
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
                 self._referenced = 1
                 self._end_move = 0
                 self._position = self._parameters[0x16] # value at reference
-            elif args[0] == "SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
+            elif args[0] == b"SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
                 # Can be followed by "ALL", but for us, it's the same
-                out = "1"
-            elif com == "HLP?":
+                out = b"1"
+            elif com == b"HLP?":
                 # The important part is " \n" at the end of each line
                 out = ("\x00The following commands are available: \n"
                        "#4 request status register \n"
@@ -4258,8 +4258,8 @@ class E861Simulator(object):
                        "ERR? get error number \n"
                        "VEL {<AxisId> <Velocity>} set closed-loop velocity \n"
                        "end of help"
-                       )
-            elif com == "HPA?":
+                       ).encode('ascii')
+            elif com == b"HPA?":
                 out = ("\x00The following parameters are valid: \n" +
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
                        "0x2=\t0\t1\tINT\tmotorcontroller\tI term 1 \n" +
@@ -4271,15 +4271,15 @@ class E861Simulator(object):
                        "0x7000002=\t0\t1\tFLOAT\tmotorcontroller\tslew rate \n" +
                        "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
                        "end of help"
-                       )
+                       ).encode('ascii')
             else:
-                logging.debug("Unknown command '%s'", com)
+                logging.debug("Unknown command '%s'", to_str_escape(com))
                 self._errno = 1
         except SimulatedError as ex:
-            logging.debug("Error detected while processing command '%s'", com)
+            logging.debug("Error detected while processing command '%s'", to_str_escape(com))
             self._errno = ex.args[0]
-        except Exception:
-            logging.debug("Failed to process command '%s'", com)
+        except Exception as ex:
+            logging.debug("Failed to process command '%s' with exception %s", to_str_escape(com), ex)
             self._errno = 1
 
         # add the response header
@@ -4287,9 +4287,9 @@ class E861Simulator(object):
             #logging.debug("Fake controller %d doesn't respond", self._address)
             pass
         else:
-            out = "%s%s\n" % (prefix, out)
+            out = b"%s%s\n" % (prefix, out)
             logging.debug("Fake controller %d responding '%s'", self._address,
-                          out.encode('string_escape'))
+                          to_str_escape(out))
             self._output_buf += out
 
 class DaisyChainSimulator(object):
@@ -4304,7 +4304,7 @@ class DaisyChainSimulator(object):
         self.port = port
         self.timeout = timeout
         self._subports = kwargs["subports"]
-        self._output_buf = ""
+        self._output_buf = b""
         self._obuf_lock = threading.Lock()
 
         # For each port, put a thread listening on the read and push to output
