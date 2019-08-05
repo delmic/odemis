@@ -261,7 +261,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         # only pass the two fastest axes of the acquisition to retrieve the period when a leech should be run again
         period = dce.estimateCorrectionPeriod(self.period.value, acq_t, shape[-2:])
         nimages = numpy.prod(shape)
-        n_anchor = 1 + nimages // period.next()
+        n_anchor = 1 + nimages // next(period)
         # number of times the anchor will be acquired * anchor acquisition time
         return n_anchor * dce.estimateAcquisitionTime()
 

@@ -148,7 +148,7 @@ def recursive_dict_update(d, other):
 
     """
 
-    for k, v in other.iteritems():
+    for k, v in other.items():
         if isinstance(v, collections.Mapping):
             r = recursive_dict_update(d.get(k, {}), v)
             d[k] = r
