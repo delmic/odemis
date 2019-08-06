@@ -2740,7 +2740,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
                          streaks.integrationTime.value)
 
         # check the dtype is correct
-        self.assertEqual(ts_da.dtype, numpy.uint16)
+        self.assertEqual(ts_da.dtype, numpy.uint32)
 
         # do a second acquisition with longer exp time and check values are bigger due to integration
         streaks.integrationTime.value = 2.5  # s
