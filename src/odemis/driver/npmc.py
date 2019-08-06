@@ -176,7 +176,7 @@ class ESP(model.Actuator):
         self.referenced = model.VigilantAttribute({a: False for a in axes}, readonly=True)
 
         self._hwVersion = str(self._id)
-        self._swVersion = self._version
+        self._swVersion = self._version.decode('latin1')
 
         # Get the position in object coord with the offset applied.
 
