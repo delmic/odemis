@@ -142,6 +142,9 @@ class TestWithBackend(unittest.TestCase):
         test.stop_backend()
 
     def tearDown(self):
+        # Delete files created by tests
+        if os.path.isfile("TÈßt.tiff"):
+            os.remove("TÈßt.tiff")
         model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
