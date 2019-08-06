@@ -1050,7 +1050,7 @@ class PolarOverlay(base.ViewOverlay):
             # Calc Phi label pos
 
             # Calculate the view point on the line where to place the label
-            if self.theta_radius > self.inner_radius / 2:
+            if self.theta_radius and self.theta_radius > self.inner_radius / 2:
                 radius = self.inner_radius * 0.25
             else:
                 radius = self.inner_radius * 0.75
