@@ -110,7 +110,13 @@ class TestKeypoint(unittest.TestCase):
         # Check that calling the function again with the same data returns the
         # same results (bug happens when using FLANN-KDtree matcher)
         for i in range(2):
-            tmatn, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
+            try:
+                tmatn, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
+            except ValueError:
+                if not hasattr(cv2, 'SIFT') and not hasattr(cv2, 'SIFT_create'):
+                    self.skipTest("Test only works with SIFT, not with ORB.")
+                else:
+                    raise AssertionError("Failed to find transform between images.")
             tmetadatan = get_img_transformation_md(tmatn, tem_img, sem_img)
             logging.debug("Computed metadata = %s", tmetadatan)
             numpy.testing.assert_equal(tmatn, tmat)
