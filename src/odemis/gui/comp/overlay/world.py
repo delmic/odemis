@@ -393,7 +393,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         """
         if self._scanner:
-            phys_rect = self.convert_roi_phys_to_ratio(roa)
+            phys_rect = self.convert_roi_ratio_to_phys(roa)
         else:
             phys_rect = roa
 
