@@ -35,13 +35,15 @@ pituner. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, absolute_import, print_function
 
 import argparse
+from builtins import input
 import logging
 import math
 import numpy
-import sys
-import time
 from odemis.driver import pigcs
 from odemis.util import driver
+import sys
+import time
+
 import matplotlib.pyplot as plt
 
 
@@ -187,9 +189,9 @@ class PITuner(object):
 
         while True:
             print("Change P, I, D, (M)ove distance, (V)elocity, (A)cceleration, (Q)uit or press Enter to start next move: ", end="")
-            choice = raw_input().upper()
+            choice = input().upper()
             if choice in ("P", "I", "D"):
-                val = raw_input("Enter new value for %s: " % (choice,))
+                val = input("Enter new value for %s: " % (choice,))
                 param = {"P": 1, "I": 2, "D": 3}[choice]
                 try:
                     self.cont.SetParameter(self.axis, param, val)
@@ -197,20 +199,20 @@ class PITuner(object):
                     logging.exception("Failed to write %s to parameter 0x%x", val, param)
             elif choice == "V":
                 print(u"Enter new velocity in µm/s: ", end="")
-                val = raw_input()
+                val = input()
                 self._vel = float(val) * 1e-6
                 self.cont.SetCLVelocity(self.axis, self._vel / self._upm)
                 self.cont.checkError()
             elif choice == "A":
                 print(u"Enter new acceleration/deceleration in µm/s²: ", end="")
-                val = raw_input()
+                val = input()
                 self._acc = float(val) * 1e-6
                 self.cont.SetCLAcceleration(self.axis, self._acc / self._upm)
                 self.cont.SetCLDeceleration(self.axis, self._acc / self._upm)
                 self.cont.checkError()
             elif choice == "M":
                 print(u"Enter new distance in µm (can be negative): ", end="")
-                val = raw_input()
+                val = input()
                 self._distm = float(val) * 1e-6
             elif choice == "":
                 return True
