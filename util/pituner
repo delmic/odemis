@@ -49,7 +49,7 @@ class PITuner(object):
     def __init__(self, cont, axis):
         """
         cont: the PIGCS controller
-        axis (int): axis number
+        axis (str): axis number
         """
         self.cont = cont
         self.axis = axis
@@ -265,8 +265,8 @@ def main(args):
             acc = pigcs.Bus._openPort(options.port, **kwargs)
 
         # TODO: allow to specify the axis
-        cont = pigcs.Controller(acc, address=options.addr, axes={1: True})
-        tuner = PITuner(cont, 1)
+        cont = pigcs.Controller(acc, address=options.addr, axes={"1": True})
+        tuner = PITuner(cont, "1")
         tuner.tune(options.vel)
 
         cont.terminate()
