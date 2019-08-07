@@ -659,7 +659,7 @@ class Controller(object):
     def GetParameters(self):
         """
         Return all the parameters values for all the axes
-        returns (dict (int, int)->str): the axis/parameter number -> value
+        returns (dict (str, int)->str): the axis/parameter number -> value
         """
         # SPA? (Get Volatile Memory Parameters)
         lines = self._sendQueryCommand("SPA?\n")
@@ -671,7 +671,7 @@ class Controller(object):
             if not m:
                 logging.debug("Line doesn't seem to be a parameter: '%s'", l)
                 continue
-            a, param, value = int(m.group("axis")), int(m.group("param"), 16), m.group("value")
+            a, param, value = m.group("axis"), int(m.group("param"), 16), m.group("value")
             params[(a, param)] = value
         return params
 
@@ -1299,7 +1299,7 @@ class Controller(object):
         assert(value > 0)
         self._sendOrderCommand("RTR %d\n" % (value,))
 
-    def GetRecordRate(self, value):
+    def GetRecordRate(self):
         """
         Get the record table rate
         Note: on the E-861, a cycle is 20µs
@@ -1312,14 +1312,13 @@ class Controller(object):
         """
         Set Data Recorder Configuration
         table (1<=int): record table ID
-        source (0<=int): Depends on the option. For axis related signal, it's the
-          axis number
+        source (str): Depends on the option. For axis-related signal, it's the axis name
         opt (0<=int): type of signal to be recorded. See documentation for values.
         """
         assert(table > 0)
-        assert(source >= 0)
+        assert(isinstance(source, basestring))
         assert(opt >= 0)
-        self._sendOrderCommand("DRC %d %d %d\n" % (table, source, opt))
+        self._sendOrderCommand("DRC %d %s %d\n" % (table, source, opt))
 
     def SetRecordTrigger(self, table, source, val):
         """
