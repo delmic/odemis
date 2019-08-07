@@ -2605,12 +2605,11 @@ class SparcStreamsController(StreamBarController):
 
         # Need to pick the right filter wheel (if there is one)
         axes = {}
-        for fw in (main_data.cl_filter, main_data.light_filter):
+        for fw in (main_data.cl_filter, main_data.light_filter, main_data.tc_od_filter, main_data.tc_filter):
             if fw is None:
                 continue
             if main_data.cld.name in fw.affects.value:
                 axes["band"] = fw
-
         ret = self._addRepStream(cli_stream, sem_cli_stream,
                                   axes=axes,
                                   play=False

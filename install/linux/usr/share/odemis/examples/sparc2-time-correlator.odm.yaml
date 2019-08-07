@@ -13,7 +13,8 @@ SPARC2-VisNIR-TR: {
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
                "Lens1 Mover", "Lens2 Switch",
-               "TC Filter Wheel", "TC Optical Density Filter", "Shutter 0", "Shutter 1"],
+               "TC Filter Wheel", "TC Optical Density Filter", "Shutter 0", "Shutter 1",
+               "CL Detector",],
 }
 
 # Light (lamp with known spectrum)
@@ -64,6 +65,7 @@ SPARC2-VisNIR-TR: {
     children: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
+       detector2: "TR CL PMT",
     }
 }
 
@@ -106,6 +108,29 @@ SPARC2-VisNIR-TR: {
         limits: [-3, 3], # V
     },
 }
+
+"TR CL PMT": { # the raw detector of the PMT
+    # Internal child of SEM Scan Interface, so no class but instead a creator
+    role: null,
+    init: {
+        channel: 2,
+        # TODO: check the limits
+        limits: [-2.5, 2.5], # V, with contrast reversed
+    },
+}
+
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: {
+        settle_time: 0.5,  # s, time for the shutter to fully open
+    },
+    dependencies: {
+       "detector": "TR CL PMT",
+       "pmt-signal": "Photon counter signal",
+    },
+}
+
 
 "Optical Path Properties": {
     class: static.OpticalLens,
@@ -391,7 +416,7 @@ SPARC2-VisNIR-TR: {
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
-    affects: ["Time Correlator", "Photon counter sync", "Photon counter signal"],
+    affects: ["Time Correlator", "Photon counter sync", "Photon counter signal", "CL Detector"],
 }
 
 "TC Optical Density Filter": {
@@ -404,7 +429,7 @@ SPARC2-VisNIR-TR: {
         offset: -3.00000925, # od
         ref_start: 2.8 #  a little before the reference (inverted axis)
     },
-    affects: ["Time Correlator", "Photon counter sync", "Photon counter signal"],
+    affects: ["Time Correlator", "Photon counter sync", "Photon counter signal", "CL Detector"],
 }
 
 "Time Correlator": {
