@@ -279,7 +279,7 @@ class SmarPodError(Exception):
         super(SmarPodError, self).__init__("Error %d. %s" % (error_code, SmarPodDLL.err_code.get(error_code, "")))
 
 
-class SA_TG_Pose(Structure):
+class SA_MC_Pose(Structure):
     """
     Triglide Pose Structure (C Struct used by DLL)
 
@@ -340,7 +340,7 @@ def dict_to_tg_pose(pos):
     returns: a Pose (C struct)
     raises ValueError if an unsupported axis name is input
     """
-    pose = SA_TG_Pose()
+    pose = SA_MC_Pose()
 
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
@@ -370,61 +370,61 @@ class TriGlideDLL(CDLL):
     hwModel = c_long(10001)  # specifies the TriGlide 110.45 S (nano)
 
     # Status
-    SA_TG_OK = 0
-    SA_TG_OTHER_ERROR = 1
-    SA_TG_SYSTEM_NOT_INITIALIZED_ERROR = 2
-    SA_TG_NO_SYSTEMS_FOUND_ERROR = 3
-    SA_TG_INVALID_PARAMETER_ERROR = 4
-    SA_TG_COMMUNICATION_ERROR = 5
-    SA_TG_UNKNOWN_PROPERTY_ERROR = 6
-    SA_TG_RESOURCE_TOO_OLD_ERROR = 7
-    SA_TG_FEATURE_UNAVAILABLE_ERROR = 8
-    SA_TG_INVALID_SYSTEM_LOCATOR_ERROR = 9
-    SA_TG_QUERYBUFFER_SIZE_ERROR = 10
-    SA_TG_COMMUNICATION_TIMEOUT_ERROR = 11
-    SA_TG_DRIVER_ERROR = 12
-    SA_TG_STATUS_CODE_UNKNOWN_ERROR = 500
-    SA_TG_INVALID_ID_ERROR = 501
-    SA_TG_INITIALIZED_ERROR = 502
-    SA_TG_HARDWARE_MODEL_UNKNOWN_ERROR = 503
-    SA_TG_WRONG_COMM_MODE_ERROR = 504
-    SA_TG_NOT_INITIALIZED_ERROR = 505
-    SA_TG_INVALID_SYSTEM_ID_ERROR = 506
-    SA_TG_NOT_ENOUGH_CHANNELS_ERROR = 507
-    SA_TG_INVALID_CHANNEL_ERROR = 508
-    SA_TG_CHANNEL_USED_ERROR = 509
-    SA_TG_SENSORS_DISABLED_ERROR = 510
-    SA_TG_WRONG_SENSOR_TYPE_ERROR = 511
-    SA_TG_SYSTEM_CONFIGURATION_ERROR = 512
-    SA_TG_SENSOR_NOT_FOUND_ERROR = 513
-    SA_TG_STOPPED_ERROR = 514
-    SA_TG_BUSY_ERROR = 515
-    SA_TG_NOT_REFERENCED_ERROR = 550
-    SA_TG_POSE_UNREACHABLE_ERROR = 551
+    SA_MC_OK = 0
+    SA_MC_OTHER_ERROR = 1
+    SA_MC_SYSTEM_NOT_INITIALIZED_ERROR = 2
+    SA_MC_NO_SYSTEMS_FOUND_ERROR = 3
+    SA_MC_INVALID_PARAMETER_ERROR = 4
+    SA_MC_COMMUNICATION_ERROR = 5
+    SA_MC_UNKNOWN_PROPERTY_ERROR = 6
+    SA_MC_RESOURCE_TOO_OLD_ERROR = 7
+    SA_MC_FEATURE_UNAVAILABLE_ERROR = 8
+    SA_MC_INVALID_SYSTEM_LOCATOR_ERROR = 9
+    SA_MC_QUERYBUFFER_SIZE_ERROR = 10
+    SA_MC_COMMUNICATION_TIMEOUT_ERROR = 11
+    SA_MC_DRIVER_ERROR = 12
+    SA_MC_STATUS_CODE_UNKNOWN_ERROR = 500
+    SA_MC_INVALID_ID_ERROR = 501
+    SA_MC_INITIALIZED_ERROR = 502
+    SA_MC_HARDWARE_MODEL_UNKNOWN_ERROR = 503
+    SA_MC_WRONG_COMM_MODE_ERROR = 504
+    SA_MC_NOT_INITIALIZED_ERROR = 505
+    SA_MC_INVALID_SYSTEM_ID_ERROR = 506
+    SA_MC_NOT_ENOUGH_CHANNELS_ERROR = 507
+    SA_MC_INVALID_CHANNEL_ERROR = 508
+    SA_MC_CHANNEL_USED_ERROR = 509
+    SA_MC_SENSORS_DISABLED_ERROR = 510
+    SA_MC_WRONG_SENSOR_TYPE_ERROR = 511
+    SA_MC_SYSTEM_CONFIGURATION_ERROR = 512
+    SA_MC_SENSOR_NOT_FOUND_ERROR = 513
+    SA_MC_STOPPED_ERROR = 514
+    SA_MC_BUSY_ERROR = 515
+    SA_MC_NOT_REFERENCED_ERROR = 550
+    SA_MC_POSE_UNREACHABLE_ERROR = 551
 
     # Defines
-    SA_TG_SENSORS_DISABLED = c_uint(0)
-    SA_TG_SENSORS_ENABLED = c_uint(1)
-    SA_TG_SENSORS_POWERSAVE = c_uint(2)
+    SA_MC_SENSORS_DISABLED = c_uint(0)
+    SA_MC_SENSORS_ENABLED = c_uint(1)
+    SA_MC_SENSORS_POWERSAVE = c_uint(2)
 
     # property symbols
-    SA_TG_FREF_METHOD = c_uint(1000)
-    SA_TG_FREF_ZDIRECTION = c_uint(1002)
-    SA_TG_FREF_XDIRECTION = c_uint(1003)
-    SA_TG_FREF_YDIRECTION = c_uint(1004)
-    SA_TG_PIVOT_MODE = c_uint(1010)
-    SA_TG_FREF_AND_CAL_FREQUENCY = c_uint(1020)
-    SA_TG_POSITIONERS_MIN_SPEED = c_uint(1100)
+    SA_MC_FREF_METHOD = c_uint(1000)
+    SA_MC_FREF_ZDIRECTION = c_uint(1002)
+    SA_MC_FREF_XDIRECTION = c_uint(1003)
+    SA_MC_FREF_YDIRECTION = c_uint(1004)
+    SA_MC_PIVOT_MODE = c_uint(1010)
+    SA_MC_FREF_AND_CAL_FREQUENCY = c_uint(1020)
+    SA_MC_POSITIONERS_MIN_SPEED = c_uint(1100)
 
     # move-status constants
-    SA_TG_STOPPED = c_uint(0)
-    SA_TG_HOLDING = c_uint(1)
-    SA_TG_MOVING = c_uint(2)
-    SA_TG_CALIBRATING = c_uint(3)
-    SA_TG_REFERENCING = c_uint(4)
-    SA_TG_STANDBY = c_uint(5)
+    SA_MC_STOPPED = c_uint(0)
+    SA_MC_HOLDING = c_uint(1)
+    SA_MC_MOVING = c_uint(2)
+    SA_MC_CALIBRATING = c_uint(3)
+    SA_MC_REFERENCING = c_uint(4)
+    SA_MC_STANDBY = c_uint(5)
 
-    SA_TG_HOLDTIME_INFINITE = c_uint(60000)
+    SA_MC_HOLDTIME_INFINITE = c_uint(60000)
 
     err_code = {
 0: "OK",
@@ -488,7 +488,7 @@ class TriGlideDLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if result != TriGlideDLL.SA_TG_OK:
+        if result != TriGlideDLL.SA_MC_OK:
             raise TriGlideError(result)
 
         return result
@@ -1157,9 +1157,9 @@ class TriGlide(model.Actuator):
 
         # Connect to the device
         self._id = c_uint()
-        self.core.SA_TG_Open(byref(self._id), TriGlideDLL.hwModel, self._locator, self._options)
+        self.core.SA_MC_Open(byref(self._id), TriGlideDLL.hwModel, self._locator, self._options)
         logging.debug("Successfully connected to TriGlide Controller ID %d", self._id.value)
-        self.core.SA_TG_SetSensorMode(self._id, TriGlideDLL.SA_TG_SENSORS_ENABLED)
+        self.core.SA_MC_SetSensorMode(self._id, TriGlideDLL.SA_MC_SENSORS_ENABLED)
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -1174,7 +1174,7 @@ class TriGlide(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         referenced = c_int()
-        self.core.SA_TG_IsReferenced(self._id, byref(referenced))
+        self.core.SA_MC_IsReferenced(self._id, byref(referenced))
         # define the referenced VA from the query
         axes_ref = {a: referenced.value for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
@@ -1196,7 +1196,7 @@ class TriGlide(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.core.SA_TG_Close(self._id)
+        self.core.SA_MC_Close(self._id)
         super(TriGlide, self).terminate()
 
     def GetSwVersion(self):
@@ -1206,7 +1206,7 @@ class TriGlide(model.Actuator):
         major = c_uint()
         minor = c_uint()
         update = c_uint()
-        self.core.SA_TG_GetDLLVersion(byref(major), byref(minor), byref(update))
+        self.core.SA_MC_GetDLLVersion(byref(major), byref(minor), byref(update))
         ver = "%u.%u.%u" % (major.value, minor.value, update.value)
         return ver
 
@@ -1215,22 +1215,22 @@ class TriGlide(model.Actuator):
         Ask the controller if it is referenced
         """
         referenced = c_int()
-        self.core.SA_TG_IsReferenced(self._id, byref(referenced))
+        self.core.SA_MC_IsReferenced(self._id, byref(referenced))
         return bool(referenced.value)
 
     def GetMoveStatus(self):
         """
         Gets the move status from the controller.
         Returns:
-            TriGlideDLL.SA_TG_MOVING is returned if moving
-            TriGlideDLL.SA_TG_STOPPED when stopped
-            TriGlideDLL.SA_TG_HOLDING when holding between moves
-            TriGlideDLL.SA_TG_CALIBRATING when calibrating
-            TriGlideDLL.SA_TG_REFERENCING when referencing
-            TriGlideDLL.SA_TG_STANDBY
+            TriGlideDLL.SA_MC_MOVING is returned if moving
+            TriGlideDLL.SA_MC_STOPPED when stopped
+            TriGlideDLL.SA_MC_HOLDING when holding between moves
+            TriGlideDLL.SA_MC_CALIBRATING when calibrating
+            TriGlideDLL.SA_MC_REFERENCING when referencing
+            TriGlideDLL.SA_MC_STANDBY
         """
         status = c_uint()
-        self.core.SA_TG_GetMoveStatus(self._id, byref(status))
+        self.core.SA_MC_GetMoveStatus(self._id, byref(status))
         return status
 
     def Move(self, pos, hold_time=0, block=False):
@@ -1248,12 +1248,12 @@ class TriGlide(model.Actuator):
         newPose = dict_to_tg_pose(pos)
 
         if hold_time == float("inf"):
-            ht = TriGlideDLL.SA_TG_HOLDTIME_INFINITE
+            ht = TriGlideDLL.SA_MC_HOLDTIME_INFINITE
         else:
             ht = c_uint(int(hold_time * 1000.0))
 
         # Use an infiinite holdtime and non-blocking (final argument)
-        self.core.SA_TG_Move(self._id, byref(newPose), ht, c_int(block))
+        self.core.SA_MC_Move(self._id, byref(newPose), ht, c_int(block))
 
     def GetPose(self):
         """
@@ -1262,7 +1262,7 @@ class TriGlide(model.Actuator):
         returns: (dict str -> float): axis name -> position
         """
         pose = Pose()
-        self.core.SA_TG_GetPose(self._id, byref(pose))
+        self.core.SA_MC_GetPose(self._id, byref(pose))
         position = tg_pose_to_dict(pose)
         logging.info("Current position: %s", position)
         return position
@@ -1272,7 +1272,7 @@ class TriGlide(model.Actuator):
         Stop command sent to the TriGlide
         """
         logging.debug("Stopping...")
-        self.core.SA_TG_Stop(self._id)
+        self.core.SA_MC_Stop(self._id)
 
     def SetSpeed(self, value):
         """
@@ -1281,7 +1281,7 @@ class TriGlide(model.Actuator):
         """
         logging.debug("Setting speed to %f", value)
         # the second argument (1) turns on speed control.
-        self.core.SA_TG_SetSpeed(self._id, c_int(1), c_double(value))
+        self.core.SA_MC_SetSpeed(self._id, c_int(1), c_double(value))
 
     def GetSpeed(self):
         """
@@ -1289,7 +1289,7 @@ class TriGlide(model.Actuator):
         """
         speed_control = c_int()
         speed = c_double()
-        self.core.SA_TG_GetSpeed(self._id, byref(speed_control), byref(speed))
+        self.core.SA_MC_GetSpeed(self._id, byref(speed_control), byref(speed))
         return speed.value
 
     def SetAcceleration(self, value):
@@ -1299,7 +1299,7 @@ class TriGlide(model.Actuator):
         """
         logging.debug("Setting acceleration to %f", value)
         # Passing 1 enables acceleration control.
-        self.core.SA_TG_SetAcceleration(self._id, c_int(1), c_double(value))
+        self.core.SA_MC_SetAcceleration(self._id, c_int(1), c_double(value))
 
     def GetAcceleration(self):
         """
@@ -1307,7 +1307,7 @@ class TriGlide(model.Actuator):
         """
         acceleration_control = c_int()
         acceleration = c_double()
-        self.core.SA_TG_GetAcceleration(self._id, byref(acceleration_control), byref(acceleration))
+        self.core.SA_MC_GetAcceleration(self._id, byref(acceleration_control), byref(acceleration))
         return acceleration.value
 
     def IsPoseReachable(self, pos):
@@ -1317,7 +1317,7 @@ class TriGlide(model.Actuator):
         returns: true if the pose is reachable - false otherwise.
         """
         reachable = c_int()
-        self.core.SA_TG_IsPoseReachable(self._id, byref(dict_to_pose(pos)), byref(reachable))
+        self.core.SA_MC_IsPoseReachable(self._id, byref(dict_to_pose(pos)), byref(reachable))
         return bool(reachable.value)
 
     def stop(self, axes=None):
@@ -1334,7 +1334,7 @@ class TriGlide(model.Actuator):
         try:
             p = self.GetPose()
         except TriGlideError as ex:
-            if ex.errno == TriGlideDLL.SA_TG_NOT_REFERENCED_ERROR:
+            if ex.errno == TriGlideDLL.SA_MC_NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because TriGlide is not referenced")
                 p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
             else:
@@ -1385,7 +1385,7 @@ class TriGlide(model.Actuator):
                 self.referenced._value = {a: False for a in self.axes.keys()}
 
                 # The TriGlide references all axes at once. This function blocks
-                self.core.SA_TG_FindReferenceMarks(self._id)
+                self.core.SA_MC_FindReferenceMarks(self._id)
 
                 if self.IsReferenced():
                     self.referenced._value = {a: True for a in self.axes.keys()}
@@ -1395,7 +1395,7 @@ class TriGlide(model.Actuator):
             except TriGlideError as ex:
                 future._was_stopped = True
                 # This occurs if a stop command interrupts referencing
-                if ex.errno == TriGlideDLL.SA_TG_STOPPED_ERROR:
+                if ex.errno == TriGlideDLL.SA_MC_STOPPED_ERROR:
                     logging.info("Referencing stopped: %s", ex)
                     raise CancelledError()
                 else:
@@ -1446,7 +1446,7 @@ class TriGlide(model.Actuator):
             while not future._must_stop.is_set():
                 status = self.GetMoveStatus()
                 # check if move is done
-                if status.value == TriGlideDLL.SA_TG_STOPPED.value:
+                if status.value == TriGlideDLL.SA_MC_STOPPED.value:
                     break
 
                 now = time.time()
@@ -1538,8 +1538,8 @@ class FakeTriGlideDLL(object):
     """
 
     def __init__(self):
-        self.pose = SA_TG_Pose()
-        self.target = SA_TG_Pose()
+        self.pose = SA_MC_Pose()
+        self.target = SA_MC_Pose()
         self.properties = {}
         self._speed = c_double(0)
         self._speed_control = c_int()
@@ -1577,39 +1577,39 @@ class FakeTriGlideDLL(object):
     These functions are provided by the real TriGlide DLL
     """
 
-    def SA_TG_Open(self, id, timeout, locator, options):
+    def SA_MC_Open(self, id, timeout, locator, options):
         pass
 
-    def SA_TG_Close(self, id):
+    def SA_MC_Close(self, id):
         pass
 
-    def SA_TG_SetSensorMode(self, id, mode):
+    def SA_MC_SetSensorMode(self, id, mode):
         pass
 
-    def SA_TG_FindReferenceMarks(self, id):
+    def SA_MC_FindReferenceMarks(self, id):
         self.stopping.clear()
         time.sleep(0.5)
         if self.stopping.is_set():
             self.referenced = False
-            raise TriGlideError(TriGlideDLL.SA_TG_STOPPED_ERROR)
+            raise TriGlideError(TriGlideDLL.SA_MC_STOPPED_ERROR)
         else:
             self.referenced = True
 
-    def SA_TG_IsPoseReachable(self, id, p_pos, p_reachable):
+    def SA_MC_IsPoseReachable(self, id, p_pos, p_reachable):
         reachable = _deref(p_reachable, c_int)
-        pos = _deref(p_pos, SA_TG_Pose)
+        pos = _deref(p_pos, SA_MC_Pose)
         if self._pose_in_range(pos):
             reachable.value = 1
         else:
             reachable.value = 0
 
-    def SA_TG_IsReferenced(self, id, p_referenced):
+    def SA_MC_IsReferenced(self, id, p_referenced):
         referenced = _deref(p_referenced, c_int)
         referenced.value = 1 if self.referenced else 0
 
-    def SA_TG_Move(self, id, p_pose, hold_time, block):
+    def SA_MC_Move(self, id, p_pose, hold_time, block):
         self.stopping.clear()
-        pose = _deref(p_pose, SA_TG_Pose)
+        pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
             self._current_move_finish = time.time() + 1.0
             self.target.x = pose.x
@@ -1619,51 +1619,51 @@ class FakeTriGlideDLL(object):
             self.target.ry = pose.ry
             self.target.rz = pose.rz
         else:
-            raise TriGlideError(TriGlideDLL.SA_TG_POSE_UNREACHABLE_ERROR)
+            raise TriGlideError(TriGlideDLL.SA_MC_POSE_UNREACHABLE_ERROR)
 
-    def SA_TG_GetPose(self, id, p_pose):
-        pose = _deref(p_pose, SA_TG_Pose)
+    def SA_MC_GetPose(self, id, p_pose):
+        pose = _deref(p_pose, SA_MC_Pose)
         pose.x = self.pose.x
         pose.y = self.pose.y
         pose.z = self.pose.z
         pose.rx = self.pose.rx
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
-        return TriGlideDLL.SA_TG_OK
+        return TriGlideDLL.SA_MC_OK
 
-    def SA_TG_GetMoveStatus(self, id, p_status):
+    def SA_MC_GetMoveStatus(self, id, p_status):
         status = _deref(p_status, c_int)
 
         if time.time() > self._current_move_finish:
             self.pose = copy.copy(self.target)
-            status.value = TriGlideDLL.SA_TG_STOPPED.value
+            status.value = TriGlideDLL.SA_MC_STOPPED.value
         else:
-            status.value = TriGlideDLL.SA_TG_MOVING.value
+            status.value = TriGlideDLL.SA_MC_MOVING.value
 
-    def SA_TG_Stop(self, id):
+    def SA_MC_Stop(self, id):
         self.stopping.set()
 
-    def SA_TG_SetSpeed(self, id, speed_control, speed):
+    def SA_MC_SetSpeed(self, id, speed_control, speed):
         self._speed = speed
         self._speed_control = speed_control
 
-    def SA_TG_GetSpeed(self, id, p_speed_control, p_speed):
+    def SA_MC_GetSpeed(self, id, p_speed_control, p_speed):
         speed = _deref(p_speed, c_double)
         speed.value = self._speed.value
         speed_control = _deref(p_speed_control, c_int)
         speed_control.value = self._speed_control.value
 
-    def SA_TG_SetAcceleration(self, id, accel_control, accel):
+    def SA_MC_SetAcceleration(self, id, accel_control, accel):
         self._accel = accel
         self._accel_control = accel_control
 
-    def SA_TG_GetAcceleration(self, id, p_accel_control, p_accel):
+    def SA_MC_GetAcceleration(self, id, p_accel_control, p_accel):
         accel = _deref(p_accel, c_double)
         accel.value = self._accel.value
         accel_control = _deref(p_accel_control, c_int)
         accel_control.value = self._accel_control.value
 
-    def SA_TG_GetDLLVersion(self, p_major, p_minor, p_update):
+    def SA_MC_GetDLLVersion(self, p_major, p_minor, p_update):
         major = _deref(p_major, c_uint)
         major.value = 1
         minor = _deref(p_minor, c_uint)
