@@ -42,7 +42,7 @@ CONFIG = {"name": "Triglide",
         "role": "",
         "ref_on_init": True,
         "actuator_speed": 0.1,  # m/s
-        "locator": "usb:ix:0",
+        "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "axes": {
             'x': {
@@ -80,7 +80,7 @@ class TestTriglide(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = smarpod.TriGlide(**CONFIG)
+        cls.dev = smarpod.SmarAct_MC(**CONFIG)
 
     @classmethod
     def tearDownClass(cls):
