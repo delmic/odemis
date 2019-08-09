@@ -1181,12 +1181,12 @@ class SmarAct_MC(model.Actuator):
         self._id = c_uint32(SA_MCDLL.SA_MC_INVALID_HANDLE)
         self.core.SA_MC_Open(byref(self._id), SA_MCDLL.hwModel, self._locator, self._options)
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
-
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
         # TODO: Fix getting software version with a supported function
         self._swVersion = 0  # self.GetSwVersion()
+
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         logging.debug("Using SA_MC library version %s", self._swVersion)
 
@@ -1201,6 +1201,7 @@ class SmarAct_MC(model.Actuator):
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
+
         if referenced:
             logging.debug("SA_MC is referenced")
         else:
@@ -1614,6 +1615,7 @@ class FakeMCDLL(object):
 
     def SA_MC_Close(self, id):
         pass
+
 
     def SA_MC_Move(self, id, p_pose, hold_time, block):
         self.stopping.clear()
