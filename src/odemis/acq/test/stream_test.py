@@ -4590,14 +4590,16 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         for time_index in range(0, 3):
             for wl_index in range(0, 3):
-                for x in range(100, 10):
-                    for y in range(100, 10):
+                for x in range(0, 3):
+                    for y in range(0, 3):
                         specs.selected_pixel.value = (x, y)
                         specs.selected_time.value = tl[time_index]
                         specs.selected_wavelength.value = wl[wl_index]
                         time.sleep(0.2)
-                        self.assertListEqual(proj_point_spectrum.image.value.tolist(), spec[:, :, 0, y, x].tolist())
-                        self.assertListEqual(proj_point_chrono.image.value.tolist(), spec[wl_index, :, 0, y, x].tolist())
+                        self.assertListEqual(proj_point_spectrum.image.value.tolist(),
+                                             spec[:, time_index, 0, y, x].tolist())
+                        self.assertListEqual(proj_point_chrono.image.value.tolist(),
+                                             spec[wl_index, :, 0, y, x].tolist())
 
     def test_temp_spec_calib(self):
         """Test StaticSpectrumStream calibration"""
