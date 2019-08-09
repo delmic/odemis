@@ -279,6 +279,28 @@ class SmarPodError(Exception):
         super(SmarPodError, self).__init__("Error %d. %s" % (error_code, SmarPodDLL.err_code.get(error_code, "")))
 
 
+class SA_MC_EventData(Union):
+    """
+    SA_MC event data is stored as this type of union (A C union used by DLL)
+    """
+    _fields_ = [
+         ("i32", c_int32),
+         ("i64", c_int64),
+         ("reserved", c_int8 * 32),
+         ]
+
+
+class SA_MC_Event(Structure):
+    """
+    SA_MC Event structure (C struct used by DLL)
+    """
+    _anonymous_ = ("u",)
+    _fields_ = [
+        ("type", c_uint32),
+        ("unused", c_int8 * 28),
+        ("u", SA_MC_EventData),
+        ]
+
 class SA_MC_Pose(Structure):
     """
     SA_MC Pose Structure (C Struct used by DLL)
@@ -367,7 +389,7 @@ class SA_MCDLL(CDLL):
     all the functions automatically.
     """
 
-    hwModel = c_long(10001)  # specifies the SA_MC 110.45 S (nano)
+    hwModel = c_long(22000)  # specifies the SA_MC 110.45 S (nano)
 
     # SmarAct MC error codes
 
@@ -431,6 +453,11 @@ class SA_MCDLL(CDLL):
     # events
     SA_MC_EVENT_MOVEMENT_FINISHED = 0x0001
 
+    # handles
+    # handle value that means no object
+    SA_MC_INVALID_HANDLE = 0xffffffff
+    SA_MC_INFINITE = -1
+
     err_code = {
 0x0000: "No error",
 0x0001: "Unspecified error",
@@ -464,7 +491,7 @@ class SA_MCDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractSA_MC.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractmc.so", RTLD_GLOBAL)
 
     def __getitem__(self, name):
         try:
@@ -1151,15 +1178,15 @@ class SmarAct_MC(model.Actuator):
             axes_def[axis_name] = ad
 
         # Connect to the device
-        self._id = c_uint()
+        self._id = c_uint32(SA_MCDLL.SA_MC_INVALID_HANDLE)
         self.core.SA_MC_Open(byref(self._id), SA_MCDLL.hwModel, self._locator, self._options)
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
-        self.core.SA_MC_SetSensorMode(self._id, SA_MCDLL.SA_MC_SENSORS_ENABLED)
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        self._swVersion = self.GetSwVersion()
+        # TODO: Fix getting software version with a supported function
+        self._swVersion = 0  # self.GetSwVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         logging.debug("Using SA_MC library version %s", self._swVersion)
 
@@ -1168,14 +1195,13 @@ class SmarAct_MC(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
-        referenced = c_int()
-        self.core.SA_MC_IsReferenced(self._id, byref(referenced))
+        referenced = self.IsReferenced()
         # define the referenced VA from the query
         axes_ref = {a: referenced.value for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
-        if referenced.value:
+        if referenced:
             logging.debug("SA_MC is referenced")
         else:
             logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
@@ -1193,6 +1219,41 @@ class SmarAct_MC(model.Actuator):
         # should be safe to close the device multiple times if terminate is called more than once.
         self.core.SA_MC_Close(self._id)
         super(SmarAct_MC, self).terminate()
+
+    # Functions to set the property values in the controller, categorized by data type
+
+    def SetProperty_f64(self, property_key, value):
+        self.core.SA_MC_SetProperty_f64(self._id, c_uint32(property_key), c_double(value))
+
+    def SetProperty_i32(self, property_key, value):
+        self.core.SA_MC_SetProperty_i32(self._id, c_uint32(property_key), c_int32(value))
+
+    def GetProperty_f64(self, property_key):
+        ret_val = c_double()
+        self.core.SA_MC_GetProperty_f64(self._id, c_uint32(property_key), byref(ret_val))
+        return ret_val.value
+
+    def GetProperty_i32(self, property_key):
+        ret_val = c_int32()
+        self.core.SA_MC_GetProperty_i32(self._id, c_uint32(property_key), byref(ret_val))
+        return ret_val.value
+
+    def WaitForEvent(self, timeout):
+        # blocks until event is triggered or timeout.
+        # returns the event code that was triggered
+        ev = SA_MC_Event()
+        self.core.SA_MC_WaitForEvent(self._id, byref(ev), c_int(timeout))
+        return ev
+
+    def Reference(self):
+        # Reference the controller. Note - this is asynchronous
+        self.core.SA_MC_Reference(self._id)
+
+    def IsReferenced(self):
+        """
+        Ask the controller if it is referenced
+        """
+        return bool(self.core.SA_MC_GetProperty_i32(SA_MCDLL.SA_MC_PKEY_IS_REFERENCED))
 
     def Move(self, pos, hold_time=0, block=False):
         """
@@ -1235,41 +1296,40 @@ class SmarAct_MC(model.Actuator):
         logging.debug("Stopping...")
         self.core.SA_MC_Stop(self._id)
 
-    def SetSpeed(self, value):
+    def SetLinSpeed(self, value):
         """
-        Set the speed of the SA_MC motion
+        Set the linear speed of the SA_MC motion
         value: (double) indicating speed for all axes
         """
-        logging.debug("Setting speed to %f", value)
+        logging.debug("Setting linear speed to %f", value)
         # the second argument (1) turns on speed control.
-        self.core.SA_MC_SetSpeed(self._id, c_int(1), c_double(value))
+        self.SetProperty_f64(SA_MCDLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
 
-    def GetSpeed(self):
+    def SetRotSpeed(self, value):
         """
-        Returns (double) the speed of the SA_MC motion
+        Set the rotary speed of the SA_MC motion
+        value: (double) indicating speed for all axes
         """
-        speed_control = c_int()
-        speed = c_double()
-        self.core.SA_MC_GetSpeed(self._id, byref(speed_control), byref(speed))
-        return speed.value
+        logging.debug("Setting rotary speed to %f", value)
+        # the second argument (1) turns on speed control.
+        self.SetProperty_f64(SA_MCDLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES, value)
 
-    def SetAcceleration(self, value):
+    def GetLinearSpeed(self):
         """
-        Set the acceleration of the SA_MC motion
-        value: (double) indicating acceleration for all axes
+        Returns (double) the linear speed of the SA_MC motion
         """
-        logging.debug("Setting acceleration to %f", value)
-        # Passing 1 enables acceleration control.
-        self.core.SA_MC_SetAcceleration(self._id, c_int(1), c_double(value))
+        return self.GetProperty_f64(SA_MCDLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
 
-    def GetAcceleration(self):
+    def GetRotarySpeed(self):
         """
-        Returns (double) the acceleration of the SA_MC motion
+        Returns (double) the rotary speed of the SA_MC motion
         """
-        acceleration_control = c_int()
-        acceleration = c_double()
-        self.core.SA_MC_GetAcceleration(self._id, byref(acceleration_control), byref(acceleration))
-        return acceleration.value
+        return self.GetProperty_f64(SA_MCDLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
+
+    def IsPoseReachable(self, pos):
+        # TODO: Write a replacement version of this function since it is no longer supported
+        # by the controller
+        return True
 
     def stop(self, axes=None):
         """
@@ -1336,7 +1396,12 @@ class SmarAct_MC(model.Actuator):
                 self.referenced._value = {a: False for a in self.axes.keys()}
 
                 # The SA_MC references all axes at once. This function blocks
-                self.core.SA_MC_FindReferenceMarks(self._id)
+                self.Reference()
+                # wait till reference completes
+                ev = self.WaitForEvent(SA_MCDLL.SA_MC_INFINITE)
+                # check if move is done
+                if ev.type != SA_MCDLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                    pass  # TODO: Do something here based on event type
 
                 if self.IsReferenced():
                     self.referenced._value = {a: True for a in self.axes.keys()}
@@ -1351,9 +1416,11 @@ class SmarAct_MC(model.Actuator):
                     raise CancelledError()
                 else:
                     raise
+
             except Exception:
                 logging.exception("Referencing failure")
                 raise
+
             finally:
                 # We only notify after updating the position so that when a listener
                 # receives updates both values are already updated.
@@ -1393,36 +1460,50 @@ class SmarAct_MC(model.Actuator):
         timeout = last_upd + max_dur
 
         with future._moving_lock:
-            self.Move(pos)
-            while not future._must_stop.is_set():
-                status = self.GetMoveStatus()
-                # check if move is done
-                if status.value == SA_MCDLL.SA_MC_STOPPED.value:
-                    break
+            try:
+                self.Move(pos)
+                while not future._must_stop.is_set():
+                    ev = self.WaitForEvent(timeout)
+                    # check if move is done
+                    if ev.type == SA_MCDLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                        break
 
-                now = time.time()
-                if now > timeout:
-                    logging.warning("Stopping move due to timeout after %g s.", max_dur)
+                    now = time.time()
+                    if now > timeout:
+                        logging.warning("Stopping move due to timeout after %g s.", max_dur)
+                        self.stop()
+                        raise TimeoutError("Move is not over after %g s, while "
+                                           "expected it takes only %g s" %
+                                           (max_dur, dur))
+
+                    # Update the position from time to time (10 Hz)
+                    if now - last_upd > 0.1:
+                        self._updatePosition()
+                        last_upd = time.time()
+
+                    # Wait half of the time left (maximum 0.1 s)
+                    left = end - time.time()
+                    sleept = max(0.001, min(left / 2, 0.1))
+                    future._must_stop.wait(sleept)
+                else:
                     self.stop()
-                    raise TimeoutError("Move is not over after %g s, while "
-                                       "expected it takes only %g s" %
-                                       (max_dur, dur))
+                    future._was_stopped = True
+                    raise CancelledError()
 
-                # Update the position from time to time (10 Hz)
-                if now - last_upd > 0.1:
-                    self._updatePosition()
-                    last_upd = time.time()
-
-                # Wait half of the time left (maximum 0.1 s)
-                left = end - time.time()
-                sleept = max(0.001, min(left / 2, 0.1))
-                future._must_stop.wait(sleept)
-            else:
-                self.stop()
+            except SA_MCError as ex:
                 future._was_stopped = True
-                raise CancelledError()
+                # This occurs if a stop command interrupts referencing
+                if ex.errno == SA_MCDLL.SA_MC_STOPPED_ERROR:
+                    logging.info("movement stopped: %s", ex)
+                    raise CancelledError()
+                else:
+                    raise
+            except Exception:
+                logging.exception("Move failure")
+                raise
 
-        self._updatePosition()
+            finally:
+                self._updatePosition()
 
         logging.debug("move successfully completed")
 
@@ -1534,30 +1615,6 @@ class FakeMCDLL(object):
     def SA_MC_Close(self, id):
         pass
 
-    def SA_MC_SetSensorMode(self, id, mode):
-        pass
-
-    def SA_MC_FindReferenceMarks(self, id):
-        self.stopping.clear()
-        time.sleep(0.5)
-        if self.stopping.is_set():
-            self.referenced = False
-            raise SA_MCError(SA_MCDLL.SA_MC_STOPPED_ERROR)
-        else:
-            self.referenced = True
-
-    def SA_MC_IsPoseReachable(self, id, p_pos, p_reachable):
-        reachable = _deref(p_reachable, c_int)
-        pos = _deref(p_pos, SA_MC_Pose)
-        if self._pose_in_range(pos):
-            reachable.value = 1
-        else:
-            reachable.value = 0
-
-    def SA_MC_IsReferenced(self, id, p_referenced):
-        referenced = _deref(p_referenced, c_int)
-        referenced.value = 1 if self.referenced else 0
-
     def SA_MC_Move(self, id, p_pose, hold_time, block):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
@@ -1582,43 +1639,5 @@ class FakeMCDLL(object):
         pose.rz = self.pose.rz
         return SA_MCDLL.SA_MC_OK
 
-    def SA_MC_GetMoveStatus(self, id, p_status):
-        status = _deref(p_status, c_int)
-
-        if time.time() > self._current_move_finish:
-            self.pose = copy.copy(self.target)
-            status.value = SA_MCDLL.SA_MC_STOPPED.value
-        else:
-            status.value = SA_MCDLL.SA_MC_MOVING.value
-
     def SA_MC_Stop(self, id):
         self.stopping.set()
-
-    def SA_MC_SetSpeed(self, id, speed_control, speed):
-        self._speed = speed
-        self._speed_control = speed_control
-
-    def SA_MC_GetSpeed(self, id, p_speed_control, p_speed):
-        speed = _deref(p_speed, c_double)
-        speed.value = self._speed.value
-        speed_control = _deref(p_speed_control, c_int)
-        speed_control.value = self._speed_control.value
-
-    def SA_MC_SetAcceleration(self, id, accel_control, accel):
-        self._accel = accel
-        self._accel_control = accel_control
-
-    def SA_MC_GetAcceleration(self, id, p_accel_control, p_accel):
-        accel = _deref(p_accel, c_double)
-        accel.value = self._accel.value
-        accel_control = _deref(p_accel_control, c_int)
-        accel_control.value = self._accel_control.value
-
-    def SA_MC_GetDLLVersion(self, p_major, p_minor, p_update):
-        major = _deref(p_major, c_uint)
-        major.value = 1
-        minor = _deref(p_minor, c_uint)
-        minor.value = 2
-        update = _deref(p_update, c_uint)
-        update.value = 3
-
