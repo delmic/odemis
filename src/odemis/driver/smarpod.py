@@ -389,7 +389,7 @@ class SA_MCDLL(CDLL):
     all the functions automatically.
     """
 
-    hwModel = c_long(22000)  # specifies the SA_MC 110.45 S (nano)
+    hwModel = 22000  # specifies the SA_MC 110.45 S (nano)
 
     # SmarAct MC error codes
 
@@ -655,7 +655,7 @@ class SmarPod(model.Actuator):
             SmarPodDLL.SMARPOD_MOVING is returned if moving
             SmarPodDLL.SMARPOD_STOPPED when stopped
             SmarPodDLL.SMARPOD_HOLDING when holding between moves
-            SmarPodDLL.SMARPOD_CALIBRATING when calibrating
+            SmarPodDLL.SMARPOD_CALIBRATING wsmarpod.SmarAct_MC(**CONFIG)hen calibrating
             SmarPodDLL.SMARPOD_REFERENCING when referencing
             SmarPodDLL.SMARPOD_STANDBY
         """
@@ -915,7 +915,7 @@ class SmarPod(model.Actuator):
         # The difficulty is to synchronise correctly when:
         #  * the task is just starting (not finished requesting axes to move)
         #  * the task is finishing (about to say that it finished successfully)
-        logging.debug("Canceling current move")
+        logging.debug("Canceling current smarpod.SmarAct_MC(**CONFIG)move")
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
@@ -1158,8 +1158,7 @@ class SmarAct_MC(model.Actuator):
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
-        self._locator = c_char_p(locator.encode("ascii"))
-        self._options = c_char_p("".encode("ascii"))  # In the current version, this must be an empty string.
+        self._locator = locator
 
         for axis_name, axis_par in axes.items():
             try:
@@ -1179,7 +1178,13 @@ class SmarAct_MC(model.Actuator):
 
         # Connect to the device
         self._id = c_uint32(SA_MCDLL.SA_MC_INVALID_HANDLE)
-        self.core.SA_MC_Open(byref(self._id), SA_MCDLL.hwModel, self._locator, self._options)
+
+        option_string = b"model " + str(SA_MCDLL.hwModel) + "\n" + \
+                        b"locator " + locator
+                        
+        options = c_char_p(option_string.encode("ascii"))
+
+        self.core.SA_MC_Open(byref(self._id), options)
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -1197,7 +1202,7 @@ class SmarAct_MC(model.Actuator):
 
         referenced = self.IsReferenced()
         # define the referenced VA from the query
-        axes_ref = {a: referenced.value for a, i in self.axes.items()}
+        axes_ref = {a: referenced for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
@@ -1210,9 +1215,8 @@ class SmarAct_MC(model.Actuator):
                 self.reference().result()
 
         # Use a default actuator speed
-        self.SetSpeed(actuator_speed)
-        self._speed = self.GetSpeed()
-        self._accel = self.GetAcceleration()
+        self.SetLinearSpeed(actuator_speed)
+        self._speed = self.GetLinearSpeed()
 
         self._updatePosition()
 
@@ -1243,7 +1247,7 @@ class SmarAct_MC(model.Actuator):
         # blocks until event is triggered or timeout.
         # returns the event code that was triggered
         ev = SA_MC_Event()
-        self.core.SA_MC_WaitForEvent(self._id, byref(ev), c_int(timeout))
+        self.core.SA_MC_WaitForEvent(self._id, byref(ev), c_int(int(timeout)))
         return ev
 
     def Reference(self):
@@ -1254,7 +1258,7 @@ class SmarAct_MC(model.Actuator):
         """
         Ask the controller if it is referenced
         """
-        return bool(self.core.SA_MC_GetProperty_i32(SA_MCDLL.SA_MC_PKEY_IS_REFERENCED))
+        return bool(self.GetProperty_i32(SA_MCDLL.SA_MC_PKEY_IS_REFERENCED))
 
     def Move(self, pos, hold_time=0, block=False):
         """
@@ -1284,7 +1288,7 @@ class SmarAct_MC(model.Actuator):
 
         returns: (dict str -> float): axis name -> position
         """
-        pose = Pose()
+        pose = SA_MC_Pose()
         self.core.SA_MC_GetPose(self._id, byref(pose))
         position = tg_pose_to_dict(pose)
         logging.info("Current position: %s", position)
@@ -1297,7 +1301,7 @@ class SmarAct_MC(model.Actuator):
         logging.debug("Stopping...")
         self.core.SA_MC_Stop(self._id)
 
-    def SetLinSpeed(self, value):
+    def SetLinearSpeed(self, value):
         """
         Set the linear speed of the SA_MC motion
         value: (double) indicating speed for all axes
@@ -1306,7 +1310,7 @@ class SmarAct_MC(model.Actuator):
         # the second argument (1) turns on speed control.
         self.SetProperty_f64(SA_MCDLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
 
-    def SetRotSpeed(self, value):
+    def SetRotarySpeed(self, value):
         """
         Set the rotary speed of the SA_MC motion
         value: (double) indicating speed for all axes
@@ -1412,7 +1416,7 @@ class SmarAct_MC(model.Actuator):
             except SA_MCError as ex:
                 future._was_stopped = True
                 # This occurs if a stop command interrupts referencing
-                if ex.errno == SA_MCDLL.SA_MC_STOPPED_ERROR:
+                if ex.errno == SA_MCDLL.SA_MC_ERROR_CANCELED:
                     logging.info("Referencing stopped: %s", ex)
                     raise CancelledError()
                 else:
@@ -1494,7 +1498,7 @@ class SmarAct_MC(model.Actuator):
             except SA_MCError as ex:
                 future._was_stopped = True
                 # This occurs if a stop command interrupts referencing
-                if ex.errno == SA_MCDLL.SA_MC_STOPPED_ERROR:
+                if ex.errno == SA_MCDLL.SA_MC_ERROR_CANCELED:
                     logging.info("movement stopped: %s", ex)
                     raise CancelledError()
                 else:

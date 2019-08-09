@@ -110,9 +110,9 @@ class TestTriglide(unittest.TestCase):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
-        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
-        pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos2 = {'x':0, 'y': 3e-3, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos3 = {'x': 1e-3, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
