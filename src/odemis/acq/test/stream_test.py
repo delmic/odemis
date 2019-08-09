@@ -4469,7 +4469,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertGreaterEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
                                 spec.metadata[model.MD_PIXEL_SIZE][0])
 
-
         # Check 1d with larger width
         specs.selected_line.value = [(30, 65), (5, 1)]
         specs.selectionWidth.value = 12

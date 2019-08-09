@@ -58,7 +58,7 @@ import wx
 import odemis.gui.conf as guiconf
 
 
-class  SettingsController(with_metaclass(ABCMeta, object)):
+class SettingsController(with_metaclass(ABCMeta, object)):
     """ Settings base class which describes an indirect wrapper for FoldPanelItems
 
     :param fold_panel_item: (FoldPanelItem) Parent window
@@ -517,12 +517,8 @@ class AnalysisSettingsController(SettingsBarController):
         # Gui data model
         self.tab_data = tab_data
 
-        # We add 3 different panels so, they can each be hidden/shown individually
-        self._pnl_acqfile = None
-        self._pnl_arfile = None
-        self._pnl_specfile = None
-        self._pnl_temporalspecfile = None
-        self._pnl_speccorrfile = None
+        self._pnl_acqfile = None  # panel containing info about file loaded
+        self._pnl_calibration = None  # panel allowing to load background correction and calibration files
 
         self._arfile_ctrl = None
         self._spec_bckfile_ctrl = None
@@ -535,7 +531,7 @@ class AnalysisSettingsController(SettingsBarController):
         # All these VAs contain FileInfo object
         tab_data.acq_fileinfo.subscribe(self.on_acqfile_change)
 
-        # The following three can be replaced by callables taking a unicode and
+        # The following can be replaced by callables taking a unicode and
         # returning a unicode (or raising a ValueError exception). They are
         # "filters" on what value can be accepted when changing the calibration
         # files. (Typically, the tab controller will put some of its functions)
@@ -564,52 +560,56 @@ class AnalysisSettingsController(SettingsBarController):
         wildcards, _ = formats_to_wildcards(odemis.dataio.get_available_formats(),
                                                             include_all=True)
 
-        self.wildcards = wildcards
-        # Panel with AR background file information
+        # Panel allowing to load bg correction or calibration files
+        # Settings displayed are stream specific
+        self._pnl_calibration = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
+
+        # Display with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
-        self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._arfile_ctrl = self._pnl_arfile.add_file_button(
+        self._arfile_ctrl = self._pnl_calibration.add_file_button(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
             clearlabel="None", wildcard=wildcards).value_ctrl
-        self._pnl_arfile.hide_panel()
+        self._ar_bckfile_entry = self._pnl_calibration.entries[0]
+        self._ar_bckfile_entry.lbl_ctrl.Show(False)
+        self._ar_bckfile_entry.value_ctrl.Show(False)
         self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
-        # TODO could  not manage to show hide the ctrl, so added them to show_calibration_panel
-        # TODO @Eric there might be a better option...
-        # # Panel with spectrum/temporal spectrum background + efficiency compensation file information
-        # # They are displayed only if there are spectrum streams or temporal spectrum streams
-        # # self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        # self._spec_bckfile_ctrl = self._pnl_acqfile.add_file_button(
-        #     "Spectrum background",
-        #     tooltip="Spectrum background acquisition file",
-        #     clearlabel="None", wildcard=wildcards).value_ctrl
-        # # self._pnl_specfile.hide_panel()
-        # # self._spec_bckfile_ctrl.Hide()
-        # self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
-        # self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
-        #
-        # # self._pnl_temporalspecfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        # self._temporalspec_bckfile_ctrl = self._pnl_acqfile.add_file_button(
-        #     "Temporal spectrum background",
-        #     tooltip="Temporal spectrum background acquisition file",
-        #     clearlabel="None", wildcard=wildcards).value_ctrl
-        # # self._pnl_temporalspecfile.hide_panel()
-        # # self._temporalspec_bckfile_ctrl.Hide()
-        # self._temporalspec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
-        # self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
-        #
-        # # self._pnl_speccorrfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        # self._specfile_ctrl = self._pnl_acqfile.add_file_button(
-        #     "Spectrum correction",
-        #     tooltip="Spectrum efficiency correction file",
-        #     clearlabel="None", wildcard=wildcards).value_ctrl
-        # # self._pnl_speccorrfile.hide_panel()
-        # # self._specfile_ctrl.Hide()
-        # self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
-        # self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
+        # Display for spectrum/temporal spectrum background + efficiency compensation file information
+        # They are displayed only if there are spectrum streams or temporal spectrum streams
+        self._spec_bckfile_ctrl = self._pnl_calibration.add_file_button(
+            "Spectrum background",
+            tooltip="Spectrum background acquisition file",
+            clearlabel="None", wildcard=wildcards).value_ctrl
+        self._spec_bckfile_entry = self._pnl_calibration.entries[1]
+        self._spec_bckfile_entry.lbl_ctrl.Show(False)
+        self._spec_bckfile_entry.value_ctrl.Show(False)
+        self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
+        self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
+        self._temporalspec_bckfile_ctrl = self._pnl_calibration.add_file_button(
+            "Temporal spectrum background",
+            tooltip="Temporal spectrum background acquisition file",
+            clearlabel="None", wildcard=wildcards).value_ctrl
+        self._temporalspec_bckfile_entry = self._pnl_calibration.entries[2]
+        self._temporalspec_bckfile_entry.lbl_ctrl.Show(False)
+        self._temporalspec_bckfile_entry.value_ctrl.Show(False)
+        self._temporalspec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
+        self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
+
+        self._specfile_ctrl = self._pnl_calibration.add_file_button(
+            "Spectrum correction",
+            tooltip="Spectrum efficiency correction file",
+            clearlabel="None", wildcard=wildcards).value_ctrl
+        self._specfile_entry = self._pnl_calibration.entries[3]
+        self._specfile_entry.lbl_ctrl.Show(False)
+        self._specfile_entry.value_ctrl.Show(False)
+        self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+        self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
+
+        self._pnl_calibration.Refresh()
+        self.tab_panel.Layout()
         self.tab_panel.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
@@ -736,46 +736,18 @@ class AnalysisSettingsController(SettingsBarController):
         :param temporalspectrum: (boolean) Show, hide or don't change temporal spectrum calib panel.
         """
 
-        if ar:
-            self._pnl_arfile.show_panel(ar)
-        # if spectrum:
-            # self._pnl_specfile.show_panel(spectrum)
-        # if temporalspectrum:
-            # self._pnl_temporalspecfile.show_panel(temporalspectrum)
-        # if spectrum or temporalspectrum:
-            # self._pnl_speccorrfile.show_panel(temporalspectrum or spectrum)
+        self._ar_bckfile_entry.lbl_ctrl.Show(ar)
+        self._ar_bckfile_entry.value_ctrl.Show(ar)
+        self._spec_bckfile_entry.lbl_ctrl.Show(spectrum)
+        self._spec_bckfile_entry.value_ctrl.Show(spectrum)
+        self._temporalspec_bckfile_entry.lbl_ctrl.Show(temporalspectrum)
+        self._temporalspec_bckfile_entry.value_ctrl.Show(temporalspectrum)
+        self._specfile_entry.lbl_ctrl.Show(spectrum or temporalspectrum)
+        self._specfile_entry.value_ctrl.Show(spectrum or temporalspectrum)
 
-        # Panel with spectrum/temporal spectrum background + efficiency compensation file information
-        # They are displayed only if there are spectrum streams or temporal spectrum streams
-        if spectrum:
-            self._spec_bckfile_ctrl = self._pnl_acqfile.add_file_button(
-                "Spectrum background",
-                tooltip="Spectrum background acquisition file",
-                clearlabel="None", wildcard=self.wildcards).value_ctrl
-            self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
-            self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
-
-        if temporalspectrum:
-            self._temporalspec_bckfile_ctrl = self._pnl_acqfile.add_file_button(
-                "Temporal spectrum background",
-                tooltip="Temporal spectrum background acquisition file",
-                clearlabel="None", wildcard=self.wildcards).value_ctrl
-            self._temporalspec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
-            self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
-
-        if spectrum or temporalspectrum:
-            self._specfile_ctrl = self._pnl_acqfile.add_file_button(
-                "Spectrum correction",
-                tooltip="Spectrum efficiency correction file",
-                clearlabel="None", wildcard=self.wildcards).value_ctrl
-            self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
-            self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
-
-        self._pnl_acqfile.Refresh()
+        self._pnl_calibration.Refresh()
         self.tab_panel.Layout()
 
-        # TODO: if 2 streams loaded, spec corr file and bg dublicated
-        # TODO: if manually deleting one stream on right side, file info panel not updated
 
 class SparcAlignSettingsController(SettingsBarController):
 

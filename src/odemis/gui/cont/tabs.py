@@ -1793,6 +1793,25 @@ class AnalysisTab(Tab):
         data = open_acquisition(filename, fmt)
         self.display_new_data(filename, data, extend=extend)
 
+    def _get_time_spectrum_streams(self, spec_streams):
+        """
+        Sort spectrum streams into the substreams according to types spectrum, temporal spectrum
+        and time corrrelator streams.
+        :param spec_streams: (list of streams) Streams to separate.
+        :returns: (3 lists of streams) spectrum, temporal spectrum and time corrrelator
+        """
+        spectrum = [s for s in spec_streams
+                    if hasattr(s, "selected_wavelength") and not hasattr(s, "selected_time")]
+        temporalspectrum = [s for s in spec_streams
+                            if hasattr(s, "selected_wavelength") and hasattr(s, "selected_time")]
+        timecorrelator = [s for s in spec_streams
+                          if not hasattr(s, "selected_wavelength") and hasattr(s, "selected_time")]
+
+        # TODO currently "selected_wavelength" is always created, so all timecorrelator streams
+        # are considered temporal spectrum streams -> adapt StaticSpectrumStream
+
+        return spectrum, temporalspectrum, timecorrelator
+
     @call_in_wx_main
     def display_new_data(self, filename, data, extend=False):
         """
@@ -1844,18 +1863,6 @@ class AnalysisTab(Tab):
 
         # all spectrum streams including spectrum, temporal spectrum and time correlator (chronograph)
         spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
-        self.temporalspectrum_streams = []
-        self.spectrum_streams = []
-        self.timecorrelator_streams = []
-        # sort spec streams
-        for s in spec_streams:
-            if hasattr(s, "selected_wavelength") and hasattr(s, "selected_time"):
-                self.temporalspectrum_streams.append(s)
-            elif hasattr(s, "selected_wavelength") and not hasattr(s, "selected_time"):
-                self.spectrum_streams.append(s)
-            elif not hasattr(s, "selected_wavelength") and hasattr(s, "selected_time"):
-                self.timecorrelator_streams.append(s)
-
         ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
 
         new_visible_views = list(self._def_views)  # Use a copy
@@ -1959,8 +1966,10 @@ class AnalysisTab(Tab):
             self.tb.enable_button(TOOL_LINE, False)
 
         # Only show the panels that fit the current streams
-        self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(self.spectrum_streams) > 0,
-                                                         len(self.temporalspectrum_streams) > 0)
+        spectrum, temporalspectrum, chronograph = self._get_time_spectrum_streams(spec_streams)
+        # TODO extend in case of bg support for time correlator data
+        self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spectrum) > 0,
+                                                         len(temporalspectrum) > 0)
 
         self.tab_data_model.visible_views.value = new_visible_views
 
@@ -1971,7 +1980,7 @@ class AnalysisTab(Tab):
             scont.stream_panel.show_remove_btn(extend)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
-        if self.spectrum_streams:
+        if spectrum:
             try:
                 self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
             except ValueError:
@@ -1979,7 +1988,7 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.spec_bck_cal.value)
                 self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
 
-        if self.temporalspectrum_streams:
+        if temporalspectrum:
             try:
                 self.set_temporalspec_background(self.tab_data_model.temporalspec_bck_cal.value)
             except ValueError:
@@ -1987,7 +1996,7 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.temporalspec_bck_cal.value)
                 self.tab_data_model.temporalspec_bck_cal.value = u""  # remove the calibration
 
-        if self.spectrum_streams or self.temporalspectrum_streams:
+        if spectrum or temporalspectrum:
             try:
                 self.set_spec_comp(self.tab_data_model.spec_cal.value)
             except ValueError:
@@ -2073,7 +2082,12 @@ class AnalysisTab(Tab):
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_data(data)  # get the background image (can be an averaged image)
 
-            for strm in self.spectrum_streams:
+            # Apply data to the relevant streams
+            spec_strms = [s for s in self.tab_data_model.streams.value
+                        if isinstance(s, acqstream.StaticSpectrumStream)]
+            spectrum = self._get_time_spectrum_streams(spec_strms)[0]
+
+            for strm in spectrum:
                 strm.background.value = cdata  # update the background VA on the stream -> recomputes image displayed
 
         except Exception as err:
@@ -2107,7 +2121,12 @@ class AnalysisTab(Tab):
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_temporalspectrum_data(data)
 
-            for strm in self.temporalspectrum_streams:
+            # Apply data to the relevant streams
+            spec_strms = [s for s in self.tab_data_model.streams.value
+                        if isinstance(s, acqstream.StaticSpectrumStream)]
+            temporalspectrum = self._get_time_spectrum_streams(spec_strms)[1]
+
+            for strm in temporalspectrum:
                 strm.background.value = cdata
 
         except Exception as err:

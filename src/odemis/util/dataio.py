@@ -69,9 +69,11 @@ def data_to_static_streams(data):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
                 klass = stream.StaticSpectrumStream
-            else:  # TODO this is also temporal spectrum data acquired with mirror and focus mode (so no time/wl info)
+            else:
                 # Spectrum: either it's obvious according to metadata, or no metadata
                 # but lots of wavelengths, so no other way to display
+                # Note: this is also temporal spectrum data acquired with mirror and focus mode (so no time/wl info)
+                # TODO: maybe drop the check for TIME_LIST and WL_LIST
                 name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
         elif ((MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1) or
