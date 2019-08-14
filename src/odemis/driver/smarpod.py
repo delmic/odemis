@@ -491,7 +491,7 @@ class SA_MCDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractmc.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractmc.so.0.9.1", RTLD_GLOBAL)
 
     def __getitem__(self, name):
         try:
@@ -1121,8 +1121,8 @@ class FakeSmarPodDLL(object):
 
 class SmarAct_MC(model.Actuator):
 
-    def __init__(self, name, role, locator, ref_on_init=False, actuator_speed=0.1,
-                 axes=None, **kwargs):
+    def __init__(self, name, role, locator, ref_on_init=False, linear_speed=0.01,
+                 rotary_speed=1, axes=None, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -1215,9 +1215,9 @@ class SmarAct_MC(model.Actuator):
                 self.reference().result()
 
         # Use a default actuator speed
-        self.SetLinearSpeed(actuator_speed)
+        self.SetLinearSpeed(linear_speed)
         self._speed = self.GetLinearSpeed()
-
+        self.SetRotarySpeed(rotary_speed)
         self._updatePosition()
 
     def terminate(self):

@@ -39,22 +39,22 @@ COMP_ARGS = {
     }
 
 CONFIG = {"name": "Triglide",
-        "role": "",
+        "role": "stage",
         "ref_on_init": True,
-        "actuator_speed": 0.1,  # m/s
+        "linear_speed": 0.001,  # m/s
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "axes": {
             'x': {
-                'range': [-0.2, 0.2],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
             },
             'y': {
-                'range': [-0.2, 0.2],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
             },
             'z': {
-                'range': [-0.1, 0.1],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
             },
             'rx': {
@@ -62,7 +62,7 @@ CONFIG = {"name": "Triglide",
                 'unit': 'rad',
             },
             'ry': {
-                'range': [-0.785, 0.785],
+                'range': [0,0],
                 'unit': 'rad',
             },
             'rz': {
@@ -87,6 +87,8 @@ class TestTriglide(unittest.TestCase):
         cls.dev.terminate()
 
     def test_reference_cancel(self):
+
+        # TODO: Still fails
         # Test canceling referencing
         f = self.dev.reference()
         time.sleep(0.1)
@@ -110,9 +112,9 @@ class TestTriglide(unittest.TestCase):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
-        pos2 = {'x':0, 'y': 3e-3, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
-        pos3 = {'x': 1e-3, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.1, 'ry': 0, 'rz': 0.1}
+        pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz':0}
+        pos3 = {'x': 0, 'y': 0, 'z': 5e-3, 'rx': 0, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -125,7 +127,7 @@ class TestTriglide(unittest.TestCase):
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0.005, 'rz': 0.002}
+        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
@@ -135,7 +137,7 @@ class TestTriglide(unittest.TestCase):
 
         # Test cancellation by stopping
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.0021, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0.005, 'rz': 0.0001}
+        new_pos = {'x':0.0021, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -147,7 +149,7 @@ class TestTriglide(unittest.TestCase):
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'ry':-0.0003, 'rz': 0}
+        shift = {'x': 0.01, 'y':-0.001, 'ry': 0, 'rz': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -155,7 +157,7 @@ class TestTriglide(unittest.TestCase):
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'z':-0.000001, 'rx': 0.00001, 'ry':-0.000001, 'rz':-0.00001}
+        shift = {'z':-0.000001, 'rx': 0.00001, 'rz':-0.00001}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
