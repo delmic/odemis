@@ -26,7 +26,7 @@ from odemis import dataio, model
 logging.getLogger().setLevel(logging.INFO)
 
 
-def acquire(scanner, det, res, zoom, dt):
+def acquire_confocal(scanner, det, res, zoom, dt):
     """
     Acquire from det with scanner
     with para: res (resolution), zoom (zoom), dt (dwelltime)
@@ -45,6 +45,16 @@ def acquire(scanner, det, res, zoom, dt):
     return im
 
 
+def acquire_sem(dt, scale):
+    ebeam = model.getComponent(role="ebeam")
+    sed = model.getComponent(role="se-detector")
+
+    ebeam.dwellTime.value = dt
+    ebeam.scale.value = scale
+    im = sed.data.get()
+    return im
+
+
 def main(args):
     """
     Handles the command line arguments
@@ -52,14 +62,18 @@ def main(args):
     return (int): value to return to the OS as program exit code
     """
     # Get components
-    scanner = model.getComponent(role="laser-mirror")
-    stage = model.getComponent(role="stage")
+    stage = model.getComponent(role="scan-stage")
 
     # parse arguments
     parser = argparse.ArgumentParser(description="Run an acquisition "
                                      "with Cryo hardware for testing")
     parser.add_argument("--output", "-o", dest="filename", required=True,
                         help="Output filename (exports as tiff)")
+    parser.add_argument("--scale", "-d", dest="res", type=int, default=4,
+                        help="Scale of the scan. Default 4")
+
+    # for confocal
+    # scanner = model.getComponent(role="laser-mirror")
     parser.add_argument("--detector", "-d", dest="detector", default="photo-detector0",
                         help="role of the detector (default: photo-detector0)")
     parser.add_argument("--res", "-d", dest="res", type=int, default=256,
@@ -73,6 +87,7 @@ def main(args):
     xres = options.res
     yres = options.res  # assume square for now
     zoom = 1.0
+    scale = (options.scale, options.scale)  # square
     dt = options.dt
 
     # move stage to specified position
@@ -80,7 +95,9 @@ def main(args):
     stage.moveAbs(pos).result()
 
     # Acquire an image
-    im = acquire(scanner, det, (xres, yres), zoom, dt)
+    # im = acquire_confocal(scanner, det, (xres, yres), zoom, dt)
+    im = acquire_sem(dt, scale)
+
     if im is not None:
         dataio.tiff.export(fn, im)
 
