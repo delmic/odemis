@@ -69,16 +69,16 @@ def main(args):
                                      "with Cryo hardware for testing")
     parser.add_argument("--output", "-o", dest="filename", required=True,
                         help="Output filename (exports as tiff)")
-    parser.add_argument("--scale", "-d", dest="res", type=int, default=4,
+    parser.add_argument("--scale", "-s", dest="scale", type=int, default=4,
                         help="Scale of the scan. Default 4")
 
     # for confocal
     # scanner = model.getComponent(role="laser-mirror")
     parser.add_argument("--detector", "-d", dest="detector", default="photo-detector0",
                         help="role of the detector (default: photo-detector0)")
-    parser.add_argument("--res", "-d", dest="res", type=int, default=256,
+    parser.add_argument("--res", "-r", dest="res", type=int, default=256,
                         help="Resolution of the scan. Default 256")
-    parser.add_argument("--dt", "-d", dest="dt", type=float, default=scanner.dwellTime.range[0] * 10,
+    parser.add_argument("--dt", dest="dt", type=float, default=scanner.dwellTime.range[0] * 10,
                         help="Dwell time of the scan. Default %f " % (scanner.dwellTime.range[0] * 10))
 
     # Get arguments
