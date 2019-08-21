@@ -44,7 +44,7 @@ class MicroscopeClient:
         Parameters
         ----------
         server_address: str
-            server address of the Microscope server as a string.
+            server address of the Microscope server.
         timeout: int
             Time in seconds the client should wait for a response from the server.
         """
@@ -55,13 +55,20 @@ class MicroscopeClient:
         self.client = zerorpc.Client(server_address, heartbeat=None, timeout=timeout)
 
     def list_available_channels(self):
-        """List all available channels and their current state as a dict."""
-        available_channels = self.client.list_available_channels()
-        return available_channels
+        """
+        List all available channels and their current state as a dict.
+
+        Returns
+        -------
+        available channels: dict
+            A dict of the names of the available channels as keys and the corresponding channel state as values.
+        """
+        return self.client.list_available_channels()
 
     def move_stage(self, position, rel=False):
         """
-        Move the stage the given position in meter. This is non-blocking.
+        Move the stage the given position in meter. This is non-blocking. Throws an error when the requested position
+        is out of range.
 
         Parameters
         ----------
@@ -69,12 +76,12 @@ class MicroscopeClient:
             Absolute or relative position to move the stage to per axes in m. Axes are 'x' and 'y'.
         rel: boolean
             If True the staged is moved relative to the current position of the stage, by the distance specified in
-            position. If false the stage is moved to the absolute position.
+            position. If False the stage is moved to the absolute position.
         """
         self.client.move_stage(position, rel)
 
     def stage_is_moving(self):
-        """Returns True if the stage is moving and False if the stage is not moving."""
+        """Returns: (bool) True if the stage is moving and False if the stage is not moving."""
         return self.client.stage_is_moving()
 
     def stop_stage_movement(self):
@@ -83,15 +90,12 @@ class MicroscopeClient:
 
     def get_stage_position(self):
         """
-        Returns
-        -------
-        position: dict
-            The current position of the stage.
+        Returns: (dict) The axes of the stage as keys with their corresponding position.
         """
         return self.client.get_stage_position()
 
     def stage_info(self):
-        """Returns the unit and range of the stage position."""
+        """Returns: (dict) the unit and range of the stage position."""
         return self.client.stage_info()
 
     def acquire_image(self, channel_name='electron1'):
@@ -124,7 +128,7 @@ class MicroscopeClient:
         Parameters
         ----------
         start_position: (tuple of int)
-            (x, y) of where the area starts in pixel, (0,0) is at the top left (checked for Apreo).
+            (x, y) of where the area starts in pixel, (0,0) is at the top left.
         size: (tuple of int)
             (width, height) of the size in pixel.
         """
@@ -132,44 +136,44 @@ class MicroscopeClient:
 
     def get_selected_area(self):
         """
-        Returns the current selected area in x, y, width, height in pixels.
-        If selected area is not active it returns the stored selected area.
+        Returns
+        -------
+        x, y, width, height: pixels
+            The current selected area. If selected area is not active it returns the stored selected area.
         """
         x, y, width, height = self.client.get_selected_area()
         return x, y, width, height
 
     def selected_area_info(self):
-        """Returns the unit and range of set selected area."""
+        """Returns: (dict) the unit and range of set selected area."""
         return self.client.selected_area_info()
 
     def reset_selected_area(self):
         """Reset the selected area to select the entire image."""
         self.client.reset_selected_area()
 
-    def set_scanning_size(self, size):
+    def set_scanning_size(self, x, y):
         """
         Set the size of the to be scanned area (aka field of view or the size, which can be scanned with the current
         settings).
 
         Parameters
         ----------
-        size: (float)
-            size for X in [m]. Y is always X * 442/512
+        x: (float)
+            size for X in [m].
+        y: (float)
+            size for y in [m].
         """
-        self.client.set_scanning_size(size)
+        self.client.set_scanning_size(x, y)
 
     def get_scanning_size(self):
         """
-        Returns
-        -------
-        scanning_size: dict
-            Dictionary containing the 'x' and 'y' scanning size in [m].
+        Returns: (tuple of floats) x and y scanning size in [m].
         """
-        x, y = self.client.get_scanning_size()
-        return x, y
+        return self.client.get_scanning_size()
 
     def scanning_size_info(self):
-        """Returns the scanning size unit and range."""
+        """Returns: (dict) with the scanning size unit and range."""
         return self.client.scanning_size_info()
 
     def set_ebeam_spotsize(self, spotsize):
@@ -183,11 +187,11 @@ class MicroscopeClient:
         self.client.set_ebeam_spotsize(spotsize)
 
     def get_ebeam_spotsize(self):
-        """Get the current spotsize of the electron beam."""
+        """Returns: (float) the current spotsize of the electron beam (unitless)."""
         return self.client.get_ebeam_spotsize()
 
     def spotsize_info(self):
-        """Returns the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
+        """Returns: (dict) the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
         return self.client.spotsize_info()
 
     def set_dwell_time(self, dwell_time):
@@ -198,14 +202,14 @@ class MicroscopeClient:
         dwell_time: float
             dwell time in seconds
         """
-        return self.client.set_dwell_time(dwell_time)
+        self.client.set_dwell_time(dwell_time)
 
     def get_dwell_time(self):
-        """Returns the dwell time in seconds."""
+        """Returns: (float) the dwell time in seconds."""
         return self.client.get_dwell_time()
 
     def dwell_time_info(self):
-        """Returns the unit and range of the dwell time."""
+        """Returns: (dict) range of the dwell time and corresponding unit."""
         return self.client.dwell_time_info()
 
     def set_ht_voltage(self, voltage):
@@ -221,11 +225,11 @@ class MicroscopeClient:
         self.client.set_ht_voltage(voltage)
 
     def get_ht_voltage(self):
-        """Get the HT Voltage in [V]."""
+        """Returns: (float) the HT Voltage in volt."""
         return self.client.get_ht_voltage()
 
     def ht_voltage_info(self):
-        """Returns the unit and range of the HT Voltage."""
+        """Returns: (dict) the unit and range of the HT Voltage."""
         return self.client.ht_voltage_info()
 
     def blank_beam(self):
@@ -237,15 +241,15 @@ class MicroscopeClient:
         self.client.unblank_beam()
 
     def beam_is_blanked(self):
-        """Returns True if the beam is blanked and False if the beam is not blanked."""
+        """Returns: (bool) True if the beam is blanked and False if the beam is not blanked."""
         return self.client.beam_is_blanked()
 
     def pump(self):
-        """Pump the microscope's chamber. Note that pumping takes some time. This blocking."""
+        """Pump the microscope's chamber. Note that pumping takes some time. This is blocking."""
         self.client.pump()
 
     def get_vacuum_state(self):
-        """Get the vacuum state of the microscope chamber to see if it is pumped or vented."""
+        """Returns: (string) the vacuum state of the microscope chamber to see if it is pumped or vented."""
         return self.client.get_vacuum_state()
 
     def vent(self):
@@ -253,7 +257,7 @@ class MicroscopeClient:
         self.client.vent()
 
     def get_pressure(self):
-        """Get the chamber pressure in [Pa]."""
+        """Returns: (float) the chamber pressure in [Pa]."""
         return self.client.get_pressure()
 
     def home_stage(self):
@@ -261,11 +265,11 @@ class MicroscopeClient:
         self.client.home_stage()
 
     def is_homed(self):
-        """Returns True if the stage is homed and False otherwise."""
+        """Returns: (bool) True if the stage is homed and False otherwise."""
         return self.client.is_homed()
 
     def get_channel(self, name='electron1'):
-        """Get an xtlib channel object."""
+        """Returns: (xtlib.Channel) an xtlib channel object."""
         return self.client.get_channel(unicode(name))
 
     def set_channel_state(self, name='electron1', state='run'):
@@ -282,34 +286,54 @@ class MicroscopeClient:
         self.client.set_channel_state(unicode(name), unicode(state))
 
     def wait_for_state_changed(self, desired_state, name='electron1', timeout=10):
-        """Wait for channel state to be changed, if it's not changed after 10 seconds break."""
+        """
+        Wait until the state of the channel has changed to the desired state, if it has not changed after a certain
+        timeout an error will be raised.
+
+        Parameters
+        ----------
+        desired_state: "run", "stop" or "cancel"
+            The state the channel should change into.
+        name: str
+            name of channel.
+        timeout: int
+            Amount of time in seconds to wait until the channel state has changed.
+        """
         self.client.wait_for_state_changed(unicode(desired_state), unicode(name), timeout)
 
     def get_channel_state(self, name='electron1'):
-        """Return the state of the channel: run, stop or cancel."""
+        """Returns: (str) the state of the channel: "run", "stop" or "cancel"."""
         return self.client.get_channel_state(unicode(name))
 
     def get_free_working_distance(self):
-        """Get the free working distance in [m]."""
+        """Returns: (float) the free working distance in [m]."""
         return self.client.get_free_working_distance()
 
     def set_free_working_distance(self, free_working_distance):
-        """Set the free working distance in [m]."""
+        """
+        Set the free working distance.
+        Parameters
+        ----------
+        free_working_distance: float
+            free working distance in [m].
+        """
         self.client.set_free_working_distance(free_working_distance)
 
     def get_fwd_follows_z(self):
         """
-        Returns True if Z follows free working distance functionality is turned on.
-        When Z follows FWD functionality is switched on and Z stage axis moves, FWD is updated to keep image in focus.
+        Returns: (bool) True if Z follows free working distance.
+        When Z follows FWD and Z-axis of stage moves, FWD is updated to keep image in focus.
         """
         return self.client.get_fwd_follows_z()
 
     def set_fwd_follows_z(self, follow_z):
         """
+        Set if z should follow the free working distance. When Z follows FWD and Z-axis of stage moves, FWD is updated
+        to keep image in focus.
         Parameters
         ---------
         follow_z: bool
-            True if Z follows free working distance functionality should be turned on.
+            True if Z should follow free working distance.
         """
         self.client.set_fwd_follows_z(follow_z)
 
@@ -322,23 +346,23 @@ class MicroscopeClient:
         channel: xtlib channel object
             One of the electron channels, the channel must be running.
         state: "start", "cancel" or "stop"
-            State is start, starts the autofocus. States cancel and stop both stop the autofocusing, some microscopes
+            If state is start, autofocus starts. States cancel and stop both stop the autofocusing. Some microscopes
             might need stop, while others need cancel.
         """
         self.client.set_autofocusing(channel, unicode(state))
 
     def is_autofocusing(self):
-        """Returns True if autofocus is running and False if autofocus is not running."""
+        """Returns: (bool) True if autofocus is running and False if autofocus is not running."""
         return self.client.is_autofocusing()
 
     def get_beam_shift(self):
-        """Retrieves the current beam shift x and y values in meter [m]."""
+        """Returns: (float) the current beam shift x and y values in meter [m]."""
         return self.client.get_beam_shift()
 
     def set_beam_shift(self, x_shift, y_shift):
-        """Sets the current beam shift values in meter [m]."""
+        """Set the current beam shift values in meter [m]."""
         self.client.set_beam_shift(x_shift, y_shift)
 
     def beam_shift_info(self):
-        """Returns the unit and xy-range of the beam shift."""
+        """Returns: (dict) the unit and xy-range of the beam shift."""
         return self.client.beam_shift_info()

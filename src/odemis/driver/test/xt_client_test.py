@@ -24,6 +24,7 @@ from __future__ import division, print_function
 
 import logging
 import os
+import time
 import unittest
 
 from odemis.driver import xt_client
@@ -40,26 +41,27 @@ class TestMicroscope(unittest.TestCase):
 
     def setUp(self):
         if TEST_NOHW:
-            self.skipTest("No simulator available")
+            self.skipTest("No hardware available.")
         self.microscope = xt_client.MicroscopeClient(timeout=30)
         if self.microscope.get_vacuum_state() != 'vacuum':
-            self.skipTest("Chamber needs to be vacuum, please pump.")
+            self.skipTest("Chamber needs to be in vacuum, please pump.")
 
     def test_acquisition(self):
         """Test acquiring an image."""
         image = self.microscope.acquire_image()
         self.assertEqual(len(image.shape), 2)
 
-    @unittest.skip("using external stage")
+    @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
     def test_move_stage(self):
         """
-        Test to move and request the microscope stage position.
+        Test that moving the microscope stage to a certain x, y, z position moves it to that position.
         """
         init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
         # move stage to a different position
         position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
         self.microscope.move_stage(position)
-        while self.microscope.stage_is_moving():
+        tstart = time.time()
+        while self.microscope.stage_is_moving() and time.time() < tstart + 5:
             continue
         stage_position = self.microscope.get_stage_position()
         # test move_stage method actually moves HW by the requested value
@@ -70,7 +72,8 @@ class TestMicroscope(unittest.TestCase):
         init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
         relative_position = {'x': 100e-6, 'y': 200e-6}  # [m]
         self.microscope.move_stage(relative_position, rel=True)
-        while self.microscope.stage_is_moving():
+        tstart = time.time()
+        while self.microscope.stage_is_moving() and time.time() < tstart + 5:
             continue
         stage_position = self.microscope.get_stage_position()
         # test move_stage method actually moves HW by the requested value
@@ -86,27 +89,18 @@ class TestMicroscope(unittest.TestCase):
         """
         Test setting the field of view (aka the size, which can be scanned with the current settings).
         """
-        init_scanfield = self.microscope.get_scanning_size()  # [m]
-        new_scanfield = init_scanfield[0] + 1e-6  # [m]
         scanfield_range = self.microscope.scanning_size_info()['range']
-        if new_scanfield < scanfield_range['x'][0]:
-            new_scanfield = scanfield_range['x'][0]
-        elif new_scanfield > scanfield_range['x'][1]:
-            new_scanfield = scanfield_range['x'][1]
-        # The max Y range can be lower than max X range * 442 / 512, so we also need to check the max Y range
-        # and adjust the x value.
-        field_of_view_ratio = 442.0 / 512.0
-        if new_scanfield * field_of_view_ratio < scanfield_range['y'][0]:
-            new_scanfield = scanfield_range['y'][0] / field_of_view_ratio
-        elif new_scanfield * field_of_view_ratio > scanfield_range['y'][1]:
-            new_scanfield = scanfield_range['y'][1] / field_of_view_ratio
+        new_scanfield_x = scanfield_range['x'][1]
+        new_scanfield_y = scanfield_range['y'][1]
 
-        self.microscope.set_scanning_size(new_scanfield)  # need to pass only x as y is calculated based on x
-        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield)
+        self.microscope.set_scanning_size(new_scanfield_x, new_scanfield_y)
+        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        self.assertEqual(self.microscope.get_scanning_size()[1], new_scanfield_y)
         # set value out of range
-        size = 1000000  # [m]
+        x = 1000000  # [m]
+        y = 100
         with self.assertRaises(Exception):
-            self.microscope.set_scanning_size(size)
+            self.microscope.set_scanning_size(x, y)
 
     def test_set_selected_area(self):
         """Test setting a selected area in the field of view."""
@@ -115,12 +109,13 @@ class TestMicroscope(unittest.TestCase):
         self.microscope.set_selected_area(start_pos, size)
         x, y, w, h = self.microscope.get_selected_area()
         self.assertEqual(start_pos + size, (x, y, w, h))
+        # set value out of range
         size = (20000, 200)
         with self.assertRaises(Exception):
             self.microscope.set_selected_area(start_pos, size)
 
     def test_reset_selected_area(self):
-        """Test resetting the selected area."""
+        """Test resetting the selected area to select the entire image.."""
         start_pos = (0, 0)
         size = (200, 200)
         self.microscope.set_selected_area(start_pos, size)
@@ -128,35 +123,23 @@ class TestMicroscope(unittest.TestCase):
 
     def test_set_ebeam_spotsize(self):
         """Setting the ebeam spot size."""
-        new_spotsize = self.microscope.get_ebeam_spotsize() + 1
         spotsize_range = self.microscope.spotsize_info()['range']
-        if new_spotsize < spotsize_range[0]:
-            new_spotsize = spotsize_range[0] + 1
-        elif new_spotsize > spotsize_range[1]:
-            new_spotsize = spotsize_range[1] - 1
+        new_spotsize = spotsize_range[1] - 1
         self.microscope.set_ebeam_spotsize(new_spotsize)
         self.assertAlmostEqual(new_spotsize, self.microscope.get_ebeam_spotsize())
 
     def test_set_dwell_time(self):
         """Setting the dwell time."""
-        new_dwell_time = self.microscope.get_dwell_time() + 1.5e-6
         dwell_time_range = self.microscope.dwell_time_info()['range']
-        if new_dwell_time < dwell_time_range[0]:
-            new_dwell_time = dwell_time_range[0] + 25e-9
-        elif new_dwell_time > dwell_time_range[1]:
-            new_dwell_time = dwell_time_range[1] - 25e-9
+        new_dwell_time = dwell_time_range[0] + 1.5e-6
         self.microscope.set_dwell_time(new_dwell_time)
         self.assertAlmostEqual(new_dwell_time, self.microscope.get_dwell_time())
 
     @unittest.skip("do not test setting voltage on the hardware.")
     def test_set_ht_voltage(self):
         """Setting the HT Voltage."""
-        new_voltage = self.microscope.get_ht_voltage() - 1e3
         ht_voltage_range = self.microscope.ht_voltage_info()['range']
-        if new_voltage < ht_voltage_range[0]:
-            new_voltage = ht_voltage_range[0] + 1e3
-        elif new_voltage > ht_voltage_range[1]:
-            new_voltage = ht_voltage_range[1] - 1e3
+        new_voltage = ht_voltage_range[1] - 1e3
         self.microscope.set_ht_voltage(new_voltage)
         self.assertAlmostEqual(new_voltage, self.microscope.get_ht_voltage())
 
@@ -173,54 +156,45 @@ class TestMicroscope(unittest.TestCase):
         self.microscope.pump()
         self.assertEqual(self.microscope.get_vacuum_state(), 'vacuum')
 
-    @unittest.skip("using external stage")
+    @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
     def test_home_stage(self):
         """Test that the stage is homed after home_stage is called."""
         self.microscope.home_stage()
-        while self.microscope.stage_is_moving():
+        tstart = time.time()
+        while self.microscope.stage_is_moving() and time.time() < tstart + 5:
             continue
         self.assertTrue(self.microscope.is_homed())
 
     def test_change_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change."""
         self.microscope.set_channel_state(state='run')
-        self.microscope.wait_for_state_changed('run')
+        self.microscope.wait_for_state_changed('run')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(), 'run')
         self.microscope.set_channel_state(state='stop')
-        self.microscope.wait_for_state_changed('stop')
+        self.microscope.wait_for_state_changed('stop')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(), 'stop')
 
     def test_change_ccd_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change for the optical channel."""
         self.microscope.set_channel_state(name='optical4', state='run')
-        self.microscope.wait_for_state_changed('run', name='optical4')
+        self.microscope.wait_for_state_changed('run', name='optical4')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(name='optical4'), 'run')
         self.microscope.set_channel_state(name='optical4', state='stop')
-        self.microscope.wait_for_state_changed('stop', name='optical4')
+        self.microscope.wait_for_state_changed('stop', name='optical4')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(name='optical4'), 'stop')
 
     def test_acquire_ccd_image(self):
         """Test acquiring an image from the optical channel."""
         self.microscope.set_channel_state(name='optical4', state='run')
-        self.microscope.wait_for_state_changed('run', name='optical4')
+        self.microscope.wait_for_state_changed('run', name='optical4')  # timeout is handled on the server side
         image = self.microscope.acquire_image(channel_name='optical4')
         self.assertEqual(len(image.shape), 2)
 
     def test_set_beam_shift(self):
         """Setting the beam shift."""
-        new_beam_shift_x = self.microscope.get_beam_shift()[0] - 1e-6
         beam_shift_range = self.microscope.beam_shift_info()['range']
-        if new_beam_shift_x < beam_shift_range['x'][0]:
-            new_beam_shift_x = beam_shift_range['x'][0] + 1e-6
-        elif new_beam_shift_x > beam_shift_range['x'][1]:
-            new_beam_shift_x = beam_shift_range['x'][1] - 1e-6
-
-        new_beam_shift_y = self.microscope.get_beam_shift()[1] - 1e-6
-        if new_beam_shift_y < beam_shift_range['y'][0]:
-            new_beam_shift_y = beam_shift_range['y'][0] + 1e-6
-        elif new_beam_shift_y > beam_shift_range['y'][1]:
-            new_beam_shift_y = beam_shift_range['y'][1] - 1e-6
-        print(new_beam_shift_x, new_beam_shift_y)
+        new_beam_shift_x = beam_shift_range['x'][1] - 1e-6
+        new_beam_shift_y = beam_shift_range['y'][0] + 1e-6
         self.microscope.set_beam_shift(new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.microscope.get_beam_shift())
 
