@@ -67,7 +67,7 @@ class MicroscopeClient:
 
     def move_stage(self, position, rel=False):
         """
-        Move the stage the given position in meter. This is non-blocking. Throws an error when the requested position
+        Move the stage the given position in meters. This is non-blocking. Throws an error when the requested position
         is out of range.
 
         Parameters
@@ -90,7 +90,7 @@ class MicroscopeClient:
 
     def get_stage_position(self):
         """
-        Returns: (dict) The axes of the stage as keys with their corresponding position.
+        Returns: (dict) the axes of the stage as keys with their corresponding position.
         """
         return self.client.get_stage_position()
 
@@ -160,20 +160,20 @@ class MicroscopeClient:
         Parameters
         ----------
         x: (float)
-            size for X in [m].
+            size for X in meters.
         y: (float)
-            size for y in [m].
+            size for y in meters.
         """
         self.client.set_scanning_size(x, y)
 
     def get_scanning_size(self):
         """
-        Returns: (tuple of floats) x and y scanning size in [m].
+        Returns: (tuple of floats) x and y scanning size in meters.
         """
         return self.client.get_scanning_size()
 
     def scanning_size_info(self):
-        """Returns: (dict) with the scanning size unit and range."""
+        """Returns: (dict) the scanning size unit and range."""
         return self.client.scanning_size_info()
 
     def set_ebeam_spotsize(self, spotsize):
@@ -182,7 +182,7 @@ class MicroscopeClient:
         Parameters
         ----------
         spotsize: float
-            desired spotsize, unitless [-]
+            desired spotsize, unitless
         """
         self.client.set_ebeam_spotsize(spotsize)
 
@@ -219,7 +219,7 @@ class MicroscopeClient:
         Parameters
         ----------
         voltage: float
-            Desired high voltage value in volt [V].
+            Desired high voltage value in volt.
 
         """
         self.client.set_ht_voltage(voltage)
@@ -257,7 +257,7 @@ class MicroscopeClient:
         self.client.vent()
 
     def get_pressure(self):
-        """Returns: (float) the chamber pressure in [Pa]."""
+        """Returns: (float) the chamber pressure in pascal."""
         return self.client.get_pressure()
 
     def home_stage(self):
@@ -306,7 +306,7 @@ class MicroscopeClient:
         return self.client.get_channel_state(unicode(name))
 
     def get_free_working_distance(self):
-        """Returns: (float) the free working distance in [m]."""
+        """Returns: (float) the free working distance in meters."""
         return self.client.get_free_working_distance()
 
     def set_free_working_distance(self, free_working_distance):
@@ -315,7 +315,7 @@ class MicroscopeClient:
         Parameters
         ----------
         free_working_distance: float
-            free working distance in [m].
+            free working distance in meters.
         """
         self.client.set_free_working_distance(free_working_distance)
 
@@ -356,11 +356,11 @@ class MicroscopeClient:
         return self.client.is_autofocusing()
 
     def get_beam_shift(self):
-        """Returns: (float) the current beam shift x and y values in meter [m]."""
+        """Returns: (float) the current beam shift x and y values in meters."""
         return self.client.get_beam_shift()
 
     def set_beam_shift(self, x_shift, y_shift):
-        """Set the current beam shift values in meter [m]."""
+        """Set the current beam shift values in meters."""
         self.client.set_beam_shift(x_shift, y_shift)
 
     def beam_shift_info(self):

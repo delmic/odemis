@@ -92,7 +92,12 @@ class TestMicroscope(unittest.TestCase):
         scanfield_range = self.microscope.scanning_size_info()['range']
         new_scanfield_x = scanfield_range['x'][1]
         new_scanfield_y = scanfield_range['y'][1]
-
+        self.microscope.set_scanning_size(new_scanfield_x, new_scanfield_y)
+        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        self.assertEqual(self.microscope.get_scanning_size()[1], new_scanfield_y)
+        # Test it still works for different values.
+        new_scanfield_x = scanfield_range['x'][0]
+        new_scanfield_y = scanfield_range['y'][0]
         self.microscope.set_scanning_size(new_scanfield_x, new_scanfield_y)
         self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
         self.assertEqual(self.microscope.get_scanning_size()[1], new_scanfield_y)
@@ -127,11 +132,19 @@ class TestMicroscope(unittest.TestCase):
         new_spotsize = spotsize_range[1] - 1
         self.microscope.set_ebeam_spotsize(new_spotsize)
         self.assertAlmostEqual(new_spotsize, self.microscope.get_ebeam_spotsize())
+        # Test it still works for different values.
+        new_spotsize = spotsize_range[0] + 1
+        self.microscope.set_ebeam_spotsize(new_spotsize)
+        self.assertAlmostEqual(new_spotsize, self.microscope.get_ebeam_spotsize())
 
     def test_set_dwell_time(self):
         """Setting the dwell time."""
         dwell_time_range = self.microscope.dwell_time_info()['range']
         new_dwell_time = dwell_time_range[0] + 1.5e-6
+        self.microscope.set_dwell_time(new_dwell_time)
+        self.assertAlmostEqual(new_dwell_time, self.microscope.get_dwell_time())
+        # Test it still works for different values.
+        new_dwell_time = dwell_time_range[1] - 1.5e-6
         self.microscope.set_dwell_time(new_dwell_time)
         self.assertAlmostEqual(new_dwell_time, self.microscope.get_dwell_time())
 
@@ -140,6 +153,10 @@ class TestMicroscope(unittest.TestCase):
         """Setting the HT Voltage."""
         ht_voltage_range = self.microscope.ht_voltage_info()['range']
         new_voltage = ht_voltage_range[1] - 1e3
+        self.microscope.set_ht_voltage(new_voltage)
+        self.assertAlmostEqual(new_voltage, self.microscope.get_ht_voltage())
+        # Test it still works for different values.
+        new_voltage = ht_voltage_range[0] + 1e3
         self.microscope.set_ht_voltage(new_voltage)
         self.assertAlmostEqual(new_voltage, self.microscope.get_ht_voltage())
 
@@ -195,6 +212,11 @@ class TestMicroscope(unittest.TestCase):
         beam_shift_range = self.microscope.beam_shift_info()['range']
         new_beam_shift_x = beam_shift_range['x'][1] - 1e-6
         new_beam_shift_y = beam_shift_range['y'][0] + 1e-6
+        self.microscope.set_beam_shift(new_beam_shift_x, new_beam_shift_y)
+        self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.microscope.get_beam_shift())
+        # Test it still works for different values.
+        new_beam_shift_x = beam_shift_range['x'][0] + 1e-6
+        new_beam_shift_y = beam_shift_range['y'][1] - 1e-6
         self.microscope.set_beam_shift(new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.microscope.get_beam_shift())
 
