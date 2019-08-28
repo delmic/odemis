@@ -151,6 +151,13 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
                 self._polarization = s.polarization
                 self._acquireAllPol = s.acquireAllPol
 
+        # Get integration time on detector if found in optical substream
+        self._integrationTime = None
+        for s in streams:
+            if hasattr(s, "integrationTime"):
+                # get the integration time VA
+                self._integrationTime = s.integrationTime
+
         # acquisition end event
         self._acq_done = threading.Event()
 
@@ -241,7 +248,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         for l in self.leeches:
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
-            if hasattr(self._sccd, "integrationTime"):
+            if self._integrationTime:
                 # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
                 integration_count = int(math.ceil(self._sccd.integrationTime.value / self._ccd.exposureTime.value))
                 if integration_count != self._sccd.integrationCounts.value:
