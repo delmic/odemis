@@ -4662,8 +4662,37 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertTrue(numpy.any(im2d_bgcorr != im2d_effcorr))
         self.assertTrue(numpy.any(im2d_bgcorr != prev_im2d))
 
-        # test rejected backgrounds for data with wl info
+    def test_temporal_spectrum_false_calib_bg(self):
+        """Test StaticSpectrumStream background image correction
+         with temporal spectrum data using invalid bg images and calibration files."""
+        temporalspectrum = self._create_temporal_spectrum_data()
+        tss = stream.StaticSpectrumStream("test temporal spectrum calibration and bg corr", temporalspectrum)
+        proj_spatial = RGBSpatialSpectrumProjection(tss)
+        tss.spectrumBandwidth.value = (tss.spectrumBandwidth.range[0][0], tss.spectrumBandwidth.range[1][1])
+        time.sleep(0.5)  # ensure that .image is updated
+
+        # get current image without any correction
         prev_im2d = proj_spatial.image.value
+
+        # create bg image (C, T, 1, 1, 1)
+        dbckg = numpy.ones(temporalspectrum.shape, dtype=numpy.uint16) + 10
+        wl_bckg = list(temporalspectrum.metadata[model.MD_WL_LIST])
+        bckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg,
+                                                model.MD_STREAK_MODE: True,
+                                                model.MD_STREAK_TIMERANGE: 1e-9,  # s
+                                                })  # background data is 2D
+
+        # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
+
+        # apply spectrum efficiency compensation
+        tss.efficiencyCompensation.value = calib
+
+        time.sleep(0.5)
+
         # apply bg correction: should fail as streak mode of bg image and data different
         bckg.metadata[model.MD_STREAK_MODE] = False  # no time info
         with self.assertRaises(ValueError):
