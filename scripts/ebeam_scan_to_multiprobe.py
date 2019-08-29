@@ -3,9 +3,11 @@
 """
 Created on 30 Jul 2019
 
-@author: Thera Pals
+@author: Andries Effting, Thera Pals
 
-This script provides a command line interface for aligning the ebeam scan to multiprobe
+Copyright © 2019 Thera Pals, Delmic
+
+This script provides a command line interface for aligning the ebeam scan to multiprobe.
 
 """
 from __future__ import division
@@ -19,14 +21,13 @@ from builtins import input
 
 from odemis import model
 from odemis.acq.align.spot import FindGridSpots
-from odemis.driver import ueye
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 
 
 def get_deflection_angle(coordinates):
     """
-    Fit a line through a set of coordinates and calculate the angle between that line and the x-axis, this is the
-    deflection angle.
+    Fit a line through a set of coordinates and calculate the angle between that line and the x-axis. This angle is
+    called the deflection angle.
 
     coordinates (ndarray of shape nx2): (x, y) coordinates of center positions of the grid of spots.
     return:
@@ -35,7 +36,7 @@ def get_deflection_angle(coordinates):
     # Construct a system of linear equations to fit the line a*x + b*y + c = 0
     n = coordinates.shape[0]
     if n < 2:
-        raise ValueError("n should be higher than or equal to 2, cannot find deflection angle for n is {}".format(n))
+        raise ValueError("Need 2 or more coordinates, cannot find deflection angle for {} coordinates.".format(n))
     elif n == 2:
         x = coordinates[1, :] - coordinates[0, :]
         # Determine the angle of this line to the x-axis, -pi/2 < phi < pi/2
@@ -83,14 +84,16 @@ def get_sem_rotation(ccd):
 
 def main(args):
     """
-    Handles the command line arguments
-    args is the list of arguments passed
-    return (int): value to return to the OS as program exit code
+    Handles the command line arguments.
+
+    args: The list of arguments passed.
+    return:
+        (int) value to return to the OS as program exit code.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action="store_true", default=False)
-    parser.add_argument("--role", dest="role", metavar="<component>",
-                        help="Role of the camera to connect via the Odemis back-end. Ex: 'ccd'.")
+    parser.add_argument("--role", dest="role", default="diagnostic-ccd", metavar="<component>",
+                        help="Role of the camera to connect to via the Odemis back-end. Ex: 'ccd'.")
 
     options = parser.parse_args(args[1:])
     if options.debug:
@@ -98,12 +101,10 @@ def main(args):
     else:
         logging.getLogger().setLevel(logging.WARNING)
 
-    if options.role:
-        if get_backend_status() != BACKEND_RUNNING:
-            raise ValueError("Backend is not running while role command is specified.")
-        ccd = model.getComponent(role=options.role)
-    else:
-        ccd = ueye.Camera("camera", "ccd", device=None)
+    if get_backend_status() != BACKEND_RUNNING:
+        raise ValueError("Backend is not running.")
+
+    ccd = model.getComponent(role=options.role)
 
     try:
         sem_rotation = get_sem_rotation(ccd)
@@ -111,8 +112,6 @@ def main(args):
     except Exception as exp:
         logging.error("%s", exp, exc_info=True)
         return 128
-    finally:
-        ccd.terminate()
     return 0
 
 
