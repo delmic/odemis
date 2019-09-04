@@ -479,6 +479,7 @@ class BufferedCanvas(wx.Panel):
 
         ctx = wxcairo.ContextFromDC(dc_view)
         self._draw_view_overlays(ctx)
+        del ctx  # needs to be dereferenced to force flushing on Windows
 
     def on_size(self, evt):
         """ Resize the bitmap buffer so it's size will match the view's """
@@ -1643,6 +1644,7 @@ class DraggableCanvas(BitmapCanvas):
         # Remember that the device context of the view port is passed!
         ctx = wxcairo.ContextFromDC(dc_view)
         self._draw_view_overlays(ctx)
+        del ctx  # needs to be dereferenced to force flushing on Windows
 
     # END Event processing
 
