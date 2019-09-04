@@ -25,6 +25,10 @@ def get_lib_tiff():
 
 def get_cairo_dlls():
     """ Help PyInstaller find all the Cairo files it needs """
+    if sys.version_info[0] >= 3:
+        # only required with python2 version of cairo (py2cairo), not python3 version (pycairo)
+        return []
+
     import os
 
     dlls = [
@@ -52,6 +56,48 @@ def get_cairo_dlls():
 
     raise ImportError("Could not find Cairo files!")
 
+def get_mkl_dlls():
+    """ Help PyInstaller find all the mkl files it needs """
+    # This is needed if we use numpy 1.16+mkl (i.e. with the python3 installation setup)
+    # If an older numpy version is used, these files will never be found and the
+    # function will return an empty list
+    import numpy
+
+    dlls = [
+        "mkl_avx.dll",
+        "mkl_avx2.dll",
+        "mkl_avx512.dll",
+        "mkl_core.dll",
+        "mkl_intel_thread.dll",
+        "mkl_p4.dll",
+        "mkl_p4m.dll",
+        "mkl_p4m3.dll",
+        "mkl_rt.dll",
+        "mkl_sequential.dll",
+        "mkl_tbb_thread.dll",
+        "mkl_vml_avx.dll",
+        "mkl_vml_avx2.dll",
+        "mkl_vml_avx512.dll",
+        "mkl_vml_cmpt.dll",
+        "mkl_vml_ia.dll",
+        "mkl_vml_p4.dll",
+        "mkl_vml_p4m.dll",
+        "mkl_vml_p4m2.dll",
+        "mkl_vml_p4m3.dll",
+        "libiomp5md.dll"
+    ]
+
+    dll_path = os.path.join(os.path.dirname(numpy.__file__), 'DLLs')
+    if all(os.path.exists(os.path.join(dll_path, dll)) for dll in dlls):
+        return [(dll, os.path.join(dll_path, dll), 'DATA') for dll in dlls]
+    else:
+        return []
+
+def get_queue_imports():
+    if sys.version_info[0] < 3:
+        return ['Queue', 'queue']
+    else:
+        return ['queue']
 
 def get_dataio_imports():
     import odemis.dataio
@@ -148,10 +194,8 @@ a = Analysis(
     datas=None,
     hiddenimports=[
         'cairo',
-        'Queue',
-        'queue',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
-    ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports(),
+    ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports() + get_queue_imports(),
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
@@ -194,6 +238,7 @@ coll = COLLECT(
     a.datas,
     get_lib_tiff(),
     get_cairo_dlls(),
+    get_mkl_dlls(),
     get_version(),
     [('OdemisViewer.ico', 'odemis-viewer.ico', 'DATA')],
     strip=False,
