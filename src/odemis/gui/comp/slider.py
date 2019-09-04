@@ -1008,6 +1008,7 @@ class VisualRangeSlider(BaseSlider):
             ctx = wxcairo.ContextFromDC(dc)
             width, height = self.ClientSize
             self._draw_content(ctx, width, height)
+            del ctx  # force flushing the cairo surface
         del dc  # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
