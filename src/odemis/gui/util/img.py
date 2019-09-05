@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from past.builtins import basestring
+from odemis.gui.util import wx_adapter
 import cairo
 import logging
 import math
@@ -2439,10 +2440,9 @@ def NDImage2wxImage(image):
         wim = wx.ImageFromBuffer(*size, dataBuffer=image) # 0 copy
         return wim
     elif image.shape[2] == 4: # RGBA
-        # 2 copies
-        return wx.ImageFromDataWithAlpha(*size,
-                             data=numpy.ascontiguousarray(image[:, :, 0:3]),
-                             alpha=numpy.ascontiguousarray(image[:, :, 3]))
+        # 1 copy
+        return wx.Image(*size, data=numpy.ascontiguousarray(image[:, :, 0:3]),
+                               alpha=numpy.ascontiguousarray(image[:, :, 3]))
     else:
         raise ValueError("image is of shape %s" % (image.shape,))
 
@@ -2461,9 +2461,9 @@ def NDImage2wxBitmap(image):
     if image.shape[2] == 3: # RGB
         bim = wx.Bitmap(size[0], size[1], 24)
         bim.CopyFromBuffer(image, wx.BitmapBufferFormat_RGB)
-        # bim = wx.BitmapFromBuffer(size[0], size[1], image)
+        # bim = wx.Bitmap.FromBuffer(size[0], size[1], image)
     elif image.shape[2] == 4: # RGBA
-        bim = wx.BitmapFromBufferRGBA(size[0], size[1], image)
+        bim = wx.Bitmap.FromBufferRGBA(size[0], size[1], image)
     else:
         raise ValueError("image is of shape %s" % (image.shape,))
 

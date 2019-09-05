@@ -45,7 +45,10 @@ if wx.MAJOR_VERSION <= 3:
             if isinstance(args[0], (file, io.IOBase)):
                 return wx.ImageFromStream(*args)
             elif len(args) >= 2 and isinstance(args[0], int) and isinstance(args[1], int):
-                return wx.EmptyImage(*args, **kwargs)
+                if "data" in kwargs and "alpha" in kwargs:
+                    return wx.ImageFromDataWithAlpha(*args, **kwargs)
+                else:
+                    return wx.EmptyImage(*args, **kwargs)
             return super(ImageClever, cls).__new__(cls, *args, **kwargs)
 
     def SetRGBClever(self, *args, **kwargs):
