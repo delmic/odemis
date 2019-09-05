@@ -575,7 +575,7 @@ class SpotSEMStream(LiveStream):
 
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
-        self._emitter.dwellTime.value = 0.1  # s
+        self._emitter.dwellTime.value = self._emitter.dwellTime.clip(0.1)  # s
 
     def _stopSpot(self):
         """
