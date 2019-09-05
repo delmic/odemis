@@ -29,7 +29,7 @@ import socket
 import numpy
 import collections
 import numbers
-
+from odemis.util import to_str_escape
 
 #  0= Boolean: Can have the values true or false. Valid entries are „true“ (true), „false“
 #              (false), „on“ (true), „off“ (false), „yes“ (true), „no“ (false), „0“ (false), or
@@ -1044,16 +1044,16 @@ class StreakCamera(model.HwComponent):
         with self._lock_command:  # lock this code, when finished lock is automatically released
             # send command to socket
             try:
-                logging.debug("Sending: '%s'", command.encode('string_escape'))
+                logging.debug("Sending: '%s'", to_str_escape(command))
                 self._commandport.send(command)
             except Exception:
                 try:  # try to reconnect if connection was lost
                     logging.exception("Failed to send the command %s, will try to reconnect to RemoteEx."
-                                      % command.encode('string_escape'))
+                                      % to_str_escape(command))
                     self._commandport, self._dataport = self._openConnection()
                     # restart receiver thread, which keeps reading the commandport response continuously
                     self._start_receiverThread()
-                    logging.debug("Sending: '%s'", command.encode('string_escape'))
+                    logging.debug("Sending: '%s'", to_str_escape(command))
                     self._commandport.send(command)
                 except (socket.error, socket.timeout) as err:
                     raise model.HwError(err, "Could not connect to RemoteEx.")
@@ -1069,7 +1069,7 @@ class StreakCamera(model.HwComponent):
                         logging.error("Latest response before timeout was '%s'",
                                       latest_response)
                     raise util.TimeoutError("No answer received after %s s for command %s."
-                                            % (timeout, command.encode('string_escape')))
+                                            % (timeout, to_str_escape(command)))
 
                 # save the latest response in case we don't receive any other response before timeout
                 latest_response = response
@@ -1108,11 +1108,11 @@ class StreakCamera(model.HwComponent):
                     returnValue = self._commandport.recv(4096)  # buffersize should be small value of power 2 (4096)
                 except socket.timeout:
                     # when socket timed out (receiving no response)
-                    logging.debug("Timeout on the socket, will wait for more data packages.")
+                    logging.debug("Timeout on the socket, will wait for more data packets.")
                     continue
 
                 responses += returnValue
-                logging.debug("Received: '%s'", responses.encode('string_escape'))
+                logging.debug("Received: '%s'", to_str_escape(responses))
 
                 resp_splitted = responses.split("\r")
                 # split responses, overwrite var responses with the remaining messages (usually empty)
