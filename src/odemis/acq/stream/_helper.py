@@ -772,7 +772,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
 
         super(TemporalSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
 
-        self.active = False  # variable keep track if stream is active/inactive
+        self._active = False  # variable keep track if stream is active/inactive
 
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
@@ -818,26 +818,29 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         :param active: (boolean) True if stream is playing.
         :returns: (boolean) If stream is playing or not.
         """
-        self.active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
-        if self.active:
-            # make the full MCPGain range available when stream is active
-            self.detMCPGain.range = self.streak_unit.MCPGain.range
-        else:
-            self._resetMCPGainHW()
-            # only allow values <= current MCPGain value for HW safety reasons when stream inactive
-            self.detMCPGain.range = (0, self.detMCPGain.value)
-        return self.active
+        self._active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
 
-    def _resetMCPGainHW(self):
-        """"
-        Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive.
-        """
-        self.streak_unit.MCPGain.value = 0
+        if self.is_active.value != self._active:  # changing from previous value?
+            if self._active:
+                # make the full MCPGain range available when stream is active
+                self.detMCPGain.range = self.streak_unit.MCPGain.range
+            else:
+                # Set HW MCPGain VA = 0, but keep GUI VA = previous value
+                try:
+                    self.streak_unit.MCPGain.value = 0
+                except Exception:
+                    # Can happen if the hardware is not responding. In such case,
+                    # let's still pause the stream.
+                    logging.exception("Failed to reset the streak unit MCP Gain")
+
+                # only allow values <= current MCPGain value for HW safety reasons when stream inactive
+                self.detMCPGain.range = (0, self.detMCPGain.value)
+        return self._active
 
     def _OnStreakSettings(self, value):
         """
         Callback, which sets MCPGain GUI VA = 0,
-        if .timeRange and/or .streakMode GUI VAs have changed.
+        if .streakMode VA has changed.
         """
         self.detMCPGain.value = 0  # set GUI VA 0
         self._OnMCPGain(value)  # update the .MCPGain VA
@@ -848,7 +851,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         only values <= current value are allowed.
         If stream is active the full range is available.
         """
-        if not self.active:
+        if not self._active:
             self.detMCPGain.range = (0, self.detMCPGain.value)
 
 
