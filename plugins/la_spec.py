@@ -234,9 +234,9 @@ class SpecExtraPlugin(Plugin):
 
         for sptm in sptms:
             if len(sptms) <= 1:
-                actname = "LA Spectrum"
+                actname = "Large Area Spectrum"
             else:
-                actname = "LA Spectrum with %s" % (sptm.name,)
+                actname = "Large Area Spectrum with %s" % (sptm.name,)
             act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
             stctrl.add_action(actname, act)
 
