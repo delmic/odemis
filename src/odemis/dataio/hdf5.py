@@ -30,6 +30,7 @@ from odemis import model
 from odemis.util import spectrum, img, fluo
 import os
 import time
+import codecs
 
 
 # User-friendly name
@@ -689,7 +690,9 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE, converter=float)
         read_metadata(pdgroup, i, md, "ParabolaF", model.MD_AR_PARABOLA_F, converter=float)
         # polarization analyzer
-        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE, converter=str)
+        # use codecs.decode to make sure bytes (python2 str format) are read properly
+        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE,
+                      converter=lambda s: codecs.decode(s, "utf8"))
         read_metadata(pdgroup, i, md, "QuarterWavePlate", model.MD_POL_POS_QWP, converter=float)
         read_metadata(pdgroup, i, md, "LinearPolarizer", model.MD_POL_POS_LINPOL, converter=float)
         # streak camera
