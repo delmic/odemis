@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import cairo
 import logging
 import numpy
 from odemis.gui.util.img import NDImage2wxImage
@@ -53,6 +54,23 @@ class VideoDisplayer(object):
         """
         if data.ndim == 3 and 3 in data.shape: # RGB
             rgb = img.ensureYXC(data)
+        elif numpy.prod(data.shape) == 1:  # single point => show text
+            text = "%g" % (data.flat[0],)
+            logging.info("Data value is: %s", text)
+            # Create a big enough white space (30x200 px) of BGRA format
+            rgb = numpy.empty((30, 200, 4), dtype=numpy.uint8)
+            rgb.fill(255)
+            # Get a Cairo context for that image
+            surface = cairo.ImageSurface.create_for_data(
+                rgb, cairo.FORMAT_ARGB32, rgb.shape[1], rgb.shape[0])
+            ctx = cairo.Context(surface)
+            # Draw a black text of 20 px high
+            ctx.set_source_rgb(0, 0, 0)
+            ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL)
+            ctx.set_font_size(20)
+            ctx.move_to(5, 20)
+            ctx.show_text(text)
+            del ctx  # ensure the context is flushed
         elif numpy.prod(data.shape) == data.shape[-1]: # 1D image => bar plot
             # TODO: add "(plot)" to the window title
             # Create a simple bar plot of X x 400 px
