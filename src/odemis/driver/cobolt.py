@@ -21,7 +21,7 @@ import glob
 import logging
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from odemis.util import driver
+from odemis.util import driver, to_str_escape
 import os
 import serial
 import threading
@@ -152,24 +152,24 @@ class DPSS(model.PowerSupplier):
         """
         cmd = cmd + "\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
-            self._serial.write(cmd)
+            logging.debug("Sending command %s", to_str_escape(cmd))
+            self._serial.write(cmd.encode('latin1'))
 
-            ans = ''
-            while ans[-2:] != '\r\n':
+            ans = b''
+            while ans[-2:] != b'\r\n':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", to_str_escape(ans))
 
             # TODO: check for other error answer?
             # Normally the device either answers OK, or a value, for commands finishing with a "?"
             if ans.startswith("Syntax error"):
                 raise DPSSError(ans)
 
-            return ans.rstrip()
+            return ans.decode('latin1').rstrip()
 
     @staticmethod
     def _openSerialPort(port):
@@ -191,7 +191,7 @@ class DPSS(model.PowerSupplier):
         # Try to read until timeout to be extra safe that we properly flushed
         while True:
             char = ser.read()
-            if char == '':
+            if char == b'':
                 break
 
         return ser
