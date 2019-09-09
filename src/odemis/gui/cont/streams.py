@@ -1046,7 +1046,7 @@ class StreamController(object):
         va_config = OrderedDict((
             ("repetition", {
                 "control_type": CONTROL_COMBO,
-                "choices": {1, 1},  # Actually, it's immediately replaced by _onStreamRep()
+                "choices": {(1, 1)},  # Actually, it's immediately replaced by _onStreamRep()
                 "accuracy": None,  # never simplify the numbers
             }),
             ("pixelSize", {
