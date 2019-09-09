@@ -22,6 +22,7 @@ import sys
 import serial
 import time
 import fcntl
+from odemis.util import to_str_escape
 
 def main(args):
     """
@@ -47,20 +48,20 @@ def main(args):
     ser.flushInput()
 
     # check IDN to make sure it is the correct HW
-    cmd = "*IDN?\n"
+    cmd = b"*IDN?\n"
     ser.write(cmd)
-    ans = ''
+    ans = b''
     char = None
-    while char != '\n':
+    while char != b'\n':
         char = ser.read()
         ans += char
-    logging.debug("Device identified itself as '%s'", ans.encode('string_escape'))
-    if ans.startswith("Delmic Analog PMT version"):
+    logging.debug("Device identified itself as '%s'", to_str_escape(ans))
+    if ans.startswith(b"Delmic Analog PMT version"):
         # Send command
         logging.info("Will now reset the power relay for 10s.")
-        ser.write("RELAY 0\n")
+        ser.write(b"RELAY 0\n")
         time.sleep(10)
-        ser.write("RELAY 1\n")
+        ser.write(b"RELAY 1\n")
         logging.info("Power relay is active again.")
     else:
         return 1
