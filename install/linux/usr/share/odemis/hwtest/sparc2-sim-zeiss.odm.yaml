@@ -80,7 +80,7 @@ SPARC2: {
     creator: "SEM Scan Interface",
     role: null,
     init: {
-        channels: [0,1],
+        channels: [0, 1],
         max_res: [4096, 3072], #px, to force the 4:3 ratio
         limits: [[-3.68 , 3.68], [-2.73, 2.73]],  # V
         park: [-5, -5], # V

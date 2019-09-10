@@ -61,8 +61,17 @@ class RemconError(Exception):
 
 
 class SEM(model.HwComponent):
+    """
+    Connects to a Zeiss SEM via the RemCon interface (over RS-232).
+    At initialisation, the SEM software should already be running, and the
+    RemCon option active (might require an extra license).
+    """
 
     def __init__(self, name, role, children, port, daemon=None, **kwargs):
+        """
+        port (string): the path of the serial port (e.g., /dev/ttyUSB0) to which
+          the RemCon interface is connected. Use "/dev/fake" for a simulator.
+        """
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
@@ -80,26 +89,34 @@ class SEM(model.HwComponent):
         self._hwVersion = self._idn
 
         try:
-            kwargs = children["scanner"]
+            ckwargs = children["scanner"]
         except (KeyError, TypeError):
             raise KeyError("ZeissSEM was not given a 'scanner' child")
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+        self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
 
-        # create the stage child
-        try:
-            kwargs = children["stage"]
-        except (KeyError, TypeError):
-            raise KeyError("ZeissSEM was not given a 'stage' child")
-        self._stage = Stage(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._stage)
+        # create the stage child, if requested
+        if "stage" in children:
+            ckwargs = children["stage"]
+            self._stage = Stage(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._stage)
 
-        try:
-            kwargs = children["focus"]
-        except (KeyError, TypeError):
-            raise KeyError("ZeissSEM was not given a 'focus' child")
-        self._focus = Focus(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._focus)
+        # create a focuser, if requested
+        if "focus" in children:
+            ckwargs = children["focus"]
+            self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._focus)
+
+    def terminate(self):
+        if self._serial:
+            if hasattr(self, "_focus"):
+                self._focus.terminate()
+            if hasattr(self, "_stage"):
+                self._stage.terminate()
+            self._scanner.terminate()
+
+            self._serial.close()
+            self._serial = None
 
     @staticmethod
     def _openSerialPort(port, baudrate):
