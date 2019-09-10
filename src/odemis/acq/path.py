@@ -489,6 +489,9 @@ class OpticalPathManager(object):
                 # path is correct anyway, just potentially more vibrations.
                 logging.exception("Failed to change CCD fan")
 
+        if mode == "mirror-align":
+            self._check_pass_through_available()
+
         fmoves = []  # moves in progress, list of (future, Component, dict(axis->pos) tuples
 
         # Restore the spectrometer focus before any other move, as (on the SR193),
@@ -831,6 +834,26 @@ class OpticalPathManager(object):
                 if new_path:
                     return new_path
         return None
+
+    def _check_pass_through_available(self):
+        """
+        Check that a pass-through filter is available, if not, will show a warning
+        (iff there is a filter component which affects the ccd).
+        That's mostly useful in case there is a typo in the filter name.
+        """
+        try:
+            ccd = self._getComponent("ccd")
+            light_filter = self._getComponent("filter")
+        except LookupError:
+            return  # No such hardware => no problem at all
+
+        try:
+            if (self.affects(light_filter.name, ccd.name)
+                and "pass-through" not in light_filter.axes["band"].choices
+               ):
+                logging.warning("No 'pass-through' filter available, alignment might be harder due to limited signal")
+        except Exception:
+            logging.exception("Failed to check pass-through filter presence")
 
     def _setCCDFan(self, enable):
         """
