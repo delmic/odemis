@@ -110,14 +110,18 @@ def pose_to_dict(pose):
     pos['rz'] = math.radians(pose.rotationZ)
     return pos
 
-def dict_to_pose(pos):
+
+def dict_to_pose(pos, base=Pose()):
     """
     Convert a coordinate dictionary (str) -> (double) to a Pose C struct
         pos: Coordinate dictionary (str) -> (double) of axis name to value
+        base: a Pose that is used as a base in case you don't want to initialize
+            the C struct to default values of 0 in the case where not all axes
+            are defined in the pos dict.
     returns: a Pose (C struct)
     raises ValueError if an unsupported axis name is input
     """
-    pose = Pose()
+    pose = base
 
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
@@ -429,7 +433,7 @@ class SmarPod(model.Actuator):
         Raises: SmarPodError if a problem occurs
         """
         # convert into a smartpad pose
-        newPose = dict_to_pose(pos)
+        newPose = dict_to_pose(pos, self.GetPose())
 
         if hold_time == float("inf"):
             ht = SmarPodDLL.SMARPOD_HOLDTIME_INFINITE
@@ -447,9 +451,7 @@ class SmarPod(model.Actuator):
         """
         pose = Pose()
         self.core.Smarpod_GetPose(self._id, byref(pose))
-        position = pose_to_dict(pose)
-        logging.info("Current position: %s", position)
-        return position
+        return pose
 
     def Stop(self):
         """
@@ -516,7 +518,7 @@ class SmarPod(model.Actuator):
         update the position VA
         """
         try:
-            p = self.GetPose()
+            p = pose_to_dict(self.GetPose())
         except SmarPodError as ex:
             if ex.errno == SmarPodDLL.SMARPOD_NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SmarPod is not referenced")
@@ -970,14 +972,16 @@ def SA_MC_pose_to_dict(pose):
     return pos
 
 
-def dict_to_SA_MC_pose(pos):
+def dict_to_SA_MC_pose(pos, base=SA_MC_Pose()):
     """
     Convert a coordinate dictionary (str) -> (double) to a SA_MC Pose C struct
         pos: Coordinate dictionary (str) -> (double) of axis name to value
+        base: A SA_MC_Pose to use as a base. Otherwise, if axes are missing in the dict,
+            the values will be initialized to the default values of 0.
     returns: a Pose (C struct)
     raises ValueError if an unsupported axis name is input
     """
-    pose = SA_MC_Pose()
+    pose = base
 
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
@@ -1317,7 +1321,7 @@ class MC_5DOF(model.Actuator):
         Raises: SA_MCError if a problem occurs
         """
         # convert into a smartpad pose
-        newPose = dict_to_SA_MC_pose(pos)
+        newPose = dict_to_SA_MC_pose(pos, self.GetPose())
 
         if hold_time == float("inf"):
             ht = MC_5DOF_DLL.SA_MC_INFINITE
@@ -1335,9 +1339,7 @@ class MC_5DOF(model.Actuator):
         """
         pose = SA_MC_Pose()
         self.core.SA_MC_GetPose(self._id, byref(pose))
-        position = SA_MC_pose_to_dict(pose)
-        logging.info("Current position: %s", position)
-        return position
+        return pose
 
     def Stop(self):
         """
@@ -1413,7 +1415,7 @@ class MC_5DOF(model.Actuator):
         update the position VA
         """
         try:
-            p = self.GetPose()
+            p = SA_MC_pose_to_dict(self.GetPose())
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SA_MC is not referenced")

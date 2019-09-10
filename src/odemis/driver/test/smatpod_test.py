@@ -115,6 +115,8 @@ class TestSmarPod(unittest.TestCase):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
         pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
         pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        # test where not all axes are defined
+        pos4 = {'x': 1e-3, 'rx': 1e-5, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -122,6 +124,11 @@ class TestSmarPod(unittest.TestCase):
         test.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        self.dev.moveAbs(pos4).result()
+        # add missing axes to do the comparison
+        pos4['y'] = pos3['y']
+        pos4['z'] = pos3['z']
+        test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):

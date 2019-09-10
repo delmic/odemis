@@ -117,7 +117,9 @@ class Test5DOF(unittest.TestCase):
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'ry': 0, 'rz': 0.001}
         pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz':0}
-        pos3 = {'x': 0, 'y': 0, 'z': 1e-3, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos3 = {'x': 3.5218e-4, 'y': 1.785e-5, 'z': 1e-3, 'rx':-1e-6, 'ry': 0, 'rz':-1.253e-6}
+        # test where not all axes are defined
+        pos4 = {'x': 1e-3, 'rx': 1e-5, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -125,6 +127,11 @@ class Test5DOF(unittest.TestCase):
         test.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        self.dev.moveAbs(pos4).result()
+        # add missing axes to do the comparison
+        pos4['y'] = pos3['y']
+        pos4['z'] = pos3['z']
+        test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):
