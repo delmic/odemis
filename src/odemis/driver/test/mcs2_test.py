@@ -38,83 +38,60 @@ COMP_ARGS = {
     "rtol": 1e-3,
     }
 
-CONFIG_SMARTPOD = {"name": "SmarPod",
-        "role": "",
+CONFIG_3DOF = {"name": "3DOF",
+        "role": "stage",
         "ref_on_init": True,
-        "actuator_speed": 0.1,  # m/s
-        "locator": "usb:ix:0",
+        "locator": "network:sn:MCS2-00001604",
+        "speed": 0.1,
+        "accel": 0.001,
         "axes": {
             'x': {
-                'range': [-0.2, 0.2],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
+                'channel': 0,
             },
             'y': {
-                'range': [-0.2, 0.2],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
+                'channel': 1,
             },
             'z': {
-                'range': [-0.1, 0.1],
+                'range': [-3e-3, 3e-3],
                 'unit': 'm',
-            },
-            'rx': {
-                'range': [-0.785, 0.785],
-                'unit': 'rad',
-            },
-            'ry': {
-                'range': [-0.785, 0.785],
-                'unit': 'rad',
-            },
-            'rz': {
-                'range': [-0.785, 0.785],
-                'unit': 'rad',
+                'channel': 2,
             },
         },
 }
 
 if TEST_NOHW:
-    CONFIG_SMARTPOD['locator'] = 'fake'
+    CONFIG_3DOF['locator'] = 'fake'
 
 
-class TestSmarPod(unittest.TestCase):
+class TestTMCS2(unittest.TestCase):
     """
-    Tests cases for the SmarPod actuator driver
+    Tests cases for the SmarAct MCS2 controller
     """
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = smaract.SmarPod(**CONFIG_SMARTPOD)
+        cls.dev = smaract.MCS2(**CONFIG_3DOF)
 
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
-        
-    def test_reference_cancel(self):
-        # Test canceling referencing
-        f = self.dev.reference()
-        time.sleep(0.1)
-        f.cancel()
-
-        for a, i in self.dev.referenced.value.items():
-            self.assertFalse(i)
-
-        f = self.dev.reference()
-        f.result()
-
-        for a, i in self.dev.referenced.value.items():
-            self.assertTrue(i)
 
     def test_out_of_range(self):
         """
         Test sending a position that is out of range.
         """
-        pos = {'x': 1.5, 'y': 20, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
+        pos = {'x': 1.5, 'y': 20, 'z': 0}
         with self.assertRaises(ValueError):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
-        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
-        pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos1 = {'x': 0, 'y': 0, 'z': 0}
+        pos2 = {'x':0, 'y': 0, 'z': 0}
+        pos3 = {'x': 0, 'y': 0, 'z': 1e-3}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -126,18 +103,18 @@ class TestSmarPod(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0.005, 'rz': 0.002}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
+        new_pos = {'x':1e-3, 'y': 0, 'z': 1e-3}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
         self.assertNotEqual(round(difference, 4), 0)
-        
+
         # Test cancellation by stopping
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.0021, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0.005, 'rz': 0.0001}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
+        new_pos = {'x':3e-3, 'y': 1e-3, 'z': 0.0007}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -147,9 +124,9 @@ class TestSmarPod(unittest.TestCase):
 
     def test_move_rel(self):
         # Test relative moves
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'ry':-0.0003, 'rz': 0}
+        shift = {'x': 1e-3, 'y':-1e-3}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -157,7 +134,7 @@ class TestSmarPod(unittest.TestCase):
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'z':-0.000001, 'rx': 0.00001, 'ry':-0.000001, 'rz':-0.00001}
+        shift = {'z':-0.000001}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()

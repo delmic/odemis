@@ -23,8 +23,9 @@ import logging
 import os
 import time
 import unittest
-from odemis.driver import smarpod
+from odemis.driver import smaract
 from odemis.util import test
+import odemis.model as model
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -38,12 +39,11 @@ COMP_ARGS = {
     "rtol": 1e-3,
     }
 
-CONFIG = {"name": "Triglide",
+CONFIG_5DOF = {"name": "5DOF",
         "role": "stage",
         "ref_on_init": True,
         "linear_speed": 0.001,  # m/s
         "locator": "network:sn:MCS2-00001602",
-        # "locator": "fake",
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -72,15 +72,18 @@ CONFIG = {"name": "Triglide",
         },
 }
 
+if TEST_NOHW:
+    CONFIG_5DOF['locator'] = 'fake'
 
-class TestTriglide(unittest.TestCase):
+
+class Test5DOF(unittest.TestCase):
     """
-    Tests cases for the SmarPod actuator driver
+    Tests cases for the SmarAct MC controller
     """
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = smarpod.SmarAct_MC(**CONFIG)
+        cls.dev = smaract.MC_5DOF(**CONFIG_5DOF)
 
     @classmethod
     def tearDownClass(cls):
@@ -112,9 +115,9 @@ class TestTriglide(unittest.TestCase):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.1, 'ry': 0, 'rz': 0.1}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'ry': 0, 'rz': 0.001}
         pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz':0}
-        pos3 = {'x': 0, 'y': 0, 'z': 5e-3, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos3 = {'x': 0, 'y': 0, 'z': 1e-3, 'rx': 0, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -127,7 +130,7 @@ class TestTriglide(unittest.TestCase):
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0, 'rz': 0.002}
+        new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
@@ -137,7 +140,7 @@ class TestTriglide(unittest.TestCase):
 
         # Test cancellation by stopping
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.0021, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0, 'rz': 0.0001}
+        new_pos = {'x':2e-3, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -149,11 +152,11 @@ class TestTriglide(unittest.TestCase):
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'ry': 0, 'rz': 0}
+        shift = {'x': 1e-3, 'y':-1e-3, 'ry': 0, 'rz': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
-        test.assert_pos_almost_equal(smarpod.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+        test.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
@@ -162,5 +165,18 @@ class TestTriglide(unittest.TestCase):
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
 
-        new_pos = smarpod.add_coord(smarpod.add_coord(smarpod.add_coord(old_pos, shift), shift), shift)
+        new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
         test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+
+    def test_pivot_set(self):
+        # Test setting the pivot to some value through metadata
+        old_pos = self.dev.position.value
+        new_pivot = {'x': 0.05, 'y': 0.05, 'z': 0.01}
+        self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+        test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+
+        old_pos = self.dev.position.value
+        new_pivot = {'x': 0.01, 'y':-0.05, 'z': 0.01}
+        self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+        test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+
