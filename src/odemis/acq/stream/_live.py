@@ -332,9 +332,33 @@ class SEMStream(LiveStream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-    def _startAcquisition(self, future=None):
-        # Note: blank => unblank, is done automatically by the driver
+    def _prepare_opm(self):
+        # unblank the beam, if the driver doesn't support "auto" mode (= None)
+        try:
+            if (model.hasVA(self._emitter, "blanker")
+                and not None in self._emitter.blanker.choices
+               ):
+                # Note: we assume that this is blocking, until the e-beam is
+                # ready to acquire an image.
+                self._emitter.blanker.value = False
+        except Exception:
+            logging.exception("Failed to disable the blanker")
 
+        return super(SEMStream, self)._prepare_opm()
+
+    def _onActive(self, active):
+        super(SEMStream, self)._onActive(active)
+        if not active:
+            # blank the beam
+            try:
+                if (model.hasVA(self._emitter, "blanker")
+                    and not None in self._emitter.blanker.choices
+                   ):
+                    self._emitter.blanker.value = True
+            except Exception:
+                logging.exception("Failed to enable the blanker")
+
+    def _startAcquisition(self, future=None):
         # update Hw settings to our own ROI
         self._applyROI()
 
