@@ -30,7 +30,6 @@ from odemis import model
 from odemis.util import spectrum, img, fluo
 import os
 import time
-import codecs
 
 
 # User-friendly name
@@ -665,6 +664,15 @@ def _parse_physical_data(pdgroup, da):
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
+        # make sure we can read both bytes (HDF5 ascii) and unicode (HDF5 utf8) metadata
+        # That's important because Python 2 strings are stored as bytes (ie ascii), while Python 3 strings
+        # (unicode) are always stored as utf-8.
+        # This forces all the strings to be unicode
+        def read_str(s):
+            if isinstance(s, bytes):
+                s = s.decode('utf8')
+            return s
+
         read_metadata(pdgroup, i, md, "ExcitationWavelength", model.MD_IN_WL, converter=float)
         read_metadata(pdgroup, i, md, "EmissionWavelength", model.MD_OUT_WL, converter=float)
         read_metadata(pdgroup, i, md, "Magnification", model.MD_LENS_MAG, converter=float)
@@ -690,9 +698,7 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE, converter=float)
         read_metadata(pdgroup, i, md, "ParabolaF", model.MD_AR_PARABOLA_F, converter=float)
         # polarization analyzer
-        # use codecs.decode to make sure bytes (python2 str format) are read properly
-        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE,
-                      converter=lambda s: codecs.decode(s, "utf8"))
+        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE, converter=read_str)
         read_metadata(pdgroup, i, md, "QuarterWavePlate", model.MD_POL_POS_QWP, converter=float)
         read_metadata(pdgroup, i, md, "LinearPolarizer", model.MD_POL_POS_LINPOL, converter=float)
         # streak camera
