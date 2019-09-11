@@ -306,11 +306,11 @@ class TimelapsePlugin(Plugin):
     def _stop_saving_threads(self):
         """
         Blocks until all the data has been stored
-        Can be called multiple times in a raw
+        Can be called multiple times in a row
         """
         # Indicate to all the threads that they should stop
-        for t in self._sthreads:
-            self._to_store.put((None, None))  # Special "quit" message
+        for _ in self._sthreads:
+            self._to_store.put((None, None))  # Special "quit" message for each thread
 
         # Wait for all the threads to complete
         self._to_store.join()
