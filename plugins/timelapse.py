@@ -44,13 +44,15 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util.dataio import splitext
 import os
+import queue
+import threading
 import time
 import wx
 
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -102,6 +104,10 @@ class TimelapsePlugin(Plugin):
 
         self._dlg = None
         self.addMenu("Acquisition/Timelapse...\tCtrl+T", self.start)
+
+        self._to_store = queue.Queue()  # queue of tuples (str, [DataArray]) for saving data
+        self._sthreads = []  # the saving threads
+        self._exporter = None  # dataio exporter to use
 
     def _get_new_filename(self):
         conf = get_acqui_conf()
@@ -267,6 +273,57 @@ class TimelapsePlugin(Plugin):
 
         dlg.Destroy()
 
+    # Functions to handle the storage of the data in parallel threads
+
+    def _saving_thread(self, i):
+        try:
+            while True:
+                fn, das = self._to_store.get()
+                if fn is None:
+                    self._to_store.task_done()
+                    return
+                logging.info("Saving data %s in thread %d", fn, i)
+                self._exporter.export(fn, das)
+                self._to_store.task_done()
+        except Exception:
+            logging.exception("Failure in the saving thread")
+        finally:
+            logging.debug("Saving thread %d done", i)
+
+    def _start_saving_threads(self, n=4):
+        """
+        n (int >= 1): number of threads
+        """
+        if self._sthreads:
+            logging.warning("The previous saving threads were not stopped, stopping now")
+            self._stop_saving_threads()
+
+        for i in range(n):
+            t = threading.Thread(target=self._saving_thread, args=(i,))
+            t.start()
+            self._sthreads.append(t)
+
+    def _stop_saving_threads(self):
+        """
+        Blocks until all the data has been stored
+        Can be called multiple times in a row
+        """
+        # Indicate to all the threads that they should stop
+        for _ in self._sthreads:
+            self._to_store.put((None, None))  # Special "quit" message for each thread
+
+        # Wait for all the threads to complete
+        self._to_store.join()
+        for t in self._sthreads:
+            t.join()
+        self._sthreads = []
+
+    def _save_data(self, fn, das):
+        """
+        Queue the requested DataArrays to be stored in the given file
+        """
+        self._to_store.put((fn, das))
+
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = main_data.tab.value.streambar_controller
@@ -278,9 +335,11 @@ class TimelapsePlugin(Plugin):
         ss, last_ss = self._get_acq_streams()
 
         fn = self.filename.value
-        exporter = dataio.find_fittest_converter(fn)
+        self._exporter = dataio.find_fittest_converter(fn)
         bs, ext = splitext(fn)
         fn_pat = bs + "-%.5d" + ext
+
+        self._start_saving_threads(4)
 
         sacqt = acq.estimateTime(ss)
         intp = max(0, p - sacqt)
@@ -292,36 +351,41 @@ class TimelapsePlugin(Plugin):
 
         # TODO: if drift correction, use it over all the time
 
-        f = model.ProgressiveFuture()
-        f.task_canceller = lambda l: True  # To allow cancelling while it's running
-        f.set_running_or_notify_cancel()  # Indicate the work is starting now
-        dlg.showProgress(f)
+        try:
+            f = model.ProgressiveFuture()
+            f.task_canceller = lambda l: True  # To allow cancelling while it's running
+            f.set_running_or_notify_cancel()  # Indicate the work is starting now
+            dlg.showProgress(f)
 
-        for i in range(nb):
-            left = nb - i
-            dur = sacqt * left + intp * (left - 1)
-            if left == 1 and last_ss:
-                ss += last_ss
-                dur += acq.estimateTime(ss) - sacqt
+            for i in range(nb):
+                left = nb - i
+                dur = sacqt * left + intp * (left - 1)
+                if left == 1 and last_ss:
+                    ss += last_ss
+                    dur += acq.estimateTime(ss) - sacqt
 
-            startt = time.time()
-            f.set_progress(end=startt + dur)
-            das, e = acq.acquire(ss).result()
-            if f.cancelled():
-                dlg.resumeSettings()
-                return
+                startt = time.time()
+                f.set_progress(end=startt + dur)
+                das, e = acq.acquire(ss).result()
+                if f.cancelled():
+                    dlg.resumeSettings()
+                    return
 
-            exporter.export(fn_pat % (i,), das)
+                self._save_data(fn_pat % (i,), das)
 
-            # Wait the period requested, excepted the last time
-            if left > 1:
-                sleept = (startt + p) - time.time()
-                if sleept > 0:
-                    time.sleep(sleept)
-                else:
-                    logging.info("Immediately starting next acquisition, %g s late", -sleept)
+                # Wait the period requested, excepted the last time
+                if left > 1:
+                    sleept = (startt + p) - time.time()
+                    if sleept > 0:
+                        time.sleep(sleept)
+                    else:
+                        logging.info("Immediately starting next acquisition, %g s late", -sleept)
 
-        f.set_result(None)  # Indicate it's over
+            self._stop_saving_threads()  # Wait for all the data to be stored
+            f.set_result(None)  # Indicate it's over
+        finally:
+            # Make sure the threads are stopped even in case of error
+            self._stop_saving_threads()
 
         # self.showAcquisition(self.filename.value)
         dlg.Close()
