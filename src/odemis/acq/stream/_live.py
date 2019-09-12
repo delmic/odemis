@@ -968,6 +968,8 @@ class StreakCamStream(CameraStream):
 
         super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
+        self._active = False  # variable keep track if stream is active/inactive
+
         # duplicate VAs for GUI except .timeRange VA (displayed on left for calibration)
         streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
         self._det_vas.update(streak_unit_vas)
@@ -998,23 +1000,28 @@ class StreakCamStream(CameraStream):
 
     # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):
-        self.active = super(StreakCamStream, self)._is_active_setter(active)
-        if self.active:
-            # make the full MCPGain range available when stream is active
-            self.detMCPGain.range = self.streak_unit.MCPGain.range
-        else:
-            self._resetMCPGainHW()
-            # only allow values <= current MCPGain value for HW safety reasons when stream inactive
-            self.detMCPGain.range = (0, self.detMCPGain.value)
-        return self.active
+        self._active = super(StreakCamStream, self)._is_active_setter(active)
 
-    def _resetMCPGainHW(self):
-        """"Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
-        self.streak_unit.MCPGain.value = 0
+        if self.is_active.value != self._active:  # changing from previous value?
+            if self._active:
+                # make the full MCPGain range available when stream is active
+                self.detMCPGain.range = self.streak_unit.MCPGain.range
+            else:
+                # Set HW MCPGain VA = 0, but keep GUI VA = previous value
+                try:
+                    self.streak_unit.MCPGain.value = 0
+                except Exception:
+                    # Can happen if the hardware is not responding. In such case,
+                    # let's still pause the stream.
+                    logging.exception("Failed to reset the streak unit MCP Gain")
+
+                # only allow values <= current MCPGain value for HW safety reasons when stream inactive
+                self.detMCPGain.range = (0, self.detMCPGain.value)
+        return self._active
 
     def _OnStreakSettings(self, value):
         """Callback, which sets MCPGain GUI VA = 0,
-        if .timeRange and/or .streakMode GUI VAs have changed."""
+        if .streakMode VA has changed."""
         self.detMCPGain.value = 0  # set GUI VA 0
         self._OnMCPGain(value)  # update the .MCPGain VA
 
@@ -1022,7 +1029,7 @@ class StreakCamStream(CameraStream):
         """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
         only values <= current value are allowed.
         If stream is active the full range is available."""
-        if not self.active:
+        if not self._active:
             self.detMCPGain.range = (0, self.detMCPGain.value)
 
 

@@ -1823,11 +1823,15 @@ class StreamBarController(object):
                 # Make sure that other streams are not updated (and it also
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
-                    if s != stream and s is not spots:
-                        self._prepareAndActivate(s, False)
-                        s.should_update.unsubscribe(cb)  # don't inform us of that change
-                        s.should_update.value = False
-                        s.should_update.subscribe(cb)
+                    if (s not in (stream, spots) and
+                        (s.should_update.value or s.is_active.value)):
+                        try:
+                            self._prepareAndActivate(s, False)
+                            s.should_update.unsubscribe(cb)  # don't inform us of that change
+                            s.should_update.value = False
+                            s.should_update.subscribe(cb)
+                        except Exception:
+                            logging.exception("Failed to stop stream %s", stream.name.value)
 
                 # prepare and activate this stream
                 # It's important it's last, to ensure hardware settings don't
