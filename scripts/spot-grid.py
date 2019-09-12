@@ -11,26 +11,25 @@ This script provides a command line interface for displaying a video with a spot
 from __future__ import division, print_function
 
 import argparse
-import wx.lib.wxcairo  # should be imported before cairo
 import cairo
 import logging
 import numpy
-from odemis import model
-from odemis.acq.align.spot import FindGridSpots
-from odemis.driver import ueye
-from odemis.gui.util.img import NDImage2wxImage
-from odemis.util import img
-from odemis.util.driver import get_backend_status, BACKEND_RUNNING
-from scipy import ndimage
 import sys
 import threading
 import wx
+import wx.lib.wxcairo  # should be imported before cairo
+
+from odemis import model
+from odemis.acq.align.spot import FindGridSpots
+from odemis.cli.video_displayer import VideoDisplayer
+from odemis.driver import ueye
+from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 
 MAX_WIDTH = 2000  # px
 PIXEL_SIZE_UM = 3.45 / 50.
 
 
-class VideoDisplayer(object):
+class VideoDisplayerGrid(VideoDisplayer):
     """
     Very simple display for a continuous flow of images as a window with an overlay of a grid of spots.
     It should be pretty much platform independent.
@@ -52,36 +51,8 @@ class VideoDisplayer(object):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        if data.ndim == 3 and 3 in data.shape:  # RGB
-            rgb = img.ensureYXC(data)
-        elif numpy.prod(data.shape) == data.shape[-1]:  # 1D image => bar plot
-            # TODO: add "(plot)" to the window title
-            # Create a simple bar plot of X x 400 px
-            lenx = data.shape[-1]
-            if lenx > MAX_WIDTH:
-                binning = lenx // MAX_WIDTH
-                data = data[..., 0::binning]
-                logging.debug("Compressed data from %d to %d elements", lenx, data.shape[-1])
-                lenx = data.shape[-1]
-            leny = 400
-            miny = min(0, data.min())
-            maxy = data.max()
-            diffy = maxy - miny
-            if diffy == 0:
-                diffy = 1
-            logging.info("Plot data from %s to %s", miny, maxy)
-            rgb = numpy.zeros((leny, lenx, 3), dtype=numpy.uint8)
-            for i, v in numpy.ndenumerate(data):
-                # TODO: have the base at 0, instead of miny, so that negative values are columns going down
-                h = leny - int(((v - miny) * leny) / diffy)
-                rgb[h:-1, i[-1], :] = 255
-        else:  # Greyscale (hopefully)
-            mn, mx, mnp, mxp = ndimage.extrema(data)
-            logging.info("Image data from %s to %s", mn, mx)
-            rgb = img.DataArray2RGB(data)  # auto brightness/contrast
         self.app.spots, self.app.translation, self.app.scaling, self.app.rotation = FindGridSpots(data, self.gridsize)
-        self.app.img = NDImage2wxImage(rgb)
-        wx.CallAfter(self.app.update_view)
+        super(VideoDisplayerGrid, self).new_image(data)
 
     def waitQuit(self):
         """
@@ -125,7 +96,7 @@ class ImageWindowApp(wx.App):
         ctx = cairo.Context(spot_surface)
         ctx.set_source_rgb(0.5, 0.1, 0.1)
         ctx.scale(width, height)
-        spots = numpy.abs(self.spots) / numpy.array([width, height])
+        spots = numpy.abs(self.spots) * self.magn / numpy.array([width, height])
         spot_temp = numpy.array([0, 0])
         for spot in spots:
             ctx.translate(*spot_temp)  # translate back to the origin since spot_temp is negative
@@ -200,7 +171,7 @@ def live_display(ccd, dataflow, kill_ccd=True, gridsize=None):
     gridsize: size of the grid of spots.
     """
     # create a window
-    window = VideoDisplayer("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize)
+    window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize)
     im_passer = ImagePasser()
     t = threading.Thread(target=image_update, args=(im_passer, window))
     t.daemon = True

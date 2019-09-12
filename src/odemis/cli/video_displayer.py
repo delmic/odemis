@@ -31,6 +31,7 @@ import wx
 
 MAX_WIDTH = 2000
 
+
 class VideoDisplayer(object):
     '''
     Very simple display for a continuous flow of images as a window
@@ -98,6 +99,19 @@ class VideoDisplayer(object):
             rgb = img.DataArray2RGB(data) # auto brightness/contrast
 
         self.app.img = NDImage2wxImage(rgb)
+        disp_size = wx.Display(0).GetGeometry().GetSize()
+        if disp_size[0] < rgb.shape[1] or disp_size[1] < rgb.shape[0]:
+            asp_ratio = rgb.shape[1] / rgb.shape[0]
+            if disp_size[0] / disp_size[1] < asp_ratio:
+                self.app.magn = disp_size[0] / rgb.shape[1]
+            else:
+                self.app.magn = disp_size[1] / rgb.shape[0]
+            self.app.img.Rescale(rgb.shape[1] * self.app.magn,
+                                 rgb.shape[0] * self.app.magn,
+                                 rgb.shape[2])
+        else:
+            self.app.magn = 1
+
         wx.CallAfter(self.app.update_view)
 
     def waitQuit(self):
