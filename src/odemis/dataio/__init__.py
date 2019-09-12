@@ -111,10 +111,12 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
     allowlossy: cf get_available_formats()
     returns (dataio. Module): the right exporter
     """
+    fn_low = filename.lower()  # case insensitive
+
     fmt2ext = get_available_formats(mode, allowlossy=True)
     for fmt in fmt2ext.keys():
         conv = get_converter(fmt)
-        if hasattr(conv, "PREFIXES") and any(filename.startswith(p) for p in conv.PREFIXES):
+        if hasattr(conv, "PREFIXES") and any(fn_low.startswith(p) for p in conv.PREFIXES):
             return conv
 
     # Find the extension of the file
@@ -127,7 +129,7 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
     best_fmt = None
     for fmt, exts in get_available_formats(mode, allowlossy).items():
         for e in exts:
-            if filename.endswith(e) and len(e) > best_len:
+            if fn_low.endswith(e) and len(e) > best_len:
                 best_len = len(e)
                 best_fmt = fmt
 

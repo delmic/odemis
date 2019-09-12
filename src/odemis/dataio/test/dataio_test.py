@@ -50,14 +50,19 @@ class TestDataIO(unittest.TestCase):
         # input args -> format name
         test_io = [(("coucou.h5",), "HDF5"),
                    (("coucou.le monde.hdf5",), "HDF5"),
+                   (("coucou.H5",), "HDF5"),
                    (("some/fancy/../path/file.tiff",), "TIFF"),
                    (("some/fancy/../.hdf5/h5.ome.tiff",), "TIFF"),
                    (("a/b/d.tiff",), "TIFF"),
                    (("a/b/d.ome.tiff",), "TIFF"),
+                   (("a/b/d.OME.tiff",), "TIFF"),
+                   (("a/b/d.OME.TIFF",), "TIFF"),
                    (("a/b/d.h5",), "HDF5"),
                    (("a/b/d.b",), "TIFF"), # fallback to tiff
                    (("d.hdf5",), "HDF5"),
+                   (("d.HDF5",), "HDF5"),
                    (("a/b/d.0.ome.tiff",), "Serialized TIFF"),
+                   (("a/b/d.0.ome.TIFF",), "Serialized TIFF"),
                    ]
         for args, fmt_exp in test_io:
             fmt_mng = find_fittest_converter(*args)
@@ -68,13 +73,20 @@ class TestDataIO(unittest.TestCase):
         # input args -> format name
         test_io = [(("coucou.h5",), "HDF5"),
                    (("coucou.le monde.hdf5",), "HDF5"),
+                   (("coucou.H5",), "HDF5"),
                    (("some/fancy/../path/file.tiff",), "TIFF"),
                    (("some/fancy/../.hdf5/h5.ome.tiff",), "TIFF"),
+                   (("catmaids://fafb.catmaid.virtualflybrain.org/?pid=1&sid0=1",), "Catmaid"),
+                   (("catmaid://catmaid.neurodata.io/catmaid/",), "Catmaid"),
+                   (("CATMAID://catmaid.neurodata.io/catmaid/",), "Catmaid"),
                    (("a/b/d.tiff",), "TIFF"),
                    (("a/b/d.ome.tiff",), "TIFF"),
+                   (("a/b/d.OME.tiff",), "TIFF"),
+                   (("a/b/d.OME.TIFF",), "TIFF"),
                    (("a/b/d.h5",), "HDF5"),
                    (("a/b/d.b",), "TIFF"),  # fallback to tiff
                    (("d.hdf5",), "HDF5"),
+                   (("d.HDF5",), "HDF5"),
                    (("a/b/d.0.ome.tiff",), "TIFF"),  # Serialised TIFF must be opened by TIFF
                    ]
         for args, fmt_exp in test_io:
