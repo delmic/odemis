@@ -38,7 +38,7 @@ import math
 from odemis import model, dataio, acq
 from odemis.acq import stream
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
-    SpectrumStream, UNDEFINED_ROI, StaticStream
+    SpectrumStream, UNDEFINED_ROI, StaticStream, LiveStream, Stream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -52,7 +52,7 @@ import wx
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "1.3"
+    __version__ = "2.0"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -90,7 +90,7 @@ class TimelapsePlugin(Plugin):
         self.period = model.FloatContinuous(10, (1e-3, 10000), unit="s",
                                             setter=self._setPeriod)
         # TODO: prevent period < acquisition time of all streams
-        self.numberOfAcquisitions = model.IntContinuous(100, (2, 1000))
+        self.numberOfAcquisitions = model.IntContinuous(100, (2, 100000))
         self.semOnlyOnLast = model.BooleanVA(False)
         self.filename = model.StringVA("a.h5")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
@@ -144,7 +144,7 @@ class TimelapsePlugin(Plugin):
             # but here it's better to be a little optimistic and allow the user
             # to pick a really short period (if each stream has a very short
             # acquisition time).
-            acqt = max(1e-3, acqt - stream.Stream.SETUP_OVERHEAD)
+            acqt = max(1e-3, acqt - Stream.SETUP_OVERHEAD)
             tot_time += acqt
 
         return min(max(tot_time, period), self.period.range[1])
@@ -271,6 +271,8 @@ class TimelapsePlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        dlg.view.stream_tree.flat.unsubscribe(self._update_exp_dur)
+
         dlg.Destroy()
 
     # Functions to handle the storage of the data in parallel threads
@@ -330,16 +332,139 @@ class TimelapsePlugin(Plugin):
         stream_paused = str_ctrl.pauseStreams()
         dlg.pauseSettings()
 
-        nb = self.numberOfAcquisitions.value
-        p = self.period.value
+        self._start_saving_threads(4)
+
         ss, last_ss = self._get_acq_streams()
+        sacqt = acq.estimateTime(ss)
+        p = self.period.value
+        nb = self.numberOfAcquisitions.value
+
+        try:
+            # If the user just wants to acquire as fast as possible, and there
+            # a single stream, we can use an optimised version
+            if (len(ss) == 1 and isinstance(ss[0], LiveStream)
+                and nb >= 2
+                and sacqt < 5 and p < sacqt + Stream.SETUP_OVERHEAD
+               ):
+                logging.info("Fast timelapse detected, will acquire as fast as possible")
+                self._fast_acquire_one(dlg, ss[0], last_ss)
+            else:
+                self._acquire_multi(dlg, ss, last_ss)
+        finally:
+            # Make sure the threads are stopped even in case of error
+            self._stop_saving_threads()
+
+        # self.showAcquisition(self.filename.value)
+
+        logging.debug("Closing dialog")
+        dlg.Close()
+
+    def _fast_acquire_one(self, dlg, st, last_ss):
+        """
+        Acquires one stream, *as fast as possible* (ie, the period is not used).
+        Only works with LiveStreams (and not with MDStreams)
+        st (LiveStream)
+        last_ss (list of Streams): all the streams to be acquire on the last time
+        """
+        # Essentially, we trick a little bit the stream, by convincing it that
+        # we want a live view, but instead of display the data, we store them.
+        # It's much faster because we don't have to stop/start the detector between
+        # each acquisition.
+        nb = self.numberOfAcquisitions.value
 
         fn = self.filename.value
         self._exporter = dataio.find_fittest_converter(fn)
         bs, ext = splitext(fn)
         fn_pat = bs + "-%.5d" + ext
 
-        self._start_saving_threads(4)
+        self._acq_completed = threading.Event()
+
+        f = model.ProgressiveFuture()
+        f.task_canceller = self._cancel_fast_acquire
+        f._stream = st
+        if last_ss:
+            nb -= 1
+            extra_dur = acq.estimateTime([st] + last_ss)
+        else:
+            extra_dur = 0
+        self._hijack_live_stream(st, f, nb, fn_pat, extra_dur)
+
+        try:
+            # Start acquisition and wait until it's done
+            f.set_running_or_notify_cancel()  # Indicate the work is starting now
+            dlg.showProgress(f)
+            st.is_active.value = True
+            self._acq_completed.wait()
+
+            if f.cancelled():
+                dlg.resumeSettings()
+                return
+        finally:
+            st.is_active.value = False  # just to be extra sure it's stopped
+            logging.debug("Restoring stream %s", st)
+            self._restore_live_stream(st)
+
+        # last "normal" acquisition, if needed
+        if last_ss:
+            logging.debug("Acquiring last acquisition, with all the streams")
+            ss = [st] + last_ss
+            f.set_progress(end=time.time() + acq.estimateTime(ss))
+            das, e = acq.acquire(ss).result()
+            self._save_data(fn_pat % (nb,), das)
+
+        self._stop_saving_threads()  # Wait for all the data to be stored
+        f.set_result(None)  # Indicate it's over
+
+    def _cancel_fast_acquire(self, f):
+        f._stream.is_active.value = False
+        self._acq_completed.set()
+        return True
+
+    def _hijack_live_stream(self, st, f, nb, fn_pat, extra_dur=0):
+        st._old_shouldUpdateHistogram = st._shouldUpdateHistogram
+        st._shouldUpdateHistogram = lambda: None
+        self._data_received = 0
+
+        dur_one = st.estimateAcquisitionTime() - Stream.SETUP_OVERHEAD
+
+        # Function that will be called after each new raw data has been received
+        def store_raw_data():
+            i = self._data_received
+            self._data_received += 1
+            logging.debug("Received data %d", i)
+            if self._data_received == nb:
+                logging.debug("Stopping the stream")
+                st.is_active.value = False
+                self._acq_completed.set()
+            elif self._data_received > nb:
+                # sometimes it goes too fast, and an extra data is received
+                logging.debug("Skipping extra data")
+                return
+
+            self._save_data(fn_pat % (i,), [st.raw[0]])
+
+            # Update progress bar
+            left = nb - i
+            dur = dur_one * left + extra_dur
+            f.set_progress(end=time.time() + dur)
+
+        st._old_shouldUpdateImage = st._shouldUpdateImage
+        st._shouldUpdateImage = store_raw_data
+
+    def _restore_live_stream(self, st):
+        st._shouldUpdateImage = st._old_shouldUpdateImage
+        del st._old_shouldUpdateImage
+        st._shouldUpdateHistogram = st._old_shouldUpdateHistogram
+        del st._old_shouldUpdateHistogram
+
+    def _acquire_multi(self, dlg, ss, last_ss):
+        p = self.period.value
+        nb = self.numberOfAcquisitions.value
+
+        fn = self.filename.value
+        self._exporter = dataio.find_fittest_converter(fn)
+        bs, ext = splitext(fn)
+        fn_pat = bs + "-%.5d" + ext
 
         sacqt = acq.estimateTime(ss)
         intp = max(0, p - sacqt)
@@ -351,41 +476,34 @@ class TimelapsePlugin(Plugin):
 
         # TODO: if drift correction, use it over all the time
 
-        try:
-            f = model.ProgressiveFuture()
-            f.task_canceller = lambda l: True  # To allow cancelling while it's running
-            f.set_running_or_notify_cancel()  # Indicate the work is starting now
-            dlg.showProgress(f)
+        f = model.ProgressiveFuture()
+        f.task_canceller = lambda l: True  # To allow cancelling while it's running
+        f.set_running_or_notify_cancel()  # Indicate the work is starting now
+        dlg.showProgress(f)
 
-            for i in range(nb):
-                left = nb - i
-                dur = sacqt * left + intp * (left - 1)
-                if left == 1 and last_ss:
-                    ss += last_ss
-                    dur += acq.estimateTime(ss) - sacqt
+        for i in range(nb):
+            left = nb - i
+            dur = sacqt * left + intp * (left - 1)
+            if left == 1 and last_ss:
+                ss += last_ss
+                dur += acq.estimateTime(ss) - sacqt
 
-                startt = time.time()
-                f.set_progress(end=startt + dur)
-                das, e = acq.acquire(ss).result()
-                if f.cancelled():
-                    dlg.resumeSettings()
-                    return
+            startt = time.time()
+            f.set_progress(end=startt + dur)
+            das, e = acq.acquire(ss).result()
+            if f.cancelled():
+                dlg.resumeSettings()
+                return
 
-                self._save_data(fn_pat % (i,), das)
+            self._save_data(fn_pat % (i,), das)
 
-                # Wait the period requested, excepted the last time
-                if left > 1:
-                    sleept = (startt + p) - time.time()
-                    if sleept > 0:
-                        time.sleep(sleept)
-                    else:
-                        logging.info("Immediately starting next acquisition, %g s late", -sleept)
+            # Wait the period requested, excepted the last time
+            if left > 1:
+                sleept = (startt + p) - time.time()
+                if sleept > 0:
+                    time.sleep(sleept)
+                else:
+                    logging.info("Immediately starting next acquisition, %g s late", -sleept)
 
-            self._stop_saving_threads()  # Wait for all the data to be stored
-            f.set_result(None)  # Indicate it's over
-        finally:
-            # Make sure the threads are stopped even in case of error
-            self._stop_saving_threads()
-
-        # self.showAcquisition(self.filename.value)
-        dlg.Close()
+        self._stop_saving_threads()  # Wait for all the data to be stored
+        f.set_result(None)  # Indicate it's over
