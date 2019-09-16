@@ -151,6 +151,15 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
                 self._polarization = s.polarization
                 self._acquireAllPol = s.acquireAllPol
 
+        # Pick integrationTime if found on a stream (typically, optical). In this case, for each ebeam pos,
+        # the (short) acquisition will be repeated until the integration time is reached.
+        self._integrationTime = None
+        for s in streams:
+            if hasattr(s, "integrationTime"):
+                # get the VAs
+                self._integrationTime = s.integrationTime
+                self._integrationCounts = s.integrationCounts
+
         # acquisition end event
         self._acq_done = threading.Event()
 
@@ -241,12 +250,12 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         for l in self.leeches:
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
-            if hasattr(self._sccd, "integrationTime"):
+            if self._integrationTime:
                 # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
-                integration_count = int(math.ceil(self._sccd.integrationTime.value / self._ccd.exposureTime.value))
-                if integration_count != self._sccd.integrationCounts.value:
+                integration_count = int(math.ceil(self._integrationTime.value / self._ccd.exposureTime.value))
+                if integration_count != self._integrationCounts.value:
                     logging.debug("Integration count of %d, does not match integration count of %d as expected",
-                                  integration_count, self._sccd.integrationCounts.value)
+                                  integration_count, self._integrationCounts.value)
                 if integration_count > 1:
                     shape = (len(pol_pos), rep[1], rep[0], integration_count)  # overwrite shape
 
@@ -827,9 +836,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             res = self._sccd._getDetectorVA("resolution").value
             readout = numpy.prod(res) / ro_rate
 
-            if hasattr(self._sccd, "integrationTime"):
-                exp = self._sccd.integrationTime.value  # get the total exp time
-                readout *= self._sccd.integrationCounts.value
+            if self._integrationTime:
+                exp = self._integrationTime.value  # get the total exp time
+                readout *= self._integrationCounts.value
 
             else:
                 exp = self._sccd._getDetectorVA("exposureTime").value
@@ -853,16 +862,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
         :returns: exp + readout (float): Estimated time for a whole (but not integrated) CCD image.
                   integration_count (int): Number of images to integrate to match the requested exposure time.
         """
-        if model.hasVA(self._sccd, "integrationTime"):
+        if self._integrationTime:
             # calculate exposure time to be set on detector
-            exp = self._sccd.integrationTime.value / self._sccd.integrationCounts.value  # get the exp time from stream
+            exp = self._integrationTime.value / self._integrationCounts.value  # get the exp time from stream
             self._ccd.exposureTime.value = self._ccd.exposureTime.clip(exp)  # set the exp time on the HW VA
             # calculate the integrationCount using the actual value from the HW, to be safe in case the HW sets a
             # slightly different value, than the stream VA shows
-            integration_count = int(math.ceil(self._sccd.integrationTime.value / self._ccd.exposureTime.value))
-            if integration_count != self._sccd.integrationCounts.value:
+            integration_count = int(math.ceil(self._integrationTime.value / self._ccd.exposureTime.value))
+            if integration_count != self._integrationCounts.value:
                 logging.debug("Integration count of %d, does not match integration count of %d as expected",
-                              integration_count, self._sccd.integrationCounts.value)
+                              integration_count, self._integrationCounts.value)
         else:
             # stream has exposure time
             exp = self._sccd._getDetectorVA("exposureTime").value  # s
@@ -1399,8 +1408,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
         if self._analyzer is not None:
             raise NotImplementedError("Scan Stage is not yet supported with polarimetry hardware.")
 
-        if hasVA(self._sccd, "integrationTime"):
-            if self._sccd.integrationTime.value > self._sccd.exposureTime.range[1]:
+        if self._integrationTime:
+            if self._integrationTime.value > self._sccd.exposureTime.range[1]:
                 raise NotImplementedError("Requested exposure time is longer than the maximum exposure time of the "
                                           "detector. Image integration is not yet supported for scan stage "
                                           "acquisitions.")
