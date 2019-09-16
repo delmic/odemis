@@ -237,7 +237,7 @@ def get_spectrum_efficiency(das):
     return ret
 
 
-def spectrum_efficiency_and_bg_correction(data, bckg=None, coef=None):
+def apply_corrections(data, bckg=None, coef=None):
     """
     Apply the background correction and the spectrum efficiency compensation
     factors to the given data if applicable.

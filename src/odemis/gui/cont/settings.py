@@ -520,11 +520,6 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_acqfile = None  # panel containing info about file loaded
         self._pnl_calibration = None  # panel allowing to load background correction and calibration files
 
-        self._arfile_ctrl = None
-        self._spec_bckfile_ctrl = None
-        self._temporalspec_bckfile_ctrl = None
-        self._specfile_ctrl = None
-
         self._create_controls()
 
         # Subscribe to the VAs that influence how the settings look.
@@ -566,46 +561,42 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Display with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
-        self._arfile_ctrl = self._pnl_calibration.add_file_button(
+        self._ar_bckfile_entry = self._pnl_calibration.add_file_button(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._ar_bckfile_entry = self._pnl_calibration.entries[0]
+            clearlabel="None", wildcard=wildcards)
         self._ar_bckfile_entry.lbl_ctrl.Show(False)
         self._ar_bckfile_entry.value_ctrl.Show(False)
-        self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
+        self._ar_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
         # Display for spectrum/temporal spectrum background + efficiency compensation file information
         # They are displayed only if there are spectrum streams or temporal spectrum streams
-        self._spec_bckfile_ctrl = self._pnl_calibration.add_file_button(
+        self._spec_bckfile_entry = self._pnl_calibration.add_file_button(
             "Spectrum background",
             tooltip="Spectrum background acquisition file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._spec_bckfile_entry = self._pnl_calibration.entries[1]
+            clearlabel="None", wildcard=wildcards)
         self._spec_bckfile_entry.lbl_ctrl.Show(False)
         self._spec_bckfile_entry.value_ctrl.Show(False)
-        self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
+        self._spec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._temporalspec_bckfile_ctrl = self._pnl_calibration.add_file_button(
+        self._temporalspec_bckfile_entry = self._pnl_calibration.add_file_button(
             "Temporal spectrum background",
             tooltip="Temporal spectrum background acquisition file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._temporalspec_bckfile_entry = self._pnl_calibration.entries[2]
+            clearlabel="None", wildcard=wildcards)
         self._temporalspec_bckfile_entry.lbl_ctrl.Show(False)
         self._temporalspec_bckfile_entry.value_ctrl.Show(False)
-        self._temporalspec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
+        self._temporalspec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
         self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._pnl_calibration.add_file_button(
+        self._specfile_entry = self._pnl_calibration.add_file_button(
             "Spectrum correction",
             tooltip="Spectrum efficiency correction file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._specfile_entry = self._pnl_calibration.entries[3]
+            clearlabel="None", wildcard=wildcards)
         self._specfile_entry.lbl_ctrl.Show(False)
         self._specfile_entry.value_ctrl.Show(False)
-        self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+        self._specfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
         self._pnl_calibration.Refresh()
@@ -637,8 +628,8 @@ class AnalysisSettingsController(SettingsBarController):
                 self._pnl_acqfile.add_metadata(key, value)
 
             # Change default dir for the calibration files
-            for file_ctrl in (self._arfile_ctrl, self._spec_bckfile_ctrl,
-                              self._temporalspec_bckfile_ctrl, self._specfile_ctrl):
+            for file_ctrl in (self._ar_bckfile_entry.value_ctrl, self._spec_bckfile_entry.value_ctrl,
+                              self._temporalspec_bckfile_entry.value_ctrl, self._specfile_entry.value_ctrl):
                 file_ctrl.default_dir = file_info.file_path
 
         self._pnl_acqfile.Refresh()
@@ -654,10 +645,10 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
+                self._ar_bckfile_entry.value_ctrl.SetValue(self.tab_data.ar_cal.value)
                 return
             except Exception:
-                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
+                self._ar_bckfile_entry.value_ctrl.SetValue(self.tab_data.ar_cal.value)
                 raise
 
         self.tab_data.ar_cal.value = fn
@@ -672,17 +663,17 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                self._spec_bckfile_entry.value_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
                 return
             except Exception:
-                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                self._spec_bckfile_entry.value_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
                 raise
 
         self.tab_data.spec_bck_cal.value = fn
 
     def _on_temporalspec_bck_file_select(self, evt):
         """ Pass the selected spec background file on to the VA """
-        logging.debug("Temoral spectrum background file selected by user")
+        logging.debug("Temporal spectrum background file selected by user")
         fn = evt.selected_file or u""
         if self.setter_temporalspec_bck_file:
             try:
@@ -690,10 +681,10 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._temporalspec_bckfile_ctrl.SetValue(self.tab_data.temporalspec_bck_cal.value)
+                self._temporalspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.temporalspec_bck_cal.value)
                 return
             except Exception:
-                self._temporalspec_bckfile_ctrl.SetValue(self.tab_data.temoralspec_bck_cal.value)
+                self._temporalspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.temoralspec_bck_cal.value)
                 raise
 
         self.tab_data.temporalspec_bck_cal.value = fn
@@ -708,25 +699,25 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
+                self._specfile_entry.value_ctrl.SetValue(self.tab_data.spec_cal.value)
                 return
             except Exception:
-                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
+                self._specfile_entry.value_ctrl.SetValue(self.tab_data.spec_cal.value)
                 raise
 
         self.tab_data.spec_cal.value = fn
 
     def _on_ar_cal(self, val):
-        self._arfile_ctrl.SetValue(val)
+        self._ar_bckfile_entry.value_ctrl.SetValue(val)
 
     def _on_spec_bck_cal(self, val):
-        self._spec_bckfile_ctrl.SetValue(val)
+        self._spec_bckfile_entry.value_ctrl.SetValue(val)
 
     def _on_temporalspec_bck_cal(self, val):
-        self._temporalspec_bckfile_ctrl.SetValue(val)
+        self._temporalspec_bckfile_entry.value_ctrl.SetValue(val)
 
     def _on_spec_cal(self, val):
-        self._specfile_ctrl.SetValue(val)
+        self._specfile_entry.value_ctrl.SetValue(val)
 
     def show_calibration_panel(self, ar, spectrum, temporalspectrum):
         """ Show/hide the the angle resolved/spectrum/temporal spectrum panel

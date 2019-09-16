@@ -632,7 +632,7 @@ class StaticSpectrumStream(StaticStream):
             self.fitToRGB.subscribe(self.onFitToRGB)
 
         # the raw data after calibration
-        self.calibrated = model.VigilantAttribute(image)  # TODO is this the one shown in the view instead of .image?
+        self.calibrated = model.VigilantAttribute(image)
 
         if "acq_type" not in kwargs:
             if image.shape[0] > 1 and image.shape[1] > 1:
@@ -775,7 +775,7 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = data
             return
 
-        calibrated = calibration.spectrum_efficiency_and_bg_correction(data, bckg, coef)
+        calibrated = calibration.apply_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
