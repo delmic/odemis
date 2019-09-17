@@ -572,10 +572,12 @@ class StaticSpectrumStream(StaticStream):
 
         # TODO should be only available if data has spectrum dimension (e.g. chronograph)
         # The selected wavelength for a temporal spectrum display
-        self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
-                                                   range=(min_bw, max_bw),
-                                                   unit=unit_bw,
-                                                   setter=self._setWavelength)
+        # Is there wl data?
+        if image.shape[0] > 1:
+            self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
+                                                       range=(min_bw, max_bw),
+                                                       unit=unit_bw,
+                                                       setter=self._setWavelength)
 
         # Is there time data?
         if image.shape[1] > 1:

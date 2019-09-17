@@ -1807,7 +1807,7 @@ class TemporalSpectrumViewport(TwoDViewPort):
         super(TemporalSpectrumViewport, self).connect_stream(projs)
         stream, proj = self._stream, self._projection
 
-        if hasattr(stream, "selected_time"):
+        if hasattr(stream, "selected_time") and hasattr(stream, "selected_wavelength"):
             pos = self.canvas.markline_overlay.val
             pos.value = (stream.selected_wavelength.value, stream.selected_time.value)
 

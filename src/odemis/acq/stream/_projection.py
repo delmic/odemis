@@ -1680,8 +1680,9 @@ class SinglePointTemporalProjection(DataProjection):
         super(SinglePointTemporalProjection, self).__init__(stream)
         self.stream.selected_pixel.subscribe(self._on_selected_pixel)
         self.stream.selectionWidth.subscribe(self._on_selected_width)
-        self.stream.selected_wavelength.subscribe(self._on_selected_wl)
-        self.stream.calibrated.subscribe(self._on_new_spec_data)
+        if model.hasVA(self.stream, "selected_wavelength"):
+            self.stream.selected_wavelength.subscribe(self._on_selected_wl)
+            self.stream.calibrated.subscribe(self._on_new_spec_data)
         self._shouldUpdateImage()
 
     def _on_new_spec_data(self, _):
@@ -1702,7 +1703,10 @@ class SinglePointTemporalProjection(DataProjection):
             return None
         
         x, y = self.stream.selected_pixel.value
-        c = numpy.searchsorted(self.stream._wl_px_values, self.stream.selected_wavelength.value)
+        if model.hasVA(self.stream, "selected_wavelength"):
+            c = numpy.searchsorted(self.stream._wl_px_values, self.stream.selected_wavelength.value)
+        else:
+            c = 0
         chrono2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
 
         md = {model.MD_DIMS: "T"}
