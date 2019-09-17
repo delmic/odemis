@@ -628,9 +628,9 @@ class AnalysisSettingsController(SettingsBarController):
                 self._pnl_acqfile.add_metadata(key, value)
 
             # Change default dir for the calibration files
-            for file_ctrl in (self._ar_bckfile_entry.value_ctrl, self._spec_bckfile_entry.value_ctrl,
-                              self._temporalspec_bckfile_entry.value_ctrl, self._specfile_entry.value_ctrl):
-                file_ctrl.default_dir = file_info.file_path
+            for file_entry in (self._ar_bckfile_entry, self._spec_bckfile_entry,
+                               self._temporalspec_bckfile_entry, self._specfile_entry):
+                file_entry.value_ctrl.default_dir = file_info.file_path
 
         self._pnl_acqfile.Refresh()
 

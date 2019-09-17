@@ -775,7 +775,7 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = data
             return
 
-        calibrated = calibration.apply_corrections(data, bckg, coef)
+        calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
