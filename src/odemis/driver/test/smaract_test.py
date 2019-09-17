@@ -329,6 +329,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "locator": "network:sn:MCS2-00001604",
         "speed": 0.1,
         "accel": 0.001,
+        "hold_time": 1.0,
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -394,7 +395,7 @@ class TestTMCS2(unittest.TestCase):
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
-        self.assertNotEqual(round(difference, 4), 0)
+        self.assertNotEqual(round(difference, 5), 0)
 
         # Test cancellation by stopping
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()

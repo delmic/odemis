@@ -116,30 +116,29 @@ def dict_to_pose(pos, base=Pose()):
     Convert a coordinate dictionary (str) -> (double) to a Pose C struct
         pos: Coordinate dictionary (str) -> (double) of axis name to value
         base: a Pose that is used as a base in case you don't want to initialize
-            the C struct to default values of 0 in the case where not all axes
+            the C struct to unknown values in the case where not all axes
             are defined in the pos dict.
     returns: a Pose (C struct)
     raises ValueError if an unsupported axis name is input
     """
-    pose = base
 
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
         if an == "x":
-            pose.positionX = v
+            base.positionX = v
         elif an == "y":
-            pose.positionY = v
+            base.positionY = v
         elif an == "z":
-            pose.positionZ = v
+            base.positionZ = v
         elif an == "rx":
-            pose.rotationX = math.degrees(v)
+            base.rotationX = math.degrees(v)
         elif an == "ry":
-            pose.rotationY = math.degrees(v)
+            base.rotationY = math.degrees(v)
         elif an == "rz":
-            pose.rotationZ = math.degrees(v)
+            base.rotationZ = math.degrees(v)
         else:
             raise ValueError("Invalid axis")
-    return pose
+    return base
 
 
 class SmarPodDLL(CDLL):
@@ -268,7 +267,6 @@ class SmarPodDLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
         if result != SmarPodDLL.SMARPOD_OK:
             raise SmarPodError(result)
 
@@ -981,25 +979,24 @@ def dict_to_SA_MC_pose(pos, base=SA_MC_Pose()):
     returns: a Pose (C struct)
     raises ValueError if an unsupported axis name is input
     """
-    pose = base
 
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
         if an == "x":
-            pose.x = v
+            base.x = v
         elif an == "y":
-            pose.y = v
+            base.y = v
         elif an == "z":
-            pose.z = v
+            base.z = v
         elif an == "rx":
-            pose.rx = math.degrees(v)
+            base.rx = math.degrees(v)
         elif an == "ry":
-            pose.ry = math.degrees(v)
+            base.ry = math.degrees(v)
         elif an == "rz":
-            pose.rz = math.degrees(v)
+            base.rz = math.degrees(v)
         else:
             raise ValueError("Invalid axis")
-    return pose
+    return base
 
 
 class MC_5DOF_DLL(CDLL):
@@ -1128,7 +1125,6 @@ class MC_5DOF_DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
         if result != MC_5DOF_DLL.SA_MC_OK:
             raise SA_MCError(result)
 
@@ -1147,8 +1143,8 @@ class SA_MCError(Exception):
 
 class MC_5DOF(model.Actuator):
 
-    def __init__(self, name, role, locator, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=1, axes=None, **kwargs):
+    def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
+                 rotary_speed=0.0174533, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1167,8 +1163,14 @@ class MC_5DOF(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
-        actuator_speed: (double) the default speed (in m/s) of the actuators
+        linear_speed: (double) the default speed (in m/s) of the linear actuators
+        rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
+            The following axes must be present:
+            x , y, z, rx, ry, rz
+            note: in the hardware, ry exists, but has a range of (0,0), so it
+            should be defined this way in the configuration
+
             axis parameters: {
                 range: [float, float], default is -1 -> 1
                 unit: (str) default will be set to 'm'
@@ -1187,6 +1189,10 @@ class MC_5DOF(model.Actuator):
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
 
+        # Be sure that the axes are defined in the controller
+        if not all(i in axes.keys() for i in ['x', 'y', 'z', 'rx', 'ry', 'rz']):
+            raise ValueError("Not all axes are defined. Must have x, y, z, rx, ry, rz")
+
         for axis_name, axis_par in axes.items():
             try:
                 axis_range = axis_par['range']
@@ -1197,8 +1203,14 @@ class MC_5DOF(model.Actuator):
             try:
                 axis_unit = axis_par['unit']
             except KeyError:
-                logging.info("Axis %s has no unit. Assuming m", axis_name)
-                axis_unit = "m"
+                # check if linear
+                if axis_name in {'x', 'y', 'z'}:
+                    logging.info("Axis %s has no unit. Assuming m", axis_name)
+                    axis_unit = "m"
+                # otherwise must be a rotary axis
+                else:
+                    logging.info("Axis %s has no unit. Assuming rad", axis_name)
+                    axis_unit = "rad"
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
@@ -1223,7 +1235,7 @@ class MC_5DOF(model.Actuator):
         logging.debug("Using SA_MC library version %s", self._swVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
-        self._pivot = self.GetPivot()
+        self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
@@ -1238,14 +1250,14 @@ class MC_5DOF(model.Actuator):
         if referenced:
             logging.debug("SA_MC is referenced")
         else:
-            logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
             if ref_on_init:
                 self.reference().result()
+            else:
+                logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
 
         # Use a default actuator speed
         self.set_linear_speed(linear_speed)
-        self._speed = self.get_linear_speed()
-        self.set_rotary_speed(rotary_speed)
+        self.set_rotary_speed(math.degrees(rotary_speed))
         self._updatePosition()
 
     def terminate(self):
@@ -1256,20 +1268,16 @@ class MC_5DOF(model.Actuator):
     def updateMetadata(self, md):
         super(MC_5DOF, self).updateMetadata(md)
         try:
-            value = md[model.MD_PIVOT_POS]
+            pivot = md[model.MD_PIVOT_POS]
         except KeyError:
             # there is no pivot position set
             return
 
-        if not isinstance(value, dict):
-            raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (value,))
+        if not isinstance(pivot, dict) and pivot.keys() == {"x", "y", "z"}:
+            raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
 
-        # update all axes
-        for n in self._axis_map.keys():
-            if n in value:
-                self._pivot[n] = value[n]
-        logging.debug("Updating pivot point to %s.", value)
-        self.SetPivot(value)
+        logging.debug("Updating pivot point to %s.", pivot)
+        self.SetPivot(pivot)
 
     """
     API Calls
@@ -1328,7 +1336,6 @@ class MC_5DOF(model.Actuator):
         else:
             ht = c_uint(int(hold_time * 1000.0))
 
-        # Use an infiinite holdtime and non-blocking (final argument)
         self.core.SA_MC_Move(self._id, byref(newPose), ht, c_int(block))
 
     def GetPose(self):
@@ -1354,7 +1361,6 @@ class MC_5DOF(model.Actuator):
         value: (double) indicating speed for all axes in m/s
         """
         logging.debug("Setting linear speed to %f", value)
-        # the second argument (1) turns on speed control.
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
 
     def set_rotary_speed(self, value):
@@ -1363,7 +1369,6 @@ class MC_5DOF(model.Actuator):
         value: (double) indicating speed for all axes in deg/s
         """
         logging.debug("Setting rotary speed to %f", value)
-        # the second argument (1) turns on speed control.
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES, value)
 
     def get_linear_speed(self):
@@ -1387,9 +1392,9 @@ class MC_5DOF(model.Actuator):
 
         """
         pivot = SA_MC_Vec3()
-        pivot.x = piv_dict.get("x")
-        pivot.y = piv_dict.get("y")
-        pivot.z = piv_dict.get("z")
+        pivot.x = piv_dict["x"]
+        pivot.y = piv_dict["y"]
+        pivot.z = piv_dict["z"]
         self.core.SA_MC_SetPivot(self._id, byref(pivot))
 
     def GetPivot(self):
@@ -1470,10 +1475,14 @@ class MC_5DOF(model.Actuator):
                 # The SA_MC references all axes at once. This function blocks
                 self.Reference()
                 # wait till reference completes
-                ev = self.WaitForEvent(MC_5DOF_DLL.SA_MC_INFINITE)
-                # check if move is done
-                if ev.type != MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
-                    pass  # TODO: Do something here based on event type
+                while True:
+                    ev = self.WaitForEvent(MC_5DOF_DLL.SA_MC_INFINITE)
+                    # check if move is done
+                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                        break
+                    else:
+                        logging.warning("Returned event type 0x%x", ev.type)
+                        # keep waiting as the referencing continues
 
                 if self._is_referenced():
                     self.referenced._value = {a: True for a in self.axes.keys()}
@@ -1500,10 +1509,9 @@ class MC_5DOF(model.Actuator):
                 self.referenced.notify(self.referenced.value)
 
     @isasync
-    def moveAbs(self, pos, predelay=0):
+    def moveAbs(self, pos):
         """
         API call to absolute move
-        predelay (float): in seconds, amount of predelay before move starts
         """
         if not pos:
             return model.InstantaneousFuture()
@@ -1511,15 +1519,14 @@ class MC_5DOF(model.Actuator):
         self._checkMoveAbs(pos)
 
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doMoveAbs, f, pos, predelay)
+        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
-    def _doMoveAbs(self, future, pos, predelay):
+    def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> absolute target position
-        predelay (float): amount of delay in seconds before move should start
         raise:
             SA_MCError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
@@ -1533,7 +1540,6 @@ class MC_5DOF(model.Actuator):
 
         with future._moving_lock:
             try:
-                time.sleep(predelay)  # Wait before starting move
                 self.Move(pos, hold_time=float("inf"))
                 while not future._must_stop.is_set():
                     ev = self.WaitForEvent(timeout)
@@ -1567,7 +1573,7 @@ class MC_5DOF(model.Actuator):
                 future._was_stopped = True
                 # This occurs if a stop command interrupts referencing
                 if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
-                    logging.info("movement stopped: %s", ex)
+                    logging.debug("movement stopped: %s", ex)
                     raise CancelledError()
                 else:
                     raise
@@ -1616,7 +1622,7 @@ class MC_5DOF(model.Actuator):
             return future._was_stopped
 
     @isasync
-    def moveRel(self, shift, predelay=0):
+    def moveRel(self, shift):
         """
         API call for relative move
         """
@@ -1626,15 +1632,15 @@ class MC_5DOF(model.Actuator):
         self._checkMoveRel(shift)
 
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doMoveRel, f, shift, predelay)
+        f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
-    def _doMoveRel(self, future, shift, predelay):
+    def _doMoveRel(self, future, shift):
         """
         Do a relative move by converting it into an absolute move
         """
         pos = add_coord(self.position.value, shift)
-        self._doMoveAbs(future, pos, predelay)
+        self._doMoveAbs(future, pos)
 
 
 class FakeMC_5DOF_DLL(object):
@@ -1774,10 +1780,7 @@ class FakeMC_5DOF_DLL(object):
             self._referencing = False  # finished referencing
             logging.debug("sim MC5DOF: Referencing complete")
 
-
-"""
-Classes associated with the SmarAct MCS2 Controller (standard)
-"""
+# Classes associated with the SmarAct MCS2 Controller (standard)
 
 
 class SA_CTL_TransmitHandle_t(c_uint32):
@@ -2188,7 +2191,6 @@ class SA_CTLDLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
         if result != SA_CTLDLL.SA_CTL_ERROR_NONE:
             raise SA_CTLError(result)
 
@@ -2205,20 +2207,10 @@ class SA_CTLError(Exception):
         super(SA_CTLError, self).__init__("Error 0x%x. %s" % (error_code, SA_CTLDLL.err_code.get(error_code, "")))
 
 
-def FindMCS2Devices():
-    """
-    Util function to find all of the MCS2 controllers and return a list of locators
-    """
-    core = SA_CTLDLL()
-    b_len = 1024
-    buf = create_string_buffer(b_len)
-    core.SA_CTL_FindDevices(c_char_p(""), buf, byref(c_size_t(b_len)))
-    return buf.value.encode('string_escape')
-
-
 class MCS2(model.Actuator):
 
-    def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3, **kwargs):
+    def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
+                 hold_time=float('inf'), ** kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2236,6 +2228,9 @@ class MCS2(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
+        hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
+            Default is float('inf') or infinite. Can be also set to 0 to disable hold.
+            Is set to the same value for all channels.
         axes: dict str (axis name) -> dict (axis parameters)
             axis parameters: {
                 range: [float, float], default is -1 -> 1
@@ -2290,7 +2285,6 @@ class MCS2(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        # TODO: Fix getting software version with a supported function
         self._swVersion = self.core.SA_CTL_GetFullVersionString()
         self._hwVersion = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
 
@@ -2312,15 +2306,17 @@ class MCS2(model.Actuator):
         if all(referenced == True for _, referenced in axes_ref.items()):
             logging.debug("SA_CTL is referenced")
         else:
-            logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
             if ref_on_init:
                 self.reference().result()
+            else:
+                logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
         self._updatePosition()
 
         for name, channel in self._axis_map.items():
             self._set_speed(channel, speed)
             self._set_accel(channel, accel)
+            self._set_hold_time(channel, hold_time)
 
         self._speed = {}
         self._updateSpeed()
@@ -2333,9 +2329,26 @@ class MCS2(model.Actuator):
         self.core.SA_CTL_Close(self._id)
         super(MCS2, self).terminate()
 
-    """
-    API Calls
-    """
+    @staticmethod
+    def scan():
+        """
+        Util function to find all of the MCS2 controllers
+        returns: set of tuples (name, dict) with dict str -> str
+            the dict just has the locator string
+        """
+        core = SA_CTLDLL()
+        b_len = 1024
+        buf = create_string_buffer(b_len)
+        core.SA_CTL_FindDevices(c_char_p(""), buf, byref(c_size_t(b_len)))
+        locators = buf.value.encode('string_escape')
+
+        devices = set()
+        for counter, loc in enumerate(locators):
+            devices.append(("MCS2 %d" (counter,), {"locator": loc}))
+
+        return devices
+
+    # API Calls
 
     # Functions to set the property values in the controller, categorized by data type
     def SetProperty_f64(self, property_key, idx, value):
@@ -2422,9 +2435,7 @@ class MCS2(model.Actuator):
         logging.debug("Stopping channel %d..." % (channel,))
         self.core.SA_CTL_Stop(self._id, c_int8(channel), c_int8(0))
 
-    """
-    Basic functions
-    """
+    # Basic functions
 
     def _get_channel_state(self, channel):
         """
@@ -2434,7 +2445,7 @@ class MCS2(model.Actuator):
         """
 
         state = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel)
-        if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED != 0:
+        if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED:
             if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_END_STOP_REACHED:
                 logging.error("Error in channel %d: End stop reached", channel)
             if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED:
@@ -2499,6 +2510,21 @@ class MCS2(model.Actuator):
         # convert to m/s
         return float(accel) * 1e-12
 
+    def _set_hold_time(self, channel, hold_time):
+        """
+        Set the hold time of the channel after the actuator reached the target position
+        channel (int): the channel
+        hold_time (float): The hold time, in seconds. Use float('inf") for infinte hold time
+            or 0 for no hold time
+        """
+        # hold time is specified in ms in the controller
+        if hold_time == float('inf'):
+            ht = SA_CTLDLL.SA_CTL_INFINITE
+        else:
+            ht = int(hold_time * 1e3)
+
+        self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME, channel, ht)
+
     def stop(self, axes=None):
         """
         Stop the SA_CTL controller and update position
@@ -2524,7 +2550,7 @@ class MCS2(model.Actuator):
         except SA_CTLError as ex:
             if ex.errno == SA_CTLDLL.SA_CTL_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_CTL is not referenced")
-                p = {'x': 0, 'y': 0, 'z': 0}
+                p = {a: 0 for a in self.axes}
             else:
                 raise
 
@@ -2537,12 +2563,8 @@ class MCS2(model.Actuator):
         update the speeds
         """
         s = {}
-        try:
-            for axis_name, axis_channel in self._axis_map.items():
-                s[axis_name] = self._get_speed(axis_channel)
-
-        except SA_CTLError as ex:
-            raise ex
+        for axis_name, axis_channel in self._axis_map.items():
+            s[axis_name] = self._get_speed(axis_channel)
 
         logging.debug("Updated speed to %s", s)
         self._speed = s
@@ -2552,12 +2574,8 @@ class MCS2(model.Actuator):
         update the accels
         """
         a = {}
-        try:
-            for axis_name, axis_channel in self._axis_map.items():
-                a[axis_name] = self._get_accel(axis_channel)
-
-        except SA_CTLError as ex:
-            raise ex
+        for axis_name, axis_channel in self._axis_map.items():
+            a[axis_name] = self._get_accel(axis_channel)
 
         logging.debug("Updated accel to %s", a)
         self._accel = a
@@ -2601,7 +2619,6 @@ class MCS2(model.Actuator):
                 moving_axes.add(channel)
                 self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
                 # compute expected end
-                # convert to mm units
                 dur = driver.estimateMoveDuration(abs(v),
                                 self._speed[an],
                                 self._accel[an])
@@ -2629,7 +2646,6 @@ class MCS2(model.Actuator):
                 moving_axes.add(channel)
                 self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
                 d = abs(v - old_pos[an])
-                # convert displacement unit to mm
                 dur = driver.estimateMoveDuration(d,
                                                   self._speed[an],
                                                   self._accel[an])
@@ -2800,6 +2816,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_POSITION: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY: [1, 1, 1],
             SA_CTLDLL.SA_CTL_PKEY_MOVE_ACCELERATION: [1, 1, 1],
+            SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
         }
 
         self.target = [0, 0, 0]
