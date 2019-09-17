@@ -517,11 +517,11 @@ class StaticARStream(StaticStream):
 
 class StaticSpectrumStream(StaticStream):
     """
-    A Spectrum stream which displays only one static image/data.
-    The main difference from the normal streams is that the data is 3D (a cube)
-    The metadata should have a MD_WL_POLYNOMIAL or MD_WL_LIST
-    Note that the data received should be of the (numpy) shape CYX or C11YX.
-    When saving, the data will be converted to CTZYX (where TZ is 11)
+    A stream which displays only one static image/data. The data can be of type
+    spectrum (C11YX), temporal spectrum (CT1YX) or time correlator (1T1YX).
+    The main difference from the normal streams is that the data is 3D or 4D.
+    The metadata should can have a MD_WL_POLYNOMIAL or MD_WL_LIST or MD_TIME_LIST.
+    When saving, the data will be converted to CTZYX.
 
     The histogram corresponds to the data after calibration, and selected via
     the spectrumBandwidth VA.
@@ -533,16 +533,16 @@ class StaticSpectrumStream(StaticStream):
         """
         name (string)
         image (model.DataArray(Shadow) of shape (CYX), (C11YX), (CTYX), (CT1YX), (1T1YX)).
-        The metadata MD_WL_POLYNOMIAL or MD_WL_LIST should be included in order to
+        The metadata MD_WL_POLYNOMIAL or MD_WL_LIST can be included in order to
         associate the C to a wavelength.
-        The metadata MD_TIME_LIST should be included to associate the T to a timestamp
+        The metadata MD_TIME_LIST can be included to associate the T to a timestamp.
 
         .background is a DataArray of shape (CT111), where C & T have the same length as in the data.
         .efficiencyCompensation is always DataArray of shape C1111.
 
         """
-        # Spectrum stream has in addition to normal stream:
-        #  * information about the current bandwidth displayed (avg. spectrum)
+        # streams have in addition to a normal stream:
+        #  * information about the current bandwidth displayed (avg. spectrum) if applicable
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
 
@@ -570,6 +570,7 @@ class StaticSpectrumStream(StaticStream):
         cwl = (max_bw + min_bw) / 2
         width = (max_bw - min_bw) / 12
 
+        # TODO should be only available if data has spectrum dimension (e.g. chronograph)
         # The selected wavelength for a temporal spectrum display
         self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
                                                    range=(min_bw, max_bw),
@@ -755,15 +756,15 @@ class StaticSpectrumStream(StaticStream):
     # as the data is static.
     def _updateCalibratedData(self, bckg=None, coef=None):
         """
-        Try to update the data with new calibration. The two parameters are
+        Try to update the data with a new calibration. The two parameters are
         the same as compensate_spectrum_efficiency(). The input data comes from
         .raw and the calibrated data is saved in .calibrated
-        bckg (DataArray or None)
-        coef (DataArray or None)
-        raise ValueError: if the data and calibration data are not valid or
+        :param bckg: (DataArray or None) The background image.
+        :param coef: (DataArray or None) The spectrum efficiency correction data.
+        :raise ValueError: If the data and calibration data are not valid or
           compatible. In that case the current calibrated data is unchanged.
         """
-        data = self.raw[0]
+        data = self.raw[0]  # only one image in .raw for spectrum, temporal spectrum and chronograph
 
         if data is None:
             self.calibrated.value = None
@@ -774,18 +775,14 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = data
             return
 
-        if not (set(data.metadata.keys()) &
-                {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
-            raise ValueError("Spectrum data contains no wavelength information")
-
-        # will raise an exception if incompatible
-        calibrated = calibration.compensate_spectrum_efficiency(data, bckg, coef)
+        calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
         """
-        Setter of the spectrum background
-        raises ValueError if it's impossible to apply it (eg, no wavelength info)
+        Setter of the background.
+        :param bckg: ()
+        :raises ValueError if it's impossible to apply it (eg, no wavelength info)
         """
         # If the coef data is wrong, this function will fail with an exception,
         # and the value never be set.

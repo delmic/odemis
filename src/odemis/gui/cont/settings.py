@@ -517,14 +517,8 @@ class AnalysisSettingsController(SettingsBarController):
         # Gui data model
         self.tab_data = tab_data
 
-        # We add 3 different panels so, they can each be hidden/shown individually
-        self._pnl_acqfile = None
-        self._pnl_arfile = None
-        self._pnl_specfile = None
-
-        self._arfile_ctrl = None
-        self._spec_bckfile_ctrl = None
-        self._specfile_ctrl = None
+        self._pnl_acqfile = None  # panel containing info about file loaded
+        self._pnl_calibration = None  # panel allowing to load background correction and calibration files
 
         self._create_controls()
 
@@ -532,12 +526,13 @@ class AnalysisSettingsController(SettingsBarController):
         # All these VAs contain FileInfo object
         tab_data.acq_fileinfo.subscribe(self.on_acqfile_change)
 
-        # The following three can be replaced by callables taking a unicode and
+        # The following can be replaced by callables taking a unicode and
         # returning a unicode (or raising a ValueError exception). They are
         # "filters" on what value can be accepted when changing the calibration
         # files. (Typically, the tab controller will put some of its functions)
         self.setter_ar_file = None
         self.setter_spec_bck_file = None
+        self.setter_temporalspec_bck_file = None
         self.setter_spec_file = None
 
     def _create_controls(self):
@@ -546,7 +541,8 @@ class AnalysisSettingsController(SettingsBarController):
         We create a Panel for each group of controls that we need to be able
         to show and hide separately.
 
-        ** AR background and Spectrum efficiency compensation **
+        ** AR background and spectrum background, temporal spectrum background and
+        spectrum efficiency compensation **
 
         These two controls are linked using VAs in the tab_data model.
 
@@ -558,35 +554,53 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_acqfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "No file loaded")
         wildcards, _ = formats_to_wildcards(odemis.dataio.get_available_formats(),
                                                             include_all=True)
-        # Panel with AR background file information
+
+        # Panel allowing to load bg correction or calibration files
+        # Settings displayed are stream specific
+        self._pnl_calibration = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
+
+        # Display with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
-        self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._arfile_ctrl = self._pnl_arfile.add_file_button(
+        self._ar_bckfile_entry = self._pnl_calibration.add_file_button(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._pnl_arfile.hide_panel()
-        self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
+            clearlabel="None", wildcard=wildcards)
+        self._ar_bckfile_entry.lbl_ctrl.Show(False)
+        self._ar_bckfile_entry.value_ctrl.Show(False)
+        self._ar_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
-        # Panel with spectrum background + efficiency compensation file information
-        # They are displayed only if there are Spectrum streams
-        self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._spec_bckfile_ctrl = self._pnl_specfile.add_file_button(
-            "Spec. background",
-            tooltip="Spectrum background correction file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
+        # Display for spectrum/temporal spectrum background + efficiency compensation file information
+        # They are displayed only if there are spectrum streams or temporal spectrum streams
+        self._spec_bckfile_entry = self._pnl_calibration.add_file_button(
+            "Spectrum background",
+            tooltip="Spectrum background acquisition file",
+            clearlabel="None", wildcard=wildcards)
+        self._spec_bckfile_entry.lbl_ctrl.Show(False)
+        self._spec_bckfile_entry.value_ctrl.Show(False)
+        self._spec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._pnl_specfile.add_file_button(
-            "Spec. correction",
+        self._temporalspec_bckfile_entry = self._pnl_calibration.add_file_button(
+            "Temporal spectrum background",
+            tooltip="Temporal spectrum background acquisition file",
+            clearlabel="None", wildcard=wildcards)
+        self._temporalspec_bckfile_entry.lbl_ctrl.Show(False)
+        self._temporalspec_bckfile_entry.value_ctrl.Show(False)
+        self._temporalspec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
+        self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
+
+        self._specfile_entry = self._pnl_calibration.add_file_button(
+            "Spectrum correction",
             tooltip="Spectrum efficiency correction file",
-            clearlabel="None", wildcard=wildcards).value_ctrl
-        self._pnl_specfile.hide_panel()
-        self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+            clearlabel="None", wildcard=wildcards)
+        self._specfile_entry.lbl_ctrl.Show(False)
+        self._specfile_entry.value_ctrl.Show(False)
+        self._specfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
+        self._pnl_calibration.Refresh()
+        self.tab_panel.Layout()
         self.tab_panel.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
@@ -614,8 +628,9 @@ class AnalysisSettingsController(SettingsBarController):
                 self._pnl_acqfile.add_metadata(key, value)
 
             # Change default dir for the calibration files
-            for file_ctrl in (self._arfile_ctrl, self._spec_bckfile_ctrl, self._specfile_ctrl):
-                file_ctrl.default_dir = file_info.file_path
+            for file_entry in (self._ar_bckfile_entry, self._spec_bckfile_entry,
+                               self._temporalspec_bckfile_entry, self._specfile_entry):
+                file_entry.value_ctrl.default_dir = file_info.file_path
 
         self._pnl_acqfile.Refresh()
 
@@ -630,10 +645,10 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
+                self._ar_bckfile_entry.value_ctrl.SetValue(self.tab_data.ar_cal.value)
                 return
             except Exception:
-                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
+                self._ar_bckfile_entry.value_ctrl.SetValue(self.tab_data.ar_cal.value)
                 raise
 
         self.tab_data.ar_cal.value = fn
@@ -648,13 +663,31 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                self._spec_bckfile_entry.value_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
                 return
             except Exception:
-                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                self._spec_bckfile_entry.value_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
                 raise
 
         self.tab_data.spec_bck_cal.value = fn
+
+    def _on_temporalspec_bck_file_select(self, evt):
+        """ Pass the selected spec background file on to the VA """
+        logging.debug("Temporal spectrum background file selected by user")
+        fn = evt.selected_file or u""
+        if self.setter_temporalspec_bck_file:
+            try:
+                fn = self.setter_temporalspec_bck_file(fn)
+            except ValueError:
+                logging.debug(u"Setter refused the file '%s'", fn)
+                # Put back old file name
+                self._temporalspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.temporalspec_bck_cal.value)
+                return
+            except Exception:
+                self._temporalspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.temoralspec_bck_cal.value)
+                raise
+
+        self.tab_data.temporalspec_bck_cal.value = fn
 
     def _on_spec_file_select(self, evt):
         """ Pass the selected efficiency compensation file on to the VA """
@@ -666,35 +699,44 @@ class AnalysisSettingsController(SettingsBarController):
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
                 # Put back old file name
-                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
+                self._specfile_entry.value_ctrl.SetValue(self.tab_data.spec_cal.value)
                 return
             except Exception:
-                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
+                self._specfile_entry.value_ctrl.SetValue(self.tab_data.spec_cal.value)
                 raise
 
         self.tab_data.spec_cal.value = fn
 
     def _on_ar_cal(self, val):
-        self._arfile_ctrl.SetValue(val)
+        self._ar_bckfile_entry.value_ctrl.SetValue(val)
 
     def _on_spec_bck_cal(self, val):
-        self._spec_bckfile_ctrl.SetValue(val)
+        self._spec_bckfile_entry.value_ctrl.SetValue(val)
+
+    def _on_temporalspec_bck_cal(self, val):
+        self._temporalspec_bckfile_entry.value_ctrl.SetValue(val)
 
     def _on_spec_cal(self, val):
-        self._specfile_ctrl.SetValue(val)
+        self._specfile_entry.value_ctrl.SetValue(val)
 
-    def show_calibration_panel(self, ar=None, spec=None):
-        """ Show/hide the the ar/spec panels
-
-        ar (boolean or None): show, hide or don't change AR calib panel
-        spec (boolean or None): show, hide or don't change spec calib panel
+    def show_calibration_panel(self, ar, spectrum, temporalspectrum):
+        """ Show/hide the the angle resolved/spectrum/temporal spectrum panel
+        (background or efficiency corrections).
+        :param ar: (boolean) Show, hide or don't change angle resolved calib panel.
+        :param spectrum: (boolean) Show, hide or don't change spectrum calib panel.
+        :param temporalspectrum: (boolean) Show, hide or don't change temporal spectrum calib panel.
         """
 
-        if ar is not None:
-            self._pnl_arfile.show_panel(ar)
-        if spec is not None:
-            self._pnl_specfile.show_panel(spec)
+        self._ar_bckfile_entry.lbl_ctrl.Show(ar)
+        self._ar_bckfile_entry.value_ctrl.Show(ar)
+        self._spec_bckfile_entry.lbl_ctrl.Show(spectrum)
+        self._spec_bckfile_entry.value_ctrl.Show(spectrum)
+        self._temporalspec_bckfile_entry.lbl_ctrl.Show(temporalspectrum)
+        self._temporalspec_bckfile_entry.value_ctrl.Show(temporalspectrum)
+        self._specfile_entry.lbl_ctrl.Show(spectrum or temporalspectrum)
+        self._specfile_entry.value_ctrl.Show(spectrum or temporalspectrum)
 
+        self._pnl_calibration.Refresh()
         self.tab_panel.Layout()
 
 

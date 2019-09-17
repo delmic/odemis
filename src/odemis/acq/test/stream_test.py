@@ -3764,7 +3764,7 @@ FILENAME = u"test" + tiff.EXTENSIONS[0]
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):
     """
-    Test static streams, which don't need any backend running
+    Test static streams, which don't need any backend running.
     """
 
     def tearDown(self):
@@ -3810,7 +3810,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
     def test_cl(self):
         """Test StaticCLStream"""
-        # AR background data
+        # CL metadata
         md = {
             model.MD_SW_VERSION: "2.1",
             model.MD_HW_NAME: "pmt",
@@ -3836,7 +3836,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
     def test_small_hist(self):
         """Test small histogram computation"""
-        # AR background data
+        # CL metadata
         md = {
             model.MD_SW_VERSION: "2.1",
             model.MD_HW_NAME: "pmt",
@@ -4267,8 +4267,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         assert not numpy.array_equal(img_vis_2, img_vis_3)
 
     def test_ar_large_image(self):
-        """Test StaticARStream with a large image to trigger resizing."""  #TODO how can we check the resizing?
-
+        """Test StaticARStream with a large image to trigger resizing."""
+        # AR metadata
         md = {model.MD_SW_VERSION: "1.0-test",
               model.MD_HW_NAME: "fake ccd",
               model.MD_DESCRIPTION: "AR",
@@ -4315,15 +4315,15 @@ class StaticStreamsTestCase(unittest.TestCase):
         # check if the bg image has been applied and the .image VA has been updated
         assert not numpy.array_equal(im2d0, im2d1)
 
-    def _create_spec_data(self):
-        # Spectrum
+    def _create_spectrum_data(self):
+        """Create spectrum data."""
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        # data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
         data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
         data[2, :, :, :, :] = numpy.arange(300)
         data[200, 0, 0, 2] = numpy.arange(300)
         wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
+        # spectrum metadata
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -4337,10 +4337,10 @@ class StaticStreamsTestCase(unittest.TestCase):
             }
         return model.DataArray(data, md)
 
-    def test_spec_das(self):
+    def test_spectrum_das(self):
         """Test StaticSpectrumStream with DataArrayShadow"""
         # TODO: once it supports it, test the stream with pyramidal data
-        spec = self._create_spec_data()
+        spec = self._create_spectrum_data()
         tiff.export(FILENAME, spec)
         acd = tiff.open_data(FILENAME)
 
@@ -4356,9 +4356,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         md2d = im2d.metadata
         self.assertEqual(md2d[model.MD_POS], spec.metadata[model.MD_POS])
 
-    def test_spec_2d(self):
+    def test_spectrum_2d(self):
         """Test StaticSpectrumStream 2D"""
-        spec = self._create_spec_data()
+        spec = self._create_spectrum_data()
         specs = stream.StaticSpectrumStream("test", spec)
         proj_spatial = RGBSpatialSpectrumProjection(specs)
         time.sleep(0.5)  # wait a bit for the image to update
@@ -4385,9 +4385,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
 
-    def test_spec_0d(self):
+    def test_spectrum_0d(self):
         """Test StaticSpectrumStream 0D"""
-        spec = self._create_spec_data()
+        spec = self._create_spectrum_data()
         specs = stream.StaticSpectrumStream("test", spec)
         proj_point_spectrum = SinglePointSpectrumProjection(specs)
         time.sleep(0.5)  # wait a bit for the image to update
@@ -4423,9 +4423,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(sp0d.dtype, spec.dtype)
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
-    def test_spec_1d(self):
+    def test_spectrum_1d(self):
         """Test StaticSpectrumStream 1D"""
-        spec = self._create_spec_data()
+        spec = self._create_spectrum_data()
         specs = stream.StaticSpectrumStream("test", spec)
         proj_line_spectrum = LineSpectrumProjection(specs)
 
@@ -4469,7 +4469,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertGreaterEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
                                 spec.metadata[model.MD_PIXEL_SIZE][0])
 
-
         # Check 1d with larger width
         specs.selected_line.value = [(30, 65), (5, 1)]
         specs.selectionWidth.value = 12
@@ -4497,157 +4496,361 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(sp1d.dtype, numpy.uint8)
         self.assertEqual(wl1d.shape, (spec.shape[0],))
 
-    def test_spec_calib(self):
-        """Test StaticSpectrumStream calibration"""
-        spec = self._create_spec_data()
-        specs = stream.StaticSpectrumStream("test", spec)
+    def test_spectrum_calib_bg(self):
+        """Test Static Spectrum Stream calibration and background image correction
+        with spectrum data."""
+        spec = self._create_spectrum_data()
+        specs = stream.StaticSpectrumStream("test spectrum calibration and bg corr", spec)
         proj_spatial = RGBSpatialSpectrumProjection(specs)
         specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0], specs.spectrumBandwidth.range[1][1])
         time.sleep(0.5)  # ensure that .image is updated
 
-        # Check efficiency compensation
+        # get current image without any correction
         prev_im2d = proj_spatial.image.value
 
+        # create background image
         dbckg = numpy.ones(spec.shape, dtype=numpy.uint16) + 10
         wl_bckg = list(spec.metadata[model.MD_WL_LIST])
         obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
         bckg = calibration.get_spectrum_data([obckg])
 
+        # create spectrum efficiency correction
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
+        # apply spectrum efficiency correction
         specs.efficiencyCompensation.value = calib
 
+        time.sleep(0.5)
+        im2d_effcorr = proj_spatial.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d_effcorr.shape, spec.shape[-2:] + (3,))
+        # check image different from previous image after bg correction, and different from efficiency corr. image
+        self.assertTrue(numpy.any(im2d_effcorr != prev_im2d))
+
+        # apply background image correction
         specs.background.value = bckg
 
         time.sleep(0.5)
-
-        # Control spatial spectrum
-        im2d = proj_spatial.image.value
+        im2d_bgcorr = proj_spatial.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
-        self.assertTrue(numpy.any(im2d != prev_im2d))
+        self.assertEqual(im2d_bgcorr.shape, spec.shape[-2:] + (3,))
+        # check image different from previous image after bg correction, and different from efficiency corr. image
+        self.assertTrue(numpy.any(im2d_bgcorr != im2d_effcorr))
+        self.assertTrue(numpy.any(im2d_bgcorr != prev_im2d))
 
-    def _create_temporal_spec_data(self):
-        # Temporal Spectrum
+    def _create_temporal_spectrum_data(self):
+        """Create temporal spectrum data."""
         data = numpy.random.randint(1, 100, size=(256, 128, 1, 20, 30), dtype="uint16")
-        # data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
         wld = 433e-9 + model.DataArray(numpy.arange(data.shape[0])) * 0.1e-9
         tld = model.DataArray(numpy.arange(data.shape[1])) * 0.1e-9
+        # temporal spectrum data
         md = {model.MD_SW_VERSION: "1.0-test",
-             model.MD_HW_NAME: "fake ccd",
-             model.MD_DESCRIPTION: "Spectrum",
-             model.MD_DIMS: "CTZYX",
-             model.MD_ACQ_DATE: time.time(),
-             model.MD_BPP: 12,
-             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-             model.MD_POS: (1.2e-3, -30e-3),  # m
-             model.MD_EXP_TIME: 0.2,  # s
-             model.MD_LENS_MAG: 60,  # ratio
-             model.MD_WL_LIST: wld,
-             model.MD_TIME_LIST: tld,
-            }
+              model.MD_HW_NAME: "fake ccd",
+              model.MD_DESCRIPTION: "Temporal spectrum",
+              model.MD_DIMS: "CTZYX",
+              model.MD_ACQ_DATE: time.time(),
+              model.MD_BPP: 12,
+              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+              model.MD_POS: (1.2e-3, -30e-3),  # m
+              model.MD_EXP_TIME: 0.2,  # s
+              model.MD_LENS_MAG: 60,  # ratio
+              model.MD_STREAK_MODE: True,
+              model.MD_STREAK_TIMERANGE: 1e-9,  # s
+              model.MD_WL_LIST: wld,
+              model.MD_TIME_LIST: tld,
+              }
         return model.DataArray(data, md)
 
-    def test_temp_spec(self):
-        """Test Temporal SpectrumStream and Projections"""
-        spec = self._create_temporal_spec_data()
-        specs = stream.StaticSpectrumStream("test", spec)
+    def test_temporal_spectrum(self):
+        """Test StaticSpectrumStream and Projections for temporal spectrum data."""
+        temporalspectrum = self._create_temporal_spectrum_data()
+        tss = stream.StaticSpectrumStream("test temporal spectrum", temporalspectrum)
         time.sleep(1.0)  # wait a bit for the image to update
 
         # Control spatial spectrum
-        proj_spatial = RGBSpatialSpectrumProjection(specs)
+        proj_spatial = RGBSpatialSpectrumProjection(tss)
         time.sleep(0.5)
         im2d = proj_spatial.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
         # Check it's at the right position
         md2d = im2d.metadata
-        self.assertEqual(md2d[model.MD_POS], spec.metadata[model.MD_POS])
+        self.assertEqual(md2d[model.MD_POS], temporalspectrum.metadata[model.MD_POS])
 
         # change bandwidth to max
-        specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0],
-                                         specs.spectrumBandwidth.range[1][1])
+        tss.spectrumBandwidth.value = (tss.spectrumBandwidth.range[0][0], tss.spectrumBandwidth.range[1][1])
         time.sleep(0.2)
         im2d = proj_spatial.image.value
-        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
 
         # Check RGB spatial projection
-        specs.fitToRGB.value = True
+        tss.fitToRGB.value = True
         time.sleep(0.2)
         im2d = proj_spatial.image.value
-        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
 
         # Create projections
-        proj_point_spectrum = SinglePointSpectrumProjection(specs)
-        proj_point_chrono = SinglePointTemporalProjection(specs)
+        proj_point_spectrum = SinglePointSpectrumProjection(tss)
+        proj_point_chrono = SinglePointTemporalProjection(tss)
 
-        # Test
-        tl = spec.metadata.get(model.MD_TIME_LIST)
-        wl = spec.metadata.get(model.MD_WL_LIST)
+        # Test projections show correct data for different ebeam positions
+        tl = temporalspectrum.metadata.get(model.MD_TIME_LIST)
+        wl = temporalspectrum.metadata.get(model.MD_WL_LIST)
 
         for time_index in range(0, 3):
             for wl_index in range(0, 3):
                 for x in range(0, 3):
                     for y in range(0, 3):
-                        specs.selected_pixel.value = (x, y)
-                        specs.selected_time.value = tl[time_index]
-                        specs.selected_wavelength.value = wl[wl_index]
+
+                        tss.selected_pixel.value = (x, y)
+                        tss.selected_time.value = tl[time_index]
+                        tss.selected_wavelength.value = wl[wl_index]
                         time.sleep(0.2)
                         self.assertListEqual(proj_point_spectrum.image.value.tolist(),
-                                             spec[:, time_index, 0, y, x].tolist())
+                                             temporalspectrum[:, time_index, 0, y, x].tolist())
                         self.assertListEqual(proj_point_chrono.image.value.tolist(),
-                                             spec[wl_index, :, 0, y, x].tolist())
+                                             temporalspectrum[wl_index, :, 0, y, x].tolist())
 
-    def test_temp_spec_calib(self):
-        """Test StaticSpectrumStream calibration"""
-        spec = self._create_temporal_spec_data()
-        specs = stream.StaticSpectrumStream("test", spec)
-        proj_spatial = RGBSpatialSpectrumProjection(specs)
-        specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0], specs.spectrumBandwidth.range[1][1])
+    def test_temporal_spectrum_calib_bg(self):
+        """Test StaticSpectrumStream calibration and background image correction
+         with temporal spectrum data."""
+        temporalspectrum = self._create_temporal_spectrum_data()
+        tss = stream.StaticSpectrumStream("test temporal spectrum calibration and bg corr", temporalspectrum)
+        proj_spatial = RGBSpatialSpectrumProjection(tss)
+        tss.spectrumBandwidth.value = (tss.spectrumBandwidth.range[0][0], tss.spectrumBandwidth.range[1][1])
+
         time.sleep(0.5)  # ensure that .image is updated
 
-        # Check efficiency compensation
+        # get current image without any correction
         prev_im2d = proj_spatial.image.value
 
-        dbckg = numpy.ones(spec.shape, dtype=numpy.uint16) + 10
-        wl_bckg = list(spec.metadata[model.MD_WL_LIST])
-        obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
-        bckg = calibration.get_spectrum_data([obckg])
+        # create bg image (C, T, 1, 1, 1)
+        dbckg = numpy.ones(temporalspectrum.shape, dtype=numpy.uint16) + 10
+        wl_bckg = list(temporalspectrum.metadata[model.MD_WL_LIST])
+        bckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg,
+                                                model.MD_STREAK_MODE: True,
+                                                model.MD_STREAK_TIMERANGE: 1e-9,  # s
+                                                })  # background data is 2D
 
+        # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        specs.efficiencyCompensation.value = calib
+        # apply spectrum efficiency compensation
+        tss.efficiencyCompensation.value = calib
 
-        specs.background.value = bckg
+        time.sleep(0.5)
+        im2d_effcorr = proj_spatial.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d_effcorr.shape, temporalspectrum.shape[-2:] + (3,))
+        # check image different from previous image after efficiency correction
+        self.assertTrue(numpy.any(im2d_effcorr != prev_im2d))
+
+        # apply bg correction
+        tss.background.value = bckg
+
+        time.sleep(0.5)
+        im2d_bgcorr = proj_spatial.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d_bgcorr.shape, temporalspectrum.shape[-2:] + (3,))
+        # check image different from previous image after bg correction, and different from efficiency corr. image
+        self.assertTrue(numpy.any(im2d_bgcorr != im2d_effcorr))
+        self.assertTrue(numpy.any(im2d_bgcorr != prev_im2d))
+
+    def test_temporal_spectrum_false_calib_bg(self):
+        """Test StaticSpectrumStream background image correction
+         with temporal spectrum data using invalid bg images and calibration files."""
+        temporalspectrum = self._create_temporal_spectrum_data()
+        tss = stream.StaticSpectrumStream("test temporal spectrum calibration and bg corr", temporalspectrum)
+        proj_spatial = RGBSpatialSpectrumProjection(tss)
+        tss.spectrumBandwidth.value = (tss.spectrumBandwidth.range[0][0], tss.spectrumBandwidth.range[1][1])
+        time.sleep(0.5)  # ensure that .image is updated
+
+        # get current image without any correction
+        prev_im2d = proj_spatial.image.value
+
+        # create bg image (C, T, 1, 1, 1)
+        dbckg = numpy.ones(temporalspectrum.shape, dtype=numpy.uint16) + 10
+        wl_bckg = list(temporalspectrum.metadata[model.MD_WL_LIST])
+        bckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg,
+                                                model.MD_STREAK_MODE: True,
+                                                model.MD_STREAK_TIMERANGE: 1e-9,  # s
+                                                })  # background data is 2D
+
+        # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
+
+        # apply spectrum efficiency compensation
+        tss.efficiencyCompensation.value = calib
+
+        time.sleep(0.5)
+
+        # apply bg correction: should fail as streak mode of bg image and data different
+        bckg.metadata[model.MD_STREAK_MODE] = False  # no time info
+        with self.assertRaises(ValueError):
+            tss.background.value = bckg
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+        # apply bg correction: should fail as time range of bg image and data different
+        bckg.metadata[model.MD_STREAK_MODE] = True
+        bckg.metadata[model.MD_STREAK_TIMERANGE] = 2e-9  # different time info
+        with self.assertRaises(ValueError):
+            tss.background.value = bckg
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+        # apply bg correction: should fail as bg image has no wl info (mirror mode), but data does
+        bckg.metadata[model.MD_STREAK_TIMERANGE] = 1e-9
+        del bckg.metadata[model.MD_WL_LIST]
+        with self.assertRaises(ValueError):
+            tss.background.value = bckg
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+        # test rejected backgrounds for data with no wl info
+        # apply bg correction: should fail as bg image has wl info, but data not
+        del temporalspectrum.metadata[model.MD_WL_LIST]  # no wl info in data
+        bckg.metadata[model.MD_WL_LIST] = wl_bckg
+        with self.assertRaises(ValueError):
+            tss.background.value = bckg
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+        # apply efficiency correction, bg image still there: should fail as data has no wl info
+        del bckg.metadata[model.MD_WL_LIST]
+        with self.assertRaises(ValueError):
+            tss.efficiencyCompensation.value = calib
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+    def _create_chronograph_data(self):
+        """Create chronograph (time correlator) data."""
+        data = numpy.random.randint(1, 100, size=(1, 128, 1, 20, 30), dtype="uint16")
+        tld = model.DataArray(numpy.arange(data.shape[1])) * 0.1e-9
+        # temporal spectrum data
+        md = {model.MD_SW_VERSION: "1.0-test",
+              model.MD_HW_NAME: "fake ccd",
+              model.MD_DESCRIPTION: "Temporal spectrum",
+              model.MD_DIMS: "CTZYX",
+              model.MD_ACQ_DATE: time.time(),
+              model.MD_BPP: 12,
+              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+              model.MD_POS: (1.2e-3, -30e-3),  # m
+              model.MD_EXP_TIME: 0.2,  # s
+              model.MD_LENS_MAG: 60,  # ratio
+              model.MD_TIME_LIST: tld,
+              }
+        return model.DataArray(data, md)
+
+    def test_chronograph(self):
+        """Test StaticSpectrumStream and Projections for chronograph (time correlator) data."""
+        chronograph = self._create_chronograph_data()
+        cs = stream.StaticSpectrumStream("test chronograph", chronograph)
+        time.sleep(1.0)  # wait a bit for the image to update
 
         # Control spatial spectrum
+        proj_spatial = RGBSpatialSpectrumProjection(cs)
         time.sleep(0.5)
         im2d = proj_spatial.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
-        self.assertTrue(numpy.any(im2d != prev_im2d))
+        self.assertEqual(im2d.shape, chronograph.shape[-2:] + (3,))
+        # Check it's at the right position
+        md2d = im2d.metadata
+        self.assertEqual(md2d[model.MD_POS], chronograph.metadata[model.MD_POS])
 
-    def test_mean_spec(self):
-        spec = self._create_spec_data()
-        specs = stream.StaticSpectrumStream("test", spec)
+        # Create projections
+        proj_point_chrono = SinglePointTemporalProjection(cs)
+
+        # Test projection shows correct data for different ebeam positions
+        for x in range(0, 3):
+            for y in range(0, 3):
+                cs.selected_pixel.value = (x, y)
+                time.sleep(0.2)
+                self.assertListEqual(proj_point_chrono.image.value.tolist(),
+                                     chronograph[0, :, 0, y, x].tolist())
+
+    def test_chronograph_calib_bg(self):
+        """Test StaticSpectrumStream calibration and background image correction
+         with time correlator data.
+
+         !!!For now we do not support this!!! Adapt test cases when changed!
+
+         """
+        chronograph = self._create_chronograph_data()
+        cs = stream.StaticSpectrumStream("test chronograph calibration and bg corr", chronograph)
+        proj_spatial = RGBSpatialSpectrumProjection(cs)
+        time.sleep(0.5)  # ensure that .image is updated
+
+        # get current image
+        prev_im2d = proj_spatial.image.value
+
+        # create bg image (C, T, 1, 1, 1)
+        dbckg = numpy.ones(chronograph.shape, dtype=numpy.uint16) + 10
+        time_bckg = list(chronograph.metadata[model.MD_TIME_LIST])
+        bckg = model.DataArray(dbckg, metadata={model.MD_TIME_LIST: time_bckg})  # background data is 1D
+
+        # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
+
+        # apply spectrum efficiency compensation  -> should fail
+        with self.assertRaises(ValueError):
+            cs.efficiencyCompensation.value = calib
+
+        # apply bg correction -> should fail - not supported yet!!!
+        with self.assertRaises(ValueError):
+            cs.background.value = bckg
+
+        time.sleep(0.5)
+        im2d = proj_spatial.image.value
+        # check image still the same
+        self.assertTrue(numpy.any(im2d == prev_im2d))
+
+    def test_mean_spectrum(self):
+        """Test MeanSpectrumStream for histogram display in settings panel
+        with spectrum data."""
+        spec = self._create_spectrum_data()
+        specs = stream.StaticSpectrumStream("test spectrum mean", spec)
         proj = MeanSpectrumProjection(specs)
         time.sleep(2)
         mean_spec = proj.image.value
         self.assertEqual(mean_spec.shape, (spec.shape[0],))
 
-    def test_mean_temporal_spec(self):
-        temp_spec = self._create_temporal_spec_data()
-        temp_specs = stream.StaticSpectrumStream("test", temp_spec)
-        proj = MeanSpectrumProjection(temp_specs)
+    def test_mean_temporal_spectrum(self):
+        """Test MeanSpectrumStream for histogram display in settings panel
+        with temporal spectrum data."""
+        temporalspectrum = self._create_temporal_spectrum_data()
+        tss = stream.StaticSpectrumStream("test temporal spectrum mean", temporalspectrum)
+        proj = MeanSpectrumProjection(tss)
         time.sleep(1.0)
-        mean_spec = proj.image.value
-        self.assertEqual(mean_spec.shape, (temp_spec.shape[0],))
+        mean_temporalspectrum = proj.image.value
+        self.assertEqual(mean_temporalspectrum.shape, (temporalspectrum.shape[0],))
+
+    def test_mean_chronograph(self):
+        """Test MeanSpectrumStream for histogram display in settings panel
+        with time correlator data data."""
+        chronograph = self._create_chronograph_data()
+        cs = stream.StaticSpectrumStream("test chronograph mean", chronograph)
+        proj = MeanSpectrumProjection(cs)
+        time.sleep(2)
+        mean_chronograph = proj.image.value
+        self.assertEqual(mean_chronograph.shape, (chronograph.shape[0],))
 
     def test_tiled_stream(self):
         POS = (5.0, 7.0)
@@ -5046,6 +5249,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         md[model.MD_DIMS] = "YXCT"
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
+
+# TODO time correlator test cases?
 
 
 if __name__ == "__main__":

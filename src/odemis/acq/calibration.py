@@ -67,18 +67,23 @@ def get_ar_data(das):
                            key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
             return earliest
 
-# TODO:
-# Same thing for the spectrum. However, we need both a background (to subtract
-# from the raw data) and a list of coefficients to compensate for the system
-# response disparities.
+# Spectrum calibration data is a background image (to subtract from the raw data, C1111)
+# and a list of coefficients (C1111) to compensate for the system response disparities.
+# The file format expected is a file with just one acquisition: the spectrum acquisition.
+# However, it is fine if it contains also the survey and SEM data (and convenient as that's
+# how Odemis saves it directly after an acquisition). If there is more than one spectrum
+# image we try to pick the right one (eg, first acquired), but absolutely no
+# correctness can be ensured.
 def get_spectrum_data(das):
     """
     Finds the DataArray that contains a spectrum data.
     (typically, a "background" image, ie, an image taken without ebeam).
 
     :param das: (list of DataArrays): all the DA into which to look for.
-    :return: (DataArray of shape C1111): the first DA that seems good.
-    :raises: LookupError: if no DA can be found
+    :return: (DataArray of shape C1111): The first data array that seems good, if e.g. multiple
+             streams were acquired. If only one bg stream, but multiple ebeam positions, returns the
+             averaged image from all ebeam positions (reduces noise).
+    :raises: LookupError: If no DA can be found.
     """
     # TODO: also allow to pass an expected resolution/wavelength polynomial, in
     # order to support a calibration file with multiple calibrations resolution?
@@ -93,8 +98,7 @@ def get_spectrum_data(das):
         # Actually, we even check for C > 3 (as a spectrum with less than 4
         # points would be very weird).
         if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-            and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)
-            ):
+                and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
             specs.append(da)
 
     if not specs:
@@ -102,11 +106,10 @@ def get_spectrum_data(das):
         # use multiple acquisitions and average them to remove the noise
         for da in das:
             if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-                and len(da.shape) == 5 and da.shape[-5] > 4
-                ):
+                    and len(da.shape) == 5 and da.shape[-5] > 4):
                 # take the average for each wavelength (accumulated with a float64)
-                dam = da.reshape((da.shape[0], -1)).mean(axis=1)
-                dam = dam.astype(da.dtype) # put back into original dtype
+                dam = da.reshape((da.shape[0], -1)).mean(axis=1)  # TODO replace with da.mean(axis=(1, 2, 3, 4))?
+                dam = dam.astype(da.dtype)  # put back into original dtype
                 dam.shape += (1, 1, 1, 1)
                 specs.append(dam)
 
@@ -121,6 +124,62 @@ def get_spectrum_data(das):
         logging.warning("Spectrum file contained %d spectrum data, "
                         "will pick the earliest acquired", len(das))
         earliest = min(specs,
+                       key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
+        return earliest
+
+# Temporal spectrum calibration data is a background image (to subtract from the raw data, CT111)
+# and a list of coefficients (C1111) to compensate for the system response disparities.
+# The file format expected is a file with just one acquisition: the temporal spectrum acquisition.
+# However, it is fine if it contains also the survey and SEM data (and convenient as that's
+# how Odemis saves it directly after an acquisition). If there is more than one temporal spectrum
+# image we try to pick the right one (eg, first acquired), but absolutely no
+# correctness can be ensured.
+def get_temporalspectrum_data(das):
+    """
+    Finds the DataArray that contains temporal spectrum data.
+    (typically, a "background" image, ie, an image taken with a blanket ebeam).
+
+    :param das: (list of DataArrays): All the data arrays into which to look for a bg image.
+    :return: (DataArray of shape CT111): The first data array that seems good, if e.g. multiple
+             streams were acquired. If only one bg stream, but multiple ebeam positions, returns the
+             averaged image from all ebeam positions (reduces noise).
+    :raises: LookupError: If no suitable background data array can be found.
+    """
+
+    # expect the worse: multiple temporal spectrum data (e.g. multiple streams acquired in one bg file)
+    temporalspecs = []
+    for da in das:
+        # What we are looking for is very specific:
+        # Need to have C >1 and T > 1.
+        # Actually, we even check for C > 4 and T > 4
+        # (as a spectrum and time info with less than 4 points would be very weird).
+        # Note: We check for same shape, streak mode (MD_STREAK_MODE), time range (MD_STREAK_TIMERANGE),
+        # wavelength (MD_WL_LIST) and time (MD_TIME_LIST) info etc. in bg setter.
+        if len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4] > 4 and da.shape[-3:] == (1, 1, 1):
+            temporalspecs.append(da)
+
+    if not temporalspecs:
+        # Be more flexible, and allow X/Y shape > 1 (multiple ebeam positions), which permits to directly
+        # use multiple acquisitions and average them to remove the noise.
+        for da in das:
+            if len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4] > 4:
+                # take the average image of all ebeam pos (accumulated with a float64)
+                da_mean = da.mean(axis=(2, 3, 4))
+                da_mean = da_mean.astype(da.dtype)  # put back into original dtype
+                da_mean.shape += (1, 1, 1)
+                temporalspecs.append(da_mean)
+
+    if not temporalspecs:
+        raise LookupError("Failed to find any temporal spectrum data within the %d data acquisitions" %
+                          (len(das)))
+    elif len(temporalspecs) == 1:
+        return temporalspecs[0]
+    else:
+        # look for the first one (in terms of time), hoping that it's the one
+        # the user expects to be representing the background
+        logging.warning("Temporal spectrum file contained %d temporal spectrum data, "
+                        "will pick the earliest acquired", len(das))
+        earliest = min(temporalspecs,
                        key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
         return earliest
 
@@ -148,8 +207,7 @@ def get_spectrum_efficiency(das):
         # Actually, we even check for C > 3 (as a spectrum with less than 4
         # points would be very weird).
         if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-            and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1,1,1,1)
-            ):
+                and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
             specs.append(da)
 
     if not specs:
@@ -179,47 +237,101 @@ def get_spectrum_efficiency(das):
     return ret
 
 
-def compensate_spectrum_efficiency(data, bckg=None, coef=None):
+def apply_spectrum_corrections(data, bckg=None, coef=None):
     """
-    Apply the efficiency compensation factors to the given data.
+    Apply the background correction and the spectrum efficiency compensation
+    factors to the given data if applicable.
     If the wavelength of the calibration doesn't cover the whole data wavelength,
     the missing wavelength is filled by the same value as the border. Wavelength
     in-between points is linearly interpolated.
-    data (DataArray of at least 5 dims): the original data. Need MD_WL_* metadata
-    bckg (None or DataArray of at least 5 dims): the background data, with TZXY = 1111
-      Need MD_WL_* metadata.
-    coef (None or DataArray of at least 5 dims): the coeficient data, with TZXY = 1111
-      Need MD_WL_* metadata.
-    returns (DataArray): same shape as original data. Can have dtype=float
+    :param data: (DataArray of at least 5 dims) The original data.
+            Spectrum data can be of two types:
+            - mirror (no wl info)
+            - grating (wl info)
+        Temporal spectrum data can be of four types:
+            - mirror + focus mode (no wl and time info)
+            - mirror + operate mode (no wl but time info)
+            - grating + focus mode (wl but no time info)
+            - grating + operate mode (wl and time info)
+        Chronograph data can be only of one type, with no wl but time info. So far no bg correction is
+            supported for chronograph data. Spectrum efficiency correction do not apply for this type of data.
+    :param bckg: (None or DataArray of at least 5 dims) The background data, with
+        CTZYX = C1111 (spectrum), CTZYX = CT111 (temporal spectrum) or CTZYX = 1T111 (time correlator).
+    :param coef: (None or DataArray of at least 5 dims) The coefficient data, with CTZXY = C1111.
+    :returns: (DataArray) Same shape as original data. Can have dtype=float.
     """
-    # Need to get the calibration data for each wavelength of the data
-    wl_data = spectrum.get_wavelength_per_pixel(data)
+
+    # handle time correlator data (chronograph) data
+    # -> no spectrum efficiency compensation and bg correction supported
+    if data.shape[-5] <= 1 and data.shape[-4] > 1:
+        raise ValueError("Do not support any background correction or spectrum efficiency "
+                         "compensation for time correlator (chronograph) data")
 
     # TODO: use MD_BASELINE as a fallback?
     if bckg is not None:
-        if bckg.shape[1:] != (1, 1, 1, 1):
-            raise ValueError("bckg should have shape C1111")
-        # It must be fitting the data
+
+        # Check that the bg matches the data.
         # TODO: support if the data is binned?
-        if data.shape[0] != bckg.shape[0]:
-            raise ValueError("Background should have same length as the data, but got %d != %d" %
-                             (bckg.shape[0], data.shape[0]))
+        if data.shape[0:2] != bckg.shape[0:2]:
+            raise ValueError("Background should have the same shape as the data, but got %s != %s" %
+                             (bckg.shape[0:2], data.shape[0:2]))
 
-        wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
-        # Warn if not the same wavelength
-        if not numpy.allclose(wl_bckg, wl_data):
-            logging.warning("Spectrum background is between %g->%g nm, "
-                            "while the spectrum is between %g->%g nm.",
-                            wl_bckg[0] * 1e9, wl_bckg[-1] * 1e9,
-                            wl_data[0] * 1e9, wl_data[-1] * 1e9)
+        # If temporal spectrum data, check for time range and streak mode.
+        if model.MD_STREAK_MODE in data.metadata.keys():
+            # Check that the data and the bg image were acquired with the same streak mode.
+            if data.metadata[model.MD_STREAK_MODE] != bckg.metadata[model.MD_STREAK_MODE]:
+                raise ValueError("Background should have the same streak mode as the data, but got %d != %d" %
+                                 (bckg.metadata[model.MD_STREAK_MODE], data.metadata[model.MD_STREAK_MODE]))
+            # Check that the time range of the data matches with the bg image.
+            if data.metadata[model.MD_STREAK_TIMERANGE] != bckg.metadata[model.MD_STREAK_TIMERANGE]:
+                raise ValueError("Background should have the same time range as the data, but got %s != %s" %
+                                 (bckg.metadata[model.MD_STREAK_TIMERANGE], data.metadata[model.MD_STREAK_TIMERANGE]))
 
-        data = img.Subtract(data, bckg)
+        # Check if we have any wavelength information.
+        if not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            # temporal spectrum data, but acquired in mirror mode (with/without time info)
+            # spectrum data, but acquired in mirror mode
+
+            # check that bg data also doesn't contain wl info
+            if set(bckg.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
+                raise ValueError("Found MD_WL_* metadata in background image, but "
+                                 "data does not provide any wavelength information")
+            data = img.Subtract(data, bckg)
+
+        else:
+            # temporal spectrum with wl info (with/without time info)
+            # spectrum data with wl info
+
+            # Need to get the calibration data for each wavelength of the data
+            wl_data = spectrum.get_wavelength_per_pixel(data)
+
+            # Check that bg data also contains wl info.
+            try:
+                wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
+            except KeyError:
+                raise ValueError("Found no MD_WL_* metadata in background image.")
+
+            # Warn if not the same wavelength
+            if not numpy.allclose(wl_bckg, wl_data):
+                logging.warning("Spectrum background is between %g->%g nm, "
+                                "while the spectrum is between %g->%g nm.",
+                                wl_bckg[0] * 1e9, wl_bckg[-1] * 1e9,
+                                wl_data[0] * 1e9, wl_data[-1] * 1e9)
+
+            data = img.Subtract(data, bckg)
 
     # We could be more clever if calib has a MD_WL_POLYNOMIAL, but it's very
     # unlikely the calibration is in this form anyway.
     if coef is not None:
+        # Check if we have any wavelength information in data.
+        if not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            raise ValueError("Cannot apply spectrum correction as "
+                             "data does not provide any wavelength information.")
         if coef.shape[1:] != (1, 1, 1, 1):
-            raise ValueError("coef should have shape C1111")
+            raise ValueError("Spectrum efficiency compensation should have shape C1111.")
+
+        # Need to get the calibration data for each wavelength of the data
+        wl_data = spectrum.get_wavelength_per_pixel(data)
         wl_coef = spectrum.get_wavelength_per_pixel(coef)
 
         # Warn if the calibration is not enough for the data
@@ -231,10 +343,9 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
 
         # Interpolate the calibration data for each wl_data
         calib_fitted = numpy.interp(wl_data, wl_coef, coef[:, 0, 0, 0, 0])
-        calib_fitted.shape += (1, 1, 1, 1) # put TZYX dims
-
+        calib_fitted.shape += (1, 1, 1, 1)  # put TZYX dims
         # Compensate the data
-        data = data * calib_fitted # will keep metadata from data
+        data = data * calib_fitted  # will keep metadata from data
 
     return data
 

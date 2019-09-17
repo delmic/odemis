@@ -663,13 +663,16 @@ class AnalysisGUIData(MicroscopyGUIData):
         # configuration file.
         ar_file = self._conf.get("calibration", "ar_file")
         spec_bck_file = self._conf.get("calibration", "spec_bck_file")
+        temporalspec_bck_file = self._conf.get("calibration", "temporalspec_bck_file")
         spec_file = self._conf.get("calibration", "spec_file")
         self.ar_cal = StringVA(ar_file) # a unicode
         self.spec_bck_cal = StringVA(spec_bck_file) # a unicode
-        self.spec_cal = StringVA(spec_file) # a unicode
+        self.temporalspec_bck_cal = StringVA(temporalspec_bck_file)  # a unicode
+        self.spec_cal = StringVA(spec_file)  # a unicode
 
         self.ar_cal.subscribe(self._on_ar_cal)
         self.spec_bck_cal.subscribe(self._on_spec_bck_cal)
+        self.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal)
         self.spec_cal.subscribe(self._on_spec_cal)
 
         self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
@@ -699,6 +702,9 @@ class AnalysisGUIData(MicroscopyGUIData):
 
     def _on_spec_bck_cal(self, fn):
         self._conf.set("calibration", "spec_bck_file", fn)
+
+    def _on_temporalspec_bck_cal(self, fn):
+        self._conf.set("calibration", "temporalspec_bck_file", fn)
 
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
