@@ -196,10 +196,6 @@ CONFIG_5DOF = {"name": "5DOF",
                 'range': [-0.785, 0.785],
                 'unit': 'rad',
             },
-            'ry': {
-                'range': [0, 0],
-                'unit': 'rad',
-            },
             'rz': {
                 'range': [-0.785, 0.785],
                 'unit': 'rad',
@@ -245,16 +241,16 @@ class Test5DOF(unittest.TestCase):
         """
         Test sending a position that is out of range.
         """
-        pos = {'x': 1.5, 'y': 20, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
+        pos = {'x': 1.5, 'y': 20, 'z': 0, 'rx': 0, 'rz': 0.0005}
         with self.assertRaises(ValueError):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'ry': 0, 'rz': 0.001}
-        pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz':0}
-        pos3 = {'x': 3.5218e-4, 'y': 1.785e-5, 'z': 1e-3, 'rx':-1e-6, 'ry': 0, 'rz':-1.253e-6}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'rz': 0.001}
+        pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'rz':0}
+        pos3 = {'x': 3.5218e-4, 'y': 1.785e-5, 'z': 1e-3, 'rx':-1e-6, 'rz':-1.253e-6}
         # test where not all axes are defined
-        pos4 = {'x': 1e-3, 'rx': 1e-5, 'ry': 0, 'rz': 0}
+        pos4 = {'x': 1e-3, 'rx': 1e-5, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -271,8 +267,8 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0, 'rz': 0.002}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
+        new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
@@ -281,8 +277,8 @@ class Test5DOF(unittest.TestCase):
         self.assertNotEqual(round(difference, 4), 0)
 
         # Test cancellation by stopping
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
-        new_pos = {'x':2e-3, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0, 'rz': 0.0001}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
+        new_pos = {'x':2e-3, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -292,9 +288,9 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_rel(self):
         # Test relative moves
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 1e-3, 'y':-1e-3, 'ry': 0, 'rz': 0}
+        shift = {'x': 1e-3, 'y':-1e-3, 'rz': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 

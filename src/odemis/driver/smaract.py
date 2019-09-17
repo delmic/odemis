@@ -965,7 +965,6 @@ def SA_MC_pose_to_dict(pose):
 
     # Note: internally, the system uses metres and degrees for rotation
     pos['rx'] = math.radians(pose.rx)
-    pos['ry'] = math.radians(pose.ry)
     pos['rz'] = math.radians(pose.rz)
     return pos
 
@@ -980,6 +979,8 @@ def dict_to_SA_MC_pose(pos, base=SA_MC_Pose()):
     raises ValueError if an unsupported axis name is input
     """
 
+    base.ry = 0
+
     # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
         if an == "x":
@@ -990,8 +991,6 @@ def dict_to_SA_MC_pose(pos, base=SA_MC_Pose()):
             base.z = v
         elif an == "rx":
             base.rx = math.degrees(v)
-        elif an == "ry":
-            base.ry = math.degrees(v)
         elif an == "rz":
             base.rz = math.degrees(v)
         else:
@@ -1167,7 +1166,7 @@ class MC_5DOF(model.Actuator):
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
             The following axes must be present:
-            x , y, z, rx, ry, rz
+            x , y, z, rx, rz
             note: in the hardware, ry exists, but has a range of (0,0), so it
             should be defined this way in the configuration
 
@@ -1190,8 +1189,8 @@ class MC_5DOF(model.Actuator):
         self._locator = locator
 
         # Be sure that the axes are defined in the controller
-        if not all(i in axes.keys() for i in ['x', 'y', 'z', 'rx', 'ry', 'rz']):
-            raise ValueError("Not all axes are defined. Must have x, y, z, rx, ry, rz")
+        if not all(i in axes.keys() for i in ['x', 'y', 'z', 'rx', 'rz']):
+            raise ValueError("Not all axes are defined. Must have x, y, z, rx, rz")
 
         for axis_name, axis_par in axes.items():
             try:
@@ -1424,7 +1423,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
             else:
                 raise
 
@@ -1664,7 +1663,7 @@ class FakeMC_5DOF_DLL(object):
         self._range['y'] = (-1, 1)
         self._range['z'] = (-1, 1)
         self._range['rx'] = (-45, 45)
-        self._range['ry'] = (-45, 45)
+        self._range['ry'] = (0, 0)
         self._range['rz'] = (-45, 45)
 
         self.stopping = threading.Event()
