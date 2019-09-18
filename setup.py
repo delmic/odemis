@@ -42,7 +42,7 @@ def _get_version_git():
         out = subprocess.check_output(args=["git", "describe", "--tags", "--dirty", "--always"],
                                       cwd=rootdir)
 
-        return out.strip()
+        return out.strip().decode("utf-8")
     except EnvironmentError:
         raise LookupError("Unable to run git")
 
