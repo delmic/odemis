@@ -1189,8 +1189,8 @@ class MC_5DOF(model.Actuator):
         self._locator = locator
 
         # Be sure that the axes are defined in the controller
-        if not all(i in axes.keys() for i in ['x', 'y', 'z', 'rx', 'rz']):
-            raise ValueError("Not all axes are defined. Must have x, y, z, rx, rz")
+        if set(axes.keys()) < {'x', 'y', 'z', 'rx', 'rz'}:
+            raise ValueError("Some of the axes are not allowed, it should have only x, y, z, rx, rz")
 
         for axis_name, axis_par in axes.items():
             try:
@@ -1272,7 +1272,7 @@ class MC_5DOF(model.Actuator):
             # there is no pivot position set
             return
 
-        if not isinstance(pivot, dict) and pivot.keys() == {"x", "y", "z"}:
+        if not isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}:
             raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
 
         logging.debug("Updating pivot point to %s.", pivot)
