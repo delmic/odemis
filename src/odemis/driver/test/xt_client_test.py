@@ -48,7 +48,7 @@ class TestMicroscope(unittest.TestCase):
 
     def test_acquisition(self):
         """Test acquiring an image."""
-        image = self.microscope.acquire_image()
+        image = self.microscope.acquire_image(channel_name='electron1')
         self.assertEqual(len(image.shape), 2)
 
     @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
@@ -184,26 +184,26 @@ class TestMicroscope(unittest.TestCase):
 
     def test_change_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change."""
-        self.microscope.set_channel_state(state='run')
-        self.microscope.wait_for_state_changed('run')  # timeout is handled on the server side
-        self.assertEqual(self.microscope.get_channel_state(), 'run')
-        self.microscope.set_channel_state(state='stop')
-        self.microscope.wait_for_state_changed('stop')  # timeout is handled on the server side
-        self.assertEqual(self.microscope.get_channel_state(), 'stop')
+        self.microscope.set_channel_state('electron1', xt_client.XT_RUN)
+        self.microscope.wait_for_state_changed(xt_client.XT_RUN, 'electron1')  # timeout is handled on the server side
+        self.assertEqual(self.microscope.get_channel_state('electron1'), xt_client.XT_RUN)
+        self.microscope.set_channel_state('electron1', xt_client.XT_STOP)
+        self.microscope.wait_for_state_changed(xt_client.XT_STOP, 'electron1')  # timeout is handled on the server side
+        self.assertEqual(self.microscope.get_channel_state('electron1'), xt_client.XT_STOP)
 
     def test_change_ccd_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change for the optical channel."""
-        self.microscope.set_channel_state(name='optical4', state='run')
-        self.microscope.wait_for_state_changed('run', name='optical4')  # timeout is handled on the server side
-        self.assertEqual(self.microscope.get_channel_state(name='optical4'), 'run')
-        self.microscope.set_channel_state(name='optical4', state='stop')
-        self.microscope.wait_for_state_changed('stop', name='optical4')  # timeout is handled on the server side
-        self.assertEqual(self.microscope.get_channel_state(name='optical4'), 'stop')
+        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_RUN)
+        self.microscope.wait_for_state_changed(xt_client.XT_RUN, name='optical4')  # timeout is handled on the server side
+        self.assertEqual(self.microscope.get_channel_state(name='optical4'), xt_client.XT_RUN)
+        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_STOP)
+        self.microscope.wait_for_state_changed(xt_client.XT_STOP, name='optical4')  # timeout is handled on the server side
+        self.assertEqual(self.microscope.get_channel_state(name='optical4'), xt_client.XT_STOP)
 
     def test_acquire_ccd_image(self):
         """Test acquiring an image from the optical channel."""
-        self.microscope.set_channel_state(name='optical4', state='run')
-        self.microscope.wait_for_state_changed('run', name='optical4')  # timeout is handled on the server side
+        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_RUN)
+        self.microscope.wait_for_state_changed(xt_client.XT_RUN, name='optical4')  # timeout is handled on the server side
         image = self.microscope.acquire_image(channel_name='optical4')
         self.assertEqual(len(image.shape), 2)
 

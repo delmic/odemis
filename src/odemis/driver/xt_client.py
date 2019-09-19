@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 16 Aug 2019
@@ -7,7 +6,7 @@ Created on 16 Aug 2019
 
 Copyright © 2019 Thera Pals, Delmic
 
-This file is part of Delmic Acquisition Software.
+This file is part of Odemis.
 
 Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your
@@ -22,19 +21,18 @@ http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
-import logging
-
-import msgpack_numpy as mn
+import msgpack_numpy
 import zerorpc
 
-mn.patch()
-
-# Necessary, otherwise nothing at all will be shown
-logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
-logging.getLogger().setLevel(logging.INFO)
+# allow to pass numpy arrays over msgpack
+msgpack_numpy.patch()
 
 
-class MicroscopeClient:
+XT_RUN = "run"
+XT_STOP = "stop"
+XT_CANCEL = "cancel"
+
+class MicroscopeClient(object):
     """
     Class to communicate with a Microscope server via the ZeroRPC protocol.
     """
@@ -44,8 +42,8 @@ class MicroscopeClient:
         Parameters
         ----------
         server_address: str
-            server address of the Microscope server.
-        timeout: int
+            server address and port of the Microscope server.
+        timeout: float
             Time in seconds the client should wait for a response from the server.
         """
         # set heartbeat to None on client and server side, otherwise after two missed heartbeats the client thinks the
@@ -98,7 +96,7 @@ class MicroscopeClient:
         """Returns: (dict) the unit and range of the stage position."""
         return self.client.stage_info()
 
-    def acquire_image(self, channel_name='electron1'):
+    def acquire_image(self, channel_name):
         """
         Acquire an image observed via the currently set channel. Note: the channel needs to be stopped before an image
         can be acquired. To acquire multiple consecutive images the channel needs to be started and stopped. This
@@ -268,11 +266,7 @@ class MicroscopeClient:
         """Returns: (bool) True if the stage is homed and False otherwise."""
         return self.client.is_homed()
 
-    def get_channel(self, name='electron1'):
-        """Returns: (xtlib.Channel) an xtlib channel object."""
-        return self.client.get_channel(unicode(name))
-
-    def set_channel_state(self, name='electron1', state='run'):
+    def set_channel_state(self, name, state):
         """
         Stop or start running the channel. This is non-blocking.
 
@@ -285,7 +279,7 @@ class MicroscopeClient:
         """
         self.client.set_channel_state(unicode(name), unicode(state))
 
-    def wait_for_state_changed(self, desired_state, name='electron1', timeout=10):
+    def wait_for_state_changed(self, desired_state, name, timeout=10):
         """
         Wait until the state of the channel has changed to the desired state, if it has not changed after a certain
         timeout an error will be raised.
@@ -301,7 +295,7 @@ class MicroscopeClient:
         """
         self.client.wait_for_state_changed(unicode(desired_state), unicode(name), timeout)
 
-    def get_channel_state(self, name='electron1'):
+    def get_channel_state(self, name):
         """Returns: (str) the state of the channel: "run", "stop" or "cancel"."""
         return self.client.get_channel_state(unicode(name))
 
@@ -366,3 +360,6 @@ class MicroscopeClient:
     def beam_shift_info(self):
         """Returns: (dict) the unit and xy-range of the beam shift."""
         return self.client.beam_shift_info()
+
+
+
