@@ -1,0 +1,86 @@
+MultiBeamSEM: {
+  class: Microscope,
+  role: mbsem,
+  children: ["SEM", "EBeam Focus", "EBeam Stage", "EBeam control",
+             "DiagnosticCam", "DiagnosticCam Focus", "Sample Stage"],
+}
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"DiagnosticCam": {
+  class: ueye.Camera,
+  role: diagnostic-ccd,
+  init: {
+    device: null,
+  },
+  children: {focus: "DiagnosticCam Focus"}
+}
+
+"DiagnosticCam Focus": {
+  class: actuator.MultiplexActuator,
+  role: diagnostic-cam-focus,
+  children: {"z": "Sample Stage"},
+  init: {
+    axes_map: {"z": "z"}
+  },
+  properties: {
+    speed: {'z': 0.001} # m/s
+  }
+}
+
+#"Sample Stage": {
+#  class: pigcs.Bus,
+#  role: stage,
+#  init: {
+#    port: "/dev/fake",
+#    # axis -> controller, channel, closed-loop?
+#    axes: {
+#      "z": [null, "Z", True]
+#    },
+#  },
+#}
+
+"Sample Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {
+        axes: ["z"],
+        ranges: {"z": [0, 100.e-6]}
+    },
+}
+
+
+"SEM": {
+  class: xt_client.SEM,
+  role: sem,
+  init: {
+    address: "tcp://127.0.0.1:4242",
+    timeout: 30,
+  },
+  children: {
+    scanner: "EBeam control",
+    focus: "EBeam Focus",
+    stage: "EBeam Stage",
+  }
+}
+
+"EBeam control": {
+  creator: "SEM",
+  role: ebeam-control,
+  init: {
+    hfw_nomag: 0.114,
+  },
+}
+
+"EBeam Focus": {
+  # Internal child of SUIPSEM, so no class
+  role: ebeam-focus,
+}
+
+"EBeam Stage": {
+  # Internal child of SUIPSEM, so no class
+  role: ebeam-stage,
+  init: {
+    inverted: ["x", "y"],
+  }
+}
