@@ -693,11 +693,21 @@ class Camera(model.DigitalCamera):
             self._set_static_settings()
 
             # Set the format
-            # TODO: color mode based on the maximum BPP
-            # cf is_DeviceFeature( IS_DEVICE_FEATURE_CMD_GET_SUPPORTED_SENSOR_BIT_DEPTHS)
-            self._dll.is_SetColorMode(self._hcam, CM_MONO8)
-            self._dtype = numpy.uint8
-            self._metadata[model.MD_BPP] = 8
+            # Loop through possible bit depths and pick the highest one that does not raise an error.
+            # We tried GET_SUPPORTED_SENSOR_BIT_DEPTHS, to find the appropriate bit depth per camera,
+            # however it is not supported on any of the camera's we tried.
+            for bpp, bit_depth in ((16, CM_MONO16), (12, CM_MONO12), (10, CM_MONO10), (8, CM_MONO8)):
+                try:
+                    self._dll.is_SetColorMode(self._hcam, bit_depth)
+                    break  # found a good color mode
+                except UEyeError as err:
+                    if err.errno == 174 and bpp > 8:  # INVALID_COLOR_FORMAT
+                        logging.debug("Set color mode to {} bits not possible, trying a lower value.".format(bpp))
+                    else:
+                        raise
+            self._dtype = numpy.uint16 if bpp > 8 else numpy.uint8
+            self._metadata[model.MD_BPP] = bpp
+            logging.info("Set color mode to {} bits.".format(bpp))
             self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
 
             # TODO: binning? frameRate? resolution + translation = AOI?
