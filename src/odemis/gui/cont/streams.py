@@ -1614,13 +1614,29 @@ class StreamBarController(object):
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
         else:
+            # Hack: If the blanker doesn't support "automatic" mode (None),
+            # we have a trick to control the blanker in the stream. Ideally,
+            # this would be done by the optical-path manager, or by the e-beam
+            # driver (by always providing a None option).
+            # We only do this on the SECOM, because on the SPARC it's less of an
+            # issue, and we would need to change a lot more streams.
+            # TODO: remove once the CompositedScanner supports automatic blanker.
+            if (self._main_data_model.role == "secom" and
+                model.hasVA(self._main_data_model.ebeam, "blanker") and
+                None not in self._main_data_model.ebeam.blanker.choices
+               ):
+                blanker = self._main_data_model.ebeam.blanker
+            else:
+                blanker = None
+
             s = acqstream.SEMStream(
                 name,
                 detector,
                 detector.data,
                 self._main_data_model.ebeam,
                 focuser=self._main_data_model.ebeam_focus,
-                opm=self._main_data_model.opm
+                opm=self._main_data_model.opm,
+                blanker=blanker
             )
 
         # If the detector already handles brightness and contrast, don't do it by default

@@ -137,6 +137,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
 
         # Configure CCD and set ebeam to spot mode
         logging.debug("Configure CCD and set ebeam to spot mode...")
+        _set_blanker(escan, False)
         ccd.binning.value = ccd.binning.clip((2, 2))
         ccd.resolution.value = ccd.resolution.range[1]
         ccd.exposureTime.value = 0.3
@@ -238,6 +239,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         ccd.resolution.value = init_cres
         escan.scale.value = init_scale
         escan.resolution.value = init_eres
+        _set_blanker(escan, True)
         with future._alignment_lock:
             future._done.set()
             if future._task_state == CANCELLED:
@@ -273,6 +275,24 @@ def estimateAlignmentTime(et, dist=None, n_autofocus=2):
     returns (float):  process estimated time #s
     """
     return estimateCenterTime(et, dist) + n_autofocus * autofocus.estimateAutoFocusTime(et)  # s
+
+
+def _set_blanker(escan, active):
+    """
+    Set the blanker to the given state iif the blanker doesn't support "automatic"
+      mode (ie, None).
+    escan (ebeam scanner)
+    active (bool): True = blanking = no ebeam
+    """
+    try:
+        if (model.hasVA(escan, "blanker")
+            and not None in escan.blanker.choices
+           ):
+            # Note: we assume that this is blocking, until the e-beam is
+            # ready to acquire an image.
+            escan.blanker.value = active
+    except Exception:
+        logging.exception("Failed to set the blanker to %s", active)
 
 
 def FindSpot(image, sensitivity_limit=100):

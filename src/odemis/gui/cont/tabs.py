@@ -2336,6 +2336,15 @@ class SecomAlignTab(Tab):
         # force this view to never follow the tool mode (just standard view)
         panel.vp_align_ccd.canvas.allowed_modes = {TOOL_NONE}
 
+        # To control the blanker if it's not automatic (None)
+        # TODO: remove once the CompositedScanner supports automatic blanker.
+        if (model.hasVA(main_data.ebeam, "blanker") and
+            None not in main_data.ebeam.blanker.choices
+           ):
+            blanker = main_data.ebeam.blanker
+        else:
+            blanker = None
+
         # No streams controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
         # Use all VAs as HW VAs, so the values are shared with the streams tab
@@ -2344,7 +2353,8 @@ class SecomAlignTab(Tab):
                                          main_data.ebeam,
                                          hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
                                          hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
-                                         acq_type=model.MD_AT_EM
+                                         acq_type=model.MD_AT_EM,
+                                         blanker=blanker
                                          )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
@@ -2356,7 +2366,8 @@ class SecomAlignTab(Tab):
         sem_spe.stream_panel.flatten()  # removes the expander header
 
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
+                                              main_data.sed.data, main_data.ebeam,
+                                              blanker=blanker)
         self.tab_data_model.streams.value.append(spot_stream)
         self._spot_stream = spot_stream
 

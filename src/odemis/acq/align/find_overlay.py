@@ -130,6 +130,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     logging.debug("Starting Overlay...")
 
     try:
+        _set_blanker(escan, False)
+
         # Repeat until we can find overlay (matching coordinates is feasible)
         for trial in range(MAX_TRIALS_NUMBER):
             logging.debug("Trying with dwell time = %g s...", future._gscanner.dwell_time)
@@ -298,6 +300,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         logging.debug("Finding overlay failed", exc_info=1)
         raise exp
     finally:
+        _set_blanker(escan, True)
         with future._overlay_lock:
             future._done.set()
             if future._find_overlay_state == CANCELLED:
@@ -435,6 +438,24 @@ def _MakeReport(msg, data, optical_image=None, subimages=None):
     report.close()
     logging.warning("Failed to find overlay. Please check the failure report in %s.",
                     path)
+
+
+def _set_blanker(escan, active):
+    """
+    Set the blanker to the given state iif the blanker doesn't support "automatic"
+      mode (ie, None).
+    escan (ebeam scanner)
+    active (bool): True = blanking = no ebeam
+    """
+    try:
+        if (model.hasVA(escan, "blanker")
+            and not None in escan.blanker.choices
+           ):
+            # Note: we assume that this is blocking, until the e-beam is
+            # ready to acquire an image.
+            escan.blanker.value = active
+    except Exception:
+        logging.exception("Failed to set the blanker to %s", active)
 
 
 class GridScanner(object):
