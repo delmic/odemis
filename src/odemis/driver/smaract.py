@@ -1165,10 +1165,10 @@ class MC_5DOF(model.Actuator):
         linear_speed: (double) the default speed (in m/s) of the linear actuators
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
-            The following axes must be present:
+            The following axes must all be present:
             x , y, z, rx, rz
-            note: in the hardware, ry exists, but has a range of (0,0), so it
-            should be defined this way in the configuration
+            note: internally in the driver, ry exists, but has a range of (0,0), so it
+            is not included here
 
             axis parameters: {
                 range: [float, float], default is -1 -> 1
@@ -1188,9 +1188,9 @@ class MC_5DOF(model.Actuator):
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
 
-        # Be sure that the axes are defined in the controller
-        if set(axes.keys()) < {'x', 'y', 'z', 'rx', 'rz'}:
-            raise ValueError("Some of the axes are not allowed, it should have only x, y, z, rx, rz")
+        # Require the user to define all 5 axes: x, y, z, rx, rz
+        if set(axes.keys()) == {'x', 'y', 'z', 'rx', 'rz'}:
+            raise ValueError("Invalid axes definition. Axes should contain x, y, z, rx, rz")
 
         for axis_name, axis_par in axes.items():
             try:
