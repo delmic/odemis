@@ -1377,12 +1377,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
         Read the SEM and CCD stream settings and adapt the SEM scanner
         accordingly.
-        return (float): estimated time for a whole CCD image
+        :returns exp + readout (float): Estimated time for a whole (but not integrated) CCD image.
         """
         # Move ebeam to the center
         self._emitter.translation.value = (0, 0)
 
-        return self._adjustHardwareSettings()
+        # TODO if image integration supported for scan stage, return both values
+        return self._adjustHardwareSettings()[0]
 
     def _runAcquisitionScanStage(self, future):
         """
@@ -1409,7 +1410,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             raise NotImplementedError("Scan Stage is not yet supported with polarimetry hardware.")
 
         if self._integrationTime:
-            if self._integrationTime.value > self._sccd.exposureTime.range[1]:
+            if self._sccd.integrationTime.value > self._ccd.exposureTime.range[1]:
                 raise NotImplementedError("Requested exposure time is longer than the maximum exposure time of the "
                                           "detector. Image integration is not yet supported for scan stage "
                                           "acquisitions.")
