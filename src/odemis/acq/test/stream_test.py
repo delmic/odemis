@@ -1753,10 +1753,10 @@ class SPARC2TestCase(unittest.TestCase):
 
     def test_acq_spec_sstage(self):
         """
-        Test spectrum acquisition with scan stage
+        Test spectrum acquisition with scan stage.
         """
         # Check that it works even when not at 0,0 of the sample stage
-        f = self.stage.moveRel({"x":-1e-3, "y": 2e-3})
+        f = self.stage.moveRel({"x": -1e-3, "y": 2e-3})
         f.result()
 
         # Zoom in to make sure the ROI is not too big physically
@@ -1770,7 +1770,7 @@ class SPARC2TestCase(unittest.TestCase):
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
-                                              self.ebeam, sstage=self.sstage)
+                                              self.ebeam, sstage=self.sstage, detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
@@ -1849,7 +1849,7 @@ class SPARC2TestCase(unittest.TestCase):
 
     def test_acq_spec_sstage_cancel(self):
         """
-        Test canceling spectrum acquisition with scan stage
+        Test canceling spectrum acquisition with scan stage.
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
@@ -1918,9 +1918,9 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def test_acq_spec_all(self):
+    def test_acq_spec_sstage_all(self):
         """
-        Test spectrum acquisition with scan stage, fuzzying, and drift correction
+        Test spectrum acquisition with scan stage, fuzzying, and drift correction.
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
