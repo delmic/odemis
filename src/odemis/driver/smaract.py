@@ -1189,7 +1189,7 @@ class MC_5DOF(model.Actuator):
         self._locator = locator
 
         # Require the user to define all 5 axes: x, y, z, rx, rz
-        if set(axes.keys()) == {'x', 'y', 'z', 'rx', 'rz'}:
+        if set(axes.keys()) != {'x', 'y', 'z', 'rx', 'rz'}:
             raise ValueError("Invalid axes definition. Axes should contain x, y, z, rx, rz")
 
         for axis_name, axis_par in axes.items():
