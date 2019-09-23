@@ -50,6 +50,8 @@ MD_POS = "Centre position"  # (m, m) or (m, m, m) if the data has XY or XYZ dime
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
 MD_ROTATION = "Rotation" # radians (0<=float<2*PI) rotation applied to the image (from its center) counter-clockwise
 # Note that the following two might be a set of ranges
+MD_PIVOT_POS = "Pivot position for controllers with rotational axes"  # (dict str->float) axis -> pos:
+# Used in SmarAct motion controllers
 MD_IN_WL = "Input wavelength range" # (m, m) or (m, m, m, m, m), lower and upper range of the wavelength input
 MD_OUT_WL = "Output wavelength range"  # (m, m) or (m, m, m, m, m), lower and upper range of the filtered wavelength before the camera
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
