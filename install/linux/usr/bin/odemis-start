@@ -2,4 +2,4 @@
 
 . /etc/odemis.conf
 
-${PYTHON_INTERPRETER:-/usr/bin/python} -m $START "$@"
+${PYTHON_INTERPRETER:-/usr/bin/python} -m ${START:-odemis.odemisd.start} "$@"
