@@ -3,7 +3,11 @@
 VER := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 
 %:
-	dh $@ --with python2 --with sphinxdoc
+	dh $@ --with python2,python3 --with sphinxdoc
+
+override_dh_auto_install:
+	python setup.py install --root debian/odemis --install-layout=deb
+	python3 setup.py install --root debian/odemis --install-layout=deb
 
 
 override_dh_installdocs:
