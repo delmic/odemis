@@ -331,6 +331,11 @@ class MicroscopeViewport(ViewPort):
             self.view.mpp.subscribe(self._on_view_mpp_change)
             view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
 
+    def clear(self):
+        super(MicroscopeViewport, self).clear()
+        if self.canvas.ruler_overlay:
+            self.canvas.ruler_overlay.clear()
+
     ################################################
     #  Panel control
     ################################################

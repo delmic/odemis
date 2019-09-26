@@ -67,11 +67,13 @@ TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3  # Select the region of acquisition (area to be acquired, SPARC-only)
 TOOL_POINT = 4  # Select a point (to acquire/display)
 TOOL_LINE = 5  # Select a line (to acquire/display)
-TOOL_DICHO = 6  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
-TOOL_SPOT = 7  # Activate spot mode on the SEM
-TOOL_RO_ANCHOR = 8 # Select the region of the anchor region for drift correction
+TOOL_RULER = 6  # Select a ruler to measure the distance between two points (to acquire/display)
+TOOL_DICHO = 7  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
+TOOL_SPOT = 8  # Activate spot mode on the SEM
+TOOL_RO_ANCHOR = 9  # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
-TOOL_AUTO_FOCUS = 9 # Run auto focus procedure on the (active) stream
+TOOL_AUTO_FOCUS = 10  # Run auto focus procedure on the (active) stream
+
 
 ALL_TOOL_MODES = {
     TOOL_NONE,
@@ -80,6 +82,7 @@ ALL_TOOL_MODES = {
     TOOL_ROA,
     TOOL_POINT,
     TOOL_LINE,
+    TOOL_RULER,
     TOOL_DICHO,
     TOOL_SPOT,
     TOOL_RO_ANCHOR,
@@ -587,6 +590,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
             TOOL_RO_ANCHOR,
             #TOOL_POINT,
             #TOOL_LINE,
+            TOOL_RULER,
             TOOL_SPOT,
         }
 
@@ -651,8 +655,8 @@ class AnalysisGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
         self._conf = get_general_conf()
 
-        # only tool to zoom and pick point/line
-        self.tool.choices = {TOOL_NONE, TOOL_POINT, TOOL_LINE}  # TOOL_ZOOM
+        # only tool to zoom and pick point/line/ruler
+        self.tool.choices = {TOOL_NONE, TOOL_POINT, TOOL_LINE, TOOL_RULER}  # TOOL_ZOOM
 
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed

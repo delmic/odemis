@@ -185,6 +185,9 @@ class InfoLegend(wx.Panel):
         # Explicitly set the
         # self.SetMinSize((-1, 40))
 
+    def clear(self):
+        pass
+
     # Make mouse events propagate to the parent
     def OnLeftDown(self, evt):
         evt.ResumePropagation(1)

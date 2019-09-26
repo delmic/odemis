@@ -75,7 +75,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
-    TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
+    TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_AUTO_FOCUS, \
     TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
@@ -85,7 +85,7 @@ from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
-              TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
+              TOOL_LINE, TOOL_RULER, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
 
 
 class Tab(object):
@@ -1704,6 +1704,8 @@ class AnalysisTab(Tab):
         self.tb.enable_button(TOOL_POINT, False)
         self.tb.add_tool(TOOL_LINE, self.tab_data_model.tool)
         self.tb.enable_button(TOOL_LINE, False)
+        self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
+
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # save the views to be able to reset them later
@@ -1828,6 +1830,10 @@ class AnalysisTab(Tab):
             # Remove all the previous streams
             self._stream_bar_controller.clear()
             # Clear any old plots
+            self.panel.vp_inspection_tl.clear()
+            self.panel.vp_inspection_tr.clear()
+            self.panel.vp_inspection_bl.clear()
+            self.panel.vp_inspection_br.clear()
             self.panel.vp_inspection_plot.clear()
             self.panel.vp_linespec.clear()
             self.panel.vp_temporalspec.clear()
@@ -2408,6 +2414,7 @@ class SecomAlignTab(Tab):
         tb = panel.lens_align_tb
         tb.add_tool(TOOL_DICHO, self.tab_data_model.tool)
         tb.add_tool(TOOL_SPOT, self.tab_data_model.tool)
+        tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
 
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.

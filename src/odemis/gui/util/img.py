@@ -2174,19 +2174,52 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, b_new
 
 
+class FakeCanvas(object):
+    """Fake canvas for drawing purposes. It is currently used to export images with printed rulers
+    in print-ready export. We ask the overlay to draw on this fake canvas"""
+
+    def __init__(self, ctx, buffer_size, buffer_center, buffer_scale):
+        """
+        ctx (cairo context): the view context on which to draw
+        buffer_size (0<int, 0<int) : buffer width and height in pixels
+        buffer_center (float, float) : center position X, Y in meters
+        buffer_scale (float, float) : buffer scale position in pixels/meter
+        """
+        self.ctx = ctx
+        self.buffer_size = buffer_size
+        self.buffer_center = buffer_center
+        self.buffer_scale = buffer_scale
+
+    def get_half_buffer_size(self):
+        """Return half the size of the current buffer"""
+        return tuple(v // 2 for v in self.buffer_size)
+
+    def phys_to_buffer(self, pos, offset=(0, 0)):
+        """Convert a position in physical coordinates into buffer coordinates"""
+        return ((pos[0] - self.buffer_center[0]) * self.buffer_scale[0] + offset[0],
+                -(pos[1] - self.buffer_center[1]) * self.buffer_scale[1] + offset[1])
+
+    def draw_overlay(self, overlay):
+        """Pass the fake canvas to the draw function of the overlay"""
+        overlay.draw(self.ctx, canvas=self)
+
+
 def images_to_export_data(streams, view_hfw, view_pos,
                           draw_merge_ratio, raw=False,
-                          interpolate_data=False, logo=None):
+                          orig_canvas=None, interpolate_data=False, logo=None):
     """
     streams (Streams or DataProjection): the data to be exported
     view_hfw (tuple of float): X (width), Y (height) in m
     view_pos (tuple of float): center position X, Y in m
     raw (bool): if False, generates one RGB image out of all the streams, otherwise
       generates one image per stream using the raw data
+    orig_canvas: if the passed canvas has a ruler overlay, a fake canvas is used
+      for the ruler overlay to draw on it.
     logo (RGBA DataArray): Image to display in the legend
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
+
     images, im_min_type = convert_streams_to_images(streams, raw)
     if not images:
         raise LookupError("There is no stream data to be exported")
@@ -2261,7 +2294,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
 
     # The list of images to export
     data_to_export = []
-
+    fake_canvas = None
     n = len(images)
     for i, im in enumerate(images):
         if raw or i == 0:  # when print-ready, share the surface to draw
@@ -2270,6 +2303,8 @@ def images_to_export_data(streams, view_hfw, view_pos,
             surface = cairo.ImageSurface.create_for_data(
                 data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
+            # The ruler overlay needs a canvas to draw itself, so use a fake canvas
+            fake_canvas = FakeCanvas(ctx, buffer_size, buffer_center, (1 / buffer_scale[0], 1 / buffer_scale[1]))
 
         if im.metadata['blend_mode'] == BLEND_SCREEN or raw:
             # No transparency in case of "raw" export
@@ -2313,6 +2348,9 @@ def images_to_export_data(streams, view_hfw, view_pos,
 
     # Create legend for print-ready
     if not raw:  # png, tiff
+        # In print-ready export, a fake canvas is used by the ruler overlay
+        if orig_canvas and orig_canvas.ruler_overlay:
+            fake_canvas.draw_overlay(orig_canvas.ruler_overlay)
         dates = [im.metadata['date'] if im.metadata['date'] else 0 for im in images]
         date = max(dates)
         legend_rgb = draw_legend_multi_streams(images, buffer_size, buffer_scale,
