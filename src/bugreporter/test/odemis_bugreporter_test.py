@@ -20,14 +20,17 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division, absolute_import
 
-import unittest
-import os
-import logging
-import zipfile
-from ..odemis_bugreporter import OdemisBugreporter
+from bugreporter.odemis_bugreporter import OdemisBugreporter, BugreporterFrame
 from future.moves.urllib.error import HTTPError
+import logging
 import odemis
+import os
+import time
+import unittest
+import wx
+import zipfile
 
 REPORTER_TEST_ID = 12
 # Set TEST_NO_SUPPORT_TICKET=1 to skip test cases which create a ticket, so we don't fill up
@@ -145,7 +148,7 @@ class TestOdemisBugreporter(unittest.TestCase):
     
             description = {
                 'name': 'Testingteam member',
-                'email': 'winkler@delmic.com',
+                'email': TEST_SUPPORT_TEAM_EMAIL,
                 'subject': 'Bugreporter test',
                 'message': "This is a test.",
                 'topicId': REPORTER_TEST_ID,
@@ -167,6 +170,72 @@ class TestOdemisBugreporter(unittest.TestCase):
         self.bugreporter.compress_files()
         self.assertTrue(zipfile.is_zipfile(self.bugreporter.zip_fn))
         os.remove(self.bugreporter.zip_fn)
+
+    def test_window(self):
+        bugreporter = OdemisBugreporter()
+        # Special verison of .run(), which simulates inputs
+        bugreporter._compress_files_f = bugreporter._executor.submit(bugreporter.compress_files)
+        app = wx.App()
+        gui = BugreporterFrame(bugreporter)
+        bugreporter.gui = gui
+        # Create simulator and focus field
+        sim = wx.UIActionSimulator()
+        self.gui_loop(0.1)
+
+        # Fill up the form
+        gui.name_ctrl.SetFocus()
+        # TODO: how to simulate typing non ascii-characters? .Char() + modifiers?
+        # sim.Text(u"Tstingteam member")
+        gui.name_ctrl.SetValue(u"TÉstingteam member")
+        self.gui_loop(0.1)
+
+        gui.email_ctrl.SetFocus()
+        gui.email_ctrl.SetValue(TEST_SUPPORT_TEAM_EMAIL)
+        # sim.Text(TEST_SUPPORT_TEAM_EMAIL) # "@" doesn't work
+        self.gui_loop(0.1)
+
+        gui.summary_ctrl.SetFocus()
+        sim.Text("Bugreporter test")
+        self.gui_loop(0.1)
+
+        gui.description_ctrl.SetFocus()
+        sim.Text("This is a test")
+        self.gui_loop(0.1)
+
+        # Simulates a "click" on the button by pressing Enter
+        gui.report_btn.SetFocus()
+        sim.Char(ord("\r"))
+        self.gui_loop(0.1)
+
+        try:
+            # If sent successfully, the window should close after a few seconds
+            self.gui_loop(2)
+            bugreporter._compress_files_f.result()
+            self.gui_loop(2)
+            self.assertFalse(gui)  # wxPython widgets which are destroyed are considered "False"
+            bugreporter._executor.shutdown()  # wait for the background tasks to complete
+        finally:
+            # app.MainLoop()  # DEBUG: For leaving the window afterwards
+            if gui:
+                gui.Destroy()
+
+    def gui_loop(self, slp=0):
+        """
+        Execute the main loop for the GUI until all the current events are processed
+        slp (0<=float): time to wait (s)
+        """
+        start = time.time()
+        app = wx.GetApp()
+        if app is None:
+            return
+
+        while True:
+            wx.CallAfter(app.ExitMainLoop)
+            app.MainLoop()
+
+            if time.time() > (start + slp):
+                break
+
 
 if __name__ == '__main__':
     unittest.main()
