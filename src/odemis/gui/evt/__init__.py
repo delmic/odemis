@@ -21,28 +21,44 @@ from __future__ import division
 
 import wx
 
-
-def new_knob_event():
-    """ Generate new (CmdEvent, Binder) tuple e.g. MooCmdEvent, EVT_MOO = NewCommandEvent() """
-    evttype = wx.NewEventType()
-
-    class _Event(wx.PyCommandEvent):
-        def __init__(self, id, **kw):
-            wx.PyCommandEvent.__init__(self, evttype, id)
-            self.__dict__.update(kw)
-            # TODO: read the key states here?
-
-        def ShiftDown(self):
-            return wx.GetKeyState(wx.WXK_SHIFT)
-
-        def ControlDown(self):
-            return wx.GetKeyState(wx.WXK_CONTROL)
-
-        def AltDown(self):
-            return wx.GetKeyState(wx.WXK_ALT)
-
-    return _Event, wx.PyEventBinder(evttype, 1)
-
 # Custom events created for the Powermate rotating knob
-KnobRotateEvent, EVT_KNOB_ROTATE = new_knob_event()
-KnobPressEvent, EVT_KNOB_PRESS = new_knob_event()
+_EVT_KNOB_ROTATE_type = wx.NewEventType()
+EVT_KNOB_ROTATE = wx.PyEventBinder(_EVT_KNOB_ROTATE_type, 1)
+
+class KnobRotateEvent(wx.PyCommandEvent):
+
+    def __init__(self, id, direction, step_value, device):
+        wx.PyCommandEvent.__init__(self, _EVT_KNOB_ROTATE_type, id)
+        # TODO: read the key states here, and inherit from wx.KeyboardState ?
+        self.direction = direction
+        self.step_value = step_value
+        self.device = device
+
+    def ShiftDown(self):
+        return wx.GetKeyState(wx.WXK_SHIFT)
+
+    def ControlDown(self):
+        return wx.GetKeyState(wx.WXK_CONTROL)
+
+    def AltDown(self):
+        return wx.GetKeyState(wx.WXK_ALT)
+
+
+_EVT_KNOB_PRESS_type = wx.NewEventType()
+EVT_KNOB_PRESS = wx.PyEventBinder(_EVT_KNOB_PRESS_type, 1)
+
+class KnobPressEvent(wx.PyCommandEvent):
+
+    def __init__(self, id, device):
+        wx.PyCommandEvent.__init__(self, _EVT_KNOB_PRESS_type, id)
+        # TODO: read the key states here, and inherit from wx.KeyboardState ?
+        self.device = device
+
+    def ShiftDown(self):
+        return wx.GetKeyState(wx.WXK_SHIFT)
+
+    def ControlDown(self):
+        return wx.GetKeyState(wx.WXK_CONTROL)
+
+    def AltDown(self):
+        return wx.GetKeyState(wx.WXK_ALT)
