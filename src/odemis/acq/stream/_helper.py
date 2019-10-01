@@ -1326,13 +1326,6 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
         pass
 
     def _onNewData(self, dataflow, data):
-        # For now, the viewport cannot display large datasets, so we have to crop the temporal data
-        # TODO: remove cropping once PlotCanvas supports bigger data
-        cropvalue = 1024
-        data = data[..., :cropvalue]
-        if model.MD_TIME_LIST in data.metadata:
-            data.metadata[model.MD_TIME_LIST] = data.metadata[model.MD_TIME_LIST][:cropvalue]
-
         # Set POS and PIXEL_SIZE from the e-beam (which is in spot mode)
         epxs = self.emitter.pixelSize.value
         data.metadata[model.MD_PIXEL_SIZE] = epxs
