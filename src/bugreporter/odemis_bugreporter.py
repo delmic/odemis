@@ -330,7 +330,7 @@ class OdemisBugreporter(object):
     def _set_description(self, name, email, subject, message):
         """
         Saves the description parameters for the ticket creation in a txt file, compresses
-        the file and calls self._create_ticket.
+        the file and calls self.create_ticket.
         :arg name, email, summary, description: (String) arguments for corresponding dictionary
         keys
         """
@@ -352,9 +352,9 @@ class OdemisBugreporter(object):
                        )
 
         with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr('description.txt', description)
-        wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
+            archive.writestr('description.txt', description.encode("utf-8"))
         api_key = self.search_api_key()
+        wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         self.create_ticket(api_key, report_description, [self.zip_fn])
 
     def send_report(self, name, email, subject, message):
@@ -445,6 +445,7 @@ class BugreporterFrame(wx.Frame):
         self.summary_ctrl = summary_ctrl
         self.description_ctrl = description_ctrl
         self.wait_lbl = wait_lbl
+        self.report_btn = report_btn
 
         self.bugreporter = controller
 
@@ -572,7 +573,7 @@ class BugreporterFrame(wx.Frame):
             future.result()
             wx.CallAfter(self._on_report_sent_successful)
         except Exception as e:
-            logging.warning("osTicket upload failed: %s", e)
+            logging.exception("osTicket upload failed: %s", e)
             wx.CallAfter(self.open_failed_upload_dlg)
 
     def on_close(self, _):
