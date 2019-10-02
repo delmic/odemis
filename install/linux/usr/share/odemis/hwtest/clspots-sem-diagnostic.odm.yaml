@@ -12,6 +12,7 @@ MultiBeamSEM: {
   role: diagnostic-ccd,
   init: {
     device: null,
+    transp: [-1, -2],
   },
   children: {focus: "DiagnosticCam Focus"}
 }
@@ -32,7 +33,7 @@ MultiBeamSEM: {
 #  class: pigcs.Bus,
 #  role: stage,
 #  init: {
-#    port: "/dev/fake",
+#    port: "/dev/ttyUSB0",
 #    # axis -> controller, channel, closed-loop?
 #    axes: {
 #      "z": [null, "Z", True]
@@ -54,8 +55,7 @@ MultiBeamSEM: {
   class: xt_client.SEM,
   role: sem,
   init: {
-    address: "tcp://127.0.0.1:4242",
-    timeout: 30,
+    address: "PYRO:Microscope@localhost:4242",
   },
   children: {
     scanner: "EBeam control",

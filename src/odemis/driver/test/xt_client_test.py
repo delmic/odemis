@@ -36,11 +36,10 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)
 # arguments used for the creation of basic components
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_STAGE = {"name": "stage", "role": "stage",
-                "rng": {"x": (5.e-3, 152.e-3), "y": (5.e-3, 152.e-3)},  # skip one axis to see if default works
                 "inverted": ["x"],
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "tcp://127.0.0.1:4242", "timeout": 5,
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@localhost:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
@@ -113,7 +112,8 @@ class TestMicroscope(unittest.TestCase):
         # move to a position out of range -> should be impossible
         position = {'x': 1, 'y': 300}  # [m]
         with self.assertRaises(Exception):
-            self.microscope.move_stage(position)
+            f = self.stage.moveAbs(position)
+            f.result()
 
     def test_set_scan_field_size(self):
         """
@@ -146,7 +146,7 @@ class TestMicroscope(unittest.TestCase):
         orig_fov = ebeam.horizontalFoV.value
 
         ebeam.horizontalFoV.value = orig_fov / 2
-        time.sleep(6)  # Wait for value refresh
+        # time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_mag * 2, ebeam.magnification.value)
         self.assertAlmostEqual(orig_fov / 2, ebeam.horizontalFoV.value)
 
@@ -154,11 +154,11 @@ class TestMicroscope(unittest.TestCase):
         fov_min = ebeam._hfw_nomag / ebeam.magnification.range[1]
         fov_max = ebeam._hfw_nomag / ebeam.magnification.range[0]
         ebeam.horizontalFoV.value = fov_min
-        time.sleep(6)
+        # time.sleep(6)
         self.assertAlmostEqual(fov_min, ebeam.horizontalFoV.value)
 
         ebeam.horizontalFoV.value = fov_max
-        time.sleep(6)
+        # time.sleep(6)
         self.assertAlmostEqual(fov_max, ebeam.horizontalFoV.value)
 
         # Reset

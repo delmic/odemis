@@ -21,19 +21,19 @@ http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
+import base64
 import logging
+import threading
 import time
 from concurrent.futures import CancelledError
 
-import msgpack_numpy
-import zerorpc
+import msgpack
+import msgpack_numpy as m
+from Pyro5.api import Proxy
 
 from odemis import model
 from odemis import util
-from odemis.model import CancellableThreadPoolExecutor, HwError
-
-# allow to pass numpy arrays over msgpack
-msgpack_numpy.patch()
+from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture
 
 XT_RUN = "run"
 XT_STOP = "stop"
@@ -45,33 +45,28 @@ class SEM(model.HwComponent):
     Class to communicate with a Microscope server via the ZeroRPC protocol.
     """
 
-    def __init__(self, name, role, children, address, timeout, daemon=None,
+    def __init__(self, name, role, children, address, daemon=None,
                  **kwargs):
         """
         Parameters
         ----------
         address: str
-            server address and port of the Microscope server, e.g. tcp://192.168.1.1:4242
+            server address and port of the Microscope server, e.g. "PYRO:Microscope@localhost:4242"
         timeout: float
             Time in seconds the client should wait for a response from the server.
         """
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
-        # set heartbeat to None on client and server side, otherwise after two missed heartbeats the client thinks the
-        # connection is lost. A heartbeat happens every 5 seconds, when a function takes longer than 5 seconds to
-        # respond a heartbeat is skipped. timeout controls how long a call can take to respond, the default is 30
-        # seconds.
+        self._proxy_access = threading.Lock()
         try:
-            # If the client fails to connect to the server, sometimes the connect call will raise an error. Other times
-            # the error will be raised when trying to call a method on the server (i.e. get_software_version).
-            self.server = zerorpc.Client(heartbeat=None, timeout=timeout)
-            self.server.connect(address)
+            self.server = Proxy(address)
+            self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
-        except Exception:
+        except Exception as err:
             raise HwError("Failed to connect to XT server '%s'. Check that the "
-                          "server address and port are correct and XT server is"
-                          " connected to the network." % (address,))
+                          "uri is correct and XT server is"
+                          " connected to the network. %s" % (address, err))
 
         # create the scanner child
         try:
@@ -102,7 +97,9 @@ class SEM(model.HwComponent):
         available channels: dict
             A dict of the names of the available channels as keys and the corresponding channel state as values.
         """
-        return self.server.list_available_channels()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.list_available_channels()
 
     def move_stage(self, position, rel=False):
         """
@@ -117,25 +114,35 @@ class SEM(model.HwComponent):
             If True the staged is moved relative to the current position of the stage, by the distance specified in
             position. If False the stage is moved to the absolute position.
         """
-        self.server.move_stage(position, rel)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.move_stage(position, rel)
 
     def stage_is_moving(self):
         """Returns: (bool) True if the stage is moving and False if the stage is not moving."""
-        return self.server.stage_is_moving()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.stage_is_moving()
 
     def stop_stage_movement(self):
         """Stop the movement of the stage."""
-        self.server.stop_stage_movement()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.stop_stage_movement()
 
     def get_stage_position(self):
         """
         Returns: (dict) the axes of the stage as keys with their corresponding position.
         """
-        return self.server.get_stage_position()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_stage_position()
 
     def stage_info(self):
         """Returns: (dict) the unit and range of the stage position."""
-        return self.server.stage_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.stage_info()
 
     def acquire_image(self, channel_name):
         """
@@ -148,7 +155,12 @@ class SEM(model.HwComponent):
         image: numpy array
             The acquired image.
         """
-        return self.server.acquire_image(unicode(channel_name))
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            x_enc = self.server.acquire_image(channel_name)
+            x_dec = base64.b64decode(x_enc['data'])
+            x_rec = msgpack.unpackb(x_dec, object_hook=m.decode)
+            return x_rec
 
     def set_scan_mode(self, mode):
         """
@@ -158,7 +170,9 @@ class SEM(model.HwComponent):
         mode: str
             Name of desired scan mode, one of: unknown, external, full_frame, spot, or line.
         """
-        self.server.set_scan_mode(unicode(mode))
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_scan_mode(mode)
 
     def set_selected_area(self, start_position, size):
         """
@@ -171,7 +185,9 @@ class SEM(model.HwComponent):
         size: (tuple of int)
             (width, height) of the size in pixel.
         """
-        self.server.set_selected_area(start_position, size)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_selected_area(start_position, size)
 
     def get_selected_area(self):
         """
@@ -180,18 +196,24 @@ class SEM(model.HwComponent):
         x, y, width, height: pixels
             The current selected area. If selected area is not active it returns the stored selected area.
         """
-        x, y, width, height = self.server.get_selected_area()
-        return x, y, width, height
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            x, y, width, height = self.server.get_selected_area()
+            return x, y, width, height
 
     def selected_area_info(self):
         """Returns: (dict) the unit and range of set selected area."""
-        return self.server.selected_area_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.selected_area_info()
 
     def reset_selected_area(self):
         """Reset the selected area to select the entire image."""
-        self.server.reset_selected_area()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.reset_selected_area()
 
-    def set_scanning_size(self, x, y=None):
+    def set_scanning_size(self, x):
         """
         Set the size of the to be scanned area (aka field of view or the size, which can be scanned with the current
         settings).
@@ -200,22 +222,24 @@ class SEM(model.HwComponent):
         ----------
         x: (float)
             size for X in meters.
-        y: (float)
-            size for y in meters.
         """
-        if y is None:
-            _, y = self.get_scanning_size()
-        self.server.set_scanning_size(x, y)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_scanning_size(x)
 
     def get_scanning_size(self):
         """
         Returns: (tuple of floats) x and y scanning size in meters.
         """
-        return self.server.get_scanning_size()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_scanning_size()
 
     def scanning_size_info(self):
         """Returns: (dict) the scanning size unit and range."""
-        return self.server.scanning_size_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.scanning_size_info()
 
     def set_ebeam_spotsize(self, spotsize):
         """
@@ -225,15 +249,21 @@ class SEM(model.HwComponent):
         spotsize: float
             desired spotsize, unitless
         """
-        self.server.set_ebeam_spotsize(spotsize)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_ebeam_spotsize(spotsize)
 
     def get_ebeam_spotsize(self):
         """Returns: (float) the current spotsize of the electron beam (unitless)."""
-        return self.server.get_ebeam_spotsize()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_ebeam_spotsize()
 
     def spotsize_info(self):
         """Returns: (dict) the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
-        return self.server.spotsize_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.spotsize_info()
 
     def set_dwell_time(self, dwell_time):
         """
@@ -243,15 +273,21 @@ class SEM(model.HwComponent):
         dwell_time: float
             dwell time in seconds
         """
-        self.server.set_dwell_time(dwell_time)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_dwell_time(dwell_time)
 
     def get_dwell_time(self):
         """Returns: (float) the dwell time in seconds."""
-        return self.server.get_dwell_time()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_dwell_time()
 
     def dwell_time_info(self):
         """Returns: (dict) range of the dwell time and corresponding unit."""
-        return self.server.dwell_time_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.dwell_time_info()
 
     def set_ht_voltage(self, voltage):
         """
@@ -263,50 +299,75 @@ class SEM(model.HwComponent):
             Desired high voltage value in volt.
 
         """
-        self.server.set_ht_voltage(voltage)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_ht_voltage(voltage)
 
     def get_ht_voltage(self):
         """Returns: (float) the HT Voltage in volt."""
-        return self.server.get_ht_voltage()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_ht_voltage()
 
     def ht_voltage_info(self):
         """Returns: (dict) the unit and range of the HT Voltage."""
-        return self.server.ht_voltage_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.ht_voltage_info()
 
-    def set_blanker(self, blank):
-        """True if the the electron beam should blank, False if it shoulf be unblanked."""
-        if blank:
+    def blank_beam(self):
+        """Blank the electron beam."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
             self.server.blank_beam()
-        else:
+
+    def unblank_beam(self):
+        """Unblank the electron beam."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
             self.server.unblank_beam()
 
     def beam_is_blanked(self):
         """Returns: (bool) True if the beam is blanked and False if the beam is not blanked."""
-        return self.server.beam_is_blanked()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.beam_is_blanked()
 
     def pump(self):
         """Pump the microscope's chamber. Note that pumping takes some time. This is blocking."""
-        self.server.pump()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.pump()
 
     def get_vacuum_state(self):
         """Returns: (string) the vacuum state of the microscope chamber to see if it is pumped or vented."""
-        return self.server.get_vacuum_state()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_vacuum_state()
 
     def vent(self):
         """Vent the microscope's chamber. Note that venting takes time (appr. 3 minutes). This is blocking."""
-        self.server.vent()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.vent()
 
     def get_pressure(self):
         """Returns: (float) the chamber pressure in pascal."""
-        return self.server.get_pressure()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_pressure()
 
     def home_stage(self):
         """Home stage asynchronously. This is non-blocking."""
-        self.server.home_stage()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.home_stage()
 
     def is_homed(self):
         """Returns: (bool) True if the stage is homed and False otherwise."""
-        return self.server.is_homed()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.is_homed()
 
     def set_channel_state(self, name, state):
         """
@@ -319,7 +380,9 @@ class SEM(model.HwComponent):
         state: "run" or "stop"
             desired state of the channel.
         """
-        self.server.set_channel_state(unicode(name), unicode(state))
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_channel_state(name, state)
 
     def wait_for_state_changed(self, desired_state, name, timeout=10):
         """
@@ -335,16 +398,21 @@ class SEM(model.HwComponent):
         timeout: int
             Amount of time in seconds to wait until the channel state has changed.
         """
-        self.server.wait_for_state_changed(unicode(desired_state),
-                                           unicode(name), timeout)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.wait_for_state_changed(desired_state, name, timeout)
 
     def get_channel_state(self, name):
         """Returns: (str) the state of the channel: "run", "stop" or "cancel"."""
-        return self.server.get_channel_state(unicode(name))
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_channel_state(name)
 
     def get_free_working_distance(self):
         """Returns: (float) the free working distance in meters."""
-        return self.server.get_free_working_distance()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_free_working_distance()
 
     def set_free_working_distance(self, free_working_distance):
         """
@@ -354,18 +422,24 @@ class SEM(model.HwComponent):
         free_working_distance: float
             free working distance in meters.
         """
-        self.server.set_free_working_distance(free_working_distance)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_free_working_distance(free_working_distance)
 
     def fwd_info(self):
         """Returns the unit and range of the free working distance."""
-        return self.server.fwd_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.fwd_info()
 
     def get_fwd_follows_z(self):
         """
         Returns: (bool) True if Z follows free working distance.
         When Z follows FWD and Z-axis of stage moves, FWD is updated to keep image in focus.
         """
-        return self.server.get_fwd_follows_z()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_fwd_follows_z()
 
     def set_fwd_follows_z(self, follow_z):
         """
@@ -376,7 +450,9 @@ class SEM(model.HwComponent):
         follow_z: bool
             True if Z should follow free working distance.
         """
-        self.server.set_fwd_follows_z(follow_z)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_fwd_follows_z(follow_z)
 
     def set_autofocusing(self, channel, state):
         """
@@ -390,35 +466,51 @@ class SEM(model.HwComponent):
             If state is start, autofocus starts. States cancel and stop both stop the autofocusing. Some microscopes
             might need stop, while others need cancel.
         """
-        self.server.set_autofocusing(channel, unicode(state))
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_autofocusing(channel, state)
 
     def is_autofocusing(self):
         """Returns: (bool) True if autofocus is running and False if autofocus is not running."""
-        return self.server.is_autofocusing()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.is_autofocusing()
 
     def get_beam_shift(self):
         """Returns: (float) the current beam shift x and y values in meters."""
-        return self.server.get_beam_shift()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_beam_shift()
 
     def set_beam_shift(self, x_shift, y_shift):
         """Set the current beam shift values in meters."""
-        self.server.set_beam_shift(x_shift, y_shift)
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_beam_shift(x_shift, y_shift)
 
     def beam_shift_info(self):
         """Returns: (dict) the unit and xy-range of the beam shift."""
-        return self.server.beam_shift_info()
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.beam_shift_info()
 
     def get_rotation(self):
-        """Retrieves the current rotation value in rad."""
-        return self.server.get_rotation()
+        """Returns: (float) the current rotation value in rad."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_rotation()
 
     def set_rotation(self, rotation):
-        """Retrieves the current rotation value in rad."""
-        self.server.set_rotation(rotation)
+        """Set the current rotation value in rad."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_rotation(rotation)
 
     def rotation_info(self):
-        """Returns the unit and range of the rotation."""
-        return self.server.rotation_info()
+        """Returns: (dict) the unit and range of the rotation."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.rotation_info()
 
 
 class Scanner(model.Emitter):
@@ -448,9 +540,8 @@ class Scanner(model.Emitter):
             setter=self._setVoltage
         )
 
-        self.blanker = model.VAEnumerated(
+        self.blanker = model.BooleanVA(
             self.parent.beam_is_blanked(),
-            choices={True, False},
             setter=self._setBlanker)
 
         spotsize_info = self.parent.spotsize_info()
@@ -466,7 +557,7 @@ class Scanner(model.Emitter):
         self.beamShift = model.TupleContinuous(
             self.parent.get_beam_shift(),
             ((range_x[0], range_y[0]), (range_x[1], range_y[1])),
-            cls=(int, long, float),
+            cls=(int, float),
             unit=beam_shift_info["unit"],
             setter=self._setBeamShift)
 
@@ -486,8 +577,11 @@ class Scanner(model.Emitter):
             setter=self._setHorizontalFoV)
 
         mag = self._hfw_nomag / fov
-        self.magnification = model.VigilantAttribute(mag, unit="",
-                                                     readonly=True)
+        mag_range_max = self._hfw_nomag / scanning_size_info["range"]["x"][0]
+        mag_range_min = self._hfw_nomag / scanning_size_info["range"]["x"][1]
+        self.magnification = model.FloatContinuous(mag, unit="",
+                                                   range=(mag_range_min, mag_range_max),
+                                                   readonly=True)
         # To provide some rough idea of the step size when changing focus
         # Depends on the pixelSize, so will be updated whenever the HFW changes
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
@@ -532,9 +626,9 @@ class Scanner(model.Emitter):
             fov = self.parent.get_scanning_size()[0]
             if fov != self.horizontalFoV.value:
                 self.horizontalFoV._value = fov
-                self.horizontalFoV.notify(fov)
                 mag = self._hfw_nomag / fov
                 self.magnification._value = mag
+                self.horizontalFoV.notify(fov)
                 self.magnification.notify(mag)
         except Exception:
             logging.exception("Unexpected failure when polling settings")
@@ -548,7 +642,11 @@ class Scanner(model.Emitter):
         return self.parent.get_ht_voltage()
 
     def _setBlanker(self, blank):
-        self.parent.set_blanker(blank)
+        """True if the the electron beam should blank, False if it should be unblanked."""
+        if blank:
+            self.parent.blank_beam()
+        else:
+            self.parent.unblank_beam()
         return self.parent.beam_is_blanked()
 
     def _setSpotSize(self, spotsize):
@@ -565,7 +663,7 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, fov):
         self.parent.set_scanning_size(fov)
-        fov = self.parent.get_scanning_size(fov)[0]
+        fov = self.parent.get_scanning_size()[0]
         mag = self._hfw_nomag / fov
         self.magnification._value = mag
         self.magnification.notify(mag)
@@ -591,11 +689,11 @@ class Stage(model.Actuator):
             rng = {}
         stage_info = parent.stage_info()
         if "x" not in rng:
-            rng["x"] = stage_info["range"].get("x", (0, 100e-6))
+            rng["x"] = stage_info["range"]["x"]
         if "y" not in rng:
-            rng["y"] = stage_info["range"].get("y", (0, 100e-6))
+            rng["y"] = stage_info["range"]["y"]
         if "z" not in rng:
-            rng["z"] = stage_info["range"].get("z", (0, 100e-6))
+            rng["z"] = stage_info["range"]["z"]
 
         axes_def = {
             # Ranges are from the documentation
@@ -651,11 +749,11 @@ class Stage(model.Actuator):
             try:
                 if future._must_stop.is_set():
                     raise CancelledError()
-                logging.debug("Moving to position (%s, %s, %s)", pos["x"], pos["y"], pos["z"])
+                logging.debug("Moving to position {}".format(pos))
                 self.parent.move_stage(pos, rel=False)
-                time.sleep(1)
+                time.sleep(0.5)
 
-                # Wait until the move is over
+                # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
                 # stop moving, and so it's nice to wait until we know the stage is
                 # not moving.
@@ -672,7 +770,7 @@ class Stage(model.Actuator):
                         logging.error("Timeout after submitting stage move. Aborting move.")
                         break
 
-                    # 50 ms is about the time it takes to read the stage status
+                    # Wait for 50ms so that we do not keep using the CPU all the time.
                     time.sleep(50e-3)
 
                 # If it was cancelled, Abort() has stopped the stage before, and
@@ -704,6 +802,7 @@ class Stage(model.Actuator):
 
         self._moveTo(future, pos)
 
+    @isasync
     def moveRel(self, shift):
         """
         Shift the stage the given position in meters. This is non-blocking.
@@ -723,34 +822,10 @@ class Stage(model.Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
-    def _checkMoveRel(self, shift):
-        """
-        Check that the arguments passed to moveRel() is (potentially) correct
-        shift (dict string -> float): the new position for a moveRel()
-        raise ValueError: if the argument is incorrect
-        """
-        for axis, val in shift.items():
-            if axis in self.axes:
-                axis_def = self.axes[axis]
-                if (hasattr(axis_def, "range") and
-                        abs(val) > abs(axis_def.range[1] - axis_def.range[0])):
-                    # we cannot check more precisely, unless we also know all
-                    # the moves queued (eg, if we had a targetPosition)
-                    rng = axis_def.range
-                    raise ValueError("Move %s for axis %s outside of range %f->%f"
-                                     % (val, axis, rng[0], rng[1]))
-                elif hasattr(axis_def, "choices"):
-                    # TODO: actually, in _some_ cases it could be acceptable
-                    # such as an almost continuous axis, but with only some
-                    # positions possible
-                    logging.warning("Change of enumerated axes via .moveRel() "
-                                    "are discouraged (axis %s)" % (axis,))
-            else:
-                raise ValueError("Unknown axis %s" % (axis,))
-
     def _doMoveAbs(self, future, pos):
         self._moveTo(future, pos)
 
+    @isasync
     def moveAbs(self, pos):
         """
         Move the stage the given position in meters. This is non-blocking.
@@ -770,31 +845,44 @@ class Stage(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
-    def _checkMoveAbs(self, pos):
-        """
-        Check that the argument passed to moveAbs() is (potentially) correct
-        pos (dict string -> float): the new position for a moveAbs()
-        raise ValueError: if the argument is incorrect
-        """
-        for axis, val in pos.items():
-            if axis in self.axes:
-                axis_def = self.axes[axis]
-                if hasattr(axis_def, "choices") and val not in axis_def.choices:
-                    raise ValueError("Unsupported position %s for axis %s"
-                                     % (val, axis))
-                elif (hasattr(axis_def, "range") and not
-                      axis_def.range[0] <= val <= axis_def.range[1]):
-                    # TODO: if not referenced, double the range
-                    rng = axis_def.range
-                    raise ValueError("Position %s for axis %s outside of range %f->%f"
-                                     % (val, axis, rng[0], rng[1]))
-            else:
-                raise ValueError("Unknown axis %s" % (axis,))
-
     def stop(self, axes=None):
         """Stop the movement of the stage."""
         self._executor.cancel()
         self.parent.stop_stage_movement()
+        try:
+            self._updatePosition()
+        except Exception:
+            logging.exception("Unexpected failure when updating position")
+
+    def _createFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f.task_canceller = self._cancelCurrentMove
+        return f
+
+    def _cancelCurrentMove(self, future):
+        """
+        Cancels the current move (both absolute or relative). Non-blocking.
+        future (Future): the future to stop. Unused, only one future must be
+         running at a time.
+        return (bool): True if it successfully cancelled (stopped) the move.
+        """
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (not finished requesting axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
+        logging.debug("Cancelling current move")
+        future._must_stop.set()  # tell the thread taking care of the move it's over
+        self.parent.stop_stage_movement()
+
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed")
+            return future._was_stopped
 
 
 class Focus(model.Actuator):
@@ -808,10 +896,9 @@ class Focus(model.Actuator):
         axes (set of string): names of the axes
         """
 
-        self.parent = parent
-        fwd_info = self.parent.fwd_info()
+        fwd_info = parent.fwd_info()
         axes_def = {
-            "z": model.Axis(unit="m", range=fwd_info["range"]),
+            "z": model.Axis(unit=fwd_info["unit"], range=fwd_info["range"]),
         }
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
@@ -869,6 +956,7 @@ class Focus(model.Actuator):
             # Update the position, even if the move didn't entirely succeed
             self._updatePosition()
 
+    @isasync
     def moveRel(self, shift):
         """
         shift (dict): shift in m
@@ -881,6 +969,7 @@ class Focus(model.Actuator):
         f = self._executor.submit(self._doMoveRel, foc)
         return f
 
+    @isasync
     def moveAbs(self, pos):
         """
         pos (dict): pos in m
@@ -899,7 +988,7 @@ class Focus(model.Actuator):
         """
         # Empty the queue (and already stop the stage if a future is running)
         self._executor.cancel()
-        logging.debug("Stopping all axes: %s", ", ".join(self.axes))
+        logging.debug("Cancelled all ebeam focus moves")
 
         try:
             self._updatePosition()
