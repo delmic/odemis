@@ -238,9 +238,11 @@ class SEMStream(LiveStream):
     # (with .accelVotage, .spotSize, .power) and the scanner (with .resolution,
     # .scale, .rotation, etc). They'd need to be decoupled to fit this model.
 
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, blanker=None, **kwargs):
         """
         emitter (Emitter): this is the scanner, with a .resolution and a .dwellTime
+        blanker (BooleanVA or None): to control the blanker (False = disabled,
+          when acquiring, and True = enabled, when stream is paused).
         """
 
         if "acq_type" not in kwargs:
@@ -258,6 +260,8 @@ class SEMStream(LiveStream):
             self._getEmitterVA("resolution").subscribe(self._onResolution)
         except AttributeError:
             pass
+
+        self._blanker = blanker
 
         # Actually use the ROI
         self.roi.subscribe(self._onROI)
@@ -335,12 +339,10 @@ class SEMStream(LiveStream):
     def _prepare_opm(self):
         # unblank the beam, if the driver doesn't support "auto" mode (= None)
         try:
-            if (model.hasVA(self._emitter, "blanker")
-                and not None in self._emitter.blanker.choices
-               ):
+            if self._blanker:
                 # Note: we assume that this is blocking, until the e-beam is
                 # ready to acquire an image.
-                self._emitter.blanker.value = False
+                self._blanker.value = False
         except Exception:
             logging.exception("Failed to disable the blanker")
 
@@ -351,10 +353,8 @@ class SEMStream(LiveStream):
         if not active:
             # blank the beam
             try:
-                if (model.hasVA(self._emitter, "blanker")
-                    and not None in self._emitter.blanker.choices
-                   ):
-                    self._emitter.blanker.value = True
+                if self._blanker:
+                    self._blanker.value = True
             except Exception:
                 logging.exception("Failed to enable the blanker")
 
@@ -523,9 +523,11 @@ class SpotSEMStream(LiveStream):
     """
     Stream which forces the SEM to be in spot mode when active.
     """
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, blanker=None, **kwargs):
         """
         detector: must be one of the SEM detector, to force beam unblanking
+        blanker (BooleanVA or None): to control the blanker (False = disabled,
+          when acquiring, and True = enabled, when stream is paused).
         """
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_EM
@@ -535,6 +537,8 @@ class SpotSEMStream(LiveStream):
 
         # used to reset the previous settings after spot mode
         self._no_spot_settings = (None, None, None)  # dwell time, resolution, translation
+
+        self._blanker = blanker
 
         # To indicate the position, use the ROI. We expect that the ROI has an
         # "empty" area (ie, lt == rb)
@@ -571,6 +575,18 @@ class SpotSEMStream(LiveStream):
         if self.is_active.value:
             self._applyROI()
 
+    def _prepare_opm(self):
+        # unblank the beam, if the driver doesn't support "auto" mode (= None)
+        try:
+            if self._blanker:
+                # Note: we assume that this is blocking, until the e-beam is
+                # ready to acquire an image.
+                self._blanker.value = False
+        except Exception:
+            logging.exception("Failed to disable the blanker")
+
+        return super(SpotSEMStream, self)._prepare_opm()
+
     def _onActive(self, active):
         # handle spot mode
         if active:
@@ -580,6 +596,13 @@ class SpotSEMStream(LiveStream):
             # stop acquisition before changing the settings
             super(SpotSEMStream, self)._onActive(active)
             self._stopSpot()
+
+            # blank the beam
+            try:
+                if self._blanker:
+                    self._blanker.value = True
+            except Exception:
+                logging.exception("Failed to enable the blanker")
 
     def _startSpot(self):
         """
