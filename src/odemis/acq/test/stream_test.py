@@ -1751,6 +1751,56 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
 
+    def test_acq_spec_live_update(self):
+        """
+        Test the live feedback acquisition in the spectrum stream
+        """
+        # Check that it works even when not at 0,0 of the sample stage
+        f = self.stage.moveRel({"x":-1e-3, "y": 2e-3})
+        f.result()
+
+        # Zoom in to make sure the ROI is not too big physically
+        self.ebeam.horizontalFoV.value = 200e-6
+
+        # Move the stage to the top-left
+        posc = {"x": sum(self.sstage.axes["x"].range) / 2,
+                "y": sum(self.sstage.axes["y"].range) / 2}
+        f = self.sstage.moveAbs(posc)
+
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
+                                              self.ebeam, sstage=self.sstage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+
+        specs.useScanStage.value = False
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        specs.pixelSize.value = 1e-6
+        specs.roi.value = (0.25, 0.45, 0.6, 0.7)
+        specs.repetition.value = (5, 6)
+        self.spec.exposureTime.value = 0.3  # s
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        f.result()
+
+        # Start acquisition
+        estt = sps.estimateAcquisitionTime()
+        timeout = 5 + 3 * estt
+        start = time.time()
+        f = sps.acquire()
+        
+        # Check if there is a live update in the setting stream.
+        im1 = specs.image.value
+        time.sleep(2.0)
+        im2 = specs.image.value
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        # Check if the image changed (live update is working)
+        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+
     def test_acq_spec_sstage(self):
         """
         Test spectrum acquisition with scan stage.
@@ -2521,6 +2571,49 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertEqual(self.streak_ccd.exposureTime.value, 1)
         self.assertEqual(streaks.integrationTime.value, 4)
 
+    def test_streak_acq_live_update(self):
+        """Test if live update works during acquisition with streak camera"""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+
+        streaks.detExposureTime.value = 0.01  # 10ms
+        # # TODO use fixed repetition value -> set ROI?
+        streaks.repetition.value = (10, 5)
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # Check if there is a live update in the setting stream.
+        time.sleep(1.0)
+        im1 = streaks.image.value
+        time.sleep(2.0)
+        im2 = streaks.image.value
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        # Check if the image changed (live update is working)
+        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+
     def test_streak_acq(self):
         """Test acquisition with streak camera"""
 
@@ -2918,6 +3011,57 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
+
+    def test_acq_arpol_live_update(self):
+        """
+        Test if live update works for AR
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test when polarization analyzer hardware is present
+        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        list_positions = list(ars.polarization.choices) + ["acquireAllPol"]
+
+        # to test each polarization position acquired sequentially in a single acq
+        ars.acquireAllPol.value = False
+
+        for pos in list_positions:
+            if pos == "acquireAllPol":
+                # to test all polarization position acquired in one acquisition
+                ars.acquireAllPol.value = True
+                # set pos to random pol pos from list as "acquireAllPol" is not a valid choice
+                pos = "vertical"
+
+            ars.polarization.value = pos
+
+            # Short acquisition (< 0.1s)
+            ars.integrationTime.value = 0.03  # s
+            # TODO use fixed repetition value -> set ROI?
+            ars.repetition.value = (1, 1)
+
+            # Start acquisition
+            # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
+            timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+            f = sas.acquire()
+
+            # sas.raw: array containing as first entry the sem scan image for the scanning positions,
+            # rest are ar images
+            # data: array should contain same images as sas.raw
+
+            # Check if there is a live update in the setting stream.
+            time.sleep(2.0)
+            im1 = ars.image.value
+            time.sleep(3.0)
+            im2 = ars.image.value
+
+            # wait until it's over
+            data = f.result(timeout)
+
+            # Check if the image changed (live update is working)
+            self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
 
     def test_acq_arpol(self):
         """
@@ -3469,6 +3613,38 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         self.assertEqual(data[0].shape[-2], 2)
         self.assertEqual(data[1].shape[-1], 1)
         self.assertEqual(data[1].shape[-2], 2)
+        
+    def test_acq_live_update(self):
+        """
+        Test if live update works for the time correlator
+        """
+        # Create the stream
+        tc_stream = stream.ScannedTemporalSettingsStream(
+            "Time Correlator",
+            self.time_correlator,
+            self.time_correlator.data,
+            self.ebeam,
+        )
+        sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
+        sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
+                                                  [sem_stream, tc_stream])
+
+        sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
+        sem_tc_stream._tc_stream.repetition.value = (5, 10)
+        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        f = sem_tc_stream.acquire()
+
+        # Check if there is a live update in the setting stream.
+        time.sleep(2.0)
+        im1 = tc_stream.image.value
+        time.sleep(3.0)
+        im2 = tc_stream.image.value
+
+        # wait until it's over
+        data = f.result()
+
+        # Check if the image changed (live update is working)
+        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
 
 
 # @skip("faster")

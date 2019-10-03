@@ -2954,6 +2954,8 @@ class FakeAndorV2DLL(object):
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]
 
+        ndbuffer += numpy.random.randint(0, 200, ndbuffer.shape, dtype=ndbuffer.dtype)
+
     def FreeInternalMemory(self):
         pass
 
