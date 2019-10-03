@@ -32,6 +32,7 @@ from future.utils import with_metaclass
 from abc import ABCMeta
 import collections
 import csv
+import locale
 import logging
 from odemis import model, util
 from odemis.acq import calibration
@@ -41,8 +42,7 @@ from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS, \
-    get_hw_config
+from odemis.gui.conf.data import HIDDEN_VAS, get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
 from odemis.gui.cont.streams import StreamController
@@ -203,7 +203,10 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         try:
             if key == model.MD_ACQ_DATE:
                 # convert to a date using the user's preferences
-                nice_str = time.strftime(u"%c", time.localtime(value))
+                nice_str = time.strftime("%c", time.localtime(value))
+                # In Python 2, we still need to convert it to unicode
+                if isinstance(nice_str, bytes):
+                    nice_str = nice_str.decode(locale.getpreferredencoding())
             else:
                 # Still try to beautify a bit if it's a number
                 if (
