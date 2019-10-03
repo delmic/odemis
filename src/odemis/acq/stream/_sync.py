@@ -1107,7 +1107,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # integrate/sum images
                     self._integrateImages(integration_count)
-
+                    # Live update the setting stream with the new data
+                    self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
                     logging.debug("Done acquiring image number %s out of %s." % (n, tot_num))
 
             # acquisition done!
@@ -1590,6 +1591,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             if self._acq_state == CANCELLED:
                                 raise CancelledError()
 
+                    # Live update the setting stream with the new data
+                    self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
+
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -2052,6 +2056,9 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                     logging.warning("No dwell time metadata in SEM data")
                 s = model.DataArray(pxsum, se_md)
                 se_data.append(s)
+
+                # Live update the setting stream with the new data
+                self._tc_stream._onNewData(self._tc_stream._dataflow, tc_data)
 
             self._onCompletedData(0, se_data)
             self._onCompletedData(1, tc_data)
