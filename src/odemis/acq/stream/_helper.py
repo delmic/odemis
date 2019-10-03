@@ -104,7 +104,7 @@ class RepetitionStream(LiveStream):
 
             # increase exposure time range to perform image integration
             # TODO: for now we specify a max integration time by using a fixed multiple of the exp time, but max 24h
-            integrationTimeRange = (detector.exposureTime.range[0], max((detector.exposureTime.range[1]*10000, 86400)))
+            integrationTimeRange = (detector.exposureTime.range[0], min((detector.exposureTime.range[1] * 10000, 86400)))
             self.integrationTime = model.FloatContinuous(detector.exposureTime.value,
                                                          integrationTimeRange, unit="s",
                                                          setter=self._setIntegrationTime)
