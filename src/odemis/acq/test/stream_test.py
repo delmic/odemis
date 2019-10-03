@@ -4864,9 +4864,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        # apply spectrum efficiency compensation
-        tss.efficiencyCompensation.value = calib
-
         time.sleep(0.5)
 
         # apply bg correction: should fail as streak mode of bg image and data different

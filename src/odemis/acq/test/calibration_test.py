@@ -301,7 +301,7 @@ class TestSpectrum(unittest.TestCase):
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.compensate_spectrum_efficiency(spec, bckg, calib)
+        compensated = calibration.apply_spectrum_corrections(spec, bckg, calib)
 
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
@@ -332,7 +332,7 @@ class TestSpectrum(unittest.TestCase):
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)
+        compensated = calibration.apply_spectrum_corrections(spec, coef=calib)
 
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
@@ -342,6 +342,7 @@ class TestSpectrum(unittest.TestCase):
         for vo, vc, wl in zip(spec[..., 3, 3], compensated[..., 3, 3], wld):
             if wl <= wl_calib[0]:
                 self.assertEqual(vo * dcalib[0], vc)
+
 
 if __name__ == "__main__":
     unittest.main()

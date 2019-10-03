@@ -759,7 +759,7 @@ class StaticSpectrumStream(StaticStream):
     def _updateCalibratedData(self, bckg=None, coef=None):
         """
         Try to update the data with a new calibration. The two parameters are
-        the same as compensate_spectrum_efficiency(). The input data comes from
+        the same as apply_spectrum_corrections(). The input data comes from
         .raw and the calibrated data is saved in .calibrated
         :param bckg: (DataArray or None) The background image.
         :param coef: (DataArray or None) The spectrum efficiency correction data.
