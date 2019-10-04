@@ -1182,10 +1182,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream.calibrated.value
             raw_md = self.stream.calibrated.value.metadata
-            md = {
-                 model.MD_PIXEL_SIZE: raw_md[model.MD_PIXEL_SIZE],
-                 model.MD_POS: raw_md[model.MD_POS]
-                 }
+            md = {k: raw_md[k] for k in (model.MD_PIXEL_SIZE, model.MD_POS) if k in raw_md}
 
             # Average time values if they exist.
             if data.shape[1] > 1:
@@ -1222,10 +1219,6 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream.calibrated.value
             raw_md = self.stream.calibrated.value.metadata
-            md = {
-                 model.MD_PIXEL_SIZE: raw_md[model.MD_PIXEL_SIZE],
-                 model.MD_POS: raw_md[model.MD_POS]
-                 }
 
             # Average time values if they exist.
             if data.shape[1] > 1:
@@ -1279,6 +1272,8 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
                 rgbim[:, :, 2] = bim[:, :, 0]
 
             rgbim.flags.writeable = False
+            md = self._find_metadata(raw_md)
+            md[model.MD_DIMS] = "YXC"  # RGB format
             raw = model.DataArray(rgbim, md)
             self.image.value = raw
 
