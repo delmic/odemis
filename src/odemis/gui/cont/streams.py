@@ -29,6 +29,7 @@ from collections import OrderedDict
 import collections
 import functools
 import gc
+import locale
 import logging
 import numpy
 from odemis import model, util
@@ -372,7 +373,10 @@ class StreamController(object):
         try:
             if key == model.MD_ACQ_DATE:
                 # convert to a date using the user's preferences
-                nice_str = time.strftime(u"%c", time.localtime(value))
+                nice_str = time.strftime("%c", time.localtime(value))
+                # In Python 2, we still need to convert it to unicode
+                if isinstance(nice_str, bytes):
+                    nice_str = nice_str.decode(locale.getpreferredencoding())
             else:
                 # Still try to beautify a bit if it's a number
                 if (
@@ -519,7 +523,11 @@ class StreamController(object):
             for key in sorted(md):
                 v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
-                    text += u"%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
+                    nice_str = time.strftime("%c", time.localtime(v))
+                    # In Python 2, we still need to convert it to unicode
+                    if isinstance(nice_str, bytes):
+                        nice_str = nice_str.decode(locale.getpreferredencoding())
+                    text += u"%s: %s\n" % (key, nice_str)
                 else:
                     if isinstance(v, numpy.ndarray):
                         # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
