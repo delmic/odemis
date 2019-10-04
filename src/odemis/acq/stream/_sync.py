@@ -2059,7 +2059,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 se_data.append(s)
 
                 # Live update the setting stream with the new data
-                self._tc_stream._onNewData(self._tc_stream._dataflow, tc_data)
+                self._tc_stream._onNewData(self._tc_stream._dataflow, tc_data[-1])
 
             self._onCompletedData(0, se_data)
             self._onCompletedData(1, tc_data)
