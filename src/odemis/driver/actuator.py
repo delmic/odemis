@@ -1006,17 +1006,16 @@ class LinearActuator(model.Actuator):
         logging.debug("Subscribing to position of dependency %s", dep.name)
         dep.position.subscribe(self._update_dep_position, init=True)
 
-        referenced = False
         if model.hasVA(dep, "referenced") and axis_name in dep.referenced.value:
             referenced = dep.referenced.value[axis_name]
             self.referenced = model.VigilantAttribute({self._axis: referenced}, readonly=True)
             dep.referenced.subscribe(self._update_dep_ref)
-        if not referenced:
-            # The initialisation will not fail if the referencing fails
-            f = self.reference({axis})
-            f.add_done_callback(self._on_referenced)
-        else:
-            self.moveAbs({self._axis: self._dependency.position.value[self._caxis]}).result()
+
+            # Automatically reference if it's possible, and not yet done
+            if not referenced:
+                # The initialisation will not fail if the referencing fails
+                f = self.reference({axis})
+                f.add_done_callback(self._on_referenced)
 
     def _on_referenced(self, future):
         try:
@@ -1083,14 +1082,15 @@ class LinearActuator(model.Actuator):
         shift dict(string-> float): name of the axis and shift
         """
         self._referenceIfNeeded()
+        logging.debug("Moving axis %s (-> %s) by %g", self._axis, self._caxis, shift[self._axis])
         self._dependency.moveRel({self._caxis: shift[self._axis]}).result()
 
     def _doMoveAbs(self, pos):
         self._referenceIfNeeded()
 
-        axis, distance = list(pos.items())[0]
-        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
-        move = {self._caxis: distance + self._offset}
+        cpos = pos[self._axis] + self._offset
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, cpos)
+        move = {self._caxis: cpos}
         self._dependency.moveAbs(move).result()
 
     def _doReference(self, axes):
