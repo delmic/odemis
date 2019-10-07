@@ -50,7 +50,9 @@ ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
 CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
-CMD_START = ["%s/src/odemis/odemisd/start.py" % ODEMIS_PATH, "-n", "-l"]
+# TODO: We should use start.py here to test starting properly. However, this doesn't work
+# as long as we want to support both python interpreters, so we directly call main.py for now.
+CMD_START = ["%s/src/odemis/odemisd/main.py" % ODEMIS_PATH, "--log-target"]
 CMD_GUI = ["%s/src/odemis/gui/main.py" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
 
 
@@ -205,7 +207,7 @@ def test_config(sim_conf, path_root, logpath, interpreter):
         logging.error("Back-end still running after requesting to stop")
         backend.kill()
 
-    if gui and gui.returncode != 143:  # SIGTERM return code
+    if gui and gui.returncode not in (-15, 143):  # SIGTERM return code, direct and via bash
         if gui.returncode == 255:
             logging.warning("Back-end might have not finish loading before the GUI was started")
         logging.error("GUI failed to start, with return code %d", gui.returncode)
