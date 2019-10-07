@@ -253,6 +253,8 @@ class BackendStarter(object):
 
         p.wait()
         time.sleep(0.1)  # Make sure we got all the data from the pipes
+        out = [o.decode("utf-8", "ignore_error") for o in out]
+        err = [e.decode("utf-8", "ignore_error") for e in err]
         return out, err
 
     def start_backend(self, modelfile):
