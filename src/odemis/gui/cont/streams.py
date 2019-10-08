@@ -1909,6 +1909,12 @@ class StreamBarController(object):
                 return  # fast path
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
+        else:
+            # Deactivate spot mode if spot stream was just paused
+            if isinstance(stream, self._spot_required):
+                self._tab_data_model.tool.value = TOOL_NONE
+                spots = self._tab_data_model.spotStream
+                spots.is_active.value = False
 
     def on_tool_change(self, tool):
         """ Pause the SE and CLI streams when the Spot mode tool is activated """
