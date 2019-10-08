@@ -114,9 +114,9 @@ def get_class(name):
 
     try:
         mod = __import__(module_name, fromlist=[class_name])
-    except ImportError:
+    except ImportError as ex:
         raise SemanticError("Error in microscope file: "
-            "no module '%s' exists (class '%s')." % (module_name, class_name))
+            "fail loading module '%s' (class '%s'): %s." % (module_name, class_name, ex))
 #        return None # DEBUG
 
     try:
