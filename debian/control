@@ -25,6 +25,7 @@ Vcs-Browser: https://github.com/delmic/odemis
 Package: odemis
 Architecture: any
 Depends: python (>= 2.7.1),
+         python-wxgtk3.0,
          python-wxgtk4.0,
          python-pkg-resources,
          python-future,
