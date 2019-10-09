@@ -1217,8 +1217,7 @@ class MC_5DOF(model.Actuator):
         # Connect to the device
         self._id = c_uint32(MC_5DOF_DLL.SA_MC_INVALID_HANDLE)
 
-        option_string = b"model " + str(MC_5DOF_DLL.hwModel) + "\n" + \
-                        b"locator " + locator
+        option_string = "model %d\n locator %s" % (MC_5DOF_DLL.hwModel, locator)
                         
         options = c_char_p(option_string.encode("ascii"))
 
@@ -2165,6 +2164,8 @@ class SA_CTLDLL(CDLL):
     SA_CTL_MOVE_MODE_SCAN_RELATIVE = 3
     SA_CTL_MOVE_MODE_STEP = 4
 
+    SA_CTL_INFINITE = 0xffffffff
+
     def __init__(self):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
@@ -2274,12 +2275,8 @@ class MCS2(model.Actuator):
         # Connect to the device
         self._id = c_uint32(0)
 
-        option_string = b"model " + str(SA_CTLDLL.hwModel) + "\n"
-        # options = c_char_p(option_string.encode("ascii"))
-        options = c_char_p("".encode("ascii"))
-
         logging.debug("Connecting to locator %s", locator)
-        self.core.SA_CTL_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(""))
+        self.core.SA_CTL_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(b""))
         logging.debug("Successfully connected to SA_CTL Controller ID %d with %d channels", self._id.value, self.get_number_of_channels())
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
