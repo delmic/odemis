@@ -144,8 +144,9 @@ run_unittests python3
 TESTLOG=./integtest-full-$DATE.log
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
-INTEGLOGDIR="./integtest-$DATE/"
-mkdir -p "$INTEGLOGDIR"
+INTEGLOGDIR="./integtest-$DATE"
+mkdir -p "$INTEGLOGDIR-python2/"
+mkdir -p "$INTEGLOGDIR-python3/"
 
 # only echo ERRORs in the output
 touch "$TESTLOG" # To make sure tail doesn't fail
@@ -153,12 +154,21 @@ tail -f "$TESTLOG" | grep --line-buffered "ERROR:" &
 
 echo "Running integration tests"
 SIMPATH="$ODEMIS_DIR/install/linux/usr/share/odemis/sim/"
-"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$SIMPATH"/ >> "$TESTLOG" 2>&1
 
+echo -e "\n\n===============================================" | tee -a "$TESTLOG"
+echo "Running integration tests with python 2" | tee -a "$TESTLOG"
+python2 "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR-python2" "$SIMPATH"/ >> "$TESTLOG" 2>&1
 ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
 if [ -d "$ODMPATH" ]; then
-    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" --interpreter "/usr/bin/python2" "$ODMPATH"/*/ >> "$TESTLOG-python2" 2>&1
-    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" --interpreter "/usr/bin/python3" "$ODMPATH"/*/ >> "$TESTLOG-python3" 2>&1
+    python2 "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR-python2" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
+fi
+
+echo -e "\n\n===============================================" | tee -a "$TESTLOG"
+echo "Running integration tests with python 3" | tee -a "$TESTLOG"
+python3 "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR-python2" "$SIMPATH"/ >> "$TESTLOG" 2>&1
+ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
+if [ -d "$ODMPATH" ]; then
+    python3 "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR-python3" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
 fi
 
 # TODO: run GUI standalone tests by trying to load every test data file that we have.

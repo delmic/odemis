@@ -50,7 +50,9 @@ ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
 CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
-CMD_START = ["%s/src/odemis/odemisd/start.py" % ODEMIS_PATH, "-n", "-l"]
+# TODO: We should use start.py here to test starting properly. However, this doesn't work
+# as long as we want to support both python interpreters, so we directly call main.py for now.
+CMD_START = ["%s/src/odemis/odemisd/main.py" % ODEMIS_PATH, "--log-target"]
 CMD_GUI = ["%s/src/odemis/gui/main.py" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
 
 
@@ -126,12 +128,11 @@ def wait_backend_ready():
     return True
 
 
-def test_config(sim_conf, path_root, logpath, interpreter):
+def test_config(sim_conf, path_root, logpath):
     """ Test one running a backend and GUI with a given microscope file
     sim_conf (str): full filename of the microscope file to start
     path_root (str): beginning of the sim_conf, which is not useful for the user
     logpath (str): directory where to store the log files
-    interpreter (str): python interpreter
     return (bool): True if no error running the whole system, False otherwise
     """
     assert sim_conf.startswith(path_root)
@@ -153,14 +154,14 @@ def test_config(sim_conf, path_root, logpath, interpreter):
         pass
 
     logging.info("Starting %s backend", sim_conf)
-    cmd = [interpreter] + CMD_START + [dlog_path, sim_conf]
+    cmd = [sys.executable] + CMD_START + [dlog_path, sim_conf]
     backend = OdemisThread("Backend %s" % sim_conf_fn, cmd)
     backend.start()
 
     # Wait for the back end to load
     if wait_backend_ready():
         logging.info("Starting %s GUI", sim_conf)
-        cmd = [interpreter] + CMD_GUI + [os.path.abspath(guilog_path)]
+        cmd = [sys.executable] + CMD_GUI + [os.path.abspath(guilog_path)]
         gui = OdemisThread("GUI %s" % sim_conf_fn, cmd)
         gui.start()
 
@@ -205,7 +206,7 @@ def test_config(sim_conf, path_root, logpath, interpreter):
         logging.error("Back-end still running after requesting to stop")
         backend.kill()
 
-    if gui and gui.returncode != 143:  # SIGTERM return code
+    if gui and gui.returncode not in (-15, 143):  # SIGTERM return code, direct and via bash
         if gui.returncode == 255:
             logging.warning("Back-end might have not finish loading before the GUI was started")
         logging.error("GUI failed to start, with return code %d", gui.returncode)
@@ -252,8 +253,6 @@ def main(args):
 
     parser.add_argument("--log-path", dest="logpath", default="/tmp/",
                         help="Directory where the logs will be saved")
-    parser.add_argument("--interpreter", dest="interpreter", default="/usr/bin/python",
-                        help="Python interpreter (/usr/bin/python2 or /usr/bin/python3)")
     parser.add_argument("paths", nargs='*',
                         help="Paths to search for microscope files that will be used "
                              "to start the backend. Only the files ending with -sim.odm.yaml are tested")
@@ -288,7 +287,7 @@ def main(args):
         for sim_conf in sim_conf_files:
             logging.info("Testing %s", sim_conf)
             try:
-                passed = test_config(sim_conf, proot, options.logpath, options.interpreter)
+                passed = test_config(sim_conf, proot, options.logpath)
                 if passed:
                     print("OK", file=sys.stderr)
                 else:
