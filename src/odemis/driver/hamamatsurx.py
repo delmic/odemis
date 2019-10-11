@@ -510,8 +510,8 @@ class ReadoutCamera(model.DigitalCamera):
                 image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
                 image.shape = (int(img_info[1]), int(img_info[0]))
 
-                logging.debug("Requested image number %s, received image number %s from buffer.",
-                              img_num, img_num_actual)
+                logging.debug("Requested image number %s, received number %s of shape %s.",
+                              img_num, img_num_actual, image.shape)
 
                 # get the scaling table to correct the time axis
                 # TODO only request scaling table if corresponding MD not available for this time range
@@ -541,7 +541,10 @@ class ReadoutCamera(model.DigitalCamera):
                         del self._metadata[model.MD_TIME_LIST]  # remove TIME list from MD if not applicable
 
                 # update MD for the current image
-                self.parent._delaybox._updateTriggerRate()
+                try:
+                    self.parent._delaybox._updateTriggerRate()
+                except Exception:
+                    logging.exception("Failed to update trigger rate")
 
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
@@ -871,7 +874,7 @@ class DelayGenerator(model.HwComponent):
         Called whenever an image arrives.
         """
         triggerRate_raw = self.parent.DevParamGet(self.location, "Repetition Rate")  # returns a list
-        triggerRate = int(triggerRate_raw[0])
+        triggerRate = float(triggerRate_raw[0])
         self._metadata[model.MD_TRIGGER_RATE] = triggerRate
 
 
