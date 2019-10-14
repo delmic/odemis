@@ -663,16 +663,6 @@ def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     """
     return steps * estimateAcquisitionTime(detector, scanner)
 
-def _totalAutoFocusTime(spgr, dets):
-    ngs = len(spgr.axes["grating"].choices)
-    nds = len(dets)
-    et = estimateAutoFocusTime(dets[0], None) + 20
-
-    # 1 time for each grating/detector combination
-    move_et = ngs * 20 if ngs > 1 else 0  # extra 20 s for grating moves
-    move_et += nds * 5 if nds > 1 else 0  # extra 5 s for detector selector moves
-
-    return (ngs * nds) * et + move_et
 
 def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
 
@@ -1045,6 +1035,35 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
     return f
 
 
+# Rough time estimation for movements
+MOVE_TIME_GRATING = 20  # s
+MOVE_TIME_DETECTOR = 5  # , for the detector selector
+
+
+def _totalAutoFocusTime(spgr, dets):
+    ngs = len(spgr.axes["grating"].choices)
+    nds = len(dets)
+    et = estimateAutoFocusTime(dets[0], None)
+
+    # 1 time for each grating/detector combination, with the gratings changing slowly
+    move_et = ngs * MOVE_TIME_GRATING if ngs > 1 else 0
+    move_et += (ngs * (nds - 1) + (1 if nds > 1 else 0)) * MOVE_TIME_DETECTOR
+
+    return (ngs * nds) * et + move_et
+
+
+def _updateAFSProgress(future, af_dur, grating_moves, detector_moves):
+    """
+    Update the progress of the future based on duration of the previous autofocus
+    future (ProgressiveFuture)
+    af_dur (0< float): total duration of the next autofocusing actions
+    grating_moves (0<= int): number of grating moves left to do
+    detector_moves (0<= int): number of detector moves left to do
+    """
+    tleft = af_dur + grating_moves * MOVE_TIME_GRATING + detector_moves * MOVE_TIME_DETECTOR
+    future.set_progress(end=time.time() + tleft)
+
+
 def CLSpotsAutoFocus(detector, focus, good_focus=None, rng_focus=None, method=MTD_EXHAUSTIVE):
     """
     Wrapper for do auto focus for CL spots. It provides the ability to check the progress of the CL spots auto focus
@@ -1096,18 +1115,6 @@ def _mapDetectorToSelector(selector, detectors):
                   (", ".join(d.name for d in detectors), list(selector.axes.keys())))
 
     return sel_axis, det_2_sel
-
-
-def _updateAFSProgress(future, last_dur, left):
-    """
-    Update the progress of the future based on duration of the previous autofocus
-    future (ProgressiveFuture)
-    last_dur (0< float): duration of the latest autofocusing action
-    left (0<= int): number of autofocus actions still left
-    """
-    # Estimate that all the other autofocusing will take the same amount of time
-    tleft = left * last_dur + 5  # 5 s to go back to original pos
-    future.set_progress(end=time.time() + tleft)
 
 
 def _playStream(detector, streams):
@@ -1169,7 +1176,12 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
     # the spectrograph has only 2 gratings and 2 detectors, it's simpler to just
     # run the autofocus a 4th time.
 
-    cnts = len(gratings) * len(detectors) # For progress update
+    # For progress update
+    ngs = len(gratings)
+    nds = len(detectors)
+    cnts = ngs * nds
+    ngs_moves = ngs if ngs > 1 else 0
+    nds_moves = (ngs * (nds - 1) + (1 if nds > 1 else 0))
     try:
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -1184,16 +1196,20 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
             dets = sorted(detectors, key=is_current_det, reverse=True)
             for d in dets:
                 logging.debug("Autofocusing on grating %s, detector %s", g, d.name)
-                tstart = time.time()
                 if selector:
+                    if selector.position.value[sel_axis] != det_2_sel[d]:
+                        nds_moves = max(0, nds_moves - 1)
                     selector.moveAbsSync({sel_axis: det_2_sel[d]})
                 try:
+                    if spectrograph.position.value["grating"] != g:
+                        ngs_moves = max(0, ngs_moves - 1)
                     # 0th order is not absolutely necessary for focusing, but it
                     # typically gives the best results
                     spectrograph.moveAbsSync({"wavelength": 0, "grating": g})
                 except Exception:
                     logging.exception("Failed to move to 0th order for grating %s", g)
 
+                tstart = time.time()
                 # Note: we could try to reuse the focus position from the previous
                 # grating or detector, and pass it as good_focus, to save a bit
                 # of time. However, if for some reason the previous value was
@@ -1205,7 +1221,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
                 fp, flvl = future._subfuture.result()
                 ret[(g, d)] = fp
                 cnts -= 1
-                _updateAFSProgress(future, time.time() - tstart, cnts)
+                _updateAFSProgress(future, (time.time() - tstart) * cnts, ngs_moves, nds_moves)
 
                 if future._autofocus_state == CANCELLED:
                     raise CancelledError()
