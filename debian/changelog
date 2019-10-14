@@ -1,3 +1,16 @@
+odemis (2.10.2-1) xenial; urgency=medium
+
+  * New version: 2.10.2
+  * Main bug fixes:
+    - bugreporter: Don't fail if description.txt contains non-ascii characters
+    - Don't fail to show acquisition file if the language settings lead to a date containing non-ascii characters
+    - Fix knob connection (DELPHI)
+    - Fix polarization metadata failing to load in some (rare) cases
+    - Don't move Labcube filters at startup if they are already referenced
+    - Time-resolved live view chronograms were limited to the first 1024 points
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 Oct 2019 11:06:45 +0200
+
 odemis (2.10.1-1) xenial; urgency=medium
 
   * New version: 2.10.1
