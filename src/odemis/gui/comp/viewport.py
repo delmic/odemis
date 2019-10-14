@@ -1193,6 +1193,7 @@ class NavigablePlotViewport(PlotViewport):
 
         self.canvas.Bind(wx.EVT_MIDDLE_DOWN, self.on_drag_start)
         self.canvas.Bind(wx.EVT_MIDDLE_UP, self.on_drag_end)
+        self.canvas.Bind(wx.EVT_LEAVE_WINDOW, self.on_drag_end)
         self.canvas.Bind(wx.EVT_MOTION, self.on_canvas_motion)
         self.canvas.Bind(miccanvas.EVT_FIT_VIEW_TO_CONTENT, self.on_fit_view)
 
