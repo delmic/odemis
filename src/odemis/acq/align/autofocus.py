@@ -825,6 +825,14 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         cf Sparc2AutoFocus
         return dict((grating, detector) -> focus pos)
     """
+    def updateProgress(subf, start, end):
+        """
+        Updates the time progress when the current subfuture updates its progress
+        """
+        # if the future is complete, the standard progress update will work better
+        if not subf.done():
+            future.set_progress(end=end + sum(future._actions_time))
+
     try:
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled before the light is on")
@@ -881,10 +889,12 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
                       spgr, focuser, dets, selector)
         try:
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
-            ret = future._running_subf.result(timeout=3 * future._actions_time[0] + 10)
+            et = future._actions_time.pop(0)
+            future._running_subf.add_update_callback(updateProgress)
+            ret = future._running_subf.result(timeout=3 * et + 10)
         except TimeoutError:
             future._running_subf.cancel()
-            logging.warning("Timeout error for autofocus spectrometer")
+            logging.error("Timeout for autofocus spectrometer after %g s", et)
         except IOError:
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -892,7 +902,6 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after the completion of the autofocus")
             raise CancelledError()
-        future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
         logging.debug("Acquiring the last image")
