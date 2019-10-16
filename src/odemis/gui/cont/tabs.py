@@ -1870,6 +1870,21 @@ class AnalysisTab(Tab):
         # TODO: Move viewport related code to ViewPortController
         # TODO: to support multiple (types of) streams (eg, AR+Spec+Spec), do
         # this every time the streams are hidden/displayed/removed.
+
+        # handle display when both data types are present.
+        # TODO: Add a way within the GUI to toggle between AR and spectrum mode
+        if spec_streams and ar_streams:
+            dlg = wx.MessageDialog(wx.GetApp().GetTopWindow() , "The file contains both spectrum and AR data. Which data type should be displayed?",
+                caption="Incompatible stream types", style=wx.YES_NO)
+            dlg.SetYesNoLabels("Spectrum", "AR")
+
+            if dlg.ShowModal() == wx.ID_YES:
+                # Show Spectrum
+                ar_streams = []
+            else:
+                # Show AR
+                spec_streams = []
+
         if spec_streams:
             # ########### Track pixel and line selection
 
