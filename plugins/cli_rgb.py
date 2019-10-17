@@ -256,6 +256,10 @@ class RGBCLIntensity(Plugin):
         else:
             logging.warning("Unknown return code %d", ans)
 
+        # Make sure we don't hold reference to the streams forever
+        self._survey_s = None
+        self._cl_int_s = None
+
         dlg.Destroy()
 
     def acquire(self, dlg):
@@ -279,27 +283,43 @@ class RGBCLIntensity(Plugin):
         # doubles the dwell time).
         dt_survey, dt_clint, dt_drift = self._calc_acq_times()
 
-
         das = []
         fn = self.filename.value
         exporter = dataio.find_fittest_converter(fn)
 
+        # Prepare the Future to represent the acquisition progress, and cancel
         dur = self.expectedDuration.value
         end = time.time() + dur
         ft = model.ProgressiveFuture(end=end)
-        ft.task_canceller = lambda l: True  # To allow cancelling while it's running
-        ft.set_running_or_notify_cancel()  # Indicate the work is starting now
+
+        # Allow to cancel by cancelling also the sub-task
+        def canceller(future):
+            # To be absolutely correct, there should be a lock, however, in
+            # practice in the worse case the task will run a little longer before
+            # stopping.
+            if future._subf:
+                logging.debug("Cancelling sub future %s", future._subf)
+                return future._subf.cancel()
+
+        ft._subf = None  # sub-future corresponding to the task currently happening
+        ft.task_canceller = canceller  # To allow cancelling while it's running
+
+        # Indicate the work is starting now
+        ft.set_running_or_notify_cancel()
         dlg.showProgress(ft)
 
-        # TODO: if the user cancels the acquisition, the GUI shows as if it's
-        # been immediately stopped, but the code only detects it at the end of
-        # the CL acquisition. => Need to listen to the future, and immediately
-        # cancel the current acquisition.
         try:
             # acquisition of SEM survey
             if self._survey_s:
-                d, e = acq.acquire([self._survey_s]).result()
+                ft._subf = acq.acquire([self._survey_s])
+                d, e = ft._subf.result()
                 das.extend(d)
+                if e:
+                    raise e
+
+            if ft.cancelled():
+                raise CancelledError()
+
             dur -= dt_survey
             ft.set_progress(end=time.time() + dur)
 
@@ -321,13 +341,19 @@ class RGBCLIntensity(Plugin):
             # Loop over the filters, for now it's fixed to 3 but this could be flexible
             for fb, co in zip(self._filters, self._colours):
                 logging.info("Moving to band %s with component %s", fb.value, self.filterwheel.name)
-                self.filterwheel.moveAbs({"band": fb.value}).result()
+                ft._subf = self.filterwheel.moveAbs({"band": fb.value})
+                ft._subf.result()
+                if ft.cancelled():
+                    raise CancelledError()
                 ft.set_progress(end=time.time() + dur)
 
                 # acquire CL stream
-                d, e = acq.acquire([self._cl_int_s]).result()
+                ft._subf = acq.acquire([self._cl_int_s])
+                d, e = ft._subf.result()
+                if e:
+                    raise e
                 if ft.cancelled():
-                    return
+                    raise CancelledError()
                 dur -= dt_clint
                 ft.set_progress(end=time.time() + dur)
 
@@ -356,22 +382,24 @@ class RGBCLIntensity(Plugin):
                     da.metadata[model.MD_USER_TINT] = co
 
                 das.extend(d)
+                if ft.cancelled():
+                    raise CancelledError()
 
             ft.set_result(None)  # Indicate it's over
 
-        except CancelledError:
-            pass
-        finally:
-            # Make sure we don't hold reference to the streams forever
-            self._survey_s = None
-            self._cl_int_s = None
+        except CancelledError as ex:
+            logging.debug("Acquisition cancelled")
+            return
+        except Exception as ex:
+            logging.exception("Failure during RGB CL acquisition")
+            ft.set_exception(ex)
+            # TODO: show the error in the plugin window
+            return
 
-        if not ft.cancelled() and das:
-            if e:
-                logging.warning("RGB CL intensity acquisition partially failed: %s", e)
-            logging.debug("Will save data to %s", fn)
-            # logging.debug("Going to export data: %s", das)
-            exporter.export(fn, das)
-            self.showAcquisition(fn)
+        if ft.cancelled() or not das:
+            return
 
+        logging.debug("Will save data to %s", fn)
+        exporter.export(fn, das)
+        self.showAcquisition(fn)
         dlg.Close()
