@@ -54,7 +54,14 @@ class VideoDisplayerSine(VideoDisplayer):
             Note that the size of the window automatically adapts afterwards to the
             last received image.
         """
+        self.img = None
+        self.available = threading.Event()
+        self.display = True
         self.app = ImageWindowApp(title, size)
+
+        t = threading.Thread(target=self.image_update)
+        t.daemon = True
+        t.start()
 
     def new_image(self, data):
         """
@@ -66,11 +73,32 @@ class VideoDisplayerSine(VideoDisplayer):
         self.app.params, self.app.cols = fit_sine_to_image(data)
         super(VideoDisplayerSine, self).new_image(data)
 
+    def store_new_image(self, image):
+        """Store new image for next time you have time to process it"""
+        self.img = image
+        self.available.set()
+
+    def image_update(self):
+        """
+        Update the image in the video displayer.
+
+        """
+        try:
+            while self.display:
+                self.available.wait()
+                self.available.clear()
+                if not self.display:
+                    return
+                self.new_image(self.img)
+        except Exception:
+            logging.exception("Failure during display")
+        finally:
+            logging.debug("Display thread ended")
+
     def waitQuit(self):
-        """
-        returns when the window is closed (or the user pressed Q)
-        """
-        self.app.MainLoop()  # TODO we could use a Event if multiple accesses must be supported
+        super(VideoDisplayerSine, self).waitQuit()
+        self.display = False
+        self.available.set()  # Force the thread to check the .display flag
 
 
 class ImageWindowApp(wx.App):
@@ -95,16 +123,10 @@ class ImageWindowApp(wx.App):
         # (but it seems in Linux (GTK) frames don't receive key events anyway
         self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey)
 
-        if wx.MAJOR_VERSION <= 3:
-            self.img = wx.EmptyImage(*size, clear=True)
-            self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
-            self.imageCtrlSine = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
-            self.imageCtrlText = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
-        else:
-            self.img = wx.Image(*size, clear=True)
-            self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
-            self.imageCtrlSine = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
-            self.imageCtrlText = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
+        self.img = wx.Image(*size, clear=True)
+        self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
+        self.imageCtrlSine = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
+        self.imageCtrlText = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
         self.panel.SetFocus()
         self.frame.Show()
 
@@ -148,14 +170,9 @@ class ImageWindowApp(wx.App):
             ctx2.show_text(text)
             ctx2.stroke()
 
-        if wx.MAJOR_VERSION <= 3:
-            self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
-            self.imageCtrlSine.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(point_surface))
-            self.imageCtrlText.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(text_surface))
-        else:
-            self.imageCtrl.SetBitmap(wx.Bitmap(self.img))
-            self.imageCtrlSine.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(point_surface))
-            self.imageCtrlText.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(text_surface))
+        self.imageCtrl.SetBitmap(wx.Bitmap(self.img))
+        self.imageCtrlSine.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(point_surface))
+        self.imageCtrlText.SetBitmap(wx.lib.wxcairo.BitmapFromImageSurface(text_surface))
 
     def OnKey(self, event):
         """Destroy the frame when the user presses q or Q."""
@@ -165,38 +182,6 @@ class ImageWindowApp(wx.App):
 
         # everything else we don't process
         event.Skip()
-
-
-class ImagePasser(object):
-    """Pass an image in a Thread."""
-
-    def __init__(self):
-        self.image = None
-        self.available = threading.Event()
-        self.display = True
-
-
-def image_update(imp, window):
-    """
-    Update the image in the video displayer.
-
-    Parameters
-    ----------
-    imp: ImagePasser
-    window: VideoDisplayerSine
-
-    """
-    try:
-        while imp.display:
-            imp.available.wait()
-            imp.available.clear()
-            if not imp.display:
-                return
-            window.new_image(imp.image)
-    except Exception:
-        logging.exception("Failure during display")
-    finally:
-        logging.debug("Display thread ended")
 
 
 def live_display(ccd, dataflow, kill_ccd=True):
@@ -214,22 +199,15 @@ def live_display(ccd, dataflow, kill_ccd=True):
     """
     # create a window
     window = VideoDisplayerSine("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value)
-    im_passer = ImagePasser()
-    t = threading.Thread(target=image_update, args=(im_passer, window))
-    t.daemon = True
-    t.start()
 
     def new_image_wrapper(df, image):
-        im_passer.image = image
-        im_passer.available.set()
+        window.store_new_image(image)
 
     try:
         dataflow.subscribe(new_image_wrapper)
         # wait until the window is closed
         window.waitQuit()
     finally:
-        im_passer.display = False
-        im_passer.available.set()  # Force the thread to check the .display flag
         dataflow.unsubscribe(new_image_wrapper)
         if kill_ccd:
             ccd.terminate()
@@ -237,12 +215,12 @@ def live_display(ccd, dataflow, kill_ccd=True):
 
 def fit_sine_to_image(image):
     """
-    Fit a sine wave to a grayscale image containing a sine somewhere in the image.
+    Fit a sine wave to a image containing a sine somewhere in the image.
 
     Parameters
     ----------
-    image: ndarray
-        Image with an oscilloscope like trace of a sine wave.
+    image: ndarray of shape nxm
+        Grayscale image with an oscilloscope like trace of a sine wave.
 
     Returns
     -------
