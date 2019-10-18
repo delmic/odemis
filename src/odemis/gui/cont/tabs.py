@@ -3473,6 +3473,16 @@ class Sparc2AlignTab(Tab):
                                        )
                 speccnt_spe = self._stream_controller.addStream(speccnts,
                                     add_to_view=self.panel.vp_align_fiber.view)
+                # Special for the time-correlator: some of its settings also affect
+                # the photo-detectors.
+                if main_data.time_correlator:
+                    if model.hasVA(main_data.time_correlator, "syncDiv"):
+                        speccnt_spe.add_setting_entry("syncDiv",
+                                                      main_data.time_correlator.syncDiv,
+                                                      main_data.time_correlator,
+                                                      main_data.hw_settings_config["time-correlator"].get("syncDiv")
+                                                      )
+
                 if main_data.tc_od_filter:
                     speccnt_spe.add_axis_entry("density", main_data.tc_od_filter)
                     speccnt_spe.add_axis_entry("band", main_data.tc_filter)

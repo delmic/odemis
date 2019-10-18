@@ -500,6 +500,8 @@ HW_SETTINGS_CONFIG = {
             }),
             ("syncDiv", {
                 "label": "Sync divider",
+                "tooltip": u"Internally reduce sync signal rate to handle higher frequencies.\n"
+                           u"Use only if the frequency is very high (see hardware documentation).",
             }),
         )),
 }
