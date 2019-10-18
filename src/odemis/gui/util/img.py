@@ -118,19 +118,20 @@ def min_type(data):
     """
 
     if numpy.issubdtype(data.dtype, numpy.integer):
-        types = [numpy.int8, numpy.uint8, numpy.int16, numpy.uint16, numpy.int32,
-                 numpy.uint32, numpy.int64, numpy.uint64]
-    else:
-        types = [numpy.float16, numpy.float32, numpy.float64]
+        types = (numpy.int8, numpy.uint8, numpy.int16, numpy.uint16, numpy.int32,
+                 numpy.uint32, numpy.int64, numpy.uint64)
 
-    data_min, data_max = data.min(), data.max()
-
-    for t in types:
-        # FIXME: doesn't work with floats
-        if numpy.all(data_min >= numpy.iinfo(t).min) and numpy.all(data_max <= numpy.iinfo(t).max):
-            return t
+        data_min, data_max = data.min(), data.max()
+        for t in types:
+            if numpy.all(data_min >= numpy.iinfo(t).min) and numpy.all(data_max <= numpy.iinfo(t).max):
+                return t
+        else:
+            raise ValueError("Could not find suitable dtype.")
     else:
-        raise ValueError("Could not find suitable dtype.")
+        # TODO: for floats, be more clever, and if all the float could have a
+        # smaller precision, return that smaller floats (eg, the data contains
+        # only 0's)
+        return data.dtype
 
 
 def apply_rotation(ctx, rotation, b_im_rect):
