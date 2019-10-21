@@ -1054,7 +1054,6 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_ERROR_COMMUNICATION_FAILED = 0x0504
 
     # property symbols
-    SA_MC_PKEY_MAX_SPEED_LINEAR_AXES = 0x00002010
     SA_MC_PKEY_PIVOT_POINT_MODE = 0x00001001
     SA_MC_PKEY_IS_REFERENCED = 0x00002a00
     SA_MC_PKEY_HOLD_TIME = 0x00002000
@@ -1092,7 +1091,6 @@ class MC_5DOF_DLL(CDLL):
 0x0301: "The following error limit has been exceeded during movement ",
 0x0320: "Positioner referencing failed ",
 0x0500: "Could not load required hardware driver",
-0x0501: "Could not find/connect to controller",
 0x0501: "Could not find/connect to controller",
 0x0502: "The device is not connected",
 0x0503: "The controller doesn't provide the require features or configuration",
@@ -2340,7 +2338,7 @@ class MCS2(model.Actuator):
 
         devices = set()
         for counter, loc in enumerate(locators):
-            devices.append(("MCS2 %d" (counter,), {"locator": loc}))
+            devices.append(("MCS2 %d" % (counter,), {"locator": loc}))
 
         return devices
 
