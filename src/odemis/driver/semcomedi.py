@@ -2619,7 +2619,7 @@ class Scanner(model.Emitter):
         self._settle_time = settle_time
 
         if scan_active_delay is not None and not 0 <= scan_active_delay < 1000:
-            raise ValueError("scan_active_delay must be >= 0 and < 1000 s" % (scan_active_delay,))
+            raise ValueError("scan_active_delay %g s is not between 0 and 1000 s" % (scan_active_delay,))
         self._scan_active_delay = scan_active_delay
 
         if len(channels) != len(set(channels)):
