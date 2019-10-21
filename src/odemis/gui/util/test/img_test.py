@@ -858,6 +858,9 @@ class TestSpatialExport(unittest.TestCase):
         spec_data = model.DataArray(data, md)
         self.spec_stream = stream.StaticSpectrumStream("test spec", spec_data)
 
+        spec_float_data = model.DataArray(data.astype(numpy.float64), md)
+        self.spec_float_stream = stream.StaticSpectrumStream("test spec float", spec_float_data)
+
         # Wait for all the streams to get an RGB image
         time.sleep(0.5)
 
@@ -878,6 +881,18 @@ class TestSpatialExport(unittest.TestCase):
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
         proj = RGBSpatialProjection(self.spec_stream)
+        streams = [self.streams[1], proj]
+        orig_md = [s.raw[0].metadata.copy() for s in streams]
+        exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale
+        for s, md in zip(streams, orig_md):
+            self.assertEqual(md, s.raw[0].metadata)
+
+    def test_spec_float_pp(self):
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        proj = RGBSpatialProjection(self.spec_float_stream)
         streams = [self.streams[1], proj]
         orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
