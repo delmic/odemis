@@ -3382,23 +3382,24 @@ class Bus(model.Actuator):
                 pass
 
         # Scan for controllers via each IP master controller
-        ipmasters = cls._scanIPMasters()
-        for ipadd in ipmasters:
-            try:
-                logging.debug("Scanning controllers on master %s:%d", ipadd[0], ipadd[1])
-                sock = cls._openIPSocket(*ipadd)
-                controllers = Controller.scan(IPBusAccesser(sock, master=None))
-                if controllers:
-                    axis_num = 0
-                    arg = {}
-                    for add, axes in controllers.items():
-                        for a, cl in axes.items():
-                            arg[axes_names[axis_num]] = (add, a, cl)
-                            axis_num += 1
-                    found.append(("Actuator IP",
-                                 {"port": "%s:%d" % ipadd, "axes": arg}))
-            except IOError:
-                logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
+        if not port == "/dev/fake":
+            ipmasters = cls._scanIPMasters()
+            for ipadd in ipmasters:
+                try:
+                    logging.debug("Scanning controllers on master %s:%d", ipadd[0], ipadd[1])
+                    sock = cls._openIPSocket(*ipadd)
+                    controllers = Controller.scan(IPBusAccesser(sock, master=None))
+                    if controllers:
+                        axis_num = 0
+                        arg = {}
+                        for add, axes in controllers.items():
+                            for a, cl in axes.items():
+                                arg[axes_names[axis_num]] = (add, a, cl)
+                                axis_num += 1
+                        found.append(("Actuator IP",
+                                     {"port": "%s:%d" % ipadd, "axes": arg}))
+                except IOError:
+                    logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
 
         return found
 
