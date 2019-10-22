@@ -573,13 +573,14 @@ class Controller(object):
         # return self.GetParameter(axis, 0x3C)
         return self._readAxisValue("CST?", axis)
 
-    def GetAxes(self):
+    def GetAxes(self, all=False):
         """
+        all (bool): also list the disabled axes
         returns (set of bytes): all the available axes
         """
         # SAI? (Get List Of Current Axis Identifiers)
         # SAI? ALL: list all axes (included disabled ones), one per line
-        answer = self._sendQueryCommand("SAI? ALL\n")
+        answer = self._sendQueryCommand("SAI?%s\n" % (" ALL" if all else "",))
         axes = set(a for a in answer)
         return axes
 
@@ -3380,6 +3381,8 @@ class Bus(model.Actuator):
             except (serial.SerialException, model.HwError):
                 # not possible to use this port? next one!
                 pass
+            except Exception:
+                logging.exception("Skipping controller %s due to unexpected error", p)
 
         # Scan for controllers via each IP master controller
         ipmasters = cls._scanIPMasters()
@@ -3399,6 +3402,8 @@ class Bus(model.Actuator):
                                  {"port": "%s:%d" % ipadd, "axes": arg}))
             except IOError:
                 logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
+            except Exception:
+                logging.exception("Skipping controller %s:%d due to unexpected error", ipadd[0], ipadd[1])
 
         return found
 
@@ -4416,3 +4421,7 @@ class FakeBus(Bus):
               )
 
         return ser
+
+    @classmethod
+    def _scanIPMasters(cls):
+        return []  # Nothing
