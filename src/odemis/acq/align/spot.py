@@ -30,7 +30,7 @@ import numpy
 from odemis import model
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
-from odemis.util.transform import Transform
+from odemis.util.transform import AffineTransform
 from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
 from scipy.spatial import cKDTree as KDTree
@@ -361,19 +361,18 @@ def FindGridSpots(image, repetition):
     if numpy.linalg.det(lattice_constants) < 0.:
         transformation_matrix = numpy.fliplr(transformation_matrix)
     translation = numpy.mean(spot_positions, axis=0)
-    transform_to_spot_positions = Transform(translation=translation)
-    transform_to_spot_positions.transformation_matrix = transformation_matrix
+    transform_to_spot_positions = AffineTransform(matrix=transformation_matrix, translation=translation)
     # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
     grid = GridPoints(*repetition)
-    spot_grid = transform_to_spot_positions.apply(grid)
+    spot_grid = transform_to_spot_positions(grid)
     tree = KDTree(spot_positions)
     dd, ii = tree.query(spot_grid, k=1)
 
     pos_sorted = spot_positions[ii.ravel(), :]
-    transformation = Transform.from_pointset(grid, pos_sorted)
-    spot_coordinates = transformation.apply(grid)
+    transformation = AffineTransform.from_pointset(grid, pos_sorted)
+    spot_coordinates = transformation(grid)
 
-    return spot_coordinates, translation, transformation.scaling, transformation.rotation
+    return spot_coordinates, translation, transformation.scale, transformation.rotation
 
 
 def CropFoV(ccd, dfbkg=None):

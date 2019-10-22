@@ -4,10 +4,14 @@ Created on 10 Jan 2019
 
 @author: Andries Effting
 
-This file is a modified version of scipy.linalg.solve_triangular();
-https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/basic.py#L261
+The function tri_inv() is a modified version of scipy.linalg's
+solve_triangular(); available from:
+
+    https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/basic.py#L261
+
 and _datacopied() from:
-https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/misc.py#L177
+
+    https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/misc.py#L177
 
 Copyright (c) 2001, 2002 Enthought, Inc.
 All rights reserved.
@@ -46,7 +50,7 @@ import numpy
 from scipy.linalg.lapack import get_lapack_funcs
 from scipy.linalg.misc import LinAlgError
 
-__all__ = ['tri_inv']
+__all__ = ['qrp', 'tri_inv']
 
 
 # Duplicate from scipy.linalg.misc
@@ -124,3 +128,20 @@ def tri_inv(c, lower=False, unit_diagonal=False, overwrite_c=False,
         raise ValueError("illegal value in %d-th argument of internal trtri" %
                          -info)
     return inv_c
+
+
+def qrp(a, mode='reduced'):
+    """
+    Compute the qr factorization of a matrix.
+
+    Factor the matrix `a` as *qr*, where `q` is orthonormal and `r` is
+    upper-triangular. The diagonal entries of `r` are nonnegative.
+
+    For documentation see numpy.linalg.qr
+
+    """
+    q, r = numpy.linalg.qr(a, mode)
+    mask = numpy.diag(r) < 0.
+    q[:, mask] *= -1.
+    r[mask, :] *= -1.
+    return q, r

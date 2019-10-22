@@ -8,27 +8,28 @@ Copyright © 2019 Andries Effting, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import logging
+import copy
 import numpy
 from numpy.linalg import LinAlgError
-from odemis.util.transform import Transform
 import unittest
 
-
-logging.getLogger().setLevel(logging.DEBUG)
+from odemis.util.transform import (_rotation_matrix_from_angle,
+                                   _rotation_matrix_to_angle,
+                                   RigidTransform, SimilarityTransform,
+                                   ScalingTransform, AffineTransform)
 
 ROT45 = 0.25 * numpy.pi
 ROT90 = 0.5 * numpy.pi
@@ -45,7 +46,8 @@ TX = numpy.array([1., 0.])
 TY = numpy.array([0., 1.])
 TXY = numpy.array([2., 3.])
 
-KNOWN_VALUES = [
+RIGID_KNOWN_VALUES = [
+    # (rotation, scale, shear, translation, [(x0, y0), (x1, y1), ...])
     (0., 1., 0., T0, [(0., 0.), (1., 0.), (0., 1.)]),
     (0., 1., 0., TX, [(1., 0.), (2., 0.), (1., 1.)]),
     (0., 1., 0., TY, [(0., 1.), (1., 1.), (0., 2.)]),
@@ -70,6 +72,11 @@ KNOWN_VALUES = [
     (ROT180, 1., 0., -TX, [(-1., 0.), (-2., 0.), (-1., -1.)]),
     (ROT180, 1., 0., -TY, [(0., -1.), (-1., -1.), (0., -2.)]),
     (ROT180, 1., 0., TXY, [(2., 3.), (1., 3.), (2., 2.)]),
+]
+
+SIMILARITY_KNOWN_VALUES = copy.copy(RIGID_KNOWN_VALUES)
+SIMILARITY_KNOWN_VALUES.extend([
+    # (rotation, scale, shear, translation, [(x0, y0), (x1, y1), ...])
     (ROT45, SQ2, 0., T0, [(0., 0.), (1., 1.), (-1., 1.)]),
     (ROT45, SQ2, 0., TX, [(1., 0.), (2., 1.), (0., 1.)]),
     (ROT45, SQ2, 0., TY, [(0., 1.), (1., 2.), (-1., 2.)]),
@@ -100,6 +107,11 @@ KNOWN_VALUES = [
     (ROT180, 2., 0., -TX, [(-1., 0.), (-3., 0.), (-1., -2.)]),
     (ROT180, 2., 0., -TY, [(0., -1.), (-2., -1.), (0., -3.)]),
     (ROT180, 2., 0., TXY, [(2., 3.), (0., 3.), (2., 1.)]),
+])
+
+SCALING_KNOWN_VALUES = copy.copy(SIMILARITY_KNOWN_VALUES)
+SCALING_KNOWN_VALUES.extend([
+    # (rotation, scale, shear, translation, [(x0, y0), (x1, y1), ...])
     (0., S23, 0., T0, [(0., 0.), (2., 0.), (0., 3.)]),
     (0., S23, 0., TX, [(1., 0.), (3., 0.), (1., 3.)]),
     (0., S23, 0., TY, [(0., 1.), (2., 1.), (0., 4.)]),
@@ -130,7 +142,10 @@ KNOWN_VALUES = [
     (ROT45, SQ2S23, 0., -TX, [(-1., 0.), (1., 2.), (-4., 3.)]),
     (ROT45, SQ2S23, 0., -TY, [(0., -1.), (2., 1.), (-3., 2.)]),
     (ROT45, SQ2S23, 0., TXY, [(2., 3.), (4., 5.), (-1., 6.)]),
+])
 
+AFFINE_KNOWN_VALUES = copy.copy(SIMILARITY_KNOWN_VALUES)
+AFFINE_KNOWN_VALUES.extend([
     (0., 1., 1., T0, [(0., 0.), (1., 0.), (1., 1.)]),
     (0., 1., 1., TX, [(1., 0.), (2., 0.), (2., 1.)]),
     (0., 1., 1., TY, [(0., 1.), (1., 1.), (1., 2.)]),
@@ -215,7 +230,6 @@ KNOWN_VALUES = [
     (ROT45, SQ2S23, 1., -TX, [(-1., 0.), (1., 2.), (-2., 5.)]),
     (ROT45, SQ2S23, 1., -TY, [(0., -1.), (2., 1.), (-1., 4.)]),
     (ROT45, SQ2S23, 1., TXY, [(2., 3.), (4., 5.), (1., 8.)]),
-
     (0., 1., -1., T0, [(0., 0.), (1., 0.), (-1., 1.)]),
     (0., 1., -1., TX, [(1., 0.), (2., 0.), (0., 1.)]),
     (0., 1., -1., TY, [(0., 1.), (1., 1.), (-1., 2.)]),
@@ -300,7 +314,7 @@ KNOWN_VALUES = [
     (ROT45, SQ2S23, -1., -TX, [(-1., 0.), (1., 2.), (-6., 1.)]),
     (ROT45, SQ2S23, -1., -TY, [(0., -1.), (2., 1.), (-5., 0.)]),
     (ROT45, SQ2S23, -1., TXY, [(2., 3.), (4., 5.), (-3., 4.)])
-]
+])
 
 
 def _angle_diff(x, y):
@@ -329,7 +343,7 @@ class RotationMatrixKnownValues(unittest.TestCase):
         _rotation_matrix_to_angle should give known result with known input.
         """
         for angle, matrix in self.known_values:
-            result = Transform._rotation_matrix_to_angle(matrix)
+            result = _rotation_matrix_to_angle(matrix)
             self.assertAlmostEqual(_angle_diff(angle, result), 0.)
 
     def test_rotation_matrix_from_angle_known_values(self):
@@ -337,7 +351,7 @@ class RotationMatrixKnownValues(unittest.TestCase):
         _rotation_matrix_from_angle should give known result with known input.
         """
         for angle, matrix in self.known_values:
-            result = Transform._rotation_matrix_from_angle(angle)
+            result = _rotation_matrix_from_angle(angle)
             numpy.testing.assert_array_almost_equal(matrix, result)
 
 
@@ -348,7 +362,7 @@ class RotationMatrixToAngleBadInput(unittest.TestCase):
         dimensions of the array is other than 2.
         """
         for s in [(), (2,), (2, 2, 2)]:
-            self.assertRaises(LinAlgError, Transform._rotation_matrix_to_angle,
+            self.assertRaises(LinAlgError, _rotation_matrix_to_angle,
                               numpy.zeros(s))
 
     def test_not_square(self):
@@ -357,7 +371,7 @@ class RotationMatrixToAngleBadInput(unittest.TestCase):
         not square.
         """
         for s in [(1, 2), (1, 3), (2, 1), (2, 3), (3, 1), (3, 2)]:
-            self.assertRaises(LinAlgError, Transform._rotation_matrix_to_angle,
+            self.assertRaises(LinAlgError, _rotation_matrix_to_angle,
                               numpy.zeros(s))
 
     def test_not_2d(self):
@@ -365,10 +379,9 @@ class RotationMatrixToAngleBadInput(unittest.TestCase):
         _rotation_matrix_to_angle should fail when the matrix is not a 2-D
         matrix.
         """
-        for s in ((1, 1), (3, 3)):
-            self.assertRaises(NotImplementedError,
-                              Transform._rotation_matrix_to_angle,
-                              numpy.zeros(s))
+        for s in (1, 3):
+            self.assertRaises(NotImplementedError, _rotation_matrix_to_angle,
+                              numpy.eye(s))
 
     def test_not_orthogonal(self):
         """
@@ -380,8 +393,7 @@ class RotationMatrixToAngleBadInput(unittest.TestCase):
                        numpy.array([(1., 1.), (0., 0.)]),
                        numpy.array([(0., 1.), (0., 1.)]),
                        numpy.array([(0., 0.), (1., 1.)])]:
-            self.assertRaises(LinAlgError, Transform._rotation_matrix_to_angle,
-                              matrix)
+            self.assertRaises(LinAlgError, _rotation_matrix_to_angle, matrix)
 
     def test_improper_rotation(self):
         """
@@ -392,8 +404,7 @@ class RotationMatrixToAngleBadInput(unittest.TestCase):
                        numpy.array([(-1., 0.), (0., 1.)]),
                        numpy.array([(0., 1.), (1., 0.)]),
                        numpy.array([(0., -1.), (-1., 0.)])]:
-            self.assertRaises(LinAlgError, Transform._rotation_matrix_to_angle,
-                              matrix)
+            self.assertRaises(LinAlgError, _rotation_matrix_to_angle, matrix)
 
 
 class RotationMatrixProperties(unittest.TestCase):
@@ -403,10 +414,9 @@ class RotationMatrixProperties(unittest.TestCase):
         determinant equal to 1.
         """
         for angle in numpy.pi * numpy.linspace(-1., 1., 1000):
-            matrix = Transform._rotation_matrix_from_angle(angle)
+            matrix = _rotation_matrix_from_angle(angle)
             self.assertEqual(matrix.shape, (2, 2))
-            numpy.testing.assert_array_almost_equal(numpy.dot(matrix.T, matrix),
-                                                 numpy.eye(2))
+            numpy.testing.assert_array_almost_equal(numpy.dot(matrix.T, matrix), numpy.eye(2))
             self.assertAlmostEqual(numpy.linalg.det(matrix), 1.)
 
 
@@ -414,224 +424,229 @@ class RotationMatrixRoundTripCheck(unittest.TestCase):
     def test_roundtrip(self):
         """
         _rotation_matrix_to_angle(_rotation_matrix_from_angle(angle)) == angle
-        for all angles
+        for all angles.
         """
         for angle in numpy.pi * numpy.linspace(-1., 1., 1000):
-            matrix = Transform._rotation_matrix_from_angle(angle)
-            result = Transform._rotation_matrix_to_angle(matrix)
+            matrix = _rotation_matrix_from_angle(angle)
+            result = _rotation_matrix_to_angle(matrix)
             self.assertAlmostEqual(angle, result)
 
 
 class RigidTransformKnownValues(unittest.TestCase):
 
+    def test_rigid_transform_matrix_known_values(self):
+        for rotation, _, _, _, _ in RIGID_KNOWN_VALUES:
+            tform = RigidTransform(rotation=rotation)
+            matrix = _rotation_matrix_from_angle(rotation)
+            numpy.testing.assert_array_almost_equal(matrix, tform.transformation_matrix)
+
     def test_rigid_transform_from_pointset_known_values(self):
         """
-        Transform.from_pointset should return known result with known input for
-        rigid transformations.
+        RigidTransform.from_pointset should return known result with known
+        input for rigid transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or scaling != 1. or shear != 0.:
-                continue
-            tform = Transform.from_pointset(src, dst, method='rigid')
+        src = RIGID_KNOWN_VALUES[0][-1]
+        for rotation, _, _, translation, dst in RIGID_KNOWN_VALUES:
+            tform = RigidTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
-            self.assertEqual(1., tform.scaling)
-            self.assertEqual(0., tform.shear)
-            numpy.testing.assert_array_almost_equal(translation,
-                                                 tform.translation)
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
 
     def test_rigid_transform_apply_known_values(self):
         """
-        Transform.apply should return known result with known input for rigid
+        RigidTransform should return known result with known input for rigid
         transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or scaling != 1. or shear != 0.:
-                continue
-            tform = Transform(rotation=rotation, translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
+        src = RIGID_KNOWN_VALUES[0][-1]
+        for rotation, _, _, translation, dst in RIGID_KNOWN_VALUES:
+            tform = RigidTransform(rotation=rotation, translation=translation)
+            numpy.testing.assert_array_almost_equal(dst, tform(src))
 
     def test_rigid_transform_inverse_known_values(self):
         """
-        Transform.inverse should return known result with known input for rigid
-        transformations.
+        RigidTransform.inverse should return known result with known input for
+        rigid transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or scaling != 1. or shear != 0.:
-                continue
-            tform = Transform(rotation=rotation,
-                              translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
+        src = RIGID_KNOWN_VALUES[0][-1]
+        for rotation, _, _, translation, dst in RIGID_KNOWN_VALUES:
+            tform = RigidTransform(rotation=rotation,
+                                   translation=translation).inverse()
+            numpy.testing.assert_array_almost_equal(src, tform(dst))
 
 
 class SimilarityTransformKnownValues(unittest.TestCase):
 
+    def test_similarity_transform_matrix_known_values(self):
+        for rotation, scale, _, _, _ in SIMILARITY_KNOWN_VALUES:
+            tform = SimilarityTransform(rotation=rotation, scale=scale)
+            R = _rotation_matrix_from_angle(rotation)
+            matrix = scale * R
+            numpy.testing.assert_array_almost_equal(matrix, tform.transformation_matrix)
+
     def test_similarity_transform_from_pointset_umeyama(self):
         """
-        Transform.from_pointset should return the known results for the
-        specific known input as described in the paper by Umeyama.
+        SimilarityTransform.from_pointset should return the known results for
+        the specific known input as described in the paper by Umeyama.
         """
         src = numpy.array([(0., 0.), (1., 0.), (0., 2.)])
         dst = numpy.array([(0., 0.), (-1., 0.), (0., 2.)])
-        tform = Transform.from_pointset(src, dst, method='similarity')
+        tform = SimilarityTransform.from_pointset(src, dst)
         numpy.testing.assert_array_almost_equal(tform.rotation_matrix,
-                                             numpy.array([(0.832, 0.555),
-                                                       (-0.555, 0.832)]),
-                                             decimal=3)
-        self.assertAlmostEqual(tform.scaling, 0.721, places=3)
-        self.assertEqual(0., tform.shear)
+                                      numpy.array([(0.832, 0.555),
+                                                   (-0.555, 0.832)]),
+                                      decimal=3)
+        self.assertAlmostEqual(tform.scale, 0.721, places=3)
         numpy.testing.assert_array_almost_equal(tform.translation,
-                                             numpy.array([-0.800, 0.400]))
+                                      numpy.array([-0.800, 0.400]))
 
     def test_similarity_transform_from_pointset_known_values(self):
         """
-        Transform.from_pointset should return known result with known input for
-        similarity transformations.
+        SimilarityTransform.from_pointset should return known result with known
+        input for similarity transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or shear != 0.:
-                continue
-            tform = Transform.from_pointset(src, dst, method='similarity')
+        src = SIMILARITY_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SIMILARITY_KNOWN_VALUES:
+            tform = SimilarityTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
-            self.assertAlmostEqual(scaling, tform.scaling)
-            self.assertEqual(0., tform.shear)
-            numpy.testing.assert_array_almost_equal(translation,
-                                                 tform.translation)
+            self.assertAlmostEqual(scale, tform.scale)
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
 
     def test_similarity_transform_apply_known_values(self):
         """
-        Transform.apply should return known result with known input for
+        SimilarityTransform should return known result with known input for
         similarity transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or shear != 0.:
-                continue
-            tform = Transform(rotation=rotation, scaling=scaling,
-                              translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
+        src = SIMILARITY_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SIMILARITY_KNOWN_VALUES:
+            tform = SimilarityTransform(rotation=rotation, scale=scale,
+                                        translation=translation)
+            numpy.testing.assert_array_almost_equal(dst, tform(src))
 
     def test_similarity_transform_inverse_known_values(self):
         """
-        Transform.inverse should return known result with known input for
-        similarity transformations.
+        SimilarityTransform.inverse should return known result with known input
+        for similarity transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if numpy.ndim(scaling) != 0 or shear != 0.:
-                continue
-            tform = Transform(rotation=rotation, scaling=scaling,
-                              translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
+        src = SIMILARITY_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SIMILARITY_KNOWN_VALUES:
+            tform = SimilarityTransform(rotation=rotation, scale=scale,
+                                        translation=translation).inverse()
+            numpy.testing.assert_array_almost_equal(src, tform(dst))
 
 
 class ScalingTransformKnownValues(unittest.TestCase):
 
+    def test_scaling_transform_matrix_known_values(self):
+        for rotation, scale, shear, _, _ in SCALING_KNOWN_VALUES:
+            tform = ScalingTransform(rotation=rotation, scale=scale)
+            R = _rotation_matrix_from_angle(rotation)
+            S = scale * numpy.eye(2)
+            matrix = numpy.dot(R, S)
+            numpy.testing.assert_array_almost_equal(matrix, tform.transformation_matrix)
+
     def test_scaling_transform_from_pointset_known_values(self):
         """
-        Transform.from_pointset should return known result with known input for
-        scaling transformations.
+        ScalingTransform.from_pointset should return known result with known
+        input for scaling transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if shear != 0.:
-                continue
-            tform = Transform.from_pointset(src, dst, method='scaling')
+        src = SCALING_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SCALING_KNOWN_VALUES:
+            tform = ScalingTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
-            numpy.testing.assert_array_almost_equal(scaling, tform.scaling)
-            self.assertEqual(0., tform.shear)
-            numpy.testing.assert_array_almost_equal(translation,
-                                                 tform.translation)
+            numpy.testing.assert_array_almost_equal(scale, tform.scale)
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
 
     def test_scaling_transform_from_pointset_non_negative_scaling(self):
         """
-        Transform.from_pointset should not return a negative value for the
-        scaling when there is a reflection in the point set for scaling
+        ScalingTransform.from_pointset should not return a negative value for
+        the scaling when there is a reflection in the point set for scaling
         transformations.
         """
         src = numpy.array([(0., 0.), (1., 0.), (0., 2.)])
         dst = numpy.array([(0., 0.), (-1., 0.), (0., 2.)])
-        tform = Transform.from_pointset(src, dst, method='scaling')
-        self.assertTrue(numpy.all(tform.scaling > 0.))
+        tform = ScalingTransform.from_pointset(src, dst)
+        self.assertTrue(numpy.all(tform.scale > 0.))
 
     def test_scaling_transform_apply_known_values(self):
         """
-        Transform.apply should return known result with known input for scaling
-        transformations.
+        ScalingTransform should return known result with known input for
+        scaling transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if shear != 0.:
-                continue
-            tform = Transform(rotation=rotation, scaling=scaling,
-                              translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
+        src = SCALING_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SCALING_KNOWN_VALUES:
+            tform = ScalingTransform(rotation=rotation, scale=scale,
+                                     translation=translation)
+            numpy.testing.assert_array_almost_equal(dst, tform(src))
 
     def test_scaling_transform_inverse_known_values(self):
         """
-        Transform.inverse should return known result with known input for
-        scaling transformations.
+        ScalingTransform.inverse should return known result with known input
+        for scaling transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            if shear != 0.:
-                continue
-            tform = Transform(rotation=rotation, scaling=scaling,
-                              translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
+        src = SCALING_KNOWN_VALUES[0][-1]
+        for rotation, scale, _, translation, dst in SCALING_KNOWN_VALUES:
+            tform = ScalingTransform(rotation=rotation, scale=scale,
+                                     translation=translation).inverse()
+            numpy.testing.assert_array_almost_equal(src, tform(dst))
 
 
 class AffineTransformKnownValues(unittest.TestCase):
 
+    def test_affine_transform_matrix_known_values(self):
+        for rotation, scale, shear, _, _ in AFFINE_KNOWN_VALUES:
+            tform = AffineTransform(rotation=rotation, scale=scale,
+                                    shear=shear)
+            R = _rotation_matrix_from_angle(rotation)
+            S = scale * numpy.eye(2)
+            L = numpy.array([(1., shear), (0., 1.)])
+            matrix = numpy.dot(numpy.dot(R, S), L)
+            numpy.testing.assert_array_almost_equal(matrix, tform.transformation_matrix)
+
     def test_affine_transform_from_pointset_known_values(self):
         """
-        Transform.from_pointset should return known result with known input for
-        affine transformations.
+        AffineTransform.from_pointset should return known result with known
+        input for affine transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            tform = Transform.from_pointset(src, dst, method='affine')
+        src = AFFINE_KNOWN_VALUES[0][-1]
+        for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
+            tform = AffineTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
-            numpy.testing.assert_array_almost_equal(scaling, tform.scaling)
+            numpy.testing.assert_array_almost_equal(scale, tform.scale)
             self.assertAlmostEqual(shear, tform.shear)
-            numpy.testing.assert_array_almost_equal(translation,
-                                                 tform.translation)
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
 
     def test_affine_transform_from_pointset_non_negative_scaling(self):
         """
-        Transform.from_pointset should not return a negative value for the
-        scaling when there is a reflection in the point set for affine
+        AffineTransform.from_pointset should not return a negative value for
+        the scaling when there is a reflection in the point set for affine
         transformations.
         """
         src = numpy.array([(0., 0.), (1., 0.), (0., 2.)])
         dst = numpy.array([(0., 0.), (-1., 0.), (0., 2.)])
-        tform = Transform.from_pointset(src, dst, method='affine')
-        self.assertTrue(numpy.all(tform.scaling > 0.))
+        tform = AffineTransform.from_pointset(src, dst)
+        self.assertTrue(numpy.all(tform.scale > 0.))
 
     def test_affine_transform_apply_known_values(self):
         """
-        Transform.apply should return known result with known input for affine
+        AffineTransform should return known result with known input for affine
         transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            tform = Transform(rotation=rotation, scaling=scaling,
-                              shear=shear, translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
+        src = AFFINE_KNOWN_VALUES[0][-1]
+        for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
+            tform = AffineTransform(rotation=rotation, scale=scale,
+                                    shear=shear, translation=translation)
+            numpy.testing.assert_array_almost_equal(dst, tform(src))
 
     def test_affine_transform_inverse_known_values(self):
         """
-        Transform.inverse should return known result with known input for
+        AffineTransform.inverse should return known result with known input for
         affine transformations.
         """
-        src = KNOWN_VALUES[0][-1]
-        for rotation, scaling, shear, translation, dst in KNOWN_VALUES:
-            tform = Transform(rotation=rotation, scaling=scaling, shear=shear,
-                              translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
+        src = AFFINE_KNOWN_VALUES[0][-1]
+        for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
+            tform = AffineTransform(rotation=rotation, scale=scale,
+                                    shear=shear,
+                                    translation=translation).inverse()
+            numpy.testing.assert_array_almost_equal(src, tform(dst))
 
 
 if __name__ == '__main__':
