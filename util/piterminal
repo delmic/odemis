@@ -25,6 +25,7 @@ piterminal. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, absolute_import, print_function
 
 import argparse
+from builtins import input
 import logging
 from odemis.driver import pigcs
 from odemis.model import HwError
@@ -33,10 +34,10 @@ import sys
 
 
 def repl(acc):
-    print("Type Ctrl+C to quit")
+    print("Type Ctrl+C to quit")  # Ctrl+D also works (EOFError)
     try:
         while True:
-            inp = raw_input("> ")
+            inp = input("> ")
             try:
                 res = acc.sendQueryCommand(None, inp + "\n")
             except HwError:
@@ -49,7 +50,7 @@ def repl(acc):
                 print("\n".join(res))
             else:
                 print(res)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
         print("")
         return
 
