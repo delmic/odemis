@@ -736,7 +736,7 @@ class TileAcqPlugin(Plugin):
 
         if self.stitch.value:
             # Number of pixels for acquisition
-            pxs = sum(self._estimateStreamPixels(ss[1]) for ss in self._get_acq_streams())
+            pxs = sum(self._estimateStreamPixels(s) for s in self._get_acq_streams()[1])
             pxs *= self.nx.value * self.ny.value
 
             # Memory calculation
