@@ -740,15 +740,20 @@ class _NumberTextCtrl(wx.TextCtrl):
 
         prev_num = self._number_value
         if str_number is None or str_number == "":
-            self._number_value = None
+            num = None
         else:
             # set new value even if not validated, so that we reach the boundaries
-            self._number_value = self.GetValidator().get_validated_number(str_number)
+            num = self.GetValidator().get_validated_number(str_number)
             # TODO: turn the text red temporarily if not valid?
             # if not validated:
             # logging.debug("Converted '%s' into '%s'", str_number, self._number_value)
 
-        if prev_num != self._number_value:
+        if num is None:
+            logging.debug("Skipping number field set to %r as it would be None, and reverting to %s", str_number, prev_num)
+            return
+
+        if prev_num != num:
+            self._number_value = num
             self._send_change_event()
 
     # Event handlers
