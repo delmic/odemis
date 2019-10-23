@@ -275,10 +275,10 @@ class TMCLController(model.Actuator):
         self._refproc_cancelled = {}  # axis number -> event
         self._refproc_lock = {}  # axis number -> lock
 
-        self._ser_access = threading.Lock()
+        self._ser_access = threading.RLock()
         self._serial, ra = self._findDevice(port, address)
         self._target = ra  # same as address, but always the actual one
-        self._port = port  # or self._serial.name ?
+        self._portpattern = port
 
         # For ensuring only one updatePosition() at the same time
         self._pos_lock = threading.Lock()
@@ -406,7 +406,7 @@ class TMCLController(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
-        driver_name = driver.getSerialDriver(self._port)
+        driver_name = driver.getSerialDriver(self._portpattern)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
         self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (self._modl, vmaj, vmin)
 
@@ -843,11 +843,25 @@ class TMCLController(model.Actuator):
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
         with self._ser_access:
             logging.debug("Sending %s", self._instr_to_str(msg))
-            self._serial.write(msg)
+            try:
+                self._serial.write(msg)
+            except IOError:
+                logging.warn("Failed to send command to TMCM, trying to reconnect.")
+                self._tryRecover()
+                # Failure here should mean that the device didn't get the (complete)
+                # instruction, so it's safe to send the command again.
+                return self.SendInstruction(n, typ, mot, val)
             self._serial.flush()
             while True:
-                res = self._serial.read(9)
-                if len(res) < 9: # TODO: TimeoutError?
+                try:
+                    res = self._serial.read(9)
+                except IOError:
+                    logging.warn("Failed to read from TMCM, trying to reconnect.")
+                    self._tryRecover()
+                    # We already sent the instruction before, so don't send it again
+                    # here. Instead, raise an error and let the user decide what to do next
+                    raise IOError("Failed to read from TMCM, restarted serial connection.")
+                if len(res) < 9:  # TODO: TimeoutError?
                     logging.warning("Received only %d bytes after %s, will fail the instruction",
                                     len(res), self._instr_to_str(msg))
                     raise IOError("Received only %d bytes after %s" %
@@ -874,6 +888,34 @@ class TMCLController(model.Actuator):
                     logging.warning("Message checksum incorrect (%d), will assume it's all fine", chk)
 
                 return rval
+
+    def _tryRecover(self):
+        self.state._set_value(HwError("USB connection lost"), force_write=True)
+        # Retry to open the serial port (in case it was unplugged)
+        # _ser_access should already be acquired, but since it's an RLock it can be acquired
+        # again in the same thread
+        with self._ser_access:
+            while True:
+                try:
+                    self._serial.close()
+                    self._serial = None
+                except Exception:
+                    pass
+                try:
+                    logging.debug("Searching for the device on port %s", self._portpattern)
+                    self._findDevice(self._portpattern)
+                except IOError:
+                    time.sleep(2)
+                except Exception:
+                    logging.exception("Unexpected error while trying to recover device")
+                    raise
+                else:
+                    # We found it back!
+                    break
+
+        # it now should be accessible again
+        self.state._set_value(model.ST_RUNNING, force_write=True)
+        logging.info("Recovered device on port %s", self._portpattern)
 
     # Low level functions
     def GetVersion(self):
