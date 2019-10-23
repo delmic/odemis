@@ -262,8 +262,10 @@ class PMTControl(model.PowerSupplier):
         self._prot_curr = prot_curr
 
         # TODO: catch errors and convert to HwError
-        self._ser_access = threading.Lock()
+        self._ser_access = threading.RLock()
 
+        self._portpattern = port
+        self._recovering = False  # True while reopening serial connection after USB disconnect/reconnect
         self._port = self._findDevice(port)  # sets ._serial
         logging.info("Found PMT Control device on port %s", self._port)
 
@@ -421,17 +423,41 @@ class PMTControl(model.PowerSupplier):
         cmd (byte str): command to be sent to PMT Control unit.
         returns (byte str): answer received from the PMT Control unit
         raises:
-            IOError: if an ERROR is returned by the PMT Control firmware.
+            PMTControlError: if an ERROR is returned by the PMT Control firmware.
+            HwError: in case the of connection timeout
         """
         cmd = cmd + b"\n"
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
-            self._serial.write(cmd)
+            try:
+                self._serial.write(cmd)
+            except IOError:
+                logging.warn("Failed to send command to PMT Control firmware, "
+                             "trying to reconnect.")
+                if self._recovering:
+                    raise
+                else:
+                    self._tryRecover()
+                    # send command again
+                    logging.debug("Sending command %s again after auto-reconnect" % to_str_escape(cmd))
+                    return self._sendCommand(cmd[:-1])  # cmd without \n
 
             ans = b''
             char = None
             while char != b'\n':
-                char = self._serial.read()
+                try:
+                    char = self._serial.read()
+                except IOError:
+                    logging.warn("Failed to read from PMT Control firmware, "
+                                 "trying to reconnect.")
+                    if self._recovering:
+                        raise
+                    else:
+                        self._tryRecover()
+                        # don't send command again
+                        raise IOError("Failed to read from PMT Control firmware, "
+                                      "restarted serial connection.")
+
                 if not char:
                     logging.error("Timeout after receiving %s", to_str_escape(ans))
                     # TODO: See how you should handle a timeout before you raise
@@ -446,6 +472,37 @@ class PMTControl(model.PowerSupplier):
                 raise PMTControlError(ans.split(b' ', 1)[1])
 
             return ans.rstrip()
+
+    def _tryRecover(self):
+        self._recovering = True
+        self.state._set_value(HwError("USB connection lost"), force_write=True)
+        # Retry to open the serial port (in case it was unplugged)
+        # _ser_access should already be acquired, but since it's an RLock it can be acquired
+        # again in the same thread
+        try:
+            with self._ser_access:
+                while True:
+                    try:
+                        self._serial.close()
+                        self._serial = None
+                    except Exception:
+                        pass
+                    try:
+                        logging.debug("Searching for the device on port %s", self._portpattern)
+                        self._port = self._findDevice(self._portpattern)
+                    except IOError:
+                        time.sleep(2)
+                    except Exception:
+                        logging.exception("Unexpected error while trying to recover device")
+                        raise
+                    else:
+                        # We found it back!
+                        break
+            # it now should be accessible again
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+            logging.info("Recovered device on port %s", self._port)
+        finally:
+            self._recovering = False
 
     @staticmethod
     def _openSerialPort(port):
