@@ -347,7 +347,7 @@ class Shamrock(model.Actuator):
             fl, ad, ft = self.EepromGetOpticalParams()
             if 0.190 <= fl <= 0.200:
                 self._model = MODEL_KY193
-            elif 0.300 <= fl <= 0.310:
+            elif 0.296 <= fl <= 0.310:
                 self._model = MODEL_SR303
             elif 0.326 <= fl <= 0.330:
                 self._model = MODEL_KY328
