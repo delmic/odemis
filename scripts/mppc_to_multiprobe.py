@@ -14,6 +14,7 @@ Preparation for imaging:
     On the SEM Control PC:
         Set HFW TODO (so far it looks the script can deal with various different settings - might remove).
         Increase the scan size (normally 3.2um) to cover the active area of the full mppc detector.
+        Set 2000x magnification and 8V at SEM.
         Set beam shift to zero.
         Select single-beam mode; use beamlet E4.
         Set the scan mode to ‘External’.
@@ -39,6 +40,7 @@ import math
 import numpy
 
 import cv2
+import glob
 import os
 
 import skimage
@@ -200,7 +202,7 @@ def get_mppc_rotation(images):
     angle_control_degree = -math.degrees(angle_control)  # convert to degree and change sign for correcting the rotation
 
     # check that angles are the same, allow a 1 degree margin
-    if not almost_equal(mppc_rotation, angle_control_degree, atol=1):
+    if not almost_equal(mppc_rotation, angle_control_degree, atol=0.5):
         raise ValueError("The angle found based on the images of cell A1 and H1, should be the same angle"
                          "as for cells A8 and H8. However, the angle of A1/H1 is {:.2f} "
                          "whereas the angle of A8/H8 is {:.2f}.".format(mppc_rotation, angle_control_degree))
@@ -208,25 +210,30 @@ def get_mppc_rotation(images):
     return mppc_rotation  # angle
 
 
-def get_mppc_offset(image):
+def get_mppc_offset(image, phi):
     """
     Calculates the offset of the MPPC detector in space. MPPC detector should be centered in regard to the scanning
     beamlet, when in single beam mode.
     Calculates the distance of the active MPPC cell image (bright square) in regard to the center of the cell image.
     Note: Return value is based on top/left corner (0,0).
     :param image: (ndarray) Preprocessed E4 cell images.
+    :param phi: (float) Rotation angle to transform the mppc image coordinate system to the multiprobe
+                coordinate system.
     :returns: (tuple of 2 float) The distance to the E4 cell image center in y and x in px.
     """
 
+    rot_matrix = numpy.array(((numpy.cos(phi), - numpy.sin(phi)), (numpy.sin(phi), numpy.cos(phi))))
+
     # calculate center of mass (y, x) of the bright spot
     spotcenter_E4 = center_of_mass(image)
+    spotcenter_E4_rot = numpy.dot(spotcenter_E4, rot_matrix)  # coordinate transform into system of multiprobe
 
     # center of image
     image_center = (image.shape[0]/2., image.shape[1]/2.)  # (y, x) [px] is at 400 x 400
+    image_center_rot = numpy.dot(image_center, rot_matrix)
 
     # calculate the x and y distance to the center
-
-    mppc_offset = (image_center[0] - spotcenter_E4[0], image_center[1] - spotcenter_E4[1])
+    mppc_offset = (image_center_rot[0] - spotcenter_E4_rot[0], image_center_rot[1] - spotcenter_E4_rot[1])
 
     return mppc_offset  # (y,x) sign of value indicates direction of correction
 
@@ -240,8 +247,12 @@ def main(args):
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action="store_true", default=False)
-    parser.add_argument('--file', dest="file", nargs="?",
+    parser.add_argument('--file', dest="file",
                         help="Image file to run the mppc to multiprobe alignment for.")
+    parser.add_argument('--angle', dest="phi", required=True,
+                        help="Rotation angle to match the mppc image coordinate system"
+                             "with the coordinate system of the multiprobe."
+                             "Can be automatically extracted with galvo_scan_to_multiprobe script.")
 
     options = parser.parse_args(args[1:])
     if options.debug:
@@ -253,19 +264,19 @@ def main(args):
     if options.file:
         image = tiff.read_data(options.file)[0]
     else:
-        scan_path = '/home/sonic/long_term_storage/'
+        scan_path = '/home/sonic/asm_storage/'
 
-        scans = os.listdir(scan_path)
-        scans = [os.path.join(scan_path, basename) for basename in scans]
+        scans = glob.glob(os.path.join(scan_path, "megafield_*"))
         last_scan = max(scans, key=os.path.getctime)
-        image = TIFF.open(os.path.join(scan_path, "{}/level_1.tiff".format(os.path.basename(last_scan)))).read_image()
+        image = TIFF.open(os.path.join(scan_path,
+                                       "{}/field_000_000_0_raw2.tiff".format(os.path.basename(last_scan)))).read_image()
 
     try:
         # pre-process image
         corner_images, image_E4 = preprocess_images(image)
 
         # calculate mppc offset
-        mppc_offset = get_mppc_offset(image_E4)
+        mppc_offset = get_mppc_offset(image_E4, options.phi)
         print("Distance of the E4 mppc cell from image center is y={:.2f} pixels and x={:.2f} pixels. "
               "Apply corresponding voltage to the galvo mirror "
               "to correct for the offset.".format(mppc_offset[0], mppc_offset[1]))
