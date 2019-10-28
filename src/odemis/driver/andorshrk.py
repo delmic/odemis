@@ -347,7 +347,7 @@ class Shamrock(model.Actuator):
             fl, ad, ft = self.EepromGetOpticalParams()
             if 0.190 <= fl <= 0.200:
                 self._model = MODEL_KY193
-            elif 0.300 <= fl <= 0.310:
+            elif 0.296 <= fl <= 0.310:
                 self._model = MODEL_SR303
             elif 0.326 <= fl <= 0.330:
                 self._model = MODEL_KY328
@@ -1282,6 +1282,9 @@ class Shamrock(model.Actuator):
         To be called whenever the user has changed the focus, to store the value,
         associated to the current grating & output port.
         """
+        if "focus" not in self.axes:
+            return
+
         g = self.GetGrating()
         if "flip-out" in self.axes:
             op = self.GetFlipperMirror(OUTPUT_FLIPPER)
@@ -1295,6 +1298,9 @@ class Shamrock(model.Actuator):
         To be called whenever the grating or output flipper have been moved, to
         ensure that the focus is set back to the previous good position
         """
+        if "focus" not in self.axes:
+            return
+
         g = self.GetGrating()
         if "flip-out" in self.axes:
             op = self.GetFlipperMirror(OUTPUT_FLIPPER)
