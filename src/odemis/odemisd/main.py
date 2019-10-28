@@ -692,7 +692,7 @@ def main(args):
             rotateLog(options.logtarget, maxBytes=50 * (2 ** 20), backupCount=5)
             handler = FileHandler(options.logtarget)
     logging.getLogger().setLevel(loglev)
-    handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
+    handler.setFormatter(logging.Formatter("%(asctime)s\t%(levelname)s\t%(module)s:%(lineno)d:\t%(message)s"))
     logging.getLogger().addHandler(handler)
 
     if loglev <= logging.DEBUG:

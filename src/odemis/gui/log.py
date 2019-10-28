@@ -63,14 +63,12 @@ def init_logger(level=logging.DEBUG, log_file=None):
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
     l.setLevel(level)
-    frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+    frm = "%(asctime)s\t%(levelname)s\t%(module)s:%(lineno)d:\t%(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
 
     # Create file handler
     # Path to the log file
     logfile_path = log_file or os.path.join(get_home_folder(), LOG_FILE)
-    # Formatting string for logging messages to file
-    frm = "%(asctime)s %(levelname)-7s %(module)s:%(lineno)d: %(message)s"
     file_format = logging.Formatter(frm)
 
     # Max 5 log files of 10Mb
