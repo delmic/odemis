@@ -332,6 +332,11 @@ class TestSymphotime(unittest.TestCase):
 
         self.controller.data.unsubscribe(measurement_callback)
 
+class TestOptionalDataRecord(unittest.TestCase):
+    # Test OptionalDataRecord to_bytes function (to make sure it's compatible with python2 and python3)
+    def test_to_bytes(self):
+        dr = symphotime.OptionalDataRecord("Test", symphotime.PQ_OPT_DATATYPE_FLOAT, 0.1)
+        self.assertIsInstance(dr.to_bytes(), bytes)
 
 if __name__ == "__main__":
     unittest.main()
