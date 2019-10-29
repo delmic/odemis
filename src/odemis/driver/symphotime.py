@@ -212,7 +212,7 @@ class OptionalDataRecord(object):
         Raises:
             ValueError if invalid record types are in the list.
         '''
-        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1,'\0')
+        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1, '\0').encode('ascii')
 
         if self.typ == PQ_OPT_DATATYPE_FLOAT:
             output_string += struct.pack('<Bf', self.typ, self.data)
