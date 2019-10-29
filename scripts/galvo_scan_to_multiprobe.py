@@ -40,56 +40,44 @@ import argparse
 import logging
 import math
 import sys
-from builtins import input
 
 import numpy
 from scanwaveform import dcoffset
 
 from odemis import model
 from odemis.acq.align.spot import FindSpot
+from odemis.util import transform
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 
 
-def get_scan_angle(coordinates):
+def get_scan_transform(coordinates, voltages):
     """
-    Fit a line through a set of coordinates and calculate the angle between that
-    line and the y-axis.
+    Determine the scaling transform from voltages to coordinates. The scaling transform consists of a translation,
+    rotation and scaling transformation.
 
     Parameters
     ----------
-    coordinates: (ndarray of shape nx2)
-        (x, y) center coordinates of the moved spot.
+    coordinates: (list of tuples)
+        (x, y) center coordinates of the moved spot grids.
+    voltages: (list of tuples)
+        x and y offset applied to the deflectors.
 
     Returns
     -------
     phi: (float)
-        Angle between a line fitted through the coordinates and the y-axis. Angle is clockwise and in radians.
+        Deflection angle in radians. Angle is counterclockwise.
+    scale: tuple of floats
+        The x and y scale factor between the voltages and coordinates, in pixels per volt.
     """
-    # Construct a system of linear equations to fit the line a*x + b*y + c = 0
-    n = coordinates.shape[0]
-    if n < 2:
-        raise ValueError("Need 2 or more coordinates, cannot find scan "
-                         "angle for {} coordinates.".format(n))
-    elif n == 2:
-        x = coordinates[1, :] - coordinates[0, :]
-        # Determine the angle of this line to the y-axis, -pi/2 < phi < pi/2
-        phi = numpy.arctan2(x[1], x[0])
-    else:
-        A = numpy.hstack((coordinates, numpy.ones((n, 1))))
-
-        # Solve the equation A*x = 0; i.e. find the null space of A. The solution
-        # is the eigenvector corresponding to the smallest singular value.
-        U, s, V = numpy.linalg.svd(A, full_matrices=False)
-        x = numpy.transpose(V[-1])
-
-        # Determine the angle of this line to the y-axis, -pi/2 < phi < pi/2
-        phi = numpy.arctan2(x[1], -x[0])
+    t = transform.ScalingTransform()
+    # Determine the transformation between voltages and coordinates.
+    transformed = t.from_pointset(voltages, coordinates)
     # Wrap phi between -pi/2 and pi/2.
-    phi = (phi + math.pi / 2) % math.pi - math.pi / 2
-    return phi
+    phi = (transformed.rotation + math.pi / 2) % math.pi - math.pi / 2
+    return phi, transformed.scale
 
 
-def get_sem_rotation(ccd, channel=None):
+def get_sem_rotation(ccd):
     """
     Find the angle of the EBeam-Deflector-Y relative to the y-axis of the diagnostic camera.
     If set to manual, the y-shift must be applied to the electron beam by
@@ -100,46 +88,40 @@ def get_sem_rotation(ccd, channel=None):
     ----------
     ccd: (odemis.model.DigitalCamera)
         A camera object of the diagnostic camera.
-    channel: (int)
-        Channel number of waveform generator. If None alignment should be done manually. Default None.
 
     Returns
     -------
     sem_rotation: (float)
         The clockwise angle, in radians, of the EBeam-Deflector-Y relative to the diagnostic camera.
+    scale: (tuple of floats)
+        The x and y scale factor between the voltages and coordinates, in pixels per volt.
     """
-    image = ccd.data.get(asap=False)
-    spot = FindSpot(image)
-    coordinates = [spot]
-    if channel:  # Automatic alignment if a channel is passed.
-        # Move the spot on the image by changing the voltage on the AWG.
-        # Offset from -4 to 4 to have enough distance between the moved spots,
-        # while not moving the spot off the camera.
-        for offset in [-4, -1, 0.0, 1, 4]:
-            dcoffset.set_dc_output('e-beam', channel, offset)
+    coordinates = []
+    voltages = []
+    # Move the spot on the image by changing the voltage on the AWG.
+    # Offset from -4 to 4 to have enough distance between the moved spots,
+    # while not moving the spot off the camera.
+    for x_offset in [-4, -2, 0.0, 2, 4]:
+        for y_offset in [-4, -2, 0.0, 2, 4]:
+            dcoffset.set_dc_output_per_axis('e-beam', 'x', x_offset)
+            dcoffset.set_dc_output_per_axis('e-beam', 'y', y_offset)
             image = ccd.data.get(asap=False)
             spot = FindSpot(image)
+            # Flip y-axis to be able to calculate the transformation, because a positive voltage applied on
+            # the deflectors results in a movement in the negative y direction on the diagnostic camera.
+            spot[1] = image.shape[1] - spot[1]
             coordinates.append(spot)
-    else:  # Manual alignment if no channel is passed.
-        input('Press enter after applying y-shift to electron beam: \n')
-        while True:
-            image = ccd.data.get(asap=False)
-            spot = FindSpot(image)
-            coordinates.append(spot)
-            inp = input('Applied y-shift to electron beam again? y/n \n')
-            while inp.lower() not in ['y', 'n']:
-                inp = input(
-                    '{} not an option please choose from y/n \n'.format(inp))
-            if inp.lower() == "n":
-                break
+            voltages.append((x_offset, y_offset))
+            print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
     # Compute the EBeam-Deflector-Y scan angle relative to the y-axis of the diagnostic camera
-    sem_rotation = get_scan_angle(numpy.array(coordinates))
+    sem_rotation, scale = get_scan_transform(coordinates, voltages)
     # Reset EBeam-Deflector-Y scan input to zero.
-    dcoffset.set_dc_output('e-beam', channel, 0)
-    return sem_rotation
+    dcoffset.set_dc_output_per_axis('e-beam', 'x', 0)
+    dcoffset.set_dc_output_per_axis('e-beam', 'y', 0)
+    return sem_rotation, scale
 
 
-def get_galvo_rotation(ccd, channel=None, galvo_offset=3):
+def get_galvo_rotation(ccd, galvo_x_offset=3, galvo_y_offset=3):
     """
     Find the angle of the DeScan-Y galvo relative to the y-axis of the diagnostic camera.
     If set to manual, the y-shift must be applied to the DeScan-Y galvo by
@@ -150,47 +132,41 @@ def get_galvo_rotation(ccd, channel=None, galvo_offset=3):
     ----------
     ccd: (odemis.model.DigitalCamera)
         A camera object of the diagnostic camera.
-    channel: (int)
-        Channel number of waveform generator. If None alignment should be done manually. Default None.
-    galvo_offset: (float)
+    galvo_y_offset: (float)
+        Experimentally determined offset of the DeScan-X galvo in Volt.
+    galvo_x_offset: (float)
         Experimentally determined offset of the DeScan-Y galvo in Volt.
 
     Returns
     -------
     galvo_rotation: (float)
         The clockwise angle, in radians, of the DeScan-Y galvo relative to the y-axis of the diagnostic camera.
+    scale: (tuple of floats)
+        The x and y scale factor between the voltages and coordinates, in pixels per volt.
     """
-    image = ccd.data.get(asap=False)
-    spot = FindSpot(image)
-    # Determine position of e-beam spot on diagnostic camera and increase scan
-    # signal until ‘enough’ points are measured.
-    coordinates = [spot]
-    if channel:  # Automatic alignment if a channel is passed.
-        # Move the spot on the image by changing the voltage on the AWG.
-        # Offsets chosen to have enough distance between the moved spots,
-        # while not moving the spot off the camera.
-        for offset in [-1e-2, -0.5e-2, 0.0, 0.5e-2, 1e-2]:
-            dcoffset.set_dc_output('mirror', channel, offset - galvo_offset)
+    coordinates = []
+    voltages = []
+    # Move the spot on the image by changing the voltage on the AWG.
+    # Offsets chosen to have enough distance between the moved spots,
+    # while not moving the spot off the camera.
+    for x_offset in [-1e-2, -0.5e-2, 0.0, 0.5e-2, 1e-2]:
+        for y_offset in [-1e-2, -0.5e-2, 0.0, 0.5e-2, 1e-2]:
+            dcoffset.set_dc_output_per_axis('mirror', 'x', x_offset - galvo_x_offset)
+            dcoffset.set_dc_output_per_axis('mirror', 'y', y_offset - galvo_y_offset)
             image = ccd.data.get(asap=False)
             spot = FindSpot(image)
+            # Flip y-axis to be able to calculate the transformation, because a positive voltage applied on
+            # the galvos results in a movement in the negative y direction on the diagnostic camera.
+            spot[1] = image.shape[1] - spot[1]
             coordinates.append(spot)
-    else:  # Manual alignment if no channel is passed.
-        input('Press enter after applying scan signal to Y-galvo input: \n')
-        while True:
-            image = ccd.data.get(asap=False)
-            spot = FindSpot(image)
-            coordinates.append(spot)
-            inp = input('Applied scan signal to Y-galvo input again? y/n \n')
-            while inp.lower() not in ['y', 'n']:
-                inp = input(
-                    '{} not an option please choose from y/n \n'.format(inp))
-            if inp.lower() == "n":
-                break
+            voltages.append((x_offset, y_offset))
+            print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
     # Compute the DeScan-Y scan angle relative to the y-axis of the diagnostic camera.
-    galvo_rotation = get_scan_angle(numpy.array(coordinates))
+    galvo_rotation, scale = get_scan_transform(coordinates, voltages)
     # Reset DeScan-Y scan input to zero.
-    dcoffset.set_dc_output('mirror', channel, 0 - galvo_offset)
-    return galvo_rotation
+    dcoffset.set_dc_output_per_axis('mirror', 'x', 0 - galvo_x_offset)
+    dcoffset.set_dc_output_per_axis('mirror', 'y', 0 - galvo_y_offset)
+    return galvo_rotation, scale
 
 
 def main(args):
@@ -211,15 +187,15 @@ def main(args):
     parser.add_argument("--role", dest="role", default="diagnostic-ccd",
                         metavar="<component>",
                         help="Role of the camera to connect to via the Odemis back-end. E.g.: 'ccd'.")
-    parser.add_argument("--channel", dest="channel", default=2,
-                        metavar="<component>",
-                        help="Number of the AWG output channel. If channel is None alignment should be done manually.")
     parser.add_argument("--scanrot", dest="scan_rotation", default=0,
                         metavar="<component>",
                         help="Scan rotation as determined by running ebeam_scan_to_multiprobe.py")
-    parser.add_argument("--galvo-offset", dest="galvo_offset", default=3,
+    parser.add_argument("--galvo-x-offset", dest="galvo_x_offset", default=3,
                         metavar="<component>",
-                        help="Experimentally determined galvo offset in Volt.")
+                        help="Experimentally determined galvo x offset in Volt.")
+    parser.add_argument("--galvo-y-offset", dest="galvo_y_offset", default=3,
+                        metavar="<component>",
+                        help="Experimentally determined galvo y offset in Volt.")
 
     options = parser.parse_args(args[1:])
     if options.debug:
@@ -232,15 +208,17 @@ def main(args):
 
     ccd = model.getComponent(role=options.role)
     try:
-        galvo_rotation = get_galvo_rotation(ccd, options.channel, options.galvo_offset)
+        galvo_rotation, galvo_scale = get_galvo_rotation(ccd, options.channel, options.galvo_offset)
         print("Galvo rotation: {:.3f}°".format(math.degrees(galvo_rotation)))
-        sem_rotation = get_sem_rotation(ccd, options.channel)
+        sem_rotation, _ = get_sem_rotation(ccd, options.channel)
         print("SEM rotation: {:.3f}°".format(math.degrees(sem_rotation)))
         # Set e-beam orientation such that DeScan-Y and EBeam-Deflector-Y have the same orientation.
         # The direction of the ebeam scan and the galvo scan are mirrored in respect to
         # each other on the image of the diagnostic camera. Therefore subtract 180 degrees.
         rotation = options.scan_rotation - abs(galvo_rotation - sem_rotation) - 180
         print("Scan angle of the mirrors is {:.3f}°.".format(math.degrees(rotation)))
+        print("Gain of the galvo descanners is {} pixels per volt in x and {} pixels per volt in y".format(
+            galvo_scale[0], galvo_scale[1]))
     except Exception as exp:
         logging.error("Error during rotation detection.")
         return 128
