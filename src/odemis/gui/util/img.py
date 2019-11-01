@@ -1928,7 +1928,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                                  legend_y_pos - small_font,
                                  tint_box_size, tint_box_size)
             legend_ctx.fill()
-            legend_ctx.set_source_rgb(*bg_color)
+            legend_ctx.set_source_rgb(*text_color)
 
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
