@@ -298,7 +298,7 @@ class ExportController(object):
             interpolate_data = fview.interpolate_content.value
             exported_data = images_to_export_data(streams,
                                                   view_hfw, view_pos,
-                                                  draw_merge_ratio, raw,
+                                                  draw_merge_ratio, raw, vp.canvas,
                                                   interpolate_data=interpolate_data,
                                                   logo=self._main_frame.legend_logo)
 

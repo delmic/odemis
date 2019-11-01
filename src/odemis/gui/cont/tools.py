@@ -55,7 +55,7 @@ class ModeTool(Tool):
     def __init__(self, icon, value_on, value_off, tooltip=None):
         """
         value_on (anything): value to set to the VA when the tool is activated
-        value_on (anything): value to set when the tool is explicitly disabled
+        value_off (anything): value to set when the tool is explicitly disabled
         """
         Tool.__init__(self, icon, tooltip=tooltip)
         self.value_on = value_on
@@ -107,6 +107,13 @@ TOOLS = {
             model.TOOL_LINE,
             model.TOOL_NONE,
             "Select line"
+        ),
+    model.TOOL_RULER:
+        ModeTool(
+            "btn_view_ruler",
+            model.TOOL_RULER,
+            model.TOOL_NONE,
+            "Select ruler"
         ),
     model.TOOL_DICHO:
         ModeTool(
