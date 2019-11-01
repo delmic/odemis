@@ -351,7 +351,6 @@ class Overlay(with_metaclass(ABCMeta, object)):
     def clear_labels(self):
         self.labels = []
 
-    # TODO: I SHOULD CHANGE THE PARTS OF THE CODE THAT CALL _write_label IF WE IMPLEMENT IT LIKE THIS
     def _write_labels(self, ctx):
         """ Render all the defined labels to the screen """
         for label in self.labels:
