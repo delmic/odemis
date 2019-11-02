@@ -7,7 +7,7 @@ libtiff==0.4.2
 matplotlib==1.4.3
 numpy==1.11.3
 opencv-python==2.4.11
-Pillow==3.2.0
+Pillow==6.2.0
 py2cairo==1.10.0
 PyInstaller==3.5
 pyparsing==2.1.4
