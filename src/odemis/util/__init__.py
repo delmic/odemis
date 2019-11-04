@@ -135,6 +135,19 @@ else:
             # 50% faster than "repr(s)[1:-1]"
             return s.encode("unicode_escape").decode("ascii")
 
+if sys.version_info[0] < 3:
+    def fsdecode(filename):
+        """
+        Decode filename from the filesystem encoding.
+        return (unicode)
+        """
+        if isinstance(filename, unicode):
+            return filename
+        else:
+            return filename.decode(sys.getfilesystemencoding())
+else:
+    import os
+    fsdecode = os.fsdecode
 
 def recursive_dict_update(d, other):
     """ Recursively update the values of the first dictionary with the values of the second
