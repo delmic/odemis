@@ -40,7 +40,7 @@ import time
 
 # Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
 # Command Set). In particular it handles the PI E-861, C-867 and E-725 controllers.
-# Information can be found the manual E-861_User_PZ205E121.pdf (p.107).
+# Information can be found in the manual E-861_User_PZ205E121.pdf (p.107).
 # For the PI C-170 aka "redstone", see the pi driver.
 # Note that although they officially support the 'command set', each controller
 # type (and firmware) has a subset of commands supported, has different parameters
@@ -122,7 +122,7 @@ import time
 #     that the asynchronous ones are ordered.
 #
 # In the typical usage, Odemis asks to moveRel() an axis to the Bus. The Bus converts
-# it into an action, returns a Future and queue the action on the Executor.
+# it into an action, returns a Future and queues the action on the Executor.
 # When the Controller is free, the Executor picks the next action, call the right
 # method which converts it into a command for the Controller, which sends it to
 # the actual PI controller and waits for it to finish.
@@ -2808,8 +2808,8 @@ class Bus(model.Actuator):
     def __init__(self, name, role, port, axes, baudrate=38400,
                  dist_to_steps=None, min_dist=None,
                  vmin=None, speed_base=None, auto_suspend=None,
-                 suspend_mode=None,
-                 _addresses=None, **kwargs):
+                 suspend_mode=None, master=254,
+                 _addresses=None,  **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
          (starting with /dev on Linux or COM on windows) or "autoip" for
@@ -2825,6 +2825,8 @@ class Bus(model.Actuator):
           Default is 10 s.
         suspend_mode (dict str -> "read" or "full"): see CLRelController.
           Default is "read".
+        master: In _some_ TCP/IP configuration, there is a master controller at address 254.
+            Default value of 254 is standard value for IPAccesser with multiple controllers.
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
@@ -2866,9 +2868,7 @@ class Bus(model.Actuator):
 
         # Special support for no address
         if len(controllers) == 1 and None in controllers:
-            master = None
-        else:
-            master = 254  # Standard value for IPAccesser with multiple controllers
+            master = None  # overwrite master default value if no address
 
         self.accesser = self._openPort(port, baudrate, _addresses, master=master)
 
