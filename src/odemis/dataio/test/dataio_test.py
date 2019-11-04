@@ -63,6 +63,7 @@ class TestDataIO(unittest.TestCase):
                    (("d.HDF5",), "HDF5"),
                    (("a/b/d.0.ome.tiff",), "Serialized TIFF"),
                    (("a/b/d.0.ome.TIFF",), "Serialized TIFF"),
+                   ((u"a/b/𝔸𝔹ℂ.ome.tiff".encode("utf-8"),), "TIFF"),  # non-ascii characters
                    ]
         for args, fmt_exp in test_io:
             fmt_mng = find_fittest_converter(*args)
@@ -88,6 +89,7 @@ class TestDataIO(unittest.TestCase):
                    (("d.hdf5",), "HDF5"),
                    (("d.HDF5",), "HDF5"),
                    (("a/b/d.0.ome.tiff",), "TIFF"),  # Serialised TIFF must be opened by TIFF
+                   ((u"a/b/𝔸𝔹ℂ.ome.tiff".encode("utf-8"),), "TIFF"),  # non-ascii characters
                    ]
         for args, fmt_exp in test_io:
             fmt_mng = find_fittest_converter(*args, mode=os.O_RDONLY)
