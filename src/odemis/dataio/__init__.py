@@ -111,7 +111,13 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
     allowlossy: cf get_available_formats()
     returns (dataio. Module): the right exporter
     """
-    fn_low = filename.lower()  # case insensitive
+    fn_low = filename.lower() # case insensitive
+    # If filename is a bytes, .startswith()/.endswith() functions implicitly
+    # decode with ascii. This fails in case of non-ascii characters. As in
+    # practice we only care about the prefix and suffix, which are always ascii.
+    # => Explicitly convert to ascii, and discard non-ascii characters.
+    if isinstance(fn_low, bytes):
+        fn_low = fn_low.decode("ascii", errors="replace")
 
     fmt2ext = get_available_formats(mode, allowlossy=True)
     for fmt in fmt2ext.keys():
