@@ -335,6 +335,7 @@ class BackendContainer(model.Container):
         for comp in list(self._dependents.keys()):  # ._dependents will be modified, so we need a copy
             for child in comp.children.value:
                 self._dependents.pop(child, None)
+
         for comp in self._dependents:
             deps = comp.dependencies.value
             for dep in deps:
@@ -349,6 +350,15 @@ class BackendContainer(model.Container):
                     # access dep.parent
                     logging.warning("Failed to find dependency %s of component %s when terminating.",
                                     dep.name, comp.name, exc_info=True)
+            # Add power supply unit as dependency, so it's not terminated before any of the components
+            # that depend on it. The reason is that on termination, the power supply unit turns off
+            # the power of some components and this should only happen if the components are already
+            # properly terminated.
+            attr = self._instantiator.ast[comp.name]
+            if "power_supplier" in attr:
+                psu = self._instantiator._get_component_by_name(attr["power_supplier"])
+                self._dependents[psu].add(comp)
+
         # terminate all the components in order
         terminating_comps = set()  # components that are already terminated or in the process of terminating
         executor = futures.ThreadPoolExecutor(max_workers=20)
