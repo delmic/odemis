@@ -22,6 +22,7 @@ This file is part of Odemis.
 from __future__ import division
 
 from builtins import str
+from past.builtins import basestring
 import os
 import wx
 from decorator import decorator
@@ -140,16 +141,25 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
+        # Convert value object to str if necessary
+        # str() fails in python2 if argument is bytes with non-ascii characters. If value is
+        # already bytes or unicode, just pass it to wx.TextCtrl.
+        if not isinstance(value, basestring):
+            try:
+                value = str(value)
+            except:
+                raise ValueError("Cannot display object %s of type %s." % (value, type(value)))
+
         if value is not None:
             if selectable:
-                value_ctrl = wx.TextCtrl(self, value=str(value),
+                value_ctrl = wx.TextCtrl(self, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                                   flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
-                value_ctrl = wx.StaticText(self, label=str(value))
+                value_ctrl = wx.StaticText(self, label=value)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
         else:
