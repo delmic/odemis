@@ -1,3 +1,14 @@
+odemis (2.10.3-1) xenial; urgency=medium
+
+  * New version: 2.10.3
+  * Main bug fixes:
+    - When wxporting a Fluoresecent stream (or a RGB CL stream) the legend didn't contain any information
+    - Never try to move the focus of the Andor SR303, because it doesn't have a focus
+    - In some cases the tile plugin could incorrectly warn on that the computer doesn't have enough memory
+    - Cancelling an acquisition in the RGB CL plugin actually didn't stop the acquisition
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 05 Nov 2019 16:22:52 +0100
+
 odemis (2.10.2-1) xenial; urgency=medium
 
   * New version: 2.10.2
