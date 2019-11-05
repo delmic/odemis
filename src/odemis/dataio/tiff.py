@@ -1832,6 +1832,10 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
         f.write_image(arr, compression=compression, write_rgb=write_rgb)
         return
 
+    # TODO: for pyramidal images, we should follow the OME-TIFF 6 format
+    # https://docs.openmicroscopy.org/ome-model/6.0.1/ome-tiff/specification.html#sub-resolutions
+    # (It should be very similar to the current implementation)
+
     # generate the sizes of the zoom levels to be generated and saved
     resized_shapes = _genResizedShapes(arr)
 
