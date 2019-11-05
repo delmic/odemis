@@ -46,7 +46,8 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None,
+                 termination=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
@@ -56,6 +57,9 @@ class PowerControlUnit(model.PowerSupplier):
         init (dict str -> boolean): turn on/off the corresponding component upon
             initialization.
         ids (list str): EEPROM ids expected to be detected during initialization.
+        termination (dict str -> bool/None): indicate for every component
+            if it should be turned off on termination (False), turned on (True)
+            or left as-is (None).
         Raise an exception if the device cannot be opened
         '''
         if pin_map:
@@ -87,6 +91,13 @@ class PowerControlUnit(model.PowerSupplier):
         self._delay.update(delay)
         self._last_start = dict.fromkeys(self._delay, time.time())
 
+        # only keep components that should be changed on termination
+        termination = termination or {}
+        self._termination = {k: v for k, v in termination.items() if v is not None}
+        for comp in self._termination:
+            if comp not in pin_map:
+                raise ValueError("Component %s in termination not found in pin_map." % comp)
+
         # will take care of executing switch asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -96,9 +107,10 @@ class PowerControlUnit(model.PowerSupplier):
 
         init = init or {}
         # Remove all None's from the dict, so it can be passed as-is to _doSupply()
-        for k, v in init.items():
-            if v is None:
-                del init[k]
+        init = {k: v for k, v in init.items() if v is not None}
+        for comp in init:
+            if comp not in pin_map:
+                raise ValueError("Component %s in init not found in pin_map." % comp)
         try:
             self._doSupply(init, apply_delay=False)
         except IOError as ex:
@@ -192,6 +204,11 @@ class PowerControlUnit(model.PowerSupplier):
             self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
+
+        # Power components on/off according to ._termination
+        # If nothing is specified, leave it as-is.
+        logging.debug("Changing power supply on termination: %s" % self._termination)
+        self._doSupply(self._termination)
 
         if self._serial:
             with self._ser_access:
