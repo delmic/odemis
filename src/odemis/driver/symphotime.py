@@ -247,9 +247,9 @@ def CreateDataRecordString(records):
     Creates a command string from a list of optional data records
     records: list of OptionalDataRecord objects
 
-    returns: (raw data string) the formatted command string for a message
+    returns: (bytes) the formatted command string for a message
     '''
-    output_string = ''
+    output_string = b''
     for record in records:
         output_string += record.to_bytes()
     return output_string
