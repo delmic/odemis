@@ -2809,7 +2809,7 @@ class Bus(model.Actuator):
                  dist_to_steps=None, min_dist=None,
                  vmin=None, speed_base=None, auto_suspend=None,
                  suspend_mode=None, master=254,
-                 _addresses=None,  **kwargs):
+                 _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
          (starting with /dev on Linux or COM on windows) or "autoip" for
@@ -2825,8 +2825,8 @@ class Bus(model.Actuator):
           Default is 10 s.
         suspend_mode (dict str -> "read" or "full"): see CLRelController.
           Default is "read".
-        master: In _some_ TCP/IP configuration, there is a master controller at address 254.
-            Default value of 254 is standard value for IPAccesser with multiple controllers.
+        master (0<=int<=255): The address of the "master" controller when connecting over
+            TCP/IP to multiple controllers. It is unused when connecting over serial port.
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
@@ -2868,7 +2868,7 @@ class Bus(model.Actuator):
 
         # Special support for no address
         if len(controllers) == 1 and None in controllers:
-            master = None  # overwrite master default value if no address
+            master = None  # direct connection to the controller
 
         self.accesser = self._openPort(port, baudrate, _addresses, master=master)
 
