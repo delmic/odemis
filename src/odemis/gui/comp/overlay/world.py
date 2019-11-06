@@ -1165,7 +1165,7 @@ class Ruler(object):
 
         # HACK: We take the opportunity that the canvas is redrawn to check if it has been shifted/rescaled.
         # If so, we update the view positions (for the mouse interaction).
-        shiftscale = shift + (scale,)
+        shiftscale = (shift, scale)
         update_view = self.last_shiftscale != shiftscale and canvas is None
 
         # In case a canvas is passed, the rulers should be drawn on this given canvas.
