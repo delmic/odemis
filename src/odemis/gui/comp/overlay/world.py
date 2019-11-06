@@ -1284,8 +1284,6 @@ class RulerOverlay(WorldOverlay):
     def clear_drag(self):
         """ Set the dragging attributes to their initial values """
         self._left_dragging = False
-        self.drag_v_start_pos = None
-        self.drag_v_end_pos = None
 
     def clear(self):
         """Remove rulers and update canvas"""
@@ -1355,6 +1353,11 @@ class RulerOverlay(WorldOverlay):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if not self.active:
             return super(RulerOverlay, self).on_motion(evt)
+
+        if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
+            # Already being handled by the canvas itself
+            evt.Skip()
+            return
 
         vpos = evt.Position
         if self._left_dragging:
