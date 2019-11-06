@@ -1288,7 +1288,7 @@ class RulerOverlay(WorldOverlay):
     def clear(self):
         """Remove rulers and update canvas"""
         self._rulers = []
-        self.cnvs.update_drawing()
+        self.cnvs.request_drawing_update()
 
     def _on_tool(self, selected_tool):
         """ Update the overlay when it's active and ruler changes"""
