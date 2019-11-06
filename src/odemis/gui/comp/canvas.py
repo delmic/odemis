@@ -614,7 +614,10 @@ class BufferedCanvas(wx.Panel):
 
         for vo in self.view_overlays:
             ctx.save()
-            vo.draw(ctx)
+            try:
+                vo.draw(ctx)
+            except Exception:
+                logging.exception("Failed to draw view overlay %s", vo)
             ctx.restore()
 
     @classmethod
@@ -907,7 +910,10 @@ class BitmapCanvas(BufferedCanvas):
         # context.
         for o in self.world_overlays:
             ctx.save()
-            o.draw(ctx, self.p_buffer_center, self.scale)
+            try:
+                o.draw(ctx, self.p_buffer_center, self.scale)
+            except Exception:
+                logging.exception("Failed to draw world overlay %s", o)
             ctx.restore()
 
     def _draw_merged_images(self, ctx, interpolate_data=False):
