@@ -877,12 +877,12 @@ class Ruler(object):
         offset = self.cnvs.get_half_buffer_size()
         if p_start_pos is not None:
             # offset must be *buffer* coordinates in pixels
-            self.v_start_pos = self.cnvs.phys_to_view(self.p_start_pos, offset)
+            self.v_start_pos = Vec(self.cnvs.phys_to_view(self.p_start_pos, offset))
         else:
             self.v_start_pos = None
 
         if p_end_pos is not None:
-            self.v_end_pos = self.cnvs.phys_to_view(self.p_end_pos, offset)
+            self.v_end_pos = Vec(self.cnvs.phys_to_view(self.p_end_pos, offset))
         else:
             self.v_end_pos = None
 
@@ -957,12 +957,12 @@ class Ruler(object):
 
         if self.mode == EDIT_START_RULER_MODE:
             if round_angle:
-                current_pos = self._round_pos(self.v_end_pos, current_pos)
+                current_pos = Vec(self._round_pos(self.v_end_pos, current_pos))
             self.v_start_pos = current_pos
 
         elif self.mode == EDIT_END_RULER_MODE:
             if round_angle:
-                current_pos = self._round_pos(self.v_start_pos, current_pos)
+                current_pos = Vec(self._round_pos(self.v_start_pos, current_pos))
             self.v_end_pos = current_pos
 
     def _round_pos(self, v_pos, current_pos):
