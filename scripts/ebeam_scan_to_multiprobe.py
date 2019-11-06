@@ -56,11 +56,13 @@ def get_scan_transform(coordinates, voltages):
     -------
     phi: (float)
         Deflection angle in radians. Angle is counterclockwise.
-    scale: tuple of floats
-        The x and y scale factor between the voltages and coordinates, in pixels per volt.
+    gain: tuple of floats
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors.
     """
+    # Create a scaling transform, a scaling transform consists of a translation, rotation and scaling component.
     t = transform.ScalingTransform()
-    # Determine the transformation between voltages and coordinates.
+    # Determine the scaling transformation between voltages and coordinates.
     transformed = t.from_pointset(voltages, coordinates)
     # Wrap phi between -pi/2 and pi/2.
     phi = (transformed.rotation + math.pi / 2) % math.pi - math.pi / 2
@@ -81,9 +83,11 @@ def get_sem_rotation(ccd):
     Returns
     -------
     phi: (float)
-        The angle of the EBeam-Deflector-x relative to the diagnostic camera.
-    scale: (tuple of floats)
-        The x and y scale factor between the voltages and coordinates, in pixels per volt.
+        The relative angle between voltages, applied to the deflectors, and coordinates, as measured on the
+        diagnostic camera. Angle is counterclockwise and in radians.
+    gain: (tuple of floats)
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors.
     """
     n_spots = (8, 8)
     coordinates = []
@@ -102,8 +106,8 @@ def get_sem_rotation(ccd):
             coordinates.append((translation[0], -translation[1]))
             voltages.append((x_offset, y_offset))
 
-    deflection_angle, scale = get_scan_transform(coordinates, voltages)
-    return deflection_angle, scale
+    deflection_angle, gain = get_scan_transform(coordinates, voltages)
+    return deflection_angle, gain
 
 
 def main(args):
@@ -140,7 +144,7 @@ def main(args):
 
     ccd = model.getComponent(role=options.role)
     try:
-        sem_rotation, scale = get_sem_rotation(ccd)
+        sem_rotation, gain = get_sem_rotation(ccd)
         if options.scanner:
             scanner = model.getComponent(role=options.scanner)
             val = scanner.rotation.value
@@ -152,7 +156,7 @@ def main(args):
             print("Add {:.2f}° to the scan rotation using SEM PC.".format(
                     math.degrees(sem_rotation)))
         print("Gain of the e-beam deflectors is {} pixels per volt in x and {} pixels per volt in y".format(
-            scale[0], scale[1]))
+            gain[0], gain[1]))
     except Exception as exp:
         logging.error("%s", exp, exc_info=True)
         return 128

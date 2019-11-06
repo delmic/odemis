@@ -65,12 +65,14 @@ def get_scan_transform(coordinates, voltages):
     Returns
     -------
     phi: (float)
-        Deflection angle in radians. Angle is counterclockwise.
-    scale: tuple of floats
-        The x and y scale factor between the voltages and coordinates, in pixels per volt.
+        Relative angle between voltages and coordinates. Angle is counterclockwise and in radians.
+    gain: tuple of floats
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors or galvos.
     """
+    # Create a scaling transform, a scaling transform consists of a translation, rotation and scaling component.
     t = transform.ScalingTransform()
-    # Determine the transformation between voltages and coordinates.
+    # Determine the scaling transformation between voltages and coordinates.
     transformed = t.from_pointset(voltages, coordinates)
     # Wrap phi between -pi/2 and pi/2.
     phi = (transformed.rotation + math.pi / 2) % math.pi - math.pi / 2
@@ -92,9 +94,11 @@ def get_sem_rotation(ccd):
     Returns
     -------
     sem_rotation: (float)
-        The clockwise angle, in radians, of the EBeam-Deflector-Y relative to the diagnostic camera.
-    scale: (tuple of floats)
-        The x and y scale factor between the voltages and coordinates, in pixels per volt.
+        The relative angle between voltages, applied to the deflectors, and coordinates, as measured on the
+        diagnostic camera. Angle is counterclockwise and in radians.
+    gain: (tuple of floats)
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors.
     """
     coordinates = []
     voltages = []
@@ -114,11 +118,11 @@ def get_sem_rotation(ccd):
             voltages.append((x_offset, y_offset))
             print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
     # Compute the EBeam-Deflector-Y scan angle relative to the y-axis of the diagnostic camera
-    sem_rotation, scale = get_scan_transform(coordinates, voltages)
+    sem_rotation, gain = get_scan_transform(coordinates, voltages)
     # Reset EBeam-Deflector-Y scan input to zero.
     dcoffset.set_dc_output_per_axis('e-beam', 'x', 0)
     dcoffset.set_dc_output_per_axis('e-beam', 'y', 0)
-    return sem_rotation, scale
+    return sem_rotation, gain
 
 
 def get_galvo_rotation(ccd, galvo_x_offset=3, galvo_y_offset=3):
@@ -140,9 +144,11 @@ def get_galvo_rotation(ccd, galvo_x_offset=3, galvo_y_offset=3):
     Returns
     -------
     galvo_rotation: (float)
-        The clockwise angle, in radians, of the DeScan-Y galvo relative to the y-axis of the diagnostic camera.
-    scale: (tuple of floats)
-        The x and y scale factor between the voltages and coordinates, in pixels per volt.
+        The relative angle between voltages, applied to the galvos, and coordinates, as measured on the
+        diagnostic camera. Angle is counterclockwise and in radians,.
+    gain: (tuple of floats)
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the galvos.
     """
     coordinates = []
     voltages = []
@@ -162,11 +168,11 @@ def get_galvo_rotation(ccd, galvo_x_offset=3, galvo_y_offset=3):
             voltages.append((x_offset, y_offset))
             print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
     # Compute the DeScan-Y scan angle relative to the y-axis of the diagnostic camera.
-    galvo_rotation, scale = get_scan_transform(coordinates, voltages)
+    galvo_rotation, gain = get_scan_transform(coordinates, voltages)
     # Reset DeScan-Y scan input to zero.
     dcoffset.set_dc_output_per_axis('mirror', 'x', 0 - galvo_x_offset)
     dcoffset.set_dc_output_per_axis('mirror', 'y', 0 - galvo_y_offset)
-    return galvo_rotation, scale
+    return galvo_rotation, gain
 
 
 def main(args):
@@ -208,7 +214,7 @@ def main(args):
 
     ccd = model.getComponent(role=options.role)
     try:
-        galvo_rotation, galvo_scale = get_galvo_rotation(ccd, options.channel, options.galvo_offset)
+        galvo_rotation, galvo_gain = get_galvo_rotation(ccd, options.channel, options.galvo_offset)
         print("Galvo rotation: {:.3f}°".format(math.degrees(galvo_rotation)))
         sem_rotation, _ = get_sem_rotation(ccd, options.channel)
         print("SEM rotation: {:.3f}°".format(math.degrees(sem_rotation)))
@@ -218,7 +224,7 @@ def main(args):
         rotation = options.scan_rotation - abs(galvo_rotation - sem_rotation) - 180
         print("Scan angle of the mirrors is {:.3f}°.".format(math.degrees(rotation)))
         print("Gain of the galvo descanners is {} pixels per volt in x and {} pixels per volt in y".format(
-            galvo_scale[0], galvo_scale[1]))
+            galvo_gain[0], galvo_gain[1]))
     except Exception as exp:
         logging.error("Error during rotation detection.")
         return 128
