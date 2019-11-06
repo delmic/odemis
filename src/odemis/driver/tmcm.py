@@ -397,12 +397,12 @@ class TMCLController(model.Actuator):
                 raise ValueError("led_prot_do of channel %d has position %s, not in do_axes" % (channel, pos))
 
         # Check state of refswitch on startup
+        self._expected_do_pos = {}  # do positions before referencing, will be reset after refswitch is released
         self._leds_on = any(self.GetIO(2, rs) for rs in self._refswitch)
         if self._leds_on:
             logging.debug("Refswitch is on during initialization, releasing refswitch for all axes.")
             for ax in self._name_to_axis.values():
                 self._releaseRefSwitch(ax)
-        self._expected_do_pos = {}  # do positions before referencing, will be reset after refswitch is released 
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
