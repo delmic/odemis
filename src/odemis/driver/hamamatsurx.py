@@ -83,16 +83,12 @@ class ReadoutCamera(model.DigitalCamera):
     Represents Hamamatsu readout camera.
     """
 
-    def __init__(self, name, role, parent, spectrograph=None, daemon=None, **kwargs):
+    def __init__(self, name, role, parent, spectrograph=None, **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
         :parameter name: (str) as in Odemis
         :parameter role: (str) as in Odemis
         :parameter parent: class streakcamera
         """
-
-        super(ReadoutCamera, self).__init__(name, role, parent=parent,
-                                            daemon=daemon, **kwargs)  # init HwComponent
-
         self.parent = parent
 
         self._spectrograph = spectrograph
@@ -108,6 +104,8 @@ class ReadoutCamera(model.DigitalCamera):
             # Might be due to the frame grabber failing to initialise (sometimes happens),
             # or the camera not being turned on.
             raise model.HwError("Failed to find readout camera, check it is powered. If powered, restart the Hamamatsu PC")
+
+        super(ReadoutCamera, self).__init__(name, role, parent=parent, **kwargs)  # init HwComponent
 
         try:
             self._hwVersion = cam_info[0][0] + ", " + cam_info[0][1] + ", " + cam_info[0][2]   # needs to be a string
@@ -932,29 +930,38 @@ class StreakCamera(model.HwComponent):
         # TODO want to check if we want to start app invisible (sVisible = False)
 
         self.AppStart()  # start HPDTA software  # Note: comment out for testing in order to not start a new App
+        try:
+            children = children or {}
+            dependencies = dependencies or {}
 
-        children = children or {}
-        dependencies = dependencies or {}
+            try:
+                ckwargs = children["readoutcam"]
+            except Exception:
+                raise ValueError("Required child readoutcam not provided")
 
-        try:
-            kwargs = children["readoutcam"]
+            self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
+                                             daemon=daemon, **ckwargs)
+            self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+            try:
+                ckwargs = children["streakunit"]
+            except Exception:
+                raise ValueError("Required child streakunit not provided")
+            self._streakunit = StreakUnit(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._streakunit)  # add streakunit to children-VA
+            try:
+                ckwargs = children["delaybox"]
+            except Exception:
+                raise ValueError("Required child delaybox not provided")
+            self._delaybox = DelayGenerator(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._delaybox)  # add delaybox to children-VA
         except Exception:
-            raise ValueError("Required child readoutcam not provided")
-        self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
-                                         daemon=daemon, **kwargs)
-        self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
-        try:
-            kwargs = children["streakunit"]
-        except Exception:
-            raise ValueError("Required child streakunit not provided")
-        self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._streakunit)  # add streakunit to children-VA
-        try:
-            kwargs = children["delaybox"]
-        except Exception:
-            raise ValueError("Required child delaybox not provided")
-        self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._delaybox)  # add delaybox to children-VA
+            try:
+                # Close back the app, so that we have some chance it can be started
+                # again next on next start attempt.
+                self.AppEnd()
+            except Exception:
+                logging.exception("AppEnd failed")
+            raise
 
     def _openConnection(self):
         """
@@ -966,7 +973,7 @@ class StreakCamera(model.HwComponent):
             self._commandport = socket.create_connection((self.host, self.port), timeout=5)
             self._dataport = socket.create_connection((self.host, self.port_d), timeout=5)
         except (socket.timeout, socket.error):
-            raise model.HwError("Failed to connect to host %s using port %d'. Check the server "
+            raise model.HwError("Failed to connect to host %s using port %d. Check the server "
                                 "is connected to the network, turned "
                                 " on, and correctly configured." % (self.host, self.port))
 
