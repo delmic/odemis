@@ -105,7 +105,11 @@ class ReadoutCamera(model.DigitalCamera):
             # or the camera not being turned on.
             raise model.HwError("Failed to find readout camera, check it is powered. If powered, restart the Hamamatsu PC")
 
-        super(ReadoutCamera, self).__init__(name, role, parent=parent, **kwargs)  # init HwComponent
+        # Only initiliase the component after we are sure not to raise HwError,
+        # because HwError tells the back-end it should try again. As this
+        # component is a child it doesn't get automatically unregistered from
+        # the back-end (Pyro4) on, and next trial would fail.
+        super(ReadoutCamera, self).__init__(name, role, parent=parent, **kwargs)
 
         try:
             self._hwVersion = cam_info[0][0] + ", " + cam_info[0][1] + ", " + cam_info[0][2]   # needs to be a string
@@ -1123,6 +1127,14 @@ class StreakCamera(model.HwComponent):
                 except socket.timeout:
                     # when socket timed out (receiving no response)
                     logging.debug("Timeout on the socket, will wait for more data packets.")
+                    continue
+                if not returnValue:
+                    # TODO: this seems to get triggered "sometimes", and then
+                    # never stop (until a back-end restart). Maybe if the
+                    # connection drops. This needs to be investigated further
+                    # and probably have a mechanism to recover to a sane state.
+                    logging.debug("Received empty data")
+                    time.sleep(0.1)
                     continue
 
                 responses += returnValue
