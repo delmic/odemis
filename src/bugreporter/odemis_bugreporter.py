@@ -28,6 +28,7 @@ from collections import OrderedDict
 from concurrent import futures
 import csv
 from datetime import datetime
+from future.moves.urllib.request import Request, urlopen
 from glob import glob
 import json
 import logging
@@ -37,9 +38,9 @@ import platform
 import re
 import shlex
 import socket
+from subprocess import CalledProcessError
 import subprocess
 import time
-from future.moves.urllib.request import Request, urlopen
 import webbrowser
 import wx
 import zipfile
@@ -218,12 +219,19 @@ class OdemisBugreporter(object):
             raise LookupError("osTicket key not found.")
         return api_key
 
-    def _get_future_output(self, command):
+    def _get_future_output(self, command, timeout=None):
         """
         Runs a external command in a future, which returns its output
         command (list of str)
+        timeout (None or 0<float): maximum time in second to wait for the command
+          to end. If the command takes longer, it will be stopped, and the output
+          generated so far will be returned.
         return Future returning a str, or raising the error
         """
+        if timeout is not None:
+            # subprocess doesn't have timeout argument in python 2.x, so we use
+            # the unix command instead
+            command = ["timeout", "%f" % timeout] + command
         return self._executor.submit(subprocess.check_output, command)
 
     def compress_files(self):
@@ -292,21 +300,26 @@ class OdemisBugreporter(object):
                 ret_code = BACKEND_STOPPED
             outputs = {}
             if ret_code in (BACKEND_RUNNING, BACKEND_STARTING):
-                # subprocess doesn't have timeout argument in python 2.x, so use future instead
-                outputs["odemis-hw-status.txt"] = self._get_future_output(['odemis-cli', '--list-prop', '*'])
+                outputs["odemis-hw-status.txt"] = self._get_future_output(['odemis-cli', '--list-prop', '*'], timeout=60)
 
             # Save USB hardware, processes, kernel name, IP address
-            outputs["lsusb.txt"] = self._get_future_output(['/usr/bin/lsusb', '-v'])
-            outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'])
-            outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'])
-            outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'])
+            outputs["lsusb.txt"] = self._get_future_output(['/usr/bin/lsusb', '-v'], timeout=60)
+            outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'], timeout=60)
+            outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'], timeout=5)
+            outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'], timeout=30)
 
             # Compress files
             with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
                 for fn, ft in outputs.items():
                     try:
-                        outp = ft.result(60)
+                        outp = ft.result(65)
                         archive.writestr(fn, outp)
+                    except CalledProcessError as ex:
+                        if ex.output:  # most probably exited due to timeout
+                            logging.warning("Incomplete output of %s: %s", fn, ex)
+                            archive.writestr(fn, ex.output)
+                        else:  # Nothing received, probably the command is really wrong
+                            logging.warning("Cannot save %s status: %s", fn, ex)
                     except Exception as ex:
                         logging.warning("Cannot save %s status: %s", fn, ex)
 
