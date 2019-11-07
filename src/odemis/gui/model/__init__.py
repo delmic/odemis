@@ -522,7 +522,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
 

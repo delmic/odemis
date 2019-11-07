@@ -385,6 +385,7 @@ class SecomStateController(object):
         """
         Empty the data of the streams which might have no more meaning after
           loading a new sample.
+        Also remove the rulers
         """
         for s in self._tab_data.streams.value:
             if not isinstance(s, self.cls_streams_involved):
@@ -398,6 +399,15 @@ class SecomStateController(object):
                 s.image.value = None
                 s.histogram._value = numpy.empty(0)
                 s.histogram.notify(s.histogram._value)
+
+        # Remove all the rulers from all the canvas
+        for vp in (self._tab_panel.vp_secom_tl, self._tab_panel.vp_secom_tr,
+                   self._tab_panel.vp_secom_bl, self._tab_panel.vp_secom_br,
+                   self._tab_panel.vp_overview_sem):
+            # We cannot call .clear() on each viewport, as that would remove too
+            # many things (including the just acquired overview stream).
+            if vp.canvas.ruler_overlay:
+                vp.canvas.ruler_overlay.clear()
 
     @call_in_wx_main
     def on_chamber_state(self, state):

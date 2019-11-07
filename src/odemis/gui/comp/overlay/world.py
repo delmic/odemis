@@ -877,12 +877,12 @@ class Ruler(object):
         offset = self.cnvs.get_half_buffer_size()
         if p_start_pos is not None:
             # offset must be *buffer* coordinates in pixels
-            self.v_start_pos = self.cnvs.phys_to_view(self.p_start_pos, offset)
+            self.v_start_pos = Vec(self.cnvs.phys_to_view(self.p_start_pos, offset))
         else:
             self.v_start_pos = None
 
         if p_end_pos is not None:
-            self.v_end_pos = self.cnvs.phys_to_view(self.p_end_pos, offset)
+            self.v_end_pos = Vec(self.cnvs.phys_to_view(self.p_end_pos, offset))
         else:
             self.v_end_pos = None
 
@@ -957,12 +957,12 @@ class Ruler(object):
 
         if self.mode == EDIT_START_RULER_MODE:
             if round_angle:
-                current_pos = self._round_pos(self.v_end_pos, current_pos)
+                current_pos = Vec(self._round_pos(self.v_end_pos, current_pos))
             self.v_start_pos = current_pos
 
         elif self.mode == EDIT_END_RULER_MODE:
             if round_angle:
-                current_pos = self._round_pos(self.v_start_pos, current_pos)
+                current_pos = Vec(self._round_pos(self.v_start_pos, current_pos))
             self.v_end_pos = current_pos
 
     def _round_pos(self, v_pos, current_pos):
@@ -1165,7 +1165,7 @@ class Ruler(object):
 
         # HACK: We take the opportunity that the canvas is redrawn to check if it has been shifted/rescaled.
         # If so, we update the view positions (for the mouse interaction).
-        shiftscale = shift + (scale,)
+        shiftscale = (shift, scale)
         update_view = self.last_shiftscale != shiftscale and canvas is None
 
         # In case a canvas is passed, the rulers should be drawn on this given canvas.
@@ -1284,13 +1284,11 @@ class RulerOverlay(WorldOverlay):
     def clear_drag(self):
         """ Set the dragging attributes to their initial values """
         self._left_dragging = False
-        self.drag_v_start_pos = None
-        self.drag_v_end_pos = None
 
     def clear(self):
         """Remove rulers and update canvas"""
         self._rulers = []
-        self.cnvs.update_drawing()
+        self.cnvs.request_drawing_update()
 
     def _on_tool(self, selected_tool):
         """ Update the overlay when it's active and ruler changes"""
@@ -1355,6 +1353,11 @@ class RulerOverlay(WorldOverlay):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if not self.active:
             return super(RulerOverlay, self).on_motion(evt)
+
+        if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
+            # Already being handled by the canvas itself
+            evt.Skip()
+            return
 
         vpos = evt.Position
         if self._left_dragging:
