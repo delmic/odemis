@@ -1,3 +1,43 @@
+odemis (3.0.0-1) xenial; urgency=medium
+
+  * New version: 3.0
+  * Main new features:
+    - Support for Python 3. Python 2.7 is still supported, but deprecated.
+    - Support for Ubuntu 18.04
+    - Ruler tool the GUI, to measure distance on the images
+    - SPARC acquisition streams now support arbitrarily long exposure time
+  * Main improvements and bug fixes:
+    - Hardware can be automatically turned off when the back-end is stopped
+    - Log format has been adjusted to be more readable & parsable
+    - Background correction also available for temporal spectrum data
+    - Fix raw export of data with float types or large ints
+    - When opening data with both AR and spectrum, a dialog box proposes to select which one to show
+    - odemis-cli --live on a detector with a single pixel shows the value of the pixel
+    - UEye camera driver supports 12- and 16-bit depth
+    - Timelapse plugin has a "fast-mode" when the period is small and only one stream is acquired
+    - Automatic reconnection to the TMCM, PMT control unit, and Andor spectrograph.
+  * Improvements and bug fixes already present in v2.10 branch:
+    - When exporting a Fluorescent stream (or a RGB CL stream) the legend didn't contain any information
+    - Never try to move the focus of the Andor SR303, because it doesn't have a focus
+    - In some cases the tile plugin could incorrectly warn on that the computer doesn't have enough memory
+    - Cancelling an acquisition in the RGB CL plugin actually didn't stop the acquisition
+    - bugreporter: Don't fail if description.txt contains non-ascii characters
+    - Don't fail to show acquisition file if the language settings lead to a date containing non-ascii characters
+    - Fix knob connection (DELPHI)
+    - Fix polarization metadata failing to load in some (rare) cases
+    - Don't move Labcube filters at startup if they are already referenced
+    - Small tweaks to the spectrum zoom/drag functionality in the GUI
+    - Time-resolved live view chronograms were limited to the first 1024 points
+    - Don't limit chronograms to the first 1024 points
+    - Fix piconfig & pituner utilities
+    - Sometimes the back-end would block when terminating
+    - andorcam2 CCD can have targetTemperature = 25°C to indicate the cooler should be disabled
+    - Show EM CCD gain setting on SPARC if the camera supports it
+    - Force to use wxPython 4.0 on Ubuntu
+    - Zeiss: detect if connected to the wrong device
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 07 Nov 2019 11:01:13 +0100
+
 odemis (2.10.0-1) xenial; urgency=medium
 
   * New version: 2.10
