@@ -121,6 +121,11 @@ class TestARExport(unittest.TestCase):
     FILENAME_PNG = "test-ar.png"
     FILENAME_TIFF = "test-ar.tiff"
 
+    @classmethod
+    def setUpClass(cls):
+        cls.app = wx.App()  # needed for the gui font name
+        super(TestARExport, cls).setUpClass()
+
     def tearDown(self):
         # clean up
         try:
@@ -149,7 +154,6 @@ class TestARExport(unittest.TestCase):
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
         ctx = cairo.Context(surface)
-        app = wx.App()  # needed for the gui font name
         font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
         ticksize = 10
         num_ticks = 6
@@ -624,7 +628,6 @@ class TestSpectrumExport(unittest.TestCase):
         self.spec_data = model.DataArray(data, md)
         self.spec_stream = stream.StaticSpectrumStream("test spec", self.spec_data)
         self.spec_stream.selected_pixel.value = (3, 1)
-        # self.app = wx.App()  # needed for the gui font name
 
     def test_spectrum_ready(self):
         self.spec_stream.selectionWidth.value = 1
@@ -815,7 +818,6 @@ class TestSpatialExport(test.GuiTestCase):
         super(TestSpatialExport, cls).tearDownClass()
 
     def setUp(self):
-        self.app = wx.App()
         data = numpy.zeros((2160, 2560), dtype=numpy.uint16)
         dataRGB = numpy.zeros((2160, 2560, 4))
         metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
