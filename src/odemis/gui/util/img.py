@@ -42,6 +42,7 @@ from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, \
     SinglePointTemporalProjection, DataProjection
+from odemis.model import DataArrayShadow
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -2013,12 +2014,16 @@ def get_ordered_images(streams, raw=False):
         else:
             if isinstance(s, RGBProjection):
                 data = s.projectAsRaw()
-            elif isinstance(s.raw, tuple):  # 2D tuple = tiles
-                data = img.mergeTiles(s.raw)
-            elif model.hasVA(s, "zIndex"):
-                data = img.getYXFromZYX(s.raw[0], s.zIndex.value)
+            elif not s.raw: # Nothing to export
+                logging.info("Skipping %s which has no raw data", s)
+                continue
             else:
+                # For now we only export the first data (typically, there is only one)
                 data = s.raw[0]
+                if isinstance(data, DataArrayShadow):
+                    data = data.getData()
+                if model.hasVA(s, "zIndex"):
+                    data = img.getYXFromZYX(data, s.zIndex.value)
 
             # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data)):

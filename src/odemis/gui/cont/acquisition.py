@@ -60,6 +60,7 @@ import time
 import wx
 
 import odemis.gui.model as guimod
+from odemis.model import DataArrayShadow
 
 
 class SnapshotController(object):
@@ -203,11 +204,12 @@ class SnapshotController(object):
             # for each stream seen in the viewport
             raw_images = []
             for s in streams:
-                data = s.raw
-                if isinstance(data, tuple): # 2D tuple = tiles
-                    data = [mergeTiles(data)]
+                for d in s.raw:
+                    if isinstance(d, DataArrayShadow):
+                        # Load the entire raw data
+                        # TODO: first check that it's not going to be too big?
+                        d = d.getData()
 
-                for d in data:
                     # add the stream name to the image
                     if not hasattr(d, "metadata"):
                         # Not a DataArray => let's try to convert it
