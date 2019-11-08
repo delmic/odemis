@@ -221,12 +221,12 @@ class SnapshotController(object):
 
                     raw_images.append(d)
 
-            popup.show_message(self._main_frame,
-                                 "Snapshot saved in %s" % (filepath,),
-                                 timeout=3
-                                 )
             # record everything to a file
             exporter.export(filepath, raw_images, thumbnail)
+            popup.show_message(self._main_frame,
+                               "Snapshot saved in %s" % (filepath,),
+                               timeout=3
+                               )
 
             logging.info("Snapshot saved as file '%s'.", filepath)
         except Exception:
