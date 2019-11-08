@@ -31,105 +31,83 @@ import argparse
 import logging
 import math
 import sys
-from builtins import input
-
-import numpy
 
 from scanwaveform import dcoffset
 
 from odemis import model
 from odemis.acq.align.spot import FindGridSpots
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
+from odemis.util import transform
 
 
-def get_deflection_angle(coordinates):
+def get_scan_transform(coordinates, voltages):
     """
-    Fit a line through a set of coordinates and calculate the angle between that
-    line and the x-axis. This angle is called the deflection angle.
+    Determine the scaling transform between voltages and coordinates. The scaling transform consists of a translation,
+    rotation and scaling transformation.
 
     Parameters
     ----------
-    coordinates: (ndarray of shape nx2)
+    coordinates: (list of tuples)
         (x, y) center coordinates of the moved spot grids.
+    voltages: (list of tuples)
+        x and y offset applied to the deflectors.
 
     Returns
     -------
     phi: (float)
-        Deflection angle in radians.
+        Deflection angle in radians. Angle is counterclockwise.
+    gain: tuple of floats
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors.
     """
-    # Construct a system of linear equations to fit the line a*x + b*y + c = 0
-    n = coordinates.shape[0]
-    if n < 2:
-        raise ValueError("Need 2 or more coordinates, cannot find deflection "
-                         "angle for {} coordinates.".format(n))
-    elif n == 2:
-        x = coordinates[1, :] - coordinates[0, :]
-        # Determine the angle of this line to the x-axis, -pi/2 < phi < pi/2
-        phi = numpy.arctan2(x[0], x[1])
-    else:
-        A = numpy.hstack((coordinates, numpy.ones((n, 1))))
-
-        # Solve the equation A*x = 0; i.e. find the null space of A. The solution is
-        # the eigenvector corresponding to the smallest singular value.
-        U, s, V = numpy.linalg.svd(A, full_matrices=False)
-        x = numpy.transpose(V[-1])
-
-        # Determine the angle of this line to the x-axis, -pi/2 < phi < pi/2
-        phi = numpy.arctan2(-x[0], x[1])
-    phi = (phi + math.pi / 2) % math.pi - math.pi / 2
-    return phi
+    # Create a scaling transform, a scaling transform consists of a translation, rotation and scaling component.
+    t = transform.ScalingTransform()
+    # Determine the scaling transformation between voltages and coordinates.
+    transformed = t.from_pointset(voltages, coordinates)
+    # Wrap phi between -pi/2 and pi/2.
+    phi = (transformed.rotation + math.pi / 2) % math.pi - math.pi / 2
+    return phi, transformed.scale
 
 
-def get_sem_rotation(ccd, auto=True, channel=1):
+def get_sem_rotation(ccd):
     """
     Find the angle of the EBeam-Deflector-x relative to the diagnostic camera.
-    If set to manual, the an x-shift must be applied to the electron beam by
-    adjusting the knobs on the AWG. When done automatically the AWG is
-    controlled by the computer and the x-shift is applied automatically.
+    This is done automatically, the AWG is controlled by the computer and the
+    x- and y-shifts are applied automatically.
 
     Parameters
     ----------
     ccd: (odemis.model.DigitalCamera)
         A camera object of the diagnostic camera.
-    auto: (bool)
-        True if alignment should be done automatically.
-    channel: (int)
-        Channel number of waveform generator.
 
     Returns
     -------
     phi: (float)
-        The angle of the EBeam-Deflector-x relative to the diagnostic camera.
+        The relative angle between voltages, applied to the deflectors, and coordinates, as measured on the
+        diagnostic camera. Angle is counterclockwise and in radians.
+    gain: (tuple of floats)
+        The x and y gain factor between the voltages and coordinates, in pixels per volt. The gain is the amount of
+        pixels the spot moves on the camera when applying a 1 Volt offset on the deflectors.
     """
-    image = ccd.data.get(asap=False)
     n_spots = (8, 8)
-    spot_coordinates, translation, scaling, rotation = FindGridSpots(image, n_spots)
-    coordinates = [translation]
-    if auto:
-        # offset from -4 to 4 to have enough distance between the moved grids
-        # while not moving off of the camera image.
-        for offset in [-4, -2, 0.0, 2, 4]:
-            dcoffset.set_dc_output('e-beam', channel, offset)
+    coordinates = []
+    voltages = []
+    # offset from -4 to 4 to have enough distance between the moved grids
+    # while not moving off of the camera image.
+    for x_offset in [-4, -2, 0.0, 2, 4]:
+        for y_offset in [-4, -2, 0.0, 2, 4]:
+            dcoffset.set_dc_output_per_axis('e-beam', 'x', x_offset)
+            dcoffset.set_dc_output_per_axis('e-beam', 'y', y_offset)
             image = ccd.data.get(asap=False)
             spot_coordinates, translation, scaling, rotation = FindGridSpots(
                 image, n_spots)
-            coordinates.append(translation)
-    else:
-        input('Press enter after applying x-shift to electron beam: \n')
-        while True:
-            image = ccd.data.get(asap=False)
-            spot_coordinates, translation, scaling, rotation = FindGridSpots(image, n_spots)
-            coordinates.append(translation)
-            inp = input('Applied x-shift to electron beam again? y/n \n')
-            while inp.lower() not in ['y', 'n']:
-                inp = input(
-                    '{} not an option please choose from y/n \n'.format(inp))
-            if inp.lower() == "n":
-                break
+            # Flip y translation to be able to calculate the transformation, because a positive voltage applied on
+            # the deflectors results in a movement in the negative y direction on the diagnostic camera.
+            coordinates.append((translation[0], -translation[1]))
+            voltages.append((x_offset, y_offset))
 
-    deflection_angle = get_deflection_angle(numpy.array(coordinates))
-    sem_rotation = deflection_angle - rotation
-    return sem_rotation
+    deflection_angle, gain = get_scan_transform(coordinates, voltages)
+    return deflection_angle, gain
 
 
 def main(args):
@@ -151,14 +129,9 @@ def main(args):
                         metavar="<component>",
                         help="Role of the camera to connect to via the Odemis "
                              "back-end. Ex: 'ccd'.")
-    parser.add_argument("--channel", dest="channel", default=1,
+    parser.add_argument("--scanner", dest="scanner", default=None,
                         metavar="<component>",
-                        help="Number of the AWG output channel.")
-    parser.add_argument("--auto", dest="auto", default=True,
-                        metavar="<component>",
-                        help="If True automatically align the ebeam scan to"
-                             "multiprobe. To do this a server must be running "
-                             "on the microscope PC.")
+                        help="Role of the scanner to connect to the SEM, i.e. 'ebeam-control'.")
 
     options = parser.parse_args(args[1:])
     if options.debug:
@@ -171,20 +144,19 @@ def main(args):
 
     ccd = model.getComponent(role=options.role)
     try:
-        sem_rotation = get_sem_rotation(ccd, auto=options.auto,
-                                        channel=options.channel)
-        if options.auto:
-            scanner = model.getComponent(role="ebeam-control")
+        sem_rotation, gain = get_sem_rotation(ccd)
+        if options.scanner:
+            scanner = model.getComponent(role=options.scanner)
             val = scanner.rotation.value
             scanner.rotation.value = val + sem_rotation
-            print("Added {:.2f}° to the scan rotation using SEM PC."
-                  "Rotation is now set to: {:.2f}°".format(
-                math.degrees(sem_rotation),
-                math.degrees(scanner.rotation.value)))
+            print("Added {:.2f}° to the scan rotation using SEM PC. Rotation is now set to: {:.2f}°".format(
+                    math.degrees(sem_rotation),
+                    math.degrees(scanner.rotation.value)))
         else:
-            print("Add {:.2f}° to the scan rotation using SEM PC. If negative"
-                  "subtract this value from the scan rotation.".format(
-                math.degrees(sem_rotation)))
+            print("Add {:.2f}° to the scan rotation using SEM PC.".format(
+                    math.degrees(sem_rotation)))
+        print("Gain of the e-beam deflectors is {} pixels per volt in x and {} pixels per volt in y".format(
+            gain[0], gain[1]))
     except Exception as exp:
         logging.error("%s", exp, exc_info=True)
         return 128
