@@ -187,6 +187,10 @@ def main(args):
                         help="Port name (ex: /dev/ttyUSB0, autoip, or 192.168.95.5)")
     parser.add_argument('--controller', dest="addr", type=int,
                         help="Controller address (if controller needs it)")
+    parser.add_argument('--master', dest="master", type=int,
+                        help="The address of the 'master' controller when connecting over "
+                             "TCP/IP to multiple controllers. It is unused when connecting over serial port."
+                             "Default is 254 if applicable.")
 
     # TODO: allow to reconfigure the IP settings on the network controller via USB
     # TODO: add way to turn on/off the error light (ex, send \x18 "STOP" and ERR?)
