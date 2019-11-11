@@ -454,27 +454,52 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_fwd_follows_z(follow_z)
 
-    def set_autofocusing(self, channel, state):
+    def set_autofocusing(self, name, state):
         """
         Set the state of autofocus, beam must be turned on. This is non-blocking.
 
         Parameters
         ----------
-        channel: xtlib channel object
-            One of the electron channels, the channel must be running.
+        name: str
+            Name of one of the electron channels, the channel must be running.
         state: "start", "cancel" or "stop"
             If state is start, autofocus starts. States cancel and stop both stop the autofocusing. Some microscopes
-            might need stop, while others need cancel.
+            might need stop, while others need cancel. The Apreo system requires stop.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_autofocusing(channel, state)
+            self.server.set_autofocusing(name, state)
 
     def is_autofocusing(self):
         """Returns: (bool) True if autofocus is running and False if autofocus is not running."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.is_autofocusing()
+
+    def set_auto_contrast_brightness(self, name, state):
+        """
+        Set the state of auto contrast brightness. This is non-blocking.
+
+        Parameters
+        ----------
+        name: str
+            Name of one of the electron channels.
+        state: "start", "cancel" or "stop"
+            If state is start, auto contrast brightness starts. States cancel and stop both stop the auto contrast
+            brightness. Some microscopes might need stop, while others need cancel. The Apreo system requires stop.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_auto_contrast_brightness(name, state)
+
+    def is_running_auto_contrast_brightness(self):
+        """
+        Returns: (bool) True if auto contrast brightness is running and False if auto contrast brightness is not
+        running.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.is_running_auto_contrast_brightness()
 
     def get_beam_shift(self):
         """Returns: (float) the current beam shift x and y values in meters."""
@@ -493,6 +518,24 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_shift_info()
+
+    def get_stigmator(self):
+        """Returns: (float) the current stigmator x and y values."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_stigmator()
+
+    def set_stigmator(self, x, y):
+        """Set the current stigmator values."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_stigmator(x, y)
+
+    def stigmator_info(self):
+        """Returns: (dict) the unit and xy-range of the stigmator."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.stigmator_info()
 
     def get_rotation(self):
         """Returns: (float) the current rotation value in rad."""
