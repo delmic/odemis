@@ -114,6 +114,8 @@ class ShamrockDLL(CDLL):
                 #  are still valid)
                 CDLL.__init__(self, "libatspectrograph.so.2", RTLD_GLOBAL)
 
+        self.device_lock = threading.RLock()
+
     def at_errcheck(self, result, func, args):
         """
         Analyse the return value of a call and raise an exception in case of
@@ -333,6 +335,9 @@ class Shamrock(model.Actuator):
         self._slit_names.update(slits)
 
         self.Initialize()
+
+        self._dev_id = device
+
         try:
             if isinstance(device, basestring):
                 self._device = self._findDevice(device)
@@ -623,6 +628,78 @@ class Shamrock(model.Actuator):
     def Close(self):
         self._dll.ShamrockClose()
 
+    def CheckErrorAndReconnect(self, err_no):
+        """
+        """
+        if err_no == 20201:  # COMMUNICATION_ERROR
+            self._reconnect()
+
+    def _reconnect(self):
+        """
+        Attempt to reconnect the device. It will block until this happens.
+        On return, the hardware should be ready to use as before, excepted it
+        still needs the settings to be applied.
+        """
+        self.state._set_value(HwError("Shamrock disconnected"), force_write=True)
+        try:
+            # Note: currently, with SDK 3.11.30050, it always says it's present.
+            # Also, "DeviceCount" stays the same all the time
+#             if self.handle and self.GetBool(u"CameraPresent"):
+#                 logging.warning("Reconnection attempt while SDK says it's present")
+#             else:
+            logging.info("Will attempt to reconnect to shamrock")
+
+            if self._device:
+                self.Close()
+
+            self._device = None
+
+            while not self._device:
+
+                time.sleep(0.5)
+
+                try:
+                    if isinstance(self._dev_id, basestring):
+                        self._device = self._findDevice(self._dev_id)
+                    else:
+                        nd = self.GetNumberDevices()
+                        if self._dev_id >= nd:
+                            raise HwError("Failed to find Andor Shamrock (%s) as device %s" %
+                                          (self.name, self._dev_id))
+                        self._device = self._dev_id
+                    # Device is now re-opened
+
+                except ShamrockError as exp:
+                    if exp.errno in (20201,):  # COMMUNICATION_ERROR
+                        # TODO: is it the right errors that indicate it's not yet back in order
+                        logging.debug("Will keep trying to reconnect after error %s", exp)
+                        # Not too often, especially because some cameras have
+                        # a couple of seconds after boot up where connecting
+                        # to them fails (or even make matters worse)
+                        continue
+
+                except HwError as exp:
+                    # Not correctly connected => back to square 1
+                    logging.error("%s", exp)
+                    self.state._set_value(exp, force_write=True)
+                    self.Close()
+                    self._device = None
+
+            # Normally, the shamrock should be back now
+
+            # Reinitialise
+            self.EepromGetOpticalParams()
+            self._updatePosition()
+
+            logging.info("Successfully reconnected to shamrock")
+
+        except Exception:
+            logging.exception("Failure during reconnection attempt to hardware")
+            self.state._set_value(HwError("Shamrock disconnected and not answering"), force_write=True)
+            raise
+
+        self.state._set_value(model.ST_RUNNING, force_write=True)
+
     def GetNumberDevices(self):
         """
         Returns (0<=int) the number of available Shamrocks
@@ -776,7 +853,9 @@ class Shamrock(model.Actuator):
                     # set in nm
                     self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
                 except ShamrockError as ex:
-                    if ex.errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                    if ex.errno == 20201:  # SHAMROCK_COMMUNICATION_ERROR
+                        self._reconnect()
+                    elif retry >= 5:
                         raise
                     # just try again
                     retry += 1
@@ -1711,6 +1790,7 @@ class Shamrock(model.Actuator):
         logging.info("Scanning %d Andor Shamrock devices", nodevices.value)
         dev = []
         serial = create_string_buffer(64)
+
         for i in range(nodevices.value):
             dll.ShamrockGetSerialNumber(i, serial)
             logging.debug("Found Shamrock %d with SN %s", i, serial.value)
