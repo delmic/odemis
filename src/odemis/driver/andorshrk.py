@@ -81,6 +81,28 @@ SHUTTER_OPEN = 1
 SHUTTER_BNC = 2  # = driven by external signal
 
 
+def callWithReconnect(fun):
+    """
+    Wrapper for functions that communicate with the shamrock.
+    In case the connection is lost (e.g. due to em-interference), we
+    try to reconnect and send the command again.
+    """
+    def wrapper(self, *args, **kwargs):
+        try:
+            return fun(self, *args, **kwargs)
+        except ShamrockError as ex:
+            if self._reconnecting:
+                raise
+            else:
+                logging.error("Communication with shamrock failed with "
+                              "exception '%s', trying to reconnect." % ex)
+                if ex.errno in (20201, 20275):  # COMMUNICATION_ERROR / NOT_INITIALIZED
+                    self._reconnect()
+                    return fun(self, *args, **kwargs)
+                else:
+                    raise
+    return wrapper
+
 class ShamrockError(IOError):
     def __init__(self, errno, strerror, *args, **kwargs):
         super(ShamrockError, self).__init__(errno, strerror, *args, **kwargs)
@@ -114,8 +136,6 @@ class ShamrockDLL(CDLL):
                 #  are still valid)
                 CDLL.__init__(self, "libatspectrograph.so.2", RTLD_GLOBAL)
 
-        self.device_lock = threading.RLock()
-
     def at_errcheck(self, result, func, args):
         """
         Analyse the return value of a call and raise an exception in case of
@@ -124,11 +144,11 @@ class ShamrockDLL(CDLL):
         """
         # everything returns SHAMROCK_SUCCESS on correct usage
         if result not in ShamrockDLL.ok_code:
-            errmsg = create_string_buffer(ERRORLENGTH).decode('latin1')
+            errmsg = create_string_buffer(ERRORLENGTH)
             self.ShamrockGetFunctionReturnDescription(result, errmsg, len(errmsg))
             raise ShamrockError(result,
                                 "Call to %s failed with error %d: %s" %
-                                (func.__name__, result, errmsg.value))
+                                (func.__name__, result, errmsg.value.decode('latin1')))
         return result
 
     def __getitem__(self, name):
@@ -335,8 +355,7 @@ class Shamrock(model.Actuator):
         self._slit_names.update(slits)
 
         self.Initialize()
-
-        self._dev_id = device
+        self._reconnecting = False
 
         try:
             if isinstance(device, basestring):
@@ -628,76 +647,41 @@ class Shamrock(model.Actuator):
     def Close(self):
         self._dll.ShamrockClose()
 
-    def CheckErrorAndReconnect(self, err_no):
-        """
-        """
-        if err_no == 20201:  # COMMUNICATION_ERROR
-            self._reconnect()
-
     def _reconnect(self):
         """
         Attempt to reconnect the device. It will block until this happens.
         On return, the hardware should be ready to use as before, excepted it
         still needs the settings to be applied.
         """
-        self.state._set_value(HwError("Shamrock disconnected"), force_write=True)
+        self.state._set_value(HwError("Spectrograph disconnected"), force_write=True)
+        self._reconnecting = True
+        logging.debug("Reconnecting spectrograph...")
+        self.Close()
+
+        # In order to make reestablish the connection, we need to turn the power off and on again and then
+        # reinitialize.
+        logging.debug("Cycling power...")
+        if model.hasVA(self, 'powerSupply'):
+            self.powerSupply.value = False
+            time.sleep(2)  # wait a bit, otherwise the system doesn't notice
+            self.powerSupply.value = True
+            logging.debug("Cycling power complete.")
+        else:
+            raise ValueError("Spectrograph doesn't have a power supplier, aborting reconnect.")
+
+        # Initialization
+        self.Initialize()  # blocking, takes 2 min
+
+        # Check if it's working
+        # If the function is called on startup, we are not ready to call ._updatePosition yet
         try:
-            # Note: currently, with SDK 3.11.30050, it always says it's present.
-            # Also, "DeviceCount" stays the same all the time
-#             if self.handle and self.GetBool(u"CameraPresent"):
-#                 logging.warning("Reconnection attempt while SDK says it's present")
-#             else:
-            logging.info("Will attempt to reconnect to shamrock")
-
-            if self._device:
-                self.Close()
-
-            self._device = None
-
-            while not self._device:
-
-                time.sleep(0.5)
-
-                try:
-                    if isinstance(self._dev_id, basestring):
-                        self._device = self._findDevice(self._dev_id)
-                    else:
-                        nd = self.GetNumberDevices()
-                        if self._dev_id >= nd:
-                            raise HwError("Failed to find Andor Shamrock (%s) as device %s" %
-                                          (self.name, self._dev_id))
-                        self._device = self._dev_id
-                    # Device is now re-opened
-
-                except ShamrockError as exp:
-                    if exp.errno in (20201,):  # COMMUNICATION_ERROR
-                        # TODO: is it the right errors that indicate it's not yet back in order
-                        logging.debug("Will keep trying to reconnect after error %s", exp)
-                        # Not too often, especially because some cameras have
-                        # a couple of seconds after boot up where connecting
-                        # to them fails (or even make matters worse)
-                        continue
-
-                except HwError as exp:
-                    # Not correctly connected => back to square 1
-                    logging.error("%s", exp)
-                    self.state._set_value(exp, force_write=True)
-                    self.Close()
-                    self._device = None
-
-            # Normally, the shamrock should be back now
-
-            # Reinitialise
-            self.EepromGetOpticalParams()
             self._updatePosition()
-
-            logging.info("Successfully reconnected to shamrock")
-
-        except Exception:
-            logging.exception("Failure during reconnection attempt to hardware")
-            self.state._set_value(HwError("Shamrock disconnected and not answering"), force_write=True)
-            raise
-
+            logging.debug("Restarting spectrograph after power cycling was successful.")
+        except ShamrockError as ex:
+            logging.error("Unable to restart spectrograph. Try to turn the power off and on again. Failed "
+                          "with exception %s." % ex)
+        finally:
+            self._reconnecting = False
         self.state._set_value(model.ST_RUNNING, force_write=True)
 
     def GetNumberDevices(self):
@@ -709,6 +693,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetNumberDevices(byref(nodevices))
         return nodevices.value
 
+    @callWithReconnect
     def GetSerialNumber(self):
         """
         Returns the device serial number
@@ -720,6 +705,7 @@ class Shamrock(model.Actuator):
 
     # Probably not needed, as ShamrockGetCalibration returns everything already
     # computed
+    @callWithReconnect
     def EepromGetOpticalParams(self):
         """
         Returns (tuple of 3 floats): Focal Length (m), Angular Deviation (rad) and
@@ -734,6 +720,7 @@ class Shamrock(model.Actuator):
 
         return FocalLength.value, math.radians(AngularDeviation.value), math.radians(FocalTilt.value)
 
+    @callWithReconnect
     def SetTurret(self, turret):
         """
         Changes the turret (=set of gratings installed in the spectrograph)
@@ -746,6 +733,7 @@ class Shamrock(model.Actuator):
             logging.debug("Moving turret to %d", turret)
             self._dll.ShamrockSetTurret(self._device, turret)
 
+    @callWithReconnect
     def GetTurret(self):
         """
         return (1<=int<=3): current turret
@@ -755,6 +743,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetTurret(self._device, byref(turret))
         return turret.value
 
+    @callWithReconnect
     def SetGrating(self, grating):
         """
         Note: it will update the focus position (if there is a focus)
@@ -780,6 +769,7 @@ class Shamrock(model.Actuator):
                 else:
                     break
 
+    @callWithReconnect
     def GetGrating(self):
         """
         return (1<=int<=4): current grating
@@ -789,6 +779,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetGrating(self._device, byref(grating))
         return grating.value
 
+    @callWithReconnect
     def GetNumberGratings(self):
         """
         return (1<=int<=4): number of gratings present
@@ -798,6 +789,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
         return noGratings.value
 
+    @callWithReconnect
     def WavelengthReset(self):
         """
         Resets the wavelength to 0 nm, and go to the first grating.
@@ -810,6 +802,7 @@ class Shamrock(model.Actuator):
 
     #ShamrockAtZeroOrder(self._device, int *atZeroOrder);
 
+    @callWithReconnect
     def GetGratingInfo(self, grating):
         """
         grating (1<=int<=4)
@@ -834,6 +827,8 @@ class Shamrock(model.Actuator):
 
         return Lines.value * 1e3, Blaze.value.decode('latin1'), Home.value, Offset.value
 
+    # this function sometimes raises a 20201 error that's not related to a lost connection,
+    # so try 5 times before reconnecting
     def SetWavelength(self, wavelength):
         """
         Sets the required wavelength.
@@ -853,17 +848,20 @@ class Shamrock(model.Actuator):
                     # set in nm
                     self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
                 except ShamrockError as ex:
-                    if ex.errno == 20201:  # SHAMROCK_COMMUNICATION_ERROR
+                    if ex.errno == 20201 and retry < 5: # COMMUNICATION_ERROR
+                        # just try again
+                        retry += 1
+                        logging.info("Failed to set wavelength, will try again")
+                        time.sleep(0.1)
+                    elif ex.errno in (20201, 20275):  # COMMUNICATION_ERROR / NOT_INITIALIZED
                         self._reconnect()
-                    elif retry >= 5:
+                        retry = 0
+                    else:
                         raise
-                    # just try again
-                    retry += 1
-                    logging.info("Failed to set wavelength, will try again")
-                    time.sleep(0.1)
                 else:
                     break
 
+    @callWithReconnect
     def GetWavelength(self):
         """
         Gets the current wavelength.
@@ -874,6 +872,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetWavelength(self._device, byref(wavelength))
         return wavelength.value * 1e-9
 
+    @callWithReconnect
     def GetWavelengthLimits(self, grating):
         """
         grating (1<=int<=4)
@@ -886,6 +885,7 @@ class Shamrock(model.Actuator):
                                                   byref(Min), byref(Max))
         return Min.value * 1e-9, Max.value * 1e-9
 
+    @callWithReconnect
     def WavelengthIsPresent(self):
         """
         return (boolean): True if it's possible to change the wavelength
@@ -895,6 +895,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
         return present.value != 0
 
+    @callWithReconnect
     def GetCalibration(self, npixels):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the
@@ -925,6 +926,7 @@ class Shamrock(model.Actuator):
         # because multiple bins were associated to 0.
         return [v * 1e-9 for v in CalibrationValues]
 
+    @callWithReconnect
     def GetPixelCalibrationCoefficients(self):
         """
         return (4 floats)
@@ -934,6 +936,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
         return a.value, b.value, c.value, d.value
 
+    @callWithReconnect
     def GetCCDLimits(self, port):
         """
         Gets the upper and lower accessible wavelength through the port.
@@ -946,6 +949,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
         return low.value * 1e-9, high.value * 1e-9
 
+    @callWithReconnect
     def SetPixelWidth(self, width):
         """
         Defines the size of each pixel (horizontally).
@@ -956,6 +960,7 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             self._dll.ShamrockSetPixelWidth(self._device, c_float(width * 1e6))
 
+    @callWithReconnect
     def SetNumberPixels(self, npixels):
         """
         Defines how many pixels (around the center) are used.
@@ -969,20 +974,24 @@ class Shamrock(model.Actuator):
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
 
     # For hardware calibration
+    @callWithReconnect
     def SetDetectorOffset(self, entrancep, exitp, offset):
         with self._hw_access:
             self._dll.ShamrockSetDetectorOffsetEx(self._device, entrancep, exitp, offset)
 
+    @callWithReconnect
     def GetDetectorOffset(self, entrancep, exitp):
         offset = c_int()
         with self._hw_access:
             self._dll.ShamrockGetDetectorOffsetEx(self._device, entrancep, exitp, byref(offset))
         return offset.value
 
+    @callWithReconnect
     def SetGratingOffset(self, grating, offset):
         with self._hw_access:
             self._dll.ShamrockSetGratingOffset(self._device, grating, offset)
 
+    @callWithReconnect
     def GetGratingOffset(self, grating):
         offset = c_int()
         with self._hw_access:
@@ -990,6 +999,7 @@ class Shamrock(model.Actuator):
         return offset.value
 
     # Focus mirror management
+    @callWithReconnect
     def SetFocusMirror(self, steps):
         """
         Relative move on the focus
@@ -1005,6 +1015,7 @@ class Shamrock(model.Actuator):
             logging.debug("Moving focus mirror by %d stp", steps)
             self._dll.ShamrockSetFocusMirror(self._device, steps)
 
+    @callWithReconnect
     def FocusMirrorReset(self):
         """
         Resets the filter to its default position. It references the focus.
@@ -1016,6 +1027,7 @@ class Shamrock(model.Actuator):
             logging.debug("Resetting focus mirror position")
             self._dll.ShamrockFocusMirrorReset(self._device)
 
+    @callWithReconnect
     def GetFocusMirror(self):
         """
         Get the current position of the focus
@@ -1026,6 +1038,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
         return focus.value
 
+    @callWithReconnect
     def GetFocusMirrorMaxSteps(self):
         """
         Get the maximum position of the focus
@@ -1036,12 +1049,14 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
         return focus.value
 
+    @callWithReconnect
     def FocusMirrorIsPresent(self):
         present = c_int()
         self._dll.ShamrockFocusMirrorIsPresent(self._device, byref(present))
         return present.value != 0
 
     # Filter wheel support
+    @callWithReconnect
     def SetFilter(self, pos):
         """
         Absolute move on the filter wheel
@@ -1052,6 +1067,7 @@ class Shamrock(model.Actuator):
             logging.debug("Moving filter to %d", pos)
             self._dll.ShamrockSetFilter(self._device, pos)
 
+    @callWithReconnect
     def GetFilter(self):
         """
         Return the current absolute position of the filter wheel
@@ -1062,6 +1078,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetFilter(self._device, byref(pos))
         return pos.value
 
+    @callWithReconnect
     def GetFilterInfo(self, pos):
         """
         pos (int): filter number
@@ -1072,12 +1089,14 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetFilterInfo(self._device, pos, info)
         return info.value.decode('latin1')
 
+    @callWithReconnect
     def FilterIsPresent(self):
         present = c_int()
         self._dll.ShamrockFilterIsPresent(self._device, byref(present))
         return present.value != 0
 
     # Slits management
+    @callWithReconnect
     def SetAutoSlitWidth(self, index, width):
         """
         index (1<=int<=4): Slit number
@@ -1097,6 +1116,7 @@ class Shamrock(model.Actuator):
                 logging.debug("Moving slit %d to %g um", index, width_um.value)
                 self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
 
+    @callWithReconnect
     def GetAutoSlitWidth(self, index):
         """
         index (1<=int<=4): Slit number
@@ -1108,6 +1128,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
         return width_um.value * 1e-6
 
+    @callWithReconnect
     def AutoSlitReset(self, index):
         """
         index (1<=int<=4): Slit number
@@ -1117,6 +1138,7 @@ class Shamrock(model.Actuator):
             with self._led_access:
                 self._dll.ShamrockAutoSlitReset(self._device, index)
 
+    @callWithReconnect
     def AutoSlitIsPresent(self, index):
         """
         Finds if a specified slit is present.
@@ -1132,6 +1154,7 @@ class Shamrock(model.Actuator):
     # the changelog and in the include file)
     # Available since SDK 2.100, but not documented, and raise a "Not available"
     # error with the SR-193i
+    @callWithReconnect
     def SetAutoSlitCoefficients(self, index, x1, y1, x2, y2):
         """
         No idea what this does! (Excepted guesses from the name)
@@ -1142,6 +1165,7 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             self._dll.ShamrockSetAutoSlitCoefficients(self._device, index, x1, y1, x2, y2)
 
+    @callWithReconnect
     def GetAutoSlitCoefficients(self, index):
         """
         No idea what this does! (Excepted guesses from the name)
@@ -1162,6 +1186,7 @@ class Shamrock(model.Actuator):
     # Available since SDK 2.101, but only with newer firmware (ie, 1.2+,
     # after 2016-11). Earlier firmware will raises either "Communication error"
     # (for the Set) or "Parameter 3 invalid" (for the Get)
+    @callWithReconnect
     def SetSlitZeroPosition(self, index, offset):
         """
         Changes the offset for the position of the given slit, to ensure that
@@ -1178,6 +1203,7 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             self._dll.ShamrockSetSlitZeroPosition(self._device, index, offset)
 
+    @callWithReconnect
     def GetSlitZeroPosition(self, index):
         """
         Read the current calibration offset for the slit position.
@@ -1192,12 +1218,14 @@ class Shamrock(model.Actuator):
         return offset.value
 
     # Shutter management
+    @callWithReconnect
     def SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
         with self._hw_access:
             logging.info("Setting shutter to mode %d", mode)
             self._dll.ShamrockSetShutter(self._device, mode)
 
+    @callWithReconnect
     def GetShutter(self):
         mode = c_int()
 
@@ -1205,6 +1233,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetShutter(self._device, byref(mode))
         return mode.value
 
+    @callWithReconnect
     def IsModePossible(self, mode):
         possible = c_int()
 
@@ -1213,6 +1242,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockIsModePossible(self._device, mode, byref(possible))
         return possible.value != 0
 
+    @callWithReconnect
     def ShutterIsPresent(self):
         present = c_int()
 
@@ -1221,6 +1251,7 @@ class Shamrock(model.Actuator):
         return present.value != 0
 
     # Mirror flipper management
+    @callWithReconnect
     def SetFlipperMirror(self, flipper, port):
         """
         Switches the given mirror to a different position.
@@ -1248,6 +1279,7 @@ class Shamrock(model.Actuator):
             logging.debug("Moving flipper %d to pos %d", flipper, port)
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
+    @callWithReconnect
     def GetFlipperMirror(self, flipper):
         """
         flipper (int from *PUT_FLIPPER): the mirror index
@@ -1262,6 +1294,7 @@ class Shamrock(model.Actuator):
 
 # def ShamrockFlipperMirrorReset(int device, int flipper);
 
+    @callWithReconnect
     def FlipperMirrorIsPresent(self, flipper):
         """
         flipper (int from *PUT_FLIPPER): the mirror index
@@ -1272,6 +1305,7 @@ class Shamrock(model.Actuator):
         return present.value != 0
 
     # "Accessory" port control (= 2 TTL lines)
+    @callWithReconnect
     def SetAccessory(self, line, val):
         """
         line (0 <= int <= 1): line number
@@ -1291,6 +1325,7 @@ class Shamrock(model.Actuator):
             # good state.
             self.GetGrating()
 
+    @callWithReconnect
     def GetAccessoryState(self, line):
         """
         line (0 <= int <= 1): line number
@@ -1302,6 +1337,7 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
         return state.value != 0
 
+    @callWithReconnect
     def AccessoryIsPresent(self):
         present = c_int()
         self._dll.ShamrockAccessoryIsPresent(self._device, byref(present))
