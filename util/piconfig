@@ -210,6 +210,8 @@ def main(args):
         if options.addr is None:
             # If no address, there is also no master (for IP)
             kwargs["master"] = None
+        elif options.addr and options.master:
+            kwargs["master"] = options.master
 
         if options.port == "/dev/fake":
             kwargs["_addresses"] = {options.addr: False}
