@@ -1967,6 +1967,7 @@ class CLRelController(Controller):
             self._encoder_mng[a] = t
             t.start()
 
+            # TODO: moved ref at init to Bus class for now as a hack to work around the below mentioned problem
             # TODO: Check if there was any need to send the RON command via SetReferenceMode in the startServo method.
             #  @Eric was there any reason for this? It seems to work fine in the tests without.
             # Referencing:
@@ -1978,12 +1979,12 @@ class CLRelController(Controller):
             # TODO Eric: Is there a situation where we explicitly want to pass False here even
             #  if we have a reference switch/limits?
             #  Is there any controller operated in closed-loop but without ref sensor?
-            self.SetReferenceMode(a, self._hasLimitSwitches[a] or self._hasRefSwitch[a])
-            if self._hasLimitSwitches[a] or self._hasRefSwitch[a]:
+            # self.SetReferenceMode(a, self._hasLimitSwitches[a] or self._hasRefSwitch[a])
+            # if self._hasLimitSwitches[a] or self._hasRefSwitch[a]:
                 # TODO problem is that we now call it without a lock
                 #  -> we dont't wait until finished and bus gets reported that it it not referenced
                 #  cannot call doReference here as method on Bus
-                self.startReferencing(a)
+                # self.startReferencing(a)
 
         self._prev_speed_accel = ({}, {})
 
@@ -2893,9 +2894,11 @@ class Bus(model.Actuator):
         # TODO also a rangesRel : min and max of a step
         speed = {}
         referenced = {}
+        controller_list = []
         for address, kwc in controllers.items():
             try:
                 controller = Controller(self.accesser, address, **kwc)
+                controller_list.append(controller)
             except IOError:
                 logging.exception("Failed to find a controller with address %s on %s", address, port)
                 raise
@@ -2948,8 +2951,8 @@ class Bus(model.Actuator):
         else:
             self._pos_updater = None
 
-        # RO VA dict axis -> bool: True if the axis has been referenced
-        # Only axes which can be referenced are listed
+        # # RO VA dict axis -> bool: True if the axis has been referenced
+        # # Only axes which can be referenced are listed
         self.referenced = model.VigilantAttribute(referenced, readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
@@ -2970,6 +2973,21 @@ class Bus(model.Actuator):
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+
+        # TODO hack: could not manage to properly do referencing in the CLController, as reference method
+        #  on the Bus class.
+        for axis in axes.keys():
+            controller, channel = self._axis_to_cc[axis]
+
+            # reference if possible
+            if controller._hasRefSwitch[channel]:
+                self.reference({axis}).result()
+
+            refed = controller.isReferenced(channel)
+            if refed is not None:
+                referenced[axis] = refed
+            self.referenced._set_value(referenced, force_write=True)
+
 
     def _updatePosition(self, axes=None):
         """
@@ -3087,11 +3105,6 @@ class Bus(model.Actuator):
 
     @isasync
     def reference(self, axes):
-        """
-        References the axes.
-        :param axes: (set of str) The axes that should be referenced.
-        :returns: (future) The referencing future.
-        """
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
@@ -3945,7 +3958,7 @@ class E861Simulator(object):
         # else:
         #   position = original position
         #   target = requested position
-        #   current position = weigthed average (according to time)
+        #   current position = weighted average (according to time)
         self._position = 0.012  # m
         self._target = self._position  # m
         self._start_move = 0
@@ -3971,7 +3984,7 @@ class E861Simulator(object):
                             0x3c: "DEFAULT-FAKE", # stage name
                             0x15: 25.0, # TMX (in mm)
                             0x30: 0.0, # TMN (in mm)
-                            0x16: 0.012, # value at ref pos
+                            0x16: 0.0125, # value at ref pos
                             0x49: 10.0, # VEL
                             0x0B: 3.2, # ACC
                             0x0C: 0.9, # DEC
@@ -4286,9 +4299,23 @@ class E861Simulator(object):
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
+
+                # simulate moving to reference position
+                ref_pos = self._parameters[0x16] * 1e3  # value at reference
+                # TODO I have not idea why it is necessary to multiply by *1e3,
+                #  but saw it also happen in the MOV commands that values were in mm instead of m.
+                speed = self._parameters[self._com_to_param[b"VEL"]]
+                cur_pos = self._get_cur_pos_cl()
+                distance = cur_pos - ref_pos
+                duration = abs(distance) / speed + 0.05
+                logging.debug("Simulating a referencing move of %f s", duration)
+                self._start_move = time.time()
+                self._end_move = self._start_move + duration
+                self._position = cur_pos
+                self._target = ref_pos
                 self._referenced = 1
-                self._end_move = 0
-                self._position = self._parameters[0x16] # value at reference
+
+                # self._target = self._parameters[0x16] * 1e3
             elif args[0] == b"SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
                 # Can be followed by "ALL", but for us, it's the same
                 out = b"1"
