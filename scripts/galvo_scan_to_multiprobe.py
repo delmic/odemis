@@ -110,13 +110,13 @@ def get_sem_rotation(ccd):
             dcoffset.set_dc_output_per_axis('e-beam', 'x', x_offset)
             dcoffset.set_dc_output_per_axis('e-beam', 'y', y_offset)
             image = ccd.data.get(asap=False)
-            spot = FindSpot(image)
+            spot = numpy.array(FindSpot(image))
             # Flip y-axis to be able to calculate the transformation, because a positive voltage applied on
             # the deflectors results in a movement in the negative y direction on the diagnostic camera.
             spot[1] = image.shape[1] - spot[1]
             coordinates.append(spot)
             voltages.append((x_offset, y_offset))
-            print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
+            print("Voltage {} V, coordinate {} px".format((x_offset, y_offset), spot))
     # Compute the EBeam-Deflector-Y scan angle relative to the y-axis of the diagnostic camera
     sem_rotation, gain = get_scan_transform(coordinates, voltages)
     # Reset EBeam-Deflector-Y scan input to zero.
@@ -157,21 +157,21 @@ def get_galvo_rotation(ccd, galvo_x_offset=3, galvo_y_offset=3):
     # while not moving the spot off the camera.
     for x_offset in [-1e-2, -0.5e-2, 0.0, 0.5e-2, 1e-2]:
         for y_offset in [-1e-2, -0.5e-2, 0.0, 0.5e-2, 1e-2]:
-            dcoffset.set_dc_output_per_axis('mirror', 'x', x_offset - galvo_x_offset)
-            dcoffset.set_dc_output_per_axis('mirror', 'y', y_offset - galvo_y_offset)
+            dcoffset.set_dc_output_per_axis('mirror', 'x', x_offset + galvo_x_offset)
+            dcoffset.set_dc_output_per_axis('mirror', 'y', y_offset + galvo_y_offset)
             image = ccd.data.get(asap=False)
-            spot = FindSpot(image)
+            spot = numpy.array(FindSpot(image))
             # Flip y-axis to be able to calculate the transformation, because a positive voltage applied on
             # the galvos results in a movement in the negative y direction on the diagnostic camera.
             spot[1] = image.shape[1] - spot[1]
             coordinates.append(spot)
             voltages.append((x_offset, y_offset))
-            print("Voltage {} V, coordinate {} px".format((numpy.round(x_offset), numpy.round(y_offset)), spot))
+            print("Voltage {} V, coordinate {} px".format((x_offset, y_offset), spot))
     # Compute the DeScan-Y scan angle relative to the y-axis of the diagnostic camera.
     galvo_rotation, gain = get_scan_transform(coordinates, voltages)
     # Reset DeScan-Y scan input to zero.
-    dcoffset.set_dc_output_per_axis('mirror', 'x', 0 - galvo_x_offset)
-    dcoffset.set_dc_output_per_axis('mirror', 'y', 0 - galvo_y_offset)
+    dcoffset.set_dc_output_per_axis('mirror', 'x', 0 + galvo_x_offset)
+    dcoffset.set_dc_output_per_axis('mirror', 'y', 0 + galvo_y_offset)
     return galvo_rotation, gain
 
 
@@ -214,10 +214,12 @@ def main(args):
 
     ccd = model.getComponent(role=options.role)
     try:
-        galvo_rotation, galvo_gain = get_galvo_rotation(ccd, options.channel, options.galvo_offset)
-        print("Galvo rotation: {:.3f}°".format(math.degrees(galvo_rotation)))
-        sem_rotation, _ = get_sem_rotation(ccd, options.channel)
-        print("SEM rotation: {:.3f}°".format(math.degrees(sem_rotation)))
+        galvo_x_offset = float(options.galvo_x_offset)
+        galvo_y_offset = float(options.galvo_y_offset)
+        galvo_rotation, galvo_gain = get_galvo_rotation(ccd, galvo_x_offset, galvo_y_offset)
+        print("Galvo rotation: {:.3f}°, galvo gain {} px/V".format(math.degrees(galvo_rotation), galvo_gain))
+        sem_rotation, sem_gain = get_sem_rotation(ccd)
+        print("SEM rotation: {:.3f}°, sem gain {} px/V".format(math.degrees(sem_rotation), sem_gain))
         # Set e-beam orientation such that DeScan-Y and EBeam-Deflector-Y have the same orientation.
         # The direction of the ebeam scan and the galvo scan are mirrored in respect to
         # each other on the image of the diagnostic camera. Therefore subtract 180 degrees.
@@ -226,7 +228,7 @@ def main(args):
         print("Gain of the galvo descanners is {} pixels per volt in x and {} pixels per volt in y".format(
             galvo_gain[0], galvo_gain[1]))
     except Exception as exp:
-        logging.error("Error during rotation detection.")
+        logging.error("Error during rotation detection.", exp)
         return 128
     return 0
 
