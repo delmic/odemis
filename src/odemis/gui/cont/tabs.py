@@ -1907,8 +1907,8 @@ class AnalysisTab(Tab):
             # number of rows (is vertical size), comes first. So we
             # need to 'swap' the values to get the (x,y) resolution.
             height, width = sraw.shape[-2], sraw.shape[-1]
-            pixel_width = sraw.metadata[model.MD_PIXEL_SIZE][0]
-            center_position = sraw.metadata[model.MD_POS]
+            pixel_width = sraw.metadata.get(model.MD_PIXEL_SIZE, (100e-9, 100e-9))[0]
+            center_position = sraw.metadata.get(model.MD_POS, (0, 0))
 
             # Set the PointOverlay values for each viewport
             for viewport in self.view_controller.viewports:
