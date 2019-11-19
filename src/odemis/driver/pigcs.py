@@ -974,7 +974,6 @@ class Controller(object):
         assert(axis in self._channels)
 
         if activated:
-            # assert(self._hasRefSwitch[axis])  # TODO use this? use closed loop only if refswitch or reflimits?
             state = 1
         else:
             state = 0
@@ -1861,6 +1860,8 @@ class CLRelController(Controller):
         self._pos_lock = {}  # acquire to read/write position
         self._slew_rate = {}  # in s, copy of 0x7000002: slew rate, for E-861
 
+        self._referenced = False   # tracking if the axis is actually referenced and not only pretending to be
+
         for a, cl in axes.items():
             if a not in self._channels:
                 raise LookupError("Axis %s is not supported by controller %d" % (a, address))
@@ -1967,7 +1968,6 @@ class CLRelController(Controller):
             self._encoder_mng[a] = t
             t.start()
 
-            # TODO: moved ref at init to Bus class for now as a hack to work around the below mentioned problem
             # TODO: Check if there was any need to send the RON command via SetReferenceMode in the startServo method.
             #  @Eric was there any reason for this? It seems to work fine in the tests without.
             # Referencing:
@@ -1979,12 +1979,6 @@ class CLRelController(Controller):
             # TODO Eric: Is there a situation where we explicitly want to pass False here even
             #  if we have a reference switch/limits?
             #  Is there any controller operated in closed-loop but without ref sensor?
-            # self.SetReferenceMode(a, self._hasLimitSwitches[a] or self._hasRefSwitch[a])
-            # if self._hasLimitSwitches[a] or self._hasRefSwitch[a]:
-                # TODO problem is that we now call it without a lock
-                #  -> we dont't wait until finished and bus gets reported that it it not referenced
-                #  cannot call doReference here as method on Bus
-                # self.startReferencing(a)
 
         self._prev_speed_accel = ({}, {})
 
@@ -2024,6 +2018,7 @@ class CLRelController(Controller):
         axis (str): the axis
         """
         with self._pos_lock[axis]:
+            self._referenced = False
             self.SetServo(axis, False)
             # This can only be done if the servo is turned off
             if 0x56 in self._avail_params:
@@ -2052,6 +2047,14 @@ class CLRelController(Controller):
                 self.SetParameter(axis, 0x56, 1, check=False)  # 1 = on
                 time.sleep(2)  # 2 s seems long enough for the encoder to initialise
             self.SetServo(axis, True)
+            if self.isReferenced(axis) is None:  # no referencing possible
+                # To allow (relative/absolute) moves, even if it's not actually referenced
+                # Needs to be followed by SetPosition call
+                self.SetReferenceMode(axis, False)
+            else:
+                # TODO I think this line is not necessary. It seemed to work fine without.
+                self.SetReferenceMode(axis, True)
+            # FIXME if this line is not executed, it will also not pretend to be referenced and no moving possible
             if 0x56 in self._avail_params:
                 self.SetPosition(axis, pos)
             if axis in self._slew_rate:
@@ -2322,14 +2325,15 @@ class CLRelController(Controller):
             # We trust the caller that it knows it's in range
             # (worst case the hardware will not go further)
 
+            # TODO remove this code
             # Absolute move is only legal if already referenced.
-            if not self.IsReferenced(axis):  # TODO: cache
-                # MoveRel adds to the _target_ position (matters in case of move update)
-                tpos = self.getTargetPosition(axis)
-                distance = position - tpos
-                self.MoveRel(axis, distance / self._upm[axis])
-            else:
-                self.MoveAbs(axis, position / self._upm[axis])
+            # if not self.IsReferenced(axis):  # TODO: cache
+            #     # MoveRel adds to the _target_ position (matters in case of move update)
+            #     tpos = self.getTargetPosition(axis)
+            #     distance = position - tpos
+            #     self.MoveRel(axis, distance / self._upm[axis])
+            # else:
+            self.MoveAbs(axis, position / self._upm[axis])
 
             old_pos = self.getPosition(axis)
             distance = position - old_pos
@@ -2409,8 +2413,7 @@ class CLRelController(Controller):
 
     def startReferencing(self, axis):
         """
-        Start a referencing move. Use isMoving() or isReferenced() to know if
-        the move is over. Position will change, as well as absolute positions.
+        Start a referencing move. Position will change, as well as absolute positions.
         axis (str)
         """
         self._acquireAxis(axis)
@@ -2427,9 +2430,14 @@ class CLRelController(Controller):
         # orig_pos = pos?
 
         if self._hasRefSwitch[axis]:
-            self.SetReferenceMode(axis, True)
+            # self.SetReferenceMode(axis, True)  # TODO think it is unnecessary
             self.ReferenceToSwitch(axis)
+            # FIXME: If referencing fails, this flag might be True though it should be not.
+            while self.isMoving(): # wait until move is done  @Eric does this work? or use future for ReferencetoSwitch call?
+                time.sleep(0.01)
+            self._referenced = True
         elif self._hasLimitSwitches[axis]:
+            self._referenced = False
             raise NotImplementedError("Don't know how to reference to limit yet")
             # TODO code for reference support to be implemented, for now code unreachable
             self.ReferenceToLimit(axis)
@@ -2438,6 +2446,7 @@ class CLRelController(Controller):
             # Go to 0 (="home")
             self.MoveAbs(axis, 0)
         else:
+            self._referenced = False
             # TODO: we _could_ think of hacky way, such as moving a lot to
             # one direction to be sure to hit the physical limit, and then
             # marking it as the lower limit, using the range.
@@ -2451,7 +2460,13 @@ class CLRelController(Controller):
         if not self._hasRefSwitch[axis] and not self._hasLimitSwitches[axis]:
             return None
         else:
-            return self.IsReferenced(axis)
+            # Check flag referenced and HW report the same status for referencing
+            if self.IsReferenced(axis) == self._referenced:
+                return self._referenced
+            else:
+                logging.warning("Axis reports being referenced though it is not.")
+                self._referenced = False  # make sure this variable is False if this happens
+                return False
 
 
 class OLController(Controller):
@@ -2894,11 +2909,9 @@ class Bus(model.Actuator):
         # TODO also a rangesRel : min and max of a step
         speed = {}
         referenced = {}
-        controller_list = []
         for address, kwc in controllers.items():
             try:
                 controller = Controller(self.accesser, address, **kwc)
-                controller_list.append(controller)
             except IOError:
                 logging.exception("Failed to find a controller with address %s on %s", address, port)
                 raise
@@ -2973,21 +2986,6 @@ class Bus(model.Actuator):
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
-
-        # TODO hack: could not manage to properly do referencing in the CLController, as reference method
-        #  on the Bus class.
-        for axis in axes.keys():
-            controller, channel = self._axis_to_cc[axis]
-
-            # reference if possible
-            if controller._hasRefSwitch[channel]:
-                self.reference({axis}).result()
-
-            refed = controller.isReferenced(channel)
-            if refed is not None:
-                referenced[axis] = refed
-            self.referenced._set_value(referenced, force_write=True)
-
 
     def _updatePosition(self, axes=None):
         """
@@ -4301,9 +4299,7 @@ class E861Simulator(object):
                     raise SimulatedError(15)
 
                 # simulate moving to reference position
-                ref_pos = self._parameters[0x16] * 1e3  # value at reference
-                # TODO I have not idea why it is necessary to multiply by *1e3,
-                #  but saw it also happen in the MOV commands that values were in mm instead of m.
+                ref_pos = self._parameters[0x16] * 1e3  # value at reference in m
                 speed = self._parameters[self._com_to_param[b"VEL"]]
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - ref_pos
@@ -4314,8 +4310,6 @@ class E861Simulator(object):
                 self._position = cur_pos
                 self._target = ref_pos
                 self._referenced = 1
-
-                # self._target = self._parameters[0x16] * 1e3
             elif args[0] == b"SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
                 # Can be followed by "ALL", but for us, it's the same
                 out = b"1"
@@ -4479,7 +4473,7 @@ class FakeBus(Bus):
         Opens a fake serial port
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         _addresses (dict of int -> bool, or None): list of each address that should have
-         a simulated controller created and wheter it is closed-loop or not.
+         a simulated controller created and whether it is closed-loop or not.
          Default to {1: False, 2:False} (used for scan).
         return (serial): the opened serial port
         """

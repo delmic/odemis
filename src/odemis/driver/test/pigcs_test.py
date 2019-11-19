@@ -40,7 +40,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
-
+TEST_NOHW=1
 if os.name == "nt":
     PORT = "COM1"
 else:
@@ -610,38 +610,39 @@ class TestActuatorCL(TestActuator):
         stage = CLASS(**self.kwargs_two)
 
         # Test proper referencing
-        self.assertTrue(stage.referenced.value['x'])
-        self.assertTrue(stage.referenced.value['y'])
-        pos = stage.position.value
-        stage.moveAbs({'x': 0.015}).result()
-        stage.moveAbs({'y': 0.005}).result()
-        self.assertAlmostEqual(stage.position.value['x'], 0.015, places=3)  # 0.001 times out
-        self.assertAlmostEqual(stage.position.value['y'], 0.005, places=3)
-        self.assertNotAlmostEqual(stage.position.value['x'], pos["x"], places=3)
-
         stage.reference({'x'}).result()
         self.assertTrue(stage.referenced.value['x'])
-        # The reference position should be 12.5 mm for simulator
-        self.assertAlmostEqual(stage.position.value["x"], 0.0125, places=3)
+        ref_pos_x = stage.position.value["x"]  # Get the reference position
 
         stage.reference({'y'}).result()
         self.assertTrue(stage.referenced.value['y'])
-        # The reference position should be 12.5 mm for simulator
-        self.assertAlmostEqual(stage.position.value["y"], 0.0125, places=3)
+        ref_pos_y = stage.position.value["x"]  # Get the reference position
+
+        # move to some position different from ref pos by certain percentage of axes range
+        stage.moveAbs({'x': ref_pos_x + stage.axes["x"].range[1] * 0.1}).result()
+        stage.moveAbs({'y': ref_pos_y + stage.axes["y"].range[1] * 0.2}).result()  # in case ref pos is 0 only add
+        self.assertAlmostEqual(stage.position.value['x'], ref_pos_x + stage.axes["x"].range[1] * 0.1, places=3)
+        self.assertAlmostEqual(stage.position.value['y'], ref_pos_y + stage.axes["y"].range[1] * 0.2, places=3)
+
+        # reference again
+        stage.reference({'x'}).result()
+        stage.reference({'y'}).result()
+        self.assertTrue(stage.referenced.value['x'])
+        self.assertTrue(stage.referenced.value['y'])
+        self.assertAlmostEqual(stage.position.value["x"], ref_pos_x, places=3)
+        self.assertAlmostEqual(stage.position.value["y"], ref_pos_y, places=3)
 
         # Test cancellation of referencing
         self.assertTrue(stage.referenced.value['x'])  # check it is referenced
-        stage.moveAbs({'x': 0.018}).result()
-        self.assertAlmostEqual(stage.position.value["x"], 0.018, places=3)
+        stage.moveAbs({'x': ref_pos_y + stage.axes["y"].range[1] * 0.3}).result()
+        self.assertAlmostEqual(stage.position.value["x"], ref_pos_y + stage.axes["y"].range[1] * 0.3, places=3)
         f = stage.reference({'x'})
-        time.sleep(0.001)
+        time.sleep(0.001)  # wait a bit so referencing actually started
         self.assertTrue(f.running())
         f.cancel()
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
         self.assertFalse(stage.referenced.value['x'])  # check it is no longer referenced
-        # self.assertNotAlmostEqual(stage.position.value["x"], 0.0125, places=3)
-        # TODO does not work simulator reports ref pos immediately...any ideas?
 
 
 # @skip("faster")
