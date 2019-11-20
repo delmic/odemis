@@ -134,8 +134,8 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
         self._set_remove = threading.Lock()
 
     def _schedule_work(self):
-        while self._waiting_work:
-            with self._set_remove:
+        with self._set_remove:
+            while self._waiting_work:
                 w, f, dependences = self._waiting_work.pop()
                 if f not in self._queue:
                     # the future has already been cancelled => forget about it
