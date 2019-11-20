@@ -12,24 +12,24 @@ described manner and analyze the acquired image with this script.
 
 Preparation for imaging:
     On the SEM Control PC:
-        Set HFW TODO (so far it looks the script can deal with various different settings - might remove).
         Increase the scan size (normally 3.2um) to cover the active area of the full mppc detector.
-        Set 2000x magnification and 8V at SEM.
+        Set 1000x magnification and 8V at SEM. -> eff_px_size =
         Set beam shift to zero.
-        Select single-beam mode; use beamlet E4.
+        Select single-beam mode; use beamlet E4. Aperture 8, manually select correct beam.
         Set the scan mode to ‘External’.
         All mppc cells should be active.
     For scan control:
-        Set galvo mirror deflection to zero; X = Y = 0 (descan).
+        Set galvo mirror deflection to zero; X = Y = 0 (descan) in config.csv file. Run scan_generation.py to
+        apply change to AWGs.
     Configure the camera to acquire a single field image.
 
-The scanning is performed with one beamlet/single probe E4 using all mppc cells.
+The scanning is performed with one beamlet/single probe E4 using all mppc cells and the deflectors (ebeam scan).
 
 Correction on hardware:
-    The offset correction needs to be applied to the galvo mirror settings.  # TODO to be defined!
+    The offset correction needs to be applied to the galvo mirror settings in the config.csv file.
+    Then run scan_generation.py to apply the new settings.
     The rotation correction needs to be manually adjusted via the rotational mounting on the mppc detector.
 
-TODO extend this description after testing and when workflow is more specified.
 """
 
 from __future__ import division
@@ -71,8 +71,10 @@ def preprocess_images(image):
     :param image: (DataArray) Image of size 6400px x 6400px made up by 64 cell images (800px x 800px), each containing
                 the corresponding mppc cell image (bright square) at a given position, which are shifted by the size
                 of the square in respect to each other.
-    :returns: (list of 4 ndarrays) The preprocessed corner images. Shape is (y, x).
-              (ndarray) The E4 cell image. Shape is (y, x).
+    :returns: (list of 4 ndarrays, dtype: int64) The preprocessed corner images. Shape is (y, x).
+              (ndarray, dtype: int64) The E4 cell image. Shape is (y, x).
+              Background is of value 0, value of the active area (bright square) is >= 1. All pixels in active area
+              have the same value, which is typically 1.
     """
 
     # make sure it is grey scale
@@ -99,11 +101,11 @@ def preprocess_images(image):
     # set 99% of the pixels with the lowest values to 0, set the rest of the pixels to 1
     for num_img, img in enumerate(images):
         shape = img.shape
-        img_histogram = numpy.bincount(numpy.ravel(img))
-        index_array = numpy.cumsum(img_histogram) >= 0.99 * shape[0] * shape[1]  # bool array: True if 99% accumulated
-        threshold = index_array.argmax()  # find the first occurrence of True
-        img[img <= threshold] = 0  # set 99% of px with the lowest values to 0
-        img[img > threshold] = 1  # set the remaining 1% to 1
+        img_histogram = numpy.bincount(img.flat)  # Note: dtype needs to be uint8 or uint16
+
+        cum_hist = numpy.cumsum(img_histogram)  # cumulative sum of the elements
+        threshold = numpy.searchsorted(cum_hist, 0.99 * shape[0] * shape[1], side="left")  # find 99% of px accumulated
+        img = (img > threshold).astype(numpy.uint8)  # set 99% of px with the lowest values to 0, remaining 1% to 1
 
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         # get rid of noise
@@ -123,25 +125,32 @@ def preprocess_images(image):
         # outside of the scanning area e.g. due to too much rotation of the mppc.
         # Use a threshold of 90% of the expected size to allow for variation due to dilation/erosion operation.
         active_area_found = False
+        num_active_areas = 0  # counter of how many active areas are found
         # find the connected component
         # Note: num_labels does not include any background values
-        for label in range(num_labels):
+        for label in range(1, num_labels + 1):
             # check that the size of the connected component is at least 10% of the size
             # of the active area (about 1% of the total area)
             # If not, it is either noise or only part of the active area was captured due to too much rotation
             # (active area a edge and thus cut-off).
-            if len(img_cc[img_cc == label + 1]) < 0.1 * 0.01 * cell_size_y * cell_size_x:  # as 0 is background
+            if numpy.count_nonzero(img_cc == label) < 0.1 * 0.01 * cell_size_y * cell_size_x:  # as 0 is background
                 # mark connected component as background as it cannot be the active area and
                 # was missed in the other pre-processing steps
-                img_cc[img_cc == label + 1] = 0
+                img_cc[img_cc == label] = 0
             else:
                 active_area_found = True
+                num_active_areas += 1
 
         if active_area_found:
             images[num_img] = img_cc
+            if num_active_areas > 1:
+                print("Found {} active areas in image {}. However, there should be only one active area. "
+                      "The fine alignment for the mppc detector might be incorrect. "
+                      "Please check if the acquired image is correct. ".format(num_active_areas, num_img))
         else:
-            raise ValueError("Active area in individual cell image is cut off or not existing. Please check size of"
-                             "scanned area and the coarse alignment of rotation and offset for the mppc detector.")
+            raise ValueError("Active area in individual cell image number %s is cut off or not existing. "
+                             "Please check size of scanned area and the coarse alignment of rotation and offset"
+                             " for the mppc detector." % num_img)
 
     return images[0:4], images[4]
 
@@ -150,8 +159,8 @@ def get_mppc_rotation(images):
     """
     Calculates the rotation of the MPPC detector in space. MPPC detector should be horizontally positioned.
     The rotation angle is calculated based on the 4 corner cell images by evaluating trigonometric quantities.
-    :param images: (list of 4 ndarrays) Preprocessed corner cell images.
-    :returns: (float) The angle that should be applied to the mppc stage. This is the opposite (negative)
+    :param images: (list of 4 ndarrays, dtype: int64) Preprocessed corner cell images. Shape is (y, x).
+    :returns: (float) The angle that should be applied to the mppc stage in radians. This is the opposite (negative)
                       of the angle the image is rotated by. E.g. if the image is rotated CW the code will
                       return a negative angle, if the image is rotated CCW the code returns a positive angle.
                       Definition: CW (clockwise) is negative angles, CCW (counter-clockwise) is positive angles.
@@ -171,7 +180,7 @@ def get_mppc_rotation(images):
 
     # check that values are the same, allow a 10px margin
     if not almost_equal(delta_y_A1_H1, delta_y_A8_H8, atol=10):
-        raise ValueError("Difference in y position for spots found in mppc cells A1 and H1 should"
+        raise ValueError("Difference in y position for spots found in mppc cells A1 and H1 should "
                          "be the similar as in A8 and H8. However, delta y of A1/H1 is {:.2f} "
                          "whereas delta y of A8/H8 is {:.2f}.".format(delta_y_A1_H1, delta_y_A8_H8))
 
@@ -182,7 +191,7 @@ def get_mppc_rotation(images):
 
     # check that values are the same, allow a 10px margin
     if not almost_equal(delta_x_A1_A8, delta_x_H1_H8, atol=10):
-        raise ValueError("Difference in x position for spots found in mppc cells A1 and A8 should"
+        raise ValueError("Difference in x position for spots found in mppc cells A1 and A8 should "
                          "be the similar as in H1 and H8. However, delta x of A1/A8 is {:.2f} "
                          "whereas delta x of A8/H8 is {:.2f}.".format(delta_x_A1_A8, delta_x_H1_H8))
 
@@ -194,20 +203,20 @@ def get_mppc_rotation(images):
     # use distances only in the projected image
     delta_x_A1_H1 = spotcenter_H1[1] - spotcenter_A1[1]
     angle = numpy.arctan2(delta_y_A1_H1, delta_x_A1_H1)  # [rad]
-    mppc_rotation = -math.degrees(angle)  # convert to degree and change sign for correcting the rotation
+    mppc_rotation = -angle  # change sign for correcting the rotation
 
     # control
     delta_x_A8_H8 = spotcenter_H8[1] - spotcenter_A8[1]
     angle_control = numpy.arctan2(delta_y_A8_H8, delta_x_A8_H8)  # [rad]
-    angle_control_degree = -math.degrees(angle_control)  # convert to degree and change sign for correcting the rotation
+    angle_control_degree = -angle_control  # change sign for correcting the rotation
 
-    # check that angles are the same, allow a 1 degree margin
+    # check that angles are the same, allow a 0.5 degree margin
     if not almost_equal(mppc_rotation, angle_control_degree, atol=0.5):
         raise ValueError("The angle found based on the images of cell A1 and H1, should be the same angle"
                          "as for cells A8 and H8. However, the angle of A1/H1 is {:.2f} "
                          "whereas the angle of A8/H8 is {:.2f}.".format(mppc_rotation, angle_control_degree))
 
-    return mppc_rotation  # angle
+    return mppc_rotation  # angle in rad
 
 
 def get_mppc_offset(image, phi):
@@ -215,27 +224,29 @@ def get_mppc_offset(image, phi):
     Calculates the offset of the MPPC detector in space. MPPC detector should be centered in regard to the scanning
     beamlet, when in single beam mode.
     Calculates the distance of the active MPPC cell image (bright square) in regard to the center of the cell image.
-    Note: Return value is based on top/left corner (0,0).
-    :param image: (ndarray) Preprocessed E4 cell images.
-    :param phi: (float) Rotation angle to transform the mppc image coordinate system to the multiprobe
+    :param image: (ndarray, dtype: int64) Preprocessed E4 cell images. Shape is (y, x).
+    :param phi: (float) Rotation angle in degrees to transform the mppc image coordinate system to the multiprobe
                 coordinate system.
-    :returns: (tuple of 2 float) The distance to the E4 cell image center in y and x in px.
+    :returns: (tuple of 2 float) The distance to the E4 cell image center in x and y in px.
+              Return value is based on top/left corner (0,0).
     """
 
     rot_matrix = numpy.array(((numpy.cos(phi), - numpy.sin(phi)), (numpy.sin(phi), numpy.cos(phi))))
 
-    # calculate center of mass (y, x) of the bright spot
-    spotcenter_E4 = center_of_mass(image)
+    # calculate center of mass (x, y) of the bright spot
+    spotcenter_E4 = center_of_mass(image)[::-1]  # invert to follow convention (x, y) in px
     spotcenter_E4_rot = numpy.dot(spotcenter_E4, rot_matrix)  # coordinate transform into system of multiprobe
 
     # center of image
-    image_center = (image.shape[0]/2., image.shape[1]/2.)  # (y, x) [px] is at 400 x 400
+    image_center = (image.shape[0]/2., image.shape[1]/2.)[::-1]  # (x, y) in px is at 400 x 400
     image_center_rot = numpy.dot(image_center, rot_matrix)
 
     # calculate the x and y distance to the center
     mppc_offset = (image_center_rot[0] - spotcenter_E4_rot[0], image_center_rot[1] - spotcenter_E4_rot[1])
 
-    return mppc_offset  # (y,x) sign of value indicates direction of correction
+    # TODO add px to voltage calc after testing was successful
+
+    return mppc_offset  # (x, y) sign of value indicates direction of correction
 
 
 def main(args):
@@ -250,8 +261,8 @@ def main(args):
     parser.add_argument('--file', dest="file",
                         help="Image file to run the mppc to multiprobe alignment for.")
     parser.add_argument('--angle', dest="phi", required=True,
-                        help="Rotation angle to match the mppc image coordinate system"
-                             "with the coordinate system of the multiprobe."
+                        help="Rotation angle in degrees to match the mppc image coordinate system "
+                             "with the coordinate system of the multiprobe. "
                              "Can be automatically extracted with galvo_scan_to_multiprobe script.")
 
     options = parser.parse_args(args[1:])
@@ -276,18 +287,18 @@ def main(args):
         corner_images, image_E4 = preprocess_images(image)
 
         # calculate mppc offset
-        mppc_offset = get_mppc_offset(image_E4, options.phi)
-        print("Distance of the E4 mppc cell from image center is y={:.2f} pixels and x={:.2f} pixels. "
+        mppc_offset = get_mppc_offset(image_E4, float(options.phi))
+        print("Distance of the E4 mppc cell from image center is x={:.2f} pixels and y={:.2f} pixels. "
               "Apply corresponding voltage to the galvo mirror "
               "to correct for the offset.".format(mppc_offset[0], mppc_offset[1]))
 
         # calculate mppc rotation
         mppc_rotation = get_mppc_rotation(corner_images)
         print("Apply {:.2f}° to correct the MPPC position using the manual rotational mount of the MPPC"
-              " detector.".format(mppc_rotation))
+              " detector.".format(math.degrees(mppc_rotation)))
 
     except Exception as exp:
-        logging.error("%s", exp, exc_info=True)
+        logging.exception("Failure during mppc fine alignment")
         return 128
 
     return 0
