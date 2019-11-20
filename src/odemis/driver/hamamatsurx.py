@@ -1256,8 +1256,8 @@ class StreakCamera(model.HwComponent):
         logging.debug("Starting RemoteEx App.")
         # Note: "1": App starts visible (use 0 for invisible)
         # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\HPDTA8.ini")
-        # need more time when starting App -> use larger timeout
-        self.sendCommand("AppStart", timeout=15)
+        # need ~15 s when starting App -> use larger timeout
+        self.sendCommand("AppStart", timeout=30)
 
     def AppEnd(self):
         """Close RemoteEx."""
