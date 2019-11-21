@@ -12,15 +12,15 @@ described manner and analyze the acquired image with this script.
 
 Preparation for imaging:
     On the SEM Control PC:
-        Increase the scan size (normally 3.2um) to cover the active area of the full mppc detector.
-        Set 1000x magnification and 8V at SEM. -> eff_px_size =
-        Set beam shift to zero.
+        Increase the scan size (normally 3.2um) to cover the active area of the full mppc detector, by
+        setting the params to achieve a 1000x magnification.  # TODO correct? on full screen?
+        Set beam shift to zero. TODO Eventually it should be the case when system correctly aligned.
         Select single-beam mode; use beamlet E4. Aperture 8, manually select correct beam.
-        Set the scan mode to ‘External’.
+        Set the scan mode to ‘External’ (spot mode).
         All mppc cells should be active.
     For scan control:
-        Set galvo mirror deflection to zero; X = Y = 0 (descan) in config.csv file. Run scan_generation.py to
-        apply change to AWGs.
+        Set galvo mirror deflection to zero; X = Y = 0 (descan) -> mirror_amp = 0 in config.csv
+        and run scan_generation.py to apply change to AWGs.
     Configure the camera to acquire a single field image.
 
 The scanning is performed with one beamlet/single probe E4 using all mppc cells and the deflectors (ebeam scan).
@@ -29,6 +29,7 @@ Correction on hardware:
     The offset correction needs to be applied to the galvo mirror settings in the config.csv file.
     Then run scan_generation.py to apply the new settings.
     The rotation correction needs to be manually adjusted via the rotational mounting on the mppc detector.
+    TODO rotation matches the coordinate system of mppc with coordinate system of multiprobe
 
 """
 
@@ -43,13 +44,13 @@ import cv2
 import glob
 import os
 
-import skimage
+from skimage import measure
 
 from odemis.util.img import RGB2Greyscale
 
 from odemis.dataio import tiff
 from libtiff import TIFF
-from odemis.util import almost_equal
+from odemis.util import almost_equal, transform
 import sys
 from scipy.ndimage.measurements import center_of_mass
 
@@ -115,7 +116,7 @@ def preprocess_images(image):
         images[num_img] = img_close
 
         # find connected component in thresholded image
-        img_cc, num_labels = skimage.measure.label(img_close, background=0, connectivity=1, return_num=True)
+        img_cc, num_labels = measure.label(img_close, background=0, connectivity=1, return_num=True)
 
         # there should be only one label in num_labels
         if num_labels != 1:
@@ -219,34 +220,46 @@ def get_mppc_rotation(images):
     return mppc_rotation  # angle in rad
 
 
-def get_mppc_offset(image, phi):
+def get_mppc_offset(image, phi, gain_diagcam, px_size_diagcam, px_size_scanimg):
     """
     Calculates the offset of the MPPC detector in space. MPPC detector should be centered in regard to the scanning
     beamlet, when in single beam mode.
     Calculates the distance of the active MPPC cell image (bright square) in regard to the center of the cell image.
     :param image: (ndarray, dtype: int64) Preprocessed E4 cell images. Shape is (y, x).
-    :param phi: (float) Rotation angle in radians to transform the mppc image coordinate system to the multiprobe
-                coordinate system.
-    :returns: (tuple of 2 float) The distance to the E4 cell image center in x and y in px.
-              Return value is based on top/left corner (0,0).
+    :param phi: (float) Rotation angle in radians to transform the mppc image/multiprobe coordinates into
+                the descan/galvo coordinate system. The mppc is already coarse aligned in respect to the multiprobe
+                in previous steps. Otherwise there would be no signal in each mppc cell.
+    :param gain_diagCam: (tuple of 2 floats) Distance on diagnostic camera per Volt. Unit is in px per Volt.
+    :returns:
+        mppc_offset_px: (tuple of 2 float) The distance to the E4 cell image center in x and y in pixels.
+        mppc_offset_volt: (tuple of 2 float) The distance to the E4 cell image center in x and y in volt that needs to
+                        be applied to the x and y offset of the AWGs of the descan/galvo mirror.
+        Return values is based on top/left corner (0,0).
     """
 
-    rot_matrix = numpy.array(((numpy.cos(phi), - numpy.sin(phi)), (numpy.sin(phi), numpy.cos(phi))))
+    rot_matrix = transform._rotation_matrix_from_angle(phi)
 
     # calculate center of mass (x, y) of the bright spot
     spotcenter_E4 = center_of_mass(image)[::-1]  # invert to follow convention (x, y) in px
-    spotcenter_E4_rot = numpy.dot(spotcenter_E4, rot_matrix)  # coordinate transform into system of multiprobe
+    # Transform coordinates from the system of multiprobe/mppc into descan/galvo system.
+    spotcenter_E4_rot = numpy.dot(spotcenter_E4, rot_matrix)
 
     # center of image
     image_center = (image.shape[1]/2., image.shape[0]/2.)  # (x, y) in px is at 400 x 400
+    # Transform coordinates from the system of multiprobe/mppc into descan/galvo system.
     image_center_rot = numpy.dot(image_center, rot_matrix)
 
-    # calculate the x and y distance to the center
-    mppc_offset = (image_center_rot[0] - spotcenter_E4_rot[0], image_center_rot[1] - spotcenter_E4_rot[1])
+    # calculate the (x, y) distance to the center
+    mppc_offset_px = (image_center_rot[0] - spotcenter_E4_rot[0], image_center_rot[1] - spotcenter_E4_rot[1])  # [px]
 
-    # TODO add px to voltage calc after testing was successful
+    # calculate the distance in nm per volt on the diagnostic camera
+    dist_per_V_diagCam = (px_size_diagcam * gain_diagcam[0], px_size_diagcam * gain_diagcam[1])  # (x, y) [nm*px/V]
 
-    return mppc_offset  # (x, y) sign of value indicates direction of correction
+    # calculate voltage to correct for the mppc offset found on the scanned image
+    mppc_offset_volt = (px_size_scanimg * mppc_offset_px[0] / dist_per_V_diagCam[0],
+                    px_size_scanimg * mppc_offset_px[1] / dist_per_V_diagCam[1])  # (x, y) [V]
+
+    return mppc_offset_px, mppc_offset_volt  # sign of value indicates direction of correction
 
 
 def main(args):
@@ -263,7 +276,20 @@ def main(args):
     parser.add_argument('--angle', dest="phi", required=True, type=float,
                         help="Rotation angle in degrees to match the mppc image coordinate system "
                              "with the coordinate system of the multiprobe. "
-                             "Can be automatically extracted with galvo_scan_to_multiprobe script.")
+                             "Can be automatically extracted with galvo_scan_to_multiprobe script "
+                             "(mirror angle in degrees).")
+    parser.add_argument('--gain', dest="gain_diagcam", required=True, nargs='+', type=float,
+                        help="The distance (gain) on the diagnostic camera per Volt applied on the AWGs"
+                             "in x and y direction. "
+                             "Can be automatically extracted with galvo_scan_to_multiprobe script "
+                             "(galvo gain in px/volt).")
+
+    parser.add_argument('--px_size_diagcam', dest="px_size_diagcam", type=int, default=75,
+                        help="The pixel size in nm on the diagnostic camera.")  # TODO depending on??
+    # TODO this needs to be an input arg or using the magnification to calc this pixel sizes!
+    parser.add_argument('--px_size_diagimg', dest="px_size_scanimg", type=int, default=40,
+                        help="The pixel size in nm on the scanned image. Default is 40nm assuming a magnification"
+                             "of 1000x. Please change if using a different magnification.")
 
     options = parser.parse_args(args[1:])
     if options.debug:
@@ -286,11 +312,15 @@ def main(args):
         # pre-process image
         corner_images, image_E4 = preprocess_images(image)
 
-        # calculate mppc offset
-        mppc_offset = get_mppc_offset(image_E4, math.radians(options.phi))
-        print("Distance of the E4 mppc cell from image center is x={:.2f} pixels and y={:.2f} pixels. "
-              "Apply corresponding voltage to the galvo mirror "
-              "to correct for the offset.".format(mppc_offset[0], mppc_offset[1]))
+        # calculate mppc offset, Note: accuracy on AWGs is 0.001 volt
+        mppc_offset_px, mppc_offset_volt = \
+            get_mppc_offset(image_E4, math.radians(options.phi), tuple(options.gain_diagcam),
+                            options.px_size_diagcam, options.px_size_scanimg)
+        # Note: need to swap the sign of x direction to match the hardware behaviour
+        # TODO check again when AWG replaced, also check again, when galvo script angle calc refined
+        print("Distance of the E4 mppc cell from image center is x={:.2f} volt and y={:.2f} volt. Apply the x={:.3f} "
+              "volt and y={:.3f} volt to the descan/galvo mirror to correct for the offset."
+              .format(mppc_offset_px[0], mppc_offset_px[1], -mppc_offset_volt[0], mppc_offset_volt[1]))
 
         # calculate mppc rotation
         mppc_rotation = get_mppc_rotation(corner_images)
