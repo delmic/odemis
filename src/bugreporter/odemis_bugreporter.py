@@ -466,12 +466,19 @@ class BugreporterFrame(wx.Frame):
         self.make_suggestion = True
 
         # Load known users, if not available make tsv file
+        self.known_users = OrderedDict()
         self.conf_path = os.path.join(os.path.expanduser(u"~"), '.config', 'odemis', 'bugreporter_users.tsv')
-        with open(self.conf_path, 'a+') as f:
-            reader = csv.reader(f, delimiter='\t')
-            self.known_users = OrderedDict()
-            for name, email in reader:
-                self.known_users[name.decode("utf-8")] = email.decode("utf-8")
+        conf_dir = os.path.dirname(self.conf_path)
+        try:
+            if not os.path.exists(conf_dir):
+                # create the directory so that we can store the config later
+                os.makedirs(conf_dir)
+            with open(self.conf_path, 'a+') as f:
+                reader = csv.reader(f, delimiter='\t')
+                for name, email in reader:
+                    self.known_users[name.decode("utf-8")] = email.decode("utf-8")
+        except OSError as ex:
+            logging.error("Failed to read known users: %s", ex)
 
     def store_user_info(self, name, email):
         """
@@ -641,4 +648,3 @@ class BugreporterFrame(wx.Frame):
 if __name__ == '__main__':
     bugreporter = OdemisBugreporter()
     bugreporter.run()
-    
