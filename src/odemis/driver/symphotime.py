@@ -77,8 +77,8 @@ PQ_ERRCODE_MEASUREMENT_READY = 1
 PQ_ERRCODE_USER_BREAK = 2
 
 # Header Constants
-T_REC_VERSION = '\x00\x02\x00\x01'      # Current record type version
-MAGIC = 'PQSPT'                         # magic string in header
+T_REC_VERSION = b'\x00\x02\x00\x01'      # Current record type version
+MAGIC = b'PQSPT'                         # magic string in header
 
 # dictionary of error codes and associated messages
 ERRCODE = {
@@ -176,8 +176,8 @@ class OptionalDataRecord(object):
         bytestring: (string) byte string of data from the Symphotime server
         index: (int) start index in the byte string
         '''
-        index_null = raw_data.find('\0')
-        name = raw_data[0:index_null]
+        index_null = raw_data.find(b'\0')
+        name = raw_data[0:index_null].decode('utf-8', 'replace')
         index = (PQ_OPT_DATATYPE_NAME_MAXLEN + 1)
         data_type = struct.unpack_from('B', raw_data, index)[0]
 
@@ -198,7 +198,8 @@ class OptionalDataRecord(object):
             return cls(name, data_type, struct.unpack_from('%dI' % wCount, raw_data, index + 3))
         elif data_type == PQ_OPT_DATATYPE_FIXED_LENGTH_STRING:
             wLen = struct.unpack_from('H', raw_data, index + 1)[0]
-            return cls(name, data_type, ''.join(struct.unpack_from('%dc' % wLen, raw_data, index + 3)))
+            data = b''.join(struct.unpack_from('%dc' % wLen, raw_data, index + 3)).decode('utf-8', 'replace')
+            return cls(name, data_type, data)
         else:
             raise ValueError('Invalid record type')
 
@@ -212,7 +213,7 @@ class OptionalDataRecord(object):
         Raises:
             ValueError if invalid record types are in the list.
         '''
-        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1, '\0').encode('ascii')
+        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1, '\0').encode('utf-8')
 
         if self.typ == PQ_OPT_DATATYPE_FLOAT:
             output_string += struct.pack('<Bf', self.typ, self.data)
@@ -233,7 +234,8 @@ class OptionalDataRecord(object):
             for val in self.data:
                 output_string += struct.pack('I', val)
         elif self.typ == PQ_OPT_DATATYPE_FIXED_LENGTH_STRING:
-            output_string += struct.pack('<BH', self.typ, len(self.data)) + self.data
+            dbytes = self.data.encode('utf-8')
+            output_string += struct.pack('<BH', self.typ, len(dbytes)) + dbytes
         else:
             raise ValueError('Invalid record type.')
 
@@ -358,7 +360,7 @@ class Message(with_metaclass(abc.ABCMeta, object)):
         '''
         msg = self._generateMessageData()
         msg_len = len(msg) + 2 + 1 + len(MAGIC)  # length of message including header
-        header = struct.pack('Hb', msg_len, self._bType) + MAGIC.encode('ascii')
+        header = struct.pack('Hb', msg_len, self._bType) + MAGIC
         return header + msg
 
     @abstractmethod
@@ -762,7 +764,7 @@ class Controller(model.Detector):
         the device via IP sockets
         '''
         logging.info("Starting listening thread...")
-        msg = ''
+        msg = b''
         try:
             while not self._shutdown_flag:
 
@@ -799,7 +801,7 @@ class Controller(model.Detector):
                     logging.error(e)
                 finally:
                     # reset message buffer to receive the next.
-                    msg = ''
+                    msg = b''
 
         except Exception as e:
             # another exception. End running.
