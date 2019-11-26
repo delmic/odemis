@@ -1356,6 +1356,10 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         self._dragging = True
+        # We capture the mouse to follow it even if outside of the viewport/legend
+        # (useful on Windows)
+        if not evt.EventObject.HasCapture():
+            evt.EventObject.CaptureMouse()
 
         pos = evt.Position
         self.drag_init_pos = (self.canvas.pos_x_to_val_x(pos[0]),
@@ -1366,6 +1370,9 @@ class NavigablePlotViewport(PlotViewport):
     def on_drag_end(self, evt):
         """ End the dragging procedure """
         self._dragging = False
+        # Make sure we stop tracking the mouse
+        if evt.EventObject.HasCapture():
+            evt.EventObject.ReleaseMouse()
 
     def on_hlegend_motion(self, evt):
         """ Process mouse motion
