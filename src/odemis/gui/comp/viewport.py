@@ -1291,10 +1291,10 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        span = self.hrange.value[1] - self.hrange.value[0]
+        rng = self.hrange.value
+        span = rng[1] - rng[0]
         zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
         scale = 0.1
-        rng = self.hrange.value
 
         # proportion of zoom_centre
         prop = (zoom_centre - rng[0]) / span
@@ -1326,11 +1326,10 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        span = self.vrange.value[1] - self.vrange.value[0]
-        # zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        rng = self.vrange.value
+        span = rng[1] - rng[0]
         zoom_centre = self.canvas.pos_y_to_val_y(evt.Position[1])
         scale = 0.1
-        rng = self.vrange.value
 
         # proportion of zoom_centre
         prop = (zoom_centre - rng[0]) / span
@@ -1376,15 +1375,17 @@ class NavigablePlotViewport(PlotViewport):
 
         """
         if self._dragging:
-
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
-                self.canvas.pos_y_to_val_y(evt.Position[1]))
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
 
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
+                               v_pos[1] - self.drag_init_pos[1])
 
             # Rescale the horizontal axis
-            (lo, hi) = self.hrange.value
+            rng = self.hrange.value
+            if rng is None:
+                return
+            lo, hi = rng
 
             lo += (self.drag_shift[0] * self._hdrag_scale_factor)
             hi += (self.drag_shift[0] * self._hdrag_scale_factor)
@@ -1407,15 +1408,18 @@ class NavigablePlotViewport(PlotViewport):
 
         """
         if self._dragging:
-
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
-                self.canvas.pos_y_to_val_y(evt.Position[1]))
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
 
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
+                               v_pos[1] - self.drag_init_pos[1])
 
             # Rescale the vertical axis
-            (lo, hi) = self.vrange.value
+            rng = self.vrange.value
+            if rng is None:
+                return
+            lo, hi = rng
+
             lo += (self.drag_shift[1] * self._vdrag_scale_factor)
             hi += (self.drag_shift[1] * self._vdrag_scale_factor)
 
@@ -1440,13 +1444,16 @@ class NavigablePlotViewport(PlotViewport):
             evt.Skip()
             return
 
+        if self.hrange.value is None or self.vrange.value is None:
+            return
+
         v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
                  self.canvas.pos_y_to_val_y(evt.Position[1]))
 
         self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                      v_pos[1] - self.drag_init_pos[1])
+                           v_pos[1] - self.drag_init_pos[1])
 
-        (lo, hi) = self.hrange.value
+        lo, hi = self.hrange.value
         lo += (self.drag_shift[0] * self._hdrag_scale_factor)
         hi += (self.drag_shift[0] * self._hdrag_scale_factor)
         if lo < self.canvas.data_xrange[0]:
@@ -1457,7 +1464,7 @@ class NavigablePlotViewport(PlotViewport):
             lo = self.canvas.display_xrange[0]
         self.hrange.value = (lo, hi)
 
-        (lo, hi) = self.vrange.value
+        lo, hi = self.vrange.value
         lo += (self.drag_shift[1] * self._vdrag_scale_factor)
         hi += (self.drag_shift[1] * self._vdrag_scale_factor)
 
