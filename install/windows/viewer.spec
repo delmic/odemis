@@ -7,15 +7,23 @@ from PyInstaller.utils.hooks import collect_submodules
 
 
 def get_lib_tiff():
-    """ Help PyInstaller find all the lib-tiff files it needs """
-    import os
-
+    """ Help PyInstaller find all the libtiff files it needs """
     print("Looking for libtiff")
     import libtiff
+    if os.path.isfile(libtiff.libtiff_ctypes.lib):
+        tiff_path = os.path.dirname(libtiff.libtiff_ctypes.lib)
+        tiff_inc = os.path.join(tiff_path, '..', 'include', 'tiff.h')
+        if os.path.isfile(tiff_inc):
+            return [
+                ('libtiff.dll', libtiff.libtiff_ctypes.lib, 'DATA'),
+                ('tiff.h', tiff_inc, 'DATA')
+            ]
+
+    # Try to just look around
     tiff_path = os.path.dirname(libtiff.__file__)
 
-    if os.path.isfile(os.path.join(tiff_path, 'libtiff.dll')) and \
-    		os.path.isfile(os.path.join(tiff_path, 'tiff.h')):
+    if (os.path.isfile(os.path.join(tiff_path, 'libtiff.dll')) and
+        os.path.isfile(os.path.join(tiff_path, 'tiff.h'))):
         return [
             ('libtiff.dll', os.path.join(tiff_path, 'libtiff.dll'), 'DATA'),
             ('tiff.h', os.path.join(tiff_path, 'tiff.h'), 'DATA')
@@ -26,11 +34,11 @@ def get_lib_tiff():
 
 def get_cairo_dlls():
     """ Help PyInstaller find all the Cairo files it needs """
-    if sys.version_info[0] >= 3:
-        # only required with python2 version of cairo (py2cairo), not python3 version (pycairo)
+    import cairo
+    cairo_ver = tuple(int(v) for v in cairo.version.split("."))
+    if cairo_ver >= (1, 10, 0):
+        # only required with py2cairo version of cairo (ie, <= 1.8), not pycairo version
         return []
-
-    import os
 
     dlls = [
         "freetype6.dll",

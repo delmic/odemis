@@ -12,7 +12,7 @@ import glob
 import os
 import subprocess
 import sys
-
+import numpy
 
 # To be updated to the current version
 VERSION = "2.10.0"
@@ -20,8 +20,8 @@ VERSION = "2.10.0"
 # the debian package
 
 # Trick from openshot
-# Boolean: running as root?
-ROOT = os.geteuid() == 0
+# Boolean: running as root in Linux?
+ROOT = sys.platform.startswith("linux") and os.geteuid() == 0
 # For Debian packaging it could be a fakeroot so reset flag to prevent execution of
 # system update services for Mime and Desktop registrations.
 # The debian/odemis.postinst script must do those.
@@ -133,6 +133,7 @@ dist = setup(name='Odemis',
              ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
              scripts=scripts,
              data_files=data_files, # not officially in setuptools, but works as for distutils
+             include_dirs=[numpy.get_include()],
             )
 
 if ROOT and dist is not None:

@@ -36,7 +36,7 @@ def add_size_to_version():
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
 
-print("Build OdemisViewer", '.'.join(odemis._get_version().split('-')[:2]))
+print("Build OdemisViewer " + '.'.join(odemis._get_version().split('-')[:2]))
 
 os.chdir(os.path.dirname(__file__) or '.')
 
