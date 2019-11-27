@@ -690,7 +690,7 @@ def main(args):
     if options.logtarget == "stderr":
         handler = logging.StreamHandler()
     else:
-        if os.sys.platform.startswith('linux'):
+        if sys.platform.startswith('linux'):
             # On Linux, we use logrotate, so nothing much to do
             handler = WatchedFileHandler(options.logtarget)
         else:

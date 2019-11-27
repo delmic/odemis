@@ -22,6 +22,7 @@ from __future__ import division
 import logging
 import os
 import struct
+import sys
 import threading
 import time
 import wx
@@ -46,7 +47,7 @@ class Powermate(threading.Thread):
             LookupError: if no Powermate is found
         """
         # TODO: support other OS than Linux?
-        if not os.sys.platform.startswith('linux'):
+        if not sys.platform.startswith('linux'):
             raise NotImplementedError("Powermate only supported on Linux")
 
         # Find the Powermate device (will stop here if nothing is found)
