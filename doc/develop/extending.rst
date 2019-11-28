@@ -27,9 +27,8 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 16.04 (x86 32 or 64 bits)
- * Eclipse + PyDev plug-in + Pylint
- * XRCed (package python-wxtools) for GUI edition
+ * `Ubuntu <http://www.ubuntu.com>`_ 18.04 (x86 32 or 64 bits)
+ * `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
 To *clone* it, type::
@@ -45,8 +44,8 @@ the next section to install Odemis on this operating system.
 Detailed instructions
 ---------------------
 
-Download Ubuntu 16.04 at this address:
-http://www.ubuntu.com/download/desktop/contribute?version=16.04.5&architecture=amd64
+Download Ubuntu 18.04 at this address:
+https://ubuntu.com/download/desktop/thank-you?version=18.04.3&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -88,39 +87,42 @@ like ``sparc-sim`` or ``secom-sim``). For example::
     MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
     
 For some simulated microscopes, you need to set-up the simulated
-acquisition board of the SEM with the following commands::
+acquisition board of the SEM. To automate it at computer start-up, create a
+``/etc/rc.local`` (if not already existing) using ``sudo gedit /etc/rc.local``
+and type the following::
 
-    sudo modprobe comedi comedi_num_legacy_minors=4
-    sudo modprobe comedi_test
-    sudo chmod a+rw /dev/comedi0
-    sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+    #!/bin/sh
 
-To automatically set-up the simulated board at computer start-up, you can copy
-the 4 lines to ``/etc/rc.local``, without the ``sudo`` part.
+    modprobe comedi comedi_num_legacy_minors=4
+    modprobe comedi_test
+    chmod a+rw /dev/comedi0
+    comedi_config /dev/comedi0 comedi_test 1000000,1000000
+
+Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
+it immediately by typing ``/etc/rc.local``.
+
+Install PyCharm
+"""""""""""""""
+`PyCharm <https://www.jetbrains.com/pycharm/>`_ is a good editor for Python code.
+Install it with::
+
+   sudo snap install pycharm-community --classic
+
+In PyCharm, open the ``odemis`` directory.
+In the project settings, change the Python interpreter to the
+*system* interpreter (select either Python 2.7 or 3.6).
 
 Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
-Type the following commands::
+Alternatively, instead of PyCharm, you may prefer Eclipse.
+It has some more advanced debugging functionalities, but everything else is a
+little less polished than PyCharm.
 
-    sudo add-apt-repository ppa:webupd8team/java
-    sudo apt-get update
-    sudo apt-get install oracle-java8-installer
-    cd ~
-    mkdir usr
-    cd usr
-    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/oxygen/1a/eclipse-java-oxygen-1a-linux-gtk-x86_64.tar.gz&mirror_id=17
-    tar xf eclipse-java-oxygen-1a-linux-gtk-x86_64.tar.gz
-    ~/usr/eclipse/eclipse
+Go to the
+`Eclipse website <https://www.eclipse.org/downloads/>`_ to download the installer, uncompress it and run it.
 
-(The last lines are to install Eclipse. Alternatively, you can go to the
-`Eclipse website <https://www.eclipse.org/downloads/>`_, download the installer, uncompress it and run it.)
-
-Go to *Help/Marketplace...*. Search for *PyDev*, and install it.
-Optionally, you can also install *Eclipse Color Theme*, and *ReST Editor*.
-
-In the Eclipse preference window, go to *PyDev/PyLint* and as location of the 
-pylint executable, indicate your lint.py, which is approximately at this place:
-``/usr/bin/pylint``
+Go to *Help/Eclipse Marketplace...*. Search for *PyDev*, and install it.
+Optionally, you can also install the *ReST Editor*.
 
 Optionally, if you want to edit the microscope configuration files (``*.odm.yaml``),
 add a file association with the Python editor. For this, in the preference 
@@ -130,22 +132,18 @@ default editor, add the Python editor.
 Edit Odemis with Eclipse
 """"""""""""""""""""""""
 
-1. Click on *File/New/PyDev Project*.
-
-2. Enter "odemis" as project name
-
-3. Select a directory for project contents: the place where Odemis was downloaded (i.e., ``/home/.../development/odemis``)
-
-4. Select "Create 'src' folder and add it to the PYTHONPATH"
-
-5. Click on Finish
+#. Click on *File/New/PyDev Project*.
+#. Enter "odemis" as project name
+#. Select a directory for project contents: the place where Odemis was downloaded (i.e., ``/home/.../development/odemis``)
+#. Select "Create 'src' folder and add it to the PYTHONPATH"
+#. Click on Finish
 
 Learning Python
 """""""""""""""
 Almost all Odemis is written in Python. If you are not familiar with this
 programming language, it is recommended you first have a look at a tutorial.
 For instance, read 
-`A Crash Course in Python for Scientists <http://nbviewer.ipython.org/gist/rpmuller/5920182>`_.
+`A Crash Course in Python for Scientists <https://nbviewer.jupyter.org/gist/rpmuller/5920182>`_.
 
 Using Git
 """""""""
@@ -160,121 +158,88 @@ Setting up the development environment on Windows
 =================================================
 
 This section describes how to get the development version Odemis GUI working on
-MS Windows, so it can be used as an image viewer. It will also explain how to
+Windows, so it can be used as an image viewer. It will also explain how to
 create an installer for easy distribution.
+
+Getting the Odemis source code
+------------------------------
+Install `git for windows <https://gitforwindows.org/>`_.
+The source code is available via a public git repository: https://github.com/delmic/odemis.
+Open the folder where you want to download the source code (eg, Documents),
+right-click and select *Git Bash here*. Then type::
+
+    git clone https://github.com/delmic/odemis.git
 
 Creating the Odemis environment
 -------------------------------
 
-First we create a base installation of Python 3:
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 2.7 32 bits
+(or Python 3.6, but you will have to adjust some of the commands).
 
-#.  Install the latest Python 3.5 32-bit release
-#.  Install setuptools using instructions from
-    https://pypi.python.org/pypi/setuptools
-#.  Download and run https://raw.github.com/pypa/pip/master/contrib/get-pip.py
-    to install pip
-#.  Use pip to install Virtualenv: ``pip install virtualenv``.
+Open the *Anaconda prompt* and type::
 
-Additionally, virtualenv wrappers might be installed, which will make it a bit
-easier to work with in Windows Powershell or the regular command prompt.
+   cd Documents\odemis
+   conda create -y --name odemisdev python==2.7.16
+   conda activate odemisdev
+   conda config --append channels conda-forge
+   # Edit requirements.txt and remove remove Pyro4
+   conda install --name odemisdev --file requirements.txt
+   conda develop src
+   pip install git+https://github.com/delmic/Pyro4.git
 
-The next step is to create a virtualenv for Odemis and start installing the
-required packages into it.
-``mkvirtualenv odemisdev``
+Download and install `Microsoft Visual C++ Compiler for Python 2.7 <https://www.microsoft.com/download/details.aspx?id=44266>`_.
+If you use Python 3.6, download and install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_. 
 
-Note that the versions indicated below are mostly the latest one at the time of this
-writing. In most cases, newer versions can be used.
+You can finally install pylibtiff, in the same terminal, by typing::
 
-#.  Git clone https://github.com/delmic/odemis.git into the project directory of
-    the Odemis virtualenv.
-#.  Install wheel, so we can install binary packages using pip:
-    ``pip install wheel``.
-#.  Install Python future using ``pip install future``
-#.  Install Yaml using ``pip install PyYAML``
-#.  Install 0MQ using ``pip install pyzmq``
-#.  Install the decorator module using ``pip install decorator``
-#.  Install Pillow, a repackaged version of PIL: ``pip install Pillow``
-#.  Install wxPython using ``pip install wxPython==4.0.6``
-#.  Install Delmic's special version of Pyro4:
-    ``pip install git+https://github.com/delmic/Pyro4.git``
-#.  Install Numpy using ``pip install numpy-1.16.5+mkl-cp35-cp35m-win32.whl``,
-    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
-#.  Install Libtiff using ``pip install libtiff-0.4.2-cp35-cp35m-win32.whl``, downloaded
-    from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
-#.  Install Scipy using ``pip install scipy-1.2.2-cp35-cp35m-win32.whl``, downloaded from
-    http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy
-#.  Install OpenCV using ``pip install opencv_python-3.4.7-cp35-cp35m-win32.whl``,
-    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
-#.  Install H5py using ``pip install h5py-2.10.0-cp35-cp35-win32.whl``, downloaded
-    from http://www.lfd.uci.edu/~gohlke/pythonlibs/#h5py
-#.  Install Matplotlib using ``pip install matplotlib-2.2.4-cp35-cp35m-win32.whl``,
-    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#matplotlib
-#.  Install PyCairo using ``pip install pycairo-1.18.1-cp35-cp35m-win32.whl``,
-    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pycairo
+   pip install libtiff
 
-Building Cython module(s)
--------------------------
+Run Odemis with::
 
-Some parts of Odemis are written with Cython, for optimization reasons. To build these modules on
-MS Windows, first install Visual Studio 2015, which can be found here:
-
-https://www.microsoft.com/en-us/download/details.aspx?id=48159
-
-Now copy these files:
-``rc.exe`` and
-``rc.dll``
-
-from ``C:\Program Files (x86)\Windows Kits\8.1\bin\x86``
-
-to
-``C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin``
+   python src\odemis\gui\main.py --standalone --log-level 2
+   # or
+   python install\windows\odemis_viewer.py
 
 
-This is a simple compiler distribution from Microsoft, specifically made for Python.
-You also need to install Cython using ``pip install Cython-0.29.13-cp35-cp35m-win32.whl``,
-downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#cython
-After installation, use the `setup.py` file from the `install/windows` folder to
-build the `*.pyd` files:
+Some parts of Odemis are written with Cython, for optimization reasons.
+To build these modules on Windows run::
 
-``python setup.py build_ext --inplace``
-
-**IMPORTANT**: It will be necessary to update the `productdir` path in the `setup.py` file!
-
-Installing PyInstaller
-----------------------
-
-#. Add the Odemis root path to the virtualenv:
-   ``add2virtualenv <path to Odemis>\src``.
-   Alternatively, you can modify the `virtualenv_path_extensions.pth` file.
-#. Install PyWin32: ``pywin32-224-cp35-cp35m-win32.whl``,
-   from https://www.lfd.uci.edu/~gohlke/pythonlibs/#pywin32
-#. Install PyInstaller: ``pip install pyinstaller`` or
-   ``pip install git+git://github.com/pyinstaller/pyinstaller.git@develop`` if pyzmq is causing is
-   causing problems.
-#. Install MSVCP90.dll redistribution by running `vcredist_x86.exe`, otherwise
-   Pyinstaller won't be able to find and package it. It can be downloaded from
-   https://www.microsoft.com/en-us/download/details.aspx?id=29 .
+   python setup.py build_ext --inplace
 
 Installing arpolarimetry
-------------------------
+""""""""""""""""""""""""
 
-The arpolarimetry library is internal to Delmic and provides some supplementary polarized AR projections. Everything else will work fine without it, so for a regular Windows installation which does not require this functionality, this is not necessary. If you have access to the Delmic Bitbucket repository, do the following
+The ``arpolarimetry`` library is internal to Delmic and provides some supplementary polarized AR projections. Everything else will work fine without it, so for a regular Windows installation which does not require this functionality, this is not necessary.
+If you have access to the Delmic Bitbucket repository, do the following::
 
-#. ``git clone https://<YOUR_NAME>@bitbucket.org/delmic/arpolarimetry.git``
-#. Install: ``python setup.py``
+   cd ..
+   git clone https://<YOUR_NAME>@bitbucket.org/delmic/arpolarimetry.git
+   cd arpolarimetry
+   python setup.py
 
 
-Building the stand-alone Odemis viewer
---------------------------------------
+Building Odemis Viewer and the installer
+----------------------------------------
 
-``pyinstaller -y viewer.spec``
+Install `NSIS <https://nsis.sourceforge.io/Download>`_.
 
-Building Windows installer
---------------------------
+Open the *Anaconda prompt* and make sure you are in the Odemis folder,
+with the *odemisdev* Python environment::
 
-Install Nsis and run:
+   cd Documents\odemis
+   conda activate odemisdev
 
-``"C:\Program Files (x86)\NSIS\makensis" setup.nsi``
+To build just the viewer executable::
+
+   pyinstaller -y install\windows\viewer.spec
+
+To build the installer::
+
+   "C:\Program Files (x86)\NSIS\makensis" setup.nsi
+
+As a shortcut to build everything::
+
+   python install\windows\build.py
 
 
 Setting up a data analysis environment on Windows
@@ -313,8 +278,7 @@ scripts, or via a command-line interface.
 #. Install using ``pip install libtiff-0.4.2-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 
-#.  Install OpenCV using ``pip install opencv_python-2.4.13.5-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
-    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
+#.  Install OpenCV using ``conda install opencv -c conda-forge``.
 
 #. Download the ZIP file of the latest release of Odemis from:
    https://github.com/delmic/odemis/releases
@@ -322,14 +286,8 @@ scripts, or via a command-line interface.
 #. Extract the Odemis release into ``C:\Program Files\Odemis`` (or any folder of
    your preference).
 
-#. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
-   ``C:\Users\YOURUSERNAME\AppData\Local\Continuum\anaconda2\Lib\site-packages``
-   (if you cannot find it, check using the console in Spyder with ``import numpy``,
-   then ``numpy.__file__``). Make sure the file does *not* have a `.txt`
-   extension (which the File Explorer automatically hides). Open that file, type
-   the full path to the Odemis source code, such as: ``C:\Program Files\Odemis\src\``,
-   and save the file.
-   Note this can be done automatically by typing in a terminal ``conda-develop C:\Program Files\Odemis\src\``.
+#. Open an *Anaconda Prompt* and type ``conda develop C:\Program Files\Odemis\src``.
+   (ie, the folder where you've extracted Odemis followed by ``src``)
 
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 To read an acquisition file you can use code such as:
@@ -379,7 +337,6 @@ The Odemis backend can be started without launching the GUI by using the followi
     odemis-start --nogui
 
 
-
 Starting the Odemis-Viewer
 --------------------------
 
@@ -387,7 +344,6 @@ The Odemis Viewer runs without a microscope file specified and is a useful tool 
 analysis on previously acquired data sets. The Odemis viewer can be started by using the following command::
 
     odemis-gui --standalone
-
 
 
 Automating the acquisition of data
