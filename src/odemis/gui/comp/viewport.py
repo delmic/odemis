@@ -41,13 +41,12 @@ from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
+    release_mouse_on_drag
 from odemis.gui.util.raster import rasterize_line
-
 from odemis.model import MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_S0, MD_POL_S1, \
     MD_POL_S2, MD_POL_S3, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_EPHI, MD_POL_DOLP, MD_POL_DOP, \
     MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N, MD_POL_S3N, MD_POL_S2N, MD_POL_S1N
-
 from odemis.util import units, spectrum, peak
 import wx
 
@@ -1356,10 +1355,7 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         self._dragging = True
-        # We capture the mouse to follow it even if outside of the viewport/legend
-        # (useful on Windows)
-        if not evt.EventObject.HasCapture():
-            evt.EventObject.CaptureMouse()
+        capture_mouse_on_drag(evt.EventObject)
 
         pos = evt.Position
         self.drag_init_pos = (self.canvas.pos_x_to_val_x(pos[0]),
@@ -1370,9 +1366,7 @@ class NavigablePlotViewport(PlotViewport):
     def on_drag_end(self, evt):
         """ End the dragging procedure """
         self._dragging = False
-        # Make sure we stop tracking the mouse
-        if evt.EventObject.HasCapture():
-            evt.EventObject.ReleaseMouse()
+        release_mouse_on_drag(evt.EventObject)
 
     def on_hlegend_motion(self, evt):
         """ Process mouse motion

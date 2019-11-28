@@ -144,6 +144,42 @@ def wxlimit_invocation(delay_s):
     return wxwrapper
 
 
+if sys.platform.startswith('linux'):
+    # On Ubuntu (ie, with wxPython/GTK), it's actually not needed to capture the
+    # mouse if the button is down, as it is followed properly. In addition on
+    # Linux the capture is very "strong" and captures it for the screen, it's
+    # nice to avoid doing it if possible.
+    # On the contrary, on Windows it's necessary to capture it in order to know
+    # its movement (and button up) outside of the widget.
+
+    def capture_mouse_on_drag(obj):
+        return
+
+    def release_mouse_on_drag(obj):
+        return
+
+else:
+
+    def capture_mouse_on_drag(obj):
+        """
+        Safe(r) mouse capture, for keeping track of dragging movement.
+        """
+        if obj.HasCapture():
+            logging.warning("Mouse was already captured, so not capturing it again")
+            return
+
+        obj.CaptureMouse()
+
+    def release_mouse_on_drag(obj):
+        """
+        Releases the mouse when acquired via capture_mouse_on_drag()
+        """
+        if not obj.HasCapture():
+            logging.info("Mouse was not captured, so not releasing it")
+            return
+
+        obj.ReleaseMouse()
+
 # Path functions
 
 def get_home_folder():
