@@ -26,6 +26,7 @@ data streams coming from the microscope.
 from __future__ import division
 
 from builtins import str
+from past.builtins import basestring
 from decorator import decorator
 import logging
 from odemis import acq, gui
@@ -42,7 +43,6 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, 
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 import wx
-
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 
@@ -987,16 +987,23 @@ class StreamPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
+        # Convert value object to str (unicode) iif necessary.
+        # unicode() (which is str() from Python3) fails in Python2 if argument
+        # is bytes with non-ascii characters.
+        # => If value is already bytes or unicode, just pass it as-is to wx.TextCtrl.
+        if not isinstance(value, basestring):
+            value = str(value)
+
         if value is not None:
             if selectable:
-                value_ctrl = wx.TextCtrl(self._panel, value=str(value),
+                value_ctrl = wx.TextCtrl(self._panel, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                                   flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
-                value_ctrl = wx.StaticText(self._panel, label=str(value))
+                value_ctrl = wx.StaticText(self._panel, label=value)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
         else:
