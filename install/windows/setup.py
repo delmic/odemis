@@ -10,37 +10,17 @@ This file is also automatically called from the Odemis Viewer Build script
 
 """
 
-from glob import glob
-import os
-from distutils.core import setup
-from distutils import msvc9compiler
-
-import numpy as np
 from Cython.Build import cythonize
+from distutils import msvc9compiler
+from distutils.core import setup
+import glob
+import numpy
+import os
 
-os.chdir(os.path.join("../../src", os.path.dirname(__file__)))
-
-# The default function in distutils has trouble finding the vcvarsall.bat file, so we override
-# the function responsible for that
-
-def find_vcvarsall(_=None):
-    from os.path import expanduser
-    home = expanduser("~")
-
-    # Adjust the following variable as needed.
-    productdir = "%s/AppData/Local/Programs/Common/Microsoft/Visual C++ for Python/9.0" % home
-    vcvarsall = os.path.join(productdir, "vcvarsall.bat")
-    if os.path.isfile(vcvarsall):
-        print("VCvarsall.bat found")
-        return vcvarsall
-    else:
-        print("Vcvarsall.bat not found. Update the productdir variable in setup.py?")
-        return None
-
-msvc9compiler.find_vcvarsall = find_vcvarsall
+os.chdir(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 setup(
     name='ImageFast',
-    include_dirs=[np.get_include()],
-    ext_modules=cythonize(glob(os.path.join("odemis\\util\\*.pyx"))),
+    ext_modules=cythonize(glob.glob(os.path.join("odemis", "util", "*.pyx"))),
+    include_dirs=[numpy.get_include()],
 )

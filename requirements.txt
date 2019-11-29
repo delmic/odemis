@@ -6,14 +6,14 @@ h5py==2.5.0
 libtiff>=0.4.2
 matplotlib>=1.4.3,<3.0
 numpy>=1.11.0,<1.17
-opencv-python>=2.4.11,<4.0
+opencv>=2.4.11,<4.0
 Pillow>=3.2.0
 pycairo>=1.10.0
 PyInstaller==3.5
 psutil>=4.3.0
-Pyro4==4.18
 PyYAML>=3.11
 pyzmq>=15.2.0
 scipy>=0.15.1
 wxPython>=4.0.4
 setuptools==39.2.0
+Pyro4==4.18
