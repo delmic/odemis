@@ -41,13 +41,12 @@ from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
+    release_mouse_on_drag
 from odemis.gui.util.raster import rasterize_line
-
 from odemis.model import MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_S0, MD_POL_S1, \
     MD_POL_S2, MD_POL_S3, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_EPHI, MD_POL_DOLP, MD_POL_DOP, \
     MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N, MD_POL_S3N, MD_POL_S2N, MD_POL_S1N
-
 from odemis.util import units, spectrum, peak
 import wx
 
@@ -1291,10 +1290,10 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        span = self.hrange.value[1] - self.hrange.value[0]
+        rng = self.hrange.value
+        span = rng[1] - rng[0]
         zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
         scale = 0.1
-        rng = self.hrange.value
 
         # proportion of zoom_centre
         prop = (zoom_centre - rng[0]) / span
@@ -1326,11 +1325,10 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        span = self.vrange.value[1] - self.vrange.value[0]
-        # zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        rng = self.vrange.value
+        span = rng[1] - rng[0]
         zoom_centre = self.canvas.pos_y_to_val_y(evt.Position[1])
         scale = 0.1
-        rng = self.vrange.value
 
         # proportion of zoom_centre
         prop = (zoom_centre - rng[0]) / span
@@ -1357,6 +1355,7 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         self._dragging = True
+        capture_mouse_on_drag(evt.EventObject)
 
         pos = evt.Position
         self.drag_init_pos = (self.canvas.pos_x_to_val_x(pos[0]),
@@ -1367,6 +1366,7 @@ class NavigablePlotViewport(PlotViewport):
     def on_drag_end(self, evt):
         """ End the dragging procedure """
         self._dragging = False
+        release_mouse_on_drag(evt.EventObject)
 
     def on_hlegend_motion(self, evt):
         """ Process mouse motion
@@ -1376,15 +1376,17 @@ class NavigablePlotViewport(PlotViewport):
 
         """
         if self._dragging:
-
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
-                self.canvas.pos_y_to_val_y(evt.Position[1]))
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
 
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
+                               v_pos[1] - self.drag_init_pos[1])
 
             # Rescale the horizontal axis
-            (lo, hi) = self.hrange.value
+            rng = self.hrange.value
+            if rng is None:
+                return
+            lo, hi = rng
 
             lo += (self.drag_shift[0] * self._hdrag_scale_factor)
             hi += (self.drag_shift[0] * self._hdrag_scale_factor)
@@ -1407,15 +1409,18 @@ class NavigablePlotViewport(PlotViewport):
 
         """
         if self._dragging:
-
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
-                self.canvas.pos_y_to_val_y(evt.Position[1]))
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
 
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
+                               v_pos[1] - self.drag_init_pos[1])
 
             # Rescale the vertical axis
-            (lo, hi) = self.vrange.value
+            rng = self.vrange.value
+            if rng is None:
+                return
+            lo, hi = rng
+
             lo += (self.drag_shift[1] * self._vdrag_scale_factor)
             hi += (self.drag_shift[1] * self._vdrag_scale_factor)
 
@@ -1440,13 +1445,16 @@ class NavigablePlotViewport(PlotViewport):
             evt.Skip()
             return
 
+        if self.hrange.value is None or self.vrange.value is None:
+            return
+
         v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
                  self.canvas.pos_y_to_val_y(evt.Position[1]))
 
         self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                      v_pos[1] - self.drag_init_pos[1])
+                           v_pos[1] - self.drag_init_pos[1])
 
-        (lo, hi) = self.hrange.value
+        lo, hi = self.hrange.value
         lo += (self.drag_shift[0] * self._hdrag_scale_factor)
         hi += (self.drag_shift[0] * self._hdrag_scale_factor)
         if lo < self.canvas.data_xrange[0]:
@@ -1457,7 +1465,7 @@ class NavigablePlotViewport(PlotViewport):
             lo = self.canvas.display_xrange[0]
         self.hrange.value = (lo, hi)
 
-        (lo, hi) = self.vrange.value
+        lo, hi = self.vrange.value
         lo += (self.drag_shift[1] * self._vdrag_scale_factor)
         hi += (self.drag_shift[1] * self._vdrag_scale_factor)
 

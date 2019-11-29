@@ -134,7 +134,6 @@ Graphical data is drawn using the following sequence of method calls:
 
 from __future__ import division
 
-from future.utils import with_metaclass
 from abc import abstractmethod
 import cairo
 from decorator import decorator
@@ -144,14 +143,14 @@ from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
+    release_mouse_on_drag
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
 import os
 import sys
 import wx
-
 from wx.lib import wxcairo
 
 
@@ -363,30 +362,15 @@ class BufferedCanvas(wx.Panel):
 
     def on_mouse_down(self):
         """ Perform actions common to both left and right mouse button down
-
-        .. note:: A bug prevents the cursor from changing in Ubuntu after the
-            mouse is captured.
-
         """
-        # Note: on Ubuntu (ie, with wxPython3/GTK2), it's actually not needed
-        # to capture the mouse. However, on Windows it's necessary to capture it
-        # in order to know its movement (and button up) outside of the widget. 
-        if not self.HasCapture():
-            self.CaptureMouse()
+        capture_mouse_on_drag(self)
 
         self.SetFocus()
 
     def on_mouse_up(self):
         """ Perform actions common to both left and right mouse button up
-
-        .. note:: A bug prevents the cursor from changing in Ubuntu after the
-            mouse is captured.
-
         """
-
-        if self.HasCapture():
-            self.ReleaseMouse()
-
+        release_mouse_on_drag(self)
         self.reset_dynamic_cursor()
 
     @ignore_if_disabled
