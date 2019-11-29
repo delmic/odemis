@@ -1,3 +1,14 @@
+odemis (2.10.4-1) xenial; urgency=medium
+
+  * New version: 2.10.4
+  * Main bug fixes:
+   - "Save snapshot" failed if pyramidal (ie, large) data was loaded
+   - Opening HDF5 files with non ascii characters or uppercase extension failed
+   - TMCM driver failed to start in the unlikely case the controller has a reference switch active
+   - Fix dragging of the spectrum getting sometimes stuck on Windows
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 29 Nov 2019 11:12:35 +0100
+
 odemis (2.10.3-1) xenial; urgency=medium
 
   * New version: 2.10.3
