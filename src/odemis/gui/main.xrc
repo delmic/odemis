@@ -2065,7 +2065,7 @@
                         </object>
                         <flag>wxEXPAND</flag>
                         <cellpos>5,2</cellpos>
-                        </object>>
+                        </object>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_streakcam">
                             <icon>img/icon/ico_fib.png</icon>
@@ -3709,7 +3709,6 @@
                                 <size>-1,10</size>
                                 <range>100</range>
                                 <value>0</value>
-                                <bg>#7C9FAD</bg>
                                 <style>wxGA_SMOOTH</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -4527,7 +4526,6 @@
                                   <size>-1,10</size>
                                   <range>100</range>
                                   <value>0</value>
-                                  <bg>#333333</bg>
                                   <style>wxGA_SMOOTH</style>
                                   <XRCED>
                                     <assign_var>1</assign_var>
@@ -4959,7 +4957,6 @@
                 <size>-1,10</size>
                 <range>100</range>
                 <value>50</value>
-                <bg>#333333</bg>
                 <hidden>1</hidden>
                 <style>wxGA_SMOOTH</style>
                 <XRCED>
@@ -5209,7 +5206,6 @@
                         <size>-1,8</size>
                         <range>100</range>
                         <value>0</value>
-                        <bg>#333333</bg>
                         <style>wxGA_SMOOTH</style>
                         <XRCED>
                           <assign_var>1</assign_var>
