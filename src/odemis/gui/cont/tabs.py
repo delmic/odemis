@@ -4314,6 +4314,8 @@ class TabBarController(object):
         self._enabled_tabs = set()  # tabs which were enabled before starting acquisition
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
+        self._tabs_fixed_big_text = set()  # {str}: set of tab names which have been fixed
+
     def get_tabs(self):
         return self._tabs.choices
 
@@ -4389,6 +4391,18 @@ class TabBarController(object):
         tab.Show()
         self.main_frame.Layout()
 
+        # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
+        # the StaticText's not shown at init to be initialized with a size as if
+        # the font was standard size. So if the font is big, the text is cropped.
+        # See: https://github.com/wxWidgets/Phoenix/issues/1452
+        # https://trac.wxwidgets.org/ticket/16088
+        # => Force resize, on the first time the tab is shown
+        if tab.name not in self._tabs_fixed_big_text:
+            self._fix_big_static_text(tab.panel)
+            # Eventually, update the size of the parent, based on everything inside it
+            wx.CallLater(100, tab.panel.Layout)
+            self._tabs_fixed_big_text.add(tab.name)
+
     def terminate(self):
         """ Terminate each tab (i.e., indicate they are not used anymore) """
 
@@ -4416,3 +4430,11 @@ class TabBarController(object):
 
         evt.Skip()
 
+    def _fix_big_static_text(self, root):
+        # Force re-calculate the size of all StaticTexts contained in the object
+        for c in root.GetChildren():
+            if isinstance(c, wx.StaticText):
+                logging.debug("Fixing size of the text %s", c.Label)
+                c.InvalidateBestSize()
+            elif isinstance(c, wx.Window):
+                self._fix_big_static_text(c)
