@@ -418,7 +418,7 @@ class MenuController(object):
         # info.Translators = ['???']
 
         if DyeDatabase:
-            info.Developers += ["", "Dye database from http://fluorophores.org"]
+            info.Developers += ["", "Dye database from Fluorophores.org http://fluorophores.org"]
             info.License += DYE_LICENCE
 
         # Show the plugins
