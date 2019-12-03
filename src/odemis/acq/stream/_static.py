@@ -27,18 +27,18 @@ from __future__ import division
 
 from past.builtins import basestring, long
 import collections
-import logging
+import copy
 import gc
+import logging
 import math
 import numpy
-import copy
-from odemis import model
+from odemis import model, util
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, VigilantAttribute, MD_POL_S0
 from odemis.util import img, conversion, spectrum, find_closest, almost_equal
 import threading
-import weakref
 import time
+import weakref
 
 from ._base import Stream, POL_POSITIONS_RESULTS, POL_POSITIONS
 
@@ -397,7 +397,7 @@ class StaticARStream(StaticStream):
 
                 sempositions.add(sempos_cur)
                 if MD_POL_MODE in d.metadata:
-                    polpositions.add(d.metadata.get(MD_POL_MODE))
+                    polpositions.add(d.metadata[MD_POL_MODE])
 
             except KeyError:
                 logging.info("Skipping DataArray without known position")
@@ -422,8 +422,18 @@ class StaticARStream(StaticStream):
 
         # check if any polarization analyzer data, (None) == no analyzer data (pol)
         if polpositions:
+            # Check that for every position, all the polarizations are available,
+            # as the GUI expects all the combinations possible, and weird errors
+            # will happen when one is missing.
+            for pos in sempositions:
+                for pol in polpositions:
+                    if pos + (pol,) not in self._pos:
+                        logging.warning("Polarization data is not complete: missing %s,%s/%s",
+                                        pos[0], pos[1], pol)
+
             # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
-            self.polarization = model.VAEnumerated(next(iter(self._pos.keys()))[-1], choices=polpositions)
+            current_pol = util.sorted_according_to(polpositions, POL_POSITIONS)[0]
+            self.polarization = model.VAEnumerated(current_pol, choices=polpositions)
 
             # Add a polarimetry VA containing the polarimetry image results.
             # Note: Polarimetry analysis are only possible if all 6 images per ebeam pos exist.
