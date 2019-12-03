@@ -136,7 +136,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
       device: "fake",
-      image: "ar-example-input.h5", # only for simulator
+      image: "sparc-ar.h5", # only for simulator
       transp: [1, -2],
     },
 }
