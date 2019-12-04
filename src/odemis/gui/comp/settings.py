@@ -23,14 +23,12 @@ from __future__ import division
 
 from builtins import str
 from past.builtins import basestring
-import os
 import wx
 from decorator import decorator
 
 import odemis.gui as gui
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
-from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, Slider
 from odemis.gui.comp.text import UnitIntegerCtrl, UnitFloatCtrl
@@ -141,14 +139,12 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
-        # Convert value object to str if necessary
-        # str() fails in python2 if argument is bytes with non-ascii characters. If value is
-        # already bytes or unicode, just pass it to wx.TextCtrl.
+        # Convert value object to str (unicode) iif necessary.
+        # unicode() (which is str() from Python3) fails in Python2 if argument
+        # is bytes with non-ascii characters.
+        # => If value is already bytes or unicode, just pass it as-is to wx.TextCtrl.
         if not isinstance(value, basestring):
-            try:
-                value = str(value)
-            except:
-                raise ValueError("Cannot display object %s of type %s." % (value, type(value)))
+            value = str(value)
 
         if value is not None:
             if selectable:
