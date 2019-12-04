@@ -1860,6 +1860,11 @@ class CLRelController(Controller):
         self._pos_lock = {}  # acquire to read/write position
         self._slew_rate = {}  # in s, copy of 0x7000002: slew rate, for E-861
 
+        # Referencing:
+        # When setting the reference mode (SetReferenceMode) with RON disabled ("RON", False),
+        # the axes are not actually referenced. It needs to be followed by SetPosition() call, which assigns a value to
+        # the current position. After that command, the axis will report to be referenced, though it is actually
+        # not (frf? returns True). This allows to do absolute/relative moves without referencing.
         self._referenced = False   # tracking if the axis is actually referenced and not only pretending to be
 
         for a, cl in axes.items():
@@ -1895,13 +1900,14 @@ class CLRelController(Controller):
             #    That typically happens with the E-861. It avoids going through
             #    the piezo "relax" procedure that takes time (4 x slew rate) and
             #    causes up to 100 nm move. It also allows to monitor the position.
+            if suspend_mode == "full" and 0x56 not in self._avail_params:
+                logging.warning("Controller %d cannot turn off sensor so suspend_mode full is not useful", address)
+                suspend_mode = "read"
             if suspend_mode == "full":
                 self._servo_suspend = True
                 if self._auto_suspend:
                     logging.info("Will turn off servo when axis not in use")
-                    if 0x56 not in self._avail_params:  # Parameter to control encoder power
-                        logging.warning("Controller %d cannot turn off sensor so suspend_mode full is not useful",
-                                        address)
+
             elif suspend_mode == "read":
                 self._servo_suspend = False
                 # Save the "real" PID values, from the EEPROM, so that even if
@@ -1924,22 +1930,15 @@ class CLRelController(Controller):
 
             self.canUpdate[a] = True
 
-            # TODO:
-            # * if not referenced => disable reference mode to be able to
-            # move relatively (until referencing happens). Use the position as
-            # is, so that if no referencing ever happens, at least the position
-            # is correct as long as the controller is powered.
-            # * if referenced => believe it and stay in this mode.
-
             # At start (and unreferenced) the controller was either already
             # powered on from a previous session or has just been turned on. In
             # any case, the current position is the most likely one: either it
             # has moved with the encoder off, and the position is entirely
             # unknown anyway, or it hasn't moved and the position is correct.
             # TODO: a slightly more likely position would be to reuse the last
-            # position of the previous session. That would basically involve
-            # storing in a file the current position during terminate(), and
-            # reading it back at init.
+            #  position of the previous session. That would basically involve
+            #  storing in a file the current position during terminate(), and
+            #  reading it back at init.
 
             # To know the actual range width, one could look at params 0x17 + 0x2f
             # (ie, distance between limit switches and origin).
@@ -1967,18 +1966,6 @@ class CLRelController(Controller):
             t.daemon = True
             self._encoder_mng[a] = t
             t.start()
-
-            # TODO: Check if there was any need to send the RON command via SetReferenceMode in the startServo method.
-            #  @Eric was there any reason for this? It seems to work fine in the tests without.
-            # Referencing:
-            # When sending the 'RON' command with False (RON disabled), the axes are not actually referenced.
-            # When setting a position (SetPosition()) with RON disabled ("RON", False), the axis will report
-            # to be referenced, though it is actually not. This allows to move without referencing beforehand.
-            # To allow (absolute) moves, even if it's not actually referenced: pass False
-            # To do proper referencing, check if has reference limits and/or switch: pass True
-            # TODO Eric: Is there a situation where we explicitly want to pass False here even
-            #  if we have a reference switch/limits?
-            #  Is there any controller operated in closed-loop but without ref sensor?
 
         self._prev_speed_accel = ({}, {})
 
@@ -2021,7 +2008,7 @@ class CLRelController(Controller):
             self._referenced = False
             self.SetServo(axis, False)
             # This can only be done if the servo is turned off
-            if 0x56 in self._avail_params:
+            if self._servo_suspend:
                 # Store the position before turning off the encoder because while
                 # turning off the encoder, some signal will be received which will
                 # make the controller believe it has moved.
@@ -2039,24 +2026,22 @@ class CLRelController(Controller):
         with self._pos_lock[axis]:
             # Param 0x56 is only for C-867 and newer E-861 and allows to control encoder power
             # Param 0x7000002 is only for E-861 and indicates time to start servo
-            if 0x56 in self._avail_params:
+            pos = None
+            if self._servo_suspend:
                 pos = self.GetPosition(axis)
                 # Warning: turning on the encoder can reset the USB connection
                 # (if it's on this very controller)
                 # Turning on the encoder resets the current position
                 self.SetParameter(axis, 0x56, 1, check=False)  # 1 = on
                 time.sleep(2)  # 2 s seems long enough for the encoder to initialise
+
             self.SetServo(axis, True)
-            if self.isReferenced(axis) is None:  # no referencing possible
-                # To allow (relative/absolute) moves, even if it's not actually referenced
-                # Needs to be followed by SetPosition call
-                self.SetReferenceMode(axis, False)
-            else:
-                # TODO I think this line is not necessary. It seemed to work fine without.
-                self.SetReferenceMode(axis, True)
-            # FIXME if this line is not executed, it will also not pretend to be referenced and no moving possible
-            if 0x56 in self._avail_params:
-                self.SetPosition(axis, pos)
+
+            self.SetReferenceMode(axis, False)
+            if pos is None:
+                pos = self.GetPosition(axis)
+            self.SetPosition(axis, pos)
+
             if axis in self._slew_rate:
                 # According to the documentation, changing mode can take up to
                 # 4 times the "slew rate". If you don't wait that time before
@@ -2086,16 +2071,17 @@ class CLRelController(Controller):
             with self.busacc.ser_access:  # To avoid garbage when using IP com
                 if self.IsOnTarget(axis, check=False):
                     # Force PID to 0, 0, 0
+                    logging.debug("Suspending servo of axis %s/%s", self.address, axis)
+                    self.SetParameter(axis, 1, 0, check=False)  # P
+                    self.SetParameter(axis, 2, 0, check=False)  # I
+                    self.SetParameter(axis, 3, 0, check=False)  # D
                     # Normally the servo should be on, but in case of error,
                     # it might have been automatically stopped.
-                    logging.debug("Suspending servo of axis %s/%s", self.address, axis)
                     if not self.GetServo(axis):
                         logging.info("Servo of axis %s/%s was off, need to restart it",
                                      self.address, axis)
                         self._startServo(axis)
-                    self.SetParameter(axis, 1, 0, check=False)  # P
-                    self.SetParameter(axis, 2, 0, check=False)  # I
-                    self.SetParameter(axis, 3, 0, check=False)  # D
+
                     try:
                         self.checkError()
                     except PIGCSError as ex:
@@ -2161,8 +2147,8 @@ class CLRelController(Controller):
                     if not self.IsOnTarget(axis, check=False):
                         logging.warning("Axis %s/%s is at %g, far from target %g",
                                         self.address, axis, pos, tpos)
-                    distance = pos - tpos
-                    self.MoveRel(axis, distance)
+
+                    self.MoveAbs(axis, tpos)
 
                 try:
                     self.checkError()
@@ -2285,9 +2271,9 @@ class CLRelController(Controller):
         self._acquireAxis(axis)
 
         # TODO: instead of handling it ad-hoc for each series of message, put
-        # the trick in the bus accesser: if the last command was an order to
-        # another controller, first force a ERR? on that previous controller,
-        # and then send the requested query.
+        #  the trick in the bus accesser: if the last command was an order to
+        #  another controller, first force a ERR? on that previous controller,
+        #  and then send the requested query.
 
         # The E861 over the network controller send (sometimes) garbage if
         # several controllers get an OSM command without any query in between.
@@ -2325,14 +2311,6 @@ class CLRelController(Controller):
             # We trust the caller that it knows it's in range
             # (worst case the hardware will not go further)
 
-            # TODO remove this code
-            # Absolute move is only legal if already referenced.
-            # if not self.IsReferenced(axis):  # TODO: cache
-            #     # MoveRel adds to the _target_ position (matters in case of move update)
-            #     tpos = self.getTargetPosition(axis)
-            #     distance = position - tpos
-            #     self.MoveRel(axis, distance / self._upm[axis])
-            # else:
             self.MoveAbs(axis, position / self._upm[axis])
 
             old_pos = self.getPosition(axis)
@@ -2384,27 +2362,25 @@ class CLRelController(Controller):
 
         return False
 
-
         # TODO: handle the fact that if the stage reaches the physical limit without knowing,
-        # the move will fail with:
-        # PIGCSError: PIGCS error -1024: Motion error: position error too large, servo is switched off automatically
-        # => put back the servo if necessary
-        # => keep checking for errors at the same time as ONT?
-
+        #  the move will fail with:
+        #  PIGCSError: PIGCS error -1024: Motion error: position error too large, servo is switched off automatically
+        #  => put back the servo if necessary
+        #  => keep checking for errors at the same time as ONT?
 
         # FIXME: it seems that on the C867 if the axis is stopped while moving, isontarget()
-        # will sometimes keep saying it's not reached forever. However, the documentation
-        # says that the target position is set to the current position after a
-        # stop (to avoid this very problem). On E861 it does update the target position fine.
-        # Need to investigate
-        # MOV 1 1.1
-        # MOV? 1  # read target pos
-        # time.sleep(0.01)
-        # ONT? 1  # should be false
-        # STP # also try HLT
-        # MOV? 1  # should be new pos
-        # POS? 1  # Should be very close
-        # ONT? 1 # Should be true at worst a little after the settle time window
+        #  will sometimes keep saying it's not reached forever. However, the documentation
+        #  says that the target position is set to the current position after a
+        #  stop (to avoid this very problem). On E861 it does update the target position fine.
+        #  Need to investigate
+        #  MOV 1 1.1
+        #  MOV? 1  # read target pos
+        #  time.sleep(0.01)
+        #  ONT? 1  # should be false
+        #  STP # also try HLT
+        #  MOV? 1  # should be new pos
+        #  POS? 1  # Should be very close
+        #  ONT? 1 # Should be true at worst a little after the settle time window
 
     def stopMotion(self):
         super(CLRelController, self).stopMotion()
@@ -2418,23 +2394,14 @@ class CLRelController(Controller):
         """
         self._acquireAxis(axis)
 
-        # Note: setting position only works if ron is disabled. It's possible
-        # also to indirectly set it after referencing, but then it will conflict
+        # Note: Setting position only works if ron is disabled when not referencable.
+        # It's possible also to indirectly set it after referencing, but then it will conflict
         # with TMN/TMX and some correct moves will fail.
-        # TODO Tested to set a position after referencing and it worked fine. What
-        #  exactly would I expect to not work?
-
-        # So referencing could look like:  TODO remove these lines when ref implemented?
-        # ron 1 1
-        # frf -> go home and now know the position officially
-        # orig_pos = pos?
 
         if self._hasRefSwitch[axis]:
-            # self.SetReferenceMode(axis, True)  # TODO think it is unnecessary
+            self.SetReferenceMode(axis, True)
             self.ReferenceToSwitch(axis)
             # FIXME: If referencing fails, this flag might be True though it should be not.
-            while self.isMoving(): # wait until move is done  @Eric does this work? or use future for ReferencetoSwitch call?
-                time.sleep(0.01)
             self._referenced = True
         elif self._hasLimitSwitches[axis]:
             self._referenced = False
@@ -2459,14 +2426,19 @@ class CLRelController(Controller):
         """
         if not self._hasRefSwitch[axis] and not self._hasLimitSwitches[axis]:
             return None
-        else:
-            # Check flag referenced and HW report the same status for referencing
-            if self.IsReferenced(axis) == self._referenced:
-                return self._referenced
+
+        # Check flag referenced and HW report the same status for referencing
+        if self.IsReferenced(axis) != self._referenced:
+            if self._referenced:
+                logging.warning("Axis %d/%s is not referenced, although it was expected to be.",
+                                self.address, axis)
+                self._referenced = False
             else:
-                logging.warning("Axis reports being referenced though it is not.")
-                self._referenced = False  # make sure this variable is False if this happens
-                return False
+                # The controller always thinks it's referenced, because we use SetReferenceMode()
+                # to allow moves even if not referencable.
+                logging.debug("Axis %d/%s is not referenced yet", self.address, axis)
+
+        return self._referenced
 
 
 class OLController(Controller):
@@ -3134,7 +3106,7 @@ class Bus(model.Actuator):
                     self.referenced._value[a] = False
                     controller.startReferencing(channel)
                     self._waitEndMove(future, (a,), time.time() + 100)  # block until it's over
-                    self.referenced._value[a] = True
+                    self.referenced._value[a] = controller.isReferenced(channel)
             except CancelledError:
                 # FIXME: if the referencing is stopped, the device refuses to
                 # move until referencing is run (and successful).
@@ -4508,3 +4480,4 @@ class FakeBus(Bus):
     @classmethod
     def _scanIPMasters(cls):
         return []  # Nothing
+
