@@ -952,14 +952,15 @@ class SPARCTestCase(unittest.TestCase):
 
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam,
+                                      detvas={"exposureTime"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4) # hopefully always supported
 
         # Long acquisition
-        self.ccd.exposureTime.value = 0.2  # s
+        ars.detExposureTime.value = 0.2  # s
         ars.repetition.value = (2, 3)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
@@ -981,7 +982,7 @@ class SPARCTestCase(unittest.TestCase):
         # short acquisition
         self.done = False
         self.updates = 0
-        self.ccd.exposureTime.value = 0.02 # s
+        ars.detExposureTime.value = 0.02  # s
         ars.repetition.value = (5, 4)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
@@ -1006,7 +1007,8 @@ class SPARCTestCase(unittest.TestCase):
 
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam,
+                                      detvas={"exposureTime"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
@@ -1014,7 +1016,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Long acquisition
         self.updates = 0
-        self.ccd.exposureTime.value = 0.2 # s
+        ars.detExposureTime.value = 0.2  # s
         ars.repetition.value = (2, 3)
 
         # Start acquisition
@@ -1022,7 +1024,7 @@ class SPARCTestCase(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        time.sleep(self.ccd.exposureTime.value) # wait a bit
+        time.sleep(0.3)  # wait a bit
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1) # at least at the end
@@ -1031,7 +1033,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # short acquisition
         self.updates = 0
-        self.ccd.exposureTime.value = 0.02 # s
+        ars.detExposureTime.value = 0.02  # s
         ars.repetition.value = (5, 4)
 
         # Start acquisition
@@ -1039,7 +1041,7 @@ class SPARCTestCase(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        time.sleep(self.ccd.exposureTime.value) # wait a bit
+        time.sleep(0.03)  # wait a bit
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1) # at least at the end
@@ -1061,16 +1063,16 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam,
+                                      detvas={"exposureTime"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4)  # hopefully always supported
 
         # Long acquisition (small rep to avoid being too long)
-        # The acquisition method is different for time > 0.1 s, but we had bugs
-        # with dwell time > 4s, so let's directly test both.
-        self.ccd.exposureTime.value = 5  # s
+        # We had bugs with dwell time > 4s, so test something really long
+        ars.detExposureTime.value = 5  # s
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
@@ -1104,7 +1106,7 @@ class SPARCTestCase(unittest.TestCase):
                             phys_roi[1] <= pos[1] <= phys_roi[3])
 
         # Short acquisition (< 0.1s)
-        self.ccd.exposureTime.value = 0.03  # s
+        ars.detExposureTime.value = 0.03  # s
         ars.repetition.value = (30, 20)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
         phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
@@ -1145,20 +1147,31 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        self.spec.exposureTime.value = 0.3 # s
+        specs.detExposureTime.value = 0.3  # s
         specs.repetition.value = (5, 6)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        im0 = specs.image.value
         start = time.time()
         f = sps.acquire()
+
+        # Check if there is a live update in the setting stream.
+        time.sleep(1)  # Wait long enough so that there is a new image
+        im1 = specs.image.value
+        self.assertIsInstance(im1, model.DataArray)
+        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im0, im1)
+        time.sleep(2)
+        im2 = specs.image.value
+        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
 
         # wait until it's over
         data = f.result(timeout)
@@ -1182,7 +1195,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(sp_dims, "CTZYX")
 
         # Short acquisition (< 0.1s)
-        self.spec.exposureTime.value = 0.01 # s
+        specs.detExposureTime.value = 0.01  # s
         specs.repetition.value = (25, 60)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
@@ -1219,14 +1232,15 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
         specs.fuzzing.value = True
 
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        self.spec.exposureTime.value = 0.3  # s
+        specs.detExposureTime.value = 0.3  # s
         specs.repetition.value = (5, 6)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
@@ -1266,7 +1280,7 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
         # Short acquisition (< 0.1s)
-        self.spec.exposureTime.value = 0.01  # s
+        specs.detExposureTime.value = 0.01  # s
         specs.repetition.value = (25, 60)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
@@ -1751,56 +1765,6 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def test_acq_spec_live_update(self):
-        """
-        Test the live feedback acquisition in the spectrum stream
-        """
-        # Check that it works even when not at 0,0 of the sample stage
-        f = self.stage.moveRel({"x":-1e-3, "y": 2e-3})
-        f.result()
-
-        # Zoom in to make sure the ROI is not too big physically
-        self.ebeam.horizontalFoV.value = 200e-6
-
-        # Move the stage to the top-left
-        posc = {"x": sum(self.sstage.axes["x"].range) / 2,
-                "y": sum(self.sstage.axes["y"].range) / 2}
-        f = self.sstage.moveAbs(posc)
-
-        # Create the streams
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
-                                              self.ebeam, sstage=self.sstage)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
-
-        specs.useScanStage.value = False
-
-        # Long acquisition (small rep to avoid being too long) > 0.1s
-        specs.pixelSize.value = 1e-6
-        specs.roi.value = (0.25, 0.45, 0.6, 0.7)
-        specs.repetition.value = (5, 6)
-        self.spec.exposureTime.value = 0.3  # s
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
-
-        f.result()
-
-        # Start acquisition
-        estt = sps.estimateAcquisitionTime()
-        timeout = 5 + 3 * estt
-        start = time.time()
-        f = sps.acquire()
-        
-        # Check if there is a live update in the setting stream.
-        im1 = specs.image.value
-        time.sleep(2.0)
-        im2 = specs.image.value
-
-        # wait until it's over
-        data = f.result(timeout)
-
-        # Check if the image changed (live update is working)
-        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
-
     def test_acq_spec_sstage(self):
         """
         Test spectrum acquisition with scan stage.
@@ -1820,7 +1784,8 @@ class SPARC2TestCase(unittest.TestCase):
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
-                                              self.ebeam, sstage=self.sstage, detvas={"exposureTime"})
+                                              self.ebeam, sstage=self.sstage,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
@@ -1829,7 +1794,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.pixelSize.value = 1e-6
         specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
-        self.spec.exposureTime.value = 0.3  # s
+        specs.detExposureTime.value = 0.3  # s
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         f.result()
@@ -1867,7 +1832,7 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertLessEqual(distc, 100e-9)
 
         # Short acquisition (< 0.1s)
-        self.spec.exposureTime.value = 0.01  # s
+        specs.detExposureTime.value = 0.01  # s
         specs.pixelSize.value = 1e-6
         specs.repetition.value = (25, 30)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
@@ -1913,7 +1878,8 @@ class SPARC2TestCase(unittest.TestCase):
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
-                                              self.ebeam, sstage=self.sstage)
+                                              self.ebeam, sstage=self.sstage,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
@@ -1922,7 +1888,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.pixelSize.value = 1e-6
         specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
-        self.spec.exposureTime.value = 0.3  # s
+        specs.detExposureTime.value = 0.3  # s
         f.result()
 
         # Start acquisition
@@ -1940,7 +1906,7 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertLessEqual(distc, 100e-9)
 
         # Check it still works after cancelling
-        self.spec.exposureTime.value = 0.01  # s
+        specs.detExposureTime.value = 0.01  # s
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
@@ -1984,7 +1950,8 @@ class SPARC2TestCase(unittest.TestCase):
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
-                                              self.ebeam, sstage=self.sstage)
+                                              self.ebeam, sstage=self.sstage,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
@@ -2000,7 +1967,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.pixelSize.value = 1e-6
         specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
-        self.spec.exposureTime.value = 0.3  # s
+        specs.detExposureTime.value = 0.3  # s
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         f.result()
@@ -2051,7 +2018,7 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertLessEqual(distc, 100e-9)
 
         # Short acquisition (< 0.1s)
-        self.spec.exposureTime.value = 0.01  # s
+        specs.detExposureTime.value = 0.01  # s
         specs.pixelSize.value = 1e-6
         specs.repetition.value = (25, 30)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
@@ -2101,7 +2068,8 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         pcd = Fake0DDetector("test")
@@ -2111,7 +2079,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        self.spec.exposureTime.value = 0.3  # s
+        specs.detExposureTime.value = 0.3  # s
         specs.repetition.value = (5, 6)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
         pca.period.value = 0.6  # ~every second pixel
@@ -3012,66 +2980,14 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
 
-    def test_acq_arpol_live_update(self):
-        """
-        Test if live update works for AR
-        """
-        # Create the stream
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        # test when polarization analyzer hardware is present
-        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
-
-        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
-
-        list_positions = list(ars.polarization.choices) + ["acquireAllPol"]
-
-        # to test each polarization position acquired sequentially in a single acq
-        ars.acquireAllPol.value = False
-
-        for pos in list_positions:
-            if pos == "acquireAllPol":
-                # to test all polarization position acquired in one acquisition
-                ars.acquireAllPol.value = True
-                # set pos to random pol pos from list as "acquireAllPol" is not a valid choice
-                pos = "vertical"
-
-            ars.polarization.value = pos
-
-            # Short acquisition (< 0.1s)
-            ars.integrationTime.value = 0.03  # s
-            # TODO use fixed repetition value -> set ROI?
-            ars.repetition.value = (1, 1)
-
-            # Start acquisition
-            # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
-            timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
-            f = sas.acquire()
-
-            # sas.raw: array containing as first entry the sem scan image for the scanning positions,
-            # rest are ar images
-            # data: array should contain same images as sas.raw
-
-            # Check if there is a live update in the setting stream.
-            time.sleep(2.0)
-            im1 = ars.image.value
-            time.sleep(3.0)
-            im2 = ars.image.value
-
-            # wait until it's over
-            data = f.result(timeout)
-
-            # Check if the image changed (live update is working)
-            self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
-
     def test_acq_arpol(self):
         """
         Test short acquisition for AR with polarization analyzer component
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        # test when polarization analyzer hardware is present
+        # No exposureTime VA => integrationTime will be provided
         ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
-
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         list_positions = list(ars.polarization.choices) + ["acquireAllPol"]
@@ -3084,12 +3000,11 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                 # to test all polarization position acquired in one acquisition
                 ars.acquireAllPol.value = True
                 # set pos to random pol pos from list as "acquireAllPol" is not a valid choice
-                pos = "vertical"
+                ars.polarization.value = "vertical"
+            else:
+                ars.polarization.value = pos
 
-            ars.polarization.value = pos
-
-            # Short acquisition (< 0.1s)
-            ars.integrationTime.value = 0.03  # s
+            ars.integrationTime.value = 0.5  # s
             # TODO use fixed repetition value -> set ROI?
             ars.repetition.value = (1, 1)
             num_ar = numpy.prod(ars.repetition.value)
@@ -3099,7 +3014,29 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
             # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
             timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
             start = time.time()
+            im0 = ars.image.value
             f = sas.acquire()
+
+            if pos == "acquireAllPol":
+                # Check if there is a live update in the setting stream.
+                # Only checked with multiple polarization, as otherwise, there is
+                # only one image anyway.
+                for i in range(10):  # Wait long enough so that there is a new image
+                    time.sleep(1)
+                    im1 = ars.image.value
+                    if im1 is not im0:
+                        logging.debug("Got image update after %d iteration", i)
+                        break
+                else:
+                    self.fail("Live image hasn't been updated")
+
+                self.assertIsInstance(im1, model.DataArray)
+
+                time.sleep(timeout / 3)  # Long enough so that a different polarization has been acquired
+                im2 = ars.image.value
+                logging.debug("New live image is of shape %s", im2.shape)
+                # Check if the image changed (live update is working)
+                self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
 
             # sas.raw: array containing as first entry the sem scan image for the scanning positions,
             # rest are ar images
@@ -3156,9 +3093,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
-        # test when polarization analyzer hardware is present
+        # No exposureTime VA => integrationTime will be provided
         ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
-
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.polarization.value = "vertical"
@@ -3172,6 +3108,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         ars.integrationTime.value = 1  # s
         ars.repetition.value = (2, 3)  # TODO use fixed repetition value -> set ROI?
+        assert ars.repetition.value == (2, 3)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
 
         num_ar = numpy.prod(ars.repetition.value)
@@ -3214,7 +3151,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         ar_drift = sas.raw[-1]  # drift correction image
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
 
-    def test_arpol_ss(self): # TODO move to SettingStreamTest cases?
+    def test_arpol_ss(self):
         """ Test ARSettingsStream """
         # Create the stream
         ars = stream.ARSettingsStream("test",
@@ -3224,6 +3161,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # shouldn't affect
         ars.roi.value = (0.15, 0.6, 0.8, 0.8)
         ars.repetition.value = (5, 6)
+        ars.detExposureTime.value = 0.1  # s
 
         # set analyzer to position different from polarization VA connected to GUI
         f = self.analyzer.moveAbs({"pol": "rhc"})
@@ -3346,12 +3284,10 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
-
-        # Create the settings stream without "exposureTime" VA
+        # Create without "exposureTime" VA => integrationTime VA
         ars = stream.ARSettingsStream("test ar integrate images",
                                       self.ccd, self.ccd.data, self.ebeam, self.analyzer,
                                       detvas={"readoutRate", "binning", "resolution"})
-
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.acquireAllPol.value = False
@@ -3403,8 +3339,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         self.assertAlmostEqual(self.ccd.exposureTime.value * md[model.MD_INTEGRATION_COUNT],
                                ars.integrationTime.value)
 
-        # check the dtype is correct
-        self.assertEqual(ar_da[0].dtype, numpy.uint16)
+        # check the dtype is increased (from uint16), to contain the sum
+        self.assertEqual(ar_da[0].dtype, numpy.uint32)
 
         # do a second acquisition with shorter exp time and check values are smaller (integrationCount smaller)
         ars.integrationTime.value = 1  # s
@@ -3445,7 +3381,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
 
-        # Create the settings stream without "exposureTime" VA
+        # Create without "exposureTime" VA => integrationTime VA
         ars = stream.ARSettingsStream("test ar integrate images",
                                       self.ccd, self.ccd.data, self.ebeam, self.analyzer,
                                       detvas={"readoutRate", "binning", "resolution"})
