@@ -409,7 +409,7 @@ class TimelapsePlugin(Plugin):
             logging.debug("Acquiring last acquisition, with all the streams")
             ss = [st] + last_ss
             f.set_progress(end=time.time() + acq.estimateTime(ss))
-            das, e = acq.acquire(ss).result()
+            das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
             self._save_data(fn_pat % (nb,), das)
 
         self._stop_saving_threads()  # Wait for all the data to be stored
@@ -490,7 +490,7 @@ class TimelapsePlugin(Plugin):
 
             startt = time.time()
             f.set_progress(end=startt + dur)
-            das, e = acq.acquire(ss).result()
+            das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
             if f.cancelled():
                 dlg.resumeSettings()
                 return

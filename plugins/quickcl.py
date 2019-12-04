@@ -509,7 +509,7 @@ class QuickCLPlugin(Plugin):
         future.set_progress(end=startt + dur)
         dlg.showProgress(future)
 
-        future._cur_f = acq.acquire(ss)
+        future._cur_f = acq.acquire(ss, self.main_app.main_data.settings_obs)
         das, e = future._cur_f.result()
         if future.cancelled():
             raise CancelledError()

@@ -38,6 +38,8 @@ from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTempor
     ScannedRemoteTCStream, ScannedTCSettingsStream
 from odemis.util import img, fluo, executeAsyncTask
 import time
+import copy
+from odemis.model import prepare_to_listen_to_more_vas
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
@@ -51,7 +53,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def acquire(streams):
+def acquire(streams, settings_obs=None):
     """ Start an acquisition task for the given streams.
 
     It will decide in which order the stream must be acquired.
@@ -60,6 +62,8 @@ def acquire(streams):
         It is highly recommended to not have any other acquisition going on.
 
     :param streams: [Stream] the streams to acquire
+    :param settings_obs: [SettingsObserver or None] class that contains a list of all VAs
+        that should be saved as metadata
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a tuple:
@@ -71,7 +75,7 @@ def acquire(streams):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streams, future)
+    task = AcquisitionTask(streams, future, settings_obs)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # connect the future to the task and run in a thread
@@ -239,8 +243,9 @@ def _weight_stream(stream):
 
 class AcquisitionTask(object):
 
-    def __init__(self, streams, future):
+    def __init__(self, streams, future, settings_obs=None):
         self._future = future
+        self._settings_obs = settings_obs
 
         # order the streams for optimal acquisition
         self._streams = sorted(streams, key=_weight_stream, reverse=True)
@@ -288,6 +293,9 @@ class AcquisitionTask(object):
                     # No leeches
                     pass
 
+            if not self._settings_obs:
+                logging.warning("Acquisition task has no SettingsObserver, not saving extra "
+                                "metadata.")
             for s in self._streams:
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):
@@ -315,6 +323,12 @@ class AcquisitionTask(object):
                 if not isinstance(das, collections.Iterable):
                     logging.warning("Future of %s didn't return a list of DataArrays, but %s", s, das)
                     das = []
+
+                # Add extra settings to metadata
+                if self._settings_obs:
+                    settings = self._settings_obs.get_all_settings()
+                    for da in das:
+                        da.metadata[model.MD_EXTRA_SETTINGS] = copy.deepcopy(settings)
                 raw_images[s] = das
 
                 # update the time left
@@ -433,3 +447,37 @@ class AcquisitionTask(object):
             return False
 
         return True
+
+HIDDEN_VAS = ['children', 'dependencies', 'affects', 'alive', 'state', 'ghosts']
+class SettingsObserver(object):
+    """
+    Class that listens to all settings, so they can be easily stored as metadata
+    at the end of an acquisition.
+    """
+
+    def __init__(self, components):
+        """
+        components (set of HwComponents): component which should be observed
+        """
+        self._all_settings = {}
+        self._components = components  # keep a reference to the components, so they are not garbage collected
+        self._va_updaters = []  # keep a reference to the subscribers so they are not garbage collected
+
+        for comp in components:
+            self._all_settings[comp.name] = {}
+            vas = model.getVAs(comp).items()
+            prepare_to_listen_to_more_vas(len(vas))
+
+            for va_name, va in vas:
+                if va_name in HIDDEN_VAS:
+                    continue
+                # Store current value of VA (calling .value might take some time)
+                self._all_settings[comp.name][va_name] = [va.value, va.unit]
+                # Subscribe to VA, update dictionary on callback
+                def update_settings(value, comp_name=comp.name, va_name=va_name):
+                    self._all_settings[comp_name][va_name][0] = value
+                self._va_updaters.append(update_settings)
+                va.subscribe(update_settings)
+
+    def get_all_settings(self):
+        return copy.deepcopy(self._all_settings)

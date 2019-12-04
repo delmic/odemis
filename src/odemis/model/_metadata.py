@@ -194,3 +194,7 @@ MD_AXES_ORDER_REF = "Axes order for referencing"  # list of str
 MD_GAIN_P = "Proportional gain"  # float
 MD_GAIN_I = "Integral gain"  # float
 MD_GAIN_D = "Derivative gain"  # float
+
+# The following is a string containing a dict encoded in JSON, which represents all the known states
+# of all the hardware used during an acquisition.
+MD_EXTRA_SETTINGS = "Extra settings"

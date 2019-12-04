@@ -369,7 +369,7 @@ class ZStackPlugin(Plugin):
 
                 startt = time.time()
                 f.set_progress(end=startt + dur)
-                das, e = acq.acquire(ss).result()
+                das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
                 if images is None:
                     # Copy metadata from the first acquisition
                     images = [[] for i in range(len(das))]

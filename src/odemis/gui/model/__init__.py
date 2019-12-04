@@ -30,7 +30,7 @@ import collections
 import logging
 import math
 from odemis import model
-from odemis.acq import path, leech
+from odemis.acq import path, leech, SettingsObserver
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
     ARPolarimetryProjection
@@ -262,6 +262,7 @@ class MainGUIData(object):
         # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
             self.role = microscope.role
+            comps_with_role = []
 
             for c in model.getComponents():
                 if c.role is None:
@@ -269,6 +270,7 @@ class MainGUIData(object):
                 try:
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
+                    comps_with_role.append(c)
                 except KeyError:
                     pass
 
@@ -324,6 +326,10 @@ class MainGUIData(object):
                 # On the Delphi, during grid pattern, the dwell time is fixed, at ~0.2s.
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
+
+            # Initialize settings observer to keep track of all relevant settings that should be
+            # stored as metadata
+            self.settings_obs = SettingsObserver(comps_with_role)
 
             # There are two kinds of SEM (drivers): the one that are able to
             # control the magnification, and the one that cannot. The former ones

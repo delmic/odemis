@@ -35,6 +35,7 @@ from unittest.case import skip
 from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
+from odemis.acq import SettingsObserver
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -136,6 +137,28 @@ class SECOMTestCase(unittest.TestCase):
         thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
+    def test_metadata(self):
+        """
+        Check if extra metadata are saved
+        """
+        settings_obs = SettingsObserver(model.getComponents())
+        self.ccd.binning.value = (1, 1)  # make sure we don't save the right metadata by accident
+        detvas = {'exposureTime', 'binning', 'gain'}
+        s1 = stream.FluoStream("fluo2", self.ccd, self.ccd.data,
+                               self.light, self.light_filter, detvas=detvas)
+        s2 = stream.BrightfieldStream("bf", self.ccd, self.ccd.data, self.light, detvas=detvas)
+
+        # Set different binning values for each stream
+        s1.detBinning.value = (2, 2)
+        s2.detBinning.value = (4, 4)
+        st = stream.StreamTree(streams=[s1, s2])
+        f = acq.acquire(st.getProjections(), settings_obs=settings_obs)
+        data, e = f.result()
+        for s in data:
+            self.assertTrue(model.MD_EXTRA_SETTINGS in s.metadata, "Stream %s didn't save extra metadata." % s)
+        self.assertEqual(data[0].metadata[model.MD_EXTRA_SETTINGS][self.ccd.name]['binning'], [(2, 2), 'px'])
+        self.assertEqual(data[1].metadata[model.MD_EXTRA_SETTINGS][self.ccd.name]['binning'], [(4, 4), 'px'])
+
     def test_progress(self):
         """
         Check we get some progress updates
@@ -231,6 +254,44 @@ class SPARCTestCase(unittest.TestCase):
     def setUp(self):
         if self.backend_was_running:
             self.skipTest("Running backend found")
+
+    def test_metadata(self):
+        """
+        Check if extra metadata are saved
+        """
+        settings_obs = SettingsObserver(model.getComponents())
+
+        detvas = {"binning", "exposureTime"}
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam, detvas=detvas)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+
+        specs.roi.value = (0, 0, 1, 1)
+        specs.repetition.value = (2, 3)
+        specs.detBinning.value = (2, specs.detBinning.value[1])
+        specs.detExposureTime.value = 0.1
+
+        specs2 = stream.SpectrumSettingsStream("test spec2", self.spec, self.spec.data, self.ebeam, detvas=detvas)
+        sps2 = stream.SEMSpectrumMDStream("test sem-spec2", [sems, specs2])
+
+        specs2.roi.value = (0, 0, 1, 1)
+        specs2.repetition.value = (2, 3)
+        specs2.detBinning.value = (4, specs2.detBinning.value[1])
+        specs2.detExposureTime.value = 0.05
+
+        f = acq.acquire([sps, sps2], settings_obs)
+        data = f.result()
+
+        spec1_data = data[0][1]
+        spec2_data = data[0][3]
+        self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['binning'],
+                         [(2, specs.detBinning.value[1]), 'px'])
+        self.assertEqual(spec2_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['binning'],
+                         [(4, specs2.detBinning.value[1]), 'px'])
+        self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['exposureTime'],
+                         [0.1, 's'])
+        self.assertEqual(spec2_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['exposureTime'],
+                         [0.05, 's'])
 
     def test_sync_sem_ccd(self):
         """

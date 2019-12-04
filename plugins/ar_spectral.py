@@ -996,7 +996,7 @@ class ARspectral(Plugin):
         exporter = dataio.find_fittest_converter(fn)
 
         try:
-            f = acq.acquire(strs)
+            f = acq.acquire(strs, self.main_app.main_data.settings_obs)
             dlg.showProgress(f)
             das, e = f.result()  # blocks until all the acquisitions are finished
         except CancelledError:

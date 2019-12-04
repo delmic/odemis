@@ -949,7 +949,7 @@ class CLAcqPlugin(Plugin):
         fn_prefix, fn_ext = os.path.splitext(self.filename.value)
 
         try:
-            f = acq.acquire(strs)
+            f = acq.acquire(strs, self.main_app.main_data.settings_obs)
             dlg.showProgress(f)
             das, e = f.result()  # blocks until all the acquisitions are finished
         except CancelledError:

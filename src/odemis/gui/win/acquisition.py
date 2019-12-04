@@ -515,7 +515,7 @@ class AcquisitionDialog(xrcfr_acq):
                 pathname, base = os.path.split(self.filename.value)
                 s.filename.value = base
 
-        self.acq_future = acq.acquire(streams)
+        self.acq_future = acq.acquire(streams, self._main_data_model.settings_obs)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
