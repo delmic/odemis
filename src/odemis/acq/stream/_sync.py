@@ -1037,17 +1037,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._analyzer:
                 if self._acquireAllPol.value:
                     pos_polarizations = POL_POSITIONS
-                    logging.debug("Will acquire the following polarization positions: %s" % list(pos_polarizations))
                     # tot number of ebeam pos to acquire taking the number of images per ebeam pos into account
                     tot_num *= len(pos_polarizations)
                 else:
                     pos_polarizations = [self._polarization.value]
-                    logging.debug("Will acquire the following polarization position: %s" % pos_polarizations)
+                logging.debug("Will acquire the following polarization positions: %s",
+                              pos_polarizations)
                 # extra time to move pol analyzer for each pos requested (value is very approximate)
                 time_move_pol_once = POL_MOVE_TIME  # s
-                logging.debug("Add %s extra sec to move polarization analyzer for all positions requested."
-                              % time_move_pol_left)
                 time_move_pol_left = time_move_pol_once * len(pos_polarizations)
+                logging.debug("Add %s extra sec to move polarization analyzer for all positions requested.",
+                              time_move_pol_left)
 
             # Initialize leeches: Shape should be slowest axis to fastest axis
             # (pol pos, rep y, rep x, images to integrate).
@@ -1064,7 +1064,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             for pol_pos in pos_polarizations:
                 if pol_pos is not None:
-                    logging.debug("Acquire with the following polarization position: %s" % pol_pos)
+                    logging.debug("Acquiring with the polarization position %s", pol_pos)
                     # move polarization analyzer to position specified
                     f = self._analyzer.moveAbs({"pol": pol_pos})
                     f.result()
