@@ -97,6 +97,10 @@ def findOptimalRange(hist, edges, outliers=0):
       discards no value, 0.5 discards every value (and so returns the median).
     return (tuple of 2 values): the range (min and max values)
     """
+    # If we got an histogram with only one value, don't try too hard.
+    if len(hist) < 2:
+        return edges
+
     if outliers == 0:
         # short-cut if no outliers: find first and last non null value
         inz = numpy.flatnonzero(hist)
@@ -110,9 +114,8 @@ def findOptimalRange(hist, edges, outliers=0):
         cum_hist = hist.cumsum()
         nval = cum_hist[-1]
 
-        # if we got a histogram of an empty array, or histogram with only one
-        # value, don't try too hard.
-        if nval == 0 or len(hist) < 2:
+        # If it's an histogram of an empty array, don't try too hard.
+        if nval == 0:
             return edges
 
         # trick: if there are lots (>1%) of complete black and not a single

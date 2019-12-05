@@ -177,6 +177,18 @@ class TestFindOptimalRange(unittest.TestCase):
         self.assertEqual(rgb[5, 1].tolist(), [255, 255, 255])
         self.assertTrue(0 < rgb[50, 50, 0] < 255)
 
+    def test_empty_hist(self):
+        # Empty histogram
+        edges = (0, 0)
+        irange = img.findOptimalRange(numpy.array([]), edges, 1 / 256)
+        self.assertEqual(irange, edges)
+
+        # histogram from an array with a single point
+        edges = (10, 10)
+        irange = img.findOptimalRange(numpy.array([1]), edges, 1 / 256)
+        self.assertEqual(irange, edges)
+
+
 class TestHistogram(unittest.TestCase):
     # 8 and 16 bit short-cuts test
     def test_uint8(self):
