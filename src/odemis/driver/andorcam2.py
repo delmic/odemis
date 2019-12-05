@@ -2955,6 +2955,8 @@ class FakeAndorV2DLL(object):
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]
 
         ndbuffer += numpy.random.randint(0, 200, ndbuffer.shape, dtype=ndbuffer.dtype)
+        # Clip, but faster than clip() on big array
+        ndbuffer[ndbuffer > 2 ** self.bpp - 1] = 2 ** self.bpp - 1
 
     def FreeInternalMemory(self):
         pass
