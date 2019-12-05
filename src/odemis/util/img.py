@@ -305,7 +305,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         same dimension
     """
     # TODO: handle signed values
-    assert(len(data.shape) == 2) # => 2D with greyscale
+    assert(data.ndim == 2) # => 2D with greyscale
 
     # Discard the DataArray aspect and just get the raw array, to be sure we
     # don't get a DataArray as result of the numpy operations
@@ -415,11 +415,10 @@ def getYXFromZYX(data, zIndex=0):
     """
 
     d = data.view()
-    if len(d.shape) < 2:
-        d.shape = (1,) * (2 - len(d.shape)) + d.shape
+    if d.ndim < 2:
+        d.shape = (1,) * (2 - d.ndim) + d.shape
 
-    elif len(d.shape) > 2:
-
+    elif d.ndim > 2:
         d.shape = d.shape[-3:]  # raise ValueError if it will not work
         d = d[zIndex]  # Remove z
 
@@ -448,9 +447,9 @@ def ensure2DImage(data):
     raise ValueError: if the data is not 2D (CTZ != 111)
     """
     d = data.view()
-    if len(d.shape) < 2:
-        d.shape = (1,) * (2 - len(d.shape)) + d.shape
-    elif len(d.shape) > 2:
+    if d.ndim < 2:
+        d.shape = (1,) * (2 - d.ndim) + d.shape
+    elif d.ndim > 2:
         d.shape = d.shape[-2:]  # raise ValueError if it will not work
 
     return d
@@ -746,7 +745,7 @@ def mergeTiles(tiles):
 
     result_shape = getTilesSize(tiles)
     # TODO must work when the channel dimension is not the last
-    if len(first_tile.shape) == 3:
+    if first_tile.ndim == 3:
         result_shape = result_shape + (first_tile.shape[2],)
 
     result = numpy.empty(result_shape, dtype=first_tile.dtype)
