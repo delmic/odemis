@@ -1098,18 +1098,27 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # extra time needed taking leeches into account and moving polarizer HW if present
                     extra_time = leech_time_left + time_move_pol_left
 
+                    # Reset live image, to be sure that if there is an
+                    # integrationTime, the new images are not mixed with the one
+                    # from the previous pixel (= ebeam pos).
+                    self._sccd.raw = []
+
                     # acquire images
                     for i in range(integration_count):
                         self._acquireImage(n, px_idx, img_time, sem_time, sub_pxs,
                                            tot_num, leech_nimg, extra_time, future)
 
+                        # Live update the setting stream with the new data
+                        try:
+                            self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
+                        except Exception:
+                            logging.exception("Failed to update CCD live view")
+
                         n += 1  # number of images acquired so far
 
                     # integrate/sum images
                     self._integrateImages(integration_count)
-                    # Live update the setting stream with the new data
-                    self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
-                    logging.debug("Done acquiring image number %s out of %s." % (n, tot_num))
+                    logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
 
             # acquisition done!
             for s, sub in zip(self._streams, self._subscribers):
@@ -1174,7 +1183,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             orig_dtype = data2process[0].dtype
 
             if det_type == model.MD_DT_NORMAL:  # SEM
-                # logging.debug("Average %s images", n)
+                logging.debug("Averaging %s images", n)
                 # get the images corresponding to the last acquisition and average
                 data = numpy.mean(data2process, axis=0).astype(orig_dtype)
 
@@ -1183,7 +1192,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.warning("Unknown detector type %s for image integration. "
                                     "Will perform image integration anyways.", det_type)
 
-                # logging.debug("Integrate %s images", n)
+                logging.debug("Integrating %s images", n)
                 best_dtype = get_best_dtype_for_acc(orig_dtype, n)  # avoid saturation and overflow
                 data = numpy.sum(data2process, axis=0, dtype=best_dtype)
 

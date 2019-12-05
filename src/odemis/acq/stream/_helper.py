@@ -211,9 +211,9 @@ class RepetitionStream(LiveStream):
         Integrate/sum the acquired images in self.raw for live display while running a stream.
         Values cannot overflow (are never clipped).
         """
-        logging.debug("Integrate %s images", len(self.raw))
+        logging.debug("Integrating %s images", len(self.raw))
         # Note: In beginning number of images in .raw can be smaller than self.integrationCounts.value
-        md = self.raw[0].metadata
+        md = self.raw[0].metadata.copy()
         orig_dtype = self.raw[0].dtype
         best_dtype = get_best_dtype_for_acc(orig_dtype, len(self.raw))  # avoid saturation and overflow
         data = numpy.sum(self.raw, axis=0, dtype=best_dtype)
