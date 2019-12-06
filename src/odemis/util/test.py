@@ -18,14 +18,15 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division, print_function
 
 import logging
+import numpy
 from odemis import model, util
 import odemis
 from odemis.util import driver
 import os
 import resource
 import subprocess
-import time
 import sys
+import time
 
 
 # ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
@@ -118,3 +119,20 @@ def assert_pos_almost_equal(actual, expected, *args, **kwargs):
     for k in expected.keys():
         if not util.almost_equal(actual[k], expected[k], *args, **kwargs):
             raise AssertionError("Position %s != %s" % (actual, expected))
+
+
+def assert_array_not_equal(a, b, msg="Arrays are equal"):
+    """
+    Asserts that two numpy arrays are not equal (where NaN are considered equal)
+    """
+    # TODO: an option to check that the shapes are equal, but the values different?
+
+    # Using numpy.any(a != b) would almost work, but NaN are always considered
+    # unequal, so instead, use numpy's assert_array_equal to do the work.
+    try:
+        numpy.testing.assert_array_equal(a, b)
+    except AssertionError:
+        # Perfect, they are not equal
+        return
+
+    raise AssertionError(msg)

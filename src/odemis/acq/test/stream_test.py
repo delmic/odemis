@@ -38,6 +38,7 @@ from odemis.acq.stream import RGBSpatialSpectrumProjection, \
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img, spectrum, find_closest
+from odemis.util.test import assert_array_not_equal
 import os
 import threading
 import time
@@ -1168,10 +1169,10 @@ class SPARCTestCase(unittest.TestCase):
         time.sleep(1)  # Wait long enough so that there is a new image
         im1 = specs.image.value
         self.assertIsInstance(im1, model.DataArray)
-        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im0, im1)
+        assert_array_not_equal(im0, im1)
         time.sleep(2)
         im2 = specs.image.value
-        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+        assert_array_not_equal(im1, im2)
 
         # wait until it's over
         data = f.result(timeout)
@@ -2580,7 +2581,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         data = f.result(timeout)
 
         # Check if the image changed (live update is working)
-        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+        assert_array_not_equal(im1, im2)
 
     def test_streak_acq(self):
         """Test acquisition with streak camera"""
@@ -3036,7 +3037,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                 im2 = ars.image.value
                 logging.debug("New live image is of shape %s", im2.shape)
                 # Check if the image changed (live update is working)
-                self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+                assert_array_not_equal(im1, im2)
 
             # sas.raw: array containing as first entry the sem scan image for the scanning positions,
             # rest are ar images
@@ -3580,7 +3581,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         data = f.result()
 
         # Check if the image changed (live update is working)
-        self.assertRaises(AssertionError, numpy.testing.utils.assert_array_equal, im1, im2)
+        assert_array_not_equal(im1, im2)
 
 
 # @skip("faster")
@@ -4640,7 +4641,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_effcorr.shape, spec.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        self.assertTrue(numpy.any(im2d_effcorr != prev_im2d))
+        assert_array_not_equal(im2d_effcorr, prev_im2d)
 
         # apply background image correction
         specs.background.value = bckg
@@ -4650,8 +4651,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_bgcorr.shape, spec.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        self.assertTrue(numpy.any(im2d_bgcorr != im2d_effcorr))
-        self.assertTrue(numpy.any(im2d_bgcorr != prev_im2d))
+        assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
+        assert_array_not_equal(im2d_bgcorr, prev_im2d)
 
     def _create_temporal_spectrum_data(self):
         """Create temporal spectrum data."""
@@ -4761,7 +4762,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_effcorr.shape, temporalspectrum.shape[-2:] + (3,))
         # check image different from previous image after efficiency correction
-        self.assertTrue(numpy.any(im2d_effcorr != prev_im2d))
+        assert_array_not_equal(im2d_effcorr, prev_im2d)
 
         # apply bg correction
         tss.background.value = bckg
@@ -4771,8 +4772,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_bgcorr.shape, temporalspectrum.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        self.assertTrue(numpy.any(im2d_bgcorr != im2d_effcorr))
-        self.assertTrue(numpy.any(im2d_bgcorr != prev_im2d))
+        assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
+        assert_array_not_equal(im2d_bgcorr, prev_im2d)
 
     def test_temporal_spectrum_false_calib_bg(self):
         """Test StaticSpectrumStream background image correction

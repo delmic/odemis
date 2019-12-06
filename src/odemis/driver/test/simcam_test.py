@@ -22,6 +22,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.driver import simcam, simulated
+from odemis.util.test import assert_array_not_equal
 import time
 import unittest
 from unittest.case import skip
@@ -361,7 +362,7 @@ class TestSimCamWithPolarization(unittest.TestCase):
         im_rhc = self.camera.data.get()
 
         # test the two images are different from each other (different txt was written on top)
-        self.assertFalse(numpy.all(im_lhc == im_rhc))
+        assert_array_not_equal(im_lhc, im_rhc)
 
         # change binning
         self.camera.binning.value = (2, 2)
@@ -374,7 +375,8 @@ class TestSimCamWithPolarization(unittest.TestCase):
         im_vertical = self.camera.data.get()
 
         # test the two images are different from each other (different txt was written on top)
-        self.assertFalse(numpy.all(im_horizontal == im_vertical))
+        assert_array_not_equal(im_horizontal, im_vertical)
+
 
 if __name__ == '__main__':
     unittest.main()

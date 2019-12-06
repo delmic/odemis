@@ -23,6 +23,7 @@
 """
 from __future__ import division, print_function
 
+from builtins import range
 import logging
 import math
 import numpy
@@ -32,18 +33,18 @@ from odemis.driver import simsem
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER
-from odemis.util.conversion import hex_to_frgb
 from odemis.gui.util.img import wxImage2NDImage
+from odemis.util.comp import compute_scanner_fov, get_fov_rect
+from odemis.util.conversion import hex_to_frgb
+from odemis.util.test import assert_array_not_equal
 import unittest
 import wx
-from builtins import range
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
-from odemis.util.comp import compute_scanner_fov, get_fov_rect
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -736,18 +737,14 @@ class OverlayTestCase(test.GuiTestCase):
         view = tab_mod.focussedView.value
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         cnvs.setView(view, tab_mod)
-
-        # ruler overlay is not yet added to the canvas
-        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
-        buf = wxImage2NDImage(img)
-
         rol = cnvs.ruler_overlay
+
+        test.gui_loop(0.1)
 
         # ruler overlay with no rulers
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
-        buffer = wxImage2NDImage(img)
-        self.assertTrue(numpy.any(buf == buffer),
-                        msg="Buffers are not equal")
+        buffer_empty = wxImage2NDImage(img)
+        self.assertTrue(numpy.all(buffer_empty == 0))
 
         # Create a "big ruler"
         p_start_pos = (-0.00055, -0.00055)
@@ -781,23 +778,27 @@ class OverlayTestCase(test.GuiTestCase):
 
         # update drawing
         cnvs.update_drawing()
-        test.gui_loop()
+        test.gui_loop(0.1)
 
         # ruler overlay with 4 rulers
-        img = wx.ImageFromBitmap(cnvs._bmp_buffer)
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         new_buffer = wxImage2NDImage(img)
-        self.assertTrue(numpy.any(buffer != new_buffer),
+        assert_array_not_equal(buffer_empty, new_buffer,
                         msg="Buffers are equal, which means that the rulers were not drawn")
 
         # make the last ruler the selected one (highlighted)
         rol._selected_ruler = selected_ruler
         cnvs.update_drawing()
-        test.gui_loop()
+        test.gui_loop(0.1)
 
         # ruler overlay with 4 rulers, 1 of them is selected (highlighted)
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
         img = wx.ImageFromBitmap(cnvs._bmp_buffer)
         sel_buffer = wxImage2NDImage(img)
-        self.assertTrue(numpy.any(new_buffer != sel_buffer),
+        assert_array_not_equal(new_buffer, sel_buffer,
                         msg="Buffers are equal, which means that the rulers were not drawn")
 
     def test_line_select_overlay(self):
