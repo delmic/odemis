@@ -165,7 +165,7 @@ class RepetitionStream(LiveStream):
         except AttributeError:
             pass
 
-    # overrides method in _live.py
+    # Overrides method of LiveStream
     def _onNewData(self, dataflow, data):
         """
         Called when a new image has arrived from the detector.
@@ -174,14 +174,14 @@ class RepetitionStream(LiveStream):
         :param data: (model.DataArray). The new image that has arrived from the detector.
         """
         if hasattr(self, "integrationTime"):
-            self.raw = (self.raw + [data])[-self.integrationCounts.value:]
+            self.raw = ([data] + self.raw)[:self.integrationCounts.value]
         else:
             self.raw = [data]
 
         self._shouldUpdateHistogram()
         self._shouldUpdateImage()
 
-    # overrides method in _base.py??
+    # Overrides method of Stream
     def _updateImage(self):
         """
         Recomputes the image with all the raw data available.
@@ -211,16 +211,31 @@ class RepetitionStream(LiveStream):
         Integrate/sum the acquired images in self.raw for live display while running a stream.
         Values cannot overflow (are never clipped).
         """
+        if len(self.raw) == 1:
+            return self.raw[0]
+
         logging.debug("Integrating %s images", len(self.raw))
         # Note: In beginning number of images in .raw can be smaller than self.integrationCounts.value
-        md = self.raw[0].metadata.copy()
-        orig_dtype = self.raw[0].dtype
-        best_dtype = get_best_dtype_for_acc(orig_dtype, len(self.raw))  # avoid saturation and overflow
-        data = numpy.sum(self.raw, axis=0, dtype=best_dtype)
-        md[model.MD_INTEGRATION_COUNT] = len(self.raw)
+        md = self.raw[-1].metadata.copy()
+
+        # Sum all the images, using a dtype big enough to avoid saturation/
+        # overflow and excluding the ones which are not compatible (eg, because
+        # the binning/shape changed).
+        orig_dtype = self.raw[-1].dtype
+        best_dtype = get_best_dtype_for_acc(orig_dtype, len(self.raw))
+        data = self.raw[0].astype(best_dtype)
+        n = 1
+        for i, d in enumerate(self.raw[1:]):
+            try:
+                data += d
+                n += 1
+            except Exception as ex:
+                logging.info("Failed to integrated image %d: %s", i + 1, ex)
+        md[model.MD_INTEGRATION_COUNT] = n
 
         return model.DataArray(data, md)
 
+    # Overrides method of Stream
     def _updateHistogram(self, data=None):
         """
         Recomputes the histogram with all the raw data available.
