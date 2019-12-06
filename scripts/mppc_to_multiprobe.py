@@ -36,23 +36,21 @@ Correction on hardware:
 from __future__ import division
 
 import argparse
+import cv2
+import glob
 import logging
 import math
 import numpy
-
-import cv2
-import glob
 import os
+import sys
+from libtiff import TIFF
+from scipy.ndimage.measurements import center_of_mass
 
 from skimage import measure
 
-from odemis.util.img import RGB2Greyscale
-
 from odemis.dataio import tiff
-from libtiff import TIFF
 from odemis.util import almost_equal, transform
-import sys
-from scipy.ndimage.measurements import center_of_mass
+from odemis.util.img import RGB2Greyscale
 
 
 def preprocess_images(image):
@@ -122,7 +120,7 @@ def preprocess_images(image):
         if num_labels != 1:
             logging.info("There should be only one active area in the image. However, found {:f} labelled"
                          "objects.".format(num_labels))
-        # Labelled object should have the size of about 1% of total image in px. Otherwise active area cut of or
+        # Labelled object should have the size of about 1% of total image in px. Otherwise active area cut off or
         # outside of the scanning area e.g. due to too much rotation of the mppc.
         # Use a threshold of 90% of the expected size to allow for variation due to dilation/erosion operation.
         num_active_areas = 0  # counter of how many active areas are found
@@ -278,16 +276,15 @@ def main(args):
                              "with the coordinate system of the multiprobe. "
                              "Can be automatically extracted with galvo_scan_to_multiprobe script "
                              "(mirror angle in degrees).")
-    parser.add_argument('--gain', dest="gain_diagcam", required=True, nargs='+', type=float,
-                        help="The distance (gain) on the diagnostic camera per Volt applied on the AWGs"
-                             "in x and y direction. "
+    parser.add_argument('--gain', dest="gain_descan", required=True, nargs='+', type=float,
+                        help="The distance (gain) on the diagnostic camera per Volt applied on the "
+                             "galvo mirror/descan AWG in x and y direction. "
                              "Can be automatically extracted with galvo_scan_to_multiprobe script "
                              "(galvo gain in px/volt).")
-
-    parser.add_argument('--px_size_diagcam', dest="px_size_diagcam", type=int, default=75,
+    parser.add_argument('--px-size-diagcam', dest="px_size_diagcam", type=int, default=75,
                         help="The pixel size in nm on the diagnostic camera.")  # TODO depending on??
     # TODO this needs to be an input arg or using the magnification to calc this pixel sizes!
-    parser.add_argument('--px_size_diagimg', dest="px_size_scanimg", type=int, default=40,
+    parser.add_argument('--px-size-diagimg', dest="px_size_scanimg", type=int, default=40,
                         help="The pixel size in nm on the scanned image. Default is 40nm assuming a magnification"
                              "of 1000x. Please change if using a different magnification.")
 
@@ -313,9 +310,9 @@ def main(args):
         corner_images, image_E4 = preprocess_images(image)
 
         # calculate mppc offset, Note: accuracy on AWGs is 0.001 volt
-        mppc_offset_px, mppc_offset_volt = \
-            get_mppc_offset(image_E4, math.radians(options.phi), tuple(options.gain_diagcam),
-                            options.px_size_diagcam, options.px_size_scanimg)
+        mppc_offset_px, mppc_offset_volt = get_mppc_offset(
+            image_E4, math.radians(options.phi), tuple(options.gain_descan),
+            options.px_size_diagcam, options.px_size_scanimg)
         # Note: need to swap the sign of x direction to match the hardware behaviour
         # TODO check again when AWG replaced, also check again, when galvo script angle calc refined
         print("Distance of the E4 mppc cell from image center is x={:.2f} volt and y={:.2f} volt. Apply the x={:.3f} "
