@@ -227,7 +227,8 @@ class SnapshotController(object):
             # record everything to a file
             exporter.export(filepath, raw_images, thumbnail)
             popup.show_message(self._main_frame,
-                               "Snapshot saved in %s" % (filepath,),
+                               "Snapshot saved as %s" % (os.path.basename(filepath),),
+                               message="In %s" % (os.path.dirname(filepath),),
                                timeout=3
                                )
 
@@ -1058,8 +1059,12 @@ class FineAlignController(object):
                                     u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f",
                                     opt_scale, rot_deg, shear, scaling_xy)
 
+                title = "Fine alignment probably incorrect"
+                lvl = logging.WARNING
                 self._tab_panel.lbl_fine_align.Label = "Probably incorrect"
             else:
+                title = "Fine alignment successful"
+                lvl = logging.INFO
                 self._tab_panel.lbl_fine_align.Label = "Successful"
 
             # Rotation is compensated in software on the FM image, but the user
@@ -1069,11 +1074,13 @@ class FineAlignController(object):
             timeout = max(2, min(abs(rot_deg), 10))
             popup.show_message(
                 self._tab_panel,
+                title,
                 u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
                 % (units.readable_str(rot_deg, unit=u"°", sig=3),
                    units.readable_str(shear, sig=3),
                    units.readable_str(scaling_xy, sig=3)),
-                timeout=timeout
+                timeout=timeout,
+                level=lvl
             )
             logging.info(u"Fine alignment computed mag correction of %f, rotation of %f°, "
                          u"shear needed of %s, and X/Y scaling needed of %s.",
