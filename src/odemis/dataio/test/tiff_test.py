@@ -38,6 +38,7 @@ import re
 import time
 import unittest
 from unittest.case import skip
+import json
 
 import libtiff.libtiff_ctypes as T # for the constant names
 import xml.etree.ElementTree as ET
@@ -418,6 +419,11 @@ class TestTiffIO(unittest.TestCase):
         """
         size = (512, 256, 1)
         dtype = numpy.dtype("uint64")
+        # use list instead of tuple for binning because json converts tuples to lists anyway
+        extra_md = {"Camera" : {'binning' : (0, 0)}, u"¤³ß": {'</Image>': '</Image>'},
+                    "Fake component": ("parameter", None)}
+        exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
+
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
                     model.MD_HW_VERSION: "2.54",
@@ -429,6 +435,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
+                    model.MD_EXTRA_SETTINGS : extra_md,
                     }
 
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)
@@ -492,6 +499,8 @@ class TestTiffIO(unittest.TestCase):
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)
+
+        self.assertEqual(json.loads(ime.find("ExtraSettings").text), exp_extra_md)
         imo.close()
 
 #    @skip("simple")
@@ -559,6 +568,11 @@ class TestTiffIO(unittest.TestCase):
         for i in range(1, 171):
             cot.append((cot[0][0] + i, i * 1e-12))
 
+        # use list instead of tuple for binning because json converts tuples to lists anyway
+        extra_md = {"Camera" : {'binning' : [0, 0]}, u"¤³ß": {'</Image>': '</Image>'},
+                    "Fake component": ("parameter", None)}
+        exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
+
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test spectrum",
@@ -571,6 +585,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_IN_WL: (500e-9, 520e-9),  # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_EBEAM_CURRENT: 20e-6,  # A
+                     model.MD_EXTRA_SETTINGS: extra_md,
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -584,6 +599,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2,  # s
                      model.MD_EBEAM_CURRENT_TIME: cot,
                      # model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_EXTRA_SETTINGS: extra_md,
                     },
                     ]
         dtype = numpy.dtype("uint8")
@@ -617,6 +633,7 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+            self.assertEqual(im.metadata[model.MD_EXTRA_SETTINGS], exp_extra_md)
 
             # reading back the data always returns a MD_WL_LIST never MD_WL_POLYNOMINAL
             if model.MD_WL_POLYNOMIAL in md:
