@@ -26,7 +26,7 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq import stream
-from odemis.model import MD_PIXEL_SIZE, MD_DWELL_TIME, MD_POS, MD_ACQ_DATE
+from odemis.model import MD_PIXEL_SIZE, MD_DWELL_TIME, MD_POS, MD_TIME_LIST
 from odemis.util import test
 import os
 import time
@@ -277,11 +277,11 @@ class TestFlim(unittest.TestCase):
 
         self.assertIsNotNone(self._image, "No data received")
         self.assertIsInstance(self._image, model.DataArray)
-        self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
+        self.assertIsNotNone(self._image.metadata[MD_TIME_LIST], "No metadata")
         self.assertEqual(self._image.ndim, 1)
         self.assertGreaterEqual(self._image.shape[0], 10, "Not enough data.")
         # make sure there are times for each value.
-        self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
+        self.assertEqual(len(self._image.metadata[MD_TIME_LIST]), self._image.shape[0])
 
     def test_setting_stream_rep(self):
         """
@@ -432,12 +432,12 @@ class TestFlim(unittest.TestCase):
 
         self.assertIsNotNone(self._image, "No data received")
         self.assertIsInstance(self._image, model.DataArray)
-        self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
+        self.assertIsNotNone(self._image.metadata[MD_TIME_LIST], "No metadata")
         self.assertEqual(self._image.ndim, 1)
         # TODO: by default the simulator only sends data for 5s... every 1.5s => 3 data
         self.assertGreaterEqual(self._image.shape[0], 3, "Not enough data.")
         # make sure there are times for each value.
-        self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
+        self.assertEqual(len(self._image.metadata[MD_TIME_LIST]), self._image.shape[0])
 
     def test_rep_ss(self):
         """
