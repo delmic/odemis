@@ -2401,7 +2401,6 @@ class CLRelController(Controller):
         if self._hasRefSwitch[axis]:
             self.SetReferenceMode(axis, True)
             self.ReferenceToSwitch(axis)
-            # FIXME: If referencing fails, this flag might be True though it should be not.
             self._referenced = True
         elif self._hasLimitSwitches[axis]:
             self._referenced = False
@@ -2936,8 +2935,8 @@ class Bus(model.Actuator):
         else:
             self._pos_updater = None
 
-        # # RO VA dict axis -> bool: True if the axis has been referenced
-        # # Only axes which can be referenced are listed
+        # RO VA dict axis -> bool: True if the axis has been referenced
+        # Only axes which can be referenced are listed
         self.referenced = model.VigilantAttribute(referenced, readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
