@@ -284,7 +284,7 @@ def main(args):
     parser.add_argument('--px-size-diagcam', dest="px_size_diagcam", type=int, default=75,
                         help="The pixel size in nm on the diagnostic camera.")  # TODO depending on??
     # TODO this needs to be an input arg or using the magnification to calc this pixel sizes!
-    parser.add_argument('--px-size-diagimg', dest="px_size_scanimg", type=int, default=40,
+    parser.add_argument('--px-size-scanimg', dest="px_size_scanimg", type=int, default=40,
                         help="The pixel size in nm on the scanned image. Default is 40nm assuming a magnification"
                              "of 1000x. Please change if using a different magnification.")
 
