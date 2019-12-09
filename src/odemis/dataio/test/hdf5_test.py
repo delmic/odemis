@@ -34,6 +34,7 @@ import os
 import time
 import unittest
 from unittest.case import skip
+import json
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -370,6 +371,11 @@ class TestHDF5IO(unittest.TestCase):
         """
         size = (512, 256, 1)
         dtype = numpy.dtype("uint16")
+        # list instead of tuple for binning because json only uses lists
+        extra_md = {"Camera" : {'binning' : ((0, 0), "px")}, u"¤³ß": {'</Image>': '</Image>'},
+                    "Fake component": ("parameter", None)}
+        exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
+
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
                     model.MD_DESCRIPTION: u"tÉst",  # non ascii character
@@ -380,6 +386,7 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
+                    model.MD_EXTRA_SETTINGS: extra_md,
                     }
 
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)
@@ -426,13 +433,13 @@ class TestHDF5IO(unittest.TestCase):
         # Try reading the metadata using the hdf5 module
         rdata = hdf5.read_data(FILENAME)
         self.assertEqual(len(rdata), 1)
-
         for im in rdata:
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], metadata[model.MD_DESCRIPTION])
             self.assertEqual(im.metadata[model.MD_POS], metadata[model.MD_POS])
             self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], metadata[model.MD_PIXEL_SIZE])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], metadata[model.MD_ACQ_DATE])
             self.assertEqual(im.metadata[model.MD_EXP_TIME], metadata[model.MD_EXP_TIME])
+            self.assertEqual(im.metadata[model.MD_EXTRA_SETTINGS], exp_extra_md)
 
     def testExportRead(self):
         """
