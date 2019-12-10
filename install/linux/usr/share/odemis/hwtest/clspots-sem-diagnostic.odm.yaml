@@ -20,7 +20,7 @@ MultiBeamSEM: {
 "DiagnosticCam Focus": {
   class: actuator.MultiplexActuator,
   role: diagnostic-cam-focus,
-  children: {"z": "Sample Stage"},
+  children: {"z": "Optical Focus"},
   init: {
     axes_map: {"z": "z"}
   },
@@ -30,12 +30,13 @@ MultiBeamSEM: {
 }
 
 "Sample Stage": {
-    class: pigcs.FakeBus,
+    class: pigcs.Bus,
     role: stage,
     init: {
-        port: "/dev/ttyPIGCS",
+        port: "autoip",
+        master: 1,
         axes: {
-            "x": [1, 1, True],
+            "x": [3, 1, True],
             "y": [2, 1, True]
         },
         inverted: ["x", "y"],
@@ -43,14 +44,16 @@ MultiBeamSEM: {
 }
 
 "Optical Focus": {
-    class: simulated.Stage,
-    role: focus,
+    class: pigcs.Bus,
+    role: optical-focus,
     init: {
-        axes: ["z"],
-        ranges: {"z": [0, 100.e-6]}
+        port: "/dev/ttyUSB0",
+        master: 1,
+        axes: {
+          "z": [null, "Z", True]
+        },
     },
 }
-
 
 "SEM": {
   class: xt_client.SEM,
