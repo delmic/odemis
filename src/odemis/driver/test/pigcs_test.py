@@ -625,8 +625,7 @@ class TestActuatorCL(TestActuator):
         self.assertAlmostEqual(stage.position.value['y'], ref_pos_y + stage.axes["y"].range[1] * 0.2, places=3)
 
         # reference again
-        stage.reference({'x'}).result()
-        stage.reference({'y'}).result()
+        stage.reference({'x', 'y'}).result()
         self.assertTrue(stage.referenced.value['x'])
         self.assertTrue(stage.referenced.value['y'])
         self.assertAlmostEqual(stage.position.value["x"], ref_pos_x, places=3)

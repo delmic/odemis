@@ -3107,11 +3107,6 @@ class Bus(model.Actuator):
                     self._waitEndMove(future, (a,), time.time() + 100)  # block until it's over
                     self.referenced._value[a] = controller.isReferenced(channel)
             except CancelledError:
-                # FIXME: if the referencing is stopped, the device refuses to
-                # move until referencing is run (and successful).
-                # => Need to put back the device into a mode where at least
-                # relative moves work.
-                logging.warning("Referencing cancelled, device will not move until another referencing")
                 future._was_stopped = True
                 raise
             except Exception:
