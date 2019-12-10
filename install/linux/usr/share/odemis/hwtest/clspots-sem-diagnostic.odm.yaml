@@ -2,7 +2,7 @@ MultiBeamSEM: {
   class: Microscope,
   role: mbsem,
   children: ["SEM", "EBeam Focus", "EBeam Stage", "EBeam control",
-             "DiagnosticCam", "DiagnosticCam Focus", "Sample Stage"],
+             "DiagnosticCam", "DiagnosticCam Focus", "Sample Stage", "Optical Focus"],
 }
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
@@ -29,21 +29,22 @@ MultiBeamSEM: {
   }
 }
 
-#"Sample Stage": {
-#  class: pigcs.Bus,
-#  role: stage,
-#  init: {
-#    port: "/dev/ttyUSB0",
-#    # axis -> controller, channel, closed-loop?
-#    axes: {
-#      "z": [null, "Z", True]
-#    },
-#  },
-#}
-
 "Sample Stage": {
-    class: simulated.Stage,
+    class: pigcs.FakeBus,
     role: stage,
+    init: {
+        port: "/dev/ttyPIGCS",
+        axes: {
+            "x": [1, 1, True],
+            "y": [2, 1, True]
+        },
+        inverted: ["x", "y"],
+    },
+}
+
+"Optical Focus": {
+    class: simulated.Stage,
+    role: focus,
     init: {
         axes: ["z"],
         ranges: {"z": [0, 100.e-6]}
