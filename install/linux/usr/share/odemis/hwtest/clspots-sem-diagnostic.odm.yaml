@@ -2,7 +2,7 @@ MultiBeamSEM: {
   class: Microscope,
   role: mbsem,
   children: ["SEM", "EBeam Focus", "EBeam Stage", "EBeam control",
-             "DiagnosticCam", "DiagnosticCam Focus", "Sample Stage"],
+             "DiagnosticCam", "DiagnosticCam Focus", "Sample Stage", "Optical Focus"],
 }
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
@@ -20,7 +20,7 @@ MultiBeamSEM: {
 "DiagnosticCam Focus": {
   class: actuator.MultiplexActuator,
   role: diagnostic-cam-focus,
-  children: {"z": "Sample Stage"},
+  children: {"z": "Optical Focus"},
   init: {
     axes_map: {"z": "z"}
   },
@@ -29,27 +29,31 @@ MultiBeamSEM: {
   }
 }
 
-#"Sample Stage": {
-#  class: pigcs.Bus,
-#  role: stage,
-#  init: {
-#    port: "/dev/ttyUSB0",
-#    # axis -> controller, channel, closed-loop?
-#    axes: {
-#      "z": [null, "Z", True]
-#    },
-#  },
-#}
-
 "Sample Stage": {
-    class: simulated.Stage,
+    class: pigcs.Bus,
     role: stage,
     init: {
-        axes: ["z"],
-        ranges: {"z": [0, 100.e-6]}
+        port: "autoip",
+        master: 1,
+        axes: {
+            "x": [3, 1, True],
+            "y": [2, 1, True]
+        },
+        inverted: ["x", "y"],
     },
 }
 
+"Optical Focus": {
+    class: pigcs.Bus,
+    role: optical-focus,
+    init: {
+        port: "/dev/ttyUSB0",
+        master: 1,
+        axes: {
+          "z": [null, "Z", True]
+        },
+    },
+}
 
 "SEM": {
   class: xt_client.SEM,
