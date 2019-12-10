@@ -24,6 +24,25 @@ import wx
 import sys
 import io
 
+if "gtk3" in wx.version():
+
+    # Fix StaticText on GTK3:
+    # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
+    # the StaticText's which are not shown to be set as size 1,1 when changing
+    # the text. The size is not updated when it's shown.
+    # See: https://github.com/wxWidgets/Phoenix/issues/1452
+    # https://trac.wxwidgets.org/ticket/16088
+    # => Force size update when showing
+    wx.StaticText._Show_orig = wx.StaticText.Show
+
+    def ShowFixed(self, show=True):
+        wx.StaticText._Show_orig(self, show)
+        if show:
+            # Force the static text to update (hopefully, there is no wrapping)
+            self.Wrap(-1)  # -1 = Disable wrapping
+
+    wx.StaticText.Show = ShowFixed
+
 if wx.MAJOR_VERSION <= 3:
     # ComboBox is now in .adv
     import wx.combo

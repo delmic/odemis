@@ -2696,7 +2696,7 @@ def __init_resources():
                         </object>
                         <flag>wxEXPAND</flag>
                         <cellpos>5,2</cellpos>
-                        </object>&gt;
+                        </object>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_streakcam">
                             <icon>img_icon_ico_fib_png</icon>
@@ -4340,7 +4340,6 @@ def __init_resources():
                                 <size>-1,10</size>
                                 <range>100</range>
                                 <value>0</value>
-                                <bg>#7C9FAD</bg>
                                 <style>wxGA_SMOOTH</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -5158,7 +5157,6 @@ def __init_resources():
                                   <size>-1,10</size>
                                   <range>100</range>
                                   <value>0</value>
-                                  <bg>#333333</bg>
                                   <style>wxGA_SMOOTH</style>
                                   <XRCED>
                                     <assign_var>1</assign_var>
@@ -5590,7 +5588,6 @@ def __init_resources():
                 <size>-1,10</size>
                 <range>100</range>
                 <value>50</value>
-                <bg>#333333</bg>
                 <hidden>1</hidden>
                 <style>wxGA_SMOOTH</style>
                 <XRCED>
@@ -5840,7 +5837,6 @@ def __init_resources():
                         <size>-1,8</size>
                         <range>100</range>
                         <value>0</value>
-                        <bg>#333333</bg>
                         <style>wxGA_SMOOTH</style>
                         <XRCED>
                           <assign_var>1</assign_var>
