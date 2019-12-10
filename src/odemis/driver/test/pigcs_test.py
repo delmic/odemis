@@ -26,6 +26,7 @@ from __future__ import division, print_function
 from concurrent import futures
 import logging
 import math
+from odemis import model
 from odemis.driver import pigcs
 import os
 import time
@@ -600,6 +601,47 @@ class TestActuatorCL(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_CL
         self.kwargs_two = KWARGS_TWO_CL
+
+    #    @skip("faster")
+    def test_reference(self):
+        """
+        Test referencing for 2 axes.
+        """
+        stage = CLASS(**self.kwargs_two)
+
+        # Test proper referencing
+        stage.reference({'x'}).result()
+        self.assertTrue(stage.referenced.value['x'])
+        ref_pos_x = stage.position.value["x"]  # Get the reference position
+
+        stage.reference({'y'}).result()
+        self.assertTrue(stage.referenced.value['y'])
+        ref_pos_y = stage.position.value["x"]  # Get the reference position
+
+        # move to some position different from ref pos by certain percentage of axes range
+        stage.moveAbs({'x': ref_pos_x + stage.axes["x"].range[1] * 0.1}).result()
+        stage.moveAbs({'y': ref_pos_y + stage.axes["y"].range[1] * 0.2}).result()  # in case ref pos is 0 only add
+        self.assertAlmostEqual(stage.position.value['x'], ref_pos_x + stage.axes["x"].range[1] * 0.1, places=3)
+        self.assertAlmostEqual(stage.position.value['y'], ref_pos_y + stage.axes["y"].range[1] * 0.2, places=3)
+
+        # reference again
+        stage.reference({'x', 'y'}).result()
+        self.assertTrue(stage.referenced.value['x'])
+        self.assertTrue(stage.referenced.value['y'])
+        self.assertAlmostEqual(stage.position.value["x"], ref_pos_x, places=3)
+        self.assertAlmostEqual(stage.position.value["y"], ref_pos_y, places=3)
+
+        # Test cancellation of referencing
+        self.assertTrue(stage.referenced.value['x'])  # check it is referenced
+        stage.moveAbs({'x': ref_pos_y + stage.axes["y"].range[1] * 0.3}).result()
+        self.assertAlmostEqual(stage.position.value["x"], ref_pos_y + stage.axes["y"].range[1] * 0.3, places=3)
+        f = stage.reference({'x'})
+        time.sleep(0.001)  # wait a bit so referencing actually started
+        self.assertTrue(f.running())
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
+        self.assertFalse(stage.referenced.value['x'])  # check it is no longer referenced
 
 
 # @skip("faster")
