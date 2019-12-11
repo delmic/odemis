@@ -189,8 +189,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
-#     def __del__(self):
-#         logging.debug("MDStream %s unreferenced", self.name.value)
+    #     def __del__(self):
+    #         logging.debug("MDStream %s unreferenced", self.name.value)
 
     @property
     def streams(self):
@@ -679,10 +679,11 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
             if numpy.prod(rep) == arr.shape[0]:
                 arr.shape = rep[::-1]
             else:
-                im_px = int(arr.shape[0]/numpy.prod(rep))  # number of images per pixel
+                im_px = int(arr.shape[0] / numpy.prod(rep))  # number of images per pixel
                 arr.shape = rep[::-1] + (im_px,)
                 # average images
                 arr = numpy.mean(arr, 2).astype(data_list[0].dtype)
+
         else:
             # need to reorder data by tiles
             # change N to Y, X
@@ -772,6 +773,104 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         """
         for l in self.leeches:
             l.complete(self.raw)
+
+
+    def _assembleLiveDataTiles(self, n, raw_data, px_idx, rep, pol_idx, pos_polarizations):
+        """
+        :param n: (int) number of the current stream
+        :param raw_data: acquired data of SEM stream
+        :param px_idx: (tuple of int) pixel index: y, x
+        :param rep: (tuple of int) repetition frame/ size of entire frame
+        :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
+        :param pos_polarizations: (list  of str) number of possible polarization possibilities
+        :param Fuzzing optional
+        """
+
+        tile_shape = raw_data.shape
+
+        #if px_idx == (0, 0):
+        if pol_idx > len(self._live_data[n]) - 1:
+            # New polarization => new DataArray
+            md = raw_data[0].metadata.copy()
+            center, pxs = self._get_center_pxs(rep, tile_shape , raw_data)
+            md.update({MD_POS: center,
+                       MD_PIXEL_SIZE: pxs})
+            da = model.DataArray(numpy.zeros(shape=rep[::-1], dtype=raw_data.dtype), md)
+            self._live_data[n].append(da)
+            self._acq_mask = numpy.zeros(rep[::-1], dtype=numpy.bool)
+
+
+        self._acq_mask[px_idx[0] * tile_shape[0]:(px_idx[0] + 1) * tile_shape[0],
+                       px_idx[1] * tile_shape[1]:(px_idx[1] + 1) * tile_shape[1]] = True
+        self._live_data[n][pol_idx][
+                       px_idx[0] * tile_shape[0]:(px_idx[0] + 1) * tile_shape[0],
+                       px_idx[1] * tile_shape[1]:(px_idx[1] + 1) * tile_shape[1]] = raw_data
+
+    def _assembleLiveData2D(self, n, raw_data, px_idx, rep, pol_idx, pos_polarizations):
+        """
+        :param n: (int) number of the current stream
+        :param raw_data: acquired data of SEM stream
+        :param px_idx: (tuple of int) pixel index: y, x
+        :param rep: (tuple of int) repetition frame/ size of entire frame
+        :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
+        :param pos_polarizations: (list  of str) number of possible polarization possibilities
+        """
+        tile_shape = raw_data.shape
+
+        # if not (hasattr(self, '_live_data')) or len(self._live_data) < 1:
+        #     self._live_data = [[]]
+        #     self._live_data[n] = [[] for l in range(0, len(pos_polarizations))]
+
+        if pol_idx > len(self._live_data[n]) - 1:
+            # New polarization => new DataArray
+            md = raw_data[0].metadata.copy()
+            center, pxs = self._get_center_pxs(rep, (1,1) , raw_data)
+            md.update({MD_POS: center,
+                       MD_PIXEL_SIZE: pxs})
+            da = model.DataArray(numpy.zeros(shape=rep[::-1], dtype=raw_data.dtype), md)
+            self._live_data[n].append(da)
+            self._acq_mask = numpy.zeros(rep[::-1], dtype=numpy.bool)
+
+        self._acq_mask[px_idx[0]: px_idx[0] + tile_shape[0],
+                       px_idx[1]: px_idx[1] + tile_shape[1]] = True
+        self._live_data[n][pol_idx][
+                           px_idx[0]: px_idx[0] + tile_shape[0],
+                           px_idx[1]: px_idx[1] + tile_shape[1]] = raw_data
+
+
+    def _inputCheckAssembleLiveView(self, n, tot_num, data, streams):
+        if type(data[0]) != list:
+            logging.error("incorrect definition of _live_data")
+        if n > tot_num:
+            logging.error("wrong value for n, more images taken than totally defined")
+
+        if len(data) > len(streams):
+            try:
+                data.remove([])
+            except:
+                pass
+
+    def _assembleLiveView(self, n, data, pol_idx, pos_polarizations, tot_num, streams):
+        '''
+        :param n: (int) number of the current stream
+        :param data: all acquired data of the streams
+        :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
+        :param pos_polarizations: (list of str) number of possible polarization possibilities
+        :param tot_num: (int) Total number of images to acquire.
+        '''
+        self._inputCheckAssembleLiveView(n, tot_num, data, streams)
+
+        # if _liveView is called after completing last scan
+        # an averaged SEM data over all polarized images is made
+        if pol_idx == len(pos_polarizations) and n == tot_num:
+            data[0] = model.DataArray(
+                                 numpy.mean(data[0], axis=0).astype(data[0][0].dtype),
+                                 data[0][0].metadata.copy())
+            self._raw = data
+        else:
+            self._raw = data
+            #only display the SEM image taken in the last polarization
+            self._raw[0]=data[0][-1]
 
 
 class SEMCCDMDStream(MultipleDetectorStream):
@@ -953,7 +1052,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         Select whether the ebeam is moved for scanning or the sample stage.
         :param future: Current future running for the whole acquisition.
         """
-
+        logging.error('runacq child')
         if hasattr(self, "useScanStage") and self.useScanStage.value:
             # TODO does not support polarimetry or image integration so far
             return self._runAcquisitionScanStage(future)
@@ -984,6 +1083,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep) * integration_count  # total number of images to acquire
             sub_pxs = self._emitter.pixelSize.value  # sub-pixel size
 
+            self._tot_num = tot_num
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
             self._raw = []
             self._anchor_raw = []
@@ -1037,17 +1137,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._analyzer:
                 if self._acquireAllPol.value:
                     pos_polarizations = POL_POSITIONS
+                    logging.debug("Will acquire the following polarization positions: %s" % list(pos_polarizations))
                     # tot number of ebeam pos to acquire taking the number of images per ebeam pos into account
                     tot_num *= len(pos_polarizations)
                 else:
                     pos_polarizations = [self._polarization.value]
-                logging.debug("Will acquire the following polarization positions: %s",
-                              pos_polarizations)
+                    logging.debug("Will acquire the following polarization position: %s" % pos_polarizations)
                 # extra time to move pol analyzer for each pos requested (value is very approximate)
                 time_move_pol_once = POL_MOVE_TIME  # s
+                logging.debug("Add %s extra sec to move polarization analyzer for all positions requested."
+                              % time_move_pol_left)
                 time_move_pol_left = time_move_pol_once * len(pos_polarizations)
-                logging.debug("Add %s extra sec to move polarization analyzer for all positions requested.",
-                              time_move_pol_left)
 
             # Initialize leeches: Shape should be slowest axis to fastest axis
             # (pol pos, rep y, rep x, images to integrate).
@@ -1062,15 +1162,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             n = 0  # number of images acquired so far
 
-            for pol_pos in pos_polarizations:
+            self._live_data = [[] for s in self._streams]
+
+            for pol_idx, pol_pos in enumerate(pos_polarizations):
                 if pol_pos is not None:
-                    logging.debug("Acquiring with the polarization position %s", pol_pos)
+                    logging.debug("Acquire with the following polarization position: %s" % pol_pos)
                     # move polarization analyzer to position specified
                     f = self._analyzer.moveAbs({"pol": pol_pos})
                     f.result()
                     time_move_pol_left -= time_move_pol_once
 
-                # iterate over pixel positions for scanning
+                # iterate over pixel positions for scanning.
                 for px_idx in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                     trans = tuple(spot_pos[px_idx])  # spot position
 
@@ -1098,27 +1200,21 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # extra time needed taking leeches into account and moving polarizer HW if present
                     extra_time = leech_time_left + time_move_pol_left
 
-                    # Reset live image, to be sure that if there is an
-                    # integrationTime, the new images are not mixed with the one
-                    # from the previous pixel (= ebeam pos).
-                    self._sccd.raw = []
-
                     # acquire images
                     for i in range(integration_count):
                         self._acquireImage(n, px_idx, img_time, sem_time, sub_pxs,
                                            tot_num, leech_nimg, extra_time, future)
-
-                        # Live update the setting stream with the new data
-                        try:
-                            self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
-                        except Exception:
-                            logging.exception("Failed to update CCD live view")
-
                         n += 1  # number of images acquired so far
 
                     # integrate/sum images
                     self._integrateImages(integration_count)
-                    logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
+
+                    for i, das in enumerate(self._acq_data):
+                        self._assembleLiveData(i, das[-1], px_idx, rep, pol_idx, pos_polarizations)
+
+                    # Live update the setting stream with the new data
+                    self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
+                    logging.debug("Done acquiring image number %s out of %s." % (n, tot_num))
 
             # acquisition done!
             for s, sub in zip(self._streams, self._subscribers):
@@ -1130,8 +1226,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            for n, das in enumerate(self._acq_data):
-                self._onCompletedData(n, das)
+            # Commented to show that onComplete can stay unused
+            # for n, das in enumerate(self._acq_data):
+            #     self._onCompletedData(n, das)
+
+            # Method which broadcast all the self._LiveData into self._raw
+            self._assembleLiveView(n, self._live_data, pol_idx, pos_polarizations, tot_num, self._streams)
 
             self._stopLeeches()
 
@@ -1183,7 +1283,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             orig_dtype = data2process[0].dtype
 
             if det_type == model.MD_DT_NORMAL:  # SEM
-                logging.debug("Averaging %s images", n)
+                # logging.debug("Average %s images", n)
                 # get the images corresponding to the last acquisition and average
                 data = numpy.mean(data2process, axis=0).astype(orig_dtype)
 
@@ -1192,7 +1292,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.warning("Unknown detector type %s for image integration. "
                                     "Will perform image integration anyways.", det_type)
 
-                logging.debug("Integrating %s images", n)
+                # logging.debug("Integrate %s images", n)
                 best_dtype = get_best_dtype_for_acc(orig_dtype, n)  # avoid saturation and overflow
                 data = numpy.sum(data2process, axis=0, dtype=best_dtype)
 
@@ -1563,7 +1663,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # MD_POS default to the center of the sample stage, but it
                     # needs to be the position of the
-                    #TODO: here different from _runAcquisitionEbeam
+                    # TODO: here different from _runAcquisitionEbeam
                     # sample stage + e-beam + scan stage translation (without the drift cor)
                     raw_pos = self._acq_data[0][-1].metadata[MD_POS]
                     strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
@@ -1751,12 +1851,18 @@ class SEMMDStream(MultipleDetectorStream):
             # initialize leeches
             leech_np, leech_time_ppx = self._startLeeches(px_time, tot_num, (rep[1], rep[0]))
 
+            self._live_data = [[] for s in self._streams]
+
             # number of spots scanned so far
             spots_sum = 0
             while spots_sum < tot_num:
+                update_interval = 0.5 # at least every X (up to in theory X + 1) seconds live data is created
                 # Acquire the maximum amount of pixels until next leech
                 npixels = min([np for np in leech_np if np is not None] +
-                              [tot_num - spots_sum])  # max, in case of no leech
+                              [tot_num - spots_sum] + [int(update_interval//px_time + 1)])  # max, in case of no leech
+                #TODO K.K. update unit tests to test for:
+                # cornercase where leech is set far after update_interval and therefore a non rectangular block may be scanned
+                # case where leech and update interval run semi in phase/out of phase
                 n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), spots_sum, npixels)
                 npixels = n_x * n_y
                 # get_next_rectangle() takes care of always fitting in the
@@ -1777,8 +1883,6 @@ class SEMMDStream(MultipleDetectorStream):
                     else:
                         logging.error("Unexpected clipping in the scan spot position %s", trans)
                 self._emitter.translation.value = cptrans
-
-                spots_sum += npixels
 
                 # and now the acquisition
                 for ce in self._acq_complete:
@@ -1805,6 +1909,12 @@ class SEMMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
                     s._dataflow.unsubscribe(self._subscribers[i])
+
+                px_x, px_y = divmod(spots_sum, rep[0])
+                px_idx = (px_x, px_y)
+                self._assembleLiveData2D(0, self._acq_data[0][-1], px_idx, rep, 0, [None])
+
+                spots_sum += npixels
 
                 # remove synchronisation
                 self._df0.synchronizedOn(None)
@@ -1839,11 +1949,10 @@ class SEMMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            # TODO: ideally, we would directly assemble the _acq_data into the final
-            # raw, which would avoid temporarily holding twice all the data.
+            # for n, das in enumerate(self._acq_data):
+            #     self._onCompletedData(n, das)
 
-            for n, das in enumerate(self._acq_data):
-                self._onCompletedData(n, das)
+            self._assembleLiveView(0, self._live_data, 0, [None], 1, self._streams)
 
             self._stopLeeches()
 
@@ -1883,6 +1992,34 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
     image).
     """
 
+    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx, pos_polarizations):
+        """
+         :param n: number of current stream
+         :param raw_data: acquired data of SEM stream
+         :param px_idx: pixel index: y, x
+         :param rep: repetition frame
+         :param pol_idx: polarisation index related to name as defined in pos_polarizations variable
+         :param pos_polarizations: (list  of str) number of possible polarization possibilities
+         """
+        if n != self._ccd_idx:
+            return super(SEMSpectrumMDStream, self)._assembleLiveDataTiles(n, raw_data, px_idx, rep, pol_idx, pos_polarizations)
+
+        spec_shape = raw_data.shape
+
+        if pol_idx > len(self._live_data[n]) - 1:
+            # New polarization => new DataArray
+            # Shape of spectrum data = C11YX
+            da = model.DataArray(numpy.zeros(shape=(spec_shape[1], 1, 1, rep[1], rep[0]), dtype=raw_data.dtype),
+                                 raw_data.metadata.copy())
+            md = da.metadata
+            md[MD_PIXEL_SIZE] = self._live_data[0][pol_idx].metadata[MD_PIXEL_SIZE]
+            md[MD_POS] = self._live_data[0][pol_idx].metadata[MD_POS]
+            md[MD_DIMS] = "CTZYX"
+            self._live_data[n] = da
+
+        self._live_data[n][:, 0, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_shape[1])
+
+
     def _onCompletedData(self, n, raw_das):
         if n != self._ccd_idx:
             return super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
@@ -1898,9 +2035,9 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         epxs = sem_data.metadata[MD_PIXEL_SIZE]
         # handle sub-pixels (aka fuzzing)
         tile_shape = self._emitter.resolution.value
-#         shape_main = sem_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
-#         rep = self.repetition.value
-#         tile_shape = (shape_main[0] / rep[0], shape_main[1] / rep[1])
+        #         shape_main = sem_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
+        #         rep = self.repetition.value
+        #         tile_shape = (shape_main[0] / rep[0], shape_main[1] / rep[1])
         pxs = (epxs[0] * tile_shape[0], epxs[1] * tile_shape[1])
 
         spec_data.metadata[MD_POS] = sem_data.metadata[MD_POS]
@@ -1944,6 +2081,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
     become necessary to carry out multiple drift corrections per pixel. This functionality
     is implemented here.
     """
+
     # TODO: implement multiple dwell time corrections per pixel in SEMCCDStream, so we don't
     # have duplicate code and a correct implementation that works with leeches and other features.
 
@@ -2243,6 +2381,26 @@ class SEMARMDStream(SEMCCDMDStream):
     image).
     """
 
+
+
+    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx, pos_polarizations):
+        """
+        :param n: (int) number of the current stream
+        :param raw_data: acquired data of SEM stream
+        :param px_idx: (tuple of int) pixel index: y, x
+        :param rep: (tuple of int) repetition frame
+        :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
+        :param pos_polarizations: (list  of str) number of possible polarization possibilities
+        """
+        if n != self._ccd_idx:
+            return super(SEMARMDStream, self)._assembleLiveDataTiles(n, raw_data, px_idx, rep, pol_idx, pos_polarizations)
+
+        md = raw_data[0].metadata.copy()
+        md[MD_PIXEL_SIZE] = self._live_data[0][pol_idx].metadata[MD_PIXEL_SIZE]
+        md[MD_POS] = self._live_data[0][pol_idx].metadata[MD_POS]
+        self._live_data.append(raw_data)
+        self._live_data[-1].metadata = md
+
     def _onCompletedData(self, n, raw_das):
         """
         n: (int) index of detector
@@ -2274,7 +2432,7 @@ class SEMARMDStream(SEMCCDMDStream):
                           len(raw_das), exp_num_image)
 
         # self._raw: first entry is sem-array, second onwards is ar-arrays
-        self._raw.extend(raw_das)  # append ar arrays
+        # self._raw.extend(raw_das)  # append ar arrays
 
 
 # TODO: ideally it should inherit from FluoStream
@@ -2282,6 +2440,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
     """
     Stream to acquire multiple ScannedFluoStreams simultaneously
     """
+
     def __init__(self, name, streams):
         """
         streams (list of ScannedFluoStreams): they should all have the same scanner
@@ -2492,7 +2651,8 @@ class ScannedRemoteTCStream(LiveStream):
         # we only use for synchronizing the scanner and recording the basic data,
         # or it's the tc_detector_live, which we don't use at all.
         super(ScannedRemoteTCStream, self).__init__(name, stream.time_correlator,
-            stream.time_correlator.dataflow, stream.emitter, opm=stream._opm, **kwargs)
+                                                    stream.time_correlator.dataflow, stream.emitter, opm=stream._opm,
+                                                    **kwargs)
 
         # Retrieve devices from the helper stream
         self._stream = stream
@@ -2704,8 +2864,9 @@ class ScannedRemoteTCStream(LiveStream):
                 self.raw[0] += data  # Uses numpy element-wise addition
                 self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
             else:
-                logging.error("New data array from tc-detector has different shape %s from previous one, can't accumulate data",
-                               data.shape)
+                logging.error(
+                    "New data array from tc-detector has different shape %s from previous one, can't accumulate data",
+                    data.shape)
 
             self._shouldUpdateHistogram()
 
