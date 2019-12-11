@@ -788,7 +788,6 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
         tile_shape = raw_data.shape
 
-        #if px_idx == (0, 0):
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
             md = raw_data[0].metadata.copy()
@@ -816,10 +815,6 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         :param pos_polarizations: (list  of str) number of possible polarization possibilities
         """
         tile_shape = raw_data.shape
-
-        # if not (hasattr(self, '_live_data')) or len(self._live_data) < 1:
-        #     self._live_data = [[]]
-        #     self._live_data[n] = [[] for l in range(0, len(pos_polarizations))]
 
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
