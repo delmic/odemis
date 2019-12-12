@@ -229,33 +229,37 @@ def get_mppc_offset(image, phi, gain_diagcam, px_size_diagcam, px_size_scanimg):
                 in previous steps. Otherwise there would be no signal in each mppc cell.
     :param gain_diagCam: (tuple of 2 floats) Distance on diagnostic camera per Volt. Unit is in px per Volt.
     :returns:
-        mppc_offset_px: (tuple of 2 float) The distance to the E4 cell image center in x and y in pixels.
-        mppc_offset_volt: (tuple of 2 float) The distance to the E4 cell image center in x and y in volt that needs to
-                        be applied to the x and y offset of the AWGs of the descan/galvo mirror.
+        mppc_offset_px: (tuple of 2 float) The distance to the E4 cell image center in x and y in the coordinate
+                        system of the mppc in pixels.
+        mppc_offset_volt: (tuple of 2 float) The distance to the E4 cell image center in x and y in the coordinate
+                        system of the descan/galvo mirror in volt that needs to be applied to the x and y offset
+                        of the AWGs of the descan/galvo mirror.
         Return values is based on top/left corner (0,0).
     """
 
-    rot_matrix = transform._rotation_matrix_from_angle(phi)
-
     # calculate center of mass (x, y) of the bright spot
     spotcenter_E4 = center_of_mass(image)[::-1]  # invert to follow convention (x, y) in px
-    # Transform coordinates from the system of multiprobe/mppc into descan/galvo system.
-    spotcenter_E4_rot = numpy.dot(spotcenter_E4, rot_matrix)
-
     # center of image
     image_center = (image.shape[1]/2., image.shape[0]/2.)  # (x, y) in px is at 400 x 400
-    # Transform coordinates from the system of multiprobe/mppc into descan/galvo system.
-    image_center_rot = numpy.dot(image_center, rot_matrix)
-
     # calculate the (x, y) distance to the center
-    mppc_offset_px = (image_center_rot[0] - spotcenter_E4_rot[0], image_center_rot[1] - spotcenter_E4_rot[1])  # [px]
+    mppc_offset_px = (image_center[0] - spotcenter_E4[0], image_center[1] - spotcenter_E4[1])
+
+    # Transform coordinates from the system of multiprobe/mppc into descan/galvo system.
+    # TODO: create method in util.transform?
+    # axes rotation: CCW rotation of coordinate system -> CW rotation of coordinates
+    ct = numpy.cos(phi)
+    st = numpy.sin(phi)
+    rot_matrix = numpy.array([(ct, st), (-st, ct)])
+
+    # transform offset into descan/galvo mirror coordinate system
+    mppc_offset_px_galvo = numpy.dot(rot_matrix, mppc_offset_px)
 
     # calculate the distance in nm per volt on the diagnostic camera
     dist_per_V_diagCam = (px_size_diagcam * gain_diagcam[0], px_size_diagcam * gain_diagcam[1])  # (x, y) [nm*px/V]
 
     # calculate voltage to correct for the mppc offset found on the scanned image
-    mppc_offset_volt = (px_size_scanimg * mppc_offset_px[0] / dist_per_V_diagCam[0],
-                    px_size_scanimg * mppc_offset_px[1] / dist_per_V_diagCam[1])  # (x, y) [V]
+    mppc_offset_volt = (px_size_scanimg * mppc_offset_px_galvo[0] / dist_per_V_diagCam[0],
+                        px_size_scanimg * mppc_offset_px_galvo[1] / dist_per_V_diagCam[1])  # (x, y) [V]
 
     return mppc_offset_px, mppc_offset_volt  # sign of value indicates direction of correction
 
@@ -314,10 +318,11 @@ def main(args):
             image_E4, math.radians(options.phi), tuple(options.gain_descan),
             options.px_size_diagcam, options.px_size_scanimg)
         # Note: need to swap the sign of x direction to match the hardware behaviour
+        # TODO is there a rotation/convention that I miss somewhere? Or due to coordinate system descan opposite scan
         # TODO check again when AWG replaced, also check again, when galvo script angle calc refined
-        print("Distance of the E4 mppc cell from image center is x={:.2f} volt and y={:.2f} volt. Apply the x={:.3f} "
+        print("Distance of the E4 mppc cell from image center is x={:.2f} px and y={:.2f} px. Apply the x={:.3f} "
               "volt and y={:.3f} volt to the descan/galvo mirror to correct for the offset."
-              .format(mppc_offset_px[0], mppc_offset_px[1], -mppc_offset_volt[0], mppc_offset_volt[1]))
+              .format(mppc_offset_px[0], mppc_offset_px[1], mppc_offset_volt[0], mppc_offset_volt[1]))
 
         # calculate mppc rotation
         mppc_rotation = get_mppc_rotation(corner_images)
