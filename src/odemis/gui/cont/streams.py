@@ -2803,6 +2803,7 @@ class SparcStreamsController(StreamBarController):
             main_data.time_correlator,
             main_data.time_correlator.data,
             main_data.ebeam,
+            opm=self._main_data_model.opm,
             detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
         )
 
