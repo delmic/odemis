@@ -79,6 +79,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
 
         self.num_entries = 0
         self.entries = []  # list of SettingEntry
+        self._disabled_entries = set()  # set of SettingEntry objects
 
         self._subscriptions = []
 
@@ -92,11 +93,17 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         """ Pause SettingEntry related control updates """
         for entry in self.entries:
             entry.pause()
+            if entry.value_ctrl and entry.value_ctrl.IsEnabled():
+                entry.value_ctrl.Enable(False)
+                self._disabled_entries.add(entry)
 
     def resume(self):
         """ Pause SettingEntry related control updates """
         for entry in self.entries:
             entry.resume()
+            if entry in self._disabled_entries:
+                entry.value_ctrl.Enable(True)
+                self._disabled_entries.remove(entry)
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries """

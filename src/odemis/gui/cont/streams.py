@@ -130,6 +130,7 @@ class StreamController(object):
         self._lbl_em_peak = None
 
         self.entries = []  # SettingEntry
+        self._disabled_entries = set()  # set of SettingEntry objects
 
         # Metadata display in analysis tab (static streams)
         if isinstance(self.stream, acqstream.StaticStream):
@@ -221,10 +222,11 @@ class StreamController(object):
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
-        # TODO: just call enable(False) from here? or is there any reason to
-        # want to pause without showing it to the user?
         for entry in self.entries:
             entry.pause()
+            if entry.value_ctrl and entry.value_ctrl.IsEnabled():
+                entry.value_ctrl.Enable(False)
+                self._disabled_entries.add(entry)
 
         self.stream_panel.enable(False)
 
@@ -232,6 +234,9 @@ class StreamController(object):
         """ Resume SettingEntry related control updates """
         for entry in self.entries:
             entry.resume()
+            if entry in self._disabled_entries:
+                entry.value_ctrl.Enable(True)
+                self._disabled_entries.remove(entry)
 
         self.stream_panel.enable(True)
 

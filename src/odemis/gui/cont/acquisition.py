@@ -662,13 +662,11 @@ class SparcAcquiController(object):
         """
         self._streambar_controller.pauseStreams()
         self._streambar_controller.pause()
-        self._streambar_controller.enable(False)
 
     def _resume_streams(self):
         """
         Resume (unfreeze) the stream settings
         """
-        self._streambar_controller.enable(True)
         self._streambar_controller.resume()
 
     def _reset_acquisition_gui(self, text=None, level=None, keep_filename=False):

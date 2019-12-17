@@ -2555,7 +2555,6 @@ class SecomAlignTab(Tab):
             self._sem_stream.should_update.value = True
             self._sem_stream.is_active.value = shown
             self._sem_spe.resume()
-            self._sem_spe.enable(True)
 
         # Set new mode
         if tool == TOOL_DICHO:
@@ -2579,7 +2578,6 @@ class SecomAlignTab(Tab):
         elif tool == TOOL_SPOT:
             # Do not show the SEM settings being changed during spot mode, and
             # do not allow to change the resolution/scale
-            self._sem_spe.enable(False)
             self._sem_spe.pause()
 
             self._sem_stream.should_update.value = False
