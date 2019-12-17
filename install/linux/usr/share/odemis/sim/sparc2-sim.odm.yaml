@@ -41,6 +41,10 @@ SPARC2: {
             "Spectrograph": True,
             "Optical Actuators": True
         },
+        termination: { # Which component to power off (or on) at the end
+            "Calibration Light": False, # make sure it's turned off
+            "Spectrograph": False,
+        },
     }
 }
 
