@@ -128,7 +128,20 @@ class Label(object):
         self.render_pos = None
         self.text_size = None
 
-    def draw(self, ctx):
+    def draw(self, ctx, canvas_padding=None, view_width=None, view_height=None):
+        """
+        Draws label to given context
+
+        :param ctx (cairo.Context): Cairo context to draw on
+        :param canvas_padding (int or None): canvas padding if exists
+        :param view_width (int or None): window view width
+        :param view_height (int or None): window view height
+        """
+        # If canvas padding is to be applied, view_width and view_height cannot be None
+        if canvas_padding and not (view_width and view_height):
+            logging.error("Padding requires view_width and view_height arguments to be passed.")
+            canvas_padding = None
+
         # No text? Do nothing
         if not self._text:
             return
@@ -179,10 +192,10 @@ class Label(object):
             # render point), to make the given position align with the top left.
             y += plh
 
-            if isinstance(self, ViewOverlay):
+            if canvas_padding:
                 # Apply padding
-                x = max(min(x, self.view_width - self.canvas_padding), self.canvas_padding)
-                y = max(min(y, self.view_height - self.canvas_padding), self.canvas_padding)
+                x = max(min(x, view_width - canvas_padding), canvas_padding)
+                y = max(min(y, view_height - canvas_padding), canvas_padding)
 
             # Horizontally align the label
             if self._align & wx.ALIGN_RIGHT:
@@ -198,17 +211,14 @@ class Label(object):
 
             # When we rotate text, flip gets a different meaning
             if self._deg is None and self.flip:
-                if isinstance(self, ViewOverlay):
-                    width = self.view_width
-                    height = self.view_height
-
+                if canvas_padding:
                     # Prevent the text from running off screen
-                    if x + lw + self.canvas_padding > width:
-                        x = width - lw
-                    elif x < self.canvas_padding:
-                        x = self.canvas_padding
-                    if y + lh + self.canvas_padding > height:
-                        y = height - lh
+                    if x + lw + canvas_padding > view_width:
+                        x = view_width - lw
+                    elif x < canvas_padding:
+                        x = canvas_padding
+                    if y + lh + canvas_padding > view_height:
+                        y = view_height - lh
                     elif y < lh:
                         y = lh
 
