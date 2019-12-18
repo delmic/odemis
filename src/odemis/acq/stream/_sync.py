@@ -2011,6 +2011,11 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         se_data = []
         tc_data = []
         spot_pos = self._getSpotPositions()
+
+        # Dwell times can be modified to account for drift correction, save original values to
+        # restore at the end of the acquisition
+        emitter_dt = self._emitter.dwellTime.value
+        tc_dt = self._tc_stream._detector.dwellTime.value
         try:
             self._adjustHardwareSettings()
 
@@ -2092,9 +2097,8 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             self._acq_done.set()
             # Reset hardware settings (dwell times might have been reduced due to subpixel drift
             # correction
-            dwell_time = self._tc_stream._getDetectorVA("dwellTime").value * max(nDC, 1)
-            self._tc_stream._detector.dwellTime.value = dwell_time
-            self._emitter.dwellTime.value = dwell_time
+            self._tc_stream._detector.dwellTime.value = tc_dt
+            self._emitter.dwellTime.value = emitter_dt
 
     def _acquireImage(self, x, y):
         try:
