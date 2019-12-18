@@ -253,7 +253,7 @@ class FocusOverlay(base.ViewOverlay):
             lbl = "focus %s" % units.readable_str(shiftm, 'm', 2)
             self.focus_label.text = lbl
             self.focus_label.pos = (x - 15, end_y)
-            self.focus_label.draw(ctx)
+            self.focus_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
     def add_shift(self, shift, axis):
         """ Adds a value on the given axis and updates the overlay
@@ -490,7 +490,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
             if self.x_label.text:
                 self.x_label.pos = (v_pos[0] + 5, self.cnvs.ClientSize.y)
-                self.x_label.draw(ctx)
+                self.x_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
             if self.y_label.text:
                 yp = max(2, v_pos[1] - 5)  # Padding from line
@@ -498,7 +498,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 label_padding = 30 if v_pos[0] < 50 else 0
                 yn = min(self.view_height - label_padding, yp)
                 self.y_label.pos = (3, yn)
-                self.y_label.draw(ctx)
+                self.y_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
             r, g, b, a = change_brightness(self.colour, -0.2)
             ctx.set_source_rgba(r, g, b, 0.5)
@@ -695,7 +695,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 self.list_labels[peak_i].text += "\nWidth: " + self.width_labels[peak_i] + "\nAmplitude: " + self.amplitude_labels[peak_i]
 
         for pl in self.list_labels:
-            pl.draw(ctx)
+            pl.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
 
 class DichotomyOverlay(base.ViewOverlay):
@@ -1248,7 +1248,7 @@ class PolarOverlay(base.ViewOverlay):
                     self.theta_radius, 0, self.tau)
             ctx.stroke()
 
-            self.theta_label.draw(ctx)
+            self.theta_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
         if self.phi is not None:
             # Draw Phi line
@@ -1256,7 +1256,7 @@ class PolarOverlay(base.ViewOverlay):
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
 
-            self.phi_label.draw(ctx)
+            self.phi_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
         ctx.set_dash([])
 
@@ -1288,7 +1288,7 @@ class PolarOverlay(base.ViewOverlay):
         pad, self.canvas_padding = self.canvas_padding, 0
 
         for _, _, _, _, label in self.ticks:
-            label.draw(ctx)
+            label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
         self.canvas_padding = pad
 
@@ -1303,7 +1303,7 @@ class PolarOverlay(base.ViewOverlay):
                 y += 40
 
             self.intensity_label.pos = (x, y)
-            self.intensity_label.draw(ctx)
+            self.intensity_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
 
 
 
