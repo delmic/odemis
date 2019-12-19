@@ -264,7 +264,7 @@ class Camera(model.DigitalCamera):
         shape = image.shape
         binning = self.binning.value
         fnt_size = int(80/binning[0])
-        fnt = ImageFont.truetype('/Library/Fonts/Arial.ttf', fnt_size)
+        fnt = ImageFont.truetype('FreeSans.ttf', fnt_size)
         # create txt image for overlay
         im_txt = Image.new('F', shape[::-1], 0)
         d = ImageDraw.Draw(im_txt)
