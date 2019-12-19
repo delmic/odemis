@@ -22,33 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-import numpy
 import unittest
+
+import numpy
 from requests import ConnectionError
 
-from odemis import model
 from odemis.dataio import AuthenticationError
 from odemis.dataio.catmaid import open_data
 
 
 class TestCatmaid(unittest.TestCase):
-
-    def test_open_data_neurodata(self):
-        """
-        Test requesting different tiles from the neurodata server.
-        """
-        url = "catmaid://catmaid.neurodata.io/catmaid/"
-        acquisition = open_data(url)
-        acquisition = acquisition.content[0]
-        size = (1024, 1024)
-        tile = acquisition.getTile(0, 0, 8, depth=437)
-        self.assertEqual(tile.shape, size)
-        self.assertEqual(tile.max(), 246)
-        numpy.testing.assert_almost_equal(tile.metadata[model.MD_POS], [0.000262, -6.55e-05])
-        numpy.testing.assert_equal(tile.metadata[model.MD_PIXEL_SIZE], [1024e-9, 1024e-9])
-        tile = acquisition.getTile(7, 2, 4, depth=437)
-        self.assertEqual(tile.shape, size)
-        self.assertEqual(tile.max(), 255)
 
     def test_open_data_virtualflybrain(self):
         """
@@ -100,7 +83,7 @@ class TestCatmaid(unittest.TestCase):
 
     def test_non_existing_tile(self):
         """Test that when requesting a non-existing tile, a tile containing only zeros is returned."""
-        url = "catmaid://catmaid.neurodata.io/catmaid/"
+        url = "catmaids://fafb.catmaid.virtualflybrain.org/"
         acquisition = open_data(url)
         acquisition = acquisition.content[0]
         size = (1024, 1024)
