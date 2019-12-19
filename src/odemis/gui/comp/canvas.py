@@ -876,9 +876,12 @@ class BitmapCanvas(BufferedCanvas):
         :param interpolate_data: (boolean) Apply interpolation if True
 
         """
-
-        # Don't draw anything if the canvas is disabled, leave the current buffer intact.
-        if not self or not self.IsEnabled() or 0 in self.GetClientSize():  # or not self
+        # Don't draw if the widget is destroyed, or has no space assigned to it.
+        # However, the following cases cannot be optimized away:
+        # * not IsEnabled(): canvas doesn't react to user input, but if a new
+        #   image is passed, it should be shown.
+        # * not IsShownOnScreen(): the thumbnail might still need to be updated.
+        if not self or 0 in self.ClientSize:
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
@@ -1957,7 +1960,7 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if not self or not self.IsEnabled():
+        if not self or 0 in self.ClientSize:
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
