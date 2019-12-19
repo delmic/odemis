@@ -489,9 +489,6 @@ class OpticalPathManager(object):
                 # path is correct anyway, just potentially more vibrations.
                 logging.exception("Failed to change CCD fan")
 
-        if mode == "mirror-align":
-            self._check_pass_through_available()
-
         fmoves = []  # moves in progress, list of (future, Component, dict(axis->pos) tuples
 
         # Restore the spectrometer focus before any other move, as (on the SR193),
@@ -540,8 +537,8 @@ class OpticalPathManager(object):
                 if axis in comp.axes:
                     if axis == "band":
                         # Handle the filter wheel in a special way. Search
-                        # for the key that corresponds to the value, most probably
-                        # to the 'pass-through'
+                        # for the position (key) that corresponds to the requested
+                        # position name (value), typically 'pass-through'.
                         choices = comp.axes[axis].choices
                         for key, value in choices.items():
                             if value == pos:
@@ -552,7 +549,18 @@ class OpticalPathManager(object):
                                     self._stored[comp_role, axis] = comp.position.value[axis]
                                 break
                         else:
-                            logging.debug("Choice %s is not present in %s axis", pos, axis)
+                            if mode == "mirror-align" and pos == "pass-through":
+                                # On the SPARC, if there is a filter-wheel in front of the CCD,
+                                # there should be a pass-through position. So if it's missing
+                                # that's typically a sign that the microscope file is incorrect
+                                # eg, a typo in the filter name.
+                                logging.warning("No 'pass-through' provided by %s.%s, "
+                                                "alignment might be harder due to limited signal. "
+                                                "That might be a sign of issue in the microscope file.",
+                                                comp.name, axis)
+                            else:
+                                logging.debug("Choice %s is not present in %s.%s axis, leaving at %s",
+                                              pos, comp.name, axis, comp.position.value[axis])
                             continue
                     elif axis == "grating":
                         # If mirror is to be used but not found in grating
@@ -834,26 +842,6 @@ class OpticalPathManager(object):
                 if new_path:
                     return new_path
         return None
-
-    def _check_pass_through_available(self):
-        """
-        Check that a pass-through filter is available, if not, will show a warning
-        (iff there is a filter component which affects the ccd).
-        That's mostly useful in case there is a typo in the filter name.
-        """
-        try:
-            ccd = self._getComponent("ccd")
-            light_filter = self._getComponent("filter")
-        except LookupError:
-            return  # No such hardware => no problem at all
-
-        try:
-            if (self.affects(light_filter.name, ccd.name)
-                and "pass-through" not in light_filter.axes["band"].choices
-               ):
-                logging.warning("No 'pass-through' filter available, alignment might be harder due to limited signal")
-        except Exception:
-            logging.exception("Failed to check pass-through filter presence")
 
     def _setCCDFan(self, enable):
         """
