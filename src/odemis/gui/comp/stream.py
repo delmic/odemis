@@ -859,7 +859,7 @@ class StreamPanel(wx.Panel):
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
@@ -871,7 +871,7 @@ class StreamPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
@@ -963,7 +963,7 @@ class StreamPanel(wx.Panel):
         value_ctrl = ComboBox(self._panel, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
                               style=cbstyle, **conf)
 
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
         if value is not None:
@@ -1029,7 +1029,7 @@ class StreamPanel(wx.Panel):
         value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY,
                                  style=wx.ALIGN_RIGHT | wx.NO_BORDER,
                                  **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)
 
