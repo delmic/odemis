@@ -41,6 +41,10 @@ SPARC2: {
             "Spectrograph": True,
             "Optical Actuators": True
         },
+        termination: { # Which component to power off (or on) at the end
+            "Calibration Light": False, # make sure it's turned off
+            "Spectrograph": False,
+        },
     }
 }
 
@@ -240,7 +244,7 @@ SPARC2: {
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 "Optical Path Properties": {
