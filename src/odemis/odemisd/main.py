@@ -712,7 +712,8 @@ def main(args):
         pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.INFO))
 
     # Useful to debug cases of multiple conflicting installations
-    logging.info("Starting Odemis back-end v%s (from %s)", odemis.__version__, __file__)
+    logging.info("Starting Odemis back-end v%s (from %s) using Python %d.%d",
+                 odemis.__version__, __file__, sys.version_info[0], sys.version_info[1])
 
     if options.validate and (options.kill or options.check or options.daemon):
         logging.error("Impossible to validate a model and manage the daemon simultaneously")

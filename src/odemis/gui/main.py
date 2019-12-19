@@ -137,7 +137,8 @@ class OdemisGUIApp(wx.App):
                     gui.legend_logo = "legend_logo_delphi.png"
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
-        logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
+        logging.info("Odemis GUI v%s (from %s) using Python %d.%d",
+                     odemis.__version__, __file__, sys.version_info[0], sys.version_info[1])
         logging.info("wxPython v%s", wx.version())
 
         # TODO: if microscope.ghost is not empty => wait and/or display a special
