@@ -818,3 +818,47 @@ class AffineTransform(RigidTransform):
         Ainv = numpy.dot(tri_inv(SL), numpy.transpose(self.rotation_matrix))
         tinv = -numpy.dot(Ainv, self.translation)
         return self.__class__(matrix=Ainv, translation=tinv)
+
+
+class AnamorphosisTransform(object):
+
+    def __init__(self, rotation=None, scale=None, shear=None, translation=None):
+        self.rotation = 0. if rotation is None else rotation
+        self.scale = (1., 1.) if scale is None else scale
+        self.shear = 0. if shear is None else shear
+        self.translation = (0., 0.) if translation is None else translation
+
+    @classmethod
+    def from_pointset(cls, x, y):
+        x = numpy.asarray(x)
+        y = numpy.asarray(y)
+
+        w = x[:, 0] + 1.0j * x[:, 1]
+        v = y[:, 0] + 1.0j * y[:, 1]
+
+        # Setup Vandermonde matrix; suffix cc denotes complex conjugate
+        wcc = numpy.conj(w)  # w̄
+        w2 = w * w  # w²
+        wabs2 = w * wcc  # ww̄
+        wcc2 = wcc * wcc  # w̄²
+        w2wcc = w * wabs2  # w²w̄
+        wwcc2 = wcc * wabs2  # ww̄²
+        w3wcc2 = wabs2 * w2wcc  # w³w̄²
+        w2wcc3 = wabs2 * wwcc2  # w²w̄³
+        # M = numpy.column_stack((numpy.ones_like(w),  # zero order
+        #                         w, wcc,  # first order
+        #                         w2, wabs2, wcc2,  # second order
+        #                         w2wcc, wwcc2,  # third order
+        #                         w3wcc2, w2wcc3))  # fifth order
+        # a, b1, b2, c1, c2, c3, d1, d2, e1, e2 = numpy.linalg.lstsq(M, v)[0]
+        M = numpy.column_stack((numpy.ones_like(w),  # zero order
+                                w, wcc))  # first order
+        a, b1, b2 = numpy.linalg.lstsq(M, v)[0]
+
+        translation = (numpy.real(a), numpy.imag(a))
+        #rotation = numpy.angle(b1)  # known wrong result in case of shear
+        #rotation = numpy.arctan2(numpy.imag(b1 + b2), numpy.real(b1 + b2))  # works but ugly
+        rotation = numpy.angle(b1 + b2)
+        scale = numpy.abs(b1)
+        return cls(rotation=rotation, scale=scale, translation=translation)
+

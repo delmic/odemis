@@ -29,7 +29,8 @@ import unittest
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
                                    RigidTransform, SimilarityTransform,
-                                   ScalingTransform, AffineTransform)
+                                   ScalingTransform, AffineTransform,
+                                   AnamorphosisTransform)
 
 ROT45 = 0.25 * numpy.pi
 ROT90 = 0.5 * numpy.pi
@@ -647,6 +648,19 @@ class AffineTransformKnownValues(unittest.TestCase):
                                     shear=shear,
                                     translation=translation).inverse()
             numpy.testing.assert_array_almost_equal(src, tform(dst))
+
+
+class AnamorphosisTransformKnownValues(unittest.TestCase):
+
+    def test_anamorphosis_transform_from_pointset_known_values(self):
+        src = AFFINE_KNOWN_VALUES[0][-1]
+        for rotation, _, _, translation, dst in AFFINE_KNOWN_VALUES:
+            print("--------")
+            print("src = ", src)
+            print("dst = ", dst)
+            tform = AnamorphosisTransform.from_pointset(src, dst)
+            self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
 
 
 if __name__ == '__main__':
