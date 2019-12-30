@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import copy
+import itertools
 import numpy
 from numpy.linalg import LinAlgError
 import unittest
@@ -652,15 +653,29 @@ class AffineTransformKnownValues(unittest.TestCase):
 
 class AnamorphosisTransformKnownValues(unittest.TestCase):
 
-    def test_anamorphosis_transform_from_pointset_known_values(self):
-        src = AFFINE_KNOWN_VALUES[0][-1]
-        for rotation, _, _, translation, dst in AFFINE_KNOWN_VALUES:
-            print("--------")
-            print("src = ", src)
-            print("dst = ", dst)
+    @staticmethod
+    def _grid(n):
+        xv = yv = numpy.arange(n, dtype=float) - 0.5 * float(n - 1)
+        xx, yy = numpy.meshgrid(xv, yv)
+        return numpy.column_stack((xx.ravel(), yy.ravel()))
+
+    def test_affine_transform_comparison_known_values(self):
+        src = self._grid(8)
+        rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
+        scaleList = [1., SQ05, SQ2, S23, SQ2S23]
+        shearList = [-1., 0., 1.]
+        translationList = [T0, TX, TY, TXY]
+        iterator = itertools.product(rotationList, scaleList, shearList, translationList)
+        for rotation, scale, shear, translation in iterator:
+            affine = AffineTransform(rotation=rotation, scale=scale,
+                                     shear=shear, translation=translation)
+            dst = affine(src)
             tform = AnamorphosisTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
+            numpy.testing.assert_array_almost_equal(scale, tform.scale)
+            self.assertAlmostEqual(shear, tform.shear)
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            numpy.testing.assert_array_almost_equal(0., tform.params[3:])
 
 
 if __name__ == '__main__':

@@ -820,13 +820,10 @@ class AffineTransform(RigidTransform):
         return self.__class__(matrix=Ainv, translation=tinv)
 
 
-class AnamorphosisTransform(object):
+class AnamorphosisTransform(AffineTransform):
 
-    def __init__(self, rotation=None, scale=None, shear=None, translation=None):
-        self.rotation = 0. if rotation is None else rotation
-        self.scale = (1., 1.) if scale is None else scale
-        self.shear = 0. if shear is None else shear
-        self.translation = (0., 0.) if translation is None else translation
+    def __init__(self, params):
+        self.params = params
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -845,20 +842,48 @@ class AnamorphosisTransform(object):
         wwcc2 = wcc * wabs2  # ww̄²
         w3wcc2 = wabs2 * w2wcc  # w³w̄²
         w2wcc3 = wabs2 * wwcc2  # w²w̄³
-        # M = numpy.column_stack((numpy.ones_like(w),  # zero order
-        #                         w, wcc,  # first order
-        #                         w2, wabs2, wcc2,  # second order
-        #                         w2wcc, wwcc2,  # third order
-        #                         w3wcc2, w2wcc3))  # fifth order
-        # a, b1, b2, c1, c2, c3, d1, d2, e1, e2 = numpy.linalg.lstsq(M, v)[0]
         M = numpy.column_stack((numpy.ones_like(w),  # zero order
-                                w, wcc))  # first order
-        a, b1, b2 = numpy.linalg.lstsq(M, v)[0]
+                                w, wcc,  # first order
+                                w2, wabs2, wcc2,  # second order
+                                w2wcc, wwcc2,  # third order
+                                w3wcc2, w2wcc3))  # fifth order
+        params = numpy.linalg.lstsq(M, v)[0]
+        return cls(params=params)
 
-        translation = (numpy.real(a), numpy.imag(a))
-        #rotation = numpy.angle(b1)  # known wrong result in case of shear
-        #rotation = numpy.arctan2(numpy.imag(b1 + b2), numpy.real(b1 + b2))  # works but ugly
-        rotation = numpy.angle(b1 + b2)
-        scale = numpy.abs(b1)
-        return cls(rotation=rotation, scale=scale, translation=translation)
+    @property
+    def rotation(self):
+        return self._rotation
 
+    @property
+    def scale(self):
+        return self._scale
+
+    @property
+    def shear(self):
+        return self._shear
+
+    @property
+    def translation(self):
+        return self._translation
+
+    @property
+    def transformation_matrix(self):
+        return self._transformation_matrix
+
+    @property
+    def params(self):
+        return self._params
+
+    @params.setter
+    def params(self, params):
+        self._params = params
+        a, b1, b2 = params[:3]
+        p, q = (b1.real, b1.imag)
+        r, s = (b2.real, b2.imag)
+        matrix = numpy.array([(p + r, -q + s), (q + s, p - r)])
+        R, S = qrp(matrix)
+        self._rotation = _rotation_matrix_to_angle(R)
+        self._scale = numpy.diag(S)
+        self._shear = S[0, 1] / S[0, 0]
+        self._translation = (a.real, a.imag)
+        self._transformation_matrix = matrix
