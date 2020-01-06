@@ -516,7 +516,7 @@ class RadioLegend(wx.Panel):
         self.SetForegroundColour(self.fg_color)
 
         # descriptive VA text
-        self.text = wx.TextCtrl(self, value="", style=wx.NO_BORDER | wx.CB_READONLY)
+        self.text = wx.StaticText(self, label="", style=wx.NO_BORDER)
         self.text.SetBackgroundColour(self.bg_color)
         self.text.SetForegroundColour(self.fg_color)
         self.text.SetToolTip("Position currently displayed")
@@ -675,10 +675,9 @@ class RadioLegend(wx.Panel):
         Used, if only one choice (aka one image) needs to be displayed.
         :param value: (str) Value that should be displayed in the text.
         """
-        self.pos_display = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
+        self.pos_display = wx.TextCtrl(self, value=value, style=wx.NO_BORDER | wx.CB_READONLY)
         self.pos_display.SetBackgroundColour(self.bg_color)
         self.pos_display.SetForegroundColour(self.fg_color)
-        self.pos_display.SetValue(value)
 
     @call_in_wx_main
     def set_pos_entries(self, choices, default_value, name):
@@ -696,7 +695,7 @@ class RadioLegend(wx.Panel):
 
         # add descriptive text to legend
         self.control_sizer.Add(self.text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
-        self.text.SetValue(name)  # set the descriptive text for the legend
+        self.text.SetLabel(name)  # set the descriptive text for the legend
 
         if len(choices) > 1:
             if isinstance(choices, collections.Mapping):  # create combo box + radio buttons
