@@ -28,6 +28,7 @@ import collections
 import logging
 import math
 import numbers
+import numpy
 import re
 
 
@@ -222,6 +223,8 @@ def to_string_pretty(x, sig=None, unit=None):
         x = int(round(x))  # avoid the .0
 
     if isinstance(x, float):
+        if isinstance(x, numpy.floating):
+            x = float(x)  # convert to standard float to get the standard display
 
         str_val = "%r" % x
 
