@@ -147,6 +147,11 @@ def to_string_si_prefix(x, sig=None):
 
     """
 
+    if sig is not None:
+        # Round it *before* calculating the scale, so that values
+        # like 999.7 first become 1000, which can then get converted to 1k.
+        x = round_significant(x, sig)
+
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
