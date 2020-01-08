@@ -41,7 +41,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.round_significant(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_round_down_significant(self):
@@ -56,7 +56,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.round_down_significant(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_to_string_si_prefix(self):
@@ -72,7 +72,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.to_string_si_prefix(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f is '%s' while expected '%s'" % (i[0], o, eo))
 
     def test_readable_str(self):
@@ -99,7 +99,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.readable_str(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_readable_time(self):
@@ -112,7 +112,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.readable_time(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_to_string_pretty(self):
