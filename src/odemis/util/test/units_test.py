@@ -22,8 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import unittest
+import numpy
 from odemis.util import units
+import unittest
+
 
 class TestUnits(unittest.TestCase):
 
@@ -85,6 +87,8 @@ class TestUnits(unittest.TestCase):
                   ((16, None), "16"),
                   ((160001, None, 3), "160000"),
                   ((16000000.0, None), "16000000"),
+                  ((16.3000000001, "px", 3), "16.3 px"),
+                  ((numpy.float64(16.3), "px", 3), "16.3 px"),
                   ((-1600, "N"), "-1.6 kN"),
                   ((-1601, "N", 3), "-1.6 kN"), # sig=3
                   ((0.0001236, None), "0.0001236"),
