@@ -966,6 +966,8 @@ class StreakCamera(model.HwComponent):
                 self.AppEnd()
             except Exception:
                 logging.exception("AppEnd failed")
+            self.should_listen = False  # terminates receiver thread
+            self._closeConnection()
             raise
 
     def _openConnection(self):
@@ -989,7 +991,7 @@ class StreakCamera(model.HwComponent):
                 raise ValueError("Connection Hamamatsu RemoteEx via port %s not successful. "
                                  "Response %s from server is not as expected." % (self.port, message))
         except socket.timeout:
-            raise model.HwError("Hamamastu RemoteEx didn't respond. "
+            raise model.HwError("Hamamatsu RemoteEx didn't respond. "
                                 "Check that it is running properly, or restart the streak camera computer.")
 
         try:
@@ -998,7 +1000,7 @@ class StreakCamera(model.HwComponent):
                 raise IOError("Connection Hamamatsu RemoteEx via port %s not successful. "
                               "Response %s from server is not as expected." % (self.port_d, message))
         except socket.timeout:
-            raise model.HwError("Hamamastu RemoteEx didn't respond. "
+            raise model.HwError("Hamamatsu RemoteEx didn't respond. "
                                 "Check that it is running properly, or restart the streak camera computer.")
 
         # set timeout
