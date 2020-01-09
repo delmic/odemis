@@ -140,25 +140,26 @@ class ReadoutCamera(model.DigitalCamera):
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
         # However, only a smaller subarea is used for operating the streak system.
         # x (lambda): horizontal, y (time): vertical
-        full_res = (int(parent.CamParamGet("Setup", "HWidth")[0]),
-                       int(parent.CamParamGet("Setup", "VWidth")[0]))
+        full_res = self._transposeSizeToUser((int(parent.CamParamGet("Setup", "HWidth")[0]),
+                                              int(parent.CamParamGet("Setup", "VWidth")[0])))
         self._metadata[model.MD_SENSOR_SIZE] = full_res
+        self._metadata[model.MD_DIMS] = "TC"
 
         # 16-bit
         self._shape = full_res + (2 ** 16,)
 
-        self._binning = self._getBinning()  # used by _setResolution
+        self._binning = self._transposeSizeToUser(self._getBinning())  # used by _setResolution
 
         # need to be before binning, as it is modified when changing binning
         self._resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
         self.resolution = model.ResolutionVA(self._resolution, ((1, 1), full_res), setter=self._setResolution)
 
-        choices_bin = self._getReadoutCamBinningChoices()
+        choices_bin = set(self._transposeSizeToUser(b) for b in self._getReadoutCamBinningChoices())
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
         self._metadata[model.MD_BINNING] = self.binning.value
 
         # physical pixel size is 6.5um x 6.5um
-        sensor_pixelsize = (6.5e-06, 6.5e-06)
+        sensor_pixelsize = self._transposeSizeToUser((6.5e-06, 6.5e-06))
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize
 
         # pixelsize VA is the sensor size, it does not include binning or magnification
@@ -243,8 +244,8 @@ class ReadoutCamera(model.DigitalCamera):
         if value == self.binning.value:
             return value
 
-        # ResolutionVA need tuple instead of list of format [2 x 2]
-        binning = "%s x %s" % (value[0], value[1])
+        # ResolutionVA need tuple instead of list of format "2 x 2"
+        binning = "%s x %s" % self._transposeSizeFromUser(value)
 
         # If camera is acquiring, it is essential to stop cam first and then change binning.
         # Currently, this only affects the Alignment tab, where camera is continuously acquiring.
@@ -551,7 +552,7 @@ class ReadoutCamera(model.DigitalCamera):
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
                 md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
-                dataarray = model.DataArray(image, md)
+                dataarray = model.DataArray(self._transposeDAToUser(image), md)
                 self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
 
                 is_receiving_image = False

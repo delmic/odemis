@@ -35,7 +35,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 CLASS_STREAKCAM = simstreakcam.StreakCamera
 
 # arguments used for the creation of basic components
-CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam", "image": "sparc-ar-mirror-align.h5"}
+CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam",
+                     "image": "sparc-ar-mirror-align.h5", "transp": [-1, 2]}
 CONFIG_STREAKUNIT = {"name": "StreakUnit", "role": "streakunit"}
 CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 

@@ -69,29 +69,32 @@ class ReadoutCamera(model.DigitalCamera):
 
         # sensor size (resolution)
         # x (lambda): horizontal, y (time): vertical
-        full_res = (self._img_list[0].shape[1], self._img_list[0].shape[0])
+        full_res = self._transposeSizeToUser((self._img_list[0].shape[1], self._img_list[0].shape[0]))
         self._metadata[model.MD_SENSOR_SIZE] = full_res
+        self._metadata[model.MD_DIMS] = "TC"
 
         # 16-bit
         depth = 2 ** (self._img_list[0].dtype.itemsize * 8)
         self._shape = full_res + (depth,)
 
         # variable needed to update resolution VA and wavelength list correctly (_updateWavelengthList())
-        self._binning = (2, 2)
+        self._binning = self._transposeSizeToUser((2, 2))
 
         # need to be before binning, as it is modified when changing binning
         resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
-        self.resolution = model.ResolutionVA(resolution, ((1, 1), full_res), setter=self._setResolution)
+        self.resolution = model.ResolutionVA(resolution,
+                                             ((1, 1), full_res),
+                                             setter=self._setResolution)
 
         # variable needed to update wavelength list correctly (_updateWavelengthList())
         self._resolution = self.resolution.value
 
-        choices_bin = {(1, 1), (2, 2), (4, 4)}
+        choices_bin = {(1, 1), (2, 2), (4, 4)}  # Should be converted to user, but they are identical
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
         self._metadata[model.MD_BINNING] = self.binning.value
 
         # physical pixel size is 6.5um x 6.5um
-        sensor_pixelsize = (6.5e-06, 6.5e-06)
+        sensor_pixelsize = self._transposeSizeToUser((6.5e-06, 6.5e-06))
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize
 
         # pixelsize VA is the sensor size, it does not include binning or magnification
@@ -275,7 +278,7 @@ class ReadoutCamera(model.DigitalCamera):
         self._img_counter = (self._img_counter + 1) % len(self._img_list)
         image = self._img_list[self._img_counter]
 
-        return image
+        return self._transposeDAToUser(image)
 
     def _generate(self):
         """

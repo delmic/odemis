@@ -187,7 +187,7 @@ SPARC2: {
     init: {
         image: "sparc-ar-mirror-align.h5",  # only for simulator!  TODO replace with streak image
 #       device: 0,
-#       transp: [-1, 2], # if mirrored on X axis
+        transp: [-1, 2], # if mirrored on X axis
     },
 #    dependencies: {spectrograph: "Spectrograph"},
     # TODO does not work for now as modelgen says no component named spectrograph found
