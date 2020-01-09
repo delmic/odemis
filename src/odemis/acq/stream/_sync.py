@@ -235,7 +235,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         total_time = self._estimateRawAcquisitionTime()  # Note: includes image integration
 
         rep = self.repetition.value
-        npixels = numpy.prod(rep)
+        npixels = int(numpy.prod(rep))
         dt = total_time / npixels
         pol_pos = [None]
 
@@ -289,7 +289,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
                 tot_dist = (phy_width[0] * repetition[1] + phy_width[1]) * 2
                 speed = self._sstage.speed.value["x"]  # consider both axes have same speed
 
-                npixels = numpy.prod(repetition)
+                npixels = int(numpy.prod(repetition))
                 # x2 the move time for compensating the accel/decel + 50 ms per pixel overhead
                 move_time = 2 * tot_dist / speed + npixels * 50e-3  # s
                 logging.debug("Estimated total scan stage travel distance is %s = %s s",
@@ -981,7 +981,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Generating %dx%d spots for %g (dt=%g) s",
                           spot_pos.shape[1], spot_pos.shape[0], img_time, dwell_time)
             rep = self.repetition.value  # (int, int): number of pixels in the ROI (X, Y)
-            tot_num = numpy.prod(rep) * integration_count  # total number of images to acquire
+            tot_num = int(numpy.prod(rep)) * integration_count  # total number of images to acquire
             sub_pxs = self._emitter.pixelSize.value  # sub-pixel size
 
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
@@ -1453,7 +1453,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                           self._emitter.resolution.value,
                           self._emitter.scale.value)
 
-            tot_num = numpy.prod(rep)
+            tot_num = int(numpy.prod(rep))
 
             # initialize leeches
             leech_np, leech_time_ppx = self._startLeeches(px_time, tot_num, (rep[1], rep[0]))
@@ -1746,7 +1746,7 @@ class SEMMDStream(MultipleDetectorStream):
             logging.debug("Starting e-beam sync acquisition with components %s",
                           ", ".join(s._detector.name for s in self._streams))
 
-            tot_num = numpy.prod(rep)
+            tot_num = int(numpy.prod(rep))
 
             # initialize leeches
             leech_np, leech_time_ppx = self._startLeeches(px_time, tot_num, (rep[1], rep[0]))
@@ -2268,7 +2268,7 @@ class SEMARMDStream(SEMCCDMDStream):
             d.metadata[MD_DESCRIPTION] = sname
 
         # expected number of images per ebeam pos
-        exp_num_image = numpy.prod(self.repetition.value)
+        exp_num_image = int(numpy.prod(self.repetition.value))
         # if polarization analyzer HW: can be multiple images per ebeam pos
         if self._analyzer and self._acquireAllPol.value:
             exp_num_image *= len(POL_POSITIONS)
