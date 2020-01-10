@@ -4235,6 +4235,16 @@ class Sparc2AlignTab(Tab):
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
 
+            # Cancel manual focus: just reset the button, as the rest is just
+            # optical-path moves.
+            self.panel.btn_manualfocus.SetValue(False)
+
+            # Turn off the brightlight, if it was on
+            bl = main.brightlight
+            if bl:
+                bl.power.value = bl.power.range[0]
+                bl.emissions.value = [0] * len(bl.emissions.value)
+
             if main.lens_mover:
                 main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
