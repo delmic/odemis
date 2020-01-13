@@ -21,19 +21,20 @@ http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
-import base64
 import logging
 import threading
 import time
 from concurrent.futures import CancelledError
 
-import msgpack
-import msgpack_numpy as m
-from Pyro5.api import Proxy
+import Pyro5.api
+import msgpack_numpy
 
 from odemis import model
 from odemis import util
 from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture
+
+Pyro5.api.config.SERIALIZER = 'msgpack'
+msgpack_numpy.patch()
 
 XT_RUN = "run"
 XT_STOP = "stop"
@@ -59,7 +60,7 @@ class SEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
         self._proxy_access = threading.Lock()
         try:
-            self.server = Proxy(address)
+            self.server = Pyro5.api.Proxy(address)
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
@@ -157,10 +158,8 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            x_enc = self.server.get_latest_image(channel_name)
-            x_dec = base64.b64decode(x_enc['data'])
-            x_rec = msgpack.unpackb(x_dec, object_hook=m.decode)
-            return x_rec
+            image = self.server.get_latest_image(channel_name)
+            return image
 
     def set_scan_mode(self, mode):
         """
