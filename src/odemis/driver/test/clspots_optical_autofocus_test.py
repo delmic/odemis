@@ -37,7 +37,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 CLSPOTS_SIM_CONFIG = CONFIG_PATH + "sim/clspots-optical-autofocus-sim.odm.yaml"
-CLSPOTS_CONFIG = CONFIG_PATH + "sim/clspots-optical-autofocus.odm.yaml"
+CLSPOTS_CONFIG = CONFIG_PATH + "hwtest/clspots-optical-autofocus.odm.yaml"
 
 
 class TestAutofocusSim(unittest.TestCase):
