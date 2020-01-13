@@ -37,7 +37,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 CLSPOTS_SIM_CONFIG = CONFIG_PATH + "sim/clspots-optical-autofocus-sim.odm.yaml"
-CLSPOTS_CONFIG = CONFIG_PATH + "sim/clspots-optical-autofocus.odm.yaml"
+CLSPOTS_CONFIG = CONFIG_PATH + "hwtest/clspots-optical-autofocus.odm.yaml"
 
 
 class TestAutofocusSim(unittest.TestCase):
@@ -149,6 +149,9 @@ class TestAutofocusHW(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW:
+            raise unittest.SkipTest('No HW present. Skipping tests.')
+
         try:
             test.start_backend(CLSPOTS_CONFIG)
         except LookupError:
@@ -158,9 +161,6 @@ class TestAutofocusHW(unittest.TestCase):
         except IOError as exp:
             logging.error(str(exp))
             raise
-
-        if TEST_NOHW:
-            raise unittest.SkipTest('No HW present. Skipping tests.')
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
