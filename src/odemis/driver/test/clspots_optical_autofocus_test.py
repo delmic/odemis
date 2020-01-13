@@ -149,6 +149,9 @@ class TestAutofocusHW(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW:
+            raise unittest.SkipTest('No HW present. Skipping tests.')
+
         try:
             test.start_backend(CLSPOTS_CONFIG)
         except LookupError:
@@ -158,9 +161,6 @@ class TestAutofocusHW(unittest.TestCase):
         except IOError as exp:
             logging.error(str(exp))
             raise
-
-        if TEST_NOHW:
-            raise unittest.SkipTest('No HW present. Skipping tests.')
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
