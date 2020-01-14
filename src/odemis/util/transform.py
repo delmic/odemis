@@ -213,12 +213,7 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
 
         """
         x = numpy.asarray(x)
-        if x.ndim == 1:
-            return (numpy.einsum('ik,k->i', self.transformation_matrix, x) +
-                    self.translation)
-        else:
-            return (numpy.einsum('ik,jk->ji', self.transformation_matrix, x) +
-                    self.translation)
+        return numpy.einsum('ik,...k->...i', self.transformation_matrix, x) + self.translation
 
     @abstractmethod
     def inverse(self):
