@@ -22,8 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import unittest
+import numpy
 from odemis.util import units
+import unittest
+
 
 class TestUnits(unittest.TestCase):
 
@@ -41,7 +43,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.round_significant(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_round_down_significant(self):
@@ -56,7 +58,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.round_down_significant(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_to_string_si_prefix(self):
@@ -72,7 +74,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.to_string_si_prefix(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%f is '%s' while expected '%s'" % (i[0], o, eo))
 
     def test_readable_str(self):
@@ -85,10 +87,16 @@ class TestUnits(unittest.TestCase):
                   ((16, None), "16"),
                   ((160001, None, 3), "160000"),
                   ((16000000.0, None), "16000000"),
+                  ((16.3000000001, "px", 3), "16.3 px"),
+                  ((numpy.float64(16.3), "px", 3), "16.3 px"),
                   ((-1600, "N"), "-1.6 kN"),
-                  ((-1601, "N", 3), "-1.6 kN"), # sig=3
+                  ((-1601, "N", 3), "-1.6 kN"),  # sig=3
                   ((0.0001236, None), "0.0001236"),
                   ((0.0012, "V"), "1.2 mV"),
+                  ((999.999, "V", 3), "1 kV"),
+                  ((999.5, "V"), "999.5 V"),
+                  ((999.5, "V", 3), "1 kV"),
+                  ((999.4, "V", 3), "999 V"),
                   ((200e-6, "m"), u"200 µm"),
                   ((0.0, "m"), "0 m"),
                   (([1500, 1200, 150], None), "1500 x 1200 x 150"),
@@ -99,7 +107,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.readable_str(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_readable_time(self):
@@ -112,7 +120,7 @@ class TestUnits(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = units.readable_time(*i)
-            self.assertEquals(o, eo,
+            self.assertEqual(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_to_string_pretty(self):

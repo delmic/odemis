@@ -28,6 +28,7 @@ import collections
 import logging
 import math
 import numbers
+import numpy
 import re
 
 
@@ -146,6 +147,11 @@ def to_string_si_prefix(x, sig=None):
 
     """
 
+    if sig is not None:
+        # Round it *before* calculating the scale, so that values
+        # like 999.7 first become 1000, which can then get converted to 1k.
+        x = round_significant(x, sig)
+
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
@@ -222,6 +228,8 @@ def to_string_pretty(x, sig=None, unit=None):
         x = int(round(x))  # avoid the .0
 
     if isinstance(x, float):
+        if isinstance(x, numpy.floating):
+            x = float(x)  # convert to standard float to get the standard display
 
         str_val = "%r" % x
 
