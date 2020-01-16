@@ -3824,7 +3824,7 @@ class IPBusAccesser(object):
                             l = l[len(prefix):]
                         else:
                             # Maybe the previous line was actually continuing (but the hardware is strange)?
-                            if ret and ret[-1] == "":
+                            if ret and ret[-1] == b"":
                                 logging.debug("Reconsidering previous line as beginning of multi-line")
                                 ret = ret[:-1]
                             else:

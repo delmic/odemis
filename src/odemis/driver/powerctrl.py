@@ -322,7 +322,7 @@ class PowerControlUnit(model.PowerSupplier):
         # Try to read until timeout to be extra safe that we properly flushed
         while True:
             char = ser.read()
-            if char == '':
+            if char == b'':
                 break
         logging.debug("Nothing left to read, Power Control Unit can safely initialize.")
 
