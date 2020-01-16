@@ -387,7 +387,7 @@ class Controller(object):
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if _stem:
-            self._channels = set("%d" % v for v in range(1, 17))  # allow commands to work on any axis
+            self._channels = tuple("%d" % v for v in range(1, 17))  # allow commands to work on any axis
             return
         if axes is None:
             raise ValueError("Need to have at least one axis configured")
@@ -576,12 +576,12 @@ class Controller(object):
     def GetAxes(self, all=False):
         """
         all (bool): also list the disabled axes
-        returns (set of bytes): all the available axes
+        returns (tuple of str): all the available axes
         """
         # SAI? (Get List Of Current Axis Identifiers)
         # SAI? ALL: list all axes (included disabled ones), one per line
         answer = self._sendQueryCommand("SAI?%s\n" % (" ALL" if all else "",))
-        axes = set(a for a in answer)
+        axes = tuple(answer)
         return axes
 
     def GetAvailableCommands(self):
@@ -802,13 +802,12 @@ class Controller(object):
         mv_axes = set()
         while bitmap > 0:
             if bitmap & 1:
-                mv_axes.add("%s" % i)
+                try:
+                    mv_axes.add(self._channels[i - 1])
+                except IndexError:
+                    logging.debug("Reported moving axis %d which is out of known axes", i)
             i += 1
             bitmap >>= 1
-        # if axes labels are not digits convert the mv_axes to characters.
-        if not all(k.isdigit() for k in self._channels):
-            # Assume axes are sorted alphabetically, i.e. 1 corresponds to x, 2 to y 3 to z.
-            mv_axes = set(n for i, n in enumerate(sorted(self._channels)) if bytes(i + 1) in mv_axes)
         return mv_axes
 
     def GetStatus(self):
@@ -1538,7 +1537,7 @@ class Controller(object):
         if axes is None:
             axes = self._channels
         else:
-            assert axes.issubset(self._channels)
+            assert axes.issubset(set(self._channels))
 
         # Note that "isOnTarget" would also work (both for OL and CL), but it
         # takes more characters and for CL, we need a more clever code anyway
@@ -1589,7 +1588,7 @@ class Controller(object):
 
             axes = self.GetAxes()
             if len(axes) == 0 or len(axes) > 16:
-                logging.error("Controller %s report axes %s", self.address, str(axes))
+                logging.error("Controller %s report axes %s", self.address, axes)
                 return False
 
             if self._model in (MODEL_E861,): # support open-loop mode
@@ -1786,7 +1785,7 @@ class CLAbsController(Controller):
         if axes is None:
             axes = set(self._upm.keys())
         else:
-            assert axes.issubset(self._channels)
+            assert axes.issubset(set(self._channels))
 
         # With servo on, it might constantly be _slightly_ moving (around the
         # target), so it's much better to use IsOnTarget info. The controller
@@ -2343,7 +2342,7 @@ class CLRelController(Controller):
         if axes is None:
             axes = self._channels
         else:
-            assert axes.issubset(self._channels)
+            assert axes.issubset(set(self._channels))
 
         # With servo on, it might constantly be _slightly_ moving (around the
         # target), so it's much better to use IsOnTarget info. The controller
@@ -2784,7 +2783,7 @@ class SMOController(Controller):
         if axes is None:
             axes = self._channels
         else:
-            assert axes.issubset(self._channels)
+            assert axes.issubset(set(self._channels))
 
         for c in axes:
             if self._isAxisMovingOLViaPID(c):
