@@ -753,7 +753,7 @@ class PMTControlSimulator(object):
                 res = b'%f\n' % self._gain
             elif tokens[0] == b"PCURR?":
                 res = b'%f\n' % self._prot_curr
-            elif tokens[0] == "PTIME?":
+            elif tokens[0] == b"PTIME?":
                 res = str(self._prot_time) + b'\n'
             elif tokens[0] == b"SWITCH?":
                 if self._protection:
