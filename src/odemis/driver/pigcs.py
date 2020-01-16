@@ -425,7 +425,7 @@ class Controller(object):
         except NotImplementedError:
             self._hasRefSwitch = {a: False for a in self._channels}
 
-        # Dict of axis (bytes) -> bool: whether the axis supports position update
+        # Dict of axis (str) -> bool: whether the axis supports position update
         self.canUpdate = {a: False for a in self._channels}
 
         self._position = {} # m (dict axis-> position)
@@ -639,7 +639,7 @@ class Controller(object):
 
     def GetParameter(self, axis, param):
         """
-        axis (str): axis number
+        axis (str): axis name
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
@@ -678,7 +678,7 @@ class Controller(object):
 
     def SetParameter(self, axis, param, val, check=True):
         """
-        axis (str): axis number
+        axis (str): axis name
         param (0<int): parameter id (cf p.35)
         val (str): value to set (if not a string, it will be converted)
         check (bool): if True, will check whether the hardware raised an error
@@ -697,7 +697,7 @@ class Controller(object):
     def GetParameterNonVolatile(self, axis, param):
         """
         Read the value of the parameter in the non-volatile memory
-        axis (str): axis number
+        axis (str): axis name
         param (0<int): parameter id (cf p.35)
         returns (str): the string representing this parameter
         """
@@ -730,7 +730,7 @@ class Controller(object):
         Returns the value for a command with axis.
         Ex: POS? 1 -> 1=25.3
         com (str): the 4 letter command (including the ?)
-        axis (str): axis number
+        axis (str): axis name
         returns (int or float or str): value returned depending on the type detected
         """
         assert(axis in self._channels)
@@ -759,7 +759,7 @@ class Controller(object):
          the ends of the axis).
         Note: It's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (str): axis number
+        axis (str): axis name
         returns (bool)
         """
         # LIM? (Indicate Limit Switches)
@@ -772,7 +772,7 @@ class Controller(object):
          the "middle" of the axis).
         Note: apparently it's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
-        axis (str): axis number
+        axis (str): axis name
         returns (bool)
         """
         # TRS? (Indicate Reference Switch)
@@ -841,7 +841,7 @@ class Controller(object):
         """
         Report whether the given axis has been referenced
         Note: setting position with RON disabled will also put it in this mode
-        axis (str): axis number
+        axis (str): axis name
         returns (bool)
         """
         # FRF? (Get Referencing Result)
@@ -852,7 +852,7 @@ class Controller(object):
         """
         Report whether the given axis is considered on target (for closed-loop
           moves only)
-        axis (str): axis number
+        axis (str): axis name
         returns (bool)
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -902,7 +902,7 @@ class Controller(object):
         """
         Call relaxing procedure. Reduce voltage, to increase lifetime and needed
           to change between modes
-        axis (str): axis number
+        axis (str): axis name
         """
         # RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
         # Also needed to change between nanostepping and analog
@@ -913,7 +913,7 @@ class Controller(object):
         """
         Stop motion with deceleration
         Note: see Stop
-        axis (str): axis number,
+        axis (None or str): axis name. If None, all axes are stopped
         """
         # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
@@ -950,7 +950,7 @@ class Controller(object):
     def GetServo(self, axis):
         """
         Return whether the servo is active or not
-        axis (str): axis number
+        axis (str): axis name
         return (bool): True if the servo is active (closed-loop)
         """
         # SVO? (Get Servo State)
@@ -966,7 +966,7 @@ class Controller(object):
         """
         Activate or de-activate the servo.
         Note: only activate it if there is a sensor (cf .HasRefSwitch and ._hasRefSwitch)
-        axis (str): axis number
+        axis (str): axis name
         activated (boolean): True if the servo should be activated (closed-loop)
         """
         # SVO (Set Servo State)
@@ -984,7 +984,7 @@ class Controller(object):
         """
         Select the reference mode.
         Note: only useful for closed-loop moves
-        axis (str): axis number
+        axis (str): axis name
         absolute (bool): If True, absolute moves can be used, but needs to have
           been referenced.
           If False only relative moves can be used, but only needs a sensor to
@@ -1005,7 +1005,7 @@ class Controller(object):
         Moves an axis for a number of steps. Can be done only with servo off.
         If the axis is already moving, the number of steps to perform is
         reset to the new number. IOW, it is not added up.
-        axis (str): axis number
+        axis (str): axis name
         steps (float): number of steps to do (can be a float). If negative, goes
           the opposite direction. 1 step is about 10µm.
         """
@@ -1020,7 +1020,7 @@ class Controller(object):
         Set the amplitude of one step (in nanostep mode). It affects the velocity
         of OLMoveStep.
         Note: probably it's best to set it to 55 and use OVL to change speed.
-        axis (str): axis number
+        axis (str): axis name
         amplitude (0<=float<=55): voltage applied (the more the further)
         """
         # SSA (Set Step Amplitude) : for nanostepping
@@ -1032,7 +1032,7 @@ class Controller(object):
         """
         Get the amplitude of one step (in nanostep mode).
         Note: mostly just for self-test
-        axis (str): axis number
+        axis (str): axis name
         returns (0<=float<=55): voltage applied
         """
         # SSA? (Get Step Amplitude), returns something like:
@@ -1045,7 +1045,7 @@ class Controller(object):
     def OLAnalogDriving(self, axis, amplitude):
         """
         Use analog mode to move the axis by a given amplitude.
-        axis (str): axis number
+        axis (str): axis name
         amplitude (-55<=float<=55): Amplitude of the move. It's only a small move.
           55 is approximately 5 um.
         """
@@ -1057,7 +1057,7 @@ class Controller(object):
     def GetOLVelocity(self, axis):
         """
         Get velocity for open-loop montion.
-        axis (str): axis number
+        axis (str): axis name
         return float: velocity in step-cycles/s
         """
         assert(axis in self._channels)
@@ -1066,7 +1066,7 @@ class Controller(object):
     def SetOLVelocity(self, axis, velocity):
         """
         Set velocity for open-loop nanostepping motion.
-        axis (str): axis number
+        axis (str): axis name
         velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
         """
         # OVL (Set Open-Loop Velocity)
@@ -1077,7 +1077,7 @@ class Controller(object):
     def GetOLAcceleration(self, axis):
         """
         Get acceleration for open-loop montion.
-        axis (str): axis number
+        axis (str): axis name
         return float: acceleration in step-cycles/s²
         """
         return self._readAxisValue("OAC?", axis)
@@ -1085,7 +1085,7 @@ class Controller(object):
     def SetOLAcceleration(self, axis, value):
         """
         Set open-loop acceleration of given axis.
-        axis (str): axis number
+        axis (str): axis name
         value (0<float): acceleration in step-cycles/s². Default is 2000
         """
         # OAC (Set Open-Loop Acceleration)
@@ -1096,7 +1096,7 @@ class Controller(object):
     def SetOLDeceleration(self, axis, value):
         """
         Set the open-loop deceleration.
-        axis (str): axis number
+        axis (str): axis name
         value (0<float): deceleration in step-cycles/s². Default is 2000
         """
         # ODC (Set Open-Loop Deceleration)
@@ -1109,7 +1109,7 @@ class Controller(object):
         """
         Start an absolute move of an axis to specific position.
          Can only be done with servo on and referenced.
-        axis (str): axis number
+        axis (str): axis name
         pos (float): position in "user" unit
         """
         # MOV (Set Target Position)
@@ -1122,7 +1122,7 @@ class Controller(object):
          Can only be done with servo on and referenced.
         If the axis is moving, the target position is updated, and so the moves
         will add up.
-        axis (str): axis number
+        axis (str): axis name
         shift (float): change of position in "user" unit
         """
         # MVR (Set Target Relative To Current Position)
@@ -1134,7 +1134,7 @@ class Controller(object):
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (str): axis number
+        axis (str): axis name
         lim (-1 or 1): -1 for negative limit and 1 for positive limit
         """
         # FNL (Fast Reference Move To Negative Limit)
@@ -1151,7 +1151,7 @@ class Controller(object):
         Start to move the axis to the switch position (typically, the center)
         Note: Servo and referencing must be on
         See IsReferenced()
-        axis (str): axis number
+        axis (str): axis name
         """
         # FRF (Fast Reference Move To Reference Switch)
         assert(axis in self._channels)
@@ -1181,7 +1181,7 @@ class Controller(object):
     def GetAutoZero(self, axis):
         """
         Return the status of the Auto Zero procedure for the given axis
-        axis (str): axis number
+        axis (str): axis name
         return (bool): True if successfull, False otherwise
         """
         ans = self._readAxisValue("ATZ?", axis)
@@ -1190,7 +1190,7 @@ class Controller(object):
     def GetPosition(self, axis):
         """
         Get the position (in "user" units)
-        axis (str): axis number
+        axis (str): axis name
         return (float): pos can be negative
         Note: after referencing, a constant is added by the controller
         """
@@ -1201,7 +1201,7 @@ class Controller(object):
         """
         Get the target position (in "user" units)
         Note: only works for closed loop controllers
-        axis (str): axis number
+        axis (str): axis name
         return (float): pos can be negative
         """
         # MOV? (Get Target Position)
@@ -1211,7 +1211,7 @@ class Controller(object):
         """
         Assign a position value (in "user" units) for the current location.
         No move is performed.
-        axis (str): axis number
+        axis (str): axis name
         pos (float): pos can be negative
         """
         # POS (SetRealPosition)
@@ -1220,7 +1220,7 @@ class Controller(object):
     def GetMinPosition(self, axis):
         """
         Get the minimum reachable position (in "user" units)
-        axis (str): axis number
+        axis (str): axis name
         return (float): pos can be negative
         """
         # TMN? (Get Minimum Commandable Position)
@@ -1229,7 +1229,7 @@ class Controller(object):
     def GetMaxPosition(self, axis):
         """
         Get the maximum reachable position (in "user" units)
-        axis (str): axis number
+        axis (str): axis name
         return (float): pos can be negative
         """
         # TMX? (Get Maximum Commandable Position)
@@ -1239,7 +1239,7 @@ class Controller(object):
     def GetCLVelocity(self, axis):
         """
         Get velocity for closed-loop motion.
-        axis (str): axis number
+        axis (str): axis name
         """
         # VEL (Get Closed-Loop Velocity)
         assert(axis in self._channels)
@@ -1248,7 +1248,7 @@ class Controller(object):
     def SetCLVelocity(self, axis, velocity):
         """
         Set velocity for closed-loop motion.
-        axis (str): axis number
+        axis (str): axis name
         velocity (0<float): velocity in units/s
         """
         # VEL (Set Closed-Loop Velocity)
@@ -1259,7 +1259,7 @@ class Controller(object):
     def GetCLAcceleration(self, axis):
         """
         Get acceleration for closed-loop motion.
-        axis (str): axis number
+        axis (str): axis name
         """
         # VEL (Get Closed-Loop Acceleration)
         assert(axis in self._channels)
@@ -1268,7 +1268,7 @@ class Controller(object):
     def SetCLAcceleration(self, axis, value):
         """
         Set closed-loop acceleration of given axis.
-        axis (str): axis number
+        axis (str): axis name
         value (0<float): acceleration in units/s²
         """
         # ACC (Set Closed-Loop Acceleration)
@@ -1279,7 +1279,7 @@ class Controller(object):
     def SetCLDeceleration(self, axis, value):
         """
         Set the closed-loop deceleration.
-        axis (str): axis number
+        axis (str): axis name
         value (0<float): deceleration in units/s²
         """
         # DEC (Set Closed-Loop Deceleration)
@@ -1384,7 +1384,7 @@ class Controller(object):
         """
         Moves an axis for a given distance. While it's moving, data will be
         recorded. Can be done only if not referenced.
-        axis (str): axis number
+        axis (str): axis name
         shift (float): relative distance in user unit
         """
         assert(axis in self._channels)
@@ -2674,7 +2674,7 @@ class SMOController(Controller):
     def OLMovePID(self, axis, voltage, t):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
-        axis (bytes): axis number
+        axis (str): axis name
         voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
           the negative direction. 32766 is 10V
         t (0<int <= 9999): time in ms.
@@ -2689,7 +2689,7 @@ class SMOController(Controller):
 
     def _isAxisMovingOLViaPID(self, axis):
         """
-        axis (bytes): axis number
+        axis (str): axis name
         returns (boolean): True moving axes for the axes controlled via PID
         raise PIGCSError if an error on a controller happened
         """
