@@ -26,6 +26,7 @@ from __future__ import division
 
 from past.builtins import basestring
 from odemis.gui.util import wx_adapter
+import threading
 import cairo
 import logging
 import math
@@ -37,12 +38,15 @@ from odemis.util import intersect, fluo, conversion, img, units
 import time
 import wx
 
+import cv2 as cv
+
 import odemis.acq.stream as acqstream
 from odemis.util import spectrum
 import odemis.gui.img as guiimg
-from odemis.acq.stream import RGBProjection, \
+from odemis.acq.stream import RGBProjection, RGBSpatialProjection, \
     SinglePointTemporalProjection, DataProjection
 from odemis.model import DataArrayShadow
+from odemis.util.img import mergeTiles
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -2228,8 +2232,27 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
+    max_res = (MAX_RES_FACTOR * CROP_RES_LIMIT) ** 2
+    mpp = math.sqrt( (view_hfw[0]*view_hfw[1]) / max_res) # Area = [meters per pixel]^2 * number_of_pixels
+
+    def img_callback(da):
+        img_received.set()
+
+    for stream_idx, projection in enumerate(streams):
+        if hasattr(projection, 'mpp'):
+            img_received = threading.Event()
+            new_proj = RGBSpatialProjection(projection.stream)
+            new_proj.rect.value = projection.rect.value
+            new_proj.mpp.value = new_proj.mpp.clip(mpp) # set pixel size to desired number
+            streams[stream_idx] = new_proj
+
+            #Update new projection
+            new_proj.image.subscribe(img_callback)
+            img_received.wait()
+            new_proj.image.unsubscribe(img_callback)
 
     images, im_min_type = convert_streams_to_images(streams, raw)
+
     if not images:
         raise LookupError("There is no stream data to be exported")
 
