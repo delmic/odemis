@@ -5550,6 +5550,7 @@ def __init_resources():
                         <fg>#BBBBBB</fg>
                         <bg>#333333</bg>
                         <object class="wxCheckBox" name="chkbox_fine_align">
+                          <size>-1,20</size>
                           <label>Fine alignment</label>
                           <XRCED>
                             <assign_var>1</assign_var>
