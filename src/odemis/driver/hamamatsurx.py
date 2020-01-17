@@ -112,13 +112,13 @@ class ReadoutCamera(model.DigitalCamera):
         super(ReadoutCamera, self).__init__(name, role, parent=parent, **kwargs)
 
         try:
-            self._hwVersion = cam_info[0][0] + ", " + cam_info[0][1] + ", " + cam_info[0][2]   # needs to be a string
+            self._hwVersion = cam_info[0] + ", " + cam_info[1] + ", " + cam_info[2]  # needs to be a string
         except:
             self._hwVersion = "N.A."
             logging.debug("Could not get hardware information for streak readout camera.")
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         try:
-            self._swVersion = cam_info[0][3] + ", " + cam_info[0][4]   # needs to be a string
+            self._swVersion = cam_info[3] + ", " + cam_info[4]  # needs to be a string
         except:
             self._swVersion = "N.A."
             logging.debug("Could not get software information for streak readout camera.")
@@ -502,7 +502,7 @@ class ReadoutCamera(model.DigitalCamera):
                 img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive (uint16)
                 img_num_actual = img_info[4]
 
-                img = ""
+                img = b""
                 try:
                     while len(img) < img_size:  # wait until all bytes are received
                         img += self.parent._dataport.recv(img_size)
@@ -512,36 +512,37 @@ class ReadoutCamera(model.DigitalCamera):
 
                 image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
                 image.shape = (int(img_info[1]), int(img_info[0]))
-
                 logging.debug("Requested image number %s, received number %s of shape %s.",
                               img_num, img_num_actual, image.shape)
 
-                # get the scaling table to correct the time axis
+                # Get the scaling table to correct the time axis
                 # TODO only request scaling table if corresponding MD not available for this time range
                 if self.parent._streakunit.streakMode.value:
                     # There should be no sync problem, as we only receive images and scaling table via the dataport
 
                     logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
-                    # request scaling table
-                    scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
-
-                    scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
-
-                    # receive the bytes via the dataport
-                    tab = ''
                     try:
-                        while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
-                            tab += self.parent._dataport.recv(scl_table_size)
-                        table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
-                        table_converted = table * self.parent._streakunit.timeRangeFactor  # convert to sec
-                        self._metadata[model.MD_TIME_LIST] = table_converted
-                    except socket.timeout as msg:
-                        logging.error("Did not receive a scaling table: %s", msg)
-                        continue
-                    logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
+                        # request scaling table
+                        scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
+                        scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
+
+                        # receive the bytes via the dataport
+                        tab = b""
+                        try:
+                            while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
+                                tab += self.parent._dataport.recv(scl_table_size)
+                            table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
+                            table_converted = table * self.parent._streakunit.timeRangeFactor  # convert to sec
+                            self._metadata[model.MD_TIME_LIST] = table_converted
+                        except socket.timeout as msg:
+                            logging.error("Did not receive a scaling table: %s", msg)
+                            continue
+                        logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
+                    except Exception:
+                        logging.exception("Failed to get scaling table")
                 else:
-                    if model.MD_TIME_LIST in self._metadata:
-                        del self._metadata[model.MD_TIME_LIST]  # remove TIME list from MD if not applicable
+                    # remove MD_TIME_LIST if not applicable
+                    self._metadata.pop(model.MD_TIME_LIST, None)
 
                 # update MD for the current image
                 try:
@@ -982,12 +983,12 @@ class StreakCamera(model.HwComponent):
         except (socket.timeout, socket.error):
             raise model.HwError("Failed to connect to host %s using port %d. Check the server "
                                 "is connected to the network, turned "
-                                " on, and correctly configured." % (self.host, self.port))
+                                "on, and correctly configured." % (self.host, self.port))
 
         # check if connection returns correct response
         try:
             message = self._commandport.recv(self.port)
-            if message != 'RemoteEx Ready\r':
+            if message != b"RemoteEx Ready\r":
                 raise ValueError("Connection Hamamatsu RemoteEx via port %s not successful. "
                                  "Response %s from server is not as expected." % (self.port, message))
         except socket.timeout:
@@ -996,7 +997,7 @@ class StreakCamera(model.HwComponent):
 
         try:
             message_d = self._dataport.recv(self.port_d)
-            if message_d != 'RemoteEx Data Ready\r':
+            if message_d != b"RemoteEx Data Ready\r":
                 raise IOError("Connection Hamamatsu RemoteEx via port %s not successful. "
                               "Response %s from server is not as expected." % (self.port_d, message))
         except socket.timeout:
@@ -1033,7 +1034,7 @@ class StreakCamera(model.HwComponent):
 
         try:
             self.AppEnd()
-        except:
+        except Exception:
             logging.info("Failed to stop the HPDTA App (Hamamatsu streak camera)", exc_info=True)
 
         self.should_listen = False  # terminates receiver thread
@@ -1048,6 +1049,7 @@ class StreakCamera(model.HwComponent):
         :parameter args: (str) optional parameters allowed for function
         :parameter kwargs: optional arguments not defined in advance
            kwargs timeout: (int) timeout while waiting for command response [sec]
+        :return: (list of str) values returned by the function
         :raise:
            HwError: if error communicating with the hardware, probably due to
               the hardware not being in a good state (or connected)
@@ -1057,6 +1059,7 @@ class StreakCamera(model.HwComponent):
         # set timeout for waiting for command response
         timeout = kwargs.pop("timeout", 5)  # default = 5s
         command = "%s(%s)\r" % (func, ",".join(args))
+        command = command.encode("ascii")
 
         with self._lock_command:  # lock this code, when finished lock is automatically released
             # send command to socket
@@ -1122,16 +1125,16 @@ class StreakCamera(model.HwComponent):
         or .queue_img (for messages related to the images).
         """
         try:
-            responses = ""  # received data not yet processed
+            responses = b""  # received data not yet processed
 
             while self.should_listen:
                 try:
-                    returnValue = self._commandport.recv(4096)  # buffersize should be small value of power 2 (4096)
+                    received = self._commandport.recv(4096)  # buffersize should be small value of power 2 (4096)
                 except socket.timeout:
                     # when socket timed out (receiving no response)
                     logging.debug("Timeout on the socket, will wait for more data packets.")
                     continue
-                if not returnValue:
+                if not received:
                     # TODO: this seems to get triggered "sometimes", and then
                     # never stop (until a back-end restart). Maybe if the
                     # connection drops. This needs to be investigated further
@@ -1140,15 +1143,15 @@ class StreakCamera(model.HwComponent):
                     time.sleep(0.1)
                     continue
 
-                responses += returnValue
-                logging.debug("Received: '%s'", to_str_escape(responses))
+                logging.debug("Received: '%s'", to_str_escape(received))
+                responses += received
 
-                resp_splitted = responses.split("\r")
+                resp_splitted = responses.split(b"\r")
                 # split responses, overwrite var responses with the remaining messages (usually empty)
                 resp_splitted, responses = resp_splitted[:-1], resp_splitted[-1]
 
                 for msg in resp_splitted:
-                    msg_splitted = msg.split(",")
+                    msg_splitted = msg.decode("latin1").split(",")
 
                     try:
                         error_code, rfunc, rargs = int(msg_splitted[0]), msg_splitted[1], msg_splitted[2:]
@@ -1157,10 +1160,10 @@ class StreakCamera(model.HwComponent):
                         continue  # return to try-statement and start receiving again
 
                     if self._getReadoutCamInfo:
-                        # command parent.CamParamGet("Setup", "CameraInfo") behaves differently then all other commands.
+                        # HACK: command CamParamGet("Setup", "CameraInfo") behaves differently than all other commands.
                         # Use nasty trick to work around for this command.
-                        # This command first receives the error_code and then additional information.
-                        # The total information has a fixed length of 5 lines:
+                        # This command first receives the first data until \r and then additional information.
+                        # Currently the total information always has 5 lines:
                         # rargs: 'OrcaFlash 4.0 V3'
                         # additional_info:
                         # '\nProduct number: C13440-20C\r\nSerial number: 301730\r\nFirmware: 4.20.B\r\nVersion: 4.20.B03-A19-B02-4.02\r'
@@ -1180,18 +1183,21 @@ class StreakCamera(model.HwComponent):
                                 additional_info += self._commandport.recv(4096)   # receive more data
                             except Exception:
                                 break
+                            logging.debug("Received: '%s'", to_str_escape(additional_info))
                         try:
-                            additional_info = additional_info.split("\r")[:-1]
-                            for item in additional_info:
-                                rargs.append(item.strip("\n"))
-                            msg_splitted[2] = rargs
+                            additional_info = additional_info.decode("latin1").split(b"\r")
+                            for item in additional_info[:-1]:
+                                msg_splitted.append(item.strip(b"\n"))
+                            if additional_info[-1]:
+                                logging.warning("Discarding data after CameraInfo '%s'", additional_info[-1])
                         except Exception:
-                            logging.error("Could not retrieve readout camera information.")
+                            logging.exception("Failure while decoding readout camera information.")
                         self._getReadoutCamInfo = False
 
                     if error_code in (4, 5):
+                        # A new image is available on the dataport => Send to the special queue
                         if error_code == 4 and rfunc == "Livemonitor":
-                            self.queue_img.put(rargs)  # only put msg in queue when it notifies about an image
+                            self.queue_img.put(rargs)
                         # Note: all other messages with error_code 4 or 5 are currently discarded
                         # as not of interest for now
                     else:  # send response including error_code to queue
