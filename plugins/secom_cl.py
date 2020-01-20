@@ -1,24 +1,39 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on 26 Jun 2013
-Edited June 2019
+Created on 26 Jun 2013, updated June 2019.
 
-@author: Éric Piel, Sabrina Rossberger
+@author: Éric Piel, Lennard Voortman, Sabrina Rossberger
 
-This is a script to acquire a set of images from the CCD from various e-beam
-spots on the sample along a grid.
-Can also be used as a plugin.
+This is an Odemis plugin to acquire a set of images from the CCD from various
+e-beam spots on the sample along a grid.
 
-
-run as:
-./secom_cl --xrep 45 --yrep 5 --prefix filename-prefix
-
---prefix indicates the beginning of the filename.
 The files are saved in TIFF, with the y, x positions of the ebeam (in nm) in the name,
-the total number of ebeam positions in x and y, the physical distance between positions in x and y
-and the type of the acquisition.
+the total number of ebeam positions in x and y, the physical distance between
+positions in x and y, and the type of the acquisition.
 
+================================================================================
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+The software is provided "as is", without warranty of any kind,
+express or implied, including but not limited to the warranties of
+merchantability, fitness for a particular purpose and non-infringement.
+In no event shall the authors be liable for any claim, damages or
+other liability, whether in an action of contract, tort or otherwise,
+arising from, out of or in connection with the software or the use or
+other dealings in the software.
 """
 
 from __future__ import division
