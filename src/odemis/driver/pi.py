@@ -225,7 +225,7 @@ class PIRedStone(object):
 
         char = self.serial.read()
         while char:
-            if char == "\x03":
+            if char == b"\x03":
                 return True
             char = self.serial.read()
         # we still timed out

@@ -140,7 +140,7 @@ class SEM(model.HwComponent):
         ser.timeout = 0
         while True:
             char = ser.read()
-            if char == '':
+            if char == b'':
                 break
         ser.timeout = 1
 
