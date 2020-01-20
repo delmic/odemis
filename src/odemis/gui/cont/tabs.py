@@ -2414,7 +2414,6 @@ class SecomAlignTab(Tab):
         tb = panel.lens_align_tb
         tb.add_tool(TOOL_DICHO, self.tab_data_model.tool)
         tb.add_tool(TOOL_SPOT, self.tab_data_model.tool)
-        tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
 
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
