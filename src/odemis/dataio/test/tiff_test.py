@@ -1763,7 +1763,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 2e-6),  # m/px
                      model.MD_PIXEL_DUR: 1e-9,  # s
                      model.MD_TIME_OFFSET:-20e-9,  # s, of the first time value
-                     model.MD_OUT_WL: "pass-through",
+                     model.MD_OUT_WL: b"pass-through",  # check if it still works if metadata is bytes
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
                     },
