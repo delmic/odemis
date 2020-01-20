@@ -445,6 +445,17 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
 
+        # Make sure all string metadata values are unicode strings (not bytes),
+        # otherwise serialization will fail later on
+        for da in g:
+            for key, value in da.metadata.items():
+                if isinstance(value, bytes):
+                    try:
+                        da.metadata[key] = value.decode('utf-8')
+                    except:
+                        logging.warning("Failed to decode value of metadata '%s'.", key)
+                        da.metadata[key] = ''
+
     # TODO: filters (with TransmittanceRange)
 
     rois = {} # dict str->ET.Element (ROI ID -> ROI XML element)
