@@ -21,19 +21,20 @@ http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
-import base64
 import logging
 import threading
 import time
 from concurrent.futures import CancelledError
 
-import msgpack
-import msgpack_numpy as m
-from Pyro5.api import Proxy
+import Pyro5.api
+import msgpack_numpy
 
 from odemis import model
 from odemis import util
 from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture
+
+Pyro5.api.config.SERIALIZER = 'msgpack'
+msgpack_numpy.patch()
 
 XT_RUN = "run"
 XT_STOP = "stop"
@@ -59,7 +60,7 @@ class SEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
         self._proxy_access = threading.Lock()
         try:
-            self.server = Proxy(address)
+            self.server = Pyro5.api.Proxy(address)
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
@@ -144,7 +145,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.stage_info()
 
-    def acquire_image(self, channel_name):
+    def get_latest_image(self, channel_name):
         """
         Acquire an image observed via the currently set channel. Note: the channel needs to be stopped before an image
         can be acquired. To acquire multiple consecutive images the channel needs to be started and stopped. This
@@ -157,10 +158,8 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            x_enc = self.server.acquire_image(channel_name)
-            x_dec = base64.b64decode(x_enc['data'])
-            x_rec = msgpack.unpackb(x_dec, object_hook=m.decode)
-            return x_rec
+            image = self.server.get_latest_image(channel_name)
+            return image
 
     def set_scan_mode(self, mode):
         """
@@ -377,8 +376,8 @@ class SEM(model.HwComponent):
         ----------
         name: str
             name of channel.
-        state: "run" or "stop"
-            desired state of the channel.
+        state: bool
+            Desired state of the channel, if True set state to run, if False set state to stop.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -505,7 +504,7 @@ class SEM(model.HwComponent):
         """Returns: (float) the current beam shift x and y values in meters."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_beam_shift()
+            return tuple(self.server.get_beam_shift())
 
     def set_beam_shift(self, x_shift, y_shift):
         """Set the current beam shift values in meters."""
@@ -554,6 +553,47 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.rotation_info()
+
+    def set_beam_power(self, state):
+        """
+        Turn on or off the beam power.
+
+        Parameters
+        ----------
+        state: bool
+            True to turn on the beam and False to turn off the beam.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_beam_power(state)
+
+    def get_beam_is_on(self):
+        """Returns True if the beam is on and False if the beam is off."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_beam_is_on()
+
+    def is_autostigmating(self):
+        """Returns True if autostigmator is running and False if autostigmator is not running."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.is_autostigmating()
+
+    def set_autostigmator(self, channel_name, state):
+        """
+        Set the state of autostigmator, beam must be turned on. This is non-blocking.
+
+        Parameters
+        ----------
+        channel_name: str
+            Name of one of the electron channels, the channel must be running.
+        state: "start", "cancel" or "stop"
+            State is start, starts the autostigmator. States cancel and stop both stop the autostigmator, some
+            microscopes might need stop, while others need cancel.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_autostigmator(channel_name, state)
 
 
 class Scanner(model.Emitter):
