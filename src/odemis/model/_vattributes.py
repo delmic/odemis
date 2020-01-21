@@ -636,7 +636,7 @@ class IntVA(VigilantAttribute):
 
     def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
-        if not isinstance(value, (int, long)):
+        if not isinstance(value, (int, long, numpy.integer)):
             raise TypeError("Value '%r' is not a int." % value)
 
 # ListVA is difficult: not only change of the .value must be detected, but we
@@ -1165,5 +1165,5 @@ class ResolutionVA(TupleContinuous):
     # old name for TupleContinuous, when it was fixed to len == 2 and cls == int
     # and default unit == "px"
     def __init__(self, value, rng, unit="px", cls=None, **kwargs):
-        cls = cls or (int, long)
+        cls = cls or (int, long, numpy.integer)
         TupleContinuous.__init__(self, value, rng, unit=unit, cls=cls, **kwargs)
