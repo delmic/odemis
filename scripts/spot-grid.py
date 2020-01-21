@@ -43,7 +43,7 @@ class VideoDisplayerGrid(VideoDisplayer):
         coming pictures
         """
         self.app = ImageWindowApp(title, size)
-        self.gridsize = (14, 14) if gridsize is None else gridsize
+        self.gridsize = (8, 8) if gridsize is None else gridsize
 
     def new_image(self, data):
         """
@@ -51,7 +51,11 @@ class VideoDisplayerGrid(VideoDisplayer):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        self.app.spots, self.app.translation, self.app.scaling, self.app.rotation = FindGridSpots(data, self.gridsize)
+        self.app.spots, trans, scale, rot = FindGridSpots(data, self.gridsize)
+        self.app.translation = trans[0], data.shape[0] - trans[1]
+        self.app.scale = scale
+        self.app.rotation = -rot
+
         super(VideoDisplayerGrid, self).new_image(data)
 
     def waitQuit(self):
@@ -204,7 +208,7 @@ def main(args):
     parser.add_argument("--role", dest="role", metavar="<component>",
                         help="display and update an image on the screen")
     parser.add_argument("--gridsize", dest="gridsize", nargs=2, metavar="<gridsize>", type=int, default=None,
-                        help="size of the grid of spots in x y, default 14 14")
+                        help="size of the grid of spots in x y, default 8 8")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
                         default=0, help="set verbosity level (0-2, default = 0)")
     options = parser.parse_args(args[1:])
