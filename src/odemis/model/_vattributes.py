@@ -104,7 +104,6 @@ class VigilantAttributeBase(object):
                                   "receiving value %s", l, v)
 
 
-# noinspection PyBroadException
 class VigilantAttribute(VigilantAttributeBase):
     """
     A VigilantAttribute represents a value (an object) with:
@@ -327,7 +326,6 @@ class VigilantAttribute(VigilantAttributeBase):
         self._unregister()
 
 
-# noinspection PyBroadException
 class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
@@ -1155,7 +1153,7 @@ class TupleContinuous(VigilantAttribute, Continuous):
                      "The actual value")
 
     def _check(self, value):
-        if not all([isinstance(v, self._cls) for v in value]):
+        if not all(isinstance(v, self._cls) for v in value):
             msg = "Value '%s' must be a tuple only consisting of types %s."
             raise TypeError(msg % (value, self._cls))
         Continuous._check(self, value)

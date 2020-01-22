@@ -757,7 +757,7 @@ class VisualRangeSlider(BaseSlider):
 
     def _SetValue(self, val):
         """ Set the value if it falls within the given range """
-        if all([self.min_value <= i <= self.max_value for i in val]):
+        if all(self.min_value <= i <= self.max_value for i in val):
             if val[0] <= val[1]:
                 self.value = val
                 self._update_pixel_value()
