@@ -38,7 +38,6 @@ import wx
 
 
 # Menu controller:
-# noinspection PyArgumentList
 class MenuController(object):
     """ This controller handles (some of) the menu actions.
     Some other actions are directly handled by the main class or the specific
