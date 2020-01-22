@@ -1647,7 +1647,7 @@ class SinglePointSpectrumProjection(DataProjection):
 
         mean = datasum / n
 
-        return model.DataArray(mean.astype(spec2d.dtype), md)
+        return model.DataArray(mean, md)
 
     def projectAsRaw(self):
         return self._computeSpec()
