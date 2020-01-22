@@ -799,7 +799,7 @@ class TileAcqPlugin(Plugin):
                 # Update the progress bar
                 ft.set_progress(end=self.estimate_time(nb - i) + time.time())
 
-                ft.running_subf = acq.acquire(ss)
+                ft.running_subf = acq.acquire(ss, self.main_app.main_data.settings_obs)
                 das, e = ft.running_subf.result()  # blocks until all the acquisitions are finished
                 if e:
                     logging.warning("Acquisition for tile %dx%d partially failed: %s",

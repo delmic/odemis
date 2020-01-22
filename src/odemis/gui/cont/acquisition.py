@@ -741,7 +741,7 @@ class SparcAcquiController(object):
         self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        self.acq_future = acq.acquire(self._tab_data_model.acquisitionStreams)
+        self.acq_future = acq.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)

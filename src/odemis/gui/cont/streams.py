@@ -518,7 +518,8 @@ class StreamController(object):
     def _on_metadata_btn(self, evt):
         text = u""
         raw = [r for r in self.stream.raw if r is not None]
-
+        text += u"======================================\nGeneral\n"
+        text += u"======================================\n"
         for i, r in enumerate(raw):
             if len(raw) > 1:
                 text += u"========= Array %d =========\n" % (i + 1,)
@@ -529,6 +530,9 @@ class StreamController(object):
             text += u"Shape: %s\n" % (u" x ".join(str(s) for s in shape),)
             text += u"Data type: %s\n" % (dtype,)
             for key in sorted(md):
+                if key == model.MD_EXTRA_SETTINGS:
+                    # show extra settings last
+                    continue
                 v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
                     nice_str = time.strftime("%c", time.localtime(v))
@@ -548,6 +552,31 @@ class StreamController(object):
                     elif isinstance(v, list) and len(v) > 2500:
                         v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
                     text += u"%s: %s\n" % (key, v)
+
+        # only display extra settings once
+        if model.MD_EXTRA_SETTINGS in raw[0].metadata:
+            text += u"\n======================================\nHardware Settings\n"
+            text += u"======================================\n"
+            for comp, vas in md[model.MD_EXTRA_SETTINGS].items():
+                try:
+                    if vas:
+                        text += u"Component %s:\n" % comp
+                    for name, (value, unit) in vas.items():
+                        unit = unit or ""  # don't display 'None'
+                        unit = unit if value is not None else ""  # don't display unit if data is None (None Hz doesn't make sense)
+                        if isinstance(value, dict):
+                            if value:
+                                text += u"\t%s:\n" % name
+                                for key, val in value.items():
+                                    text += u"\t\t%s: %s %s\n" % (key, val, unit)
+                            else:
+                                # still display the VA, might be interesting (e.g. that no axis was referenced)
+                                text += u"\t%s: {}\n" % name
+                        else:
+                            text += u"\t%s: %s %s\n" % (name, value, unit)
+                except Exception as ex:
+                    logging.warning("Couldn't display metadata for component %s: %s" % (comp, ex))
+                    continue
 
         # Note: we show empty window even if no data present, to let the user know
         # that there is no data, but the button worked fine.
