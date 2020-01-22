@@ -361,6 +361,9 @@ class VigilantAttributeTest(unittest.TestCase):
         va.value = [11, 150]
         self.assertEqual(va.value, (11, 150))
 
+        # Numpy integers are also fine
+        va.value = (numpy.prod([10, 3]), numpy.uint64(1))
+
         # must not accept resolutions with float
         try:
             va.value = (8., 160)
