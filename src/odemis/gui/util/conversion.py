@@ -104,10 +104,10 @@ def change_brightness(colour, weight):
         _col = hex_to_frgb(colour)
         _alpha = None
     elif isinstance(colour, tuple):
-        if all([isinstance(v, float) for v in colour]):
+        if all(isinstance(v, float) for v in colour):
             _col = colour[:3]
             _alpha = colour[-1] if len(colour) == 4 else None
-        elif all([isinstance(v, int) for v in colour]):
+        elif all(isinstance(v, int) for v in colour):
             _col = rgb_to_frgb(colour[:3])
             _alpha = colour[-1] if len(colour) == 4 else None
         else:

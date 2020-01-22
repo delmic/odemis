@@ -1153,7 +1153,7 @@ class TupleContinuous(VigilantAttribute, Continuous):
                      "The actual value")
 
     def _check(self, value):
-        if not all([isinstance(v, self._cls) for v in value]):
+        if not all(isinstance(v, self._cls) for v in value):
             msg = "Value '%s' must be a tuple only consisting of types %s."
             raise TypeError(msg % (value, self._cls))
         Continuous._check(self, value)

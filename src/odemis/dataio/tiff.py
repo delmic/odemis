@@ -1196,7 +1196,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     """
     assert(len(das) > 0)
     # all image have the same shape?
-    assert all([das[0].shape == im.shape for im in das])
+    assert all(das[0].shape == im.shape for im in das)
 
     idnum = len(root.findall("Image"))
     ime = ET.SubElement(root, "Image", attrib={"ID": "Image:%d" % idnum})
