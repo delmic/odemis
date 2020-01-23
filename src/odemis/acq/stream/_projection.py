@@ -1568,7 +1568,7 @@ class MeanSpectrumProjection(DataProjection):
 
         # flatten all but the C dimension, for the average
         data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
-        av_data = numpy.mean(data.astype('float64') , axis=1)
+        av_data = numpy.mean(data, axis=1)
 
         self.image.value = model.DataArray(av_data, md)
 
@@ -1647,7 +1647,7 @@ class SinglePointSpectrumProjection(DataProjection):
 
         mean = datasum / n
 
-        return model.DataArray(mean.astype(spec2d.dtype), md)
+        return model.DataArray(mean, md)
 
     def projectAsRaw(self):
         return self._computeSpec()
