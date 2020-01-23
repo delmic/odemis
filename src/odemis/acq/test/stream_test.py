@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division, print_function
 
-from past.builtins import long
 from concurrent.futures import CancelledError
 import gc
 import logging
@@ -35,11 +34,14 @@ from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
 from odemis.acq.stream import RGBSpatialSpectrumProjection, \
     SinglePointSpectrumProjection, SinglePointTemporalProjection, \
     LineSpectrumProjection, MeanSpectrumProjection
-from odemis.dataio import tiff
+from odemis.dataio import tiff, hdf5
 from odemis.driver import simcam
+from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
+    MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow
 from odemis.util import test, conversion, img, spectrum, find_closest
 from odemis.util.test import assert_array_not_equal
 import os
+from past.builtins import long
 import threading
 import time
 import unittest
@@ -3979,32 +3981,63 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertLessEqual(ir[1][1], 3)  # Should be rounded to the next power of 2 -1
         self.assertEqual(h[2], da.shape[1])
 
+    def _create_ar_data(self, shape, tweak=0, pol=None):
+        """
+        shape (200<int, 200<int)
+        tweak (0<=int<20)
+        pol (MD_POL_*)
+        """
+        metadata = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_HW_NAME: "fake ccd",
+            model.MD_DESCRIPTION: "AR polarization analyzer",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_AR_POLE: (253.1, 65.1),
+            model.MD_LENS_MAG: 0.4,  # ratio
+        }
+
+        QWP_POSITIONS = {
+            MD_POL_NONE: 1.6,
+            MD_POL_HORIZONTAL: 0,
+            MD_POL_VERTICAL: 1.570796,
+            MD_POL_POSDIAG: 0.785398,
+            MD_POL_NEGDIAG: 2.356194,
+            MD_POL_RHC: 0,
+            MD_POL_LHC: 0,
+        }
+        LINPOL_POSITIONS = {
+            MD_POL_NONE: 1.6,
+            MD_POL_HORIZONTAL: 0,
+            MD_POL_VERTICAL: 1.570796,
+            MD_POL_POSDIAG: 0.785398,
+            MD_POL_NEGDIAG: 2.356194,
+            MD_POL_RHC: 0.785398,
+            MD_POL_LHC: 2.356194,
+        }
+        if pol:
+            metadata[model.MD_POL_MODE] = pol
+            metadata[model.MD_POL_POS_LINPOL] = QWP_POSITIONS[pol]  # rad
+            metadata[model.MD_POL_POS_QWP] = LINPOL_POSITIONS[pol]  # rad
+
+        center = shape[0] // 2, shape[1] // 2
+        data = numpy.zeros(shape, dtype=numpy.uint16) + (1500 + 100 * tweak)
+        # modify a few px close to AR_POLE
+        data[center[0] - 10:center[0] + 70, center[1] - 200:center[1] - 100 + tweak * 10] += 1000 * (tweak + 1)
+        return model.DataArray(data, metadata)
+
     def test_ar(self):
         """Test StaticARStream"""
         # AR metadata
-        md = {model.MD_SW_VERSION: "1.0-test",
-             model.MD_HW_NAME: "fake ccd",
-             model.MD_DESCRIPTION: "AR",
-             model.MD_ACQ_DATE: time.time(),
-             model.MD_BPP: 12,
-             model.MD_BINNING: (1, 1),  # px, px
-             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-             model.MD_POS: (1.2e-3, -30e-3),  # m
-             model.MD_EXP_TIME: 1.2,  # s
-             model.MD_AR_POLE: (253.1, 65.1),
-             model.MD_LENS_MAG: 0.4,  # ratio
-            }
-
-        # AR data
-        md0 = dict(md)
-        data0 = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md0)
-        data0[200:250, 50:70] = 1000  # modify a few px close to AR_POLE so _projectXY2RGB has different values
-        md1 = dict(md)
-        md1[model.MD_POS] = (1.5e-3, -30e-3)
-        md1[model.MD_BASELINE] = 300  # AR background should take this into account
-        data1 = model.DataArray(3345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
-        data1[200:250, 50:70] = 2000  # modify a few px close to AR_POLE so _projectXY2RGB has different values
+        data0 = self._create_ar_data((512, 1024))
+        data1 = self._create_ar_data((512, 1024), tweak=5)
+        data1.metadata[model.MD_POS] = (1.5e-3, -30e-3)
+        data1.metadata[model.MD_BASELINE] = 300  # AR background should take this into account
 
         logging.info("setting up stream")
         ars = stream.StaticARStream("test", [data0, data1])
@@ -4037,65 +4070,43 @@ class StaticStreamsTestCase(unittest.TestCase):
         else:
             self.fail("Failed to find a second point in AR")
 
-        e.wait()
-
-        im2d1 = ars_raw_pj.image.value
+        e.wait(3.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
+        im2d1 = ars_raw_pj.image.value
 
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
-        self.assertFalse(im2d0 is im2d1)
-
         assert_array_not_equal(im2d0, im2d1)
 
         logging.info("testing image background correction")
         # test background correction from image
         dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16)
-        calib = model.DataArray(dcalib, md)
+        calib = model.DataArray(dcalib, data0.metadata.copy())
 
         e.clear()
         ars.background.value = calib
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
-        e.wait()
 
-        im2d2 = ars_raw_pj.image.value
+        e.wait(3.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
+        im2d2 = ars_raw_pj.image.value
 
         # Check it's a RGB DataArray
         self.assertEqual(im2d2.shape[2], 3)
-        self.assertFalse(im2d1 is im2d2)
-
         # check if the .image VA has been updated
         assert_array_not_equal(im2d1, im2d2)
 
     def test_ar_das(self):
         """Test StaticARStream with a DataArrayShadow"""
         logging.info("setting up stream")
-        # AR metadata
-        md = {model.MD_SW_VERSION: "1.0-test",
-             model.MD_HW_NAME: "fake ccd",
-             model.MD_DESCRIPTION: "AR",
-             model.MD_ACQ_DATE: time.time(),
-             model.MD_BPP: 12,
-             model.MD_BINNING: (1, 1),  # px, px
-             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-             model.MD_POS: (1.2e-3, -30e-3),  # m
-             model.MD_EXP_TIME: 1.2,  # s
-             model.MD_AR_POLE: (253.1, 65.1),
-             model.MD_LENS_MAG: 0.4,  # ratio
-            }
-
-        # AR data
-        md0 = dict(md)
-        data0 = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md0)
-        md1 = dict(md)
-        md1[model.MD_POS] = (1.5e-3, -30e-3)
-        md1[model.MD_BASELINE] = 300  # AR background should take this into account
-        data1 = model.DataArray(3345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
+        data0 = self._create_ar_data((512, 1024))
+        data1 = self._create_ar_data((512, 1024), tweak=5)
+        data1.metadata[model.MD_POS] = (1.5e-3, -30e-3)
+        data1.metadata[model.MD_BASELINE] = 300  # AR background should take this into account
 
         tiff.export(FILENAME, [data0, data1])
         acd = tiff.open_data(FILENAME)
+        assert isinstance(acd.content[0], DataArrayShadow)
 
         ars = stream.StaticARStream("test", acd.content)
         ars_raw_pj = stream.ARRawProjection(ars)
@@ -4119,40 +4130,20 @@ class StaticStreamsTestCase(unittest.TestCase):
 
     def test_arpol_allpol(self):
         """Test StaticARStream with ARRawProjection and all possible polarization modes."""
-
-        metadata = []
+        # AR polarization analyzer data: different for each polarization
         pol_positions = [model.MD_POL_NONE] + list(POL_POSITIONS)
-        qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
-        linpol_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
-
-        # AR polarizer metadata
-        for idx, pol_pos in enumerate(pol_positions):
-            metadata.append({model.MD_SW_VERSION: "1.0-test",
-                             model.MD_HW_NAME: "fake ccd",
-                             model.MD_DESCRIPTION: "AR polarization analyzer",
-                             model.MD_ACQ_DATE: time.time(),
-                             model.MD_BPP: 12,
-                             model.MD_BINNING: (1, 1),  # px, px
-                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-                             model.MD_POS: (1.2e-3, -30e-3),  # m
-                             model.MD_EXP_TIME: 1.2,  # s
-                             model.MD_AR_POLE: (253.1, 65.1),
-                             model.MD_LENS_MAG: 0.4,  # ratio
-                             model.MD_POL_MODE: pol_positions[idx],
-                             model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
-                             model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
-                             })
-
-        # AR polarization analyzer data
         data = []
-        for index, md in enumerate(metadata):
-            data_pol = model.DataArray(1500 + 100 * index + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
-            data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
-            data.append(data_pol)
+        bg_data = []  # list of background images
+        for i, pol in enumerate(pol_positions):
+            data.append(self._create_ar_data((512, 1024), tweak=i, pol=pol))
 
-        logging.info("setting up ar stream")
-        ars = stream.StaticARStream("test ar polarizer static stream", data)
+            # Background images, per polarization
+            dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + i * 10
+            calib = model.DataArray(dcalib, data[i].metadata.copy())
+            bg_data.append(calib)
+
+        logging.info("Setting up AR stream")
+        ars = stream.StaticARStream("AR polarizer static stream", data)
         ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
@@ -4163,96 +4154,64 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait()
+        e.wait(3.0)
+        time.sleep(1.0)  # wait a little extra as .image is updated multiple times
 
         # Control AR projection
         im2d0 = ars_raw_pj.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
-
-        # Check it's a RGB DataArray
-        self.assertEqual(im2d0.shape[2], 3)
+        self.assertEqual(im2d0.shape[2], 3)  # RGB DataArray
 
         # changing polarization position
-        logging.info("changing polarization position")
+        logging.info("Changing polarization position")
         e.clear()
-        # change position once
+        # Pick one random position (different from the current one)
         for p in ars_raw_pj.polarization.choices:
-            if p != (None, None) and p != ars_raw_pj.polarization.value:
+            if p != ars_raw_pj.polarization.value:
                 ars_raw_pj.polarization.value = p
                 break
         else:
             self.fail("Failed to find another polarization position")
 
-        e.wait()
-
+        e.wait(3.0)
+        time.sleep(1.0)  # wait extra, in case .image is updated multiple times (normally not here)
         im2d1 = ars_raw_pj.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
-        # Check it's a RGB DataArray
-        self.assertEqual(im2d1.shape[2], 3)
-        # check if the .image VA has been updated
+        self.assertEqual(im2d1.shape[2], 3)  # RGB DataArray
+        # check that the .image VA has been updated
         assert_array_not_equal(im2d0, im2d1)
 
         ###################################################################
         # testing background correction
-        logging.info("testing image background correction")
-        # test background correction from image using a different image for each polarization position
-        bg_data = []  # list of background images
-        for idx in range(len(pol_positions)):
-            dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + idx  # different bg image for each pol
-            calib = model.DataArray(dcalib, metadata[idx])
-            bg_data.append(calib)
-
+        logging.info("Testing image background correction")
+        # test background correction using a different image for each polarization position
         e.clear()
         ars.background.value = bg_data
 
         # test if bg VA shows same values as stored in bg_data
-        for idx, pol_pos in enumerate(pol_positions):
+        for pol_pos in pol_positions:
             bg_VA = [bg_im for bg_im in ars.background.value if bg_im.metadata[model.MD_POL_MODE] == pol_pos]
             bg_im = [bg_im for bg_im in bg_data if bg_im.metadata[model.MD_POL_MODE] == pol_pos]
             self.assertEqual(len(bg_VA), 1)
             numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
-        e.wait()
 
+        e.wait(3.0)
+        time.sleep(1.0)  # wait shortly as .image is updated multiple times
         im2d2 = ars_raw_pj.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
-        # Check it's a RGB DataArray
-        self.assertEqual(im2d2.shape[2], 3)
-        # check if the bg image has been applied and the .image VA has been updated
+        self.assertEqual(im2d2.shape[2], 3)  # RGB DataArray
+        # check that the bg image has been applied, ie the .image VA has been updated
         assert_array_not_equal(im2d1, im2d2)
 
         ###################################################################
-        # test bg correction passing only 1 bg image but have six images -> should raise an error
-        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
-        e.clear()
+        # 1 bg image but have six images -> should raise an error
         with self.assertRaises(ValueError):
-            ars._setBackground(bg_data)
+            ars.background.value = bg_data[0]
 
     def test_arpol_1pol(self):
         """Test StaticARStream with ARRawProjection and one possible polarization mode."""
-
-        # ARPOL metadata
-        md = {model.MD_SW_VERSION: "1.0-test",
-              model.MD_HW_NAME: "fake ccd",
-              model.MD_DESCRIPTION: "AR polarization analyzer",
-              model.MD_ACQ_DATE: time.time(),
-              model.MD_BPP: 12,
-              model.MD_BINNING: (1, 1),  # px, px
-              model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-              model.MD_POS: (1.2e-3, -30e-3),  # m
-              model.MD_EXP_TIME: 1.2,  # s
-              model.MD_AR_POLE: (253.1, 65.1),
-              model.MD_LENS_MAG: 0.4,  # ratio
-              model.MD_POL_MODE: model.MD_POL_HORIZONTAL,
-              model.MD_POL_POS_LINPOL: 0.0,  # rad
-              model.MD_POL_POS_QWP: 0.0,  # rad
-              }
-
         # ARPOL data
-        data = [model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)]
-        data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
+        data = [self._create_ar_data((512, 1024), pol=MD_POL_HORIZONTAL)]
+
         logging.info("setting up stream")
         ars = stream.StaticARStream("test ar polarization static stream", data)
         ars_raw_pj = stream.ARRawProjection(ars)
@@ -4265,59 +4224,39 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait()
-
-        im2d0 = ars_raw_pj.image.value
+        e.wait(3.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
+        im2d0 = ars_raw_pj.image.value
+
         # corresponding bg image
-        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), md)]
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), data[0].metadata)]
         e.clear()
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
-        e.wait()
+        e.wait(3.0)
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d1 = ars_raw_pj.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
         assert_array_not_equal(im2d0, im2d1)
 
     def test_arpolarimetry(self):
         """Test StaticARStream with ARPolarimetryProjection projection."""
 
-        metadata = []
-        qwp_pos = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
-        linpol_pos = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
-
-        # raw AR polarization analyzer metadata
-        for idx, pol_pos in enumerate(POL_POSITIONS):
-            metadata.append({model.MD_SW_VERSION: "1.0-test",
-                             model.MD_HW_NAME: "fake ccd",
-                             model.MD_DESCRIPTION: "AR polarization analyzer",
-                             model.MD_ACQ_DATE: time.time(),
-                             model.MD_BPP: 12,
-                             model.MD_BINNING: (1, 1),  # px, px
-                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-                             model.MD_POS: (1.2e-3, -30e-3),  # m
-                             model.MD_EXP_TIME: 1.2,  # s
-                             model.MD_AR_POLE: (253.1, 65.1),
-                             model.MD_LENS_MAG: 0.4,  # ratio
-                             model.MD_POL_MODE: pol_pos,
-                             model.MD_POL_POS_LINPOL: qwp_pos[idx],  # rad
-                             model.MD_POL_POS_QWP: linpol_pos[idx],  # rad
-                             })
-
-        # raw AR polarization analyzer data
         data_raw = []
-        for index, md in enumerate(metadata):
-            data_pol = model.DataArray(1500 + 100 * index + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
-            data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
-            data_raw.append(data_pol)
+        bg_data = []  # list of background images
+        for i, pol in enumerate(POL_POSITIONS):
+            data_raw.append(self._create_ar_data((512, 1024), tweak=i, pol=pol))
 
-        logging.info("setting up ar stream")
-        ars = stream.StaticARStream("test ar polarimetry static stream", data_raw)
+            # Background images, per polarization
+            dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + i * 10
+            calib = model.DataArray(dcalib, data_raw[i].metadata.copy())
+            bg_data.append(calib)
+
+        logging.info("setting up AR stream")
+        ars = stream.StaticARStream("test AR polarimetry static stream", data_raw)
         ars_vis_pol = stream.ARPolarimetryProjection(ars)
 
         # wait a bit for the image to update
@@ -4328,11 +4267,12 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_vis_pol.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait()
+        e.wait(40.0)  # It can take a long time
+        assert e.is_set()
+        time.sleep(1.0)  # wait shortly as .image is updated multiple times
 
         # Control AR projections
         img_vis_1 = ars_vis_pol.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
         self.assertEqual(img_vis_1.shape[2], 3)
@@ -4348,10 +4288,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         else:
             self.fail("Failed to find another polarimetry position")
 
-        e.wait()
+        e.wait(40.0)  # typically, it's fast, because all the positions are pre-computed
+        assert e.is_set()
 
         img_vis_2 = ars_vis_pol.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
         self.assertEqual(img_vis_2.shape[2], 3)
@@ -4361,45 +4301,25 @@ class StaticStreamsTestCase(unittest.TestCase):
         ###################################################################
         # testing background correction is applied visualized data
         logging.info("testing image background correction")
-        bg_data = []  # list of background images for raw data
-        for idx in range(len(POL_POSITIONS)):
-            bg_image = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + idx  # different bg image for each pol
-            bg_image = model.DataArray(bg_image, metadata[idx])
-            bg_data.append(bg_image)
 
         e.clear()
         ars.background.value = bg_data
 
-        e.wait()
+        e.wait(40.0)  # It can take a long time
+        assert e.is_set()
         img_vis_3 = ars_vis_pol.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
-        # Check it's a RGB DataArray
-        self.assertEqual(img_vis_3.shape[2], 3)
+        self.assertEqual(img_vis_3.shape[2], 3)  # RGB DataArray
         # check if the bg image has been applied and the .image VA has been updated
         assert_array_not_equal(img_vis_2, img_vis_3)
 
     def test_ar_large_image(self):
         """Test StaticARStream with a large image to trigger resizing."""
         # AR metadata
-        md = {model.MD_SW_VERSION: "1.0-test",
-              model.MD_HW_NAME: "fake ccd",
-              model.MD_DESCRIPTION: "AR",
-              model.MD_ACQ_DATE: time.time(),
-              model.MD_BPP: 12,
-              model.MD_BINNING: (1, 1),  # px, px
-              model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
-              model.MD_POS: (1.2e-3, -30e-3),  # m
-              model.MD_EXP_TIME: 1.2,  # s
-              model.MD_AR_POLE: (253.1, 65.1),
-              model.MD_LENS_MAG: 0.4,  # ratio
-              }
+        data = [self._create_ar_data((2000, 2200))]
 
-        data = [model.DataArray(1500 + numpy.zeros((2000, 2200), dtype=numpy.uint16), md)]
-        data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
-        ars = stream.StaticARStream("test ar static stream with large image", data)
+        ars = stream.StaticARStream("test AR static stream with large image", data)
         ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
@@ -4410,21 +4330,21 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait()
-
-        im2d0 = ars_raw_pj.image.value
+        e.wait(3.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
+        im2d0 = ars_raw_pj.image.value
+
         # corresponding bg image
-        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), md)]
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), data[0].metadata)]
         e.clear()
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
-        e.wait()
+        e.wait(3.0)
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d1 = ars_raw_pj.image.value
-        time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
         assert_array_not_equal(im2d0, im2d1)
 
