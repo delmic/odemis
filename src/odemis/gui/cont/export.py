@@ -63,39 +63,42 @@ class ExportController(object):
         tab_data: MicroscopyGUIData -- the representation of the microscope GUI
         main_frame: (wx.Frame): the whole GUI frame
         """
-
         self._data_model = tab_data
-        self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._tab_panel = tab_panel
+        self._viewports = list(viewports.keys())
         self._conf = get_acqui_conf()
 
-        # Listen to "acquire image" button
+        # Listen to "export" button and menu
         self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.on_export)
-
-        self._viewports = list(viewports.keys())
-
         self._main_frame.Bind(wx.EVT_MENU, self.on_export, id=self._main_frame.menu_item_export_as.GetId())
-
         self._main_frame.menu_item_export_as.Enable(False)
 
         # subscribe to get notified about tab changes
         self._prev_streams = None # To unsubscribe afterwards
-        self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
+        tab_data.main.tab.subscribe(self.on_tab_change, init=True)
 
     @call_in_wx_main
     def on_tab_change(self, tab):
         """ Subscribe to the the current tab """
+        # Only let Export to be enabled in "our" tab, ie the analysis tab
+        if tab is not None and tab.tab_data_model is self._data_model:
+            self._data_model.focussedView.subscribe(self.on_view_change, init=True)
+        else:
+            self._data_model.focussedView.unsubscribe(self.on_view_change)
+            self._main_frame.menu_item_export_as.Enable(False)
+            self._tab_panel.btn_secom_export.Enable(False)
+
+    def on_view_change(self, view):
+        """
+        Check whether the current view has any stream to export
+        """
         if self._prev_streams:
             self._prev_streams.unsubscribe(self.on_streams_change)
             self._prev_streams = None
-        if tab is not None and tab.name == 'analysis':
-            # Only let export item to be enabled in AnalysisTab
-            tab.tab_data_model.streams.subscribe(self.on_streams_change, init=True)
-            self._prev_streams = tab.tab_data_model.streams
-        else:
-            self._main_frame.menu_item_export_as.Enable(False)
-            self._tab_panel.btn_secom_export.Enable(False)
+
+        view.stream_tree.flat.subscribe(self.on_streams_change, init=True)
+        self._prev_streams = view.stream_tree.flat
 
     @call_in_wx_main
     def on_streams_change(self, streams):
@@ -149,9 +152,12 @@ class ExportController(object):
                 # TODO: remove numbers from the view name?
                 basename += " " + view.name.value
 
-            # only batch export when more than 1 image to export for view
-            if hasattr(streams[0], "polarimetry") or \
-                    (hasattr(streams[0], "polarization") and len(streams[0].polarization.choices) > 1):
+            # Special batch export for AR view of polarization or polarimetry,
+            # as they contain typically 6 or 24 images.
+            if (export_type == 'AR' and streams and
+                 (hasattr(streams[0], "polarimetry") or
+                  (hasattr(streams[0], "polarization") and len(streams[0].polarization.choices) > 1)
+               )):
                 batch_export = True
 
         else:
