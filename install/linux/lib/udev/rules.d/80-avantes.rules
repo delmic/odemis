@@ -1,0 +1,5 @@
+# Allow the user in the "Odemis" group to have access to the Avantes spectrograph.
+
+# AvaSpec HERO Sensline
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1992", ATTRS{idProduct}=="0669", GROUP="odemis"
+
