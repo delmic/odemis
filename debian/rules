@@ -7,8 +7,8 @@ VER := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 
 override_dh_auto_install:
 	python setup.py install --root debian/odemis --install-layout=deb
-	python3 setup.py install --root debian/odemis --install-layout=deb
-
+	# Don't override Python 2 scripts, so copy them in some non-standard directory
+	python3 setup.py install --root debian/odemis --install-layout=deb --install-scripts usr/lib/odemis/python3/
 
 override_dh_installdocs:
 	# Just be sure there is no left over from previous builds
@@ -31,6 +31,10 @@ override_dh_installdocs:
 	# Install the "normal" documentation files (not needed? taken care by setup.py?)
 	#dh_installdocs
 
+override_dh_python3:
+	# Leave the scripts marked as /usr/bin/python as-is. We'll switch to Python 3
+	# explicitily.
+	dh_python3 --no-shebang-rewrite
 
 override_dh_compress:
 	# make sure it doesn't compress example scripts and PDF files
