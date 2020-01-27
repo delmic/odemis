@@ -379,23 +379,19 @@ class ARRawProjection(ARProjection):
         :param pol_pos: (str or None) Polarization position (must be part of the .stream._pos).
         :returns: (2D DataArray) The polar projection.
         """
-
         # Note: Need a copy of the link to the dict. If self._polar_cache is reset while
         # still running this method, the dict might get new entries again, though it should be empty.
         polar_cache = self._polar_cache
 
         try:
-            polar_data = polar_cache[ebeam_pos][pol_pos]
+            polar_data = polar_cache.setdefault(ebeam_pos, {})[pol_pos]
         except KeyError:
             # Compute the polar representation
             data = self.stream._pos[ebeam_pos + (pol_pos,)]
-            # TODO stream._pos can be then also be ordered first ebeam_pos, then pol_pos
-            # TODO would also simplify the check for the correct bg image etc.
+            # TODO: stream._pos can be then also be structured ebeam_pos/pol_pos.
+            #   That would also simplify the check for the correct bg image etc.
 
             try:
-                # Create empty dict for processed ebeam position in cache
-                polar_cache[ebeam_pos] = {}
-
                 # Correct image for background. It must match the polarization (defaulting to MD_POL_NONE).
                 calibrated = self._processBackground(data, data.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
 
@@ -412,16 +408,10 @@ class ARRawProjection(ARProjection):
 
                 # Warning: allocates lot of memory, which will not be free'd until
                 # the current thread is terminated.
-
                 polar_data = angleres.AngleResolved2Polar(calibrated, output_size, hole=False)
 
                 # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
-                # polar_cache[ebeam_pos + (pol_pos,)] = polar_data
                 polar_cache[ebeam_pos][pol_pos] = polar_data
-
-                # return an array
-                polar_data = polar_cache[ebeam_pos][pol_pos]
-
             except Exception:
                 logging.exception("Failed to convert to azimuthal projection")
                 return data  # display its raw as fallback
@@ -456,8 +446,6 @@ class ARRawProjection(ARProjection):
                 self.stream._updateHistogram(polar_data)
 
                 self.image.value = self._project2RGB(polar_data)
-                # Note: Need to calculate the histogram when user changes B/C settings and then project2RGB
-
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
@@ -540,10 +528,7 @@ class ARRawProjection(ARProjection):
 
         if hasattr(self, "polarization"):
             for pol_pos in self.polarization.choices:
-                try:
-                    data = self._polar_cache[ebeam_pos][pol_pos]
-                except KeyError:
-                    data = self._project2Polar(ebeam_pos, pol_pos)
+                data = self._project2Polar(ebeam_pos, pol_pos)
                 data = self._project2RGB(data, self.stream.tint.value)
                 data_dict[pol_pos] = data
         else:  # standard single AR image
@@ -584,6 +569,7 @@ class ARPolarimetryProjection(ARProjection):
         self._polarimetry_cache = {}  # dict tuple (float, float) -> dict(MD_POL_* (str) -> DataArray)
         # represents (ebeam posX, ebeam posY) -> (polarimetry pos -> DataArray)
 
+        # TODO: share the raw data with the cache from ARRawProjection
         # Same as above, but the raw (aka rectangular representation -> phi/theta) images.
         # Images are background corrected.
         self._polarimetry_cache_raw = {}  # dict tuple (float, float) -> dict(MD_POL_* (str) -> DataArray)
