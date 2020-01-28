@@ -30,6 +30,7 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.model import oneway
+from odemis.util import TimeoutError
 import os
 import queue
 import threading
@@ -428,6 +429,10 @@ INTEGRATION_TIME_RNG = (5.22e-3, 600)  # s
 GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
+GEN_DATA = "D"  # New data ready
+GEN_UNSYNC = "U"  # Synchronisation stopped
+# There are also floats, which are trigger messages
+
 
 class TerminationRequested(Exception):
     """
@@ -504,7 +509,8 @@ class Spectrometer(model.Detector):
         # Queue to control the acquisition thread
         self._genmsg = queue.Queue()  # GEN_*
         # Queue of all synchronization events received (typically max len 1)
-        self._triggers = queue.Queue()  # float (time) or None
+        self._old_triggers = []
+        self._data_ready = threading.Event()  # set when new data is available
         # Thread of the generator
         self._generator = None
 
@@ -672,7 +678,7 @@ class Spectrometer(model.Detector):
         Setter for .exposureTime VA
         """
         # Round to the step size
-        round(et / INTEGRATION_TIME_STEP) *  INTEGRATION_TIME_STEP
+        et = round(et / INTEGRATION_TIME_STEP) * INTEGRATION_TIME_STEP
         return et
 
 # Example of acquisition using polling
@@ -714,8 +720,6 @@ class Spectrometer(model.Detector):
 
     def stop_generate(self):
         self._genmsg.put(GEN_STOP)
-        # In case the generator is waiting for a trigger
-        self._triggers.put(None)
 
     def set_trigger(self, sync):
         """
@@ -725,14 +729,26 @@ class Spectrometer(model.Detector):
             logging.debug("Now set to software trigger")
         else:
             # Just to make sure to not wait forever for it
-            self._triggers.put(None)
+            logging.debug("Sending unsynchronisation event")
+            self._genmsg.put(GEN_UNSYNC)
 
     @oneway
     def onEvent(self):
         """
         Called by the Event when it is triggered
         """
-        self._triggers.put(time.time())
+        self._genmsg.put(time.time())
+
+    # The acquisition is based on a FSM that roughly looks like this:
+    # Event\State |   Stopped   |Ready for acq|  Acquiring |  Receiving data |
+    #  START      |Ready for acq|     .       |     .      |                 |
+    #  Trigger    |      .      | Acquiring   | (buffered) |   (buffered)    |
+    #  UNSYNC     |      .      | Acquiring   |     .      |         .       |
+    #  DATA       |      .      |     .       |Receiving data|       .       |
+    #  STOP       |      .      |  Stopped    | Stopped    |    Stopped      |
+    #  TERM       |    Final    |   Final     |  Final     |    Final        |
+    # If the acquisition is not synchronised, then the Trigger event in Ready for
+    # acq is considered as a "null" event: it's immediately switched to acquiring.
 
     def _get_acq_msg(self, **kwargs):
         """
@@ -741,10 +757,11 @@ class Spectrometer(model.Detector):
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
-        if msg not in (GEN_START, GEN_STOP, GEN_TERM):
-            logging.warning("Acq received unexpected message %s", msg)
-        else:
+        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_DATA, GEN_UNSYNC) or
+              isinstance(msg, float)):
             logging.debug("Acq received message %s", msg)
+        else:
+            logging.warning("Acq received unexpected message %s", msg)
         return msg
 
     def _acq_wait_start(self):
@@ -754,62 +771,101 @@ class Spectrometer(model.Detector):
         raise TerminationRequested: if a terminate message was received
         """
         while True:
-            state = self._get_acq_msg(block=True)
-            if state == GEN_TERM:
+            msg = self._get_acq_msg(block=True)
+            if msg == GEN_TERM:
                 raise TerminationRequested()
-
-            # Check if there are already more messages on the queue
-            try:
-                state = self._get_acq_msg(block=False)
-                if state == GEN_TERM:
-                    raise TerminationRequested()
-            except queue.Empty:
-                pass
-
-            if state == GEN_START:
+            elif msg == GEN_START:
                 return
 
-            # Duplicate Stop
-            logging.debug("Skipped message %s as acquisition is stopped", state)
+            # Duplicate Stop or trigger
+            logging.debug("Skipped message %s as acquisition is stopped", msg)
 
-    def _acq_should_stop(self, timeout=None):
+    def _acq_should_stop(self):
         """
         Indicate whether the acquisition should now stop or can keep running.
+        Non blocking.
         Note: it expects that the acquisition is running.
-        timeout (0<float or None): how long to wait to check (if None, don't wait)
         return (bool): True if needs to stop, False if can continue
         raise TerminationRequested: if a terminate message was received
         """
-        try:
-            if timeout is None:
-                state = self._get_acq_msg(block=False)
-            else:
-                state = self._get_acq_msg(timeout=timeout)
-            if state == GEN_STOP:
+        while True:
+            try:
+                msg = self._get_acq_msg(block=False)
+            except queue.Empty:
+                # No message => keep running
+                return False
+
+            if msg == GEN_STOP:
                 return True
-            elif state == GEN_TERM:
+            elif msg == GEN_TERM:
                 raise TerminationRequested()
-        except queue.Empty:
-            pass
-        return False
+            elif isinstance(msg, float):  # trigger
+                self._old_triggers.insert(0, msg)
+            else:  # Anything else shouldn't really happen
+                logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
 
     def _acq_wait_trigger(self):
         """
         Block until a trigger is received, or a stop message.
         Note: it expects that the acquisition is running.
+        If the acquisition is not synchronised, it will immediately return
         return (bool): True if needs to stop, False if a trigger is received
         raise TerminationRequested: if a terminate message was received
         """
-        while True:
-            trigger = self._triggers.get(block=True)
-            if self._acq_should_stop(timeout=None):
-                return True
+        if not self.data._sync_event:
+            # No synchronisation -> just check it shouldn't stop
+            return self._acq_should_stop()
 
-            if trigger is None:  # not a real trigger
-                logging.debug("Discarding fake trigger")
-            else:
-                logging.debug("Received trigger after %s s", time.time() - trigger)
+        try:
+            # Already some trigger received before?
+            trigger = self._old_triggers.pop()
+            logging.debug("Using late trigger")
+        except IndexError:
+            # Let's really wait
+            while True:
+                msg = self._get_acq_msg(block=True)
+                if msg == GEN_TERM:
+                    raise TerminationRequested()
+                elif msg == GEN_STOP:
+                    return True
+                elif msg == GEN_UNSYNC or isinstance(msg, float):  # trigger
+                    trigger = msg
+                    break
+                else: # Anything else shouldn't really happen
+                    logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
+
+        if trigger == GEN_UNSYNC:
+            logging.debug("End of synchronisation")
+        else:
+            logging.debug("Received trigger after %s s", time.time() - trigger)
+        return False
+
+    def _acq_wait_data(self, timeout=0):
+        """
+        Block until a data is received, or a stop message.
+        Note: it expects that the acquisition is running.
+        timeout (0<=float): how long to wait to check (use 0 to not wait)
+        return (bool): True if needs to stop, False if a trigger is received
+        raise TerminationRequested: if a terminate message was received
+        """
+        tend = time.time() + timeout
+        while True:
+            left = max(0, tend - time.time())
+            try:
+                msg = self._get_acq_msg(timeout=left)
+            except queue.Empty:
+                raise TimeoutError("No data message received within %s s" % (timeout,))
+            if msg == GEN_DATA:
                 return False
+            elif msg == GEN_TERM:
+                raise TerminationRequested()
+            elif msg == GEN_STOP:
+                return True
+            elif isinstance(msg, float):  # trigger
+                # received trigger too early => store it for later
+                self._old_triggers.insert(0, msg)
+            else:  # Anything else shouldn't really happen
+                logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
 
     def _acquire(self):
         """
@@ -817,7 +873,6 @@ class Spectrometer(model.Detector):
         Managed via the ._genmsg Queue
         """
         npixels = self._shape[0]
-        data_ready = threading.Event()
 
         # There is a limitation in ctypes, which prevents from using a method as
         # callback. So instead, we define a local function, which has access to
@@ -834,16 +889,18 @@ class Spectrometer(model.Detector):
                 logging.error("Measurement data failed to be acquired (error %d)", result)
                 return
 
-            data_ready.set()
+            self._genmsg.put(GEN_DATA)
 
         # TODO: handle device reconnection (on ERR_DEVICE_NOT_FOUND/ERR_COMMUNICATION)
 
         try:
             config = MeasConfigType()  # Initialized to 0 by default
-            exp = None
+            exp = None  # To know if we need to reconfigure the settings
             while True:
                 # Wait until we have a start (or terminate) message
                 self._acq_wait_start()
+                logging.debug("Preparing acquisition")
+                self._old_triggers = []  # discard all old triggers
 
                 # Keep acquiring images until stop requested
                 while True:
@@ -859,36 +916,28 @@ class Spectrometer(model.Detector):
                         config.NrAverages = 1
                         self.PrepareMeasure(config)
 
-                    # TODO: move the triggers to a different queue, so that if
-                    #   lots of triggers are sent, and then stopped, it doesn't
-                    #   have to acquire each image before stopping.
                     # Wait for trigger (if synchronized)
-                    if self.data._sync_event:
-                        if self._acq_wait_trigger():
-                            # True = Stop requested
-                            break
-                    elif self._acq_should_stop():  # already requested to stop?
+                    if self._acq_wait_trigger():
+                        # True = Stop requested
                         break
 
                     logging.debug("Starting one image acquisition")
-                    data_ready.clear()
-                    # TODO: convert to polling, and so can support early stop more easily?
-                    #  cf picoquant. Also, it would ensure to not receive old
-                    #  data when doing fast start/stop/start.
                     self.Measure(1, callback=onData)
                     tstart = time.time()
                     twait = exp * 3 + 1  # Give a big margin for timeout
 
-                    # TODO: only allow to update the setting here (not during acq)
                     md = self._metadata.copy()
                     md[model.MD_ACQ_DATE] = tstart
                     md[model.MD_EXP_TIME] = exp
 
                     # Wait for the acquisition to be received
-                    # TODO: support cancelling too (ie, stop or terminate) -> need to
-                    #  listen to two kinds of events.
                     logging.debug("Waiting for %g s", twait)
-                    if not data_ready.wait(twait):
+                    try:
+                        if self._acq_wait_data(twait):
+                            logging.debug("Stopping measurement early")
+                            self.StopMeasure()
+                            break
+                    except TimeoutError:
                         logging.error("Acquisition timeout after %g s", twait)
                         # TODO: try to reset the hardware?
                         #  cf ResetDevice(), but only works on AS7010
@@ -987,7 +1036,6 @@ class AvantesDataFlow(model.DataFlow):
             self._detector.set_trigger(True)
             self._sync_event.subscribe(self._detector)
         else:
-            logging.debug("Sending unsynchronisation event")
             self._detector.set_trigger(False)
 
 

@@ -59,6 +59,7 @@ class AvantesTest(unittest.TestCase):
         cls.spectrometer.terminate()
 
     def setUp(self):
+        self._data = queue.Queue()
         self.got_image = threading.Event()
         # Add a bit of "margin" in case the previous test started/stopped acquisition,
         # and it's still on-going. Without it, if the new test case start an
@@ -102,7 +103,6 @@ class AvantesTest(unittest.TestCase):
         """
         exp = 0.1
         self.spectrometer.exposureTime.value = exp
-        self._data = queue.Queue()
 
         self.spectrometer.data.subscribe(self.receive_spec_data)
         try:
@@ -128,7 +128,30 @@ class AvantesTest(unittest.TestCase):
         finally:
             self.spectrometer.data.unsubscribe(self.receive_spec_data)
 
-    def test_software_trigger(self):
+    def test_cancel(self):
+        # Start long acquisition
+        exp = 30
+        self.spectrometer.exposureTime.value = exp
+        self.assertAlmostEqual(exp, self.spectrometer.exposureTime.value)
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+
+        # Wait a little bit to be sure it's started
+        time.sleep(0.2)
+
+        # Cancel it
+        begin = time.time()
+        self.spectrometer.data.unsubscribe(self.receive_spec_data)
+
+        # Ask for a short acquisition, to check the previous one is over
+        self.spectrometer.exposureTime.value = 0.1
+        data = self.spectrometer.data.get()
+        duration = time.time() - begin
+
+        # It should have taken a lot less long than the long acquisition
+        self.assertLessEqual(duration, 5)
+        self.assertAlmostEqual(data.metadata[model.MD_EXP_TIME], 0.1)
+
+    def test_trigger(self):
         """
         Check that the synchronisation with softwareTrigger works.
         Make it typical, by waiting for the data received, and then notifying
@@ -137,14 +160,10 @@ class AvantesTest(unittest.TestCase):
         self.spectrometer.exposureTime.value = 0.1  # s
         exp = self.spectrometer.exposureTime.value
         duration = exp * 1.1 + 0.1
-
-        numbert = 4
+        numbert = 6
         self.ccd_left = numbert  # unsubscribe after receiving
 
-        try:
-            self.spectrometer.data.synchronizedOn(self.spectrometer.softwareTrigger)
-        except IOError:
-            self.skipTest("Camera doesn't support synchronisation")
+        self.spectrometer.data.synchronizedOn(self.spectrometer.softwareTrigger)
         self.spectrometer.data.subscribe(self.receive_auto_unsub)
 
         # Wait for the image
@@ -162,7 +181,70 @@ class AvantesTest(unittest.TestCase):
         # check we can still get data normally
         d = self.spectrometer.data.get()
 
-        time.sleep(0.1)
+    def test_trigger_cache(self):
+        """
+        Check that the synchronisation store older triggers (if they arrive a little early)
+        """
+        self.spectrometer.exposureTime.value = 0.1  # s
+        exp = self.spectrometer.exposureTime.value
+        duration = exp * 1.1 + 0.1
+        numbert = 6
+
+        self.spectrometer.data.synchronizedOn(self.spectrometer.softwareTrigger)
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+
+        try:
+            # Send all the triggers at once
+            for i in range(numbert):
+                self.spectrometer.softwareTrigger.notify()
+
+            for i in range(numbert):
+                # wait for the image to be received
+                try:
+                    self._data.get(timeout=duration + 5)
+                except queue.Empty:
+                    self.fail("No data %d received after %s s" % (i, duration))
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
+
+        self.spectrometer.data.synchronizedOn(None)
+
+        # check we can still get data normally
+        d = self.spectrometer.data.get()
+
+    def test_trigger_removal(self):
+        """
+        Check that when the synchronisation is removed, the acquisition continues
+        """
+        self.spectrometer.exposureTime.value = 0.1  # s
+        exp = self.spectrometer.exposureTime.value
+        duration = exp * 1.1 + 0.1
+        numbert = 6
+
+        self.spectrometer.data.synchronizedOn(self.spectrometer.softwareTrigger)
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+
+        try:
+            # Get one image
+            self.spectrometer.softwareTrigger.notify()
+            self._data.get(timeout=duration + 5)
+
+            # make sure it's waiting
+            time.sleep(0.1)
+            self.spectrometer.data.synchronizedOn(None)
+
+            # Check we receive the other images
+            for i in range(1, numbert):
+                # wait for the image to be received
+                try:
+                    self._data.get(timeout=duration + 5)
+                except queue.Empty:
+                    self.fail("No data %d received after %s s" % (i, duration))
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
+
+        # check we can still get data normally
+        d = self.spectrometer.data.get()
 
     def receive_spec_data(self, df, d):
         self._data.put(d)
