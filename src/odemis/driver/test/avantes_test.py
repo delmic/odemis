@@ -22,6 +22,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 KWARGS = {"name": "spec", "role": "spectrometer", "sn": None}
+if TEST_NOHW:
+    KWARGS["sn"] = "fake"
 
 
 class AvantesStaticTest(unittest.TestCase):

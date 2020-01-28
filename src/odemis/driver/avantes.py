@@ -25,9 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from ctypes import *
+import ctypes
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.model import oneway
 import os
 import queue
@@ -440,7 +441,7 @@ class Spectrometer(model.Detector):
     Support for the Avantes Spectrometer, relying on the libavs.
     Currently only supporting USB connection, on Linux. Tested only on the
     AvaSpec-HSC 1024x58TEC-EVO.
-    
+
     Only exposure time can be changed. The 16-bit ADC mode is forced on (instead
     of 14-bit). Temperature is not shown, and target temperature cannot be
     changed (the default is the minimum temperature). Resolution cropping is not
@@ -450,11 +451,15 @@ class Spectrometer(model.Detector):
     def __init__(self, name, role, sn=None, **kwargs):
         """
         sn (string or None): serial number of the device to open.
-            If None, it will pick the first device found. 
+            If None, it will pick the first device found.
+            If "fake", it will use a simulated device.
         """
         super(Spectrometer, self).__init__(name, role, **kwargs)
-        self._dll = AvantesDLL()
-        self._sn = sn
+        if sn == "fake":
+            self._dll = FakeAvantesDLL()
+            sn = None
+        else:
+            self._dll = AvantesDLL()
 
         # Look for the spectrometer and initialize it
         self._dev_id, self._dev_hdl = self._open_device(sn)
@@ -487,7 +492,7 @@ class Spectrometer(model.Detector):
 
         self.exposureTime = model.FloatContinuous(1, INTEGRATION_TIME_RNG, unit="s",
                                                   setter=self._onExposureTime)
-        
+
         # No support for binning/resolution change, but we put them, as it helps
         # to follow the standard interface, so there rest of Odemis is happy
         self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)))
@@ -505,11 +510,11 @@ class Spectrometer(model.Detector):
 
     def _open_device(self, sn):
         """
-        return IdentityType, AvsHandle: info on the device, and opaque handle  
+        return IdentityType, AvsHandle: info on the device, and opaque handle 
         """
         # Check all USB devices
         self.Init(0)  # USB only
-        ndevices = self._dll.AVS_UpdateUSBDevices()
+        ndevices = self.UpdateUSBDevices()
         if ndevices == 0:
             raise model.HwError("Device not found, check it is powered on and connected")
 
@@ -544,7 +549,11 @@ class Spectrometer(model.Detector):
 
     def Done(self):
         self._dll.AVS_Done()
-        
+
+    def UpdateUSBDevices(self):
+        ndevices = self._dll.AVS_UpdateUSBDevices()
+        return ndevices
+
     def GetList(self, ndevices):
         """
         ndevices (1< int): number of devices to expect
@@ -559,14 +568,14 @@ class Spectrometer(model.Detector):
                             required_size.value, sizeof(dev_ids))
 
         return dev_ids
-    
+
     def Activate(self, dev_id):
         """
         return AvsHandle (c_long): handle
         """
         hdl = self._dll.AVS_Activate(byref(dev_id))
         return c_long(hdl)  # Force it to be the ctypes (opaque) object
-    
+
     def Deactivate(self):
         self._dll.AVS_Deactivate(self._dev_hdl)
 
@@ -591,7 +600,7 @@ class Spectrometer(model.Detector):
         return (numpy array of doulble with shape (npixels)): wavelength in nm
         """
         wll = numpy.empty(npixels, dtype=numpy.double)
-        self._dll.AVS_GetLambda(self._dev_hdl, wll.ctypes.data_as(POINTER(c_double)))
+        self._dll.AVS_GetLambda(self._dev_hdl, numpy.ctypeslib.as_ctypes(wll))
         return wll
 
     def GetNumPixels(self):
@@ -655,7 +664,7 @@ class Spectrometer(model.Detector):
 
         data = numpy.empty(npixels, dtype=numpy.double)
         ts = c_uint()
-        self._dll.AVS_GetScopeData(self._dev_hdl, byref(ts), data.ctypes.data_as(POINTER(c_double)))
+        self._dll.AVS_GetScopeData(self._dev_hdl, byref(ts), numpy.ctypeslib.as_ctypes(data))
         return ts.value, data
 
     def _onExposureTime(self, et):
@@ -815,7 +824,7 @@ class Spectrometer(model.Detector):
         # self and other needed context information.
         @MEASUREMENT_CB
         def onData(p_dev_hdl, p_result):
-            print("Got a data %s %s" % (p_dev_hdl.contents.value, p_result.contents.value))
+            # logging.debug("Got a data %s %s" % (p_dev_hdl.contents.value, p_result.contents.value))
             if p_dev_hdl.contents.value != self._dev_hdl.value:
                 logging.warning("Received information not about the current device")
                 return
@@ -824,7 +833,7 @@ class Spectrometer(model.Detector):
             if result < SUCCESS:
                 logging.error("Measurement data failed to be acquired (error %d)", result)
                 return
-            
+
             data_ready.set()
 
         # TODO: handle device reconnection (on ERR_DEVICE_NOT_FOUND/ERR_COMMUNICATION)
@@ -980,4 +989,180 @@ class AvantesDataFlow(model.DataFlow):
         else:
             logging.debug("Sending unsynchronisation event")
             self._detector.set_trigger(False)
+
+
+# Only for testing/simulation purpose
+# Very rough version that is just enough so that if the wrapper behaves correctly,
+# it returns the expected values. Copied from andorcam2
+
+def _deref(p, typep):
+    """
+    p (byref object)
+    typep (c_type): type of pointer
+    Use .value to change the value of the object
+    """
+    # This is using internal ctypes attributes, that might change in later
+    # versions. Ugly!
+    # Another possibility would be to redefine byref by identity function:
+    # byref= lambda x: x
+    # and then dereferencing would be also identity function.
+    return typep.from_address(addressof(p._obj))
+
+def _val(obj):
+    """
+    return the value contained in the object. Needed because ctype automatically
+    converts the arguments to c_types if they are not already c_type
+    obj (c_type or python object)
+    """
+    if isinstance(obj, ctypes._SimpleCData):
+        return obj.value
+    else:
+        return obj
+
+
+class FakeAvantesDLL(object):
+    """
+    Fake AvantesDLL. It basically simulates a spectrograph connected.
+    """
+
+    def __init__(self):
+        self._meas_config = MeasConfigType()
+        self._dev_config = DeviceConfigType()
+        self._use_16bit = False
+        self._npixels = 1024
+        self._handle = None  # c_long
+
+        self._meas_nmsr = 0  # Number of measurements to be done
+        self._meas_tstart = 0  # Time the measurement started
+        self._meas_dur = 0  # Time (s) of one measurement
+        self._ndata_read = 0  # number of data (measurements) passed to the application
+        self._ndata_notified = 0  # number of data (measurements) passed to the callback
+        self._meas_timer = None  # RepeatingTimer to call the measurement callback
+        self._meas_cb = None  # Function to call on new measurement data
+
+        self._tick_start = time.time()  # Time the device booted
+
+    def AVS_Init(self, port):
+        return
+
+    def AVS_Done(self):
+        return
+
+    def AVS_UpdateUSBDevices(self):
+        return 1
+
+    def AVS_GetList(self, list_size, p_required_size, p_list):
+        list_size = _val(list_size)
+        p_required_size = _deref(p_required_size, c_uint)
+        p_required_size.value = sizeof(IdentityType)
+        if list_size < p_required_size.value:
+            raise AvantesError(-9, "ERR_INVALID_SIZE")
+
+        p_list[0].SerialNumber = b"12345678"
+        p_list[0].UserFriendlyName = b"Fake spec"
+        p_list[0].Status = USB_AVAILABLE
+        return 1
+
+    def AVS_Activate(self, dev_id):
+        self._handle = c_long(4)  # chosen by fair dice roll
+        return self._handle.value
+
+    def AVS_Deactivate(self, hdev):
+        return
+
+    def _get_ndata_available(self):
+        """
+        Computes the number of measurement data acquired since the beginning of
+          the measurement (based on the current time)
+        return (int)
+        """
+        # How many measumrents fit since the start of the acquisition?
+        now = time.time()
+        nmsr = (now - self._meas_tstart) // self._meas_dur
+
+        # Clipped by the number of measurements requested
+        if self._meas_nmsr > 0:
+            nmsr = min(self._meas_nmsr, nmsr)
+
+        return nmsr
+
+    def _on_new_measurement(self):
+        """
+        Calls the callback for each measurement ready
+        """
+        self._ndata_notified += 1
+        if self._meas_cb:
+            self._meas_cb(pointer(self._handle), pointer(c_int(0)))
+
+        # Stop the callback as soon as we've received enough data
+        if self._meas_nmsr > 0 and self._ndata_notified >= self._meas_nmsr:
+            self._meas_timer.cancel()
+            self._meas_timer = None
+            self._meas_cb = None
+
+    def AVS_Measure(self, hdev, callback, nmsr):
+        self._meas_nmsr = _val(nmsr)
+        self._meas_tstart = time.time()
+        self._meas_dur = self._meas_config.IntegrationTime / 1000 * self._meas_config.NrAverages
+        self._ndata_read = 0
+
+        if cast(callback, c_void_p):  # Not a null pointer
+            self._meas_cb = callback
+            self._meas_timer = util.RepeatingTimer(self._meas_dur, self._on_new_measurement, "Measurement callback thread")
+            self._meas_timer.start()
+        else:
+            self._meas_cb = None
+
+    def AVS_StopMeasure(self, hdev):
+        self._meas_nmsr = 0
+        self._meas_cb = None
+        if self._meas_timer:
+            self._meas_timer.cancel()
+            self._meas_timer = None
+
+    def AVS_PrepareMeasure(self, hdev, meas_config):
+        self._meas_config = _deref(meas_config, MeasConfigType)
+
+    def AVS_PollScan(self, hdev):
+        if self._ndata_read < self._get_ndata_available():
+            return c_int(1)
+        else:
+            return c_int(0)
+
+    def AVS_GetScopeData(self, hdev, p_ts, p_spec):
+        ts = _deref(p_ts, c_uint)
+        nd_spec = numpy.ctypeslib.as_array(p_spec)  # , (self._npixels,))
+        ts.value = int((time.time() - self._tick_start) * 1000)  # ms
+
+        max_val = (2 ** 16 - 1) if self._use_16bit else (2 ** 14 - 1)
+        nd_spec[...] = numpy.random.random_sample(nd_spec.shape) * max_val
+
+    def AVS_GetLambda(self, hdev, wll):
+        minwl = 350
+        maxwl = 1000
+        px_wl = (maxwl - minwl) / self._npixels
+        for i in range(self._npixels):
+            wll[i] = minwl + i * px_wl
+
+    def AVS_GetNumPixels(self, hdev, p_npixels):
+        npixels = _deref(p_npixels, c_ushort)
+        npixels.value = self._npixels
+
+    def AVS_GetVersionInfo(self, hdev, p_fpgav, p_fwv, p_dllv):
+        p_fpgav.value = b"008.000.006.000"
+        p_fwv.value = b"001.010.000.000"
+        p_dllv.value = b"9.1.2.3"
+
+    def AVS_UseHighResAdc(self, hdev, enable):
+        self._use_16bit = _val(enable)
+
+    def AVS_GetParameter(self, hdev, size, p_required_size, p_dev_param):
+        size = _val(size)
+        p_required_size = _deref(p_required_size, c_uint)
+
+        p_required_size.value = sizeof(DeviceConfigType)
+        if size < p_required_size.value:
+            raise AvantesError(-9, "ERR_INVALID_SIZE")
+
+        memmove(p_dev_param, byref(self._dev_config), sizeof(self._dev_config))
 
