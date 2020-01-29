@@ -111,8 +111,8 @@ class ImageWindowApp(wx.App):
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         info = [
             "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
-            "pitch-x: {:.2f} um".format(PIXEL_SIZE_UM * self.scaling[0]),
-            "pitch-y: {:.2f} um".format(PIXEL_SIZE_UM * self.scaling[1]),
+            "pitch-x: {:.2f} um".format(PIXEL_SIZE_UM * self.scale[0]),
+            "pitch-y: {:.2f} um".format(PIXEL_SIZE_UM * self.scale[1]),
             "translation-x: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[0]),
             "translation-y: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[1]),
         ]
