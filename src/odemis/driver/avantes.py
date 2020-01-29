@@ -419,6 +419,9 @@ class DeviceConfigType(Structure):
     ]
 
 
+# FPGA clock
+CLOCK_RATE = 48e6  # Hz
+
 # TODO: minimum time varies per hardware, cf manual section 4.2.2
 # 0.001 ms steps
 # For the AvaSpec-HS1024x58-USB2:
@@ -497,6 +500,10 @@ class Spectrometer(model.Detector):
 
         self.exposureTime = model.FloatContinuous(1, INTEGRATION_TIME_RNG, unit="s",
                                                   setter=self._onExposureTime)
+
+        # Not so useful, but makes happy some client when trying to estimate the
+        # acquisition time. Not sure whether this is correct, but it's good enough
+        self.readoutRate = model.VigilantAttribute(CLOCK_RATE, readonly=True, unit="Hz")
 
         # No support for binning/resolution change, but we put them, as it helps
         # to follow the standard interface, so there rest of Odemis is happy
