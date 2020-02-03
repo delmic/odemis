@@ -1,3 +1,21 @@
+odemis (3.0.1-1) xenial; urgency=medium
+
+  * New version: 3.0.1
+  * Main bug fixes and improvements:
+   - Use Python 2 by default for the utils
+   - Don't show the ruler tool in the SECOM alignment tab
+   - Show the fine alignment checkbox in Ubuntu 18.04 (SECOM/DELPHI)
+   - Only enable the Export button when there is something to export
+   - Spectrum average should not be aliased to an round number (SPARC)
+   - The calibration light could stay on if leaving the alignment tab of the
+     streak camera while doing manual focus.
+   - Fix connection to some hardware blocking with Python 3
+   - Fix rounding of floats with Python 3
+   - Fix drivers complaining of integers on Python 3
+   - Fix histogram limit bars not shown in Windows
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 03 Feb 2020 16:47:53 +0100
+
 odemis (3.0.0-1) xenial; urgency=medium
 
   * New version: 3.0
