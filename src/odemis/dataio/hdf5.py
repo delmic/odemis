@@ -26,6 +26,7 @@ import collections
 import h5py
 import logging
 import numpy
+import odemis
 from odemis import model
 from odemis.util import spectrum, img, fluo
 import os
@@ -1135,6 +1136,7 @@ def _add_svi_info(group):
     gi["Company"] = "Delmic"
     gi["FileSpecificationCompatibility"] = "0.01p0"
     gi["FileSpecificationVersion"] = "0.02"  # SVI has typically 0.01d8
+    gi["WriterVersion"] = "%s %s" % (odemis.__shortname__, odemis.__version__)
     gi["ImageHistory"] = ""
     gi["URL"] = "www.delmic.com"
 
