@@ -276,7 +276,14 @@ class ReadoutCamera(model.DigitalCamera):
         :return: (dataarray) image
         """
         self._img_counter = (self._img_counter + 1) % len(self._img_list)
-        image = self._img_list[self._img_counter]
+        image = self._img_list[self._img_counter].copy()
+
+        # Add some noise
+        mx = image.max()
+        image += numpy.random.randint(0, max(mx // 100, 10), image.shape, dtype=image.dtype)
+        # Clip, but faster than clip() on big array.
+        # There can still be some overflow, but let's just consider this "strong noise"
+        image[image > mx] = mx
 
         return self._transposeDAToUser(image)
 
