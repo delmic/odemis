@@ -1322,7 +1322,6 @@ class Camera(model.DigitalCamera):
         return found
 
 
-# Copy of picoquant.BasicDataFlow
 class UEyeDataFlow(model.DataFlow):
     def __init__(self, detector):
         """
