@@ -1978,27 +1978,33 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         return 1.1 * pxTime * res
 
     def _adjustHardwareSettings(self):
+        """
+        return img_time (0 < float): estimated time for a one acquisition (not integrated)
+               ninteg (int): Number of images to integrate to match the requested dwell time.
+        """
         self._emitter.scale.value = (1, 1)
         self._emitter.resolution.value = (1, 1)
 
+        px_time = self._tc_stream._getDetectorVA("dwellTime").value
         # Re-adjust dwell time for number of drift corrections
         if self._dc_estimator:
-            nDC = self._getNumDriftCors()
-            dwell_time = self._tc_stream._getDetectorVA("dwellTime").value / max(nDC, 1)
+            ninteg = max(self._getNumDriftCors(), 1)
         else:
-            dwell_time = self._tc_stream._getDetectorVA("dwellTime").value
+            ninteg = 1
+        dwell_time = px_time / ninteg
 
-        logging.debug("Setting dwell time for ebeam and tc detector to %s " % dwell_time +
-                      "to account for sub-pixel drift corrections.")
+        logging.debug("Setting dwell time for ebeam and TC detector to %s "
+                      "to account for sub-pixel drift corrections.", dwell_time)
         self._tc_stream._detector.dwellTime.value = dwell_time
         self._emitter.dwellTime.value = dwell_time
+
+        return px_time, ninteg
 
     def _runAcquisition(self, future):
         self._raw = []
         self._anchor_raw = []
 
         # Drift correction
-        nDC = self._getNumDriftCors()
         if self._dc_estimator:
             drift_est = drift.AnchoredEstimator(self._emitter, self._se_stream._detector,
                                                 self._dc_estimator.roi.value,
@@ -2007,7 +2013,6 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         tot_dc_vect = [0, 0]
 
         n = 0
-        px_iters = max(nDC, 1)
         se_data = []
         tc_data = []
         spot_pos = self._getSpotPositions()
@@ -2017,7 +2022,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         emitter_dt = self._emitter.dwellTime.value
         tc_dt = self._tc_stream._detector.dwellTime.value
         try:
-            self._adjustHardwareSettings()
+            img_time, ninteg = self._adjustHardwareSettings()
 
             for px_idx in numpy.ndindex(*self.repetition.value[::-1]):
                 x, y = tuple(spot_pos[px_idx])
@@ -2026,7 +2031,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
 
                 # In case of multiple drift corrections per pixel, acquire for part of the dwell time and
                 # perform drift correction iteratively until full dwell time is reached.
-                for _ in range(px_iters):
+                for _ in range(ninteg):
                     # Add total drift vector
                     xcor = x - tot_dc_vect[0]
                     ycor = y - tot_dc_vect[1]
@@ -2036,7 +2041,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                         logging.error("Drift of %s px caused acquisition region out "
                                       "of bounds: needed to scan spot at %s.", tot_dc_vect, (xcor, ycor))
                     # Acquire image
-                    tc_i, se_i = self._acquireImage(xclip, yclip)
+                    tc_i, se_i = self._acquireImage(xclip, yclip, img_time)
                     tc_px_data.append(tc_i)
                     se_px_data.append(se_i)
                     logging.debug("Memory used = %d bytes", udriver.readMemoryUsage())
@@ -2049,6 +2054,8 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 n += 1
                 logging.info("Acquired %d out of %d pixels", n, numpy.prod(self.repetition.value))
 
+                # TODO: use _integrateImages(), once the function is per image
+
                 # Sum up the partial data to get the full output for the pixel
                 dtype = tc_px_data[0].dtype
                 idt = numpy.iinfo(dtype)
@@ -2056,7 +2063,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
                 tc_md = tc_px_data[0].metadata.copy()
                 try:
-                    tc_md[model.MD_DWELL_TIME] *= px_iters
+                    tc_md[model.MD_DWELL_TIME] *= ninteg
                 except KeyError:
                     logging.warning("No dwell time metadata in time-correlator data")
                 pxsum = model.DataArray(pxsum.astype(dtype), tc_md)
@@ -2066,7 +2073,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
                 se_md = se_px_data[0].metadata.copy()
                 try:
-                    se_md[model.MD_DWELL_TIME] *= px_iters
+                    se_md[model.MD_DWELL_TIME] *= ninteg
                 except KeyError:
                     logging.warning("No dwell time metadata in SEM data")
                 s = model.DataArray(pxsum, se_md)
@@ -2095,12 +2102,12 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         finally:
             logging.debug("TC acquisition finished")
             self._acq_done.set()
-            # Reset hardware settings (dwell times might have been reduced due to subpixel drift
-            # correction
+            # Reset hardware settings (dwell times might have been reduced due
+            # to subpixel drift correction)
             self._tc_stream._detector.dwellTime.value = tc_dt
             self._emitter.dwellTime.value = emitter_dt
 
-    def _acquireImage(self, x, y):
+    def _acquireImage(self, x, y, img_time):
         try:
             for ce in self._acq_complete:
                 ce.clear()
@@ -2111,13 +2118,15 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             if math.hypot(x - trans[0], y - trans[1]) > 1e-3:
                 logging.warning("Ebeam translation is %s instead of requested %s.", trans, (x, y))
 
+            self._acq_min_date = time.time()
+
             # Get data
             for s, sub in zip(self._streams, self._subscribers):
                 s._dataflow.subscribe(sub)
 
             # Wait for detector to acquire image
             for i, s in enumerate(self._streams):
-                timeout = 2.5 * self._tc_stream._getDetectorVA("dwellTime").value + 3
+                timeout = 2.5 * img_time + 3
                 if not self._acq_complete[i].wait(timeout):
                     raise TimeoutError()
             if self._acq_state == CANCELLED:
