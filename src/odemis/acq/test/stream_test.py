@@ -3293,6 +3293,10 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                                       detvas={"readoutRate", "binning", "resolution"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
+        # For the integration code to get activated, we need a CCD maximum
+        # exposure time less than the integrationTime.
+        self.assertLess(self.ccd.exposureTime.range[1], 11)
+
         ars.acquireAllPol.value = False
         sems.emtDwellTime.value = 1e-06
 
@@ -3374,7 +3378,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
         self.assertEqual(ar_da3[0].metadata[model.MD_BASELINE], 100)
         # test that the baseline is actually removed compared to same acquisition without baseline
-        numpy.testing.assert_array_less(ar_da3[0], ar_da[0])
+        self.assertLess(ar_da3[0].mean(), ar_da[0].mean())
 
     def test_ar_acq_integrated_images_leech(self):
         """Test acquisition with camera with a long exposure time
