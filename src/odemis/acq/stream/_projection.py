@@ -1359,7 +1359,7 @@ class LineSpectrumProjection(RGBProjection):
             # out of the original data, the outside pixels count as 0.
             # force the intermediate values to float, as mean() still needs to run
             spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=1)
-            spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
+            spec1d = spec1d_w.mean(axis=0)
         assert spec1d.shape == (n, spec2d.shape[0])
 
         # Use metadata to indicate spatial distance between pixel

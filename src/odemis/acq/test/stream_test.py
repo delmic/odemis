@@ -4442,7 +4442,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         wl0d, _ = spectrum.get_spectrum_range(sp0d)
         self.assertEqual(len(sp0d), spec.shape[0])
         self.assertEqual(len(wl0d), spec.shape[0])
-        self.assertEqual(sp0d.dtype, spec.dtype)
+        self.assertIsInstance(sp0d.dtype.type(), numpy.floating)
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
         # Check with very large width
@@ -4453,7 +4453,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         wl0d, _ = spectrum.get_spectrum_range(sp0d)
         self.assertEqual(len(sp0d), spec.shape[0])
         self.assertEqual(len(wl0d), spec.shape[0])
-        self.assertEqual(sp0d.dtype, spec.dtype)
+        self.assertIsInstance(sp0d.dtype.type(), numpy.floating)
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
     def test_spectrum_1d(self):
@@ -4528,6 +4528,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(sp1d.shape[2], 3)
         self.assertEqual(sp1d.dtype, numpy.uint8)
         self.assertEqual(wl1d.shape, (spec.shape[0],))
+
+        # Check the raw data is a float
+        sp1d_raw = proj_line_spectrum.projectAsRaw()
+        self.assertIsInstance(sp1d_raw.dtype.type(), numpy.floating)
 
     def test_spectrum_calib_bg(self):
         """Test Static Spectrum Stream calibration and background image correction
