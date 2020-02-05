@@ -3479,6 +3479,11 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         mic = model.getMicroscope()
         cls.optmngr = path.OpticalPathManager(mic)
 
+        # Wait extra time for the referencing at init
+        # (during referencing the shutters are force closed, so the acquisition
+        # goes faster because the shutters can't open anyway, which is not realistic)
+        time.sleep(10)
+
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
@@ -3498,14 +3503,20 @@ class TimeCorrelatorTestCase(unittest.TestCase):
             self.time_correlator,
             self.time_correlator.data,
             self.ebeam,
+            detvas={"dwellTime"},
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
 
+        # randomly picked value, to simulate previous value
+        self.ebeam.dwellTime.value = 0.042
+
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
-        sem_tc_stream._tc_stream.repetition.value = (5, 10)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        tc_stream.repetition.value = (5, 10)
+        # Note: due to the shutters, the acquisition is slower, but in reality
+        # the dwell time would be >> 1s.
+        tc_stream.detDwellTime.value = 5e-3
         f = sem_tc_stream.acquire()
         data = f.result()
 
@@ -3532,31 +3543,31 @@ class TimeCorrelatorTestCase(unittest.TestCase):
 
         # Sub-pixel drift correction
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
-        dc.period.value = 5
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
         dc.dwellTime.value = 1e-06
         dc.period.value = 1
-        sem_tc_stream._se_stream.leeches.append(dc)
+        sem_stream.leeches.append(dc)
 
-        sem_tc_stream._tc_stream.repetition.value = (1, 2)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 2
+        tc_stream.repetition.value = (1, 2)
+        tc_stream.detDwellTime.value = 2
 
         f = sem_tc_stream.acquire()
         time.sleep(0.1)
         # Dwell time on detector and emitter should be reduced by 1/2
         self.assertEqual(self.time_correlator.dwellTime.value, 1)
-        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 1)
+        # SEM dwell time might be either 1s, or the drift correction dwell time
+        self.assertIn(self.ebeam.dwellTime.value, (1, 1e-6))
         data = f.result()
         # Dwell time on detector and emitter should be back to normal
         self.assertEqual(self.time_correlator.dwellTime.value, 2)
-        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 2)
+        self.assertEqual(self.ebeam.dwellTime.value, 0.042)
 
         self.assertEqual(len(data), 3)  # additional anchor region data array
         self.assertEqual(data[0].shape[-1], 1)
         self.assertEqual(data[0].shape[-2], 2)
         self.assertEqual(data[1].shape[-1], 1)
         self.assertEqual(data[1].shape[-2], 2)
-        
+
     def test_acq_live_update(self):
         """
         Test if live update works for the time correlator
@@ -3567,14 +3578,15 @@ class TimeCorrelatorTestCase(unittest.TestCase):
             self.time_correlator,
             self.time_correlator.data,
             self.ebeam,
+            # No local VA, to check it also works the "old" way
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
 
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
-        sem_tc_stream._tc_stream.repetition.value = (5, 10)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        tc_stream.repetition.value = (5, 3)
+        self.time_correlator.dwellTime.value = 5e-3
         f = sem_tc_stream.acquire()
 
         # Check if there is a live update in the setting stream.
