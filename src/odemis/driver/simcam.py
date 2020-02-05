@@ -306,6 +306,14 @@ class Camera(model.DigitalCamera):
         coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
                  [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
         sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+
+        # Add some noise
+        mx = self._img.max()
+        sim_img += numpy.random.randint(0, max(mx // 100, 10), sim_img.shape, dtype=sim_img.dtype)
+        # Clip, but faster than clip() on big array.
+        # There can still be some overflow, but let's just consider this "strong noise"
+        sim_img[sim_img > mx] = mx
+
         return sim_img
 
 
