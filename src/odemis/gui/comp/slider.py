@@ -1020,6 +1020,8 @@ class VisualRangeSlider(BaseSlider):
         _, height = self.ClientSize
         ctx = wxcairo.ContextFromDC(dc)
         self._draw_selection(ctx, height)
+        del ctx # be sure to delete the context first before deleting MemoryDC
+        del dc  # need to get rid of the MemoryDC before Update() is called.
 
 
 class BandwidthSlider(VisualRangeSlider):
