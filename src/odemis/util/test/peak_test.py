@@ -31,45 +31,46 @@ PATH = os.path.dirname(__file__)
 
 class TestPeak(unittest.TestCase):
     """
-    Test peak fitting
+    Test peak fitting in both energy and space domain for all the available fitting types
     """
     def setUp(self):
         data = hdf5.read_data(os.path.join(PATH, "spectrum_fitting.h5"))[1]
         data = numpy.squeeze(data)
         self.data = data
-        self.wl = numpy.linspace(470, 1030, 167)
+        self.wl_in_meters = numpy.linspace(470e-9, 1030e-9, 167)
+        max_bw = data.shape[0] // 2
+        min_bw = (max_bw - data.shape[0]) + 1
+        self.wl_in_pixels = list(range(min_bw, max_bw + 1))
         self._peak_fitter = peak.PeakFitter()
 
-    def test_precomputed(self):
+    def test_peakfitting_energy(self):
         data = self.data
-        wl = self.wl
+        wl = self.wl_in_meters
         spec = data[:, 20, 20]
 
         # Try gaussian
-        f = self._peak_fitter.Fit(spec, wl)
-        params, offset = f.result()
+        f = self._peak_fitter.Fit(spec, wl, type='gaussian_energy')
+        params, offset, curve_type = f.result()
         self.assertTrue(1 <= len(params) < 20)
         # Parameters should be positive
         for pos, width, amplitude in params:
             self.assertGreater(pos, 0)
             self.assertGreater(width, 0)
             self.assertGreater(amplitude, 0)
-        # offset doesn't officially needs to be positive
-        # self.assertTrue(offset >= 0)
 
         # Create curve
         curve = peak.Curve(wl, params, offset)
         self.assertEqual(len(curve), len(wl))
         # TODO: find peaks on curve, and see we about the same peaks
-        wlhr = numpy.linspace(470, 1030, 512)
-        curve = peak.Curve(wlhr, params, offset)
+        wlhr = numpy.linspace(470e-9, 1030e-9, 512)
+        curve = peak.Curve(wlhr, params, offset, type='gaussian_energy')
         self.assertEqual(len(curve), len(wlhr))
         #plt.figure()
         #plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
 
         # Try lorentzian
-        f = self._peak_fitter.Fit(spec, wl, type='lorentzian')
-        params, offset = f.result()
+        f = self._peak_fitter.Fit(spec, wl, type='lorentzian_energy')
+        params, offset, curve_type = f.result()
         self.assertTrue(1 <= len(params) < 20)
         # Parameters should be positive
         for pos, width, amplitude in params:
@@ -77,10 +78,56 @@ class TestPeak(unittest.TestCase):
             self.assertGreater(width, 0)
             self.assertGreater(amplitude, 0)
 
-        curve = peak.Curve(wl, params, offset, type='lorentzian')
+        curve = peak.Curve(wl, params, offset, type='lorentzian_energy')
+        self.assertEqual(len(curve), len(wl))
+        wlhr = numpy.linspace(470e-9, 1030e-9, 512)
+        curve = peak.Curve(wlhr, params, offset, type='gaussian_energy')
+        self.assertEqual(len(curve), len(wlhr))
         #plt.figure()
         #plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
         #plt.show(block=False)
+
+        # Assert wrong fitting type
+        self.assertRaises(KeyError, peak.Curve, wl, params, offset, type='wrongType')
+
+    def test_peakfitting_space(self):
+        data = self.data
+        wl = self.wl_in_pixels
+        spec = data[:, 20, 20]
+
+        # Try gaussian
+        f = self._peak_fitter.Fit(spec, wl, type='gaussian_space')
+        params, offset, curve_type = f.result()
+        self.assertTrue(1 <= len(params) < 20)
+        # pos parameter can be negative
+        for pos, width, amplitude in params:
+            self.assertGreater(pos, -1000)
+            self.assertGreater(width, 0)
+            self.assertGreater(amplitude, 0)
+
+        # Create curve
+        curve = peak.Curve(wl, params, offset)
+        self.assertEqual(len(curve), len(wl))
+        # TODO: find peaks on curve, and see we about the same peaks
+        wlhr = numpy.linspace(-125, 125, 180)
+        curve = peak.Curve(wlhr, params, offset, type='gaussian_space')
+        self.assertEqual(len(curve), len(wlhr))
+
+        # Try lorentzian
+        f = self._peak_fitter.Fit(spec, wl, type='lorentzian_space')
+        params, offset, curve_type = f.result()
+        self.assertTrue(1 <= len(params) < 20)
+        # pos parameter can be negative
+        for pos, width, amplitude in params:
+            self.assertGreater(pos, -1000)
+            self.assertGreater(width, 0)
+            self.assertGreater(amplitude, 0)
+
+        curve = peak.Curve(wl, params, offset, type='lorentzian_space')
+        self.assertEqual(len(curve), len(wl))
+        wlhr = numpy.linspace(-125, 125, 180)
+        curve = peak.Curve(wlhr, params, offset, type='lorentzian_space')
+        self.assertEqual(len(curve), len(wlhr))
 
         # Assert wrong fitting type
         self.assertRaises(KeyError, peak.Curve, wl, params, offset, type='wrongType')

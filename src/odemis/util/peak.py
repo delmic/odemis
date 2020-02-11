@@ -26,6 +26,12 @@ import time
 import warnings
 from builtins import range
 
+H_PLANK = 6.6260715e-34  # J/s(e-34)
+C_LIGHT = 299792458  # m/s
+E_CHARGE = 1.602e-19  # J --> eV
+WL_TO_ENERGY = H_PLANK * C_LIGHT / E_CHARGE
+WIDTH_RATIO = 0.01
+
 # TODO: this code is full of reliance on numpy being quite lax with wrong
 # computation, and easily triggers numpy warnings. To force numpy to be
 # stricter:
@@ -33,34 +39,55 @@ from builtins import range
 # warnings.filterwarnings('error')
 # numpy.seterr(all='raise')
 
-# rough estimation of peak width based on fitting type
-PEAK_WIDTHS = {'gaussian': 0.1, 'lorentzian': 1e-4}
-
-# These two fitting functions are called back from curve_fit()
+# These four fitting functions are called back from curve_fit()
 # Note: when returning NaN, curve_fit() appears to not like the proposed parameters
+
 
 def GaussianFit(data, *peaks):
     """
     Applies gaussian fitting to data given the "peaks" parameters.
-    peaks (list of floats): series of pos, width, amplitude and initial offset
+    data (1d array of floats): the wavelength list for each N pixel
+    peaks (list of floats): series of pos, width, amplitude and initial offset (given in space domain)
     """
     gau = peaks[-1]  # Automatically converted to a vector in the addition
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
-        sprime = pos * abs(width)
-        gau += abs(amplitude) * _Normalize(numpy.exp(-(data - pos) ** 2 / sprime ** 2))
+        gau += amplitude * numpy.exp(-(data - pos) ** 2 / (2 * width ** 2))
+    return gau
 
+
+def GaussianEnergyFit(data, *peaks):
+    """
+    Applies gaussian fitting to data given the "peaks" parameters.
+    data (1d array of floats): the energy list for each N pixel
+    peaks (list of floats): series of pos, width, amplitude and initial offset (currently given in the energy domain)
+    """
+    gau = peaks[-1] * WL_TO_ENERGY / data**2  # offset is a constant in space domain, so it's converted to energy here
+    for pos, width, amplitude in _Grouped(peaks[:-1], 3):
+        gau += amplitude * numpy.exp(-(data - pos) ** 2 / (2 * width ** 2))
     return gau
 
 
 def LorentzianFit(data, *peaks):
     """
     Applies lorentzian fitting to data given the "peaks" parameters.
+    data (1d array of floats): the wavelength list for each N pixel
+    peaks (list of floats): series of pos, width, amplitude and initial offset (given in space domain)
     """
-    lor = peaks[-1]
+    lor = peaks[-1]  # Automatically converted to a vector in the addition
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
-        wprime = pos * abs(width)
-        lor += abs(amplitude) * _Normalize(wprime ** 2 / ((data - pos) ** 2 + wprime ** 2))
+        lor += amplitude * width ** 2 / ((data - pos) ** 2 + width ** 2)
+    return lor
 
+
+def LorentzianEnergyFit(data, *peaks):
+    """
+    Applies lorentzian fitting to data given the "peaks" parameters.
+    data (1d array of floats): the energy list for each N pixel
+    peaks (list of floats): series of pos, width, amplitude and initial offset (currently given in the energy domain)
+    """
+    lor = peaks[-1] * WL_TO_ENERGY / data**2 # offset is a constant in space domain, so it's converted to energy here
+    for pos, width, amplitude in _Grouped(peaks[:-1], 3):
+        lor += amplitude * width ** 2 / ((data - pos) ** 2 + width ** 2)
     return lor
 
 
@@ -99,7 +126,10 @@ def Smooth(signal, window_len=11, window='hanning'):
     y = numpy.convolve(w / w.sum(), s, mode='same')
     return y[window_len:-window_len + 1]
 
-PEAK_FUNCTIONS = {'gaussian': GaussianFit, 'lorentzian': LorentzianFit}
+
+PEAK_FUNCTIONS = {'gaussian_space': GaussianFit, 'lorentzian_space': LorentzianFit, 'gaussian_energy': GaussianEnergyFit,
+                  'lorentzian_energy': LorentzianEnergyFit}
+
 
 def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
     """
@@ -186,15 +216,15 @@ class PeakFitter(object):
             self._executor = None
         logging.debug("PeakFitter destroyed")
 
-    def Fit(self, spectrum, wavelength, type='gaussian'):
+    def Fit(self, spectrum, wavelength, type='gaussian_space'):
         """
         Wrapper for _DoFit. It provides the ability to check the progress of fitting
         procedure or even cancel it.
         spectrum (1d array of floats): The data representing the spectrum.
         wavelength (1d array of floats): The wavelength values corresponding to the
         spectrum given.
-        type (str): Type of fitting to be applied (for now only ‘gaussian’ and
-        ‘lorentzian’ are available).
+        type (str): Type of fitting to be applied ('gaussian_space', 'lorentzian_space',
+        'gaussian_energy' or 'lorentzian_energy')
         returns (model.ProgressiveFuture):  Progress of DoFit
         """
         # Create ProgressiveFuture and update its state to RUNNING
@@ -207,7 +237,7 @@ class PeakFitter(object):
 
         return self._executor.submitf(f, self._DoFit, f, spectrum, wavelength, type)
 
-    def _DoFit(self, future, spectrum, wavelength, type='gaussian'):
+    def _DoFit(self, future, spectrum, wavelength, type='gaussian_space'):
         """
         Smooths the spectrum signal, detects the peaks and applies the type of peak
         fitting required. Finally returns the optimized peak parameters.
@@ -237,7 +267,8 @@ class PeakFitter(object):
             logging.debug("Starting peak detection on data (len = %d) with window = %d",
                           len(wavelength), window_size)
             try:
-                width = PEAK_WIDTHS[type]
+                wl_rng = wavelength[-1] - wavelength[0]
+                width = wl_rng * WIDTH_RATIO  # initial peak width estimation
                 FitFunction = PEAK_FUNCTIONS[type]
             except KeyError:
                 raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
@@ -254,12 +285,30 @@ class PeakFitter(object):
                     continue
 
                 fit_list = []
+                lower_bounds = []
+                upper_bounds = []
                 for (pos, amplitude) in peaks:
-                    fit_list.append(pos)
-                    fit_list.append(width)
-                    fit_list.append(amplitude)
-                # Initialize offset to 0
-                fit_list.append(0)
+                    if type in {'gaussian_energy', 'lorentzian_energy'}:
+                        energy = apply_jacobian_x(wavelength)
+                        spectra_energy = apply_jacobian_y(wavelength, spectrum)
+                        fit_list.extend(peak_to_energy(pos, width, amplitude))
+                        # lower & upper bounds for center position, width, amplitude in energy domain
+                        en_rng = energy[0] - energy[-1]
+                        lower_bounds.extend([energy[-1] - en_rng / 2, en_rng / 1e4, 0])
+                        upper_bounds.extend([energy[0] + en_rng / 2, en_rng * 10, numpy.inf])
+                    else:
+                        # lower & upper bounds for center position, width, amplitude in space domain
+                        fit_list.extend([pos, width, amplitude])
+                        lower_bounds.extend([wavelength[0] - wl_rng / 2, wl_rng / 1e3, 0])
+                        upper_bounds.extend([wavelength[-1] + wl_rng / 2, wl_rng * 10, numpy.inf])
+
+                # Initialize the offset with the minimum possible value
+                offset = 0
+                fit_list.append(offset)
+                # Set the lower & upper bounds for the offset
+                lower_bounds.extend([0])
+                upper_bounds.extend([min(spectrum)])
+                param_bounds = (lower_bounds, upper_bounds)
 
                 if future._fit_state == CANCELLED:
                     raise CancelledError()
@@ -271,11 +320,14 @@ class PeakFitter(object):
                         # TODO, from scipy 0.17, curve_fit() supports the 'bounds' parameter.
                         # It could be used to ensure the peaks params are positives.
                         # (Once we don't support Ubuntu 12.04)
-                        params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
+                        if type in {'gaussian_energy', 'lorentzian_energy'}:
+                            params, _ = curve_fit(FitFunction, energy, spectra_energy, p0=fit_list, bounds=param_bounds)
+                        else:
+                            params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list, bounds=param_bounds)
                     break
-                except Exception:
+                except Exception as ex:
                     window_size = int(round(window_size * 1.2))
-                    logging.debug("Retrying to fit peak with window = %d", window_size)
+                    logging.debug("Retrying to fit peak with window = %d due to error %s", window_size, ex)
                     continue
             else:
                 raise ValueError("Could not apply peak fitting of type %s." % type)
@@ -285,9 +337,12 @@ class PeakFitter(object):
                 # Note: to avoid negative peaks, the fit functions only take the
                 # absolute of the amplitude/width. So now amplitude and width
                 # have 50% chances to be negative => Force positive now.
-                peaks_params.append((pos, abs(width), abs(amplitude)))
-            params = peaks_params, params[-1]
-            return params
+                if type in {'gaussian_energy', 'lorentzian_energy'}:
+                    peaks_params.append(peak_to_wavelength(pos, width, amplitude))
+                else:
+                    peaks_params.append((pos, width, amplitude))
+
+            return peaks_params, params[-1], type
         except CancelledError:
             logging.debug("Fitting of type %s was cancelled.", type)
         finally:
@@ -318,14 +373,96 @@ class PeakFitter(object):
         return len(data) * 10e-3  # s
 
 
-def Curve(wavelength, peak_parameters, offset, type='gaussian'):
+def peak_to_energy(pos, width, amplitude):
+    """
+    Converts the peaks to energy domain.
+    Args:
+        pos: the center position of the peak in 'm'
+        width: the width of the peak in 'm'
+        amplitude: the amplitude of the peak in space domain
+
+    Returns: peak parameters as (pos, width, amplitude) in energy domain
+
+    """
+    pos_e = WL_TO_ENERGY / pos
+    width_e = (WL_TO_ENERGY / (pos - width / 2)) - (WL_TO_ENERGY / (pos + width / 2))
+    amplitude_e = (amplitude * pos ** 2) / WL_TO_ENERGY
+    return pos_e, width_e, amplitude_e
+
+
+def peak_to_wavelength(pos_e, width_e, amplitude_e):
+    """
+    Converts the peaks to space domain.
+    Args:
+        pos_e: the center position of the peak in 'eV'
+        width_e: the width of the peak in 'eV'
+        amplitude_e: the amplitude of the peak in energy domain
+
+    Returns: peak parameters as (pos, width, amplitude) in space domain
+
+    """
+    pos = WL_TO_ENERGY / pos_e
+    width = (WL_TO_ENERGY / (pos_e - width_e / 2)) - (WL_TO_ENERGY / (pos_e + width_e / 2))
+    amplitude = (amplitude_e * WL_TO_ENERGY) / pos ** 2
+    return pos, width, amplitude
+
+
+def apply_jacobian_x(wavelength):
+    """
+    Converts the wavelength from 'm' (space domain) to 'eV' (energy domain).
+    Args:
+        wavelength(1d array of floats): the list of wavelengths in 'm'
+
+    Returns:
+         energy (1d array of floats): wavelength in 'eV'
+
+    """
+    wavelength = numpy.asarray(wavelength)
+    energy = WL_TO_ENERGY / wavelength
+    return energy
+
+
+def apply_jacobian_y(wavelength, spectrum):
+    """
+    Applies Jacobian transformation to the spectrum.
+    Args:
+        wavelength(1d array of floats): wavelength values corresponding to the given spectrum in 'm'
+        spectrum(1d array of floats): data representing the spectrum in space domain
+
+    Returns:
+         spectra_energy (1d array of floats): data representing the spectrum in energy domain
+
+    """
+    wavelength = numpy.asarray(wavelength)
+    spectra_energy = spectrum * (wavelength ** 2) / WL_TO_ENERGY
+    return spectra_energy
+
+
+def apply_reverse_jacobian_y(wavelength, curve_energy):
+    """
+    Applied inverse Jacobian transformation to the curve.
+    Args:
+        wavelength (1d array of floats): wavelength values in 'eV'
+        curve_energy (1d array of floats): dataset of points representing the curve in energy domain
+
+    Returns:
+        curve_space (1d array of floats): dataset of points representing the curve in space domain
+
+    """
+    wavelength = numpy.asarray(wavelength)
+    curve_space = (curve_energy * WL_TO_ENERGY) / (wavelength ** 2)
+    return curve_space
+
+
+def Curve(wavelength, peak_parameters, offset, type='gaussian_space'):
     """
     Given the peak parameters and the wavelength values returns the actual
     dataset of curve points.
     wavelength (1d array of floats): The wavelength values corresponding to the
     spectrum given.
     peak_parameters (list of tuples): The parameters of the peak curves to
-    be depicted.
+    be depicted. They can be either in space or energy domain depending on the
+    fitting type.
     offset (float): peaks offset
     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
     ‘lorentzian’ are available).
@@ -339,12 +476,23 @@ def Curve(wavelength, peak_parameters, offset, type='gaussian'):
     except KeyError:
         raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
 
+    if type in {'gaussian_energy', 'lorentzian_energy'}:
+        peaks_params = []
+        for (pos, width, amplitude) in peak_parameters:
+            peaks_params.append(peak_to_energy(pos, width, amplitude))
+        peak_parameters = peaks_params
+        rng = apply_jacobian_x(wavelength)  # energy
+    else:
+        rng = wavelength
     # Flatten the peak parameters tuples
     peak_flat = [p for l in peak_parameters for p in l]
     peak_flat.append(offset)
-    curve = FitFunction(wavelength, *peak_flat)
-#         residual = numpy.sqrt((abs(output - spectrum) ** 2).sum() / len(spectrum))
-#         logging.info("Residual error of spectrum fitting is %f", residual)
+
+    curve = FitFunction(rng, *peak_flat)
+    if type in {'gaussian_energy', 'lorentzian_energy'}:
+        curve = apply_reverse_jacobian_y(wavelength, curve)
+    # residual = numpy.sqrt((abs(output - spectrum) ** 2).sum() / len(spectrum))
+    # logging.info("Residual error of spectrum fitting is %f", residual)
     return curve
 
 
@@ -353,14 +501,3 @@ def _Grouped(iterable, n):
     Iterate over the iterable, n elements at a time
     """
     return zip(*[iter(iterable)] * n)
-
-
-def _Normalize(vector):
-    normfac = numpy.max(vector)
-    if normfac == 0:
-        # TODO: raise a ValueError instead? But that confuses curve_fit a lot
-        logging.debug("Tried to normalize null vector")
-        return float("NaN")
-
-    vecnorm = vector / normfac
-    return vecnorm
