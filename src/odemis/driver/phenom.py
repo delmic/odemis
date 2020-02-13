@@ -651,6 +651,20 @@ class Scanner(model.Emitter):
         self._trans = (value[0] / self._shape[0], value[1] / self._shape[1])
         return value
 
+    def transToPhy(self, trans):
+        """
+        Converts a position in ratio of FoV to physical unit (m), given the
+          current magnification.
+          Note: the convention is that in internal coordinates Y goes down, while
+          in physical coordinates, Y goes up.
+        trans (-0.5<float<0.5, -0.5<float<0.5): shift from the center of pixels
+        returns (tuple of 2 floats): physical position in meters
+        """
+        pxs = self.pixelSize.value # m/px
+        phy_pos = (trans[0] * self._shape[0] * pxs[0],
+                   -trans[1] * self._shape[1] * pxs[1]) # - to invert Y
+        return phy_pos
+
     def _onShift(self, shift):
         beamShift = self.parent._objects.create('ns0:position')
         with self.parent._acq_progress_lock:
@@ -955,7 +969,14 @@ class Detector(model.Detector):
             metadata = self.parent._metadata.copy()
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
-            # TODO: if translation, the MD_POS must be updated.
+            # Update position (if there is one known) by the translation.
+            # Note that the beam shift is not taken into account, as that control
+            # is used for calibration, so to ensure that the center of the image
+            # matches the given position metadata.
+            center = metadata.get(model.MD_POS, (0, 0))
+            trans_phy = self.parent._scanner.transToPhy(trans)
+            metadata[model.MD_POS] = (center[0] + trans_phy[0],
+                                      center[1] + trans_phy[1])
 
             # Spot is achieved by setting a scale = 0
             # The Phenom needs _some_ resolution. Smaller is better because
