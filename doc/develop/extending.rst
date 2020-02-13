@@ -173,13 +173,19 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 2.7 32 bits
-(or Python 3.6, but you will have to adjust some of the commands).
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 2.7 32 bits.
+It's also possible to use the version with Python 3.7, 32 or 64 bits, in which case
+you should follow the second set of instructions. Also note that Odemis doesn't
+work with Python 3.7 yet (only Python 3.5 or 3.6) but that it's fine as anaconda
+supports multiple versions of Python simultaneously.
 
-Open the *Anaconda prompt* and type::
+Python 2 setup
+""""""""""""""
+For Python 2.7, open the *Anaconda prompt* and type::
 
    cd Documents\odemis
    conda create -y --name odemisdev python==2.7.16
+   conda create -y --name odemisdev python==3.6.8
    conda activate odemisdev
    conda config --append channels conda-forge
    # Edit requirements.txt and remove remove Pyro4
@@ -188,12 +194,35 @@ Open the *Anaconda prompt* and type::
    pip install git+https://github.com/delmic/Pyro4.git
 
 Download and install `Microsoft Visual C++ Compiler for Python 2.7 <https://www.microsoft.com/download/details.aspx?id=44266>`_.
-If you use Python 3.6, download and install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_. 
 
+Python 3 setup
+""""""""""""""
+For Python 3, open the *Anaconda prompt* and type::
+
+   cd Documents\odemis
+   conda create -y --name odemisdev python==3.6.8
+   conda activate odemisdev
+   conda config --append channels conda-forge
+   conda install --name odemisdev --file requirements-py3.txt
+   conda develop src
+   pip install git+https://github.com/delmic/Pyro4.git
+
+Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
+and pick the "Visual C++ build tools".
+
+Final steps
+"""""""""""
 You can finally install pylibtiff, in the same terminal, by typing::
 
    pip install libtiff
 
+Some parts of Odemis are written with Cython, for optimization reasons. This step
+is optional. To build these modules on Windows run::
+
+   python setup.py build_ext --inplace
+
+Launching Odemis Viewer
+"""""""""""""""""""""""
 Run Odemis with::
 
    python src\odemis\gui\main.py --standalone --log-level 2
@@ -201,10 +230,6 @@ Run Odemis with::
    python install\windows\odemis_viewer.py
 
 
-Some parts of Odemis are written with Cython, for optimization reasons.
-To build these modules on Windows run::
-
-   python setup.py build_ext --inplace
 
 Installing arpolarimetry
 """"""""""""""""""""""""
