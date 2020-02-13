@@ -3293,6 +3293,10 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                                       detvas={"readoutRate", "binning", "resolution"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
+        # For the integration code to get activated, we need a CCD maximum
+        # exposure time less than the integrationTime.
+        self.assertLess(self.ccd.exposureTime.range[1], 11)
+
         ars.acquireAllPol.value = False
         sems.emtDwellTime.value = 1e-06
 
@@ -3374,7 +3378,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
         self.assertEqual(ar_da3[0].metadata[model.MD_BASELINE], 100)
         # test that the baseline is actually removed compared to same acquisition without baseline
-        numpy.testing.assert_array_less(ar_da3[0], ar_da[0])
+        self.assertLess(ar_da3[0].mean(), ar_da[0].mean())
 
     def test_ar_acq_integrated_images_leech(self):
         """Test acquisition with camera with a long exposure time
@@ -3475,6 +3479,11 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         mic = model.getMicroscope()
         cls.optmngr = path.OpticalPathManager(mic)
 
+        # Wait extra time for the referencing at init
+        # (during referencing the shutters are force closed, so the acquisition
+        # goes faster because the shutters can't open anyway, which is not realistic)
+        time.sleep(10)
+
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
@@ -3494,14 +3503,20 @@ class TimeCorrelatorTestCase(unittest.TestCase):
             self.time_correlator,
             self.time_correlator.data,
             self.ebeam,
+            detvas={"dwellTime"},
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
 
+        # randomly picked value, to simulate previous value
+        self.ebeam.dwellTime.value = 0.042
+
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
-        sem_tc_stream._tc_stream.repetition.value = (5, 10)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        tc_stream.repetition.value = (5, 10)
+        # Note: due to the shutters, the acquisition is slower, but in reality
+        # the dwell time would be >> 1s.
+        tc_stream.detDwellTime.value = 5e-3
         f = sem_tc_stream.acquire()
         data = f.result()
 
@@ -3528,31 +3543,31 @@ class TimeCorrelatorTestCase(unittest.TestCase):
 
         # Sub-pixel drift correction
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
-        dc.period.value = 5
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
         dc.dwellTime.value = 1e-06
         dc.period.value = 1
-        sem_tc_stream._se_stream.leeches.append(dc)
+        sem_stream.leeches.append(dc)
 
-        sem_tc_stream._tc_stream.repetition.value = (1, 2)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 2
+        tc_stream.repetition.value = (1, 2)
+        tc_stream.detDwellTime.value = 2
 
         f = sem_tc_stream.acquire()
         time.sleep(0.1)
         # Dwell time on detector and emitter should be reduced by 1/2
         self.assertEqual(self.time_correlator.dwellTime.value, 1)
-        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 1)
+        # SEM dwell time might be either 1s, or the drift correction dwell time
+        self.assertIn(self.ebeam.dwellTime.value, (1, 1e-6))
         data = f.result()
         # Dwell time on detector and emitter should be back to normal
         self.assertEqual(self.time_correlator.dwellTime.value, 2)
-        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 2)
+        self.assertEqual(self.ebeam.dwellTime.value, 0.042)
 
         self.assertEqual(len(data), 3)  # additional anchor region data array
         self.assertEqual(data[0].shape[-1], 1)
         self.assertEqual(data[0].shape[-2], 2)
         self.assertEqual(data[1].shape[-1], 1)
         self.assertEqual(data[1].shape[-2], 2)
-        
+
     def test_acq_live_update(self):
         """
         Test if live update works for the time correlator
@@ -3563,14 +3578,15 @@ class TimeCorrelatorTestCase(unittest.TestCase):
             self.time_correlator,
             self.time_correlator.data,
             self.ebeam,
+            # No local VA, to check it also works the "old" way
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
 
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
-        sem_tc_stream._tc_stream.repetition.value = (5, 10)
-        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        tc_stream.repetition.value = (5, 3)
+        self.time_correlator.dwellTime.value = 5e-3
         f = sem_tc_stream.acquire()
 
         # Check if there is a live update in the setting stream.
