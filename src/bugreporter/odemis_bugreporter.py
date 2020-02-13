@@ -46,8 +46,7 @@ import wx
 import zipfile
 
 logging.getLogger().setLevel(logging.DEBUG)
-DEFAULT_CONFIG = {"LOGLEVEL": "1",
-                  "TERMINAL": "/usr/bin/gnome-terminal"}
+DEFAULT_CONFIG = {"LOGLEVEL": "1"}
 
 OS_TICKET_URL = "https://support.delmic.com/api/tickets.json"
 TEST_SUPPORT_TICKET = (os.environ.get("TEST_SUPPORT_TICKET", 0) != 0)
@@ -120,13 +119,16 @@ def parse_config(configfile):
     """
 
     config = DEFAULT_CONFIG.copy()
-    f = open(configfile)
-    for line in shlex.split(f, comments=True):
-        tokens = line.split("=")
-        if len(tokens) != 2:
-            logging.warning("Can't parse '%s', skipping the line", line)
-        else:
-            _add_var_config(config, tokens[0], tokens[1])
+    try:
+        f = open(configfile)
+        for line in shlex.split(f, comments=True):
+            tokens = line.split("=")
+            if len(tokens) != 2:
+                logging.warning("Can't parse '%s', skipping the line", line)
+            else:
+                _add_var_config(config, tokens[0], tokens[1])
+    except Exception:
+        logging.exception("Failed to parse the config file %s", configfile)
 
     return config
 
@@ -191,8 +193,9 @@ class OdemisBugreporter(object):
             att_desc = {os.path.basename(fn): "data:application/zip;base64,%s" % encoded_data}
             fields["attachments"].append(att_desc)
 
-        description = json.dumps(fields)
-        req = Request(OS_TICKET_URL, description, headers={"X-API-Key": api_key})
+        description = json.dumps(fields).encode("utf-8")
+        # data must be bytes, but the headers can be str or bytes
+        req = Request(OS_TICKET_URL, data=description, headers={"X-API-Key": api_key})
         f = urlopen(req)
         response = f.getcode()
         f.close()
@@ -473,10 +476,10 @@ class BugreporterFrame(wx.Frame):
             if not os.path.exists(conf_dir):
                 # create the directory so that we can store the config later
                 os.makedirs(conf_dir)
-            with open(self.conf_path, 'a+') as f:
+            with open(self.conf_path) as f:
                 reader = csv.reader(f, delimiter='\t')
                 for name, email in reader:
-                    self.known_users[name.decode("utf-8")] = email.decode("utf-8")
+                    self.known_users[name] = email
         except OSError as ex:
             logging.error("Failed to read known users: %s", ex)
 
@@ -503,8 +506,7 @@ class BugreporterFrame(wx.Frame):
         # Overwrite tsv file
         with open(self.conf_path, 'w+') as f:
             writer = csv.writer(f, delimiter='\t')
-            writer.writerows([(name.encode("utf-8"), email.encode("utf-8")) \
-                              for name, email in self.known_users.items()])
+            writer.writerows(self.known_users.items())
 
     def on_name_key_down(self, evt):
         """
