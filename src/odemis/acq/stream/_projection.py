@@ -1013,10 +1013,15 @@ class RGBSpatialProjection(RGBProjection):
         """
         dims = tile.metadata.get(model.MD_DIMS, "CTZYX"[-tile.ndim::])
         ci = dims.find("C")  # -1 if not found
-        # is RGB
-        if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):
-            # Just pass the RGB data on
+        tint = tuple(self.stream.tint.value)
+        if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
+            # Take the RGB data as-is, just needs to make sure it's in the right order
             tile = img.ensureYXC(tile)
+            if tint != (255, 255, 255):  # Tint not white => adjust the RGB channels
+                tile = tile.copy()
+                # Explicitly only use the first 3 values, to leave the alpha channel as-is
+                numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
+
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
             tile.metadata = self.stream._find_metadata(tile.metadata)
@@ -1028,7 +1033,7 @@ class RGBSpatialProjection(RGBProjection):
         else:
             tile = img.ensure2DImage(tile)
 
-        return self._projectXY2RGB(tile, self.stream.tint.value)
+        return self._projectXY2RGB(tile, tint)
 
     def _getTilesFromSelectedArea(self):
         """
