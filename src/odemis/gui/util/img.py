@@ -1922,7 +1922,10 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
             legend_ctx.show_text(s.name.value)
 
         # If stream has tint, draw the colour in a little square next to the name
-        if stream is None and isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+        if (stream is None and
+            (isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)) or
+             hasattr(s, "tint") and tuple(s.tint.value) != (255, 255, 255)
+           )):
             tint = s.tint.value
             legend_ctx.set_source_rgb(*conversion.rgb_to_frgb(tint))
             legend_ctx.rectangle(legend_x_pos + cell_x_step - tint_box_size - small_font,
