@@ -94,11 +94,12 @@ class StreamController(object):
         self._stream_config = data.get_stream_settings_config()
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
-        # Special display for dyes (aka FluoStreams)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.StaticCLStream)):
+        # Allow changing the tint of all "flat" static streams, and FluoStreams (live)
+        if isinstance(stream, (acqstream.FluoStream, acqstream.Static2DStream, acqstream.RGBStream)):
             options |= OPT_BTN_TINT
-            if not isinstance(stream, acqstream.StaticStream):
-                options |= OPT_NAME_EDIT
+        # Allow changing the name of dyes (aka FluoStreams)
+        if isinstance(stream, acqstream.FluoStream):
+            options |= OPT_NAME_EDIT
 
         # Special display for spectrum (aka SpectrumStream)
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
