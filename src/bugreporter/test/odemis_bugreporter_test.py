@@ -138,8 +138,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         zip_file = zipfile.ZipFile(self.bugreporter.zip_fn)
         for f in files:
             if os.path.isfile(f):
-                # zip_file.namelist() doesn't contain '/' as first element
-                self.assertTrue(f[1:] in zip_file.namelist(), "File %s not found in archive." % f)
+                self.assertTrue(f in zip_file.namelist(), "File %s not found in archive." % f)
 
         # Create ticket
         if TEST_NO_SUPPORT_TICKET != 1:
