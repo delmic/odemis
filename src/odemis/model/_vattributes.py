@@ -731,10 +731,8 @@ class ListVA(VigilantAttribute):
 
     # Redefine the setter, so we can force to listen to internal modifications
     def _set_value(self, value, **kwargs):
+        value = _NotifyingList(value, notifier=self._internal_set_value)
         VigilantAttribute._set_value(self, value, **kwargs)
-        # TODO: this means that .notify will be called with a simple list,
-        # should it be overridden to change to a notifying list? Same for the proxy.
-        self._value = _NotifyingList(self._value, notifier=self._internal_set_value)
 
     value = property(VigilantAttribute._get_value,
                      _set_value,
