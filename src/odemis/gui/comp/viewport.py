@@ -1549,8 +1549,13 @@ class PointSpectrumViewport(NavigablePlotViewport):
                 # TODO: try to find more peaks (= small window) based on width?
                 # => so far not much success
                 # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
-                self._peak_future = self._peak_fitter.Fit(data, wll,
-                                                          type=self._stream.peak_method.value)
+
+                if self._stream.peak_method.value == 'gaussian':
+                    curve_type = 'gaussian_energy' if self.unit_x == 'm' else 'gaussian_space' # 'gaussian_space' if unit_x =='px'
+                else:  # peak_method.value == 'lorentzian'
+                    curve_type = 'lorentzian_energy' if self.unit_x == 'm' else 'lorentzian_space'  # 'lorentzian_space' if unit_x == 'px'
+
+                self._peak_future = self._peak_fitter.Fit(data, wll, type=curve_type)
                 self._peak_future.add_done_callback(self._update_peak)
         else:
             self.clear()
@@ -1571,14 +1576,14 @@ class PointSpectrumViewport(NavigablePlotViewport):
     @call_in_wx_main
     def _update_peak(self, f):
         try:
-            peak_data, peak_offset = f.result()
+            peak_data, peak_offset, curve_type = f.result()
             if not hasattr(self._stream, "peak_method"):
                 # In case the stream has just changed, or removed.
                 return
 
             self._curve_overlay.update_data(peak_data, peak_offset,
                                             self.spectrum_range, self.unit_x,
-                                            self._stream.peak_method.value)
+                                            curve_type)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")

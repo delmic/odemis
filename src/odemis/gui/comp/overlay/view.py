@@ -583,7 +583,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         peak_offset (float): initial offset
         spectrum_range (list of floats): wavelength/pixel for each pixel in the original spectrum data
         unit (str): m or px
-        type (str): peak fitting method, 'gaussian' or 'lorentzian'
+        type (str): peak fitting method ('gaussian_space', 'gaussian_energy', 'lorentzian_space', 'lorentzian_energy')
         """
         self.peaks = peak_data
         self.peak_offset = peak_offset
