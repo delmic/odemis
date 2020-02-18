@@ -182,12 +182,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()  # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
-
-            # TODO: instead of roles + label, have a class method on each
-            # StreamTab class that takes the microscope as input, and return a
-            # label or None if it shouldn't be displayed. (+ a "priority" to
-            # decide which one is the default?)
-
             tab_defs = [
                 {
                     # Unique name of the tab

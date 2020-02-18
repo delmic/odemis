@@ -257,19 +257,6 @@ class Tab(object):
             self.button.highlight(on)
             self.highlighted = on
 
-    def make_default(self):
-        """ Try and make the current tab the default
-
-        This will only work when no tab has been set.
-        """
-
-        if not self.tab_data_model.main.tab.value:
-            # Use the '_value' attribute, because the tab choices might not have been set yet
-            self.tab_data_model.main.tab._value = self
-        else:
-            logging.warn("Could not make the '%s' tab default, '%s' already is.",
-                         self, self.tab_data_model.main.tab.value.name)
-
     @classmethod
     def get_display_priority(cls, main_data):
         """
@@ -4274,18 +4261,11 @@ class Sparc2AlignTab(Tab):
 class TabBarController(object):
     def __init__(self, tab_defs, main_frame, main_data):
         """
-        tab_defs (list of 5-tuples (string, string, Tab class, button, panel):
-            list of all the possible tabs. Each tuple is:
-                - microscope role(s) (string or tuple of strings/None)
-                - internal name(s)
-                - class
-                - tab btn
-                - tab panel.
-            If role is None, it will match when there is no microscope
-            (main_data.microscope is None).
-
-        TODO: support "*" for matching anything?
-
+        tab_defs (dict of four entries string -> value):
+           name -> string: internal name
+           controller -> Tab class: class controlling the tab
+           button -> Button: tab btn
+           panel -> Panel: tab panel
         """
         self.main_frame = main_frame
         self._tabs = main_data.tab  # VA that we take care of
@@ -4301,22 +4281,17 @@ class TabBarController(object):
         for tab in tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.on_click)
 
-        # When setting a value for an Enumerated VA, the value must be part of its choices, and
-        # when setting it's choices its current value must be one of them. Therefore, we first set
-        # the current tab using the `._value` attribute, so that the check will not occur. We can
-        # then set the `choices` normally.
-        # Note: One of the created Tab controllers might have concluded that it should be default
-        # tab. In that case, the current tab value will already have been set, overriding the tab
-        # definition passed to this class.
-        if not self._tabs.value:
-            self._tabs._value = default_tab or tab_list[0]
-
-        # Choices is a dict tab -> name of the tab
-        choices = {t: t.name for t in tab_list}
-        self._tabs.choices = choices
-        self._tabs.subscribe(self._on_tab_change)
-        # force the switch to the first tab
+        # When setting a value for an Enumerated VA, the value must be part of
+        # its choices, and when setting its choices its current value must be
+        # one of them. Therefore, we first set the current tab using the
+        # `._value` attribute, so that the check will fail. We can then set the
+        # `choices` normally.
+        self._tabs._value = default_tab
+        # Choices is a dict of Tab -> str: Tab controller -> name of the tab
+        self._tabs.choices = {t: t.name for t in tab_list}
+        # Indicate the value has changed
         self._tabs.notify(self._tabs.value)
+        self._tabs.subscribe(self._on_tab_change, init=True)
 
         self._enabled_tabs = set()  # tabs which were enabled before starting acquisition
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
@@ -4351,25 +4326,26 @@ class TabBarController(object):
         Tabs that are not wanted or needed will be removed from the list and the associated
         buttons will be hidden in the user interface.
 
-        returns (list of Tabs): all the compatible tabs
-
+        returns tabs (list of Tabs): all the compatible tabs
+                default_tab (Tab): the first tab to be shown
         """
 
         role = main_data.role
-        logging.debug("Creating tabs belonging to the '%s' interface", role or "no backend")
+        logging.debug("Creating tabs belonging to the '%s' interface", role or "standalone")
 
         tabs = []  # Tabs
         main_sizer = main_frame.GetSizer()
-        index = 1
         default_tab = None
         max_prio = -1
 
         for tab_def in tab_defs:
             priority = tab_def["controller"].get_display_priority(main_data)
             if priority is not None:
+                assert priority >= 0
                 tpnl = tab_def["panel"](self.main_frame)
-                main_sizer.Insert(index, tpnl, flag=wx.EXPAND, proportion=1)
-                index += 1
+                # Insert as "second" item, to be just below the buttons.
+                # As only one tab is shown at a time, the exact order isn't important.
+                main_sizer.Insert(1, tpnl, flag=wx.EXPAND, proportion=1)
                 tab = tab_def["controller"](tab_def["name"], tab_def["button"],
                                             tpnl, main_frame, main_data)
                 if max_prio < priority:
@@ -4384,17 +4360,10 @@ class TabBarController(object):
     @call_in_wx_main
     def _on_tab_change(self, tab):
         """ This method is called when the current tab has changed """
-
-        try:
-            self.main_frame.Freeze()
-            for t in self._tabs.choices:
-                if t.IsShown():
-                    t.Hide()
-        finally:
-            self.main_frame.Thaw()
-        # It seems there is a bug in wxWidgets which makes the first .Show() not
-        # work when the frame is frozen. So always call it after Thaw(). Doesn't
-        # seem to cause too much flickering.
+        logging.debug("Switch to tab %s", tab.name)
+        for t in self._tabs.choices:
+            if t.IsShown():
+                t.Hide()
         tab.Show()
         self.main_frame.Layout()
 
@@ -4417,16 +4386,6 @@ class TabBarController(object):
             t.terminate()
 
     def on_click(self, evt):
-
-        # if .value:
-        #     logging.warn("Acquisition in progress, tabs frozen")
-        #     evt_btn = evt.GetEventObject()
-        #     evt_btn.SetValue(not evt_btn.GetValue())
-        #     return
-
-        # ie, mouse click or space pressed
-        logging.debug("Tab button click")
-
         evt_btn = evt.GetEventObject()
         for t in self._tabs.choices:
             if evt_btn == t.button:
