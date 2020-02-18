@@ -1716,6 +1716,17 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_temporalspec_bck_file = self.set_temporalspec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
+        if main_data.role is None:
+            # HACK: Move the logo to inside the FileInfo bar, as the tab buttons
+            # are hidden when only one tab is present (ie, no backend).
+            capbar = panel.fp_fileinfo._caption_bar
+            logo = main_frame.logo
+            assert main_frame.pnl_tabbuttons.GetSizer().Detach(logo)
+            logo.Reparent(capbar)
+            # Move to the right of the foldpanelbar (before the icon)
+            # | Title .... logo | padding (20) | arrow (16) | padding (6) |
+            logo.SetPosition((capbar.Size[0] - logo.Size[0] - 20 - 16 - 6, 8))
+
         self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
 
     @property
@@ -4361,6 +4372,9 @@ class TabBarController(object):
             b = tab_def["button"]
             if b not in buttons:
                 b.Hide()
+
+        if len(tabs) <= 1:  # No need for tab buttons at all
+            main_frame.pnl_tabbuttons.Hide()
 
         return tabs, default_tab
 
