@@ -4334,6 +4334,7 @@ class TabBarController(object):
         logging.debug("Creating tabs belonging to the '%s' interface", role or "standalone")
 
         tabs = []  # Tabs
+        buttons = set()  # Buttons used for the current interface
         main_sizer = main_frame.GetSizer()
         default_tab = None
         max_prio = -1
@@ -4352,8 +4353,14 @@ class TabBarController(object):
                     max_prio = priority
                     default_tab = tab
                 tabs.append(tab)
-            else:
-                tab_def["button"].Hide()  # Hide the tab button
+                assert tab.button not in buttons
+                buttons.add(tab.button)
+
+        # Hides the buttons which are not used
+        for tab_def in tab_defs:
+            b = tab_def["button"]
+            if b not in buttons:
+                b.Hide()
 
         return tabs, default_tab
 

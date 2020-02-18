@@ -196,19 +196,19 @@ class OdemisGUIApp(wx.App):
                 {
                     "name": "secom_align",
                     "controller": tabs.SecomAlignTab,
-                    "button": self.main_frame.btn_tab_secom_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_secom_align
                 },
                 {
                     "name": "sparc_align",
                     "controller": tabs.SparcAlignTab,
-                    "button": self.main_frame.btn_tab_sparc_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_sparc_align
                 },
                 {
                     "name": "sparc2_align",
                     "controller": tabs.Sparc2AlignTab,
-                    "button": self.main_frame.btn_tab_sparc2_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_sparc2_align
                 },
                 {

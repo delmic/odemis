@@ -74,10 +74,8 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
-        self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
         self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
-        self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
-        self.btn_tab_sparc2_align = xrc.XRCCTRL(self, "btn_tab_sparc2_align")
+        self.btn_tab_align = xrc.XRCCTRL(self, "btn_tab_align")
         self.logo = xrc.XRCCTRL(self, "logo")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
@@ -892,27 +890,6 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_align">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>LENS ALIGNMENT</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_chamber">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
@@ -934,28 +911,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_align">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ALIGNMENT</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc2_align">
+              <object class="TabButton" name="btn_tab_align">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ALIGNMENT</label>
