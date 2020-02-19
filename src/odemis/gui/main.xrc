@@ -4019,16 +4019,6 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="main_buttons">
-                <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
-                </object>
-                <size>400,-1</size>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
@@ -4055,16 +4045,6 @@
                         <label>STREAMS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_annotations">
-                        <label>ANNOTATIONS</label>
-                        <collapsed>1</collapsed>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <hidden>1</hidden>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -4635,16 +4615,6 @@
                         <label>STREAMS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_annotations">
-                        <label>ANNOTATIONS</label>
-                        <collapsed>1</collapsed>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <hidden>1</hidden>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>

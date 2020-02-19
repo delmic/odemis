@@ -452,11 +452,9 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
         self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
         self.vp_angular_pol = xrc.XRCCTRL(self, "vp_angular_pol")
-        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
-        self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_export = xrc.XRCCTRL(self, "btn_secom_export")
 
 
@@ -525,7 +523,6 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
-        self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
 
 
@@ -4648,16 +4645,6 @@ def __init_resources():
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="main_buttons">
-                <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
-                </object>
-                <size>400,-1</size>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
@@ -4684,16 +4671,6 @@ def __init_resources():
                         <label>STREAMS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_annotations">
-                        <label>ANNOTATIONS</label>
-                        <collapsed>1</collapsed>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <hidden>1</hidden>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -5264,16 +5241,6 @@ def __init_resources():
                         <label>STREAMS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_annotations">
-                        <label>ANNOTATIONS</label>
-                        <collapsed>1</collapsed>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <hidden>1</hidden>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
