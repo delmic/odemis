@@ -1052,15 +1052,13 @@ class TestSpatialExportPyramidal(unittest.TestCase):
     def setUpClass(cls):
         # expected max number of pixels with a safety margin, derived from the MAX_RES_FACTOR in img.py
         cls.expected_max_nmr_pixels = 23004160 * 0.95
+        cls.app = wx.App()
 
-
-    def setUp_custom(self, fluo_stream_resolution, SEM_stream_resolution):
+    def _prepare_streams(self, fluo_stream_resolution, SEM_stream_resolution):
         '''
         :param fluo_stream_resolution (tuple): resolution of StaticFluoStream x,y
         :param SEM_stream_resolution(tuple): resolution of StaticSEMStream x,y
         '''
-        self.app = wx.App()
-
         data = numpy.zeros((fluo_stream_resolution[0], fluo_stream_resolution[1]), dtype=numpy.uint16)
         metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
                     'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07),
@@ -1074,7 +1072,7 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
         fluo_stream_pj = stream.RGBSpatialProjection(fluo_stream)
 
-        data = numpy.zeros((SEM_stream_resolution[0], SEM_stream_resolution[1]), dtype=numpy.uint16)
+        data = numpy.zeros(SEM_stream_resolution, dtype=numpy.uint16)
         metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
                     'Exposure time': 3e-06, 'Pixel size': (1e-6, 1e-6),
                     'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
@@ -1092,18 +1090,17 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         sem_stream_pj.mpp.value = 1e-6
 
         self.streams = [fluo_stream_pj, sem_stream_pj]
-        self.image_ratio = [[] for _ in self.streams]
-        self.image_ratio[0] = fluo_stream_resolution[0] / fluo_stream_resolution[1]
-        self.image_ratio[1] = SEM_stream_resolution[0] / SEM_stream_resolution[1]
+        self.image_ratio = [fluo_stream_resolution[0] / fluo_stream_resolution[1],
+                             SEM_stream_resolution[0] / SEM_stream_resolution[1]]
 
         # Wait for all the streams to get an RGB image
-        time.sleep(0.5)
+        time.sleep(3.5)
 
     def test_normal_resolution(self):
         '''
         unit test for a normal picture size significantly SMALLER than the MAXRESOLUTION
         '''
-        self.setUp_custom((2160, 2560), (1024, 1024))
+        self._prepare_streams((2160, 2560), (1024, 1024))
         orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
 
         # Print ready format
@@ -1115,7 +1112,7 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         self.assertEqual(len(exp_data_rgb), 1)
         self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
 
-        # Post-process forma12t
+        # Post-process format
         exp_data_gray = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
         self.assertEqual(len(exp_data_gray), 2)
         self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
@@ -1129,8 +1126,7 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         The resolution which will be exported is approximately the maximum resolution as defined the MAX_RES_FACTOR
         in img.py
         '''
-        self.setUp_custom((10000, 10000), (10000, 10000))
-        time.sleep(2.5) #Extra waiting time cause loading of large picture takes longer
+        self._prepare_streams((10000, 10000), (10000, 10000))
         orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
 
         # Print ready format
@@ -1164,15 +1160,13 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         '''
         Input stream has approximately twice the maximum resolution to export an image of
         '''
-        self.setUp_custom((10000, 10000), (10000, 10000))
-        time.sleep(2.5) #Extra waiting time cause loading of large picture takes longer
+        self._prepare_streams((10000, 10000), (10000, 10000))
         orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
 
         # Print ready format
         view_hfw = (2*8.191282393266523e-04, 2*6.205915392651362e-04)
         view_pos = [-0.001203511795256, -0.000295338300158]
         draw_merge_ratio = 0.3
-        self.streams[1]._updateImage()
         exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(len(exp_data_rgb), 1)
         self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
@@ -1199,8 +1193,7 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         '''
         Test printing an stream which has an high resolution an is an extremely narrow rectangular image
         '''
-        self.setUp_custom((1000, 10000), (1000, 10000))
-        time.sleep(2.5)  # Extra waiting time cause loading of large picture takes longer
+        self._prepare_streams((1000, 10000), (1000, 10000))
         orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
 
         # Print ready format
@@ -1208,7 +1201,6 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         view_pos = [-0.001203511795256, -0.000295338300158]
 
         draw_merge_ratio = 0.3
-        self.streams[1]._updateImage()
         exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(len(exp_data_rgb), 1)
         self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
