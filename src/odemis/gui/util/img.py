@@ -26,6 +26,7 @@ from __future__ import division
 
 from past.builtins import basestring
 from odemis.gui.util import wx_adapter
+import threading
 import cairo
 import logging
 import math
@@ -36,11 +37,10 @@ from odemis.gui.comp.overlay.base import Label
 from odemis.util import intersect, fluo, conversion, img, units
 import time
 import wx
-
 import odemis.acq.stream as acqstream
 from odemis.util import spectrum
 import odemis.gui.img as guiimg
-from odemis.acq.stream import RGBProjection, \
+from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
 from odemis.model import DataArrayShadow
 
@@ -2228,8 +2228,34 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
+    max_res = (MAX_RES_FACTOR * CROP_RES_LIMIT) ** 2
+    # min_mpp = the minimum meters per pixels resulting in the maximum pixels size on based on the requested
+    # field-of-view, and the maximum number of pixels we are willing to export (independent of the image ratio)
+    min_mpp = math.sqrt((view_hfw[0]*view_hfw[1]) / max_res)# Area = [meters per pixel]^2 * number_of_pixels
+
+    def _ensure_proj_mpp(projection, min_mpp):
+        img_received = threading.Event()
+        new_proj = RGBSpatialProjection(projection.stream)
+        new_proj.rect.value = projection.rect.value
+        new_proj.mpp.value = new_proj.mpp.clip(min_mpp)  # set pixel size to desired number
+        streams[stream_idx] = new_proj
+
+        #Callback function needed to pass to subscribe method
+        def img_callback(da):
+            img_received.set()
+
+        # Wait until the projection has been updated
+        new_proj.image.subscribe(img_callback)
+        img_received.wait()
+        new_proj.image.unsubscribe(img_callback)
+
+    for stream_idx, projection in enumerate(streams):
+        #Check if a projection resolution can be increased begore exporting
+        if hasattr(projection, 'mpp'):
+            _ensure_proj_mpp(projection, min_mpp)
 
     images, im_min_type = convert_streams_to_images(streams, raw)
+
     if not images:
         raise LookupError("There is no stream data to be exported")
 

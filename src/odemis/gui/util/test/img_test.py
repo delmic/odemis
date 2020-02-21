@@ -1048,11 +1048,18 @@ class TestSpatialExport(test.GuiTestCase):
                         msg="Canvas are equal, which means there in no drawn ruler to be shown in the export")
 
 class TestSpatialExportPyramidal(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # expected max number of pixels with a safety margin, derived from the MAX_RES_FACTOR in img.py
+        cls.expected_max_nmr_pixels = 23004160 * 0.95
+        cls.app = wx.App()
 
-    def setUp(self):
-        self.app = wx.App()
-        data = numpy.zeros((2160, 2560), dtype=numpy.uint16)
-        dataRGB = numpy.zeros((2160, 2560, 4))
+    def _prepare_streams(self, fluo_stream_resolution, SEM_stream_resolution):
+        '''
+        :param fluo_stream_resolution (tuple): resolution of StaticFluoStream x,y
+        :param SEM_stream_resolution(tuple): resolution of StaticSEMStream x,y
+        '''
+        data = numpy.zeros((fluo_stream_resolution[0], fluo_stream_resolution[1]), dtype=numpy.uint16)
         metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
                     'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07),
                     'Acquisition date': 1441361559.258568, 'Hardware version': "firmware: '14.9.16.0' (driver 3.10.30003.5)",
@@ -1065,12 +1072,12 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
         fluo_stream_pj = stream.RGBSpatialProjection(fluo_stream)
 
-        data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
-        dataRGB = numpy.zeros((1024, 1024, 4))
+        data = numpy.zeros(SEM_stream_resolution, dtype=numpy.uint16)
         metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
                     'Exposure time': 3e-06, 'Pixel size': (1e-6, 1e-6),
                     'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
                     'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 5000.0, 'Rotation': 0.0}
+
         image = model.DataArray(data, metadata)
 
         # export
@@ -1083,12 +1090,17 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         sem_stream_pj.mpp.value = 1e-6
 
         self.streams = [fluo_stream_pj, sem_stream_pj]
-        self.min_res = (623, 432)
+        self.image_ratio = [fluo_stream_resolution[0] / fluo_stream_resolution[1],
+                             SEM_stream_resolution[0] / SEM_stream_resolution[1]]
 
         # Wait for all the streams to get an RGB image
-        time.sleep(0.5)
+        time.sleep(3.5)
 
-    def test_first(self):
+    def test_normal_resolution(self):
+        '''
+        unit test for a normal picture size significantly SMALLER than the MAXRESOLUTION
+        '''
+        self._prepare_streams((2160, 2560), (1024, 1024))
         orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
 
         # Print ready format
@@ -1108,6 +1120,110 @@ class TestSpatialExportPyramidal(unittest.TestCase):
 
         for s, md in zip(self.streams, orig_md):
             self.assertEqual(md, s.raw[0][0].metadata)
+
+    def test_aprox_max_resolution(self):
+        '''
+        The resolution which will be exported is approximately the maximum resolution as defined the MAX_RES_FACTOR
+        in img.py
+        '''
+        self._prepare_streams((10000, 10000), (10000, 10000))
+        orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
+
+        # Print ready format
+        view_hfw = (8.191282393266523e-04, 6.205915392651362e-04)
+        view_pos = [-0.001203511795256, -0.000295338300158]
+        draw_merge_ratio = 0.3
+        self.streams[1]._updateImage()
+        exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data_rgb), 1)
+        self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
+        self.assertGreater(exp_data_rgb[0][:, :, 0].size, self.expected_max_nmr_pixels)
+        new_image_ratio = exp_data_rgb[0].shape[0] /exp_data_rgb[0].shape[1]
+        # Works only for streams with similair ratio (height/width) of images in both fluo_stream and SEM_stream
+        self.assertLess(abs(new_image_ratio - self.image_ratio[0]) / self.image_ratio[0], 0.3)
+
+        # Post-process format
+        exp_data_gray = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data_gray), 2)
+        self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
+        self.assertEqual(exp_data_rgb[0].shape[:2], exp_data_gray[0].shape)  # all exported images must have the same shape
+
+        for s, md in zip(self.streams, orig_md):
+            self.assertEqual(md, s.raw[0][0].metadata)
+
+        # Checking the ratio between height/width of each stream
+        for data_gray, ratio in zip(exp_data_gray, self.image_ratio):
+            new_image_ratio = data_gray.shape[0] / data_gray.shape[1]
+            self.assertLess(abs(new_image_ratio - ratio) / ratio, 0.3)
+
+    def test_twice_max_resolution(self):
+        '''
+        Input stream has approximately twice the maximum resolution to export an image of
+        '''
+        self._prepare_streams((10000, 10000), (10000, 10000))
+        orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
+
+        # Print ready format
+        view_hfw = (2*8.191282393266523e-04, 2*6.205915392651362e-04)
+        view_pos = [-0.001203511795256, -0.000295338300158]
+        draw_merge_ratio = 0.3
+        exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data_rgb), 1)
+        self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
+        self.assertGreater(exp_data_rgb[0][:, :, 0].size , self.expected_max_nmr_pixels)
+        new_image_ratio = exp_data_rgb[0].shape[0] /exp_data_rgb[0].shape[1]
+        # Works only for streams with similair ratio (height/width) of images in both fluo_stream and SEM_stream
+        self.assertLess(abs(new_image_ratio - self.image_ratio[0]) / self.image_ratio[0], 0.3)
+
+        # Post-process format
+        exp_data_gray = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data_gray), 2)
+        self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
+        self.assertEqual(exp_data_rgb[0].shape[:2], exp_data_gray[0].shape)  # all exported images must have the same shape
+
+        for s, md in zip(self.streams, orig_md):
+            self.assertEqual(md, s.raw[0][0].metadata)
+
+        # Checking the ratio between height/width of each stream
+        for data_gray, ratio in zip(exp_data_gray, self.image_ratio):
+            new_image_ratio = data_gray.shape[0] / data_gray.shape[1]
+            self.assertLess(abs(new_image_ratio - ratio) / ratio, 0.3)
+
+    def test_narrow_rectangular(self):
+        '''
+        Test printing an stream which has an high resolution an is an extremely narrow rectangular image
+        '''
+        self._prepare_streams((1000, 10000), (1000, 10000))
+        orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
+
+        # Print ready format
+        view_hfw = (8.191282393266523e-03/3, 6.205915392651362e-04/3)
+        view_pos = [-0.001203511795256, -0.000295338300158]
+
+        draw_merge_ratio = 0.3
+        exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data_rgb), 1)
+        self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
+        # This stream has ten times less pixel than others, however legend is later added on bottom
+        self.assertGreater(exp_data_rgb[0][:, :, 0].size , self.expected_max_nmr_pixels*0.1)
+        new_image_ratio = exp_data_rgb[0].shape[0] /exp_data_rgb[0].shape[1]
+        # Works only for streams with similair ratio (height/width) of images in both fluo_stream and SEM_stream
+        self.assertLess(abs(new_image_ratio - self.image_ratio[0]) / self.image_ratio[0], 1.5)
+
+        # Post-process format
+        exp_data_gray = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data_gray), 2)
+        self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
+        self.assertEqual(exp_data_rgb[0].shape[:2],
+                         exp_data_gray[0].shape)  # all exported images must have the same shape
+
+        for s, md in zip(self.streams, orig_md):
+            self.assertEqual(md, s.raw[0][0].metadata)
+
+        # Checking the ratio between height/width of each stream
+        for data_gray, ratio in zip(exp_data_gray, self.image_ratio):
+            new_image_ratio = data_gray.shape[0] / data_gray.shape[1]
+            self.assertLess(abs(new_image_ratio - ratio) / ratio, 1.5)
 
 
 class TestOverviewFunctions(unittest.TestCase):
