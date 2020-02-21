@@ -53,7 +53,9 @@ import odemis.gui.util.align as align
 from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
-from odemis.acq.align.autofocus import Sparc2AutoFocus
+from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.gui.conf.util import create_axis_entry
+from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -3202,6 +3204,9 @@ class Sparc2AlignTab(Tab):
         self._spot_stream = spot_stream
 
         self._ccd_stream = None
+        # The ccd stream panel entry object is kept as attribute
+        # to enable/disable ccd stream panel during focus mode
+        self._ccd_spe = None
         if main_data.ccd:
             # Force the "temperature" VA to be displayed by making it a hw VA
             hwdetvas = set()
@@ -3222,9 +3227,9 @@ class Sparc2AlignTab(Tab):
             self._setFullFoV(ccd_stream, (2, 2))
             self._ccd_stream = ccd_stream
 
-            ccd_spe = self._stream_controller.addStream(ccd_stream,
+            self._ccd_spe = self._stream_controller.addStream(ccd_stream,
                                 add_to_view=self.panel.vp_align_lens.view)
-            ccd_spe.stream_panel.flatten()
+            self._ccd_spe.stream_panel.flatten()
 
             # To activate the SEM spot when the CCD plays
             ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
@@ -3242,36 +3247,6 @@ class Sparc2AlignTab(Tab):
         # TODO: handle if there are two spectrometers with focus (but for now,
         # there is no such system)
         if ccd_focuser:
-            # Add a stream to see the focus, and the slit for lens alignment.
-            # As it is a BrightfieldStream, it will turn on the emitter when
-            # active.
-            speclines = acqstream.BrightfieldStream(
-                                "Spectrograph line",
-                                main_data.ccd,
-                                main_data.ccd.data,
-                                emitter=None,  # actually, the brightlight, but the autofocus procedure takes care of it
-                                focuser=ccd_focuser,
-                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
-                                forcemd={model.MD_POS: (0, 0),
-                                         model.MD_ROTATION: 0},
-                                acq_type=model.MD_AT_SLIT,
-                                )
-            speclines.tint.value = (0, 64, 255)  # colour it blue
-            # Fixed values, known to work well for autofocus
-            speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
-            self._setFullFoV(speclines, (2, 2))
-            if model.hasVA(speclines, "detReadoutRate"):
-                try:
-                    speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
-                except AttributeError:
-                    speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
-            self._specline_stream = speclines
-            # TODO: make the legend display a merge slider (currently not happening
-            # because both streams are optical)
-            # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
-            self._stream_controller.addStream(speclines, visible=False,
-                                add_to_view=self.panel.vp_align_lens.view)
-
             # Focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
             self.panel.slider_focus.SetRange(z.range[0], z.range[1])
@@ -3312,6 +3287,36 @@ class Sparc2AlignTab(Tab):
             tab_data.autofocus_active.subscribe(self._onAutofocus)
         else:
             self.panel.pnl_fib_focus.Show(False)
+
+        # Manual focus mode initialization
+        # Add all the `blue` streams, one for each detector to adjust the focus
+        self._focus_streams = []
+        # Future object to keep track of turning on/off the manual focus mode
+        self._mf_future = model.InstantaneousFuture()
+        self._enableFocusComponents(manual=False, ccd_stream=True)
+
+        if ccd_focuser:  # TODO: handle fib_focuser as well
+            # Create a focus stream for each Spectrometer detector
+            self._focus_streams = self._createFocusStreams(ccd_focuser, main_data.hw_settings_config)
+            for focus_stream in self._focus_streams:
+                # Add the stream to the stream bar controller
+                # so that it's displayed with the default 0.3 merge ratio
+                self._stream_controller.addStream(focus_stream, visible=False,
+                                                  add_to_view=False)
+
+                # Remove the stream from the focused view initially
+                self.tab_data_model.focussedView.value.removeStream(focus_stream)
+                # Subscribe to stream's should_update VA in order to view/hide it
+                focus_stream.should_update.subscribe(self._ensureOneFocusStream)
+
+            # Bind spectograph available gratings to the focus panel gratings combobox
+            create_axis_entry(self, 'grating', main_data.spectrograph)
+
+            if self._focus_streams:
+                # Set the focus panel detectors combobox items to the focus streams detectors
+                self.panel.cmb_focus_detectors.Items = [s.detector.name for s in self._focus_streams]
+                self.panel.cmb_focus_detectors.Bind(wx.EVT_COMBOBOX, self._onFocusDetectorChange)
+                self.panel.cmb_focus_detectors.SetSelection(0)
 
         self._moi_stream = None
         if main_data.ccd:
@@ -3419,7 +3424,7 @@ class Sparc2AlignTab(Tab):
             # In such case, there is no focus affecting the ccd, so the
             # pnl_focus will also be hidden later on, by the ccd_focuser code
         else:
-            self.panel.btn_manualfocus.Bind(wx.EVT_BUTTON, self._onManualFocus)
+            self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
         if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
@@ -3441,8 +3446,6 @@ class Sparc2AlignTab(Tab):
         # steak camera
         if "streak-align" not in tab_data.align_mode.choices:
             self.panel.pnl_streak.Show(False)
-        else:
-            self.panel.btn_manualfocus.Show(True)  # TODO only for streak cam now
 
         # chronograph of spectrometer if "fiber-align" mode is present
         self._speccnt_stream = None
@@ -3719,6 +3722,10 @@ class Sparc2AlignTab(Tab):
         self._stream_controller.pauseStreams()
         # Cancel autofocus (if it happens to run)
         self.tab_data_model.autofocus_active.value = False
+        # Disable manual focus components and cancel already running procedure
+        self.panel.btn_manual_focus.SetValue(False)
+        self._enableFocusComponents(manual=False, ccd_stream=True)
+        self._mf_future.cancel()
 
         main = self.tab_data_model.main
 
@@ -3752,8 +3759,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
             self.panel.gauge_autofocus.Enable(True)
-
-            self.panel.btn_manualfocus.Enable(False)  # TODO used only for streak cam now, will be implemented soon
+            self.panel.btn_manual_focus.Enable(True)
 
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
@@ -3815,7 +3821,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
-            self.panel.btn_manualfocus.Enable(True)
+            self.panel.btn_manual_focus.Enable(True)
             self.panel.btn_autofocus.Enable(False)
             self.panel.gauge_autofocus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
@@ -3828,7 +3834,7 @@ class Sparc2AlignTab(Tab):
         # only display doc for current mode selected
         self.panel.html_moi_doc.LoadPage(self.doc_path)
         if mode == "lens-align":
-            if self._specline_stream:
+            if self._focus_streams:
                 doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
                 self.panel.html_moi_doc.AppendToPage(doc_cnt)
             doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
@@ -3918,6 +3924,115 @@ class Sparc2AlignTab(Tab):
         """
         self.tab_data_model.autofocus_active.value = not self.tab_data_model.autofocus_active.value
 
+    def _createFocusStreams(self, focuser, hw_settings_config):
+        """
+        Initialize a stream to see the focus, and the slit for lens alignment.
+        :param focuser: the focuser to get the components for (currently ccd_focuser)
+        :param hw_settings_config: hw config for initializing BrightfieldStream
+        :return: all created focus streams
+        """
+        focus_streams = []
+        dets = GetSpectrometerFocusingDetectors(focuser)
+        # One "line" stream per detector
+        # Add a stream to see the focus, and the slit for lens alignment.
+        # As it is a BrightfieldStream, it will turn on the emitter when
+        # active.
+        for d in dets:
+            speclines = acqstream.BrightfieldStream(
+                "Spectrograph line ({name})".format(name=d.name),
+                d,
+                d.data,
+                emitter=None,  # actually, the brightlight, but the autofocus procedure takes care of it
+                focuser=focuser,
+                detvas=get_local_vas(d, hw_settings_config),
+                forcemd={model.MD_POS: (0, 0),
+                         model.MD_ROTATION: 0},
+                acq_type=model.MD_AT_SLIT,
+            )
+            speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
+            # Fixed values, known to work well for autofocus
+            speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
+            self._setFullFoV(speclines, (2, 2))
+            if model.hasVA(speclines, "detReadoutRate"):
+                try:
+                    speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
+                except AttributeError:
+                    speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
+            focus_streams.append(speclines)
+
+        return focus_streams
+
+    @call_in_wx_main
+    def _ensureOneFocusStream(self, _):
+        """
+        Ensures that only one focus stream is shown at a time
+        Called when a focus stream "should_update" state changes
+        Add/Remove the stream to the current view (updating the StreamTree)
+        Set the focus detectors combobox selection to the the stream's detector
+        # Pick the stream to be shown:
+        #  1. Pick the stream which is playing (should_update=True)
+        #  2. Pick the focus stream which is already shown (in v.getStreams())
+        #  3. Pick the first focus stream
+        """
+        focusedview = self.tab_data_model.focussedView.value
+        should_update_stream = next((s for s in self._focus_streams if s.should_update.value), None)
+        if should_update_stream:
+            # This stream should be shown, remove the other ones first
+            for st in focusedview.getStreams():
+                if st in self._focus_streams and st is not should_update_stream:
+                    focusedview.removeStream(st)
+            focusedview.addStream(should_update_stream)
+            # Set the focus detectors combobox selection
+            try:
+                istream = self._focus_streams.index(should_update_stream)
+                self.panel.cmb_focus_detectors.SetSelection(istream)
+            except ValueError:
+                logging.error("Unable to find index of the focus stream")
+        else:
+            # Check if there are any focus stream currently shown
+            if not any(s in self._focus_streams for s in focusedview.getStreams()):
+                # Otherwise show the first one
+                focusedview.addStream(self._focus_streams[0])
+                self.panel.cmb_focus_detectors.SetSelection(0)
+
+    def _onFocusDetectorChange(self, evt):
+        """
+        Handler for focus detector combobox selection change
+        Play the stream associated with the chosen detector
+        """
+        # Find the stream related to this selected detector
+        idx = self.panel.cmb_focus_detectors.GetSelection()
+        stream = self._focus_streams[idx]
+        # Play this stream (set both should_update and is_active with True)
+        stream.should_update.value = True
+        stream.is_active.value = True
+
+    def add_combobox_control(self, label_text, value=None, conf=None):
+        """ Add a combo box to the focus panel
+        # Note: this is a hack. It must be named so, to look like a StreamPanel
+        """
+        # No need to create components, defined already on the xrc file
+        return self.panel.cmb_focus_gratings_label, self.panel.cmb_focus_gratings
+
+    def _enableFocusComponents(self, manual, ccd_stream=False):
+        """
+        Enable or disable focus GUI components (autofocus button, position slider, detector and grating comboboxes)
+        Manual focus button is not included as it's only disabled once => during auto focus
+        :param manual (bool): if manual focus is enabled/disabled
+        :param ccd_stream (bool): if ccd_stream panel should be enabled/disabled
+        """
+        self.panel.slider_focus.Enable(manual)
+        self.panel.cmb_focus_detectors.Enable(manual)
+        self.panel.cmb_focus_gratings.Enable(manual)
+
+        # Autofocus button is inverted
+        self.panel.btn_autofocus.Enable(not manual)
+
+        # Enable/Disable ccd stream panel
+        if self._ccd_spe and self._ccd_spe.stream_panel.Shown:
+            self._ccd_spe.stream_panel.Enable(ccd_stream)
+
+    @call_in_wx_main
     def _onManualFocus(self, event):
         """
         Called when manual focus btn receives an event.
@@ -3925,71 +4040,73 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
+        gauge = self.panel.gauge_autofocus
 
-        if event.GetEventObject().GetValue():  # manual focus btn active
-            # # Disable autofocus if manual focus btn pushed
-            #         # self.panel.btn_autofocus.Enable(False)
-            #         # self.panel.gauge_autofocus.Enable(False)
+        if event.GetEventObject().GetValue():  # manual focus btn toggled
+            # Set the optical path according to the align mode
             if align_mode == "streak-align":
-                s = None
                 opath = "streak-focus"
+            elif align_mode == "lens-align":
+                opath = "spec-focus"
             else:
                 self._stream_controller.pauseStreams()
-                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
+                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.",
+                                align_mode)
                 return
-
-            # For streak-focus, it's not useful to use turnLightOn(), as the camera should not
-            # yet be receiving light anyway.
-            # TODO: if standard focus mode, call Sparc2AutoFocus(align_mode, main.opm, s, start_autofocus=False)
-
-            # Note: First close slit, then switch on calibration light
-            # Go to the special focus mode (=> close the slit)
-            f = main.opm.setPath(opath).result()
-
-            # force wavelength 0
-            main.spectrograph.moveAbsSync({"wavelength": 0})
 
             if align_mode != "streak-align":
                 self._stream_controller.pauseStreams()
 
-            # Turn on the light
-            bl.power.value = bl.power.range[1]
-            if s:
-                s.should_update.value = True  # the stream will set all the emissions to 1
-            else:
-                bl.emissions.value = [1] * len(bl.emissions.value)
-
-        else:  # manual focus button is inactive
-            # Go back to previous mode (=> open the slit & turn off the lamp)
             if align_mode == "streak-align":
-                s = None
-            # Note: First turn off calibration light, then open slit
-            bl.power.value = bl.power.range[0]
-            if s:
-                s.should_update.value = True  # the stream will set all the emissions to 0
-            else:
-                bl.emissions.value = [0] * len(bl.emissions.value)
+                # force wavelength 0
+                # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
+                main.spectrograph.moveAbsSync({"wavelength": 0})
 
+            self._mf_future = Sparc2ManualFocus(main.opm, bl, opath, toggled=True)
+            self._mf_future.add_done_callback(self._onManualFocusReady)
+            # Update GUI
+            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
+        else:  # manual focus button is untoggled
+            # Go back to previous mode (=> open the slit & turn off the lamp)
+            # Get the optical path from align mode
             opath = self._mode_to_opm[align_mode]
-            f = main.opm.setPath(opath)
-            f.add_done_callback(self._on_align_mode_done)
-            f.result()  # TODO: don't block the GUI => make it part of the manual focus??
-            # if align_mode != "streak-align":
-            #     # Enable autofocus if manual focus btn not pushed
-            #     self.panel.btn_autofocus.Enable(True)
-            #     self.panel.gauge_autofocus.Enable(True)
 
+            self._mf_future = Sparc2ManualFocus(main.opm, bl, opath, toggled=False)
+            self._mf_future.add_done_callback(self._onManualFocusFinished)
+            # Update GUI
+            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
+
+    @call_in_wx_main
+    def _onManualFocusReady(self, future):
+        """
+        Called when starting manual focus is done
+        Make sure there's a shown focus stream, then enable/disable manual focus components
+        """
+        if future.cancelled():
+            return
+
+        if self._focus_streams:
+            istream = self.panel.cmb_focus_detectors.GetSelection()
+            self._focus_streams[istream].should_update.value = True
+
+        align_mode = self.tab_data_model.align_mode.value
+        if align_mode == "lens-align":
+            self._enableFocusComponents(manual=True, ccd_stream=False)
+
+    def _onManualFocusFinished(self, future):
+        """
+        Called when finishing manual focus is done
+        """
+        self._onAlignMode(self.tab_data_model.align_mode.value)
 
     @call_in_wx_main
     def _onAutofocus(self, active):
-        # TODO disable manual focus while running autofocus
         if active:
             main = self.tab_data_model.main
             align_mode = self.tab_data_model.align_mode.value
             if align_mode == "lens-align":
                 focus_mode = "spec-focus"
-                # TODO: create one stream per detector
-                ss = [self._specline_stream]
+                ss = self._focus_streams
                 btn = self.panel.btn_autofocus
                 gauge = self.panel.gauge_autofocus
             elif align_mode == "fiber-align":
@@ -4003,6 +4120,8 @@ class Sparc2AlignTab(Tab):
 
             # GUI stream bar controller pauses the stream
             btn.SetLabel("Cancel")
+            self.panel.btn_manual_focus.Enable(False)
+            self._enableFocusComponents(manual=False, ccd_stream=False)
             self._stream_controller.pauseStreams()
 
             # No manual autofocus for now
@@ -4040,7 +4159,8 @@ class Sparc2AlignTab(Tab):
         # just twice the same thing, with the second time being a no-op.
         self._onAlignMode(self.tab_data_model.align_mode.value)
 
-        # TODO enable manual focus when done running autofocus
+        # Enable manual focus when done running autofocus
+        self.panel.btn_manual_focus.Enable(True)
 
     def _onBkgAcquire(self, evt):
         """
@@ -4236,7 +4356,7 @@ class Sparc2AlignTab(Tab):
 
             # Cancel manual focus: just reset the button, as the rest is just
             # optical-path moves.
-            self.panel.btn_manualfocus.SetValue(False)
+            self.panel.btn_manual_focus.SetValue(False)
 
             # Turn off the brightlight, if it was on
             bl = main.brightlight
