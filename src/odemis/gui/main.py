@@ -182,12 +182,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()  # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
-
-            # TODO: instead of roles + label, have a class method on each
-            # StreamTab class that takes the microscope as input, and return a
-            # label or None if it shouldn't be displayed. (+ a "priority" to
-            # decide which one is the default?)
-
             tab_defs = [
                 {
                     # Unique name of the tab
@@ -202,19 +196,19 @@ class OdemisGUIApp(wx.App):
                 {
                     "name": "secom_align",
                     "controller": tabs.SecomAlignTab,
-                    "button": self.main_frame.btn_tab_secom_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_secom_align
                 },
                 {
                     "name": "sparc_align",
                     "controller": tabs.SparcAlignTab,
-                    "button": self.main_frame.btn_tab_sparc_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_sparc_align
                 },
                 {
                     "name": "sparc2_align",
                     "controller": tabs.Sparc2AlignTab,
-                    "button": self.main_frame.btn_tab_sparc2_align,
+                    "button": self.main_frame.btn_tab_align,
                     "panel": main_xrc.xrcpnl_tab_sparc2_align
                 },
                 {
