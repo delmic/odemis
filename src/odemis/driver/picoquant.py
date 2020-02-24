@@ -17,19 +17,21 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-import queue
+from concurrent import futures
 from ctypes import *
 import ctypes
+from decorator import decorator
 import logging
 import math
 import numpy
 from odemis import model, util
 from odemis.model import HwError
+from odemis.util import TimeoutError
+import queue
 import random
 import threading
 import time
-from decorator import decorator
-from concurrent import futures
+
 
 # Based on phdefin.h
 MAXDEVNUM = 8
@@ -180,6 +182,19 @@ class PHDLL(CDLL):
         - 77: "ERROR_HARDWARE_F14",
         - 78: "ERROR_HARDWARE_F15",
     }
+
+
+# Acquisition control messages
+GEN_START = "S"  # Start acquisition
+GEN_STOP = "E"  # Don't acquire image anymore
+GEN_TERM = "T"  # Stop the generator
+
+
+class TerminationRequested(Exception):
+    """
+    Generator termination requested.
+    """
+    pass
 
 
 @decorator
@@ -338,9 +353,6 @@ class PH300(model.Detector):
         # while it's building up.
 
         # Queue to control the acquisition thread:
-        # * "S" to start
-        # * "E" to end
-        # * "T" to terminate
         self._genmsg = queue.Queue()
         self._generator = threading.Thread(target=self._acquire,
                                            name="PicoHarp300 acquisition thread")
@@ -375,7 +387,7 @@ class PH300(model.Detector):
         model.Detector.terminate(self)
         self.stop_generate()
         if self._generator:
-            self._genmsg.put("T")
+            self._genmsg.put(GEN_TERM)
             self._generator.join(5)
             self._generator = None
         self.CloseDevice()
@@ -625,7 +637,7 @@ class PH300(model.Detector):
 
     # Acquisition methods
     def start_generate(self):
-        self._genmsg.put("S")
+        self._genmsg.put(GEN_START)
         if not self._generator.is_alive():
             logging.warning("Restarting acquisition thread")
             self._generator = threading.Thread(target=self._acquire,
@@ -633,7 +645,7 @@ class PH300(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        self._genmsg.put("E")
+        self._genmsg.put(GEN_STOP)
 
     def _get_acq_msg(self, **kwargs):
         """
@@ -642,7 +654,7 @@ class PH300(model.Detector):
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
-        if msg not in ("S", "E", "T"):
+        if msg not in (GEN_START, GEN_STOP, GEN_TERM):
             logging.warning("Acq received unexpected message %s", msg)
         else:
             logging.debug("Acq received message %s", msg)
@@ -652,23 +664,26 @@ class PH300(model.Detector):
         """
         Blocks until the acquisition should start.
         Note: it expects that the acquisition is stopped.
-        raise StopIteration: if a terminate message was received
+        raise TerminationRequested: if a terminate message was received
         """
         while True:
-            state = self._get_acq_msg(block=True)
-            if state == "T":
-                raise StopIteration()
+            msg = self._get_acq_msg(block=True)
+            if msg == GEN_TERM:
+                raise TerminationRequested()
 
             # Check if there are already more messages on the queue
             try:
-                state = self._get_acq_msg(block=False)
-                if state == "T":
-                    raise StopIteration()
+                msg = self._get_acq_msg(block=False)
+                if msg == GEN_TERM:
+                    raise TerminationRequested()
             except queue.Empty:
                 pass
 
-            if state == "S":
+            if msg == GEN_START:
                 return
+
+            # Duplicate Stop or trigger
+            logging.debug("Skipped message %s as acquisition is stopped", msg)
 
     def _acq_should_stop(self, timeout=None):
         """
@@ -676,20 +691,45 @@ class PH300(model.Detector):
         Note: it expects that the acquisition is running.
         timeout (0<float or None): how long to wait to check (if None, don't wait)
         return (bool): True if needs to stop, False if can continue
-        raise StopIteration: if a terminate message was received
+        raise TerminationRequested: if a terminate message was received
         """
         try:
             if timeout is None:
-                state = self._get_acq_msg(block=False)
+                msg = self._get_acq_msg(block=False)
             else:
-                state = self._get_acq_msg(timeout=timeout)
-            if state == "E":
+                msg = self._get_acq_msg(timeout=timeout)
+            if msg == GEN_STOP:
                 return True
-            elif state == "T":
-                raise StopIteration()
+            elif msg == GEN_TERM:
+                raise TerminationRequested()
         except queue.Empty:
             pass
         return False
+
+    def _acq_wait_data(self, exp_tend, timeout=0):
+        """
+        Block until a data is received, or a stop message.
+        Note: it expects that the acquisition is running.
+        exp_tend (float): expected time the acquisition message is received
+        timeout (0<=float): how long to wait to check (use 0 to not wait)
+        return (bool): True if needs to stop, False if data is ready
+        raise TerminationRequested: if a terminate message was received
+        """
+        now = time.time()
+        ttimeout = now + timeout
+        while now <= ttimeout:
+            twait = max(1e-3, (exp_tend - now) / 2)
+            logging.debug("Waiting for %g s", twait)
+            if self._acq_should_stop(twait):
+                return True
+
+            # Is the data ready?
+            if self.CTCStatus():
+                logging.debug("Acq complete")
+                return False
+            now = time.time()
+
+        raise TimeoutError("Acquisition timeout after %g s")
 
     def _toggle_shutters(self, shutters, open):
         """
@@ -719,6 +759,9 @@ class PH300(model.Detector):
         Acquisition thread
         Managed via the .genmsg Queue
         """
+        # TODO: support synchronized acquisition, so that it's possible to acquire
+        #   one image at a time, without opening/closing the shutters in-between.
+        #   See avantes for an example.
         try:
             while True:
                 # Wait until we have a start (or terminate) message
@@ -731,49 +774,34 @@ class PH300(model.Detector):
                 while True:
                     tacq = self.dwellTime.value
                     tstart = time.time()
-                    tend = tstart + tacq
-                    ttimeout = tstart + tacq * 3 + 1  # Give a big margin for timeout
 
                     # TODO: only allow to update the setting here (not during acq)
                     md = self._metadata.copy()
                     md[model.MD_ACQ_DATE] = tstart
                     md[model.MD_DWELL_TIME] = tacq
 
-                    logging.debug("Starting new acquisition")
                     # check if any message received before starting again
                     if self._acq_should_stop():
                         break
 
+                    logging.debug("Starting new acquisition")
                     self.ClearHistMem()
                     self.StartMeas(int(tacq * 1e3))
 
                     # Wait for the acquisition to be done or until a stop or
                     # terminate message comes
-                    must_stop = False
                     try:
-                        now = tstart
-                        while now < ttimeout:
-                            twait = max(1e-3, min((tend - now) / 2, tacq / 2))
-                            logging.debug("Waiting for %g s", twait)
-                            if self._acq_should_stop(twait):
-                                must_stop = True
-                                break
-
-                            # Is the data ready?
-                            if self.CTCStatus():
-                                logging.debug("Acq complete")
-                                break
-                            now = time.time()
-                        else:
-                            logging.error("Acquisition timeout after %g s", now - tstart)
-                            # TODO: try to reset the hardware?
-                            continue
+                        if self._acq_wait_data(tstart + tacq, timeout=tacq * 3 + 1):
+                            # Stop message received
+                            break
+                        logging.debug("Acq complete")
+                    except TimeoutError as ex:
+                        logging.error(ex)
+                        # TODO: try to reset the hardware?
+                        continue
                     finally:
                         # Must always be called, whether the measurement finished or not
                         self.StopMeas()
-
-                    if must_stop:
-                        break
 
                     # Read data and pass it
                     data = self.GetHistogram()
@@ -783,7 +811,7 @@ class PH300(model.Detector):
                 logging.debug("Acquisition stopped")
                 self._toggle_shutters(self._shutters.keys(), False)
 
-        except StopIteration:
+        except TerminationRequested:
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
