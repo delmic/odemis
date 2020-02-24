@@ -65,14 +65,15 @@ TOOL_NONE = 0  # No tool (normal)
 TOOL_ZOOM = 1  # Select the region to zoom in
 TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3  # Select the region of acquisition (area to be acquired, SPARC-only)
-TOOL_POINT = 4  # Select a point (to acquire/display)
-TOOL_LINE = 5  # Select a line (to acquire/display)
-TOOL_RULER = 6  # Select a ruler to measure the distance between two points (to acquire/display)
-TOOL_DICHO = 7  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
-TOOL_SPOT = 8  # Activate spot mode on the SEM
-TOOL_RO_ANCHOR = 9  # Select the region of the anchor region for drift correction
+TOOL_RULER = 4  # Select a ruler to measure the distance between two points (to acquire/display)
+TOOL_POINT = 5  # Select a point (to acquire/display)
+TOOL_LABEL = 6
+TOOL_LINE = 7  # Select a line (to acquire/display)
+TOOL_DICHO = 8  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
+TOOL_SPOT = 9  # Activate spot mode on the SEM
+TOOL_RO_ANCHOR = 10  # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
-TOOL_AUTO_FOCUS = 10  # Run auto focus procedure on the (active) stream
+TOOL_AUTO_FOCUS = 11  # Run auto focus procedure on the (active) stream
 
 
 ALL_TOOL_MODES = {
@@ -83,6 +84,7 @@ ALL_TOOL_MODES = {
     TOOL_POINT,
     TOOL_LINE,
     TOOL_RULER,
+    TOOL_LABEL,
     TOOL_DICHO,
     TOOL_SPOT,
     TOOL_RO_ANCHOR,
@@ -528,7 +530,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_LABEL}  # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
 
@@ -597,6 +599,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
             #TOOL_POINT,
             #TOOL_LINE,
             TOOL_RULER,
+            TOOL_LABEL,
             TOOL_SPOT,
         }
 
@@ -662,7 +665,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line/ruler
-        self.tool.choices = {TOOL_NONE, TOOL_POINT, TOOL_LINE, TOOL_RULER}  # TOOL_ZOOM
+        self.tool.choices = {TOOL_NONE, TOOL_RULER, TOOL_POINT, TOOL_LABEL, TOOL_LINE}  # TOOL_ZOOM
 
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed

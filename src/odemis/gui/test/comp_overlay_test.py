@@ -32,7 +32,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
-from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER
+from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
@@ -733,15 +733,15 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()
-        tab_mod.tool.choices |= {TOOL_RULER}
+        tab_mod.tool.choices |= {TOOL_RULER, TOOL_LABEL}
         view = tab_mod.focussedView.value
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         cnvs.setView(view, tab_mod)
-        rol = cnvs.ruler_overlay
+        gol = cnvs.gadget_overlay
 
         test.gui_loop(0.1)
 
-        # ruler overlay with no rulers
+        # Gadget overlay with no tools
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         buffer_empty = wxImage2NDImage(img)
         self.assertTrue(numpy.all(buffer_empty == 0))
@@ -749,8 +749,8 @@ class OverlayTestCase(test.GuiTestCase):
         # Create a "big ruler"
         p_start_pos = (-0.00055, -0.00055)
         p_end_pos = (0.00055, 0.00055)
-        ruler = wol.Ruler(cnvs, p_start_pos, p_end_pos)
-        rol._rulers.append(ruler)
+        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        gol._tools.append(ruler)
 
         # Create a 10 px ruler
         v_start_pos = (400, 400)
@@ -758,8 +758,8 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
         p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
-        ruler = wol.Ruler(cnvs, p_start_pos, p_end_pos)
-        rol._rulers.append(ruler)
+        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        gol._tools.append(ruler)
 
         # Create a 1 px ruler
         b_start_pos = (599, 670)
@@ -767,20 +767,20 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.buffer_to_phys(b_start_pos, offset)
         p_end_pos = cnvs.buffer_to_phys(b_end_pos, offset)
-        ruler = wol.Ruler(cnvs, p_start_pos, p_end_pos)
-        rol._rulers.append(ruler)
+        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        gol._tools.append(ruler)
 
         # Add one ruler that will become the selected ruler
         p_start_pos = (0, 0)
         p_end_pos = (0, 0.00035)
-        selected_ruler = wol.Ruler(cnvs, p_start_pos, p_end_pos)
-        rol._rulers.append(selected_ruler)
+        selected_ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        gol._tools.append(selected_ruler)
 
-        # update drawing
+        # Update drawing
         cnvs.update_drawing()
         test.gui_loop(0.1)
 
-        # ruler overlay with 4 rulers
+        # Ruler overlay with 4 rulers
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
         cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
@@ -788,18 +788,141 @@ class OverlayTestCase(test.GuiTestCase):
         assert_array_not_equal(buffer_empty, new_buffer,
                         msg="Buffers are equal, which means that the rulers were not drawn")
 
-        # make the last ruler the selected one (highlighted)
-        rol._selected_ruler = selected_ruler
+        # Make the last ruler the selected one (highlighted)
+        gol._selected_tool = selected_ruler
         cnvs.update_drawing()
         test.gui_loop(0.1)
 
-        # ruler overlay with 4 rulers, 1 of them is selected (highlighted)
+        # Ruler overlay with 4 rulers, 1 of them is selected (highlighted)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
         cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
         img = wx.ImageFromBitmap(cnvs._bmp_buffer)
         sel_buffer = wxImage2NDImage(img)
         assert_array_not_equal(new_buffer, sel_buffer,
-                        msg="Buffers are equal, which means that the rulers were not drawn")
+                        msg="Buffers are equal, which means that the label was not drawn")
+
+        # Create a label
+        v_start_pos = (500, 500)
+        v_end_pos = (500, 510)
+        offset = cnvs.get_half_buffer_size()
+        p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
+        p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
+        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label.text = 'A label is added'
+        gol._tools.append(label)
+
+        # Update drawing
+        cnvs.update_drawing()
+        test.gui_loop(0.1)
+
+        # Gadget overlay with 4 rulers and 1 label
+        # Ruler overlay with 4 rulers
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        lab_buffer = wxImage2NDImage(img)
+        assert_array_not_equal(sel_buffer, lab_buffer,
+                               msg="Buffers are equal, which means that the label was not drawn")
+
+    def test_label_overlay(self):
+        logging.getLogger().setLevel(logging.DEBUG)
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        tab_mod = self.create_simple_tab_model()
+        tab_mod.tool.choices |= {TOOL_RULER, TOOL_LABEL}
+        view = tab_mod.focussedView.value
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.setView(view, tab_mod)
+        gol = cnvs.gadget_overlay
+
+        test.gui_loop(0.1)
+
+        # gadget overlay with no tools
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        buffer_empty = wxImage2NDImage(img)
+        self.assertTrue(numpy.all(buffer_empty == 0))
+
+        # Create a "big label"
+        p_start_pos = (-0.00055, -0.00055)
+        p_end_pos = (0.00055, 0.00055)
+        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label.text = 'label1'
+        gol._tools.append(label)
+
+        # Create a 10 px label
+        v_start_pos = (500, 500)
+        v_end_pos = (500, 510)
+        offset = cnvs.get_half_buffer_size()
+        p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
+        p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
+        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label.text = 'label2'
+        gol._tools.append(label)
+
+        # Create a 1 px label
+        b_start_pos = (599, 670)
+        b_end_pos = (599, 671)
+        offset = cnvs.get_half_buffer_size()
+        p_start_pos = cnvs.buffer_to_phys(b_start_pos, offset)
+        p_end_pos = cnvs.buffer_to_phys(b_end_pos, offset)
+        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label.text = 'label3'
+        gol._tools.append(label)
+
+        # Add one ruler that will become the selected ruler
+        p_start_pos = (0, 0)
+        p_end_pos = (0, 0.00035)
+        selected_label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        selected_label.text = 'label4'
+        gol._tools.append(selected_label)
+
+        # update drawing
+        cnvs.update_drawing()
+        test.gui_loop(0.1)
+
+        # ruler overlay with 4 labels
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        new_buffer = wxImage2NDImage(img)
+        assert_array_not_equal(buffer_empty, new_buffer,
+                               msg="Buffers are equal, which means that the labels were not drawn")
+
+        # make the last label the selected one (highlighted)
+        gol._selected_tool = selected_label
+        gol._selected_tool.text = 'selected_label'
+        cnvs.update_drawing()
+        test.gui_loop(0.1)
+
+        # ruler overlay with 4 labels, 1 of them is selected (highlighted)
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.ImageFromBitmap(cnvs._bmp_buffer)
+        sel_buffer = wxImage2NDImage(img)
+        assert_array_not_equal(new_buffer, sel_buffer,
+                               msg="Buffers are equal, which means that the labels were not drawn")
+
+        # Create a ruler
+        v_start_pos = (500, 500)
+        v_end_pos = (500, 510)
+        offset = cnvs.get_half_buffer_size()
+        p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
+        p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
+        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        gol._tools.append(ruler)
+
+        # Update drawing
+        cnvs.update_drawing()
+        test.gui_loop(0.1)
+
+        # Gadget overlay with 4 rulers and 1 label
+        # Ruler overlay with 4 rulers
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        rul_buffer = wxImage2NDImage(img)
+        assert_array_not_equal(sel_buffer, rul_buffer,
+                               msg="Buffers are equal, which means that the ruler was not drawn")
 
     def test_line_select_overlay(self):
         logging.getLogger().setLevel(logging.DEBUG)

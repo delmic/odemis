@@ -2206,8 +2206,9 @@ class FakeCanvas(object):
                 -(pos[1] - self.buffer_center[1]) * self.buffer_scale[1] + offset[1])
 
     def draw_overlay(self, overlay):
+        font_size = self.buffer_size[0] * LARGE_FONT
         """Pass the fake canvas to the draw function of the overlay"""
-        overlay.draw(self.ctx, canvas=self)
+        overlay.draw(self.ctx, canvas=self, font_size=font_size)
 
 
 def images_to_export_data(streams, view_hfw, view_pos,
@@ -2386,8 +2387,8 @@ def images_to_export_data(streams, view_hfw, view_pos,
     # Create legend for print-ready
     if not raw:  # png, tiff
         # In print-ready export, a fake canvas is used by the ruler overlay
-        if orig_canvas and orig_canvas.ruler_overlay:
-            fake_canvas.draw_overlay(orig_canvas.ruler_overlay)
+        if orig_canvas and orig_canvas.gadget_overlay:
+            fake_canvas.draw_overlay(orig_canvas.gadget_overlay)
         dates = [im.metadata['date'] if im.metadata['date'] else 0 for im in images]
         date = max(dates)
         legend_rgb = draw_legend_multi_streams(images, buffer_size, buffer_scale,

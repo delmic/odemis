@@ -332,8 +332,8 @@ class MicroscopeViewport(ViewPort):
 
     def clear(self):
         super(MicroscopeViewport, self).clear()
-        if self.canvas.ruler_overlay:
-            self.canvas.ruler_overlay.clear()
+        if self.canvas.gadget_overlay:
+            self.canvas.gadget_overlay.clear()
 
     ################################################
     #  Panel control
@@ -1493,6 +1493,7 @@ class PointSpectrumViewport(NavigablePlotViewport):
     def setView(self, view, tab_data):
         self._peak_fitter = peak.PeakFitter()
         self._peak_future = model.InstantaneousFuture()
+
         self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
 
         super(PointSpectrumViewport, self).setView(view, tab_data)

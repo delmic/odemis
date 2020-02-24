@@ -40,7 +40,7 @@ from odemis.acq.stream import SinglePointSpectrumProjection, \
     RGBSpatialProjection, LineSpectrumProjection, \
     SinglePointTemporalProjection, POL_POSITIONS, POL_POSITIONS_RESULTS
 import odemis.gui.test as test
-from odemis.gui.model import TOOL_RULER
+from odemis.gui.model import TOOL_RULER, TOOL_LABEL
 import odemis.gui.comp.miccanvas as miccanvas
 from odemis.gui.comp.overlay import world as wol
 
@@ -1005,9 +1005,9 @@ class TestSpatialExport(test.GuiTestCase):
         self.assertEqual(len(exp_data[0].shape), 2)  # greyscale
         self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
 
-    def test_fake_canvas(self):
+    def test_fake_canvas_ruler(self):
         """
-        Test that a fake canvas is used when the original canvas has a ruler overlay. The rulers are
+        Test that a fake canvas is used when the original canvas has a gadget overlay. The tools are
         drawn on this fake canvas and they are shown in the print-ready export.
         """
         # Print ready format
@@ -1022,7 +1022,7 @@ class TestSpatialExport(test.GuiTestCase):
         # Add a canvas and make it add a ruler overlay
         canvas = miccanvas.DblMicroscopeCanvas(self.panel)
         tab_mod = self.create_simple_tab_model()
-        tab_mod.tool.choices |= {TOOL_RULER}
+        tab_mod.tool.choices |= {TOOL_RULER, TOOL_LABEL}
         view = tab_mod.focussedView.value
         self.add_control(canvas, wx.EXPAND, proportion=1, clear=True)
         canvas.setView(view, tab_mod)
@@ -1037,8 +1037,8 @@ class TestSpatialExport(test.GuiTestCase):
         # Create a ruler
         p_start_pos = tuple(view_pos)
         p_end_pos = (0.00055, 0.00055)
-        ruler = wol.Ruler(canvas, p_start_pos, p_end_pos)
-        canvas.ruler_overlay._rulers.append(ruler)
+        ruler = wol.RulerGadget(canvas, p_start_pos, p_end_pos)
+        canvas.gadget_overlay._tools.append(ruler)
 
         # Export while there is a canvas with a ruler overlay and a ruler was drawn on it.
         # The ruler overlay is forced to draw the ruler on a fake canvas and the ruler is shown in the export.
@@ -1046,6 +1046,49 @@ class TestSpatialExport(test.GuiTestCase):
         exp_da_r = exp_data_r[0]
         self.assertTrue(numpy.any(ex_da != exp_da_r),
                         msg="Canvas are equal, which means there in no drawn ruler to be shown in the export")
+
+    def test_fake_canvas_label(self):
+        """
+        Test that a fake canvas is used when the original canvas has a gadget overlay. The tools are
+        drawn on this fake canvas and they are shown in the print-ready export.
+        """
+        # Print ready format
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+
+        # Export while canvas=None
+        e_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
+        e_da = e_data[0]
+
+        # Add a canvas and make it add a ruler overlay
+        canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        tab_mod = self.create_simple_tab_model()
+        tab_mod.tool.choices |= {TOOL_RULER, TOOL_LABEL}
+        view = tab_mod.focussedView.value
+        self.add_control(canvas, wx.EXPAND, proportion=1, clear=True)
+        canvas.setView(view, tab_mod)
+
+        # Export while there is a canvas with a ruler overlay but there are no drawn rulers
+        ex_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False, canvas)
+        ex_da = ex_data[0]
+
+        self.assertTrue(numpy.any(e_da == ex_da),
+                        msg="Canvas are not equal, which means there are rulers shown in the export")
+
+        # Create a label
+        p_start_pos = tuple(view_pos)
+        p_end_pos = (0.00055, 0.00055)
+        label = wol.LabelGadget(canvas, p_start_pos, p_end_pos)
+        canvas.gadget_overlay._tools.append(label)
+
+        # Export while there is a canvas with a ruler overlay and a ruler was drawn on it.
+        # The ruler overlay is forced to draw the ruler on a fake canvas and the ruler is shown in the export.
+        exp_data_r = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False, canvas)
+        exp_da_r = exp_data_r[0]
+        self.assertTrue(numpy.any(ex_da != exp_da_r),
+                        msg="Canvas are equal, which means there in no drawn ruler to be shown in the export")
+
 
 class TestSpatialExportPyramidal(unittest.TestCase):
     @classmethod
