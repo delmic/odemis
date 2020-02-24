@@ -31,6 +31,7 @@ from odemis import model
 from odemis.util import spectrum, img, fluo
 import os
 import time
+import json
 
 
 # User-friendly name
@@ -709,6 +710,8 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "StreakMode", model.MD_STREAK_MODE, converter=bool)
         read_metadata(pdgroup, i, md, "TriggerDelay", model.MD_TRIGGER_DELAY, converter=float)
         read_metadata(pdgroup, i, md, "TriggerRate", model.MD_TRIGGER_RATE, converter=float)
+        # extra settings
+        read_metadata(pdgroup, i, md, "ExtraSettings", model.MD_EXTRA_SETTINGS, converter=json.loads)
 
     return das
 
@@ -1005,6 +1008,15 @@ def _add_image_metadata(group, image, mds):
         gp["EmissionCurrentOverTime"] = cots_sl
         state = [ST_INVALID if v is None else ST_REPORTED for v in cots]
         _h5svi_set_state(gp["EmissionCurrentOverTime"], state)
+
+    sett = [md.get(model.MD_EXTRA_SETTINGS) for md in mds]
+    if any(sett):
+        try:
+            value = [json.dumps(s) for s in sett]
+            state = [ST_INVALID if s is None else ST_REPORTED for s in sett]
+            set_metadata(gp, "ExtraSettings", state, value)
+        except Exception as ex:
+            logging.warning("Failed to save ExtraSettings metadata, exception: %s", ex)
 
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []

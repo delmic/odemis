@@ -36,6 +36,7 @@ import os
 import re
 import sys
 import time
+import json
 import uuid
 import threading
 from odemis.model import DataArrayShadow, AcquisitionData
@@ -350,6 +351,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #        + ARData ({0, 1})
 #        + POLData ({0, 1})
 #        + StreakCamData ({0, 1})
+#        + ExtraSettings   # To store all hw settings
 #      + ROI (*)
 #        . ID
 #        . Name
@@ -560,6 +562,12 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
+        extrase = ime.find("ExtraSettings")
+        try:
+            md[model.MD_EXTRA_SETTINGS] = json.loads(extrase.text)
+        except (AttributeError, KeyError, ValueError):
+            pass  
+   
         # rotation (and mirroring and translation, but we don't support this)
         trans_mat = ime.find("Transform")
         if trans_mat is not None:
@@ -1254,6 +1262,14 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             for j in range(3):
                 trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
 
+    if model.MD_EXTRA_SETTINGS in globalMD:
+        sett = globalMD[model.MD_EXTRA_SETTINGS]
+        extrase = ET.SubElement(ime, "ExtraSettings")
+        try:
+            extrase.text = json.dumps(sett)  # serialize hw settings
+        except Exception as ex:
+            logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
+            extrase.text = ''
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
