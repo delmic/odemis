@@ -746,4 +746,8 @@ class GlobalShiftRegistrar(object):
             if i not in positions:
                 positions[i] = [None, None]
 
-        return numpy.array(list(positions.values())).reshape([num_rows, num_cols, 2])
+        # Sort positions by key
+        positions = sorted(positions.items(), key=lambda x: x[0])
+        # Select values and convert to numpy.array
+        positions = numpy.array([p[1] for p in positions])
+        return positions.reshape([num_rows, num_cols, 2])
