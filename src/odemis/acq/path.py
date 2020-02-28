@@ -31,6 +31,7 @@ from odemis import model, util
 from odemis.acq import stream
 import time
 from odemis.util import TimeoutError
+import queue
 
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
@@ -259,6 +260,28 @@ SECOM_MODES = {
 ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus', 'streak-focus'}
 
 
+class OneTaskExecutor(ThreadPoolExecutor):
+    """
+    Only one task at a time is executed. If several tasks are queued, only the
+    last one is executed.
+    """
+
+    def __init__(self, thread_name_prefix=''):
+        super(OneTaskExecutor, self).__init__(max_workers=1, thread_name_prefix=thread_name_prefix)
+
+    def submit(self, fn, *args, **kwargs):
+        # Cancels all the previous tasks which didn't start yet
+        # Note: in practice, there should be only one task at most queued.
+        while True:
+            try:
+                self._work_queue.get(block=False)
+                logging.debug("Canceling 1 task before starting the next one")
+            except queue.Empty:
+                break
+
+        return ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
+
+
 # TODO: Could be moved to util
 def affectsGraph(microscope):
     """
@@ -369,7 +392,7 @@ class OpticalPathManager(object):
                 logging.debug("No focus component affecting chamber")
 
         # will take care of executing setPath asynchronously
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._executor = OneTaskExecutor()
 
     def __del__(self):
         logging.debug("Ending path manager")
