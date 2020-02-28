@@ -182,7 +182,7 @@ class ArrowFocus(object):
             self._focus_thread.join(10)
 
 
-def man_calib(logpath):
+def man_calib(logpath, keep_loaded=False):
     escan = None
     detector = None
     ccd = None
@@ -240,6 +240,7 @@ def man_calib(logpath):
             force_calib = True
         else:
             first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift = calib_values
+
             force_calib = False
         print_col(ANSI_CYAN,
                   "**Delphi Manual Calibration steps**\n"
@@ -267,40 +268,42 @@ def man_calib(logpath):
                   "Instead, you may zoom in/out while focusing.")
         print_col(ANSI_BLACK, "Now initializing, please wait...")
 
-        # Move to the overview position first
-        f = chamber.moveAbs({"pressure": overview_pressure})
-        f.result()
+        # Default value for the stage offset
+        position = (offset[0] * scaling[0], offset[1] * scaling[1])
 
-        # Reference the (optical) stage
-        f = opt_stage.reference({"x", "y"})
-        f.result()
+        if keep_loaded and chamber.position.value["pressure"] == vacuum_pressure:
+            logging.info("Skipped optical lens detection, will use previous value %s", position)
+        else:
+            # Move to the overview position first
+            f = chamber.moveAbs({"pressure": overview_pressure})
+            f.result()
 
-        f = focus.reference({"z"})
-        f.result()
+            # Reference the (optical) stage
+            f = opt_stage.reference({"x", "y"})
+            f.result()
 
-        # SEM stage to (0,0)
-        f = sem_stage.moveAbs({"x": 0, "y": 0})
-        f.result()
+            f = focus.reference({"z"})
+            f.result()
 
-        # Calculate offset approximation
-        try:
-            f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
-            position = f.result()
-        except IOError as ex:
-            if not force_calib:
-                position = (offset[0] * scaling[0], offset[1] * scaling[1])
-            else:
-                position = (0, 0)
-            logging.warning("Failed to locate the optical lens (%s), will used previous value %s",
-                            ex, position)
+            # SEM stage to (0,0)
+            f = sem_stage.moveAbs({"x": 0, "y": 0})
+            f.result()
 
-        # Just to check if move makes sense
-        f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
-        f.result()
+            # Calculate offset approximation
+            try:
+                f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
+                position = f.result()
+            except IOError as ex:
+                logging.warning("Failed to locate the optical lens (%s), will use previous value %s",
+                                ex, position)
 
-        # Move to SEM
-        f = chamber.moveAbs({"pressure": vacuum_pressure})
-        f.result()
+            # Just to check if move makes sense
+            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+            f.result()
+
+            # Move to SEM
+            f = chamber.moveAbs({"pressure": vacuum_pressure})
+            f.result()
 
         # Set basic e-beam settings
         escan.spotSize.value = 2.7
@@ -649,9 +652,10 @@ def man_calib(logpath):
     except Exception:
         logging.exception("Unexpected failure during calibration")
     finally:
-        print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
-        # Eject the sample holder
-        f = chamber.moveAbs({"pressure": vented_pressure})
+        if not keep_loaded:
+            # Eject the sample holder
+            print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
+            f = chamber.moveAbs({"pressure": vented_pressure})
 
         aligndelphi.restore_hw_settings(escan, ccd, hw_settings)
 
@@ -676,6 +680,8 @@ def main(args):
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="set verbosity level (0-2, default = 0)")
+    parser.add_argument("--keep-loaded", dest="keep_loaded", action="store_true", default=False,
+                        help="Do not force unloading/loading the sample to acquire a overview image")
 
     options = parser.parse_args(args[1:])
 
@@ -704,7 +710,7 @@ def main(args):
     logging.getLogger().addHandler(hdlr_calib)
 
     try:
-        man_calib(logpath)
+        man_calib(logpath, options.keep_loaded)
     except KeyboardInterrupt:
         logging.warning("Manual calibration procedure was cancelled.")
     except:
