@@ -475,6 +475,10 @@ class AlignedSEMStream(SEMStream):
                 self._emitter.shift.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
+                shift_clipped = self._emitter.shift.clip(shift)
+                if shift_clipped != shift:
+                    shift = shift_clipped
+                    logging.info("Limiting spot shift to %s m,m due to hardware constraints", shift)
                 self._beamshift = shift
                 cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
                 cur_trans = (cur_trans[0] + 0.25 * shift[0],

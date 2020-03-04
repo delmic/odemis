@@ -300,6 +300,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         self._subscriptions.append(on_chamber_state)
         self.tab_data.main.chamberState.subscribe(on_chamber_state, init=True)
 
+        @call_in_wx_main
         def adjust_done(_):
             """ Callback that enables and untoggles the 'auto adjust' contrast button """
             btn_autoadjust.SetToggle(False)
