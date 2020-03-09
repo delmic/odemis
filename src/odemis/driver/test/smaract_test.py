@@ -361,6 +361,9 @@ class TestTMCS2(unittest.TestCase):
     def tearDownClass(cls):
         cls.dev.terminate()
 
+    def test_simple(self):
+        self.assertEqual(set(self.dev.axes.keys()), {"x", "y", "z"})
+
     def test_out_of_range(self):
         """
         Test sending a position that is out of range.

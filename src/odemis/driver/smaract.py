@@ -1020,7 +1020,7 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_ERROR_INVALID_PROPERTY = 0x0004
     # Invalid handle in call to function
     SA_MC_ERROR_INVALID_HANDLE = 0x0005
-    # Tried to use an unspported feature
+    # Tried to use an unsupported feature
     SA_MC_ERROR_NOT_SUPPORTED = 0x0006
     # Reached limit of simultaneously controllable devices
     SA_MC_ERROR_DEVICE_LIMIT_REACHED = 0x0007
@@ -1079,7 +1079,7 @@ class MC_5DOF_DLL(CDLL):
 0x0003: "Invalid locator in call to Open function ",
 0x0004: "Undefined or inaccessible property in function call ",
 0x0005: "Invalid handle in call to function ",
-0x0006: "Tried to use an unspported feature",
+0x0006: "Tried to use an unsupported feature",
 0x0007: "Reached limit of simultaneously controllable devices ",
 0x0008: "Supplied buffer too small",
 0x0100: "An operation has been canceled while waiting for a result ",
@@ -1101,7 +1101,6 @@ class MC_5DOF_DLL(CDLL):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
             # WinDLL.__init__(self, "libSA_MC.dll")  # TODO check it works
-            # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
             CDLL.__init__(self, "libsmaractmc.so", RTLD_GLOBAL)
@@ -1123,19 +1122,18 @@ class MC_5DOF_DLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         if result != MC_5DOF_DLL.SA_MC_OK:
-            raise SA_MCError(result)
+            raise SA_MCError(result, "Call to %s() failed with error 0x%x: %s" %
+                             (func.__name__, result, MC_5DOF_DLL.err_code.get(result, "")))
 
         return result
 
 
-class SA_MCError(Exception):
-    """
-    SA_MC Exception
-    """
+class SA_MCError(IOError):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(SA_MCError, self).__init__(errno, strerror, *args, **kwargs)
 
-    def __init__(self, error_code):
-        self.errno = error_code
-        super(SA_MCError, self).__init__("Error %d. %s" % (error_code, MC_5DOF_DLL.err_code.get(error_code, "")))
+    def __str__(self):
+        return self.strerror
 
 
 class MC_5DOF(model.Actuator):
@@ -1164,18 +1162,15 @@ class MC_5DOF(model.Actuator):
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
             The following axes must all be present:
-            x , y, z, rx, rz
-            note: internally in the driver, ry exists, but has a range of (0,0), so it
-            is not included here
+            x, y, z, rx, rz
+            Note: internally in the driver, ry exists, but has a range of (0,0),
+            so it is not included here.
 
             axis parameters: {
                 range: [float, float], default is -1 -> 1
-                unit: (str) default will be set to 'm'
+                unit: (str) default is "m" for x, y, z and "rad" for the r*
             }
         """
-        if not axes:
-            raise ValueError("Needs at least 1 axis.")
-
         if locator != "fake":
             self.core = MC_5DOF_DLL()
         else:
@@ -1200,35 +1195,32 @@ class MC_5DOF(model.Actuator):
             try:
                 axis_unit = axis_par['unit']
             except KeyError:
-                # check if linear
-                if axis_name in {'x', 'y', 'z'}:
-                    logging.info("Axis %s has no unit. Assuming m", axis_name)
-                    axis_unit = "m"
-                # otherwise must be a rotary axis
-                else:
-                    logging.info("Axis %s has no unit. Assuming rad", axis_name)
-                    axis_unit = "rad"
+                # m if linear, "rad" otherwise
+                axis_unit = "m" if axis_name in {'x', 'y', 'z'} else "rad"
+                logging.info("Axis %s has no unit. Assuming %s", axis_name, axis_unit)
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
 
         # Connect to the device
         self._id = c_uint32(MC_5DOF_DLL.SA_MC_INVALID_HANDLE)
-
         option_string = "model %d\n locator %s" % (MC_5DOF_DLL.hwModel, locator)
-                        
         options = c_char_p(option_string.encode("ascii"))
-
-        self.core.SA_MC_Open(byref(self._id), options)
+        try:
+            self.core.SA_MC_Open(byref(self._id), options)
+        except SA_MCError as ex:
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CONNECT_FAILED:
+                raise model.HwError("Failed to find device, check it is connected and turned on")
+            raise
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        # TODO: Fix getting software version with a supported function
-        self._swVersion = "Unknown"  # self.GetSwVersion()
+        # TODO: A way to query the DLL version?
+        self._swVersion = "Unknown"
 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
-        logging.debug("Using SA_MC library version %s", self._swVersion)
+        # logging.debug("Using SA_MC library version %s", self._swVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
@@ -1715,7 +1707,7 @@ class FakeMC_5DOF_DLL(object):
 
             logging.debug("sim MC5DOF: moving to target: %s" % (self.target,))
         else:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE)
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
 
     def SA_MC_GetPose(self, id, p_pose):
         pose = _deref(p_pose, SA_MC_Pose)
@@ -1741,26 +1733,26 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_SetProperty_f64(self, id, prop, val):
         if not prop.value in self.properties:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY)
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY, "error")
 
         self.properties[prop.value] = val
 
     def SA_MC_SetProperty_i32(self, id, prop, val):
         if not prop.value in self.properties:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY)
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY, "error")
 
         self.properties[prop.value] = val
 
     def SA_MC_GetProperty_f64(self, id, prop, p_val):
         if not prop.value in self.properties:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY)
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY, "error")
 
         val = _deref(p_val, c_double)
         val.value = self.properties[prop.value].value
 
     def SA_MC_GetProperty_i32(self, id, prop, p_val):
         if not prop.value in self.properties:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY)
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY, "error")
 
         val = _deref(p_val, c_int32)
         val.value = self.properties[prop.value].value
@@ -1880,6 +1872,25 @@ class SA_CTLDLL(CDLL):
     SA_CTL_ERROR_FEATURE_NOT_SUPPORTED = 0x7ffd
     SA_CTL_ERROR_FEATURE_NOT_IMPLEMENTED = 0x7ffe
 
+    SA_CTL_ERROR_DEVICE_LIMIT_REACHED = 0xf000
+    SA_CTL_ERROR_INVALID_LOCATOR = 0xf001
+    SA_CTL_ERROR_INITIALIZATION_FAILED = 0xf002
+    SA_CTL_ERROR_NOT_INITIALIZED = 0xf003
+    SA_CTL_ERROR_COMMUNICATION_FAILED = 0xf004
+    SA_CTL_ERROR_INVALID_QUERYBUFFER_SIZE = 0xf006
+    SA_CTL_ERROR_INVALID_DEVICE_HANDLE = 0xf007
+    SA_CTL_ERROR_INVALID_TRANSMIT_HANDLE = 0xf008
+    SA_CTL_ERROR_UNEXPECTED_PACKET_RECEIVED = 0xf00f
+    SA_CTL_ERROR_CANCELED = 0xf010
+    SA_CTL_ERROR_DRIVER_FAILED = 0xf013
+    SA_CTL_ERROR_BUFFER_LIMIT_REACHED = 0xf016
+    SA_CTL_ERROR_INVALID_PROTOCOL_VERSION = 0xf017
+    SA_CTL_ERROR_DEVICE_RESET_FAILED = 0xf018
+    SA_CTL_ERROR_BUFFER_EMPTY = 0xf019
+    SA_CTL_ERROR_DEVICE_NOT_FOUND = 0xf01a
+    SA_CTL_ERROR_THREAD_LIMIT_REACHED = 0xf01b
+    SA_CTL_ERROR_NO_APPLICATION = 0xf01c
+
     err_code = {
         0x0000: "NONE",
         0x0001: "UNKNOWN_COMMAND",
@@ -1959,15 +1970,27 @@ class SA_CTLDLL(CDLL):
         0x0500: "INTERNAL_COMMUNICATION",
         0x7ffd: "FEATURE_NOT_SUPPORTED",
         0x7ffe: "FEATURE_NOT_IMPLEMENTED",
+        0xf000: "DEVICE_LIMIT_REACHED",
         0xf001: "INVALID LOCATOR STRING",
+        0xf002: "INITIALIZATION_FAILED",
         0xf003: "NOT INITIALIZED",
         0xf004: "COMMUNICATION FAILED",
+        0xf006: "INVALID_QUERYBUFFER_SIZE",
         0xf007: "INVALID DEVICE HANDLE",
         0xf008: "INVALID TRANSMIT HANDLE",
+        0xf00f: "UNEXPECTED_PACKET_RECEIVED",
         0xf010: "CANCELLED",
         0xf013: "DRIVER FAILURE",
+        0xf016: "BUFFER_LIMIT_REACHED",
+        0xf017: "INVALID_PROTOCOL_VERSION",
+        0xf018: "DEVICE_RESET_FAILED",
+        0xf019: "BUFFER_EMPTY",
         0xf01a: "DEVICE_NOT_FOUND",
+        0xf01b: "THREAD_LIMIT_REACHED",
+        0xf01c: "NO_APPLICATION",
     }
+
+    SA_CTL_STRING_MAX_LENGTH = 63
 
     # device states
     SA_CTL_DEV_STATE_BIT_HM_PRESENT = 0x00000001
@@ -2173,13 +2196,17 @@ class SA_CTLDLL(CDLL):
             # Global so that its sub-libraries can access it
             CDLL.__init__(self, "libsmaractctl.so", RTLD_GLOBAL)
 
+        self.SA_CTL_GetFullVersionString.restype = c_char_p
+        self.SA_CTL_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
+
     def __getitem__(self, name):
         try:
             func = super(SA_CTLDLL, self).__getitem__(name)
         except Exception:
             raise AttributeError("Failed to find %s" % (name,))
         func.__name__ = name
-        func.errcheck = self.sp_errcheck
+        if func.errcheck is None:
+            func.errcheck = self.sp_errcheck
         return func
 
     @staticmethod
@@ -2190,19 +2217,17 @@ class SA_CTLDLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         if result != SA_CTLDLL.SA_CTL_ERROR_NONE:
-            raise SA_CTLError(result)
+            raise SA_CTLError(result, "Call to %s() failed with error 0x%x: %s" %
+                              (func.__name__, result, SA_CTLDLL.err_code.get(result, "")))
 
         return result
 
+class SA_CTLError(IOError):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(SA_CTLError, self).__init__(errno, strerror, *args, **kwargs)
 
-class SA_CTLError(Exception):
-    """
-    SA_CTL Exception
-    """
-
-    def __init__(self, error_code):
-        self.errno = error_code
-        super(SA_CTLError, self).__init__("Error 0x%x. %s" % (error_code, SA_CTLDLL.err_code.get(error_code, "")))
+    def __str__(self):
+        return self.strerror
 
 
 class MCS2(model.Actuator):
@@ -2233,6 +2258,7 @@ class MCS2(model.Actuator):
             axis parameters: {
                 range: [float, float], default is -1 -> 1
                 unit: (str) default will be set to 'm'
+                channel: (int) the corresponding axis number on the controller
             }
         """
         if not axes:
@@ -2271,20 +2297,26 @@ class MCS2(model.Actuator):
             self._axis_map[axis_name] = axis_channel
 
         # Connect to the device
-        self._id = c_uint32(0)
-
         logging.debug("Connecting to locator %s", locator)
-        self.core.SA_CTL_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(b""))
-        logging.debug("Successfully connected to SA_CTL Controller ID %d with %d channels", self._id.value, self.get_number_of_channels())
+        self._id = c_uint32(0)
+        try:
+            self.core.SA_CTL_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(b""))
+        except SA_CTLError as ex:
+            if ex.errno == SA_CTLDLL.SA_CTL_ERROR_DEVICE_NOT_FOUND:
+                raise model.HwError("Failed to find device, check it is connected and turned on")
+            raise
+        logging.debug("Connected to SA_CTL Controller ID %d with %d channels", self._id.value, self._get_number_of_channels())
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        self._swVersion = self.core.SA_CTL_GetFullVersionString()
-        self._hwVersion = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
+        self._swVersion = self.GetFullVersionString()
+        devname = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
+        sn = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER, 0)
+        self._hwVersion = "SmarAct %s (s/n %s)" % (devname, sn)
 
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
-        logging.debug("Using SA_CTL library version %s", self._swVersion)
+        logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
 
@@ -2295,9 +2327,9 @@ class MCS2(model.Actuator):
         axes_ref = {a: self._is_channel_referenced(i) for a, i in self._axis_map.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
-        # If ref_on_init, referenced immediately.
 
-        if all(referenced == True for _, referenced in axes_ref.items()):
+        # If ref_on_init, referenced immediately.
+        if all(referenced for _, referenced in axes_ref.items()):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
@@ -2334,15 +2366,19 @@ class MCS2(model.Actuator):
         b_len = 1024
         buf = create_string_buffer(b_len)
         core.SA_CTL_FindDevices(c_char_p(""), buf, byref(c_size_t(b_len)))
-        locators = buf.value.encode('string_escape')
+        locators = buf.value.encode('ascii')
 
         devices = set()
         for counter, loc in enumerate(locators):
-            devices.append(("MCS2 %d" % (counter,), {"locator": loc}))
+            devices.add(("MCS2 %d" % (counter,), {"locator": loc}))
 
         return devices
 
     # API Calls
+
+    def GetFullVersionString(self):
+        ver = self.core.SA_CTL_GetFullVersionString()
+        return ver.decode("latin1")
 
     # Functions to set the property values in the controller, categorized by data type
     def SetProperty_f64(self, property_key, idx, value):
@@ -2399,8 +2435,17 @@ class MCS2(model.Actuator):
         self.core.SA_CTL_GetProperty_i64(self._id, c_int8(idx), c_uint32(property_key), byref(ret_val), c_size_t(0))
         return ret_val.value
 
-    def get_number_of_channels(self):
-        return self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_NUMBER_OF_CHANNELS, 0)
+    def GetProperty_s(self, property_key, idx):
+        """
+        property_key (int32): property key symbol
+        idx (int): channel
+        returns (str): the value
+        """
+        ret_val = create_string_buffer(SA_CTLDLL.SA_CTL_STRING_MAX_LENGTH)
+        slen = c_size_t(len(ret_val))
+        self.core.SA_CTL_GetProperty_s(self._id, c_int8(idx), c_uint32(property_key),
+                                       ret_val, byref(slen))
+        return ret_val.value.decode("latin1")
 
     def Reference(self, channel):
         # Reference the controller. Note - this is asynchronous
@@ -2430,6 +2475,9 @@ class MCS2(model.Actuator):
         self.core.SA_CTL_Stop(self._id, c_int8(channel), c_int8(0))
 
     # Basic functions
+
+    def _get_number_of_channels(self):
+        return self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_NUMBER_OF_CHANNELS, 0)
 
     def _get_channel_state(self, channel):
         """
@@ -2811,6 +2859,8 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY: [1, 1, 1],
             SA_CTLDLL.SA_CTL_PKEY_MOVE_ACCELERATION: [1, 1, 1],
             SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
+            SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [b"Simulated"],
+            SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
         }
 
         self.target = [0, 0, 0]
@@ -2837,33 +2887,33 @@ class FakeMCS2_DLL(object):
     def SA_CTL_Close(self, id):
         logging.debug("sim MCS2: Closing MCS2 Sim")
 
-    def SA_CTL_GetFullVersionString(self,):
-        return "Fake MCS2 DLL Simulator"
+    def SA_CTL_GetFullVersionString(self):
+        return b"1.2.3.123"
 
     def SA_CTL_SetProperty_f64(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
     def SA_CTL_SetProperty_i32(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
     def SA_CTL_SetProperty_i64(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
     def SA_CTL_GetProperty_f64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         val = _deref(p_val, c_double)
         val.value = self.properties[property_key.value][ch.value]
 
     def SA_CTL_GetProperty_i32(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
 
         # Handle movement states before setting the value
         if property_key.value == SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE:
@@ -2884,8 +2934,13 @@ class FakeMCS2_DLL(object):
 
     def SA_CTL_GetProperty_i64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         val = _deref(p_val, c_int64)
+        val.value = self.properties[property_key.value][ch.value]
+
+    def SA_CTL_GetProperty_s(self, handle, ch, property_key, val, ioArraySize):
+        if not property_key.value in self.properties:
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         val.value = self.properties[property_key.value][ch.value]
 
     def SA_CTL_Reference(self, handle, ch, _):
@@ -2905,7 +2960,7 @@ class FakeMCS2_DLL(object):
                 logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
             self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
         else:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_RANGE_LIMIT_REACHED)
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_RANGE_LIMIT_REACHED, "error")
 
     def SA_CTL_Stop(self, handle, ch, _):
         self.stopping.set()
