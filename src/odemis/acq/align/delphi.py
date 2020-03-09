@@ -217,21 +217,9 @@ def _DoDelphiCalibration(future, main_data):
         raise CancelledError()
 
     try:
-        # We need access to the separate sem and optical stages, which form
-        # the "stage". They are not found in the model, but we can find them
-        # as children of stage (on the DELPHI), and distinguish them by
-        # their role.
-        sem_stage = None
-        opt_stage = None
-        logger.debug("Find SEM and optical stages...")
-        for c in main_data.stage.children.value:
-            if c.role == "sem-stage":
-                sem_stage = c
-            elif c.role == "align":
-                opt_stage = c
-
-        if not sem_stage or not opt_stage:
-            raise KeyError("Failed to find SEM and optical stages")
+        logger.debug("Looking for SEM and optical stages...")
+        sem_stage = model.getComponent(role="sem-stage")
+        opt_stage = model.getComponent(role="align")
 
         # Move to the overview position first
         f = main_data.chamber.moveAbs({"pressure": overview_pressure})
