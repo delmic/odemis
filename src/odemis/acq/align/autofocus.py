@@ -757,6 +757,74 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     return f
 
 
+def _cancelSparc2ManualFocus(future):
+    """
+    Canceller of _DoSparc2ManualFocus task.
+    """
+    logging.debug("Cancelling manual focus...")
+    if future._state == FINISHED:
+        return False
+    future._state = CANCELLED
+    return True
+
+
+def Sparc2ManualFocus(opm, bl, align_mode, toggled=True):
+    """
+    Provides the ability to check the progress of the Sparc2 manual focus
+    procedure in a Future or even cancel it.
+    :param opm: OpticalPathManager object
+    :param bl: bright light object
+    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
+    :param mf_toggled (bool): Toggle the manual focus button on/off
+    :return (ProgressiveFuture -> for the _DoSparc2ManualFocus function)
+    """
+    est_start = time.time() + 0.1
+    manual_focus_loading_time = 10  # Rough estimation of the slit movement
+    f = model.ProgressiveFuture(start=est_start, end=est_start + manual_focus_loading_time)
+    # The only goal for using a canceller is to make the progress bar stop
+    # as soon as it's cancelled.
+    f.task_canceller = _cancelSparc2ManualFocus
+    executeAsyncTask(f, _DoSparc2ManualFocus, args=(opm, bl, align_mode, toggled))
+    return f
+
+
+def _DoSparc2ManualFocus(opm, bl, align_mode, toggled=True):
+    """
+    The actual implementation of the manual focus procedure, run asynchronously
+    When the manual focus button is toggled:
+            - Turn on the light
+            - Change the optical path (closing the slit)
+    :param future: the future object that is used to represent the task
+    :param opm: OpticalPathManager object
+    :param bl: brightlight object
+    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus
+    :param mf_toggled (bool): Toggle the manual focus button on/off
+    """
+    # First close slit, then switch on calibration light
+    # Go to the special focus mode (=> close the slit)
+    f = opm.setPath(align_mode)
+    bl.power.value = bl.power.range[(1 * toggled)]  # When mf_toggled = False 1 will be 0
+    bl.emissions.value = [(1 * toggled)] * len(bl.emissions.value)
+    f.result()
+
+
+def GetSpectrometerFocusingDetectors(focuser):
+    """
+    Public wrapper around _getSpectrometerFocusingComponents to return detectors only
+    :param focuser: (Actuator) the focuser that will be used to change focus
+    :return: detectors (list of Detectors): the detectors attached on the
+          spectrograph, which can be used for focusing
+    """
+    dets = []
+    for n in focuser.affects.value:
+        try:
+            d = model.getComponent(name=n)
+        except LookupError:
+            continue
+        if d.role.startswith("ccd") or d.role.startswith("sp-ccd"):  # catches ccd*, sp-ccd*
+            dets.append(d)
+    return dets
+
 def _getSpectrometerFocusingComponents(focuser):
     """
     Finds the different components needed to run auto-focusing with the
@@ -769,15 +837,8 @@ def _getSpectrometerFocusingComponents(focuser):
         * selector (Actuator or None): the component to switch detectors
     raise LookupError: if not all the components could be found
     """
-    dets = []
-    for n in focuser.affects.value:
-        try:
-            d = model.getComponent(name=n)
-        except LookupError:
-            continue
-        if d.role.startswith("ccd") or d.role.startswith("sp-ccd"): # catches ccd*, sp-ccd*
-            dets.append(d)
 
+    dets = GetSpectrometerFocusingDetectors(focuser)
     if not dets:
         raise LookupError("Failed to find any detector for the spectrometer focusing")
 

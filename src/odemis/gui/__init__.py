@@ -57,6 +57,8 @@ ALERT_COLOUR = "#DD3939"
 SELECTION_COLOUR = FG_COLOUR_EDIT
 SELECTION_COLOUR_2ND = FG_COLOUR_2ND
 
+# Tint value for the Spectrograph line stream, to be used for adjusting the focus
+FOCUS_STREAM_COLOR = (0, 64, 255)  # colour it blue
 
 # END Colour definitions
 
