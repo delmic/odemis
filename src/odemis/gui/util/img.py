@@ -47,6 +47,7 @@ from odemis.model import DataArrayShadow
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
+MIN_AR_SIZE = 800  # px, minimum size the AR image is exported
 SPEC_PLOT_SIZE = 1024
 SPEC_SCALE_WIDTH = 150  # ticks + text vertically
 SPEC_SCALE_HEIGHT = 100  # ticks + text horizontally
@@ -229,7 +230,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, margin=0):
     center_y = client_size[1] / 2
     font_size = max(3, client_size[0] * SPEC_FONT_SIZE)
     inner_radius = min(center_x, center_y)
-    radius = inner_radius + (ticksize / 1.5)
+    radius = inner_radius + 1
     ticks = []
 
     # Top middle
@@ -708,8 +709,7 @@ def ar_to_export_data(projections, raw=False):
             the requested ebeam position will be returned in a dictionary. If only one polarization position
             is available, a 3D DataArray will be returned.
     """
-
-    # load logo for legend
+    # Logo for legend
     logo = "legend_logo_delmic_black.png"
 
     # we expect just one stream
@@ -721,70 +721,64 @@ def ar_to_export_data(projections, raw=False):
     projection = projections[0]
 
     if raw:  # csv
-        # single image for raw ar data (phi/theta representation) for one ebeam pos
+        # single image for raw AR data (phi/theta representation) for one ebeam pos
         # if multiple images per ebeam pos (e.g. polarization or polarimetry data): batch export
         return projection.projectAsRaw()
 
     else:  # png, tiff
-        # single image for visualized ar data for one ebeam pos
+        # single image for visualized AR data for one ebeam pos
         # batch export for polarization analyzer raw data and polarimetry results for one ebeam pos
         data_dict = projection.projectAsVis()
 
         # create the image with web overlay, legend etc.
-        for pol_mode in data_dict:
-            stream_im = data_dict[pol_mode]
+        for pol_mode, stream_im in data_dict.items():
             if stream_im is None:
                 raise LookupError("Stream %s has no data selected" % (projection.name.value,))
-            plot_im = format_rgba_darray(stream_im)  # RGB -> BGRA for cairo
-            # image is always centered, fitting the whole canvas, with scale 1
-            images = set_images([(plot_im, (0, 0), (1, 1), False, None, None, None, None,
-                                  projection.name.value, None, None, {})])
-            ar_margin = int(0.2 * stream_im.shape[0])
-            ar_size = stream_im.shape[0] + ar_margin, stream_im.shape[1] + ar_margin
+
+            if stream_im.shape[0] < MIN_AR_SIZE or stream_im.shape[1] < MIN_AR_SIZE:
+                # Increase the size of the image, to fit the minimum size
+                scale = MIN_AR_SIZE / min(stream_im.shape[:2])
+                im_scale = (scale, scale)
+            else:  # Use the image as-is, and adjust the overlay/legend size to fit
+                im_scale = (1.0, 1.0)
+
+            im_size = int(round(stream_im.shape[0] * im_scale[0])), int(round(stream_im.shape[1] * im_scale[1]))
+            ar_margin = int(0.2 * im_size[0])
+            buffer_size = im_size[0] + ar_margin, im_size[1] + ar_margin
 
             # Make surface based on the maximum resolution
-            data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
+            data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
             surface = cairo.ImageSurface.create_for_data(
-                data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
+                data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
 
-            im = images[0]
-            buffer_center = (-ar_margin / 2, ar_margin / 2)
-            buffer_scale = (1.0, 1.0)
-            buffer_size = stream_im.shape[0], stream_im.shape[1]
-
+            # image is always centered, fitting the whole canvas, with scale 1
+            plot_im = format_rgba_darray(stream_im)  # RGB -> BGRA for cairo
+            plot_im.metadata['dc_keepalpha'] = False
             draw_image(
                 ctx,
-                im,
-                im.metadata['dc_center'],
-                buffer_center,
-                buffer_scale,
-                buffer_size,
-                1.0,
-                rotation=im.metadata['dc_rotation'],
-                shear=im.metadata['dc_shear'],
-                flip=im.metadata['dc_flip'],
-                blend_mode=im.metadata['blend_mode'],
-                interpolate_data=False
+                plot_im,
+                p_im_center=(0, 0),
+                buffer_center=(0, 0),
+                buffer_scale=(1.0, 1.0),
+                buffer_size=buffer_size,
+                im_scale=im_scale,
+                interpolate_data=True
             )
 
             font_name = "Sans"
             ticksize = 10
             num_ticks = 6
-            ticks_info = ar_create_tick_labels(projection.image.value.shape, ticksize, num_ticks, int(ar_margin / 2))
+            ticks_info = ar_create_tick_labels(im_size, ticksize, num_ticks, int(ar_margin / 2))
             ticks, (center_x, center_y), inner_radius, radius = ticks_info
-            draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
+            draw_ar_frame(ctx, buffer_size, ticks, font_name, center_x, center_y, inner_radius, radius)
             draw_ar_spiderweb(ctx, center_x, center_y, radius)
 
             # draw legend
-            md = stream_im.metadata
-            img.mergeMetadata(md, im.metadata)
-            ar_plot = model.DataArray(data_to_draw, md)
-            date = stream_im.metadata[model.MD_ACQ_DATE]
-            buffer_size = ar_size[0], ar_size[1]
-            legend_rgb = draw_legend_simple(ar_plot, buffer_size, date,
+            date = stream_im.metadata.get(model.MD_ACQ_DATE)
+            legend_rgb = draw_legend_simple(stream_im, buffer_size, date,
                                             img_file=logo, bg_color=(1, 1, 1), text_color=(0, 0, 0))
-            data_with_legend = numpy.append(ar_plot, legend_rgb, axis=0)
+            data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
             data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]  # BGRA -> RGBA for exporter
             ar_plot_final = model.DataArray(data_with_legend, metadata={model.MD_DIMS: "YXC"})
             data_dict[pol_mode] = ar_plot_final
