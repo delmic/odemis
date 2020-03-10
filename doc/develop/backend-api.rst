@@ -294,8 +294,8 @@ example, a secondary electron detector, the CCD of a camera.
     .. py:attribute:: shape
 
         *(RO, list of ints)* maximum value of each dimension of the detector.
-        A greyscale CCD camera 2560x1920 with 12 bits intensity has a 3D shape *(2560, 1920, 2048)*.
-        A RGB camera has a shape of 4 values (eg, *(2560, 1920, 3, 2048)*)
+        A greyscale CCD camera 2560x1920 with 12 bits intensity has a 3D shape *(2560, 1920, 4096)*.
+        A RGB camera has a shape of 4 values (eg, *(2560, 1920, 3, 4096)*)
         The actual size of the data sent in the data-flow can be smaller
         (though it should always have the same number of dimensions)
         and found in the data-flow.
