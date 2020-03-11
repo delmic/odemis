@@ -236,7 +236,7 @@ def prepare_to_listen_to_more_vas(inc):
         resource.setrlimit(resource.RLIMIT_NOFILE, (cur_limit[0] + inc * FILES_PER_VA, cur_limit[1]))
     except ValueError:
         # this happens when starting odemis from eclipse
-        logging.warning("Maximum number of open files is already at its limit %s." % cur_limit[0])
+        logging.info("Maximum number of open files is already at its limit %s.", cur_limit[0])
 
 # Container management functions and class
 
