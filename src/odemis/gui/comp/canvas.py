@@ -138,7 +138,7 @@ from abc import abstractmethod
 import cairo
 from decorator import decorator
 import logging
-from odemis import util
+from odemis import util, gui
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
@@ -212,12 +212,7 @@ class BufferedCanvas(wx.Panel):
         # The main cursor is the default cursor when the mouse hovers over the canvas
         self.default_cursor = wx.STANDARD_CURSOR
         self.dynamic_cursor = None
-        # This is ugly, but there is no official "drag" cursor, and the best fitting
-        # one depends on the OS.
-        if sys.platform.startswith("linux"):
-            self._drag_cursor = wx.Cursor(wx.CURSOR_SIZENESW)
-        else:
-            self._drag_cursor = wx.Cursor(wx.CURSOR_SIZING)
+        self._drag_cursor = wx.Cursor(gui.DRAG_CURSOR)
 
         # Event Biding
 

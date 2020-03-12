@@ -930,7 +930,7 @@ class VisualRangeSlider(BaseSlider):
             if hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                 self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
             elif hover == gui.HOVER_SELECTION:
-                self.SetCursor(wx.Cursor(wx.CURSOR_SIZENESW)) # A closed hand!
+                self.SetCursor(wx.Cursor(gui.DRAG_CURSOR))
             else:
                 self.SetCursor(wx.STANDARD_CURSOR)
 
