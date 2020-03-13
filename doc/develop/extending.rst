@@ -95,8 +95,8 @@ and type the following::
 
     modprobe comedi comedi_num_legacy_minors=4
     modprobe comedi_test
-    chmod a+rw /dev/comedi0
     comedi_config /dev/comedi0 comedi_test 1000000,1000000
+    comedi_config /dev/comedi1 comedi_test 100000,100000
 
 Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
 it immediately by typing ``/etc/rc.local``.
@@ -185,7 +185,6 @@ For Python 2.7, open the *Anaconda prompt* and type::
 
    cd Documents\odemis
    conda create -y --name odemisdev python==2.7.16
-   conda create -y --name odemisdev python==3.6.8
    conda activate odemisdev
    conda config --append channels conda-forge
    # Edit requirements.txt and remove remove Pyro4
