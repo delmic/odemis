@@ -29,6 +29,7 @@ from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import test
 from odemis.util.test import assert_pos_almost_equal
 import os
+import time
 import unittest
 from unittest.case import skip
 
@@ -475,6 +476,24 @@ class Sparc2PathTestCase(unittest.TestCase):
         """
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
+
+    def test_queue(self):
+        """
+        Test changing path multiple times without waiting for it to be complete
+        """
+        tstart = time.time()
+        self.optmngr.setPath("cli")
+
+        # All these ones should get discarded
+        for i in range(5):
+            self.optmngr.setPath("ar")
+            self.optmngr.setPath("mirror-align")
+            self.optmngr.setPath("cli")
+
+        self.optmngr.setPath("ar").result()
+        dur = time.time() - tstart
+
+        self.assertLess(dur, 20, "Changing to CLI then AR mode took %s s > 20 s" % (dur,))
 
     # @skip("simple")
     def test_set_path(self):
