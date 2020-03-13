@@ -735,8 +735,9 @@ def ar_to_export_data(projections, raw=False):
             if stream_im is None:
                 raise LookupError("Stream %s has no data selected" % (projection.name.value,))
 
+            # Image is always centered, fitting the whole canvas (+ a margin of 10 %)
             if stream_im.shape[0] < MIN_AR_SIZE or stream_im.shape[1] < MIN_AR_SIZE:
-                # Increase the size of the image, to fit the minimum size
+                # Increase the size of the image to fit the minimum size
                 scale = MIN_AR_SIZE / min(stream_im.shape[:2])
                 im_scale = (scale, scale)
             else:  # Use the image as-is, and adjust the overlay/legend size to fit
@@ -746,15 +747,14 @@ def ar_to_export_data(projections, raw=False):
             ar_margin = int(0.2 * im_size[0])
             buffer_size = im_size[0] + ar_margin, im_size[1] + ar_margin
 
-            # Make surface based on the maximum resolution
+            # Create a cairo surface to draw the final image
             data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
             surface = cairo.ImageSurface.create_for_data(
                 data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
 
-            # image is always centered, fitting the whole canvas, with scale 1
             plot_im = format_rgba_darray(stream_im)  # RGB -> BGRA for cairo
-            plot_im.metadata['dc_keepalpha'] = False
+            plot_im.metadata['dc_keepalpha'] = False  # The alpha channel is garbage => don't use it
             draw_image(
                 ctx,
                 plot_im,
@@ -769,12 +769,12 @@ def ar_to_export_data(projections, raw=False):
             font_name = "Sans"
             ticksize = 10
             num_ticks = 6
-            ticks_info = ar_create_tick_labels(im_size, ticksize, num_ticks, int(ar_margin / 2))
+            ticks_info = ar_create_tick_labels(im_size, ticksize, num_ticks, ar_margin / 2)
             ticks, (center_x, center_y), inner_radius, radius = ticks_info
             draw_ar_frame(ctx, buffer_size, ticks, font_name, center_x, center_y, inner_radius, radius)
             draw_ar_spiderweb(ctx, center_x, center_y, radius)
 
-            # draw legend
+            # Draw legend
             date = stream_im.metadata.get(model.MD_ACQ_DATE)
             legend_rgb = draw_legend_simple(stream_im, buffer_size, date,
                                             img_file=logo, bg_color=(1, 1, 1), text_color=(0, 0, 0))
