@@ -269,6 +269,7 @@ class OneTaskExecutor(ThreadPoolExecutor):
     def __init__(self, thread_name_prefix=''):
         super(OneTaskExecutor, self).__init__(max_workers=1, thread_name_prefix=thread_name_prefix)
 
+    # Override ThreadPoolExecutor.submit()
     def submit(self, fn, *args, **kwargs):
         # Cancels all the previous tasks which didn't start yet
         # Note: in practice, there should be only one task at most queued.
@@ -279,7 +280,8 @@ class OneTaskExecutor(ThreadPoolExecutor):
             except queue.Empty:
                 break
 
-        return ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
+        # Add this new function call to the _work_queue
+        return super(OneTaskExecutor, self).submit(fn, *args, **kwargs)
 
 
 # TODO: Could be moved to util
