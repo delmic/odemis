@@ -20,10 +20,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import sys
 import wx.lib.newevent
 
 # Colour definitions
-
 # Background colours
 BG_COLOUR_MAIN = "#333333"      # Default dark background
 BG_COLOUR_STREAM = "#4D4D4D"    # Stream panel background
@@ -62,6 +62,12 @@ FOCUS_STREAM_COLOR = (0, 64, 255)  # colour it blue
 
 # END Colour definitions
 
+# This is ugly, but there is no official "drag" cursor, and the best fitting
+# one depends on the OS. Ideally, we want a "closed hand".
+if sys.platform.startswith("linux"):
+    DRAG_CURSOR = wx.CURSOR_SIZENESW
+else:  # Windows
+    DRAG_CURSOR = wx.CURSOR_SIZING
 
 # Control types
 

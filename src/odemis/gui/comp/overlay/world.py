@@ -228,7 +228,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:
-                    self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 elif self.hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZEWE)
                 elif self.hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -1542,7 +1542,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
             if not self.dragging:
                 if self.hover in (gui.HOVER_START, gui.HOVER_END, gui.HOVER_LINE):
-                    self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
             else:
@@ -2158,7 +2158,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
     def on_left_down(self, evt):
         if self.active:
             DragMixin._on_left_down(self, evt)
-            self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
+            self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
         else:
             WorldOverlay.on_left_down(self, evt)
 
