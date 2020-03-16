@@ -33,7 +33,6 @@ from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
-from odemis.util import driver
 import sys
 import threading
 import traceback
@@ -77,12 +76,6 @@ class OdemisGUIApp(wx.App):
 
         l = logging.getLogger()
         self.log_level = l.getEffectiveLevel()
-
-        if not self._is_standalone:
-            try:
-                driver.speedUpPyroConnect(model.getMicroscope())
-            except Exception:
-                logging.exception("Failed to speed up start up")
 
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
@@ -135,11 +128,6 @@ class OdemisGUIApp(wx.App):
                 if microscope.role == "delphi":
                     gui.logo = img.getBitmap("logo_delphi.png")
                     gui.legend_logo = "legend_logo_delphi.png"
-
-        logging.info("\n\n************  Starting Odemis GUI  ************\n")
-        logging.info("Odemis GUI v%s (from %s) using Python %d.%d",
-                     odemis.__version__, __file__, sys.version_info[0], sys.version_info[1])
-        logging.info("wxPython v%s", wx.version())
 
         # TODO: if microscope.ghost is not empty => wait and/or display a special
         # "hardware status" tab.
@@ -487,6 +475,11 @@ def main(args):
             GLib.set_prgname(name)
         except Exception:
             logging.info("Failed to set WM_CLASS")
+
+    logging.info("\n\n************  Starting Odemis GUI  ************\n")
+    logging.info("Odemis GUI v%s (from %s) using Python %d.%d",
+                 odemis.__version__, __file__, sys.version_info[0], sys.version_info[1])
+    logging.info("wxPython v%s", wx.version())
 
     # Create application
     app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
