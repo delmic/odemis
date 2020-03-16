@@ -26,6 +26,7 @@ from __future__ import division
 import cairo
 from decorator import decorator
 import logging
+import numpy
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import DataProjection
@@ -38,7 +39,7 @@ from odemis.gui.util.img import format_rgba_darray
 from odemis.util import units, limit_invocation
 import scipy.ndimage
 import time
-import numpy
+import weakref
 import wx
 from wx.lib.imageutils import stepColour
 import wx.lib.newevent
@@ -126,8 +127,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.focus_timer = None
 
-        # Simple image caching dictionary {obj_id: rgb image}
-        self.images_cache = {}
+        # Image caching "dictionary": list of (weakref to DataArray, rgba image)
+        # Cannot use a normal dict because the DataArrays (numpy.arrays) are not
+        # hashable, so cannot they be used as keys of a dict.
+        self._images_cache = []
 
         self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
         self.roa_overlay = None
@@ -151,6 +154,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_data.tool.unsubscribe(self._on_tool)
             tab_data.main.debug.unsubscribe(self._on_debug)
             self._tab_data_model = None
+
+    def clear(self):
+        super(DblMicroscopeCanvas, self).clear()
+        # Reclaim some memory
+        self._images_cache = []
 
     # Ability manipulation
 
@@ -458,6 +466,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         return images_opt + images_std + images_spc
 
+    def _format_rgba_darray_cached(self, da):
+        """
+        Return the RGBA version of a RGB(A) DataArray, optimized by re-using a
+        the previous computed output (stored in ._images_cache)
+        """
+        for wda, rgba_da in self._images_cache:
+            if wda() is da:
+                return rgba_da
+        return format_rgba_darray(da)
+
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as the canvas
         currently expects.
@@ -467,8 +485,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # add the images in order
         ims = []
-        im_cache = {}
-        images_cache = {}
+        im_cache = []
         for rgbim, blend_mode, name, _ in images:
             if isinstance(rgbim, tuple): # tuple of tuple of tiles
                 if len(rgbim) == 0 or len(rgbim[0]) == 0:
@@ -479,12 +496,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 for tile_column in rgbim:
                     new_array_col = []
                     for tile in tile_column:
-                        tile_id = id(tile)
-                        if tile_id in self.images_cache:
-                            rgba_tile = self.images_cache[tile_id]
-                        else:
-                            rgba_tile = format_rgba_darray(tile)
-                        images_cache[tile_id] = rgba_tile
+                        rgba_tile = self._format_rgba_darray_cached(tile)
+                        im_cache.append((weakref.ref(tile), rgba_tile))
                         new_array_col.append(rgba_tile)
                         rgba_tile.metadata = md
                     new_array.append(tuple(new_array_col))
@@ -498,12 +511,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             else:
                 # Get converted RGBA image from cache, or create it and cache it
                 # On large images it costs 100 ms (per image and per canvas)
-                im_id = id(rgbim)
-                if im_id in self.images_cache:
-                    rgba_im = self.images_cache[im_id]
-                else:
-                    rgba_im = format_rgba_darray(rgbim)
-                im_cache[im_id] = rgba_im
+                rgba_im = self._format_rgba_darray_cached(rgbim)
+                im_cache.append((weakref.ref(rgbim), rgba_im))
 
                 md = rgbim.metadata
                 pos = md[model.MD_POS]
@@ -514,7 +523,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             flip = md.get(model.MD_FLIP, 0)
 
             # Replace the old cache, so the obsolete RGBA images can be garbage collected
-            self.images_cache = im_cache
+            self._images_cache = im_cache
 
             keepalpha = False
             ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
