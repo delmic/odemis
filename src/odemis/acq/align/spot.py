@@ -349,6 +349,7 @@ def FindGridSpots(image, repetition):
     translation : tuple of two floats
     scaling : tuple of two floats
     rotation : float
+    shear : float
 
     """
     spot_positions = MaximaFind(image, repetition[0] * repetition[1])
@@ -371,8 +372,7 @@ def FindGridSpots(image, repetition):
     pos_sorted = spot_positions[ii.ravel(), :]
     transformation = AffineTransform.from_pointset(grid, pos_sorted)
     spot_coordinates = transformation(grid)
-
-    return spot_coordinates, translation, transformation.scale, transformation.rotation
+    return spot_coordinates, translation, transformation.scale, transformation.rotation, transformation.shear
 
 
 def CropFoV(ccd, dfbkg=None):

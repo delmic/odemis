@@ -51,10 +51,11 @@ class VideoDisplayerGrid(VideoDisplayer):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        self.app.spots, trans, scale, rot = FindGridSpots(data, self.gridsize)
+        self.app.spots, trans, scale, rot, shear = FindGridSpots(data, self.gridsize)
         self.app.translation = trans[0], data.shape[0] - trans[1]
         self.app.scale = scale
         self.app.rotation = -rot
+        self.app.shear = shear
 
         super(VideoDisplayerGrid, self).new_image(data)
 
@@ -115,6 +116,7 @@ class ImageWindowApp(wx.App):
             "pitch-y: {:.2f} um".format(PIXEL_SIZE_UM * self.scale[1]),
             "translation-x: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[0]),
             "translation-y: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[1]),
+            "shear: {:.5f} ".format(self.shear),
         ]
         ctx2 = cairo.Context(text_surface)
         ctx2.set_source_rgb(1.00, 0.83, 0.00)
