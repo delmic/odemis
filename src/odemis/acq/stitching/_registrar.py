@@ -726,28 +726,21 @@ class GlobalShiftRegistrar(object):
                     adj.append([j, shifts[j][i]])
             adj_list[i] = adj
 
-        positions = {0: (0, 0)}
+        positions = numpy.zeros((num_rows, num_cols, 2))  # start with no shift for each tile
+        positions_flat = positions.reshape((num_rows * num_cols, 2))  # the tiles in the "idx" notation
         idx_queue = deque([0])  # start with index 0
+        idx_done = set()  # set of positions that have already been updated
         while idx_queue:
             key = idx_queue.popleft()
             for next_idx, shift in adj_list[key]:
-                if not next_idx in positions.keys():
+                if next_idx not in idx_done:  # don't consider positions that have already been dealt with
                     if next_idx > key:
-                        positions[next_idx] = numpy.add(positions[key], shift)
+                        positions_flat[next_idx] = numpy.add(positions_flat[key], shift)
                     else:
-                        positions[next_idx] = numpy.subtract(positions[key], shift)
+                        positions_flat[next_idx] = numpy.subtract(positions_flat[key], shift)
 
+                    idx_done.add(next_idx)
                     if next_idx not in idx_queue:
                         idx_queue.append(next_idx)
 
-        # If there are any tiles missing in the grid, add position None, so we can still
-        # reshape the array and get an output
-        for i in range(num_rows * num_cols):
-            if i not in positions:
-                positions[i] = [None, None]
-
-        # Sort positions by key
-        positions = sorted(positions.items(), key=lambda x: x[0])
-        # Select values and convert to numpy.array
-        positions = numpy.array([p[1] for p in positions])
-        return positions.reshape([num_rows, num_cols, 2])
+        return positions
