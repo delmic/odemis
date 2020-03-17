@@ -66,7 +66,7 @@ def _doTurnOnLight(f, bl, ccd):
         # We need the light to be off, so that we can notice a difference when
         # it turns on.
         # In case it's already turned on, just assume everything is fine.
-        if bl.emissions.value[0] * bl.power.value != 0:
+        if sum(bl.power.value) > 0:
             logging.debug("The light is already on")
             return
         if f._task_state == CANCELLED:
@@ -81,7 +81,6 @@ def _doTurnOnLight(f, bl, ccd):
         logging.debug("Looking for intensity of %s in an %s image", intensity_min_on, img_light_off.shape)
         # Turn the light on, full power!
         bl.power.value = bl.power.range[1]
-        bl.emissions.value = [1] * len(bl.emissions.value)
         while True:
             img2 = ccd.data.get()
             try:

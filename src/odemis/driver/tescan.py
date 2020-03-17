@@ -38,7 +38,7 @@ from tescan import sem, CancelledError
 import threading
 import time
 import weakref
-
+from past.builtins import long
 
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2
@@ -1491,13 +1491,11 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self._shape = ()
-        self.power = model.FloatContinuous(10., (0., 10.), unit="W")
+        self.power = model.ListContinuous([10., ], (0., 10.), unit="W", cls=(int, long, float),)
         # turn on when initializing
         self.parent._device.ChamberLed(1)
         self.power.subscribe(self._updatePower)
         # just one band: white
-        # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
-        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
@@ -1505,7 +1503,7 @@ class Light(model.Emitter):
     def _updatePower(self, value):
         # Switch the chamber LED based on the power value (On in case of max,
         # off in case of min)
-        if value == self.power.range[1]:
+        if value[0] == self.power.range[1]:
             self.parent._device.ChamberLed(1)
         else:
             self.parent._device.ChamberLed(0)

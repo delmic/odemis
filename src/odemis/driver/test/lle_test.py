@@ -77,14 +77,11 @@ class TestStatic(unittest.TestCase):
         dev = CLASS(**KWARGS)
 
         # should start off
-        self.assertEqual(dev.power.value, 0)
+        self.assertEqual(dev.power.value, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
         # turn on first source to 50%
-        dev.power.value = dev.power.range[1]
-        em = dev.emissions.value
-        em[0] = 0.5
-        dev.emissions.value = em
-        self.assertGreater(dev.emissions.value[0], 0)
+        dev.power.value[0] = dev.power.range[1][0] * 0.5
+        self.assertGreater(dev.power.value[0], 0)
 
         dev.terminate()
 
@@ -94,14 +91,11 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "Device self-test failed.")
 
         # should start off
-        self.assertEqual(dev.power.value, 0)
+        self.assertEqual(dev.power.value, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        # turn on green (1) to 50%
-        dev.power.value = dev.power.range[1]
-        em = dev.emissions.value
-        em[1] = 0.5
-        dev.emissions.value = em
-        self.assertGreater(dev.emissions.value[1], 0)
+        # turn on first source to 50%
+        dev.power.value[1] = dev.power.range[1][1] * 0.5
+        self.assertGreater(dev.power.value[1], 0)
 
         dev.terminate()
 
@@ -118,14 +112,11 @@ class TestLLE(unittest.TestCase):
         self.assertTrue(self.dev.selfTest(), "Device self-test failed.")
 
         # should start off
-        self.assertEqual(self.dev.power.value, 0)
+        self.assertEqual(self.dev.power.value, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
         # turn on first source to 50%
-        self.dev.power.value = self.dev.power.range[1]
-        em = self.dev.emissions.value
-        em[0] = 0.5
-        self.dev.emissions.value = em
-        self.assertGreater(self.dev.emissions.value[0], 0)
+        self.dev.power.value[0] = self.dev.power.range[1][0] * 0.5
+        self.assertGreater(self.dev.power.value[0], 0)
 
     def test_multi(self):
         """simultaneous source activation
@@ -133,55 +124,49 @@ class TestLLE(unittest.TestCase):
         simultaneously as other sources.
         """
         # should start off
-        self.assertEqual(self.dev.power.value, 0)
-
+        self.assertEqual(self.dev.power.value, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         # Easiest way is to depend on internal attribute, but we could also check
         # the peak wavelength of .spectra.value and find out which id is which colour
 
         # turn on 3 sources at the same time (which are possible)
-        self.dev.power.value = self.dev.power.range[1]
-        em = [0] * len(self.dev.emissions.value)
+        pw = self.dev.power.value
         for i in self.dev._rcubt[0:3]:
-            em[i] = 0.1 + 0.1 * i
-        self.dev.emissions.value = em
-        self.assertEqual(self.dev.emissions.value, em)
+            pw[i] = 0.1 + 0.01 * i
+            self.dev.power.value[i] = pw[i]
+        self.assertEqual(self.dev.power.value, pw)
 
         # turn on yellow source very strong => all the other ones should be shut
         yellow_i = self.dev._source_id.index(4)
-        em[yellow_i] = 1
-        self.dev.emissions.value = em
-        exp_em = [0] * len(em)
-        exp_em[yellow_i] = 1
-        self.assertEqual(self.dev.emissions.value, exp_em)
+        pw[yellow_i] = self.dev.power.range[1][yellow_i]
+        self.dev.power.value = pw
+        exp_em = [0.] * len(pw)
+        exp_em[yellow_i] = self.dev.power.range[1][yellow_i]
+        self.assertEqual(self.dev.power.value, exp_em)
 
         # turn on all the sources => at least one should be on
-        self.dev.emissions.value = [1 for e in em]
-        self.assertTrue(any(self.dev.emissions.value))
+        self.dev.power.value = self.dev.power.range[1]
+        self.assertTrue(any(self.dev.power.value))
 
     def test_cycle(self):
         """
-        Test each emission source for 2 seconds at maximum intensity and then 1s
+        Test each power source for 2 seconds at maximum intensity and then 1s
         at 30%.
         """
-        em = [0] * len(self.dev.emissions.value)
-        self.dev.power.value = self.dev.power.range[1]
+        self.dev.power.value = self.dev.power.range[0]
 
         # can fully checked only by looking what the hardware is doing
-        print("Starting emission source cycle...")
-        for i in range(len(em)):
+        print("Starting power source cycle...")
+        for i in range(len(self.dev.power.value)):
             print("Turning on wavelength %g" % self.dev.spectra.value[i][2])
-            em[i] = 1
-            self.dev.emissions.value = em
+            self.dev.power.value[i] = self.dev.power.range[1][i]
             time.sleep(1)
-            self.assertEqual(self.dev.emissions.value, em)
-            em[i] = 0.3
-            self.dev.emissions.value = em
+            self.assertEqual(self.dev.power.value[i], self.dev.power.range[1][i])
+            self.dev.power.value[i] = self.dev.power.range[1][i] * 0.3
+            self.assertEqual(self.dev.power.value[i], self.dev.power.range[1][i] * 0.3)
             time.sleep(1)
-            self.assertEqual(self.dev.emissions.value, em)
             # value so small that it's == 0 for the hardware
-            self.dev.emissions.value[i] = 1e-8
-            em[i] = 0
-            self.assertEqual(self.dev.emissions.value, em)
+            self.dev.power.value[i] = self.dev.power.range[1][i] * 1e-8
+            self.assertEqual(self.dev.power.value[i], 0.0)
 
 
 if __name__ == "__main__":

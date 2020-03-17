@@ -18,7 +18,8 @@ from __future__ import division
 
 import logging
 from odemis import model
-
+from past.builtins import long
+import copy
 
 class MultiplexLight(model.Emitter):
     """
@@ -45,93 +46,54 @@ class MultiplexLight(model.Emitter):
         model.Emitter.__init__(self, name, role, dependencies=dependencies, **kwargs)
         self._shape = ()
 
-        self._child_idx = {} # Emitter -> index (shift) in the emissions/spectra
+        self._child_idx = {} # Emitter -> index (shift) in the power/spectra
 
         spectra = []
+        max_power = []
         for n, child in dependencies.items():
             if not (model.hasVA(child, "power") and
-                    model.hasVA(child, "emissions") and
                     model.hasVA(child, "spectra")
                    ):
                 raise ValueError("Child %s is not a light emitter" % (n,))
             self._child_idx[child] = len(spectra)
             spectra.extend(child.spectra.value)
-            # TODO: update emissions whenever the child emissions change
+            max_power.extend(child.power.range[1])
+            # Subscribe to each child power to update self.power
+            child.power.subscribe(self._updateMultiplexPower)
 
         # Child with the maximum power range
-        max_power = max(c.power.range[1] for c in self.dependencies.value)
-        self.power = model.FloatContinuous(0, (0., max_power), unit="W")
-        self.power.subscribe(self._updatePower)
-
+        self.power = model.ListContinuous(value=[0.0] * len(max_power),
+                                          range=(tuple([0.0] * len(max_power)), tuple(max_power),),
+                                          unit="W", cls=(int, long, float),)
+        self.power.subscribe(self._updateChildPower)
+        self._updateMultiplexPower(None)
         # info on which source is which wavelength
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
-        # It needs .spectra and .power
-        pwr, em = self._readPwrEmissions()
-        self.power._value = pwr
-
-        # ratio of power per source
-        # if some source don't support max power, clamped before 1
-        self.emissions = model.ListVA(em, unit="", setter=self._setEmissions)
-
-    def _updatePower(self, power):
+    def _updateChildPower(self, power):
+        """
+        Whenever the self.power changes, the .power of the correct dependency is adjusted accordingly
+        """
+        # Prevent re-updating child power if power values are the same
+        # To avoid infinite loop from alternating subscriber calls
+        child_power = []
+        for child in self._child_idx.keys():
+            child_power.extend(child.power.value)
+        if power == child_power:
+            return
+        # Update child powers with new values
+        power = copy.copy(power)  # Not to be attached to self.power.value
         for child, idx in self._child_idx.items():
-            cpwr = child.power.range[1] * power / self.power.range[1]
-            child.power.value = child.power.clip(cpwr)
-            logging.debug("Setting %s as %g W => %g W",
-                          child.name, power, cpwr)
+            child.power.value = power[idx:idx+len(child.power.value)]
+            logging.debug("Setting %s as %s W",
+                          child.name, str(child.power.value))
 
-    def _readPwrEmissions(self):
+    def _updateMultiplexPower(self, _):
         """
-        Compute what should be the .power and .emissions value, based on the
-        values from all the dependencies.
+        Whenever the .power of a dependency changes, the self.power is updated appropriately
         """
-        pwr_ratio = max(c.power.value / c.power.range[1] for c in self.dependencies.value)
-        pwr = self.power.range[1] * pwr_ratio
-        em = [0] * len(self.spectra.value)
         for child, idx in self._child_idx.items():
-            # Compensate for the fact that not all dependencies have the same max power
-            if pwr > 0:
-                pratio = child.power.value / pwr
-            else:
-                pratio = child.power.range[1] / self.power.range[1]
-            for i, e in enumerate(child.emissions.value):
-                em[idx + i] = e * pratio
-                logging.debug("Read em %d as %s * %g W => %s * %g W",
-                              idx + i, e, child.power.value, em[idx + i], pwr)
-        return pwr, em
-
-#     def _updateEmissions(self):
-#         """
-#         Called when the emission of one of the dependencies changes.
-#         Update the emissions from all the dependencies
-#         """
-#         # TODO: do not call the setter in such case, but it's a little tricky
-#         # because emissions is a ListVA, which has a special _set_value (which
-#         # converts the list to a NotifyingList)
-#         em = self._readEmissions()
-#         if em != self.emissions.value:
-#             self.emissions.value = em
-
-    def _setEmissions(self, intensities):
-        """
-        intensities (list of N floats [0..1]): intensity of each source
-        """
-        if len(intensities) != len(self.spectra.value):
-            raise ValueError("Emission must be an array of %d floats." % len(self.spectra.value))
-
-        for child, idx in self._child_idx.items():
-            em = intensities[idx:(idx + len(child.emissions.value))]
-            pratio = self.power.range[1] / child.power.range[1] # >= 1
-            cem = [min(max(0, e * pratio), 1) for e in em]
-            logging.debug("Setting %s as %s * %g W => %s * %g W",
-                          child.name, em, self.power.range[1], cem, child.power.range[1])
-            child.emissions.value = cem
-
-        # Read back the emissions, which might have been clamped
-        pwr, em = self._readPwrEmissions()
-        # TODO: what to do if power is different from the current value? That shouldn't happen, right?
-        return em
+            self.power.value[idx:idx+len(child.power.value)] = child.power.value[:]
 
 
 class ExtendedLight(model.Emitter):
@@ -157,8 +119,7 @@ class ExtendedLight(model.Emitter):
             raise ValueError("Child %s is not an emitter." % (self._light.name,))
         if not model.hasVA(self._light, 'power'):
             raise ValueError("Child %s has no power VA." % (self._light.name,))
-        if not model.hasVA(self._light, 'emissions'):
-            raise ValueError("Child %s has no emissions VA." % (self._light.name,))
+
         # Clock generator
         try:
             self._clock = dependencies["clock"]
@@ -173,22 +134,17 @@ class ExtendedLight(model.Emitter):
         self.period = self._clock.period
 
         # All the other VAs are straight from the light
-        self.emissions = self._light.emissions
         self.spectra = self._light.spectra
         self.power = self._light.power
 
         # Turn off/on the power of the clock based on the light power
-        self.emissions.subscribe(self._onEmissions)
         self.power.subscribe(self._onPower)
 
-    def _updateClockPower(self, power, emissions):
-        if any((em * power) > 0 for em in emissions):
+    def _onPower(self, power):
+        """
+        Update clock power if any power source is activated
+        """
+        if any(p > 0 for p in power):
             self._clock.power.value = 1
         else:
             self._clock.power.value = 0
-
-    def _onEmissions(self, em):
-        self._updateClockPower(self.power.value, em)
-
-    def _onPower(self, power):
-        self._updateClockPower(power, self.emissions.value)

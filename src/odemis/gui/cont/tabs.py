@@ -328,10 +328,11 @@ class SecomStreamsTab(Tab):
                                       )
 
             # Set some nice default values
-            if conf_set_stream.emtPower.value == 0 and hasattr(conf_set_stream.emtPower, "range"):
+            if conf_set_stream.power.value == 0 and hasattr(conf_set_stream.power, "range"):
                 # cf StreamBarController._ensure_power_non_null()
                 # Default to power = 10% (if 0)
-                conf_set_stream.emtPower.value = conf_set_stream.emtPower.range[1] * 0.1
+                conf_set_stream.power.value = conf_set_stream.power.range[1] * 0.1
+
             # TODO: the period should always be set to the min? And not even be changed?
             if hasattr(conf_set_stream, "emtPeriod"):
                 # Use max frequency
@@ -2032,11 +2033,11 @@ class AnalysisTab(Tab):
         # if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
         # Show the 1 x 1 view if:
-        # - the streams are all the same in every view 
+        # - the streams are all the same in every view
         # - views are empty with no projection
-        
+
         def projection_list_eq(list1, list2):
-            """ Returns true if two projection lists are the same, 
+            """ Returns true if two projection lists are the same,
             i.e. they are projecting the same streams, even if the objects are different
             list1 (list of Projections)
             list2 (list of Projections) to be
@@ -2044,7 +2045,7 @@ class AnalysisTab(Tab):
 
             if len(list1) != len(list2):
                 return False
-            
+
             # since it is impossible to order the lists, use O(n²) comparison
             # each proj in list1 should have at least one match in list2
             for proj1 in list1:
@@ -2055,7 +2056,7 @@ class AnalysisTab(Tab):
                         break
                 else:  # no projection identical to proj1 found
                     return False
-                
+
             # all projections identical
             return True
 
@@ -3586,8 +3587,6 @@ class Sparc2AlignTab(Tab):
 
         if main_data.brightlight:
             # Make sure the calibration light is off
-            emissions = [0.] * len(main_data.brightlight.emissions.value)
-            main_data.brightlight.emissions.value = emissions
             main_data.brightlight.power.value = main_data.brightlight.power.range[0]
 
         # Bind moving buttons & keys
@@ -4414,7 +4413,6 @@ class Sparc2AlignTab(Tab):
             bl = main.brightlight
             if bl:
                 bl.power.value = bl.power.range[0]
-                bl.emissions.value = [0] * len(bl.emissions.value)
 
             if main.lens_mover:
                 main.lens_mover.position.unsubscribe(self._onLensPos)

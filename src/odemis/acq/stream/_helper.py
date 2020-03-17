@@ -1481,19 +1481,19 @@ class ScannedTCSettingsStream(RepetitionStream):
         self._append(d, date)
         self._shouldUpdateImage()
         
-    def _setEmission(self, value):
-        # set all light emissions at once to a value
-        em = self.emitter.emissions.value
-        em = [value] * len(em)
-        self.emitter.emissions.value = em
+    def _setPower(self, value):
+        # set all light power at once to a value
+        pw = list(self.emitter.power.range[1])
+        pw = [value * p for p in pw]
+        self.emitter.power.value = pw
 
     def _onActive(self, active):
         if active: 
-            # set emissions
-            self._setEmission(1)
+            # set power values
+            self._setPower(1)
         else:
-            # stop emissions
-            self._setEmission(0)
+            # stop power values
+            self._setPower(0)
             
         RepetitionStream._onActive(self, active)
 

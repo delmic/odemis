@@ -666,7 +666,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_IN_WL: (500e-9, 522e-9),  # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_USER_TINT: (255, 0, 65), # purple
-                     model.MD_LIGHT_POWER: 100e-3 # W
+                     model.MD_LIGHT_POWER: 100e-3  # W
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -752,7 +752,7 @@ class TestTiffIO(unittest.TestCase):
                 owl = im.metadata[model.MD_OUT_WL]  # nm
                 self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
                                  owl[1] <= md[model.MD_OUT_WL][-1]))
-                if model.MD_LIGHT_POWER in md:
+                if model.MD_LIGHT_POWER in md and model.MD_LIGHT_POWER in im:
                     self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
                 self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))

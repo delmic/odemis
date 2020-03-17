@@ -1121,6 +1121,33 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
                     (axis, v, self._range[0], self._range[1]))
 
 
+class ListContinuous(ListVA, Continuous):
+    def __init__(self, value, range, unit="", cls=None, **kwargs):
+        """
+        range (2 x tuple): minimum and maximum size for each dimension
+        cls (class or list of classes): classes allowed for each element of the tuple
+          default to the same class as the first element
+        """
+        if not isinstance(value, list):
+            raise ValueError("value (%s) is not a list" % (value,))
+        self._cls = cls or value[0].__class__
+        Continuous.__init__(self, range)
+        ListVA.__init__(self, value, unit=unit, **kwargs)
+
+    def _set_value(self, value, **kwargs):
+        # force list
+        value = list(value)
+        ListVA._set_value(self, value, **kwargs)
+    # need to overwrite the whole property
+    value = property(ListVA._get_value, _set_value, ListVA._del_value,
+                     "The actual value")
+
+    def _check(self, value):
+        if not all(isinstance(v, self._cls) for v in value):
+            msg = "Value '%s' must be a list only consisting of types %s."
+            raise TypeError(msg % (value, self._cls))
+        Continuous._check(self, value)
+
 class TupleContinuous(VigilantAttribute, Continuous):
     """
     VigilantAttribute which contains tuple of fixed length and has all the

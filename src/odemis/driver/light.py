@@ -23,7 +23,7 @@ from __future__ import division, absolute_import
 
 import logging
 from odemis import model
-
+from past.builtins import long
 
 class Light(model.Emitter):
     """
@@ -37,30 +37,15 @@ class Light(model.Emitter):
         self.powerSupply.value = False  # immediately turn it off
 
         self._shape = ()
-        self.power = model.FloatContinuous(0., (0., 10.), unit="W")
+        self.power = model.ListContinuous([0., ], ((0.,), (10.,)), unit="W", cls=(int, long, float),)
         self.power.subscribe(self._updatePower)
         # just one band: white
-        # In general emissions is list of 0 <= floats <= 1. Here it's just one value, either 0 or 1.
-        self.emissions = model.ListVA([0], unit="", setter=self._setEmissions)
-        self.emissions.subscribe(self._updatePower)
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
 
-    def _setEmissions(self, em):
-        if len(em) != 1:
-            raise ValueError("Must have one emission (got %d)" % len(em))
-
-        # Either 0 or 1
-        if em[0]:
-            em = [1]
-        else:
-            em = [0]
-
-        return em
-
-    def _updatePower(self, _):
+    def _updatePower(self, value):
         # Set powerSupply VA based on the power value (True in case of max,
         # False in case of min)
-        pw = self.power.value * self.emissions.value[0]
+        pw = value[0]
         self.powerSupply.value = (pw == self.power.range[1])

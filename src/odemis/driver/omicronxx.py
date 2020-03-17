@@ -42,8 +42,7 @@ import os
 import re
 import serial
 import time
-import sys
-
+from past.builtins import long
 
 class OXXError(Exception):
     """
@@ -646,13 +645,11 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
         self._shape = ()
 
         # power of the whole device (=> max power of the device with max power)
-        self.power = model.FloatContinuous(0., (0., max(max_power)), unit="W")
+        self.power = model.ListContinuous(value=[0.0] * len(self._devices),
+                                          range=(tuple([0.0] * len(self._devices)), tuple(max_power),),
+                                          unit="W", cls=(int, long, float),)
         self.power.subscribe(self._updatePower)
 
-        # ratio of power per device
-        # => if some device don't support max power, clamped before 1
-        self.emissions = model.ListVA([0.] * len(self._devices), unit="",
-                                      setter=self._setEmissions)
         # info on what device is which wavelength
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
@@ -664,7 +661,7 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
                 raise HwError("Failed to power on the master device, check the interlock.")
 
         # make sure everything is off (turning on the HUB will turn on the lights)
-        self._updateIntensities(self.power.value, self.emissions.value)
+        self._updateIntensities(self.power.value)
 
         # set SW version
         driver_name = self._devices[0].acc.driver
@@ -687,11 +684,11 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
         if self._master:
             self._master.terminate()
 
-    def _updateIntensities(self, power, intensities):
+    def _updateIntensities(self, power):
         # TODO: compare to the previous (known) state, and only send commands for
         # the difference, to save some time (each command takes ~5 ms)
         # set the actual values
-        all_off = all(power * i == 0 for i in intensities)
+        all_off = all(p == 0 for p in power)
         if not all_off and self._master:
             # On the LedHUB, when the master goes from off to on, all the
             # devices are turned on too. In theory, as the level has been set to
@@ -700,8 +697,8 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
             # them in stand-by, so that the light cannot be emitting anyway.
             self._master.LightOn()
 
-        for d, intens in zip(self._devices, intensities):
-            p = min(power * intens, d.max_power)
+        for d, p in zip(self._devices, power):
+            p = min(p, d.max_power)
             if p > 0:
                 d.LightOn()
                 d.setLightPower(p / d.max_power)
@@ -719,23 +716,8 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
             self._master.LightOff()
 
     def _updatePower(self, value):
-        self._updateIntensities(value, self.emissions.value)
+        self._updateIntensities(value)
 
-    def _setEmissions(self, intensities):
-        """
-        intensities (list of N floats [0..1]): intensity of each source
-        """
-        if len(intensities) != len(self._devices):
-            raise ValueError("Emission must be an array of %d floats." % len(self._devices))
-
-        # clamp intensities which cannot reach the maximum power
-        cl_intens = []
-        for d, intens in zip(self._devices, intensities):
-            cl_intens.append(min(intens, d.max_power / self.power.range[1]))
-
-        self._updateIntensities(self.power.value, cl_intens)
-
-        return cl_intens
 
 
 class MultixX(GenericxX):

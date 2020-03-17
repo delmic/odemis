@@ -32,7 +32,7 @@ from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import os
 import random
 import time
-
+from past.builtins import long
 
 class Light(model.Emitter):
     """
@@ -46,12 +46,9 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
-        self.power = model.FloatContinuous(0., (0., max_power), unit="W")
+        self.power = model.ListContinuous([0., ], ((0.,), (max_power,)), unit="W", cls=(int, long, float))
         self.power.subscribe(self._updatePower)
         # just one band: white
-        # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
-        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
-
         # list of 5-tuples of floats
         if spectra is None:
             spectra = [(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)] # White
@@ -60,7 +57,7 @@ class Light(model.Emitter):
         self.spectra = model.ListVA([tuple(spectra[0])], unit="m", readonly=True)
 
     def _updatePower(self, value):
-        if value == 0:
+        if value[0] == 0:
             logging.info("Light is off")
         else:
             logging.info("Light is on")

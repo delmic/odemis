@@ -145,18 +145,18 @@ def _DoAcquisition(future, escan, ccd, detector, light):
         logging.debug("Acquiring CCD images...")
 
         # Turn on light for CCD acquisition
-        emissions = [1, 0, 0, 0, 0, 0, 0]
-        light.emissions.value = emissions
+        intensities = [1, 0, 0, 0, 0, 0, 0]
+        light.power.value = [ints * pw for ints, pw in zip(intensities, light.power.range[1])]
 
         optical_image_1 = ccd.data.get()
 
-        emissions = [0, 1, 0, 0, 0, 0, 0]
-        light.emissions.value = emissions
+        intensities = [0, 1, 0, 0, 0, 0, 0]
+        light.power.value = [ints * pw for ints, pw in zip(intensities, light.power.range[1])]
 
         optical_image_2 = ccd.data.get()
 
-        emissions = [0, 0, 1, 0, 0, 0, 0]
-        light.emissions.value = emissions
+        intensities = [0, 0, 1, 0, 0, 0, 0]
+        light.power.value = [ints * pw for ints, pw in zip(intensities, light.power.range[1])]
 
         optical_image_3 = ccd.data.get()
 
@@ -167,8 +167,7 @@ def _DoAcquisition(future, escan, ccd, detector, light):
             future._acq_state = FINISHED
 
         # Turn off light for CCD acquisition
-        emissions = [0] * len(light.emissions.value)
-        light.emissions.value = emissions
+        light.power.value = light.power.range[0]
 
         logging.debug("Acquiring SEM image...")
 

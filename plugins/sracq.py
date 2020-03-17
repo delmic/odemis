@@ -49,7 +49,6 @@ class SRAcqPlugin(Plugin):
             "control_type": gui.CONTROL_INT,  # no slider
             "accuracy": None,
         }),
-        ("power", {}),
         ("countConvertWavelength", {
             "label": "Emission wavelength",
             "tooltip": "Light wavelength received by the camera for count conversion.",
@@ -112,13 +111,6 @@ class SRAcqPlugin(Plugin):
         self.ccd = main_data.ccd
 
         self.addMenu("Acquisition/Super-resolution...", self.start)
-
-        # light.power has a maximum range corresponding to the maximum source,
-        # and other sources are actually proportionally scaled, which is very
-        # confusing. So make it a bit more obvious that it's just a ratio.
-        pwr = 100 * self.light.power.value / self.light.power.range[1]
-        self.power = model.FloatContinuous(pwr, range=(0, 100), unit="%",
-                                           setter=self._set_power)
 
         # Add the useful VAs which are available on the CCD.
         # (on an iXon, they should all be there)
@@ -190,10 +182,6 @@ class SRAcqPlugin(Plugin):
         p, bn = os.path.split(fn)
         if p:
             conf.last_path = p
-
-    def _set_power(self, pwr):
-        self.light.power.value = self.light.power.range[1] * (pwr / 100)
-        return 100 * self.light.power.value / self.light.power.range[1]
 
     def _update_exp_dur(self, _=None):
         """
@@ -279,8 +267,6 @@ class SRAcqPlugin(Plugin):
                 self.ccd.countConvert.value = 2  # photons
 
             # Switch on laser (at the right wavelength and power)
-            # self.light.emissions.value = self._full_intensity
-            # self.light.power.value = self.power.value
             self._stream._setup_emission()
             self._stream._setup_excitation()
 
@@ -318,10 +304,6 @@ class SRAcqPlugin(Plugin):
             f.set_exception(ex)
             return
         finally:
-            # Switch off laser
-            self.light.emissions.value = [0.] * len(self.light.spectra.value)
-            # self.light.power.value = 0
-
             # Revert CCD count to normal behaviour
             if model.hasVA(self.ccd, "countConvert"):
                 try:

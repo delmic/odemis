@@ -26,7 +26,7 @@ import logging
 from odemis import model
 from odemis.model import HwError
 import time
-
+from past.builtins import long
 
 class WhiteLed(model.Emitter):
     '''
@@ -65,15 +65,12 @@ class WhiteLed(model.Emitter):
         time.sleep(0.1)  # Device apparently needs some time to recover
 
         self._shape = ()
-        # TODO: allow to change the power also via emissions? Or just make it a choice
-        self.emissions = model.ListVA([0], unit="", setter=self._setEmissions)
-        self.emissions.subscribe(self._updatePower)
         # list of 5-tuples of floats
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
 
-        self.power = model.FloatContinuous(0., (0., self._max_power), unit="W",
-                                           setter=self._setPower)
+        self.power = model.ListContinuous([0., ], ((0.,), (max_power,)), unit="W",
+                                          cls=(int, long, float), setter=self._setPower)
         self.power.subscribe(self._updatePower, init=True)
 
         self._swVersion = "Blinkstick v%s" % (blinkstick.__version__,)
@@ -86,28 +83,15 @@ class WhiteLed(model.Emitter):
         rsn = self._bstick.device.serial_number
         self._hwVersion = "%s %s (s/n: %s)" % (man, desc, rsn)
 
-    def _setEmissions(self, em):
-        if len(em) != 1:
-            raise ValueError("Must have one emission (got %d)" % len(em))
-
-        # Either 0 or 1
-        if em[0]:
-            em = [1]
-        else:
-            em = [0]
-
-        return em
-
     def _setPower(self, value):
         # Calculate the corresponding intensity (0 -> 255) for the power given
         # TODO: check whether the device intensity is proportional
-        intensity = int(round(value * 255 / self._max_power))
+        intensity = int(round(value[0] * 255 / self._max_power))
         act_val = intensity * self._max_power / 255
-        return act_val
+        return [act_val]
 
-    def _updatePower(self, _):
-        pw = self.power.value * self.emissions.value[0]
-        intensity = int(round(pw * 255 / self._max_power))
+    def _updatePower(self, value):
+        intensity = int(round(value[0] * 255 / self._max_power))
 
         # All leds are connected to channel 0 and all 3 colours
         logging.debug("Led set to RGB=%d", intensity)

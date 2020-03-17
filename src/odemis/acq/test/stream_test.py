@@ -506,7 +506,7 @@ class SECOMTestCase(unittest.TestCase):
         em_choices = self.light_filter.axes["band"].choices
 
         # no light info
-        self.light.emissions.value = [0] * len(self.light.emissions.value)
+        self.light.power.value = self.light.power.range[0]
         s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
                                self.light, self.light_filter)
         # => stream emission is based on filter
@@ -530,7 +530,7 @@ class SECOMTestCase(unittest.TestCase):
         self.assertEqual(s1.excitation.value[2], expected_ex)
 
         # with light info (last emission is used)
-        self.light.emissions.value[-1] = 0.9
+        self.light.power.value[-1] = self.light.power.range[1][-1] * 0.9
         s2 = stream.FluoStream("fluo2", self.ccd, self.ccd.data,
                                self.light, self.light_filter)
         # => stream emission is based on filter
@@ -568,8 +568,8 @@ class SECOMTestCase(unittest.TestCase):
             time.sleep(0.1)
             # check the hardware setting is updated
             exp_intens = [0] * len(self.light.spectra.value)
-            exp_intens[i] = 1
-            self.assertEqual(self.light.emissions.value, exp_intens)
+            exp_intens[i] = min(self.light.power.range[1][i], s1.power.value)
+            self.assertEqual(self.light.power.value, exp_intens)
 
         time.sleep(2)
         s1.is_active.value = False
@@ -585,27 +585,26 @@ class SECOMTestCase(unittest.TestCase):
 
         # original VA name -> expected local setting VA name
         det_lsvas = {"exposureTime": "detExposureTime"}
-        emt_lsvas = {"power": "emtPower"}
         detvas = set(det_lsvas.keys())
-        emtvas = set(emt_lsvas.keys())
         fs = stream.FluoStream("fluo", ccd, ccd.data, light, self.light_filter,
-                               detvas=detvas, emtvas=emtvas)
+                               detvas=detvas)
 
         # Check all the VAs requested are on the stream
         for lsvn in det_lsvas.values():
             va = getattr(fs, lsvn)
             self.assertIsInstance(va, model.VigilantAttribute)
 
-        for lsvn in emt_lsvas.values():
-            va = getattr(fs, lsvn)
-            self.assertIsInstance(va, model.VigilantAttribute)
+        self.assertIsInstance(fs.power, model.VigilantAttribute)
 
+        # Get powered channel index
+        choices = light.spectra.value
+        channel_idx = choices.index(fs.excitation.value)
         # Modify local VAs and check nothing happens on the hardware (while
         # stream is paused)
-        self.assertEqual(light.power.value, fs.emtPower.value)
-        light.power.value = 0.1
-        fs.emtPower.value = 0.4
-        self.assertNotEqual(light.power.value, fs.emtPower.value)
+        self.assertEqual(light.power.value[channel_idx], fs.power.value)
+        light.power.value[channel_idx] = 0.1
+        fs.power.value = 0.2
+        self.assertNotEqual(light.power.value[channel_idx], fs.power.value)
 
         self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
         ccd.exposureTime.value = 0.2
@@ -616,28 +615,30 @@ class SECOMTestCase(unittest.TestCase):
         fs.should_update.value = True
         fs.is_active.value = True
 
-        self.assertEqual(light.power.value, fs.emtPower.value)
-        self.assertEqual(light.power.value, 0.4)
+        self.assertEqual(light.power.value[channel_idx], fs.power.value)
+        self.assertEqual(light.power.value[channel_idx], 0.2)
         self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
         self.assertEqual(ccd.exposureTime.value, 0.5)
 
         # Directly change HW VAs, and check the stream doesn't see the changes
-        light.power.value = 0.1
+        light.power.value[channel_idx] = 0.1
         ccd.exposureTime.value = 0.2
-        time.sleep(0.01) # updates are asynchonous so it can take a little time to receive them
-        self.assertNotEqual(light.power.value, fs.emtPower.value)
+        time.sleep(0.01)  # updates are asynchonous so it can take a little time to receive them
+        self.assertNotEqual(light.power.value[channel_idx], fs.power.value)
         self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
 
         # Change the local VAs while playing
-        fs.emtPower.value = 0.4
-        self.assertEqual(light.power.value, fs.emtPower.value)
+        fs.power.value = 0.18  # different value than previous one
+        self.assertEqual(light.power.value[channel_idx], fs.power.value)
+        # Check there is only 1 active power source
+        self.assertEqual(len([pw for pw in light.power.value if pw != 0]), 1)
         fs.detExposureTime.value = 0.5
         self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
 
         # Stop stream, and check VAs are not updated anymore
         fs.is_active.value = False
-        light.power.value = 0.1
-        self.assertNotEqual(light.power.value, fs.emtPower.value)
+        light.power.value[channel_idx] = 0.1
+        self.assertNotEqual(light.power.value[channel_idx], fs.power.value)
         ccd.exposureTime.value = 0.2
         self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
 
@@ -784,7 +785,6 @@ class SECOMConfocalTestCase(unittest.TestCase):
                        dataflow=None,
                        emitter=self.light,
                        detvas={"dwellTime"},
-                       emtvas={"power"},
                       )
 
         sfluos = []

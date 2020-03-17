@@ -265,10 +265,10 @@ class TestSEMNoDet(TestSEMBase, unittest.TestCase):
         Test if it's possible to change chamber light
         """
         light = self.light
-        orig_pwr = light.power.value
+        orig_pwr = light.power.value[0]
         new_pwr = int(not orig_pwr)  # 0 or 1
-        light.power.value = new_pwr
-        light.emissions.value = [1]
+        light.power.value[0] = new_pwr
+        self.assertEqual(light.power.value[0], new_pwr)
 
         time.sleep(1)
         # Reset

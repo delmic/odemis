@@ -75,9 +75,7 @@ class TestFlim(unittest.TestCase):
         cls.detector = model.getComponent(role="photo-detector0")
 
         cls.ex_light.period.value = 0.0001
-        em = [0] * len(cls.ex_light.emissions.value)
-        cls.ex_light.emissions.value = em
-        cls.ex_light.power.value = 0.25
+        cls.ex_light.power.value = list(cls.ex_light.range[0])
 
     @classmethod
     def tearDownClass(cls):
@@ -134,9 +132,8 @@ class TestFlim(unittest.TestCase):
             # Check we didn't ask for too short dwell time, which the hardware
             # do not support.
             self.assertLessEqual(self.lscanner.dwellTime.value, dwellTime)
-            # Check local VA's to see if they are set correctly while acquiring. 
-            self.assertTrue(any(em > 0) for em in self.ex_light.emissions.value)
-            self.assertGreater(self.ex_light.power.value, 0)
+            # Check local VA's to see if they are set correctly while acquiring.
+            self.assertTrue(any(pw > 0 for pw in self.ex_light.power.value))
             self.assertGreater(self.ex_light.period.value, 0)
             das = f.result()  # wait for the result. This blocks
             self.assertEqual(das, remote.raw)
