@@ -3979,7 +3979,8 @@ class Sparc2AlignTab(Tab):
             for st in focusedview.getStreams():
                 if st in self._focus_streams and st is not should_update_stream:
                     focusedview.removeStream(st)
-            focusedview.addStream(should_update_stream)
+            if not should_update_stream in focusedview.stream_tree:
+                focusedview.addStream(should_update_stream)
             # Set the focus detectors combobox selection
             try:
                 istream = self._focus_streams.index(should_update_stream)
@@ -4039,6 +4040,7 @@ class Sparc2AlignTab(Tab):
         bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
         gauge = self.panel.gauge_autofocus
+        self._mf_future.cancel()  # In case it's still changing, immediately stop (the gauge)
 
         if event.GetEventObject().GetValue():  # manual focus btn toggled
             # Set the optical path according to the align mode
@@ -4052,13 +4054,14 @@ class Sparc2AlignTab(Tab):
                                 align_mode)
                 return
 
-            if align_mode != "streak-align":
-                self._stream_controller.pauseStreams()
-
             if align_mode == "streak-align":
                 # force wavelength 0
                 # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
                 main.spectrograph.moveAbsSync({"wavelength": 0})
+            else:
+                if align_mode == "lens-align":
+                    self._enableFocusComponents(manual=True, ccd_stream=False)
+                self._stream_controller.pauseStreams()
 
             self._mf_future = Sparc2ManualFocus(main.opm, bl, opath, toggled=True)
             self._mf_future.add_done_callback(self._onManualFocusReady)
@@ -4087,14 +4090,13 @@ class Sparc2AlignTab(Tab):
             istream = self.panel.cmb_focus_detectors.GetSelection()
             self._focus_streams[istream].should_update.value = True
 
-        align_mode = self.tab_data_model.align_mode.value
-        if align_mode == "lens-align":
-            self._enableFocusComponents(manual=True, ccd_stream=False)
-
     def _onManualFocusFinished(self, future):
         """
         Called when finishing manual focus is done
         """
+        if future.cancelled():
+            return
+
         self._onAlignMode(self.tab_data_model.align_mode.value)
 
     @call_in_wx_main
@@ -4345,6 +4347,9 @@ class Sparc2AlignTab(Tab):
             if main.lens_mover:
                 main.lens_mover.position.subscribe(self._onLensPos)
             main.mirror.position.subscribe(self._onMirrorPos)
+
+            # Reset the focus progress bar (as any focus action has been cancelled)
+            wx.CallAfter(self.panel.gauge_autofocus.SetValue, 0)
         else:
             # when hidden, the new tab shown is in charge to request the right
             # optical path mode, if needed.
