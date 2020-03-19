@@ -1449,7 +1449,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
             b_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
-            self.update_projection(b_start, b_end, shift + (scale,))
+            self.update_projection(b_start, b_end, tuple(shift) + (scale,))
 
             # Calculate unit vector
             dx, dy = (b_start[0] - b_end[0],
