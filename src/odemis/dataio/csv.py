@@ -69,14 +69,12 @@ def export(filename, data):
                 csv_writer.writerows(spectrum_tuples)
 
         elif dims == "T" and data.ndim == 1:
+            logging.debug("Exporting chronogram data to CSV")
             time_range, unit = spectrum.get_time_range(data)
             if unit == "s":
+                # Adjust range values to ps
                 time_range = [t * 1e12 for t in time_range]
                 unit = "ps"
-            logging.debug("Exporting chronogram data to CSV")
-
-            if unit == "ps":
-                # turn range to nm
                 time_tuples = [(s, d) for s, d in zip(time_range, data)]
                 headers = ['# Time (ps)', 'intensity']
             else:
@@ -98,7 +96,7 @@ def export(filename, data):
                 unit = "nm"
 
             # attach distance as first row
-            line_length = data.shape[1] * data.metadata[model.MD_PIXEL_SIZE][1]
+            line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
             distance_lin = numpy.linspace(0, line_length, data.shape[0])
             distance_lin.shape = (distance_lin.shape[0], 1)
             data = numpy.append(distance_lin, data, axis=1)
@@ -116,6 +114,7 @@ def export(filename, data):
             raise ValueError("Unknown type of data to be exported as CSV")
         
     elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_TEMPSPECTRUM:
+        logging.debug("Exporting temporal spectrum data to CSV")
         spectrum_range, unit_c = spectrum.get_spectrum_range(data)
         if unit_c == "m":
             spectrum_range = [s * 1e9 for s in spectrum_range]
