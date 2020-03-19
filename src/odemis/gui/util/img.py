@@ -1431,38 +1431,27 @@ def line_to_export_data(proj, raw):
         if spec is None:
             raise LookupError("No line selected to pick a spectrum")
         spectrum_range, unit = spectrum.get_spectrum_range(spec)
-        # TODO shall we really inverse the y scale or should we have zero top left
-        images = set_images([(spec, (0, 0), (1, 1), True, None, None, wx.VERTICAL, None, "Spatial Spectrum", None, None, {})])
-        # TODO: just use a standard tuple, instead of wx.Size
-        client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
-        im = images[0]  # just one image
+        images = set_images([(spec, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None, {})])
+        buffer_size = (SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         # adjust to viewport size
-        scale = (im.shape[1] / client_size.x, im.shape[0] / client_size.y)
+        scale = (buffer_size[0] / spec.shape[1], buffer_size[1] / spec.shape[0])
         # Make surface based on the maximum resolution
-        data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
-        data_to_draw.fill(255)
+        data_to_draw = numpy.empty((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
+        data_to_draw.fill(255)  # White background
         surface = cairo.ImageSurface.create_for_data(
-            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+            data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
         ctx = cairo.Context(surface)
 
-        buffer_center = (0, 0)
-        buffer_scale = scale
-        buffer_size = client_size.x, client_size.y
-
+        im = images[0]
         draw_image(
             ctx,
             im,
-            im.metadata['dc_center'],
-            buffer_center,
-            buffer_scale,
-            buffer_size,
-            1.0,
-            im_scale=im.metadata['dc_scale'],
-            rotation=im.metadata['dc_rotation'],
-            shear=im.metadata['dc_shear'],
-            flip=im.metadata['dc_flip'],
-            blend_mode=im.metadata['blend_mode'],
-            interpolate_data=False
+            p_im_center=(0, 0),
+            buffer_center=(0, 0),
+            buffer_scale=(1, 1),
+            buffer_size=buffer_size,
+            im_scale=scale,  # (1, 1),
+            flip=wx.VERTICAL,  # X should go from bottom (0) to top (line length)
         )
 
         # Draw top/bottom horizontal (wavelength) legend
@@ -1471,22 +1460,22 @@ def line_to_export_data(proj, raw):
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
         font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
-        scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, buffer_size[0], 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_HEIGHT)
+            scale_x_draw, cairo.FORMAT_ARGB32, buffer_size[0], SPEC_SCALE_HEIGHT)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+        draw_scale(ctx, value_range, buffer_size, orientation, tick_spacing,
                    text_colour, unit, SPEC_SCALE_HEIGHT, font_size, "Wavelength")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Top
-        scale_x_draw = numpy.empty((SMALL_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw = numpy.empty((SMALL_SCALE_WIDTH, buffer_size[0], 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SMALL_SCALE_WIDTH)
+            scale_x_draw, cairo.FORMAT_ARGB32, buffer_size[0], SMALL_SCALE_WIDTH)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+        draw_scale(ctx, value_range, buffer_size, orientation, tick_spacing,
                    text_colour, unit, SMALL_SCALE_WIDTH, font_size, mirror=True)
         data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
 
@@ -1495,13 +1484,13 @@ def line_to_export_data(proj, raw):
         tick_spacing = SPEC_PLOT_SIZE // 6
         line_length = spec.shape[0] * spec.metadata[model.MD_PIXEL_SIZE][1]
         value_range = (0, line_length)
-        scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw = numpy.empty((buffer_size[1], SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, buffer_size[1])
         ctx = cairo.Context(surface)
         unit = "m"
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+        draw_scale(ctx, value_range, buffer_size, orientation, tick_spacing,
                    text_colour, unit, SPEC_SCALE_WIDTH, font_size, "Distance from origin")
 
         # Extend y scale bar to fit the height of the bar plot with the x
@@ -1513,12 +1502,12 @@ def line_to_export_data(proj, raw):
         data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
 
         # Right
-        scale_y_draw = numpy.empty((client_size.y, SMALL_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw = numpy.empty((buffer_size[1], SMALL_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_y_draw, cairo.FORMAT_ARGB32, SMALL_SCALE_WIDTH, client_size.y)
+            scale_y_draw, cairo.FORMAT_ARGB32, SMALL_SCALE_WIDTH, buffer_size[1])
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+        draw_scale(ctx, value_range, buffer_size, orientation, tick_spacing,
                    text_colour, unit, SMALL_SCALE_WIDTH, font_size, mirror=True)
 
         # Extend y scale bar to fit the height of the bar plot with the x
