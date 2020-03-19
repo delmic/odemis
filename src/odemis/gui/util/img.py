@@ -822,7 +822,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     Calculate which values in the range to represent as ticks on the axis
 
     value_range (tuple of floats): value range
-    client_size (wx._core.Size)
+    client_size (int, int): number of pixels in X,Y
     orientation (int): legend orientation
     tick_spacing (float): space between ticks
 
@@ -923,7 +923,7 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
     Draws horizontal and vertical scale bars
 
     value_range (tuple of floats): value range
-    client_size (wx._core.Size)
+    client_size (int, int): number of pixels in X/Y
     orientation (int): legend orientation
     tick_spacing (float): space between ticks
     fill_colour (tuple of floats): colour to fill bars
@@ -945,7 +945,6 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
         value_range = (v[1], v[0])
 
     tick_list, _ = calculate_ticks(value_range, client_size, orientation, tick_spacing)
-    csize = client_size
     # TODO use always client_size instead of scale_width
 
     # Set Font
@@ -960,24 +959,24 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
     if orientation == wx.VERTICAL:
         if mirror:
             ctx.move_to(0, 0)
-            ctx.line_to(0, csize.y)
+            ctx.line_to(0, client_size[1])
             ctx.stroke()
         else:
             ctx.move_to(scale_width, 0)
-            ctx.line_to(scale_width, csize.y)
+            ctx.line_to(scale_width, client_size[1])
             ctx.stroke()
     else:
         if mirror:
             ctx.move_to(0, scale_width)
-            ctx.line_to(csize.x, scale_width)
+            ctx.line_to(client_size[0], scale_width)
             ctx.stroke()
         else:
             ctx.move_to(0, 0)
-            ctx.line_to(csize.x, 0)
+            ctx.line_to(client_size[0], 0)
             ctx.stroke()
 
     max_width = 0
-    prev_lpos = 0 if orientation == wx.HORIZONTAL else csize.y
+    prev_lpos = 0 if orientation == wx.HORIZONTAL else client_size[1]
 
     if scale_label:
         ctx.save()
@@ -995,11 +994,11 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
         _, _, lbl_width, _, _, _ = ctx.text_extents(scale_label)
         # TODO: probably not correctly placed in case of mirror (but no one cases)
         if orientation == wx.HORIZONTAL:
-            ctx.move_to(((csize.x - scale_width) / 2) - lbl_width / 2,
+            ctx.move_to(((client_size[0] - scale_width) / 2) - lbl_width / 2,
                         scale_width - int(font_size * 0.4))
         else:
             ctx.move_to(int(font_size * 1.2),
-                        ((csize.y - scale_width) / 2) + lbl_width / 2)
+                        ((client_size[1] - scale_width) / 2) + lbl_width / 2)
             ctx.rotate(-math.pi / 2)
         ctx.show_text(scale_label)
         ctx.restore()
@@ -1012,7 +1011,7 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
 
         if orientation == wx.HORIZONTAL:
             lpos = pos - (lbl_width // 2)
-            lpos = max(min(lpos, csize.x - lbl_width - 2), 2)
+            lpos = max(min(lpos, client_size[0] - lbl_width - 2), 2)
             if prev_lpos < lpos:
                 if mirror:
                     # ctx.move_to(lpos, scale_width - (lbl_height - 3))
@@ -1028,14 +1027,14 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
         else:
             max_width = max(max_width, lbl_width)
             lpos = pos + (lbl_height // 2)
-            lpos = max(min(lpos, csize.y), 2)
+            lpos = max(min(lpos, client_size[1]), 2)
 
             if prev_lpos >= lpos + 20 or i == 0 or i == len(tick_list):
                 if mirror:
-                    ctx.move_to(scale_width - lbl_width - 9, csize.y - lpos)
+                    ctx.move_to(scale_width - lbl_width - 9, client_size[1] - lpos)
                     ctx.show_text(label)
-                    ctx.move_to(scale_width - 5, csize.y - pos)
-                    ctx.line_to(scale_width, csize.y - pos)
+                    ctx.move_to(scale_width - 5, client_size[1] - pos)
+                    ctx.line_to(scale_width, client_size[1] - pos)
                 else:
                     ctx.move_to(scale_width - lbl_width - 9, lpos)
                     ctx.show_text(label)
