@@ -1295,19 +1295,21 @@ class LineSpectrumProjection(RGBProjection):
     def _on_selected_time(self, _):
         self._shouldUpdateImage()
 
+    def _find_metadata(self, md):
+        return md  # The data from _computeSpec() should already be correct
+
     def _computeSpec(self):
         """
         Compute the 1D spectrum from the stream.calibrated VA using the
         selected_time, selected_line, and width.
 
-        return: spec1d, md
-            where spec1d is the line spectrum (1D array)
-            and md is the metadata structure
+        return DataArray of of shape XC: the line spectrum
+           the distance increases in X and the wavelength increases in C
         """
 
         if ((None, None) in self.stream.selected_line.value or
                 self.stream.calibrated.value.shape[0] == 1):
-            return None, None
+            return None
 
         if model.hasVA(self.stream, "selected_time"):
             t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
@@ -1323,7 +1325,7 @@ class LineSpectrumProjection(RGBProjection):
         l = math.hypot(*v)
         n = 1 + int(l)
         if l < 1:  # a line of just one pixel is considered not valid
-            return None, None
+            return None
 
         # FIXME: if the data has a width of 1 (ie, just a line), and the
         # requested width is an even number, the output is empty (because all
@@ -1335,8 +1337,8 @@ class LineSpectrumProjection(RGBProjection):
         coord = numpy.empty((3, width, n, spec2d.shape[0]))
         coord[0] = numpy.arange(spec2d.shape[0])  # spectra = all
         coord_spc = coord.swapaxes(2, 3)  # just a view to have (line) space as last dim
-        coord_spc[-1] = numpy.linspace(end[0], start[0], n)  # X axis
-        coord_spc[-2] = numpy.linspace(end[1], start[1], n)  # Y axis
+        coord_spc[-1] = numpy.linspace(start[0], end[0], n)  # X axis
+        coord_spc[-2] = numpy.linspace(start[1], end[1], n)  # Y axis
 
         # Spread over the width
         # perpendicular unit vector
@@ -1369,23 +1371,17 @@ class LineSpectrumProjection(RGBProjection):
             pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
         else:
             logging.warning("Pixel size should have two dimensions")
-            return None, None
+            return None
 
         raw_md = self.stream.calibrated.value.metadata
         md = raw_md.copy()
-        md[model.MD_DIMS] = "XC"  # RGB format
+        md[model.MD_DIMS] = "XC"  # wavelength horizontal, distance vertical
         md[MD_PIXEL_SIZE] = (None, pxs)  # for the spectrum, use get_spectrum_range()
-        return spec1d, md
+        return model.DataArray(spec1d, md)
 
     def projectAsRaw(self):
         try:
-            spec1d, md = self._computeSpec()
-
-            if spec1d is None:
-                return None
-            else:
-                return model.DataArray(spec1d[::-1, :], md)
-
+            return self._computeSpec()
         except Exception:
             logging.exception("Projected raw %s image", self.__class__.__name__)
             return None
@@ -1395,22 +1391,25 @@ class LineSpectrumProjection(RGBProjection):
         Recomputes the image with all the raw data available and
         return the 1D spectrum representing the (average) spectrum
 
-        Updates self.image.value to None or DataArray with 3 dimensions: first axis (Y) is spatial
-          (along the line), second axis (X) is spectrum. If not raw, third axis
-          is colour (RGB, but actually always greyscale). Note: when not raw,
-          the beginning of the line (Y) is at the "bottom".
+        Updates self.image.value to None or DataArray with 3 dimensions:
+          first axis (vertical, named X) is spatial (along the line, starting from 0 at the top),
+          second axis (horizontal, named C) is spectrum.
+          third axis is colour (RGB, but actually always greyscale)
           MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
-          If the selected_line is not valid, it will updat to None
+          If the selected_line is not valid, .image is set to None
         """
         try:
-
-            spec1d, md = self._computeSpec()
+            spec1d = self._computeSpec()
 
             if spec1d is None:
                 self.image.value = None
                 return
 
-            # Scale and convert to RGB image
+            # We cannot use the stream histogram, as it's linked to the spatial view,
+            # which is limited to the spectrum center/band, while this data always
+            # shows all the spectrum range all the time
+            # => compute based on the AutoBC settings.
+
             if self.stream.auto_bc.value:
                 hist, edges = img.histogram(spec1d)
                 irange = img.findOptimalRange(hist, edges,
@@ -1418,9 +1417,13 @@ class LineSpectrumProjection(RGBProjection):
             else:
                 # use the values requested by the user
                 irange = sorted(self.stream.intensityRange.value)
-            rgb8 = img.DataArray2RGB(spec1d, irange)
-            self.image.value = model.DataArray(rgb8, md)
 
+            # Scale and convert to RGB image
+            rgbim = img.DataArray2RGB(spec1d, irange)
+            rgbim.flags.writeable = False
+            md = self._find_metadata(spec1d.metadata)
+            md[model.MD_DIMS] = "YXC"  # RGB format
+            self.image.value = model.DataArray(rgbim, md)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
