@@ -34,7 +34,7 @@ from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
-from odemis.gui.util.img import format_rgba_darray
+from odemis.gui.util.img import format_rgba_darray, apply_flip
 from odemis.util import units, limit_invocation
 import scipy.ndimage
 import time
@@ -1443,6 +1443,7 @@ class TwoDPlotCanvas(BitmapCanvas):
                 # Save and restore the transformation matrix, to prevent scale accumulation
                 ctx.save()
 
+                apply_flip(ctx, im_data.metadata["dc_flip"], (0, 0, csize[0], csize[1]))
                 # Scale the width and height separately in such a way that the image data fill the
                 # entire canvas
                 ctx.scale(csize[0] / width, csize[1] / height)
