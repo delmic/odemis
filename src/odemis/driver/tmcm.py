@@ -328,12 +328,8 @@ class TMCLController(model.Actuator):
                 axis_params, global_params, io_config = self.parse_tsv_config(f)
             except Exception as ex:
                 raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
-            if global_params:
-                # All global parameters can be recorded in the flash,
-                # so we don't support reading them live, to avoid confusion.
-                raise ValueError("Param file contain global parameters (G0), which should be set via tmcmconfig")
-            logging.debug("Extracted param file config: %s, %s", axis_params, io_config)
-            self.apply_config(axis_params, io_config)
+            logging.debug("Extracted param file config: %s, %s, %s", axis_params, global_params, io_config)
+            self.apply_config(axis_params, io_config, global_params)
 
         # will take care of executing axis move asynchronously
         self._executor = ParallelThreadPoolExecutor()  # one task at a time
@@ -640,16 +636,20 @@ class TMCLController(model.Actuator):
     # Note: there is no method to read the config from the live memory because it
     # is not possible to read the current output values (written by SetIO()).
 
-    def apply_config(self, axis_params, io_config):
+    def apply_config(self, axis_params, io_config, global_params=None):
         """
         Configure the device according to the given 'user configuration'.
         axis_params (dict (int, int) -> int): axis number/param number -> value
         io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        global_params (dict (int, int) -> int): bank/param number -> value
         """
+        global_params = global_params or {}
         for (ax, ad), v in axis_params.items():
             self.SetAxisParam(ax, ad, v)
         for (b, p), v in io_config.items():
             self.SetIO(b, p, v)
+        for (b, ad), v in global_params.items():
+            self.SetGlobalParam(b, ad, v)
 
     def write_config(self, axis_params, io_config):
         """
