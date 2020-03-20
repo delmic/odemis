@@ -201,9 +201,10 @@ def FindCenterCoordinates(image, smoothing=True):
     w = numpy.sqrt(dI2 / numpy.hypot(ik - i0, jk - j0))
 
     # Solve the linear set of equations in a least-squares sense.
-    # Note: rcond set to -1 to suppress warnings on numpy 1.11 -> 1.14. It maybe
-    # could be set to None with newer numpy (or entirely removed).
-    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond=-1)[0]
+    # Note: rcond is set explicitly to have correct and consistent behavior,
+    #       independent on numpy version.
+    rcond = numpy.finfo(numpy.float64).eps * max(m, n)
+    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond)[0]
 
     # Convert from index (top-left) to (center) position information.
     xc = jc - 0.5 * float(m) + 0.5
@@ -255,17 +256,19 @@ def MaximaFind(image, qty, len_object=18):
 
     # dilation
     structure = _CreateSEDisk(len_object // 2)
-    dilated = cv2.dilate(filtered, structure, iterations=1)
+    dilated = cv2.dilate(filtered, structure)
 
     # find local maxima
-    binary = (filtered == dilated)
+    binary = (filtered == dilated).astype(numpy.uint8)
 
     # thresholding
     qradius = max(len_object // 4, 1)
     structure = _CreateSEDisk(qradius)
-    BWdil = cv2.dilate(numpy.array(binary).astype(numpy.uint8), structure)
+    binary_dilated = cv2.dilate(binary, structure)
 
-    labels, num_features = ndimage.label(BWdil)
+    # Identify all features and then select qty of features with highest mean
+    # value in the filtered image
+    labels, num_features = ndimage.label(binary_dilated)
     index = numpy.arange(1, num_features + 1)
     mean = ndimage.mean(filtered, labels=labels, index=index)
     si = numpy.argsort(mean)[::-1][:qty]
