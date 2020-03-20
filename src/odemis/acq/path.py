@@ -266,8 +266,8 @@ class OneTaskExecutor(ThreadPoolExecutor):
     last one is executed.
     """
 
-    def __init__(self, thread_name_prefix=''):
-        super(OneTaskExecutor, self).__init__(max_workers=1, thread_name_prefix=thread_name_prefix)
+    def __init__(self):
+        super(OneTaskExecutor, self).__init__(max_workers=1)
 
     # Override ThreadPoolExecutor.submit()
     def submit(self, fn, *args, **kwargs):
