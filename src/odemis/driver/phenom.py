@@ -1978,8 +1978,14 @@ class ChamberPressure(model.Actuator):
                     # new operational mode is reached. Moreover, immediately
                     # GetOperationalMode() returns the new mode, quite
                     # before the event is sent and the system is actually ready.
-                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-                    TimeUpdater.cancel()
+                    try:
+                        self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    except suds.WebFault as ex:
+                        opmode = self._pressure_device.GetOperationalMode()
+                        if opmode in ("OPERATIONAL-MODE-ACQUIRESEMIMAGE", "OPERATIONAL-MODE-LIVESEM"):
+                            logging.warning("Moved raised an error but seems to have moved as expected to %s (%s)", opmode, ex)
+                        else:
+                            raise
 
                     # Typically, it will first go to ACQUIRESEMIMAGE, then LIVESEM
                     try:
@@ -2015,7 +2021,6 @@ class ChamberPressure(model.Actuator):
                         return
 
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-                    TimeUpdater.cancel()
 
                     # Typically, it will first go to ACQUIRENAVCAMIMAGE, then LIVENAVCAM
                     try:
@@ -2032,12 +2037,13 @@ class ChamberPressure(model.Actuator):
 
                 elif p == PRESSURE_UNLOADED:
                     self._pressure_device.UnloadSample()
-                    TimeUpdater.cancel()
                 else:
                     raise ValueError("Unexpected pressure %g" % (p,))
             except Exception as ex:
                 logging.exception("Failed to move to pressure %g: %s", p, ex)
                 raise
+            finally:
+                TimeUpdater.cancel()
 
         # Wait for position to be updated (via the chamber_move event listener thread)
         self._position_event.wait(10)
