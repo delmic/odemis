@@ -25,6 +25,7 @@ from __future__ import division
 
 import logging
 from odemis.gui.util import call_in_wx_main
+import sys
 import wx
 from wx.adv import NotificationMessage
 
@@ -43,5 +44,10 @@ def show_message(parent, title, message=None, timeout=3.0, level=logging.INFO):
     flags = {logging.INFO: wx.ICON_INFORMATION,
              logging.WARNING: wx.ICON_WARNING,
              logging.ERROR: wx.ICON_ERROR}[level]
+
+    # On Windows, if message is None, then no popup is shown at all
+    if message is None and sys.platform.startswith('win'):
+        message = " "
+
     m = NotificationMessage(title, message, parent=parent, flags=flags)
     m.Show(timeout)
