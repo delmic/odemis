@@ -821,19 +821,86 @@ class AffineTransform(RigidTransform):
 
 
 class AnamorphosisTransform(AffineTransform):
+    """
+    AnamorphosisTransform
 
-    def __init__(self, params):
-        self.params = params
+    The anamorphosis transform is a polynomial model of the distortions in an
+    electron optical system, and is described in more detail in [1].
 
-    @classmethod
-    def from_pointset(cls, x, y):
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
+    The anamorphosis transform has the following form:
 
-        w = x[:, 0] + 1.0j * x[:, 1]
-        v = y[:, 0] + 1.0j * y[:, 1]
+        wᵢ = A + B₁ w + B₂ w̄ + C₁ w² + C₂ ww̄ + C₃ w̄² +
+                                       D₁ w²w̄ + D₂ ww̄² + E₁ w³w̄² + E₂ w²w̄³,
 
-        # Setup Vandermonde matrix; suffix cc denotes complex conjugate
+    where A, B₁, B₂, C₁, C₂, C₃, D₁, D₂, E₁, and E₂ are the (complex)
+    coefficients of the transform. The in- and output coordinates are the
+    complex numbers w = x + j*y. Note that A, B₁, B₂ define an ordinary affine
+    transform, and the higher order distortions are set by the other
+    coefficients.
+
+    Parameters
+    ----------
+    coeffs : Transform coefficients as array, list, or tuple; optional.
+        List of transform coefficients: A, B₁, B₂, C₁, C₂, C₃, D₁, D₂, E₁, E₂.
+    rotation : float, optional
+        Rotation angle in counter-clockwise direction as radians.
+    scale : (sx, sy) as array, list, or tuple, optional
+        x, y scale factors.
+    shear : float, optional
+        Shear factor.
+    nlcoeffs : Non-linear transform coefficients as array, list, or tuple;
+               optional.
+        List of non-linear transform coefficients: C₁, C₂, C₃, D₁, D₂, E₁, E₂.
+    translation : (tx, ty) as array, list, or tuple, optional
+        x, y translation parameters.
+
+    Attributes
+    ----------
+    rotation_matrix
+    transformation_matrix
+    rotation : float
+        Rotation.
+    scale : (sx, sy) as array
+        Scale factors.
+    shear : float
+        Shear factor.
+    coeffs : tuple
+        Tuple of transform coefficients.
+    nlcoeffs : tuple
+        Tuple of non-linear transform coefficients.
+    translation : (2,) array
+        Translation vector.
+
+    References
+    ----------
+    .. [1] J. Stopka, "Polynomial fit for Multi-beam distortions", internal
+    note, 2019
+
+    """
+
+    def __init__(self, coeffs=None, rotation=None, scale=None, shear=None,
+                 nlcoeffs=None, translation=None):
+
+        params = any(param is not None
+                     for param in (rotation, scale, shear, nlcoeffs, translation))
+
+        if params and coeffs is not None:
+            raise ValueError("You cannot specify the transformation "
+                             "coefficients and the implicit parameters at the "
+                             "same time.")
+        elif coeffs is not None:
+            self.coeffs = coeffs
+        else:
+            self.rotation = 0. if rotation is None else rotation
+            self.scale = (1., 1.) if scale is None else scale
+            self.shear = 0. if shear is None else shear
+            self.nlcoeffs = (0., 0., 0., 0., 0., 0., 0.) if nlcoeffs is None else nlcoeffs
+            self.translation = (0., 0.) if translation is None else translation
+
+    @staticmethod
+    def _vandermonde(w):
+        """Return the Vandermonde matrix."""
+        # suffix cc denotes complex conjugate
         wcc = numpy.conj(w)  # w̄
         w2 = w * w  # w²
         wabs2 = w * wcc  # ww̄
@@ -847,43 +914,80 @@ class AnamorphosisTransform(AffineTransform):
                                 w2, wabs2, wcc2,  # second order
                                 w2wcc, wwcc2,  # third order
                                 w3wcc2, w2wcc3))  # fifth order
-        params = numpy.linalg.lstsq(M, v)[0]
-        return cls(params=params)
+        return M
+
+    def __call__(self, x):
+        x = numpy.asarray(x)
+        w = x[..., 0] + 1.0j * x[..., 1]
+
+        M = self._vandermonde(w)
+        v = numpy.dot(M, self.coeffs)
+
+        if x.ndim == 1:
+            return np.array((v.real, v.imag))
+        return numpy.column_stack((v.real, v.imag))
+
+    @classmethod
+    def from_pointset(cls, x, y):
+        """
+        Estimate the transformation from a set of corresponding points.
+
+        Constructor for AnamorphosisTransform that determines the best
+        coordinate transformation from two point sets `x` and `y` in a
+        least-squares sense. For more information see [1].
+
+        Parameters
+        ----------
+        x : (n, 2) array
+            Coordinates in the source reference frame.
+        y : (n, 2) array
+            Coordinates in the destination reference frame. Must be of same
+            dimensions as `x`.
+
+        Returns
+        -------
+        tform : AnamorphosisTransform
+            Optimal coordinate transformation.
+
+        References
+        ----------
+        .. [1] J. Stopka, "Polynomial fit for Multi-beam distortions", internal
+        note, 2019
+
+        """
+        x = numpy.asarray(x)
+        y = numpy.asarray(y)
+
+        w = x[:, 0] + 1.0j * x[:, 1]
+        v = y[:, 0] + 1.0j * y[:, 1]
+
+        M = cls._vandermonde(w)
+        coeffs = numpy.linalg.lstsq(M, v)[0]
+        return cls(coeffs=coeffs)
 
     @property
-    def rotation(self):
-        return self._rotation
+    def coeffs(self):
+        tx, ty = self.translation
+        M = self.transformation_matrix
+        p = 0.5 * (M[0, 0] + M[1, 1])
+        q = 0.5 * (M[1, 0] - M[0, 1])
+        r = 0.5 * (M[0, 0] - M[1, 1])
+        s = 0.5 * (M[1, 0] + M[0, 1])
+        a = tx + 1.0j * ty
+        b1 = p + 1.0j * q
+        b2 = r + 1.0j * s
+        c1, c2, c3, d1, d2, e1, e2 = self.nlcoeffs
+        return (a, b1, b2, c1, c2, c3, d1, d2, e1, e2)
 
-    @property
-    def scale(self):
-        return self._scale
-
-    @property
-    def shear(self):
-        return self._shear
-
-    @property
-    def translation(self):
-        return self._translation
-
-    @property
-    def transformation_matrix(self):
-        return self._transformation_matrix
-
-    @property
-    def params(self):
-        return self._params
-
-    @params.setter
-    def params(self, params):
-        self._params = params
-        a, b1, b2 = params[:3]
+    @coeffs.setter
+    def coeffs(self, coeffs):
+        a, b1, b2, c1, c2, c3, d1, d2, e1, e2 = coeffs
         p, q = (b1.real, b1.imag)
         r, s = (b2.real, b2.imag)
         matrix = numpy.array([(p + r, -q + s), (q + s, p - r)])
-        R, S = qrp(matrix)
-        self._rotation = _rotation_matrix_to_angle(R)
-        self._scale = numpy.diag(S)
-        self._shear = S[0, 1] / S[0, 0]
-        self._translation = (a.real, a.imag)
-        self._transformation_matrix = matrix
+        self.transformation_matrix = matrix
+        self.nlcoeffs = (c1, c2, c3, d1, d2, e1, e2)
+        self.translation = (a.real, a.imag)
+
+    def inverse(self):
+        raise NotImplementedError()
