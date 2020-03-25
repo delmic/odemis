@@ -27,6 +27,7 @@ import numpy
 from numpy.linalg import LinAlgError
 import unittest
 
+from odemis.util.spot import GridPoints
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
                                    RigidTransform, SimilarityTransform,
@@ -653,12 +654,6 @@ class AffineTransformKnownValues(unittest.TestCase):
 
 class AnamorphosisTransformKnownValues(unittest.TestCase):
 
-    @staticmethod
-    def _grid(n):
-        xv = yv = numpy.arange(n, dtype=float) - 0.5 * float(n - 1)
-        xx, yy = numpy.meshgrid(xv, yv)
-        return numpy.column_stack((xx.ravel(), yy.ravel()))
-
     def test_anamorphosis_transform_matrix_known_values(self):
         for rotation, scale, shear, _, _ in AFFINE_KNOWN_VALUES:
             tform = AnamorphosisTransform(rotation=rotation, scale=scale,
@@ -686,7 +681,7 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
         an affine transform if the input coordinates contain no higher order
         aberrations.
         """
-        src = self._grid(8)
+        src = GridPoints(8, 8)
         rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
         scaleList = [1., SQ05, SQ2, S23, SQ2S23]
         shearList = [-1., 0., 1.]
@@ -706,8 +701,8 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
     def test_anamorphosis_transform_rotation(self):
         """
         The rotation component of an AnamorphosisTransform should be equal to
-        the argument of coefficient b1 if the transform is has zero shear and
-        no higher order aberrations.
+        the argument of coefficient b1 if the transform has zero shear and no
+        higher order aberrations.
         """
         rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
         scaleList = [1., SQ05, SQ2, S23, SQ2S23]
@@ -722,8 +717,8 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
     def test_anamorphosis_transform_scale(self):
         """
         The scale component of an AnamorphosisTransform should be equal to
-        the absolute value of coefficient b1 if the transform is has zero
-        shear, isotropic scaling, and no higher order aberrations.
+        the absolute value of coefficient b1 if the transform has zero shear,
+        isotropic scaling, and no higher order aberrations.
         """
         rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
         scaleList = [1., SQ05, SQ2]
