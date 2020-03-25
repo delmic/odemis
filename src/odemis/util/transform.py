@@ -834,9 +834,9 @@ class AnamorphosisTransform(AffineTransform):
 
     where A, B₁, B₂, C₁, C₂, C₃, D₁, D₂, E₁, and E₂ are the (complex)
     coefficients of the transform. The in- and output coordinates are the
-    complex numbers w = x + j*y. Note that A, B₁, B₂ define an ordinary affine
-    transform, and the higher order distortions are set by the other
-    coefficients.
+    complex numbers w = x + j*y. Note that w̄ is the complex conjugate of w. The
+    coefficients A, B₁, B₂ define an ordinary affine transform, and the other
+    coefficients determine the higher order distortions.
 
     Parameters
     ----------
@@ -990,4 +990,5 @@ class AnamorphosisTransform(AffineTransform):
         self.translation = (a.real, a.imag)
 
     def inverse(self):
-        raise NotImplementedError()
+        raise NotImplementedError("The inverse of the AnamorphosisTransform "
+                                  "is not an Anamorphosis transform itself.")
