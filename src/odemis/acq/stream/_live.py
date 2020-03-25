@@ -430,12 +430,12 @@ class AlignedSEMStream(SEMStream):
         """
         res, shift = self._computeROISettings(self.roi.value)
 
-        if (self._shiftebeam == MTD_EBEAM_SHIFT) and (self._beamshift is not None):
-            shift = tuple(s + c for s, c in zip(shift, self._beamshift))
-
-        # always in this order
+        # always in this order: resolution, then shift
         self._emitter.resolution.value = res
-        self._emitter.shift.value = shift
+        if self._shiftebeam == MTD_EBEAM_SHIFT:
+            if self._beamshift is not None:
+                shift = tuple(s + c for s, c in zip(shift, self._beamshift))
+            self._emitter.shift.value = shift
 
     def _prepare(self):
         """
@@ -470,16 +470,16 @@ class AlignedSEMStream(SEMStream):
             self._beamshift = None
             try:
                 logging.info("Determining the Ebeam center position")
-                # TODO Handle cases where current beam shift is larger than
-                # current limit. Happens when accel. voltage is changed
-                self._emitter.shift.value = (0, 0)
+                if self._shiftebeam == MTD_EBEAM_SHIFT:
+                    self._emitter.shift.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
-                shift_clipped = self._emitter.shift.clip(shift)
-                if shift_clipped != shift:
-                    shift = shift_clipped
-                    logging.info("Limiting spot shift to %s m,m due to hardware constraints", shift)
-                self._beamshift = shift
+                if self._shiftebeam == MTD_EBEAM_SHIFT:
+                    shift_clipped = self._emitter.shift.clip(shift)
+                    if shift_clipped != shift:
+                        shift = shift_clipped
+                        logging.info("Limiting spot shift to %s m,m due to hardware constraints", shift)
+                    self._beamshift = shift
                 cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
                 cur_trans = (cur_trans[0] + 0.25 * shift[0],
                              cur_trans[1] + 0.25 * shift[1])
