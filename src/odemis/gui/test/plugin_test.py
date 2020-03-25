@@ -27,6 +27,8 @@ from __future__ import division
 import logging
 from odemis import model, dataio
 from odemis.gui import plugin
+from odemis.gui.util import get_home_folder
+import os
 import time
 import unittest
 
@@ -119,6 +121,13 @@ class PluginTestCase(test.GuiTestCase):
     def test_find_plugins(self):
         """ Test that find_plugins can find plugin modules"""
         paths = plugin.find_plugins()
+        if not paths:
+            # A typical reason for this to fail is that no plugin are installed
+            hf = get_home_folder()
+            upath = os.path.join(hf, u".local/share/odemis/plugins")
+            if not os.path.isdir(upath) or not os.listdir(upath):
+                self.fail("Please install at least one plugin in ~/.local/share/odemis/plugins")
+
         self.assertGreater(len(paths), 0)
 
     def test_load_plugin(self):
