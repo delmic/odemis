@@ -22,14 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import copy
+import itertools
 import numpy
 from numpy.linalg import LinAlgError
 import unittest
 
+from odemis.util.spot import GridPoints
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
                                    RigidTransform, SimilarityTransform,
-                                   ScalingTransform, AffineTransform)
+                                   ScalingTransform, AffineTransform,
+                                   AnamorphosisTransform)
 
 ROT45 = 0.25 * numpy.pi
 ROT90 = 0.5 * numpy.pi
@@ -647,6 +650,85 @@ class AffineTransformKnownValues(unittest.TestCase):
                                     shear=shear,
                                     translation=translation).inverse()
             numpy.testing.assert_array_almost_equal(src, tform(dst))
+
+
+class AnamorphosisTransformKnownValues(unittest.TestCase):
+
+    def test_anamorphosis_transform_matrix_known_values(self):
+        for rotation, scale, shear, _, _ in AFFINE_KNOWN_VALUES:
+            tform = AnamorphosisTransform(rotation=rotation, scale=scale,
+                                          shear=shear)
+            R = _rotation_matrix_from_angle(rotation)
+            S = scale * numpy.eye(2)
+            L = numpy.array([(1., shear), (0., 1.)])
+            matrix = numpy.dot(numpy.dot(R, S), L)
+            numpy.testing.assert_array_almost_equal(matrix, tform.transformation_matrix)
+
+    def test_anamorphosis_transform_apply_known_values(self):
+        """
+        AnamorphosisTransform should return known result with known input for
+        affine transformations.
+        """
+        src = AFFINE_KNOWN_VALUES[0][-1]
+        for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
+            tform = AnamorphosisTransform(rotation=rotation, scale=scale,
+                                          shear=shear, translation=translation)
+            numpy.testing.assert_array_almost_equal(dst, tform(src))
+
+    def test_anamorphosis_transform_comparison_known_values(self):
+        """
+        The transform returned by AnamorphosisTransform.from_pointset should be
+        an affine transform if the input coordinates contain no higher order
+        aberrations.
+        """
+        src = GridPoints(8, 8)
+        rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
+        scaleList = [1., SQ05, SQ2, S23, SQ2S23]
+        shearList = [-1., 0., 1.]
+        translationList = [T0, TX, TY, TXY]
+        iterator = itertools.product(rotationList, scaleList, shearList, translationList)
+        for rotation, scale, shear, translation in iterator:
+            affine = AffineTransform(rotation=rotation, scale=scale,
+                                     shear=shear, translation=translation)
+            dst = affine(src)
+            tform = AnamorphosisTransform.from_pointset(src, dst)
+            self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
+            numpy.testing.assert_array_almost_equal(scale, tform.scale)
+            self.assertAlmostEqual(shear, tform.shear)
+            numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            numpy.testing.assert_array_almost_equal(0., tform.coeffs[3:])
+
+    def test_anamorphosis_transform_rotation(self):
+        """
+        The rotation component of an AnamorphosisTransform should be equal to
+        the argument of coefficient b1 if the transform has zero shear and no
+        higher order aberrations.
+        """
+        rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
+        scaleList = [1., SQ05, SQ2, S23, SQ2S23]
+        translationList = [T0, TX, TY, TXY]
+        iterator = itertools.product(rotationList, scaleList, translationList)
+        for rotation, scale, translation in iterator:
+            tform = AnamorphosisTransform(rotation=rotation, scale=scale,
+                                          translation=translation)
+            b1 = tform.coeffs[1]
+            self.assertAlmostEqual(0., _angle_diff(rotation, numpy.angle(b1)))
+
+    def test_anamorphosis_transform_scale(self):
+        """
+        The scale component of an AnamorphosisTransform should be equal to
+        the absolute value of coefficient b1 if the transform has zero shear,
+        isotropic scaling, and no higher order aberrations.
+        """
+        rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
+        scaleList = [1., SQ05, SQ2]
+        translationList = [T0, TX, TY, TXY]
+        iterator = itertools.product(rotationList, scaleList, translationList)
+        for rotation, scale, translation in iterator:
+            tform = AnamorphosisTransform(rotation=rotation, scale=scale,
+                                          translation=translation)
+            b1 = tform.coeffs[1]
+            self.assertAlmostEqual(scale, numpy.abs(b1))
 
 
 if __name__ == '__main__':
