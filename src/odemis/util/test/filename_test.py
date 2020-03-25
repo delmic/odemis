@@ -54,7 +54,7 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test-123-%s' % timeshrt: ('test-{cnt}-{timeshrt}', '123'),
                    'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
                    '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
-                   'test-0000': ('test-{cnt}', '0000'),
+                   'test-0070': ('test-{cnt}', '0070'),  # test-0000 gives the wrong result at midnight
                    '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
                    'test2-45': ('test2-{cnt}', '45'),
                    'test': ('test-{cnt}', '001'),
