@@ -190,34 +190,38 @@ class ExportController(object):
             if isinstance(exported_data, dict):
                 # get the file names
                 filename_dict = {}
+                n_exist = 0
+                dir_name, base = os.path.split(filepath)
+                base_name, file_extension = splitext(base)
                 for key in exported_data.keys():
-                    dir_name, base = os.path.split(filepath)
-                    base_name, file_extension = splitext(base)
-
                     # use the filename defined by the user and add the MD_POL_MODE to the filename
                     filename = os.path.join(dir_name, base_name + "_" + key + file_extension)
 
                     # detect we'd overwrite an existing file => show our own warning
                     if os.path.exists(filename):
-                        dlg = wx.MessageDialog(self._main_frame,
-                                               "A file named \"%s\" already exists.\n"
-                                               "Do you want to replace it?" % (filename,),
-                                               "File already exists",
-                                               wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
-                        ret = dlg.ShowModal()
-                        dlg.Destroy()
-                        if ret == wx.ID_NO:
-                            return
+                        n_exist += 1
 
                     filename_dict[key] = filename
 
+                if n_exist:
+                    dlg = wx.MessageDialog(self._main_frame,
+                                           "Some files (%d/%d) already exists.\n"
+                                           "Do you want to replace them?" % (n_exist, len(filename_dict)),
+                                           "Files already exist",
+                                           wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+                    ret = dlg.ShowModal()
+                    dlg.Destroy()
+                    if ret == wx.ID_NO:
+                        return
+
                 # record everything to a file
-                for key in exported_data.keys():
-                    exporter.export(filename_dict[key], exported_data[key])
+                for key, data in exported_data.items():
+                    exporter.export(filename_dict[key], data)
 
                 # TODO need to be adapted for batch export as now redundant
                 popup.show_message(self._main_frame,
-                                   "Exported in files of type %s"
+                                   "Images exported",
+                                   "Stored as %s"
                                    % (os.path.join(dir_name, base_name + "_" + "xxx" + file_extension),),
                                    timeout=3
                                    )
@@ -229,7 +233,8 @@ class ExportController(object):
                 exporter.export(filepath, exported_data)
 
                 popup.show_message(self._main_frame,
-                                   "Exported in %s" % (filepath,),
+                                   "Image exported",
+                                   "Stored in %s" % (filepath,),
                                    timeout=3
                                    )
 
