@@ -1523,7 +1523,7 @@ class PointSpectrumViewport(NavigablePlotViewport):
             wll, unit_x = spectrum.get_spectrum_range(data)
 
             range_x = wll[0], wll[-1]
-            if not self.hrange_lock.value:
+            if not self.hrange_lock.value or self.hrange.value is None:
                 display_xrange = util.find_plot_content(wll, data)
             else:
                 display_xrange = self.hrange.value
