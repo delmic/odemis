@@ -4261,6 +4261,12 @@ class StaticStreamsTestCase(unittest.TestCase):
     def test_arpolarimetry(self):
         """Test StaticARStream with ARPolarimetryProjection projection."""
 
+        # Check whether the arpolarimetry package is available
+        try:
+            import arpolarimetry
+        except ImportError:
+            self.skipTest("arpolarimetry package not available, type in a terminal: sudo apt install python-arpolarimetry python3-arpolarimetry")
+
         data_raw = []
         bg_data = []  # list of background images
         for i, pol in enumerate(POL_POSITIONS):
