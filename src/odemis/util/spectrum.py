@@ -51,35 +51,35 @@ def get_wavelength_per_pixel(da):
     if not hasattr(da, 'metadata'):
         raise AttributeError("No metadata found in data array")
 
+    # check dimension of data
+    dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
+    if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB?
+        # This is a hack to handle RGB projections of CX (ie, line spectrum)
+        # and CT (temporal spectrum) data. In theory the MD_DIMS should be
+        # XCR and TCR (where the R is about the RGB channels). However,
+        # this is confusing, and the GUI would not know how to display it.
+        ci = 1
+    else:
+        try:
+            ci = dims.index("C")  # get index of dimension C
+        except ValueError:
+            raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
+
     # MD_WL_LIST has priority
     if model.MD_WL_LIST in da.metadata:
         wl = da.metadata[model.MD_WL_LIST]
-        # check dimension of data
-        dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
-        if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB?
-            # This is a hack to handle RGB projections of CX (ie, line spectrum)
-            # and CT (temporal spectrum) data. In theory the MD_DIMS should be
-            # XCR and TCR (where the R is about the RGB channels). However,
-            # this is confusing, and the GUI would not know how to display it.
-            ci = 1
-        else:
-            try:
-                ci = dims.index("C")  # get index of dimension C
-            except ValueError:
-                raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
 
         if len(wl) != da.shape[ci]:
             raise ValueError("Length of wavelength list does not match length of wavelength data.")
         return wl
-
-    if model.MD_WL_POLYNOMIAL in da.metadata:
+    elif model.MD_WL_POLYNOMIAL in da.metadata:
         pn = da.metadata[model.MD_WL_POLYNOMIAL]
         pn = polynomial.polytrim(pn)
         if len(pn) >= 2:
             npn = polynomial.Polynomial(pn,  #pylint: disable=E1101
-                                        domain=[0, da.shape[0] - 1],
-                                        window=[0, da.shape[0] - 1])
-            ret = npn.linspace(da.shape[0])[1]
+                                        domain=[0, da.shape[ci] - 1],
+                                        window=[0, da.shape[ci] - 1])
+            ret = npn.linspace(da.shape[ci])[1]
             return ret.tolist()
         else:
             # a polynomial of 0 or 1 value is useless

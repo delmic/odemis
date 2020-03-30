@@ -1891,7 +1891,7 @@ class LineSpectrumViewport(TwoDViewPort):
             self.left_legend.range = (0, line_length)
 
             self.canvas.set_2d_data(data, unit_x, unit_y,
-                                    self.bottom_legend.range, self.left_legend.range)
+                                    self.bottom_legend.range, self.left_legend.range, flip=wx.VERTICAL)
         else:
             self.clear()
 
