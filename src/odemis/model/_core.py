@@ -31,7 +31,6 @@ import os
 import threading
 from future.moves.urllib.parse import quote
 from odemis.util import inspect_getmembers
-import resource
 
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
@@ -219,27 +218,34 @@ def load_roattributes(self, roattributes):
     # save the list in case we need to pickle the object again
     self._odemis_roattributes = list(roattributes.keys())
 
+if os.name != 'nt':
+    import resource
+    FILES_PER_VA = 6
 
-FILES_PER_VA = 6
-def prepare_to_listen_to_more_vas(inc):
-    """
-    There's a limit on the number of VA subscribers we can create (the number of open
-    file descriptors). By default, it's set to 1024 on ubuntu. If we want to use more
-    subscribers, we need to explicitly increase this limit. This is for example necessary in
-    the SettingsObserver (cf odemis.acq).
-    This function allows us to use an additional amount of inc VA subscribers. It corresponds
-    to the system call ulimit -n.
-    inc (int): how many VAs to open additionally
-    """
-    cur_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-    try:
-        resource.setrlimit(resource.RLIMIT_NOFILE, (cur_limit[0] + inc * FILES_PER_VA, cur_limit[1]))
-    except ValueError:
-        # this happens when starting odemis from eclipse
-        logging.info("Maximum number of open files is already at its limit %s.", cur_limit[0])
+    def prepare_to_listen_to_more_vas(inc):
+        """
+        There's a limit on the number of VA subscribers we can create (the number of open
+        file descriptors). By default, it's set to 1024 on ubuntu. If we want to use more
+        subscribers, we need to explicitly increase this limit. This is for example necessary in
+        the SettingsObserver (cf odemis.acq).
+        This function allows us to use an additional amount of inc VA subscribers. It corresponds
+        to the system call ulimit -n.
+        inc (int): how many VAs to open additionally
+        """
+        cur_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (cur_limit[0] + inc * FILES_PER_VA, cur_limit[1]))
+        except ValueError:
+            # this happens when starting odemis from eclipse
+            logging.info("Maximum number of open files is already at its limit %s.", cur_limit[0])
+
+else:
+
+    # do nothing in Windows
+    def prepare_to_listen_to_more_vas(inc):
+        pass
 
 # Container management functions and class
-
 class ContainerObject(Pyro4.core.DaemonObject):
     """Object which represent the daemon for remote access"""
 
