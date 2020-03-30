@@ -34,6 +34,7 @@ from odemis.gui import model, img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
 from odemis.gui.util import call_in_wx_main
 import wx
+from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL
 
 # Two types of tools:
 # * mode: they are toggle buttons, changing the tool mode of the GUIModel
@@ -65,6 +66,7 @@ class ModeTool(Tool):
 class ActionTool(Tool):
     pass
 
+
 TOOLS = {
     model.TOOL_ZOOM:
         ModeTool(
@@ -94,6 +96,13 @@ TOOLS = {
             model.TOOL_NONE,
             "Select anchor region for drift correction"
         ),
+    model.TOOL_RULER:
+        ModeTool(
+            "btn_view_ruler",
+            model.TOOL_RULER,
+            model.TOOL_NONE,
+            "Select ruler"
+        ),
     model.TOOL_POINT:
         ModeTool(
             "btn_view_pick",
@@ -101,19 +110,19 @@ TOOLS = {
             model.TOOL_NONE,
             "Select point"
         ),
+    model.TOOL_LABEL:
+        ModeTool(
+            "btn_view_label",
+            model.TOOL_LABEL,
+            model.TOOL_NONE,
+            "Select label"
+        ),
     model.TOOL_LINE:
         ModeTool(
             "btn_view_1dpick",
             model.TOOL_LINE,
             model.TOOL_NONE,
             "Select line"
-        ),
-    model.TOOL_RULER:
-        ModeTool(
-            "btn_view_ruler",
-            model.TOOL_RULER,
-            model.TOOL_NONE,
-            "Select ruler"
         ),
     model.TOOL_DICHO:
         ModeTool(
@@ -151,13 +160,19 @@ class ToolBar(wx.Panel):
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
         # Create orientation dependent objects
-        if kwargs['style'] & wx.VERTICAL:
+        if kwargs['style'] & (wx.VERTICAL | wx.HORIZONTAL):
+            self.orientation = wx.VERTICAL | wx.HORIZONTAL
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_top.png"))
+            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_bottom.png"))
+            self.btn_sizer = wx.GridBagSizer()
+        elif kwargs['style'] & wx.VERTICAL:
             self.orientation = wx.VERTICAL
             main_sizer = wx.BoxSizer(wx.VERTICAL)
             first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_top.png"))
             second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bottom.png"))
             self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
-        else:
+        else:  # kwargs['style'] & wx.HORIZONTAL:
             self.orientation = wx.HORIZONTAL
             main_sizer = wx.BoxSizer(wx.HORIZONTAL)
             first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_left.png"))
@@ -181,7 +196,9 @@ class ToolBar(wx.Panel):
 
         main_sizer.Add(second_bmp)
 
-        if self.orientation == wx.VERTICAL:
+        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL):
+            main_sizer.SetItemMinSize(self.btn_panel, 50, -1)
+        elif self.orientation == wx.VERTICAL:
             main_sizer.SetItemMinSize(self.btn_panel, 40, -1)
         else:
             main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
@@ -200,6 +217,7 @@ class ToolBar(wx.Panel):
         raises:
             KeyError: if tool_id is incorrect
         """
+        self.tool = tool_id
         tooltype = TOOLS[tool_id]
         if isinstance(tooltype, ActionTool):
             self._add_action_tool(tooltype, tool_id, handler)
@@ -251,15 +269,33 @@ class ToolBar(wx.Panel):
         if tooltip:
             btn.SetToolTip(tooltip)
 
-        if self.orientation == wx.HORIZONTAL:
-            f = wx.LEFT | wx.RIGHT | wx.TOP
+        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL):
+            f = wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL
             b = 5
-        else:
-            f = wx.TOP | wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL
-            b = 5
+            # Ideal position for the known tools
+            pos = {TOOL_RULER: (0, 0), TOOL_LABEL: (1, 0), TOOL_POINT: (0, 1), TOOL_LINE: (1, 1),
+                   TOOL_ACT_ZOOM_FIT: (2, 1)}.get(self.tool)
 
-        self.btn_sizer.Add(btn, border=b, flag=f)
-        self.btn_panel.Layout()
+            # Unknown tool, or position already used => pick the first position available
+            if not pos or self.btn_sizer.FindItemAtPosition(pos):
+                for j in range(8):  # max 2x8
+                    for i in range(2):
+                        if not self.btn_sizer.FindItemAtPosition((i, j)):
+                            pos = (i, j)
+                            break
+                else:
+                    raise ValueError("No more space in toolbar")
+            self.btn_sizer.Add(btn, pos, border=b, flag=f)
+            self.btn_panel.Layout()
+        else:
+            if self.orientation == wx.HORIZONTAL:
+                f = wx.LEFT | wx.RIGHT | wx.TOP
+                b = 5
+            else:
+                f = wx.TOP | wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL
+                b = 5
+            self.btn_sizer.Add(btn, border=b, flag=f)
+            self.btn_panel.Layout()
         return btn
 
     def enable_button(self, tool_id, enable):
