@@ -1,3 +1,18 @@
+odemis (3.0.2-1) xenial; urgency=medium
+
+  * New version 3.0.2
+  * Main bug fixes and improvements:
+   - Fix error during automatic stage calibration (DELPHI)
+   - Sometimes the GUI would stop after the "Auto adjust" procedure (DELPHI)
+   - Confirmation message that export succeeded didn't appear on Windows
+   - Export of large (pyramidal) data is now done at finest resolution
+   - Line spectrum data exported as CSV was inverted on distance axis
+   - Line spectrum exported as CSV had the wrong metadata on distance axis
+   - After opening a new file, one previous image could still be displayed (very rarely)
+   - Any tmcm.tsv file can be loaded using the param_file argument
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 30 Mar 2020 18:02:58 +0200
+
 odemis (3.0.1-1) xenial; urgency=medium
 
   * New version: 3.0.1
