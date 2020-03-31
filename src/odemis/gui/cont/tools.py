@@ -160,20 +160,18 @@ class ToolBar(wx.Panel):
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
         # Create orientation dependent objects
-        if kwargs['style'] & (wx.VERTICAL | wx.HORIZONTAL):
-            self.orientation = wx.VERTICAL | wx.HORIZONTAL
+        self.orientation = kwargs['style'] & (wx.VERTICAL | wx.HORIZONTAL)  # mask other bits
+        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL):
             main_sizer = wx.BoxSizer(wx.VERTICAL)
             first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_top.png"))
             second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_bottom.png"))
             self.btn_sizer = wx.GridBagSizer()
-        elif kwargs['style'] & wx.VERTICAL:
-            self.orientation = wx.VERTICAL
+        elif self.orientation == wx.VERTICAL:
             main_sizer = wx.BoxSizer(wx.VERTICAL)
             first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_top.png"))
             second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bottom.png"))
             self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
-        else:  # kwargs['style'] & wx.HORIZONTAL:
-            self.orientation = wx.HORIZONTAL
+        else:  # self.orientation == wx.HORIZONTAL:
             main_sizer = wx.BoxSizer(wx.HORIZONTAL)
             first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_left.png"))
             second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_right.png"))
