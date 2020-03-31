@@ -404,7 +404,7 @@ class AlignedSEMStream(SEMStream):
         stage.position.subscribe(self._onMove)
         focus.position.subscribe(self._onMove)
         self._executor = ThreadPoolExecutor(max_workers=1)
-        self._beamshift = None
+        self._beamshift = (0, 0)
 
     def _onMove(self, pos):
         """
@@ -433,8 +433,7 @@ class AlignedSEMStream(SEMStream):
         # always in this order: resolution, then shift
         self._emitter.resolution.value = res
         if self._shiftebeam == MTD_EBEAM_SHIFT:
-            if self._beamshift is not None:
-                shift = tuple(s + c for s, c in zip(shift, self._beamshift))
+            shift = (shift[0] + self._beamshift[0], shift[1] + self._beamshift[1])
             self._emitter.shift.value = shift
 
     def _prepare(self):
@@ -467,7 +466,7 @@ class AlignedSEMStream(SEMStream):
             self._getEmitterVA("resolution").unsubscribe(self._onResolution)
 
             shift = (0, 0)
-            self._beamshift = None
+            self._beamshift = (0, 0)
             try:
                 logging.info("Determining the Ebeam center position")
                 if self._shiftebeam == MTD_EBEAM_SHIFT:
