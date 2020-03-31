@@ -4427,7 +4427,7 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="ToolBar" name="ana_toolbar">
-                <style>wxVERTICAL</style>
+                <style>wxVERTICAL|wxHORIZONTAL</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
