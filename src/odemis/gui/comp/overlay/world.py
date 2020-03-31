@@ -959,6 +959,10 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
             vpos: the view coordinates of the mouse cursor once left click mouse event is fired
         """
         self.drag_v_start_pos = self.drag_v_end_pos = Vec(vpos)
+        if self.v_start_pos is None:
+            self.v_start_pos = self.drag_v_start_pos
+        if self.v_end_pos is None:
+            self.v_end_pos = self.drag_v_end_pos
 
     @abstractmethod
     def on_motion(self, vpos, ctrl_down):
@@ -1413,20 +1417,24 @@ class LabelGadget(GenericGadgetLine):
         """ Update view coordinates while editing the label. If round_angle(boolean) is True,
         the label is forced to be at one angle multiple of 45 degrees """
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        diff = current_pos - self.drag_v_start_pos
+        self.drag_v_start_pos = current_pos
 
         if self._mode == LABEL_MODE_EDIT_START:
+            new_v_start = self.v_start_pos + diff
             if round_angle:
-                current_pos = Vec(self._round_pos(self.v_end_pos, current_pos))
-            self.v_start_pos = current_pos
+                new_v_start = Vec(self._round_pos(self.v_end_pos, new_v_start))
+            self.v_start_pos = new_v_start
 
         elif self._mode in (LABEL_MODE_EDIT_END, LABEL_MODE_EDIT_TEXT):
             if self._mode == LABEL_MODE_EDIT_TEXT:
                 # when the mouse cursor is on motion while the left mouse button is pressed down, the
                 # flag _edit_label_end gets True, representing that only the position of the text is being edited.
                 self._edit_label_end = True
+            new_v_end = self.v_end_pos + diff
             if round_angle:
-                current_pos = Vec(self._round_pos(self.v_start_pos, current_pos))
-            self.v_end_pos = current_pos
+                new_v_end = Vec(self._round_pos(self.v_start_pos, new_v_end))
+            self.v_end_pos = new_v_end
 
     def _edit_text(self):
         """ A dialog box pops up and the user can edit the text """
@@ -1712,7 +1720,7 @@ class GadgetOverlay(WorldOverlay):
             If no tool is found, it returns None.
         """
         if self._tools:
-            for tool in self._tools:
+            for tool in self._tools[::-1]:
                 hover_mode = tool.get_hover(vpos)
                 if hover_mode != gui.HOVER_NONE:
                     return tool, hover_mode
