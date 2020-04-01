@@ -18,6 +18,7 @@ from __future__ import division
 
 import logging
 import numpy
+from abc import abstractmethod
 from odemis import model, util
 from odemis.util import img
 
@@ -30,7 +31,37 @@ from odemis.util import img
 # directly copy the image already transformed.
 # TODO: handle higher dimensions by just copying them as-is
 
-class CollageWeaver(object):
+class Weaver(object):
+    """
+    Abstract class representing a weaver.
+    A weaver assembles a set of small images with MD_POS metadata (tiles) into one large image.
+    """
+
+    def __init__(self):
+        self.tiles = []
+
+    def addTile(self, tile):
+        """
+        Adds one tile to the weaver.
+        tile (2D DataArray): the image must have at least MD_POS and
+        MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
+        """
+        # Merge the correction metadata inside each image (to keep the rest of the
+        # code simple)
+        tile = model.DataArray(tile, tile.metadata.copy())
+        img.mergeMetadata(tile.metadata)
+        self.tiles.append(tile)
+
+    @abstractmethod
+    def getFullImage(self):
+        """
+        Assembles the tiles into a large image.
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
+        """
+        pass
+
+
+class CollageWeaver(Weaver):
     """
     Very straight-forward version, which just paste the images where their center
     position is. It expects that the pixel size for all the images are identical.
@@ -43,25 +74,10 @@ class CollageWeaver(object):
       the bounding box.
     """
 
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        """
-        tile (2D DataArray): the image must have at least MD_POS and
-        MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
-        """
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
-
     def getFullImage(self):
         """
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
         """
-
         tiles = self.tiles
 
         # Compute the bounding box of each tile and the global bounding box
@@ -128,23 +144,13 @@ class CollageWeaver(object):
         return model.DataArray(im, md)
 
 
-class CollageWeaverReverse(object):
+class CollageWeaverReverse(Weaver):
     """
     Similar to CollageWeaver, but only fills parts of the global image with the new tile that
     are still empty. This is desirable if the quality of the overlap regions is much better the first
     time a region is imaged due to bleaching effects. The result is equivalent to a collage that starts 
     with the last tile and pastes the older tiles in reverse order of acquisition.
     """
-
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
 
     def getFullImage(self):
         """
@@ -226,21 +232,11 @@ class CollageWeaverReverse(object):
         return model.DataArray(im, md)
 
 
-class MeanWeaver(object):
+class MeanWeaver(Weaver):
     """
     Pixels of the final image which are corresponding to several tiles are computed as an 
     average of the pixel of each tile.
     """
-
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
 
     def getFullImage(self):
         """
