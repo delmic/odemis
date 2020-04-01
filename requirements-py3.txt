@@ -1,6 +1,6 @@
 Cython>=0.23.5
 decorator>=4.0.9
-futures>=3.0.5
+future>=0.16.0
 h5py>=2.5.0
 libtiff>=0.4.2
 matplotlib>=1.4.3,<3.0
