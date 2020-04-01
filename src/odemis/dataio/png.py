@@ -18,11 +18,12 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
+import numpy
 from odemis import model
 from odemis.util import img
 import os
-import scipy
 
+from PIL import Image
 
 FORMAT = "PNG"
 # list of file-name extensions possible, the first one is the default when saving a file
@@ -37,8 +38,11 @@ def _saveAsPNG(filename, data):
 
     # TODO: store metadata
 
-    # TODO: support RGB
-    if data.metadata.get(model.MD_DIMS) == 'YXC':
+    # Already RGB 8 bit?
+    if (data.metadata.get(model.MD_DIMS) == 'YXC'
+        and data.dtype in (numpy.uint8, numpy.int8)
+        and data.shape[2] in (3, 4)
+       ):
         rgb8 = data
     else:
         data = img.ensure2DImage(data)
@@ -59,7 +63,9 @@ def _saveAsPNG(filename, data):
         rgb8 = img.DataArray2RGB(data, irange)
 
     # save to file
-    scipy.misc.imsave(filename, rgb8)
+    im = Image.fromarray(rgb8)
+    im.save(filename, "PNG")
+
 
 def export(filename, data, thumbnail=None):
     '''
