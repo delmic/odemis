@@ -37,8 +37,12 @@ class Weaver(object):
     A weaver assembles a set of small images with MD_POS metadata (tiles) into one large image.
     """
 
-    def __init__(self):
+    def __init__(self, adjust_brt=True):
+        """
+        adjust_brt (bool): True if brightness correction should be applied
+        """
         self.tiles = []
+        self.adjust_brt = adjust_brt
 
     def addTile(self, tile):
         """
@@ -60,6 +64,18 @@ class Weaver(object):
         """
         pass
 
+    def _adjust_brightness(self, tiles):
+        """
+        Adjusts the brightness of a list of tiles, so they all have the same mean value.
+        tiles (2D DataArray): input tiles
+        return (2D DataArray): tiles with adjusted brightness
+        """
+        im_brt = numpy.mean(tiles)
+        for tile in tiles:
+            tile_brt = numpy.mean(tile)
+            diff = numpy.array(im_brt - tile_brt).astype(tile.dtype)  # single value, use array for type cast
+            tile += diff
+        return tiles
 
 class CollageWeaver(Weaver):
     """
@@ -78,7 +94,7 @@ class CollageWeaver(Weaver):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
         """
-        tiles = self.tiles
+        tiles = self._adjust_brightness(self.tiles) if self.adjust_brt else self.tiles
 
         # Compute the bounding box of each tile and the global bounding box
 
@@ -156,7 +172,7 @@ class CollageWeaverReverse(Weaver):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
-        tiles = self.tiles
+        tiles = self._adjust_brightness(self.tiles) if self.adjust_brt else self.tiles
 
         # Compute the bounding box of each tile and the global bounding box
 
@@ -242,7 +258,7 @@ class MeanWeaver(Weaver):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
-        tiles = self.tiles
+        tiles = self._adjust_brightness(self.tiles) if self.adjust_brt else self.tiles
 
         # Compute the bounding box of each tile and the global bounding box
 

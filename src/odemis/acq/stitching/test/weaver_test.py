@@ -122,6 +122,50 @@ class TestCollageWeaver(unittest.TestCase):
 
                     numpy.testing.assert_array_almost_equal(w, img[:sz, :sz], decimal=1)
 
+    def test_brightness_adjust(self):
+        img0 = numpy.zeros((100, 100))
+        img1 = numpy.zeros((100, 100)) + 0.2
+
+        img0[:, 80:90] = 1
+        img1[:, 10:20] = 1.2
+
+        # Tile 1 brightness is 0.2 higher than tile 0 brightness. In the weaved image, both
+        # will have the mean value.
+        exp_out = numpy.zeros((100, 170)) + 0.1
+        exp_out[:, 80:90] = 1.1
+
+        md0 = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (50, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in0 = model.DataArray(img0, md0)
+
+        md1 = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (120, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in1 = model.DataArray(img1, md1)
+
+        weaver = CollageWeaver()
+        weaver.addTile(in0)
+        weaver.addTile(in1)
+        outd = weaver.getFullImage()
+
+        numpy.testing.assert_almost_equal(outd, exp_out, decimal=5)
 
 # @unittest.skip("skip")
 class TestMeanWeaver(unittest.TestCase):
@@ -283,7 +327,7 @@ class TestMeanWeaver(unittest.TestCase):
         }
         in1 = model.DataArray(img1, md1)
 
-        weaver = MeanWeaver()
+        weaver = MeanWeaver(adjust_brt=False)
         weaver.addTile(in0)
         weaver.addTile(in1)
         outd = weaver.getFullImage()
@@ -459,7 +503,7 @@ class TestCollageWeaverReverse(unittest.TestCase):
         }
         in1 = model.DataArray(img1, md1)
 
-        weaver = CollageWeaverReverse()
+        weaver = CollageWeaverReverse(adjust_brt=False)
         weaver.addTile(in0)
         weaver.addTile(in1)
         outd = weaver.getFullImage()
