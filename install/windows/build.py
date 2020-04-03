@@ -9,7 +9,7 @@ cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
 nsis_command = [
     r"C:\Program Files (x86)\NSIS\makensis",
-    "/DPRODUCT_VERSION=" + '.'.join(odemis._get_version().split('-')[:2]),
+    "/DPRODUCT_VERSION=" + odemis.get_version_simplified(),
     "setup.nsi"
 ]
 
@@ -32,11 +32,11 @@ def run_command(cmd, flavor=None):
 
 def add_size_to_version():
     with open('dist/version.txt', 'a') as f:
-        version = '.'.join(odemis._get_version().split('-')[:2])
+        version = odemis.get_version_simplified()
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
 
-print("Build OdemisViewer " + '.'.join(odemis._get_version().split('-')[:2]))
+print("Build OdemisViewer " + odemis.get_version_simplified())
 
 os.chdir(os.path.dirname(__file__) or '.')
 

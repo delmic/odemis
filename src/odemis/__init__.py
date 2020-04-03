@@ -84,7 +84,7 @@ def get_version_simplified():
     This function returns a version string of the form "M.N.PP(.QQQ)", where
     QQQ is the commit number in case of unstable release.
     """
-    return ".".join(_get_version().split("-")[:2])
+    return ".".join(__version__.split("-")[:2])
 
 
 __version__ = _get_version()
