@@ -929,6 +929,165 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     return setting_entry
 
 
+def create_local_axis_entry(container, name, va, comp, conf=None):
+    # If no conf provided, set it to an empty dictionary
+    conf = conf or {}
+
+    # Format label
+    label_text = conf.get('label', label_to_human(name))
+    tooltip = conf.get('tooltip', "")
+
+    logging.debug("Adding Local Axis control %s", label_text)
+
+    ad = comp.axes[name]
+    pos = comp.position.value[name]
+    unit = ad.unit
+
+    # Determine control type
+    try:
+        control_type = conf['control_type']
+    except KeyError:
+        # If axis has .range (continuous) => slider
+        # If axis has .choices (enumerated) => combo box
+        if hasattr(ad, "range"):
+            control_type = odemis.gui.CONTROL_SLIDER
+        else:
+            control_type = odemis.gui.CONTROL_COMBO
+
+    if callable(control_type):
+        control_type = control_type(comp, name, conf)
+
+    if control_type == odemis.gui.CONTROL_SLIDER:
+        if "range" in conf:
+            minv, maxv = conf["range"]
+        else:
+            minv, maxv = ad.range
+
+        ctrl_conf = {
+            'min_val': minv,
+            'max_val': maxv,
+            'unit': unit,
+            'accuracy': conf.get('accuracy', 3),
+        }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
+        lbl_ctrl, value_ctrl = container.add_float_slider(label_text, pos, ctrl_conf)
+
+        # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
+        # but to EVT_SCROLL_CHANGED, which happens when the user has made his
+        # mind. This avoid too many unnecessary actuator moves and disabling the
+        # widget too early.
+
+        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_SCROLL_CHANGED)
+
+    elif control_type == odemis.gui.CONTROL_FLT:
+        if "range" in conf:
+            minv, maxv = conf["range"]
+        else:
+            minv, maxv = ad.range
+
+        ctrl_conf = {
+            'min_val': minv,
+            'max_val': maxv,
+            'unit': unit,
+            'accuracy': conf.get('accuracy', 3),
+        }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
+        lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
+
+        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_COMMAND_ENTER)
+
+    elif control_type == odemis.gui.CONTROL_COMBO:
+        # TODO: make it read-only _only_ if the axes have a .choices (but for now
+        # that's always the case for combo-boxes anyway)
+        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf={"style": wx.CB_READONLY})
+
+        choices_fmt = format_axis_choices(name, ad)
+
+        accuracy = conf.get('accuracy', 3)
+
+        # Set choices
+        if unit is None:
+            unit = ""
+        for choice, formatted in choices_fmt:
+            value_ctrl.Append(formatted, choice)
+
+        # A small wrapper function makes sure that the value can
+        # be set by passing the actual value (As opposed to the text label)
+        def cb_set(value, va=va, ctrl=value_ctrl, u=unit, acc=accuracy):
+            # Re-read the value from the VA because it'll be called via
+            # CallAfter(), and if the value is changed multiple times, it might
+            # not be in chronological order.
+            value = va.value
+            for i in range(ctrl.GetCount()):
+                d = ctrl.GetClientData(i)
+                if (d == value or
+                    (all(isinstance(v, float) for v in (value, d)) and
+                     util.almost_equal(d, value))
+                   ):
+                    logging.debug("Setting combobox value to %s", ctrl.Items[i])
+                    ctrl.SetSelection(i)
+                    break
+            else:
+                logging.debug("No existing label found for value %s in combobox ctrl %d",
+                              value, id(ctrl))
+                # entering value as free text
+                txt = value_to_str(value, u, acc)
+                ctrl.SetValue(txt)
+
+        # equivalent wrapper function to retrieve the actual value
+        def cb_get(ctrl=value_ctrl, va=va, u=unit):
+            ctrl_value = ctrl.GetValue()
+            # Try to use the predefined value if it's available
+            i = ctrl.GetSelection()
+
+            # Warning: if the text contains an unknown value, GetSelection will
+            # not return wx.NOT_FOUND (as expected), but the last selection value
+            if i != wx.NOT_FOUND and ctrl.Items[i] == ctrl_value:
+                logging.debug("Getting item value %s from combobox control",
+                              ctrl.GetClientData(i))
+                return ctrl.GetClientData(i)
+            else:
+                va_val = va.value
+                try:
+                    new_val = str_to_value(ctrl_value, va)
+                except (ValueError, TypeError):
+                    logging.warning("Value %s couldn't be understood", ctrl_value, exc_info=True)
+                    new_val = va_val  # To force going back to last value
+
+                # if it ends up being the same value as before the combobox will
+                # not update, so force it now
+                if va_val == new_val:
+                    cb_set(va_val)
+                return new_val
+
+        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     va_2_ctrl=cb_set, ctrl_2_va=cb_get,
+                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+
+    else:
+        logging.error("Unknown control type %s", control_type)
+
+    value_ctrl.SetToolTip(tooltip)
+    lbl_ctrl.SetToolTip(tooltip)
+
+    return axis_entry
+
+
 def create_axis_entry(container, name, comp, conf=None):
     # If no conf provided, set it to an empty dictionary
     conf = conf or {}

@@ -745,7 +745,6 @@ STREAM_SETTINGS_CONFIG = {
                            u"A wide opening means more light and a worse resolution.",
             }),
             ("band", {  # from filter
-                "label": "Filter",
             }),
         )),
     stream.MonochromatorSettingsStream:
@@ -794,7 +793,6 @@ STREAM_SETTINGS_CONFIG = {
     stream.CLSettingsStream:
         OrderedDict((
             ("band", {  # from filter or cl-filter
-                "label": "Filter",
             }),
         )),
     stream.ScannedTCSettingsStream:

@@ -106,8 +106,8 @@ class Stream(object):
     SETUP_OVERHEAD = 0.1
 
     def __init__(self, name, detector, dataflow, emitter, focuser=None, opm=None,
-                 hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, raw=None,
-                 acq_type=None):
+                 hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, axis_map={},
+                 raw=None, acq_type=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -120,6 +120,8 @@ class Stream(object):
             Stream
         hwemtvas (None or set of str): names of all emitter hardware VAs to be controlled by this
             Stream
+        axis_map (None or dict of axis_name_in_stream(str) -> (str, Actuator)): names of all of the axes that
+            are connected to the stream and should be controlled
         detvas (None or set of str): names of all the detector VigilantAttributes
           (VAs) to be duplicated on the stream. They will be named .detOriginalName
         emtvas (None or set of str): names of all the emitter VAs to be
@@ -187,9 +189,13 @@ class Stream(object):
         self._hwvas = {}  # str (name of the proxied VA) -> original Hw VA
         self._hwvasetters = {}  # str (name of the proxied VA) -> setter
         self._lvaupdaters = {}  # str (name of the proxied VA) -> listener
+        self._axisvaupdaters = {}  # str (name of the axis VA) -> listener (functools.partial)
 
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
+
+        self.axis_map = axis_map or {}
+        self._axis_vas = self._duplicateAxes(self.axis_map)
 
         self._dRangeLock = threading.Lock()
         self._drange = None  # min/max data range, or None if unknown
@@ -257,6 +263,27 @@ class Stream(object):
             self._updateHistogram(drange_raw)
             self._onNewData(None, self.raw[0])
 
+    def _duplicateAxes(self, axis_map):
+        """
+        Duplicate all of the axes passed to the stream in local Vigilant Attributes
+        and return them as a dictionary of axis_name -> duplicated VA
+        axis_map (dict of axis_name -> Actuator): map of an axis name to an Actuator component
+        """
+        if not axis_map:
+            return {}
+
+        # Add axis position VA's to the list of hardware VA's
+        axis_vas = {}  # dict of axis_name to duplicated position VA
+        for va_name in axis_map:
+            axis_name = axis_map[va_name][0]
+            actuator = axis_map[va_name][1]
+            va = self._duplicateAxis(axis_name, actuator)
+            axis_vas[va_name] = va
+            # add attributes to stream
+            setattr(self, "axis" + va_name[0].upper() + va_name[1:], va)
+
+        return axis_vas
+
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
         """
@@ -299,6 +326,10 @@ class Stream(object):
     @property
     def emt_vas(self):
         return self._emt_vas
+
+    @property
+    def axis_vas(self):
+        return self._axis_vas
 
     def __str__(self):
         return "%s %s" % (self.__class__.__name__, self.name.value)
@@ -404,6 +435,25 @@ class Stream(object):
         if lva._value != v:
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
+            
+    # TODO: move to odemis.util ?
+    def _duplicateAxis(self, axis_name, actuator):
+        """
+        Create a new VigilanteAttribute (VA) for the given axis, , which imitates is behaviour.
+        axis_name (str): the name of the axis to define
+        actuator (Actuator): the actuator
+        return (VigilantAttribute): new VA
+        """
+        axis = actuator.axes[axis_name]
+        pos = actuator.position.value[axis_name]
+
+        if hasattr(axis, "choices"):
+            return model.VAEnumerated(pos, choices=axis.choices, unit=axis.unit)
+        elif hasattr(axis, "range"):
+            # Continuous
+            return model.FloatContinuous(pos, range=axis.range, unit=axis.unit)
+        else:
+            raise ValueError("Invalid axis type")
 
     # TODO: move to odemis.util ?
     def _duplicateVA(self, va, setter=None):
@@ -561,6 +611,77 @@ class Stream(object):
                 raise AttributeError(u"Detector has not VA %s" % (vaname,))
             return hwva
 
+    def _linkHwAxes(self):
+        """"
+        Link the axes to the hardware components
+        If local axis Vigilant Attributes's are specified, write the values of the local axis VA
+        to the real hardware
+        """
+
+        if hasattr(self, "axis_map") and self.axis_map:
+
+            logging.info("Moving linked HW axes")
+
+            moving_axes = []
+            for ax_name in self.axis_map:
+                try:
+                    local_pos_va = self._axis_vas[ax_name]
+                    real_ax_name, act = self.axis_map[ax_name]
+                    pos = local_pos_va.value
+                    logging.info("Moving actuator %s axis %s to position %s.", act.name, real_ax_name, pos)
+                    f = act.moveAbs({real_ax_name: pos})
+                    f.add_done_callback(self._onAxisMoveDone)
+                    moving_axes.append(f)
+                    # subscribe to update the axis when the stream plays
+                    updater = functools.partial(self._update_linked_axis, ax_name)
+                    self._axisvaupdaters[ax_name] = updater
+                    local_pos_va.subscribe(updater)
+                except Exception:
+                    logging.exception("Failed to move actuator %s axis %s.", act.name, real_ax_name)
+
+            for f in moving_axes:
+                try:
+                    f.result()
+                except Exception:
+                    logging.exception("Failed to move axis.")
+                    
+    def _onAxisMoveDone(self, f):
+        """
+         Callback method, which checks that the move is actually finished.
+        :param f: (future)
+        """
+        try:
+            f.result()
+        except Exception:
+            logging.exception("Failed to move axis.")
+
+    def _update_linked_axis(self, ax_name, pos):
+        """ Update the value of a linked hardware axis VA
+            when the stream is active
+        """
+        if not self.is_active.value:
+            return
+        try:
+            act = self.axis_map[ax_name][1]
+            logging.info("Moving actuator %s to position %s.", act.name, pos)
+            f = act.moveAbs({ax_name: pos})
+            # TODO: Move this to a separate thread to make sure it doens't block the GUI
+            # it would be good to have the caller know when the axis is done moving.
+            # f.result()
+        except Exception:
+            logging.exception("Failed to move axis.")
+        return pos
+
+    def _unlinkHwAxes(self):
+        """
+        Unlink the axes to the hardware components
+        """
+        if hasattr(self, "axis_map") and self.axis_map is not None:
+            for ax_name in self.axis_map:
+                va = self._axis_vas[ax_name]
+                va.unsubscribe(self._axisvaupdaters[ax_name])
+                del self._axisvaupdaters[ax_name]
+
     def prepare(self):
         """
         Take care of any action required to be taken before the stream becomes
@@ -586,6 +707,8 @@ class Stream(object):
         logging.debug(u"Preparing stream %s ...", self.name.value)
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
+        self._linkHwAxes()
+
         self._prepared = True
         return self._prepare_opm()
 
@@ -644,9 +767,11 @@ class Stream(object):
                 # True, all the HwVAs are already synchronised, and this avoids
                 # the VA setter to catch again the change
                 self._linkHwVAs()
+                self._linkHwAxes()
                 # TODO: create generic fct linkHWAxes and call here
             else:
                 self._unlinkHwVAs()
+                self._unlinkHwAxes()
         return active
 
     def _updateDRange(self, data=None):

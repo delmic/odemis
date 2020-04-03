@@ -1511,6 +1511,7 @@ class SPARC2TestCase(unittest.TestCase):
         cls.spgp = model.getComponent(role="spectrograph")
         cls.stage = model.getComponent(role="stage")
         cls.sstage = model.getComponent(role="scan-stage")
+        cls.filter = model.getComponent(role="cl-filter")
 
     @classmethod
     def tearDownClass(cls):
@@ -1560,11 +1561,15 @@ class SPARC2TestCase(unittest.TestCase):
         """
         Test short & long acquisition for SEM MD CL intensity
         """
+        # create axes
+        axes = {"filter": ("band", self.filter)}
+
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                         emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
+                      axis_map=axes,
                       emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
@@ -1623,6 +1628,7 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(mcs.axisFilter.value, self.filter.position.value["band"])
 
         # Now same thing but with more pixels and drift correction
         mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
@@ -1633,6 +1639,8 @@ class SPARC2TestCase(unittest.TestCase):
         sems.leeches.append(dc)
 
         mcs.repetition.value = (3000, 4000)
+        b0, b1 = list(mcs.axisFilter.choices)[:2]
+        mcs.axisFilter.value = b0
         exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
 
         # Start acquisition
@@ -1652,6 +1660,7 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertEqual(len(sms.raw), 3)
         self.assertEqual(sms.raw[0].shape, exp_res[::-1])
         self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        self.assertEqual(mcs.axisFilter.value, self.filter.position.value["band"])
         sem_md = sms.raw[0].metadata
         cl_md = sms.raw[1].metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
@@ -3612,6 +3621,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         cls.cl = model.getComponent(role="cl-detector")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
+        cls.filter = model.getComponent(role="filter")
 
         mic = model.getMicroscope()
         cls.optmngr = path.OpticalPathManager(mic)
@@ -3824,9 +3834,14 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
     def test_cl_ss(self):
         """ Test CLSettingsStream """
+
+        # create axes
+        axes = {"filter": ("band", self.filter)}
+
         # Create the stream
         cls = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
+                      axis_map=axes,
                       emtvas={"dwellTime", })  # note: not "scale", "resolution"
         self._image = None
         cls.image.subscribe(self._on_image)
@@ -3837,10 +3852,23 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         cls.emtDwellTime.value = 10e-6 # s
         cls.pixelSize.value *= 10
+        b0, b1 = list(cls.axisFilter.choices)[:2]
+        cls.axisFilter.value = b0
+
+        # test that the actuator does not move when the local axis VA updates and the stream is inactive
+        cls.axisFilter.value = b1
+        time.sleep(1.0)
+        self.assertNotEqual(cls.axisFilter.value, self.filter.position.value["band"])
+        cls.axisFilter.value = b0
 
         # Start acquisition
         cls.should_update.value = True
         cls.is_active.value = True
+
+        # test that the actuator does move when the local axis VA updates and the stream is active
+        cls.axisFilter.value = b1
+        time.sleep(1.0)
+        self.assertEqual(cls.axisFilter.value, self.filter.position.value["band"])
 
         # resolution is only updated after starting acquisition
         res = self.ebeam.resolution.value

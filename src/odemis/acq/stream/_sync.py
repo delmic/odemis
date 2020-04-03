@@ -312,6 +312,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         # the last stream are used.
         for s in self._streams:
             s._linkHwVAs()
+            s._linkHwAxes()
 
         # TODO: if already acquiring, queue the Future for later acquisition
         if self._current_future is not None and not self._current_future.done():
