@@ -2560,6 +2560,23 @@ class SparcStreamsController(StreamBarController):
 
         return self._add_stream(s, **kwargs)
 
+    def _filter_axes(self, axes):
+        """
+        Given an axes dict from config, filter the dict based on the hardware present
+        axes (dict str -> (str, actuator))
+        returns: the axes dict, filtered based on hardware components
+        """
+        main_data = self._main_data_model
+        new_axes = {}
+
+        for va_name, (axis_name, comp) in axes.items():
+            # Check if the axis exists on the component. If not, filter it by not
+            # adding to the new dict
+            if axis_name in comp.axes.keys():
+                new_axes[va_name]  (axis_name, comp)
+
+        return new_axes
+
     def _addRepStream(self, stream, mdstream, **kwargs):
         """
         Display and connect a new RepetitionStream to the GUI
@@ -2689,12 +2706,15 @@ class SparcStreamsController(StreamBarController):
                 "slit-in": ("slit-in", spg),
                }
 
+        axes = self._filter_axes(axes)
+
         # Also add light filter for the spectrum stream if it affects the detector
         for fw in (main_data.cl_filter, main_data.light_filter):
             if fw is None:
                 continue
             if detector.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
+                break
 
         spec_stream = acqstream.SpectrumSettingsStream(
             name,
@@ -2736,12 +2756,15 @@ class SparcStreamsController(StreamBarController):
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg)}
 
+        axes = self._filter_axes(axes)
+
         # Also add light filter for the spectrum stream if it affects the detector
         for fw in (main_data.cl_filter, main_data.light_filter):
             if fw is None:
                 continue
             if main_data.streak_ccd.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
+                break
 
         ts_stream = acqstream.TemporalSpectrumSettingsStream(
             "Temporal Spectrum",
@@ -2775,12 +2798,15 @@ class SparcStreamsController(StreamBarController):
                 "slit-monochromator": spg,
                }
 
+        axes = self._filter_axes(axes)
+
         # Also add light filter if it affects the detector
         for fw in (main_data.cl_filter, main_data.light_filter):
             if fw is None:
                 continue
             if main_data.monochromator.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
+                break
 
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Monochromator",
@@ -2809,7 +2835,9 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         axes = {"density": ("density", main_data.tc_od_filter),
-                "band": ("band", main_data.tc_filter)}
+                "filter": ("band", main_data.tc_filter)}
+
+        axes = self._filter_axes(axes)
 
         tc_stream = acqstream.ScannedTemporalSettingsStream(
             "Time Correlator",
