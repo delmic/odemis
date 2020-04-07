@@ -138,7 +138,6 @@ class StreamController(object):
             self._display_metadata()
 
         # Add local hardware settings to the stream panel
-
         self._add_hw_setting_controls()
 
         if hasattr(stream, "emtResolution") or hasattr(stream, "detResolution"):
@@ -339,15 +338,16 @@ class StreamController(object):
         """
         Add controls for the axes that are connected to the stream
         """
-        if hasattr(self.stream, "axis_map") and self.stream.axis_map:
-            # Add Axes (in same order as config)
-            axes_names = util.sorted_according_to(list(self.stream.axis_map.keys()), list(self._stream_config.keys()))
-            for axisname in axes_names:
-                real_ax_name, comp = self.stream.axis_map[axisname]
-                conf = self._stream_config.get(axisname)
 
-                if hasattr(self.stream, "_axis_vas"):
-                    self.add_local_axis_entry(real_ax_name, self.stream.axis_vas[axisname], comp, conf)
+        if not hasattr(self.stream, "axis_vas"):
+            return
+
+        # Add Axes (in same order as config)
+        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
+
+        for axisname in axes_names:
+            conf = self._stream_config.get(axisname)
+            self.add_local_axis_entry(axisname, self.stream.axis_vas[axisname], conf)
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
@@ -366,18 +366,17 @@ class StreamController(object):
 
         return se
 
-    def add_local_axis_entry(self, name, va, hw_comp, conf=None):
+    def add_local_axis_entry(self, name, va, conf=None):
         """ Add a name/value pair to the settings panel.
 
         :param name: (string): name of the value
         :param va: (VigilantAttribute)
-        :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
         :return SettingEntry or None: the entry created, or None, if no entry was
           created (eg, because the conf indicates CONTROL_NONE).
         """
 
-        ae = create_local_axis_entry(self.stream_panel, name, va, hw_comp, conf)
+        ae = create_local_axis_entry(self.stream_panel, name, va, conf)
         if ae is not None:
             self.entries.append(ae)
 
@@ -2647,6 +2646,7 @@ class SparcStreamsController(StreamBarController):
                 continue
             if main_data.cld.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
+                break
 
         cli_stream = acqstream.CLSettingsStream(
             "CL intensity",

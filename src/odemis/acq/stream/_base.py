@@ -274,9 +274,7 @@ class Stream(object):
 
         # Add axis position VA's to the list of hardware VA's
         axis_vas = {}  # dict of axis_name to duplicated position VA
-        for va_name in axis_map:
-            axis_name = axis_map[va_name][0]
-            actuator = axis_map[va_name][1]
+        for va_name, (axis_name, actuator) in axis_map.items():
             va = self._duplicateAxis(axis_name, actuator)
             axis_vas[va_name] = va
             # add attributes to stream
@@ -436,7 +434,6 @@ class Stream(object):
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
             
-    # TODO: move to odemis.util ?
     def _duplicateAxis(self, axis_name, actuator):
         """
         Create a new VigilanteAttribute (VA) for the given axis, , which imitates is behaviour.
@@ -623,21 +620,20 @@ class Stream(object):
             logging.info("Moving linked HW axes")
 
             moving_axes = []
-            for ax_name in self.axis_map:
+            for va_name, (axis_name, actuator) in self.axis_map.items():
                 try:
-                    local_pos_va = self._axis_vas[ax_name]
-                    real_ax_name, act = self.axis_map[ax_name]
+                    local_pos_va = self._axis_vas[va_name]
                     pos = local_pos_va.value
-                    logging.info("Moving actuator %s axis %s to position %s.", act.name, real_ax_name, pos)
-                    f = act.moveAbs({real_ax_name: pos})
+                    logging.info("Moving actuator %s axis %s to position %s.", actuator.name, axis_name, pos)
+                    f = actuator.moveAbs({axis_name: pos})
                     f.add_done_callback(self._onAxisMoveDone)
                     moving_axes.append(f)
                     # subscribe to update the axis when the stream plays
-                    updater = functools.partial(self._update_linked_axis, ax_name)
-                    self._axisvaupdaters[ax_name] = updater
+                    updater = functools.partial(self._update_linked_axis, axis_name)
+                    self._axisvaupdaters[va_name] = updater
                     local_pos_va.subscribe(updater)
                 except Exception:
-                    logging.exception("Failed to move actuator %s axis %s.", act.name, real_ax_name)
+                    logging.exception("Failed to move actuator %s axis %s.", actuator.name, axis_name)
 
             for f in moving_axes:
                 try:

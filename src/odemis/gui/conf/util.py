@@ -499,34 +499,27 @@ def format_choices(choices):
     return choices_formatted, choices_si_prefix
 
 
-def format_axis_choices(name, axis_def):
+def format_axis_choices(name, choices, unit):
     """
     Transform the given choices for an axis into an user friendly display
 
     name (str): the name of the axis
-    axis_def (Axis): the axis definition
+    choices (dict): the choices.
 
     returns:
       choices_formatted (None or list of (value, str): axis value/user-friendly
          display name (including the unit). None if axis doesn't support choices.
     """
 
-    try:
-        choices = axis_def.choices
-    except AttributeError:
-        return None
-
     if not choices:
         return None
-
-    unit = axis_def.unit
 
     if isinstance(choices, dict):
         choices_formatted = list(choices.items())
         # In this case, normally the values are already formatted, but for
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)
-        if name == "band":
+        if name == "filter":
 
             def to_readable_band(v):
                 if (isinstance(v, (tuple, list)) and len(v) > 1 and
@@ -929,7 +922,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     return setting_entry
 
 
-def create_local_axis_entry(container, name, va, comp, conf=None):
+def create_local_axis_entry(container, name, va, conf=None):
     # If no conf provided, set it to an empty dictionary
     conf = conf or {}
 
@@ -939,9 +932,8 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
 
     logging.debug("Adding Local Axis control %s", label_text)
 
-    ad = comp.axes[name]
-    pos = comp.position.value[name]
-    unit = ad.unit
+    pos = va.value
+    unit = va.unit
 
     # Determine control type
     try:
@@ -949,19 +941,16 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
     except KeyError:
         # If axis has .range (continuous) => slider
         # If axis has .choices (enumerated) => combo box
-        if hasattr(ad, "range"):
+        if hasattr(va, "range"):
             control_type = odemis.gui.CONTROL_SLIDER
         else:
             control_type = odemis.gui.CONTROL_COMBO
-
-    if callable(control_type):
-        control_type = control_type(comp, name, conf)
 
     if control_type == odemis.gui.CONTROL_SLIDER:
         if "range" in conf:
             minv, maxv = conf["range"]
         else:
-            minv, maxv = ad.range
+            minv, maxv = va.range
 
         ctrl_conf = {
             'min_val': minv,
@@ -982,7 +971,7 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
         # mind. This avoid too many unnecessary actuator moves and disabling the
         # widget too early.
 
-        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+        axis_entry = SettingEntry(name=name, va=va,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      events=wx.EVT_SCROLL_CHANGED)
 
@@ -990,7 +979,7 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
         if "range" in conf:
             minv, maxv = conf["range"]
         else:
-            minv, maxv = ad.range
+            minv, maxv = va.range
 
         ctrl_conf = {
             'min_val': minv,
@@ -1006,7 +995,7 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
 
         lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
 
-        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+        axis_entry = SettingEntry(name=name, va=va,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      events=wx.EVT_COMMAND_ENTER)
 
@@ -1015,7 +1004,7 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
         # that's always the case for combo-boxes anyway)
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf={"style": wx.CB_READONLY})
 
-        choices_fmt = format_axis_choices(name, ad)
+        choices_fmt = format_axis_choices(name, va.choices, va.unit)
 
         accuracy = conf.get('accuracy', 3)
 
@@ -1074,7 +1063,7 @@ def create_local_axis_entry(container, name, va, comp, conf=None):
                     cb_set(va_val)
                 return new_val
 
-        axis_entry = SettingEntry(name=name, va=va, hw_comp=comp,
+        axis_entry = SettingEntry(name=name, va=va,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=cb_set, ctrl_2_va=cb_get,
                                      events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
@@ -1169,7 +1158,7 @@ def create_axis_entry(container, name, comp, conf=None):
         # that's always the case for combo-boxes anyway)
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf={"style": wx.CB_READONLY})
 
-        choices_fmt = format_axis_choices(name, ad)
+        choices_fmt = format_axis_choices(name, ad.choices, ad.unit)
 
         # Set choices
         if unit is None:
