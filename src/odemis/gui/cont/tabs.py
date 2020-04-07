@@ -2034,8 +2034,55 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.ar_cal.value)
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
-        # TODO: if all the views are either empty or contain the same streams,
+        # if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
+        # Show the 1 x 1 view if:
+        # - the streams are all the same in every view 
+        # - views are empty with no projection
+        
+        def projection_list_eq(list1, list2):
+            """ Returns true if two projection lists are the same, 
+            i.e. they are projecting the same streams, even if the objects are different
+            list1 (list of Projections)
+            list2 (list of Projections) to be
+            """
+
+            if len(list1) != len(list2):
+                return False
+            
+            # since it is impossible to order the lists, use O(n²) comparison
+            # each proj in list1 should have at least one match in list2
+            for proj1 in list1:
+                # there should be at least one corresponding match in the second list
+                for proj2 in list2:
+                    # matches are of the same type projecting the same stream reference
+                    if type(proj1) == type(proj2) and proj1.stream == proj2.stream:
+                        break
+                else:  # no projection identical to proj1 found
+                    return False
+                
+            # all projections identical
+            return True
+
+        same_projections = []
+        # Are there at least two views different (not including the empty ones)?
+        for view in self.tab_data_model.visible_views.value:
+            view_projections = view.getProjections()
+            # if no projections, the view is empty
+            if not view_projections:
+                pass
+            elif not same_projections:
+                same_projections = view_projections
+            elif  not projection_list_eq(same_projections, view_projections):
+                break  # At least two views are different => leave the display as-is.
+
+        else:  # All views are identical (or empty)
+            self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_ONE
+
+        # Change the focused view to the first non empty view, then display fullscreen
+        # set the focused view to the view with the most streams.
+        self.tab_data_model.focussedView.value = max(self.tab_data_model.visible_views.value,
+                                                         key=lambda v:len(v.getStreams()))
 
         if not extend:
             # Force the canvases to fit to the content
