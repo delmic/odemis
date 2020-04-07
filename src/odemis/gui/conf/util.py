@@ -620,14 +620,29 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
     # If no conf provided, set it to an empty dictionary
     conf = conf or {}
-
+    
     # Get the range and choices
     min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
-    # Format the provided choices
-    choices_formatted, choices_si_prefix = format_choices(choices)
-    # Determine the control type to use, either from config or some 'smart' default
-    control_type = determine_control_type(hw_comp, va, choices_formatted, conf)
+    choices_formatted, choices_si_prefix = None, None
 
+    if hw_comp is None and not va.readonly:  # Must be a local axis control
+        # Determine control type
+        try:
+            control_type = conf['control_type']
+        except KeyError:
+            # If axis has .range (continuous) => slider
+            # If axis has .choices (enumerated) => combo box
+            if hasattr(va, "range"):
+                control_type = odemis.gui.CONTROL_SLIDER
+            else:
+                control_type = odemis.gui.CONTROL_COMBO
+                choices_formatted = format_axis_choices(name, choices, va.unit)
+    else:
+        # Format the provided choices
+        choices_formatted, choices_si_prefix = format_choices(choices)
+        # Determine the control type to use, either from config or some 'smart' default
+        control_type = determine_control_type(hw_comp, va, choices_formatted, conf)    
+    
     # Special case, early stop
     if control_type == odemis.gui.CONTROL_NONE:
         return None

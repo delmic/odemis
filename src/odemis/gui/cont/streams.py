@@ -347,7 +347,7 @@ class StreamController(object):
 
         for axisname in axes_names:
             conf = self._stream_config.get(axisname)
-            self.add_local_axis_entry(axisname, self.stream.axis_vas[axisname], conf)
+            self.add_setting_entry(axisname, self.stream.axis_vas[axisname], None, conf)
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
@@ -365,22 +365,6 @@ class StreamController(object):
             self.entries.append(se)
 
         return se
-
-    def add_local_axis_entry(self, name, va, conf=None):
-        """ Add a name/value pair to the settings panel.
-
-        :param name: (string): name of the value
-        :param va: (VigilantAttribute)
-        :param conf: ({}): Configuration items that may override default settings
-        :return SettingEntry or None: the entry created, or None, if no entry was
-          created (eg, because the conf indicates CONTROL_NONE).
-        """
-
-        ae = create_local_axis_entry(self.stream_panel, name, va, conf)
-        if ae is not None:
-            self.entries.append(ae)
-
-        return ae
 
     def add_axis_entry(self, name, comp, conf=None):
         """ Add a widget to the setting panel to control an axis
