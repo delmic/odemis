@@ -222,7 +222,12 @@ BACKEND_STOPPED = "STOPPED"
 # TODO: support TERMINATING status?
 def get_backend_status():
     try:
-        model._core._microscope = None # force reset of the microscope
+        # Fast path: if no back-end file, for sure, it is stopped.
+        # The main goal is to avoid showing confusing error messages from Pyro.
+        if not os.path.exists(model.BACKEND_FILE):
+            return BACKEND_STOPPED
+
+        model._core._microscope = None  # force reset of the microscope
         microscope = model.getMicroscope()
         if not microscope.ghosts.value:
             return BACKEND_RUNNING
