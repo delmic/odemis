@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import os
 import subprocess
 import sys
@@ -9,7 +11,7 @@ cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
 nsis_command = [
     r"C:\Program Files (x86)\NSIS\makensis",
-    "/DPRODUCT_VERSION=" + '.'.join(odemis._get_version().split('-')[:2]),
+    "/DPRODUCT_VERSION=" + odemis.get_version_simplified(),
     "setup.nsi"
 ]
 
@@ -32,11 +34,11 @@ def run_command(cmd, flavor=None):
 
 def add_size_to_version():
     with open('dist/version.txt', 'a') as f:
-        version = '.'.join(odemis._get_version().split('-')[:2])
+        version = odemis.get_version_simplified()
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
 
-print("Build OdemisViewer " + '.'.join(odemis._get_version().split('-')[:2]))
+print("Build OdemisViewer " + odemis.get_version_simplified())
 
 os.chdir(os.path.dirname(__file__) or '.')
 
@@ -44,11 +46,6 @@ os.chdir(os.path.dirname(__file__) or '.')
 def build_odemisviewer_exe():
     run_command(cpy_command)
     run_command(pyi_command, "odemis")
-
-
-def build_delphiviewer_exe():
-    run_command(cpy_command)
-    run_command(pyi_command, "delphi")
 
 
 def build_odemisviewer_inst():
@@ -61,16 +58,20 @@ def build_odemisviewer_inst():
     nsis_cmd = nsis_command[:-1] + info + [nsis_command[-1]]
     return run_command(nsis_cmd, "odemis")
 
+# In case the Delphi Viewer should be built, use these functions.
+# def build_delphiviewer_exe():
+#     run_command(cpy_command)
+#     run_command(pyi_command, "delphi")
 
-def build_delphiviewer_inst():
-    info = [
-        "/DPRODUCT_NAME=DelphiViewer",
-        "/DPRODUCT_HNAME=Delphi Viewer",
-        "/DIMAGE=install_delphi.bmp",
-        "/DWEBSITE=http://www.delphimicroscope.com",
-    ]
-    nsis_cmd = nsis_command[:-1] + info + [nsis_command[-1]]
-    run_command(nsis_cmd, "delphi")
+# def build_delphiviewer_inst():
+#     info = [
+#         "/DPRODUCT_NAME=DelphiViewer",
+#         "/DPRODUCT_HNAME=Delphi Viewer",
+#         "/DIMAGE=install_delphi.bmp",
+#         "/DWEBSITE=http://www.delphimicroscope.com",
+#     ]
+#     nsis_cmd = nsis_command[:-1] + info + [nsis_command[-1]]
+#     run_command(nsis_cmd, "delphi")
 
 
 while True:
@@ -78,16 +79,9 @@ while True:
     [1] OdemisViewer Executable
     [2] OdemisViewer Installer
 
-    [3] DelphiViewer Executable
-    [4] DelphiViewer Installer
-
-    [5] Both Executables
-    [6] Both Installers
-
-    [7] OdemisViewer Executable and Installer
-    [8] DelphiViewer Executable and Installer
-
     [9] Build everything
+
+    [Q] Quit
 
 > """)
 
@@ -101,34 +95,15 @@ while True:
     elif i == 2:
         build_odemisviewer_inst()
         add_size_to_version()
-    elif i == 3:
-        build_delphiviewer_exe()
-    elif i == 4:
-        build_delphiviewer_inst()
-        add_size_to_version()
-    elif i == 5:
-        build_odemisviewer_exe()
-        build_delphiviewer_exe()
-    elif i == 6:
-        build_odemisviewer_inst()
-        build_delphiviewer_inst()
-        add_size_to_version()
-    elif i == 7:
-        build_odemisviewer_exe()
-        build_odemisviewer_inst()
-        add_size_to_version()
-    elif i == 8:
-        build_delphiviewer_exe()
-        build_delphiviewer_inst()
-        add_size_to_version()
     elif i == 9:
         build_odemisviewer_exe()
-        build_delphiviewer_exe()
+#         build_delphiviewer_exe()
         build_odemisviewer_inst()
-        build_delphiviewer_inst()
+#         build_delphiviewer_inst()
         add_size_to_version()
     else:
         break
     print("\n\nBuild Done.")
+
 sys.exit(0)
 
