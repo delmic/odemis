@@ -530,7 +530,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER, TOOL_LABEL}  # TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
 
@@ -596,10 +596,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
             #TOOL_ROI,
             TOOL_ROA,
             TOOL_RO_ANCHOR,
-            #TOOL_POINT,
-            #TOOL_LINE,
             TOOL_RULER,
-            TOOL_LABEL,
             TOOL_SPOT,
         }
 
