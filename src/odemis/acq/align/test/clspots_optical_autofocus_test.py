@@ -235,3 +235,7 @@ class TestAutofocusHW(unittest.TestCase):
         # Test that the correct focus has been found.
         logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
         numpy.testing.assert_allclose(foc_pos, self._optimal_focus, atol=0.5e-6)
+
+
+if __name__ == '__main__':
+    unittest.main()
