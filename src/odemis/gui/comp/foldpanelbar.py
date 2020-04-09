@@ -109,11 +109,9 @@ class FoldPanelBar(wx.Panel):
         return item
 
     def Refresh(self, *args, **kwargs):
-        self.Freeze()
         wx.Panel.Refresh(self, *args, **kwargs)
         # self.Parent.Layout()
         self.Parent.FitInside()
-        self.Thaw()
 
 
 class FoldPanelItem(wx.Panel):
