@@ -338,7 +338,7 @@ class StreamController(object):
         """
         Add controls for the axes that are connected to the stream
         """
-
+        stream_config = self._stream_config.get(type(self.stream), {})
         if not hasattr(self.stream, "axis_vas"):
             return
 
@@ -346,7 +346,7 @@ class StreamController(object):
         axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
 
         for axisname in axes_names:
-            conf = self._stream_config.get(axisname)
+            conf = stream_config.get(axisname)
             self.add_setting_entry(axisname, self.stream.axis_vas[axisname], None, conf)
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
@@ -2562,20 +2562,14 @@ class SparcStreamsController(StreamBarController):
 
     def _filter_axes(self, axes):
         """
-        Given an axes dict from config, filter the dict based on the hardware present
-        axes (dict str -> (str, actuator))
-        returns: the axes dict, filtered based on hardware components
+        Given an axes dict from config, filter out the axes which are not
+          available on the current hardware.
+        axes (dict str -> (str, Actuator or None)): VA name -> axis+Actuator
+        returns (dict): the filtered axes
         """
-        main_data = self._main_data_model
-        new_axes = {}
-
-        for va_name, (axis_name, comp) in axes.items():
-            # Check if the axis exists on the component. If not, filter it by not
-            # adding to the new dict
-            if axis_name in comp.axes.keys():
-                new_axes[va_name]  (axis_name, comp)
-
-        return new_axes
+        return {va_name: (axis_name, comp)
+                for va_name, (axis_name, comp) in axes.items()
+                if comp and axis_name in comp.axes}
 
     def _addRepStream(self, stream, mdstream, **kwargs):
         """

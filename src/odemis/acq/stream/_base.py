@@ -190,11 +190,13 @@ class Stream(object):
         self._hwvasetters = {}  # str (name of the proxied VA) -> setter
         self._lvaupdaters = {}  # str (name of the proxied VA) -> listener
         self._axisvaupdaters = {}  # str (name of the axis VA) -> listener (functools.partial)
+        self._posupdaters = {}  # str (name of the axis VA) -> listener (functools.partial)
 
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
         self._axis_map = axis_map or {}
+        self._linked_actuators = set()
         self._axis_vas = self._duplicateAxes(self._axis_map)
 
         self._dRangeLock = threading.Lock()
@@ -442,7 +444,7 @@ class Stream(object):
         pos = actuator.position.value[axis_name]
 
         if hasattr(axis, "choices"):
-            return model.VAEnumerated(pos, choices=axis.choices, unit=axis.unit)
+            return model.FloatEnumerated(pos, choices=axis.choices, unit=axis.unit)
         elif hasattr(axis, "range"):
             # Continuous
             return model.FloatContinuous(pos, range=axis.range, unit=axis.unit)
@@ -613,23 +615,35 @@ class Stream(object):
         to the real hardware
         """
 
-        if hasattr(self, "axis_map"):
+        if hasattr(self, "_axis_map"):
 
             moving_axes = []
+            moves = {}  # Actuator -> move {axis -> value}
             for va_name, (axis_name, actuator) in self._axis_map.items():
+                va = self._axis_vas[va_name]
+                pos = va.value
+                moves.setdefault(actuator, {})[axis_name] = pos
+                logging.info("Moving actuator %s axis %s to position %s.", actuator.name, axis_name, pos)
+                self._linked_actuators.add(actuator)
+
+                # subscribe to update the axis when the stream plays
+                ax_updater = functools.partial(self._update_linked_axis, va_name)
+                self._axisvaupdaters[va_name] = ax_updater
+                va.subscribe(ax_updater)
+
+            # coordinate the moves in sequence, one per actuator
+            for act, mv in moves.items():
+                # subscribe to the position VA's of the actuators
+                pos_updater = functools.partial(self._update_linked_position, act)
+                self._posupdaters[act] = pos_updater
+                act.position.subscribe(pos_updater)
+
                 try:
-                    local_pos_va = self._axis_vas[va_name]
-                    pos = local_pos_va.value
-                    logging.info("Moving actuator %s axis %s to position %s.", actuator.name, axis_name, pos)
-                    f = actuator.moveAbs({axis_name: pos})
+                    f = act.moveAbs(mv)
                     f.add_done_callback(self._onAxisMoveDone)
                     moving_axes.append(f)
-                    # subscribe to update the axis when the stream plays
-                    updater = functools.partial(self._update_linked_axis, axis_name)
-                    self._axisvaupdaters[va_name] = updater
-                    local_pos_va.subscribe(updater)
                 except Exception:
-                    logging.exception("Failed to move actuator %s axis %s.", actuator.name, axis_name)
+                    logging.exception("Failed to move actuator %s axis %s.", act.name, mv)
 
             for f in moving_axes:
                 try:
@@ -646,6 +660,28 @@ class Stream(object):
             f.result()
         except Exception:
             logging.exception("Failed to move axis.")
+            
+    def _update_linked_position(self, act, pos):
+        """ Subscriber called when the actuator position changes.
+        update the linked axis VA's with the new position value
+        """
+        if not self.is_active.value:
+            return
+
+        for axis_name, axpos in pos.items():
+            for va_name, (real_axis_name, actuator) in self._axis_map.items():
+                if axis_name == real_axis_name and act == actuator:
+                    va = self._axis_vas[va_name]
+                    break
+            else:
+                raise ValueError("The axis name %s is not found in the axis map" % axis_name)
+
+            # before updating va
+            va.unsubscribe(self._axisvaupdaters[va_name])
+            # update va
+            va.value = axpos
+            logging.info("Updating local axis %s to position %s", va_name, axpos)
+            va.subscribe(self._axisvaupdaters[va_name])
 
     def _update_linked_axis(self, va_name, pos):
         """ Update the value of a linked hardware axis VA
@@ -668,10 +704,16 @@ class Stream(object):
         """
         Unlink the axes to the hardware components
         """
-        if hasattr(self, "axis_map") and self._axis_map is not None:
+        if hasattr(self, "_axis_map") and self._axis_map is not None:
             for va_name, va in self._axis_vas.items():
                 va.unsubscribe(self._axisvaupdaters[va_name])
                 del self._axisvaupdaters[va_name]
+
+            for actuator in self._linked_actuators:
+                actuator.position.unsubscribe(self._posupdaters[actuator])
+                del self._posupdaters[actuator]
+
+            self._linked_actuators.clear()
 
     def prepare(self):
         """

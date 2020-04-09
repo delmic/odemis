@@ -703,6 +703,9 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
+            }),
         )),
     # For DEBUG
 #     stream.StaticSpectrumStream:
@@ -744,7 +747,8 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Opening size of the spectrograph input slit.\n"
                            u"A wide opening means more light and a worse resolution.",
             }),
-            ("band", {  # from filter
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
             }),
         )),
     stream.MonochromatorSettingsStream:
@@ -786,13 +790,14 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "All polarizations",
                 "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
             }),
-            ("band", {  # from filter
-                "label": "Filter",
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
             }),
         )),
     stream.CLSettingsStream:
         OrderedDict((
-            ("band", {  # from filter or cl-filter
+            ("filter", {  # from filter or cl-filter
+                "choices": util.format_band_choices,
             }),
         )),
     stream.ScannedTCSettingsStream:
