@@ -1365,7 +1365,7 @@ class Shamrock(model.Actuator):
         return gchoices
 
     # high-level methods (interface)
-    def _updatePosition(self):
+    def _updatePosition(self, must_notify=False):
         """
         update the position VA
         """
@@ -1390,7 +1390,7 @@ class Shamrock(model.Actuator):
             userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
             pos["flip-out"] = userv
 
-        self.position._set_value(pos, force_write=True)
+        self.position._set_value(pos, must_notify=must_notify, force_write=True)
 
     def _storeFocus(self):
         """
@@ -1675,7 +1675,7 @@ class Shamrock(model.Actuator):
                 self.position._value["wavelength"] = 0  # same trick
 
         self._restoreFocus()
-        self._updatePosition()
+        self._updatePosition(must_notify=True)
 
     def _doSetFocusRel(self, shift):
         # it's only now that we can check the goal (absolute) position is wrong
