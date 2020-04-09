@@ -498,6 +498,28 @@ def format_choices(choices):
 
     return choices_formatted, choices_si_prefix
 
+def format_band_choices(comp, va, conf):
+    """
+    Formatter function for local axis VigilantAttributes
+    """
+
+    choices = va.choices
+
+    if not isinstance(choices, dict):
+        return va.choices
+
+    return {k: to_readable_band(v) for k, v in va.choices}
+
+
+def to_readable_band(v):
+    """
+    Convert a list of choices to readable bands for the GUI
+    """
+    if (isinstance(v, (tuple, list)) and len(v) > 1 and
+            all(isinstance(c, numbers.Real) for c in v)):
+        return fluo.to_readable_band(v)
+    else:
+        return v
 
 def format_axis_choices(name, choices, unit):
     """
@@ -520,14 +542,6 @@ def format_axis_choices(name, choices, unit):
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)
         if name == "band":
-
-            def to_readable_band(v):
-                if (isinstance(v, (tuple, list)) and len(v) > 1 and
-                        all(isinstance(c, numbers.Real) for c in v)):
-                    return fluo.to_readable_band(v)
-                else:
-                    return v
-
             choices_formatted = [(k, to_readable_band(v)) for k, v in choices_formatted]
     elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
         choices_formatted = None
