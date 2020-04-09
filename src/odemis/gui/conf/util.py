@@ -519,7 +519,7 @@ def format_axis_choices(name, choices, unit):
         # In this case, normally the values are already formatted, but for
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)
-        if name == "filter":
+        if name == "band":
 
             def to_readable_band(v):
                 if (isinstance(v, (tuple, list)) and len(v) > 1 and

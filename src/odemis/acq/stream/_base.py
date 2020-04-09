@@ -194,8 +194,8 @@ class Stream(object):
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
-        self.axis_map = axis_map or {}
-        self._axis_vas = self._duplicateAxes(self.axis_map)
+        self._axis_map = axis_map or {}
+        self._axis_vas = self._duplicateAxes(self._axis_map)
 
         self._dRangeLock = threading.Lock()
         self._drange = None  # min/max data range, or None if unknown
@@ -266,12 +266,9 @@ class Stream(object):
     def _duplicateAxes(self, axis_map):
         """
         Duplicate all of the axes passed to the stream in local Vigilant Attributes
-        and return them as a dictionary of axis_name -> duplicated VA
         axis_map (dict of axis_name -> Actuator): map of an axis name to an Actuator component
+        returns (dict str -> VA): axis_name -> new VA.
         """
-        if not axis_map:
-            return {}
-
         # Add axis position VA's to the list of hardware VA's
         axis_vas = {}  # dict of axis_name to duplicated position VA
         for va_name, (axis_name, actuator) in axis_map.items():
@@ -610,17 +607,16 @@ class Stream(object):
 
     def _linkHwAxes(self):
         """"
-        Link the axes to the hardware components
+        Link the axes, which are defined as local VA's,
+        to their respective hardware component values. Blocking function.
         If local axis Vigilant Attributes's are specified, write the values of the local axis VA
         to the real hardware
         """
 
-        if hasattr(self, "axis_map") and self.axis_map:
-
-            logging.info("Moving linked HW axes")
+        if hasattr(self, "axis_map"):
 
             moving_axes = []
-            for va_name, (axis_name, actuator) in self.axis_map.items():
+            for va_name, (axis_name, actuator) in self._axis_map.items():
                 try:
                     local_pos_va = self._axis_vas[va_name]
                     pos = local_pos_va.value
@@ -651,18 +647,18 @@ class Stream(object):
         except Exception:
             logging.exception("Failed to move axis.")
 
-    def _update_linked_axis(self, ax_name, pos):
+    def _update_linked_axis(self, va_name, pos):
         """ Update the value of a linked hardware axis VA
             when the stream is active
         """
         if not self.is_active.value:
             return
         try:
-            act = self.axis_map[ax_name][1]
+            act = self._axis_map[va_name][1]
             logging.info("Moving actuator %s to position %s.", act.name, pos)
-            f = act.moveAbs({ax_name: pos})
-            # TODO: Move this to a separate thread to make sure it doens't block the GUI
-            # it would be good to have the caller know when the axis is done moving.
+            f = act.moveAbs({va_name: pos})
+            # TODO: ideally, it would block, so that the the caller knows when the move is complete.
+            # However, this requires that the GUI calls this function is a separate thread.
             # f.result()
         except Exception:
             logging.exception("Failed to move axis.")
@@ -672,11 +668,10 @@ class Stream(object):
         """
         Unlink the axes to the hardware components
         """
-        if hasattr(self, "axis_map") and self.axis_map is not None:
-            for ax_name in self.axis_map:
-                va = self._axis_vas[ax_name]
-                va.unsubscribe(self._axisvaupdaters[ax_name])
-                del self._axisvaupdaters[ax_name]
+        if hasattr(self, "axis_map") and self._axis_map is not None:
+            for va_name, va in self._axis_vas.items():
+                va.unsubscribe(self._axisvaupdaters[va_name])
+                del self._axisvaupdaters[va_name]
 
     def prepare(self):
         """
@@ -691,6 +686,7 @@ class Stream(object):
         if self.is_active.value:
             logging.warning("Prepare of stream %s called while already active", self.name.value)
             # TODO: raise an error
+
         return self._prepare()
 
     def _prepare(self):
@@ -703,7 +699,6 @@ class Stream(object):
         logging.debug(u"Preparing stream %s ...", self.name.value)
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
-        self._linkHwAxes()
 
         self._prepared = True
         return self._prepare_opm()
