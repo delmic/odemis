@@ -263,6 +263,7 @@ class CaptionBar(wx.Window):
         self._collapsed = collapsed  # The current state of the CaptionBar
         self._caption = caption
         self._mouse_hovering = False
+        self._logo = None  # wx.Bitmap or None
 
         # Set Icons
         self._icon_size = wx.Size(16, 16)
@@ -279,6 +280,13 @@ class CaptionBar(wx.Window):
 
     def set_caption(self, caption):
         self._caption = caption
+
+    def set_logo(self, logo):
+        """
+        logo (wx.Bitmap or None): bitmap to display on the right. If None, nothing
+          will be shown
+        """
+        self._logo = logo
 
     def is_collapsed(self):
         """ Returns wether the status of the bar is expanded or collapsed. """
@@ -304,7 +312,6 @@ class CaptionBar(wx.Window):
 
     def on_paint(self, _):
         """ Handle the ``wx.EVT_PAINT`` event for L{CaptionBar} """
-
         dc = wx.PaintDC(self)
         win_rect = self.GetRect()
 
@@ -321,6 +328,13 @@ class CaptionBar(wx.Window):
         y_pos = (win_rect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) // 2
 
         dc.DrawText(self._caption, CAPTION_PADDING_LEFT, y_pos)
+
+        if self._logo:
+            dc.DrawBitmap(self._logo,
+                          self.Parent.Size.x
+                           -self._logo.Width - 20  # 20 = extra padding for logo
+                           -self._icon_size.x - CAPTION_PADDING_RIGHT,
+                          (win_rect.Height - self._logo.Height) // 2)
 
         # Only draw the icon if it's part of a FoldPanelItem
         if isinstance(self.Parent, FoldPanelItem):

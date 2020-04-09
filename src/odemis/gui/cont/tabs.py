@@ -1723,12 +1723,7 @@ class AnalysisTab(Tab):
             # HACK: Move the logo to inside the FileInfo bar, as the tab buttons
             # are hidden when only one tab is present (ie, no backend).
             capbar = panel.fp_fileinfo._caption_bar
-            logo = main_frame.logo
-            assert main_frame.pnl_tabbuttons.GetSizer().Detach(logo)
-            logo.Reparent(capbar)
-            # Move to the right of the foldpanelbar (before the icon)
-            # | Title .... logo | padding (20) | arrow (16) | padding (6) |
-            logo.SetPosition((capbar.Size[0] - logo.Size[0] - 20 - 16 - 6, 8))
+            capbar.set_logo(main_frame.logo.GetBitmap())
 
         self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
 
