@@ -4484,7 +4484,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         specs = stream.StaticSpectrumStream("test", spec)
         proj_line_spectrum = LineSpectrumProjection(specs)
 
-        # Check 1d spectrum on corner-case: parallel to the X axis
+        # Check 1d spectrum on corner-case: parallel to the X axis.
+        # We select line #3, from px 7 until px 65 (included)
         specs.selected_line.value = [(3, 7), (3, 65)]
         time.sleep(1.0)  # ensure that .image is updated
         sp1d = proj_line_spectrum.image.value
@@ -4497,8 +4498,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
                          spec.metadata[model.MD_PIXEL_SIZE][0])
 
-        # compare to doing it manually, by cutting the band at 3
-        sp1d_raw_ex = spec[:, 0, 0, 65:6:-1, 3]
+        # compare to doing it manually, which is easy as it's an horizontal line
+        sp1d_raw_ex = spec[:, 0, 0, 7:66, 3]
         # make it contiguous to be sure to get the fast conversion, because
         # there are (still) some minor differences with the slow conversion
         sp1d_raw_ex = numpy.ascontiguousarray(sp1d_raw_ex.swapaxes(0, 1))
