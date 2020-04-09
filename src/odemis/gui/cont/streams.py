@@ -42,8 +42,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas, get_hw_config
-from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry, \
-    create_local_axis_entry
+from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
@@ -374,7 +373,6 @@ class StreamController(object):
         :param conf: ({}): Configuration items that may override default settings
 
         """
-        
         ae = create_axis_entry(self.stream_panel, name, comp, conf)
         if ae is not None:
             self.entries.append(ae)
