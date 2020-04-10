@@ -1141,7 +1141,7 @@ class StreamView(View):
 
         # How much one image is displayed on the other one. Value used by
         # StreamTree
-        self.merge_ratio = FloatContinuous(0.3, range=[0, 1], unit="")
+        self.merge_ratio = FloatContinuous(0.5, range=[0, 1], unit="")
         self.merge_ratio.subscribe(self._onMergeRatio)
 
         # Streams to display (can be considered an implementation detail in most

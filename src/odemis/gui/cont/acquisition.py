@@ -725,6 +725,12 @@ class SparcAcquiController(object):
                 isinstance(s, TemporalSpectrumSettingsStream)):
                 has_temporal = True
 
+        #  ADD the the overlay (live_update) in the SEM window which displays the SEM measurements of the current
+        #  acquisition if a  stream is added and acquisition is started.
+        for v in self._tab_data_model.visible_views.value:
+            if hasattr(v, "stream_classes") and isinstance(self._tab_data_model.semStream, v.stream_classes):
+                v.addStream(self._tab_data_model.semStream)
+
         if (self.conf.last_format == 'TIFF' or self.conf.last_format == 'Serialized TIFF') and has_temporal:
             raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5." \
                                       % self.conf.last_format)
@@ -810,6 +816,12 @@ class SparcAcquiController(object):
         if exp:
             logging.error("Acquisition failed (after %d streams): %s",
                           len(data), exp)
+
+        #  REMOVE the the overlay (live_update) in the SEM window which displays the SEM measurements of the current
+        #  acquisition if a  stream is added and acquisition is started.
+        for v in self._tab_data_model.visible_views.value:
+            if hasattr(v, "removeStream"):
+                v.removeStream(self._tab_data_model.semStream)
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
