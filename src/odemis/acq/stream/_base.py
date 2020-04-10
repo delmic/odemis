@@ -268,12 +268,12 @@ class Stream(object):
 
         self.intensityRange.subscribe(self._onIntensityRange)
 
-    def _init_thread(self):
+    def _init_thread(self, period=0.1):
         """ Initialize the thread that updates the image
         """
         self._imthread = threading.Thread(target=self._image_thread,
-                                          args=(weakref.ref(self),),
-                                          name="Image computation")
+                                          args=(weakref.ref(self), period),
+                                          name="Image computation of %s" % self.name.value)
         self._imthread.daemon = True
         self._imthread.start()
 
@@ -848,15 +848,14 @@ class Stream(object):
         self._im_needs_recompute.set()
 
     @staticmethod
-    def _image_thread(wstream):
+    def _image_thread(wstream, period=0.1):
         """ Called as a separate thread, and recomputes the image whenever it receives an event
         asking for it.
 
         Args:
             wstream (Weakref to a Stream): the stream to follow
-
+            period ( float > 0) (Seconds): Minimum time in second between two image updates
         """
-
         try:
             stream = wstream()
             name = stream.name.value
@@ -864,8 +863,6 @@ class Stream(object):
             # Only hold a weakref to allow the stream to be garbage collected
             # On GC, trigger im_needs_recompute so that the thread can end too
             wstream = weakref.ref(stream, lambda o: im_needs_recompute.set())
-
-            tnext = 0
             while True:
                 del stream
                 im_needs_recompute.wait()  # wait until a new image is available
@@ -875,16 +872,15 @@ class Stream(object):
                     logging.debug("Stream %s disappeared so ending image update thread", name)
                     break
 
-                tnow = time.time()
+                tnext = time.time() + period  #running with a period of max "period", optional arg standard is 10 Hz
+                im_needs_recompute.clear()
+                stream._updateImage()
 
+                tnow = time.time()
                 # sleep a bit to avoid refreshing too fast
                 tsleep = tnext - tnow
                 if tsleep > 0.0001:
                     time.sleep(tsleep)
-
-                tnext = time.time() + 0.1  # max 10 Hz
-                im_needs_recompute.clear()
-                stream._updateImage()
         except Exception:
             logging.exception("Image update thread failed")
 
@@ -917,7 +913,6 @@ class Stream(object):
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
         """
-        # logging.debug("Updating image")
         if not self.raw:
             return
 
