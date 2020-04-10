@@ -28,6 +28,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import numpy
 from collections import OrderedDict
 from concurrent import futures
 import functools
@@ -38,7 +39,7 @@ import odemis.gui
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_POL_NONE, MD_DESCRIPTION
+from odemis.model import MD_POL_NONE, MD_DESCRIPTION, MD_POS, MD_PIXEL_SIZE, MD_DIMS
 from odemis.util import executeAsyncTask
 
 
@@ -186,8 +187,8 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
         finally:
             self._sccd._unlinkHwAxes()
 
-    def _onCompletedData(self, n, raw_das):
-        super(LASEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
+    def _assembleFinalData(self, n, data):
+        super(LASEMSpectrumMDStream, self)._assembleFinalData(n, data)
 
         # In case there are several similar streams, add the polarization to the
         # stream name to make it easier to differentiate them.
@@ -195,6 +196,32 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
             da = self._raw[n]
             da.metadata[MD_DESCRIPTION] += " (%s)" % (self._polarization.value,)
 
+    def _assembleSpecData(self, data_list, repetition):
+        """
+        Take all the data received from the spectrometer and assemble it in a
+        cube.
+
+        data_list (list of M DataArray of shape (1, N)): all the data received
+        repetition (list of 2 int): X,Y shape of the high dimensions of the cube
+         so that X * Y = M
+        return (DataArray of shape N,1,1,Y,X)
+        """
+        assert len(data_list) > 0
+
+        # each element of acq_spect_buf has a shape of (1, N)
+        # reshape to (N, 1)
+        for e in data_list:
+            e.shape = e.shape[::-1]
+        # concatenate into one big array of (N, number of pixels)
+        spec_data = numpy.concatenate(data_list, axis=1)
+        # reshape to (C, 1, 1, Y, X) (as C must be the 5th dimension)
+        spec_res = data_list[0].shape[0]
+        spec_data.shape = (spec_res, 1, 1, repetition[1], repetition[0])
+
+        # copy the metadata from the first point and add the ones from metadata
+        md = data_list[0].metadata.copy()
+        md[MD_DIMS] = "CTZYX"
+        return model.DataArray(spec_data, metadata=md)
 
 class SpecExtraPlugin(Plugin):
     name = "Large area spectrum stream"

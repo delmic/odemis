@@ -2126,6 +2126,11 @@ class SPARC2TestCase(unittest.TestCase):
                       emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
+        # TODO update unit tests to test for a cornerecase: where leech is set far after update_interval and
+        #  therefore a non rectangular block may be scanned (case where leech and update interval run semi in
+        #  phase/out of phase). Test assembleLiveData if finsishes the  current line. After which a new rectangular block
+        #  is scanned instead of running into an error
+        
         pcd = Fake0DDetector("test")
         pca = ProbeCurrentAcquirer(pcd)
         sems.leeches.append(pca)
