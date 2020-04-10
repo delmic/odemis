@@ -29,6 +29,7 @@ from odemis import model
 from odemis.acq.stream import SEMCCDMDStream, ARSettingsStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
+from odemis.model import MD_DESCRIPTION
 
 
 class SEMCLCCDStream(SEMCCDMDStream):
@@ -60,18 +61,21 @@ class SEMCLCCDStream(SEMCCDMDStream):
         # positions scanned).
         return data.mean()
 
-    def _onCompletedData(self, n, raw_das):
+    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+        if n != self._ccd_idx:
+            return super(SEMCLCCDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+
+        raw_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
+        self._live_data[n].append(raw_data)
+
+    def _assembleFinalData(self, n, data):
         # Only override for the CCD data
         if n < len(self._streams) - 1:
-            r = super(SEMCLCCDStream, self)._onCompletedData(n, raw_das)
-            return r
+            return super(SEMCLCCDStream, self)._assembleFinalData(n, data)
 
         # Same as sem data, but without computing the data position from the
         # CCD metadata
         md = self._ccd_md.copy()
-        sem_data = self._raw[0]  # _onCompletedData() should be called in order
-        md[model.MD_POS] = sem_data.metadata[model.MD_POS]
-        md[model.MD_DESCRIPTION] = self._streams[n].name.value
         # Make sure it doesn't contain metadata related to AR
         for k in (model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE,
                   model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
@@ -80,6 +84,7 @@ class SEMCLCCDStream(SEMCCDMDStream):
 
         try:
             # handle sub-pixels (aka fuzzing)
+            sem_data = self._raw[0]
             sem_shape = sem_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
             rep = self.repetition.value
             tile_shape = (sem_shape[0] / rep[0], sem_shape[1] / rep[1])
@@ -90,7 +95,7 @@ class SEMCLCCDStream(SEMCCDMDStream):
             logging.warning("Metadata missing from the SEM data")
 
         # concatenate data into one big array of (number of pixels,1)
-        flat_list = [ar.flatten() for ar in raw_das]
+        flat_list = [ar.flatten() for ar in data]
         rep_one = numpy.concatenate(flat_list)
         # reshape to (Y, X)
         rep_one.shape = rep[::-1]

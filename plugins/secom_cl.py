@@ -44,6 +44,7 @@ import copy
 import logging
 import math
 import numpy
+from odemis.model import MD_DESCRIPTION
 
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
@@ -568,7 +569,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         :param data: (DataArray) The data as received from the detector, from _onData(),
                      and with MD_POS updated to the current position of the e-beam.
         :param i: (int, int) The iteration number in X, Y.
-        :returns: (value) The value as needed by _onCompletedData.
+        :returns: (value) The value as needed by _assembleFinalData.
         """
         if n != self._ccd_idx:
             return super(SECOMCLSEMMDStream, self)._preprocessData(n, data, i)
@@ -603,17 +604,24 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         # Return something, but not the data to avoid data being cached.
         return model.DataArray(numpy.array([0]))
 
-    def _onCompletedData(self, n, raw_das):
+    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+        if n != self._ccd_idx:
+            return super(SECOMCLSEMMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+
+        # For other streams (CL) don't do a live update
+        return
+
+    def _assembleFinalData(self, n, data):
         """
         Called at the end of an entire acquisition. It should assemble the data and append it to ._raw .
         :param n: (0<=int) The index of the detector.
         :param raw_das: (list) List of data acquired for given detector n.
         """
         if n != self._ccd_idx:
-            return super(SECOMCLSEMMDStream, self)._onCompletedData(n, raw_das)
+            super(SECOMCLSEMMDStream, self)._assembleFinalData(n, data)
 
-        # self._raw: first entry is sem-array, second onwards is cl-arrays
-        self._raw.extend(raw_das)  # append cl arrays
+        # For other streams (CL) don't do anything
+        return
 
     def _get_center_pos(self, data, crop_roi):
         """
