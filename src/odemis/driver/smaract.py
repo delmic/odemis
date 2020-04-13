@@ -1245,18 +1245,17 @@ class MC_5DOF(model.Actuator):
         super(MC_5DOF, self).terminate()
 
     def updateMetadata(self, md):
-        super(MC_5DOF, self).updateMetadata(md)
-        try:
+        if model.MD_PIVOT_POS in md:
             pivot = md[model.MD_PIVOT_POS]
-        except KeyError:
-            # there is no pivot position set
-            return
+            if not (isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
 
-        if not isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}:
-            raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
+            # TODO: warn if rx or rz != 0, as this means the current position is not correct anymore
+            #   or update the current position, based on the new pivot point.
+            logging.debug("Updating pivot point to %s.", pivot)
+            self.SetPivot(pivot)
 
-        logging.debug("Updating pivot point to %s.", pivot)
-        self.SetPivot(pivot)
+        super(MC_5DOF, self).updateMetadata(md)
 
     """
     API Calls
