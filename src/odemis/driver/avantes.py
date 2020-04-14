@@ -852,7 +852,7 @@ class Spectrometer(model.Detector):
         Block until a data is received, or a stop message.
         Note: it expects that the acquisition is running.
         timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if a trigger is received
+        return (bool): True if needs to stop, False if data is ready
         raise TerminationRequested: if a terminate message was received
         """
         tend = time.time() + timeout

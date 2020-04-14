@@ -36,8 +36,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # The config file might contain additional paths for finding odemis, so we
 # need to parse it and override the path before loading the rest
 
-DEFAULT_CONFIG = {"LOGLEVEL": "1",
-                  "TERMINAL": "/usr/bin/gnome-terminal"}
+DEFAULT_CONFIG = {"LOGLEVEL": "1"}
 
 # Used to parse the back-end log, and display it nicely
 RE_MSG_BE_START = "Starting Odemis back-end"
