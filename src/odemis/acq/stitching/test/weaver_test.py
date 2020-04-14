@@ -113,7 +113,7 @@ class TestCollageWeaver(unittest.TestCase):
                     [tiles, _] = decompose_image(
                         img, o, n, "horizontalZigzag", False)
 
-                    weaver = CollageWeaver()
+                    weaver = CollageWeaver(adjust_brightness=False)
                     for t in tiles:
                         weaver.addTile(t)
 
@@ -160,7 +160,7 @@ class TestCollageWeaver(unittest.TestCase):
         }
         in1 = model.DataArray(img1, md1)
 
-        weaver = CollageWeaver()
+        weaver = CollageWeaver(adjust_brightness=True)
         weaver.addTile(in0)
         weaver.addTile(in1)
         outd = weaver.getFullImage()
@@ -327,7 +327,7 @@ class TestMeanWeaver(unittest.TestCase):
         }
         in1 = model.DataArray(img1, md1)
 
-        weaver = MeanWeaver(adjust_brt=False)
+        weaver = MeanWeaver(adjust_brightness=False)
         weaver.addTile(in0)
         weaver.addTile(in1)
         outd = weaver.getFullImage()
@@ -413,7 +413,7 @@ class TestCollageWeaverReverse(unittest.TestCase):
                     [tiles, _] = decompose_image(
                         img, o, n, "horizontalZigzag", False)
 
-                    weaver = CollageWeaverReverse()
+                    weaver = CollageWeaverReverse(adjust_brightness=False)
                     for t in tiles:
                         weaver.addTile(t)
 
@@ -503,7 +503,7 @@ class TestCollageWeaverReverse(unittest.TestCase):
         }
         in1 = model.DataArray(img1, md1)
 
-        weaver = CollageWeaverReverse(adjust_brt=False)
+        weaver = CollageWeaverReverse(adjust_brightness=False)
         weaver.addTile(in0)
         weaver.addTile(in1)
         outd = weaver.getFullImage()
