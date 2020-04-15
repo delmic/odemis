@@ -444,7 +444,7 @@ class Stream(object):
         pos = actuator.position.value[axis_name]
 
         if hasattr(axis, "choices"):
-            return model.FloatEnumerated(pos, choices=axis.choices, unit=axis.unit)
+            return model.VAEnumerated(pos, choices=axis.choices, unit=axis.unit)
         elif hasattr(axis, "range"):
             # Continuous
             return model.FloatContinuous(pos, range=axis.range, unit=axis.unit)
@@ -674,7 +674,8 @@ class Stream(object):
                     va = self._axis_vas[va_name]
                     break
             else:
-                raise ValueError("The axis name %s is not found in the axis map" % axis_name)
+                # some axes might not necessarily be in the axis map. Skip them
+                continue
 
             # before updating va
             va.unsubscribe(self._axisvaupdaters[va_name])
@@ -683,6 +684,8 @@ class Stream(object):
             logging.info("Updating local axis %s to position %s", va_name, axpos)
             va.subscribe(self._axisvaupdaters[va_name])
 
+        return pos
+
     def _update_linked_axis(self, va_name, pos):
         """ Update the value of a linked hardware axis VA
             when the stream is active
@@ -690,9 +693,9 @@ class Stream(object):
         if not self.is_active.value:
             return
         try:
-            act = self._axis_map[va_name][1]
-            logging.info("Moving actuator %s to position %s.", act.name, pos)
-            f = act.moveAbs({va_name: pos})
+            real_axis_name, act = self._axis_map[va_name]
+            logging.info("Moving actuator %s axis %s to position %s.", act.name, real_axis_name, pos)
+            f = act.moveAbs({real_axis_name: pos})
             # TODO: ideally, it would block, so that the the caller knows when the move is complete.
             # However, this requires that the GUI calls this function is a separate thread.
             # f.result()

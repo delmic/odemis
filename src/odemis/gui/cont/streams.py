@@ -2692,7 +2692,7 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(detector)
 
-        # band should be set to the pass-through by default
+        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg),
@@ -2743,7 +2743,7 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(main_data.streak_ccd)
 
-        # band should be set to the pass-through by default
+        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg)}
@@ -2783,7 +2783,7 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
         spg = self._getAffectingSpectrograph(main_data.spectrometer)
 
-        # band should be set to the pass-through by default
+        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": spg,
                 "grating": spg,
                 "slit-in": spg,
