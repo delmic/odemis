@@ -2809,10 +2809,10 @@ class SparcStreamsController(StreamBarController):
         spg = self._getAffectingSpectrograph(main_data.spectrometer)
 
         # TODO: band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-                "slit-monochromator": spg,
+        axes = {"wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "slit-in": ("slit-in", spg),
+                "slit-monochromator": ("slit-monochromator", spg),
                }
 
         axes = self._filter_axes(axes)
