@@ -523,20 +523,27 @@ def to_readable_band(v):
         return v
 
 
-def format_axis_choices(name, choices, unit):
+def format_axis_choices(name, axis_def):
     """
     Transform the given choices for an axis into an user friendly display
 
     name (str): the name of the axis
-    choices (dict): the choices.
+    axis_def (Axis): Axis definition object
 
     returns:
       choices_formatted (None or list of (value, str): axis value/user-friendly
          display name (including the unit). None if axis doesn't support choices.
     """
 
+    try:
+        choices = axis_def.choices
+    except AttributeError:
+        return None
+
     if not choices:
         return None
+
+    unit = axis_def.unit
 
     if isinstance(choices, dict):
         choices_formatted = list(choices.items())
@@ -1018,7 +1025,7 @@ def create_axis_entry(container, name, comp, conf=None):
         # that's always the case for combo-boxes anyway)
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf={"style": wx.CB_READONLY})
 
-        choices_fmt = format_axis_choices(name, ad.choices, ad.unit)
+        choices_fmt = format_axis_choices(name, ad)
 
         # Set choices
         if unit is None:
