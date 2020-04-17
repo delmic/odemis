@@ -2624,6 +2624,8 @@ class SparcStreamsController(StreamBarController):
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
+        axes = self._filter_axes({"filter": ("band", main_data.light_filter)})
+
         ar_stream = acqstream.ARSettingsStream(
             "Angle-resolved",
             main_data.ccd,
@@ -2632,6 +2634,7 @@ class SparcStreamsController(StreamBarController):
             main_data.pol_analyzer,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             # TODO: add a focuser for the SPARCv2?
             detvas=detvas,
         )
@@ -2647,9 +2650,7 @@ class SparcStreamsController(StreamBarController):
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
                                                 [sem_stream, ar_stream])
 
-        return self._addRepStream(ar_stream, sem_ar_stream,
-                                  axes={"band": main_data.light_filter}
-                                  )
+        return self._addRepStream(ar_stream, sem_ar_stream)
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
