@@ -2592,6 +2592,47 @@ class SparcStreamsController(StreamBarController):
                 for va_name, (axis_name, comp) in axes.items()
                 if comp and axis_name in comp.axes}
 
+    def _set_default_spectrum_axes(self, stream):
+        """
+        Try to guess good default values for a spectrum stream's axes
+        """
+        if hasattr(stream, "axisGrating") and hasattr(stream.axisGrating, "choices"):
+            # Anything *but* mirror is fine
+            choices = stream.axisGrating.choices
+
+            # Locate the mirror entry
+            mirror = None
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if "mirror" in desc.lower():  # poor's man definition of a mirror
+                        mirror = pos
+                        break
+
+            if mirror is not None and stream.axisGrating.value == mirror:
+                # Pick the first entry which is not a mirror
+                for pos in choices:
+                    if pos != mirror:
+                        stream.axisGrating.value = pos
+                        logging.debug("Picking grating %d for spectrum stream", pos)
+                        break
+
+        if hasattr(stream, "axisWavelength"):
+            # Wavelength should be > 0
+            if stream.axisWavelength.value == 0:
+                # 600 nm ought to be good for every stream...
+                # TODO: pick based on the grating's blaze
+                stream.axisWavelength.value = stream.axisWavelength.clip(600e-9)
+
+        if hasattr(stream, "axisFilter") and hasattr(stream.axisFilter, "choices"):
+            # Use pass-through if available
+            choices = stream.axisFilter.choices
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if desc == "pass-through":  # that's an official constant
+                        stream.axisFilter.value = pos
+                        logging.debug("Picking pass-through filter (%d) for spectrum stream", pos)
+                        break
+
     def _addRepStream(self, stream, mdstream, **kwargs):
         """
         Display and connect a new RepetitionStream to the GUI
@@ -2716,7 +2757,6 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(detector)
 
-        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg),
@@ -2743,6 +2783,7 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
+        self._set_default_spectrum_axes(spec_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -2767,7 +2808,6 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(main_data.streak_ccd)
 
-        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg)}
@@ -2794,6 +2834,7 @@ class SparcStreamsController(StreamBarController):
             axis_map=axes,
             detvas=detvas,
             streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+        self._set_default_spectrum_axes(ts_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -2807,7 +2848,6 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
         spg = self._getAffectingSpectrograph(main_data.spectrometer)
 
-        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg),
@@ -2835,6 +2875,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator, self._main_data_model.hw_settings_config),
         )
+        self._set_default_spectrum_axes(monoch_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
