@@ -149,6 +149,10 @@ class StreamController(object):
 
         self._add_stream_setting_controls()
 
+        if len(self.entries) > 0:  # TODO: only do so, if some other controls are displayed after
+            self.stream_panel.add_divider()
+
+        num_settings_entries = len(self.entries)
         if hasattr(self.stream, "axis_vas"):
             self._add_axis_controls()
 
@@ -159,6 +163,9 @@ class StreamController(object):
             self._add_excitation_ctrl()
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
+
+        if len(self.entries) > num_settings_entries:  # TODO: also only if other controls after
+            self.stream_panel.add_divider()
 
         # Add metadata button to show dialog with full list of metadata
         if isinstance(self.stream, acqstream.StaticStream):
@@ -274,8 +281,6 @@ class StreamController(object):
         else:
             detector_conf = {}
 
-        add_divider = False
-
         # TODO "integrationTime" not part of detector VAs now, as stream VA
         #  -> should be handled as detector VA as it replaces exposureTime VA
 
@@ -290,7 +295,6 @@ class StreamController(object):
                 logging.debug("%s hardware configuration found", name)
 
             self.add_setting_entry(name, va, self.stream.emitter, conf)
-            add_divider = True
 
         # Process the emitter VAs first
         vas_names = util.sorted_according_to(list(self.stream.emt_vas.keys()), list(emitter_conf.keys()))
@@ -303,7 +307,6 @@ class StreamController(object):
                               self.stream.emitter.role)
 
             self.add_setting_entry(name, va, self.stream.emitter, conf)
-            add_divider = True
 
         # Then process the detector
         vas_names = util.sorted_according_to(list(self.stream.det_vas.keys()), list(detector_conf.keys()))
@@ -316,10 +319,6 @@ class StreamController(object):
                               self.stream.detector.role)
 
             self.add_setting_entry(name, va, self.stream.detector, conf)
-            add_divider = True
-
-        if add_divider:  # TODO: only do so, if some other controls are displayed
-            self.stream_panel.add_divider()
 
     def _add_stream_setting_controls(self):
         """ Add control for the VAs of the stream
