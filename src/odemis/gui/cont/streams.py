@@ -91,7 +91,7 @@ class StreamController(object):
         self.view = view
         self._sb_ctrl = sb_ctrl
 
-        self._stream_config = data.get_stream_settings_config()
+        self._stream_config = data.get_stream_settings_config().get(type(stream), {})
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Allow changing the tint of all "flat" static streams, and FluoStreams (live)
@@ -325,27 +325,24 @@ class StreamController(object):
         """ Add control for the VAs of the stream
         Note: only the VAs which are defined in the stream_config are shown.
         """
-        stream_config = self._stream_config.get(type(self.stream), {})
-        for vaname, conf in stream_config.items():
+        for vaname, conf in self._stream_config.items():
             try:
                 va = getattr(self.stream, vaname)
             except AttributeError:
                 logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
                 continue
-            conf = stream_config.get(vaname)
+            conf = self._stream_config.get(vaname)
             self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
 
     def _add_axis_controls(self):
         """
         Add controls for the axes that are connected to the stream
         """
-        stream_config = self._stream_config.get(type(self.stream), {})
-
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(stream_config.keys()))
+        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
 
         for axisname in axes_names:
-            conf = stream_config.get(axisname)
+            conf = self._stream_config.get(axisname)
             self.add_setting_entry(axisname, self.stream.axis_vas[axisname], None, conf)
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
@@ -1402,8 +1399,6 @@ class StreamBarController(object):
         if hasattr(tab_data, "spotStream") and tab_data.spotStream:
             self._spot_stream = tab_data.spotStream
             self._scheduleStream(self._spot_stream)
-
-        self._stream_config = data.get_stream_settings_config()
 
     def pause(self):
         """ Pause (=freeze) SettingEntry related control updates """
