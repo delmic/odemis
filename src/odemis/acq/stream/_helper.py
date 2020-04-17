@@ -1046,20 +1046,6 @@ class ARSettingsStream(CCDSettingsStream):
 
     # onActive & projection: same as the standard LiveStream
 
-    # Override Stream._is_active_setter() in RepetitionStream class and _base.py
-    def _is_active_setter(self, active):
-        """
-        Called when stream is activated/played. Additionally, links/unlinks the hardware axes.
-        :param active: (boolean) True if stream is playing.
-        :returns: (boolean) If stream is playing or not.
-        """
-        active = super(ARSettingsStream, self)._is_active_setter(active)
-        if active:
-            self._linkHwAxes()
-        else:
-            self._unlinkHwAxes()
-        return active
-
     def _linkHwAxes(self):
         """"
         Subscribe polarization VA: link VA to hardware axis.
