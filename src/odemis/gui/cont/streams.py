@@ -148,7 +148,8 @@ class StreamController(object):
 
         self._add_stream_setting_controls()
 
-        self._add_axis_controls()
+        if hasattr(self.stream, "axis_vas"):
+            self._add_axis_controls()
 
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
@@ -338,8 +339,6 @@ class StreamController(object):
         Add controls for the axes that are connected to the stream
         """
         stream_config = self._stream_config.get(type(self.stream), {})
-        if not hasattr(self.stream, "axis_vas"):
-            return
 
         # Add Axes (in same order as config)
         axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))

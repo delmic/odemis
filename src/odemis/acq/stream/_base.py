@@ -265,22 +265,6 @@ class Stream(object):
             self._updateHistogram(drange_raw)
             self._onNewData(None, self.raw[0])
 
-    def _duplicateAxes(self, axis_map):
-        """
-        Duplicate all of the axes passed to the stream in local Vigilant Attributes
-        axis_map (dict of axis_name -> Actuator): map of an axis name to an Actuator component
-        returns (dict str -> VA): axis_name -> new VA.
-        """
-        # Add axis position VA's to the list of hardware VA's
-        axis_vas = {}  # dict of axis_name to duplicated position VA
-        for va_name, (axis_name, actuator) in axis_map.items():
-            va = self._duplicateAxis(axis_name, actuator)
-            axis_vas[va_name] = va
-            # add attributes to stream
-            setattr(self, "axis" + va_name[0].upper() + va_name[1:], va)
-
-        return axis_vas
-
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
         """
@@ -450,6 +434,22 @@ class Stream(object):
             return model.FloatContinuous(pos, range=axis.range, unit=axis.unit)
         else:
             raise ValueError("Invalid axis type")
+
+    def _duplicateAxes(self, axis_map):
+        """
+        Duplicate all of the axes passed to the stream in local Vigilant Attributes
+        axis_map (dict of axis_name -> Actuator): map of an axis name to an Actuator component
+        returns (dict str -> VA): axis_name -> new VA.
+        """
+        # Add axis position VA's to the list of hardware VA's
+        axis_vas = {}  # dict of axis_name to duplicated position VA
+        for va_name, (axis_name, actuator) in axis_map.items():
+            va = self._duplicateAxis(axis_name, actuator)
+            axis_vas[va_name] = va
+            # add attributes to stream
+            setattr(self, "axis" + va_name[0].upper() + va_name[1:], va)
+
+        return axis_vas
 
     # TODO: move to odemis.util ?
     def _duplicateVA(self, va, setter=None):
