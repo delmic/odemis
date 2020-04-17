@@ -190,13 +190,12 @@ class Stream(object):
         self._hwvasetters = {}  # str (name of the proxied VA) -> setter
         self._lvaupdaters = {}  # str (name of the proxied VA) -> listener
         self._axisvaupdaters = {}  # str (name of the axis VA) -> listener (functools.partial)
-        self._posupdaters = {}  # str (name of the axis VA) -> listener (functools.partial)
+        self._posupdaters = {}  # Actuator -> listener (functools.partial)
 
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
         self._axis_map = axis_map or {}
-        self._linked_actuators = set()
         self._axis_vas = self._duplicateAxes(self._axis_map)
 
         self._dRangeLock = threading.Lock()
@@ -615,8 +614,7 @@ class Stream(object):
         to the real hardware
         """
 
-        if hasattr(self, "_axis_map"):
-
+        if hasattr(self, "_axis_vas"):
             moving_axes = []
             moves = {}  # Actuator -> move {axis -> value}
             for va_name, (axis_name, actuator) in self._axis_map.items():
@@ -624,7 +622,6 @@ class Stream(object):
                 pos = va.value
                 moves.setdefault(actuator, {})[axis_name] = pos
                 logging.info("Moving actuator %s axis %s to position %s.", actuator.name, axis_name, pos)
-                self._linked_actuators.add(actuator)
 
                 # subscribe to update the axis when the stream plays
                 ax_updater = functools.partial(self._update_linked_axis, va_name)
@@ -707,16 +704,15 @@ class Stream(object):
         """
         Unlink the axes to the hardware components
         """
-        if hasattr(self, "_axis_map") and self._axis_map is not None:
-            for va_name, va in self._axis_vas.items():
-                va.unsubscribe(self._axisvaupdaters[va_name])
+        if hasattr(self, "_axis_vas"):
+            for va_name, updater in list(self._axisvaupdaters.items()):
+                va = self._axis_vas[va_name]
+                va.unsubscribe(updater)
                 del self._axisvaupdaters[va_name]
 
-            for actuator in self._linked_actuators:
-                actuator.position.unsubscribe(self._posupdaters[actuator])
+            for actuator, updater in list(self._posupdaters.items()):
+                actuator.position.unsubscribe(updater)
                 del self._posupdaters[actuator]
-
-            self._linked_actuators.clear()
 
     def prepare(self):
         """
