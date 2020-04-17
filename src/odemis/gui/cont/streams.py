@@ -342,7 +342,7 @@ class StreamController(object):
         stream_config = self._stream_config.get(type(self.stream), {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
+        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(stream_config.keys()))
 
         for axisname in axes_names:
             conf = stream_config.get(axisname)
