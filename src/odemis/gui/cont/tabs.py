@@ -885,8 +885,6 @@ class SparcAcquisitionTab(Tab):
         # To make sure the spot mode is stopped when the tab loses focus
         tab_data.streams.value.append(spot_stream)
 
-        tab_data.streams.value.append(semcl_stream)
-
         viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
             assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
@@ -984,8 +982,6 @@ class SparcAcquisitionTab(Tab):
         sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
-
-        semcl_stream_cont = self._stream_controller.addStream(semcl_stream, add_to_view=True)
 
         # FIXME
         # Display on the SEM live stream panel, the extra settings of the SEM concurrent stream
