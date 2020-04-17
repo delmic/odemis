@@ -28,19 +28,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import numpy
 from collections import OrderedDict
 from concurrent import futures
 import functools
 import logging
+import numpy
 from odemis import model
 from odemis.acq.stream import SpectrumSettingsStream, POL_POSITIONS, SEMSpectrumMDStream
 import odemis.gui
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_POL_NONE, MD_DESCRIPTION, MD_POS, MD_PIXEL_SIZE, MD_DIMS
+from odemis.model import MD_POL_NONE, MD_DESCRIPTION
 from odemis.util import executeAsyncTask
+
+import odemis.gui.conf.util as confutil
 
 
 class LASpectrumSettingsStream(SpectrumSettingsStream):
@@ -83,18 +85,6 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
             self.acquireAllPol = model.BooleanVA(False)
 
     # Copy from ARSettingsStream (to only change the axis when playing)
-    # Override Stream._is_active_setter() in _base.py
-    def _is_active_setter(self, active):
-        active = super(LASpectrumSettingsStream, self)._is_active_setter(active)
-        if active:
-            # we cannot do it here, as the OPM would reset the axes (and it's
-            # called as a subscriber of is_active, so just after this function)
-            # => moved to .prepare()
-            # self._linkHwAxes()
-            pass
-        else:
-            self._unlinkHwAxes()
-        return active
 
     def _prepare_opm(self):
         # Return a future which calls the OPM _and_ updates the "special" axes
@@ -108,15 +98,17 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
         # Take care of the axes as soon as the OPM is done
         # Note: it's sub-optimal, as the OPM will explicitly move the axes away
         # while we maybe end-up putting them back.
-        self._linkHwAxes()
+        self._changeLensAxes()
 
-    def _linkHwAxes(self, _=None):
+    def _changeLensAxes(self, _=None):
         """"
-        Subscribe local axes VAs (ie, l2 and polarization)
-        Synchronized with stream. Waits until movement is completed.
+        Move the special axes (ie, l2 and polarization)
+        Waits until movement is completed.
         """
-        super(LASpectrumSettingsStream, self)._linkHwAxes()
-
+        # We cannot do it in _linkHwAxes(), as the OPM would reset the axes
+        # (as _linkHwAxes() is called in the is_active setter, while the OPM is
+        # called as a subscriber of is_active, so just after)
+        # => moved to .prepare()
         fs = []
         if self.l2:
             logging.debug("Moving l2 to position %s.", self._toLens2Pos)
@@ -200,36 +192,10 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
             da = self._raw[n]
             da.metadata[MD_DESCRIPTION] += " (%s)" % (self._polarization.value,)
 
-    def _assembleSpecData(self, data_list, repetition):
-        """
-        Take all the data received from the spectrometer and assemble it in a
-        cube.
-
-        data_list (list of M DataArray of shape (1, N)): all the data received
-        repetition (list of 2 int): X,Y shape of the high dimensions of the cube
-         so that X * Y = M
-        return (DataArray of shape N,1,1,Y,X)
-        """
-        assert len(data_list) > 0
-
-        # each element of acq_spect_buf has a shape of (1, N)
-        # reshape to (N, 1)
-        for e in data_list:
-            e.shape = e.shape[::-1]
-        # concatenate into one big array of (N, number of pixels)
-        spec_data = numpy.concatenate(data_list, axis=1)
-        # reshape to (C, 1, 1, Y, X) (as C must be the 5th dimension)
-        spec_res = data_list[0].shape[0]
-        spec_data.shape = (spec_res, 1, 1, repetition[1], repetition[0])
-
-        # copy the metadata from the first point and add the ones from metadata
-        md = data_list[0].metadata.copy()
-        md[MD_DIMS] = "CTZYX"
-        return model.DataArray(spec_data, metadata=md)
 
 class SpecExtraPlugin(Plugin):
     name = "Large area spectrum stream"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
@@ -287,6 +253,9 @@ class SpecExtraPlugin(Plugin):
                     "label": "Input slit",
                     "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
                 }),
+                ("filter", {  # filter.band
+                    "choices": confutil.format_band_choices,
+                }),
             ))
         )
 
@@ -301,6 +270,22 @@ class SpecExtraPlugin(Plugin):
         stctrl = self._tab.streambar_controller
 
         spg = stctrl._getAffectingSpectrograph(detector)
+
+        axes = {"wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "slit-in": ("slit-in", spg),
+               }
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if detector.name in fw.affects.value:
+                axes["filter"] = ("band", fw)
+                break
+
+        axes = stctrl._filter_axes(axes)
+
         spec_stream = LASpectrumSettingsStream(
             name,
             detector,
@@ -310,26 +295,14 @@ class SpecExtraPlugin(Plugin):
             analyzer=main_data.pol_analyzer,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
+            axis_map=axes,
             detvas=get_local_vas(detector, main_data.hw_settings_config),
         )
+        stctrl._set_default_spectrum_axes(spec_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab.tab_data_model.semStream
         sem_spec_stream = LASEMSpectrumMDStream("SEM " + name,
                                                         [sem_stream, spec_stream])
 
-        # TODO: all the axes, including the filter band should be local. The
-        # band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-               }
-
-        # Also add light filter for the spectrum stream if it affects the detector
-        for fw in (main_data.cl_filter, main_data.light_filter):
-            if fw is None:
-                continue
-            if detector.name in fw.affects.value:
-                axes["band"] = fw
-
-        return stctrl._addRepStream(spec_stream, sem_spec_stream, axes=axes)
+        return stctrl._addRepStream(spec_stream, sem_spec_stream)
