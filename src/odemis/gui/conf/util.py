@@ -498,13 +498,37 @@ def format_choices(choices):
 
     return choices_formatted, choices_si_prefix
 
+def format_band_choices(comp, va, conf):
+    """
+    Formatter function for local axis VigilantAttributes
+    """
+
+    choices = va.choices
+
+    if not isinstance(choices, dict):
+        return va.choices
+
+    conf["unit"] = ""  # Disable unit display
+    return {k: to_readable_band(v) for k, v in va.choices.items()}
+
+
+def to_readable_band(v):
+    """
+    Convert a list of choices to readable bands for the GUI
+    """
+    if (isinstance(v, (tuple, list)) and len(v) > 1 and
+            all(isinstance(c, numbers.Real) for c in v)):
+        return fluo.to_readable_band(v)
+    else:
+        return v
+
 
 def format_axis_choices(name, axis_def):
     """
     Transform the given choices for an axis into an user friendly display
 
     name (str): the name of the axis
-    axis_def (Axis): the axis definition
+    axis_def (Axis): Axis definition object
 
     returns:
       choices_formatted (None or list of (value, str): axis value/user-friendly
@@ -527,14 +551,6 @@ def format_axis_choices(name, axis_def):
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)
         if name == "band":
-
-            def to_readable_band(v):
-                if (isinstance(v, (tuple, list)) and len(v) > 1 and
-                        all(isinstance(c, numbers.Real) for c in v)):
-                    return fluo.to_readable_band(v)
-                else:
-                    return v
-
             choices_formatted = [(k, to_readable_band(v)) for k, v in choices_formatted]
     elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
         choices_formatted = None
@@ -627,7 +643,6 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
     # If no conf provided, set it to an empty dictionary
     conf = conf or {}
-
     # Get the range and choices
     min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
     # Format the provided choices

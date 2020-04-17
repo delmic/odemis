@@ -1065,6 +1065,8 @@ class ARSettingsStream(CCDSettingsStream):
         Subscribe polarization VA: link VA to hardware axis.
         Synchronized with stream. Waits until movement is completed.
         """
+        super(ARSettingsStream, self)._linkHwAxes()
+
         if self.analyzer:
             try:
                 logging.debug("Moving polarization analyzer to position %s.", self.polarization.value)
@@ -1078,6 +1080,8 @@ class ARSettingsStream(CCDSettingsStream):
 
     def _unlinkHwAxes(self):
         """"Unsubscribe polarization VA: unlink VA from hardware axis."""
+        super(ARSettingsStream, self)._unlinkHwAxes()
+
         if self.analyzer:
             self.polarization.unsubscribe(self._onPolarization)
 

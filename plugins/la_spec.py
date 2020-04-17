@@ -115,6 +115,8 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
         Subscribe local axes VAs (ie, l2 and polarization)
         Synchronized with stream. Waits until movement is completed.
         """
+        super(LASpectrumSettingsStream, self)._linkHwAxes()
+
         fs = []
         if self.l2:
             logging.debug("Moving l2 to position %s.", self._toLens2Pos)
@@ -139,6 +141,8 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
 
     def _unlinkHwAxes(self):
         """"unsubscribe local axes: unlink VA from hardware axis"""
+        super(LASpectrumSettingsStream, self)._unlinkHwAxes()
+
         if self.analyzer:
             self.polarization.unsubscribe(self._onPolarization)
 

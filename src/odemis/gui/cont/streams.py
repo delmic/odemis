@@ -149,6 +149,9 @@ class StreamController(object):
 
         self._add_stream_setting_controls()
 
+        if hasattr(self.stream, "axis_vas"):
+            self._add_axis_controls()
+
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
@@ -332,6 +335,19 @@ class StreamController(object):
             conf = stream_config.get(vaname)
             self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
 
+    def _add_axis_controls(self):
+        """
+        Add controls for the axes that are connected to the stream
+        """
+        stream_config = self._stream_config.get(type(self.stream), {})
+
+        # Add Axes (in same order as config)
+        axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
+
+        for axisname in axes_names:
+            conf = stream_config.get(axisname)
+            self.add_setting_entry(axisname, self.stream.axis_vas[axisname], None, conf)
+
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
 
@@ -357,7 +373,6 @@ class StreamController(object):
         :param conf: ({}): Configuration items that may override default settings
 
         """
-
         ae = create_axis_entry(self.stream_panel, name, comp, conf)
         if ae is not None:
             self.entries.append(ae)
@@ -2572,7 +2587,18 @@ class SparcStreamsController(StreamBarController):
 
         return self._add_stream(s, **kwargs)
 
-    def _addRepStream(self, stream, mdstream, axes, **kwargs):
+    def _filter_axes(self, axes):
+        """
+        Given an axes dict from config, filter out the axes which are not
+          available on the current hardware.
+        axes (dict str -> (str, Actuator or None)): VA name -> axis+Actuator
+        returns (dict): the filtered axes
+        """
+        return {va_name: (axis_name, comp)
+                for va_name, (axis_name, comp) in axes.items()
+                if comp and axis_name in comp.axes}
+
+    def _addRepStream(self, stream, mdstream, **kwargs):
         """
         Display and connect a new RepetitionStream to the GUI
         stream (RepetitionStream): freshly baked stream
@@ -2589,23 +2615,6 @@ class SparcStreamsController(StreamBarController):
 
         # add the acquisition stream to the acquisition set
         self._tab_data_model.acquisitionStreams.add(mdstream)
-
-        stream_config = self._stream_config.get(type(stream), {})
-
-        # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(list(axes.keys()), list(stream_config.keys()))
-        for axisname in axes_names:
-            comp = axes[axisname]
-            if comp is None:
-                logging.debug("Skipping axis %s for non existent component",
-                              axisname)
-                continue
-            if axisname not in comp.axes:
-                logging.debug("Skipping non existent axis %s on component %s",
-                              axisname, comp.name)
-                continue
-            conf = stream_config.get(axisname)
-            stream_cont.add_axis_entry(axisname, comp, conf)
 
         return stream_cont
 
@@ -2651,6 +2660,16 @@ class SparcStreamsController(StreamBarController):
         """ Create a CLi stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
+
+        # Need to pick the right filter wheel (if there is one)
+        axes = {}
+        for fw in (main_data.cl_filter, main_data.light_filter, main_data.tc_od_filter, main_data.tc_filter):
+            if fw is None:
+                continue
+            if main_data.cld.name in fw.affects.value:
+                axes["filter"] = ("band", fw)
+                break
+
         cli_stream = acqstream.CLSettingsStream(
             "CL intensity",
             main_data.cld,
@@ -2659,6 +2678,7 @@ class SparcStreamsController(StreamBarController):
             sstage=main_data.scan_stage,
             focuser=self._main_data_model.ebeam_focus,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
         )
@@ -2672,15 +2692,7 @@ class SparcStreamsController(StreamBarController):
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
                                                [sem_stream, cli_stream])
 
-        # Need to pick the right filter wheel (if there is one)
-        axes = {}
-        for fw in (main_data.cl_filter, main_data.light_filter, main_data.tc_od_filter, main_data.tc_filter):
-            if fw is None:
-                continue
-            if main_data.cld.name in fw.affects.value:
-                axes["band"] = fw
         ret = self._addRepStream(cli_stream, sem_cli_stream,
-                                  axes=axes,
                                   play=False
                                   )
 
@@ -2708,6 +2720,23 @@ class SparcStreamsController(StreamBarController):
         logging.debug("Adding spectrum stream for %s", detector.name)
 
         spg = self._getAffectingSpectrograph(detector)
+
+        # TODO: band should be set to the pass-through by default
+        axes = {"wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "slit-in": ("slit-in", spg),
+               }
+
+        axes = self._filter_axes(axes)
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if detector.name in fw.affects.value:
+                axes["filter"] = ("band", fw)
+                break
+
         spec_stream = acqstream.SpectrumSettingsStream(
             name,
             detector,
@@ -2715,32 +2744,18 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
+
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
                                                         [sem_stream, spec_stream])
 
-        # TODO: all the axes, including the filter band should be local. The
-        # band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-               }
-
-        # Also add light filter for the spectrum stream if it affects the detector
-        for fw in (main_data.cl_filter, main_data.light_filter):
-            if fw is None:
-                continue
-            if detector.name in fw.affects.value:
-                axes["band"] = fw
-
-        return self._addRepStream(spec_stream, sem_spec_stream,
-                                  axes=axes,
-                                  )
+        return self._addRepStream(spec_stream, sem_spec_stream)
 
     def addTemporalSpectrum(self):
         """
@@ -2755,6 +2770,23 @@ class SparcStreamsController(StreamBarController):
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
+        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
+
+        # TODO: band should be set to the pass-through by default
+        axes = {"wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "slit-in": ("slit-in", spg)}
+
+        axes = self._filter_axes(axes)
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.streak_ccd.name in fw.affects.value:
+                axes["filter"] = ("band", fw)
+                break
+
         ts_stream = acqstream.TemporalSpectrumSettingsStream(
             "Temporal Spectrum",
             main_data.streak_ccd,
@@ -2764,6 +2796,7 @@ class SparcStreamsController(StreamBarController):
             main_data.streak_delay,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             detvas=detvas,
             streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
 
@@ -2771,28 +2804,31 @@ class SparcStreamsController(StreamBarController):
         sem_stream = self._tab_data_model.semStream
         sem_ts_stream = acqstream.SEMTemporalSpectrumMDStream("SEM TempSpec", [sem_stream, ts_stream])
 
-        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
-
-        # TODO: all the axes, including the filter band should be local. The
-        # band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg}
-
-        # Also add light filter for the spectrum stream if it affects the detector
-        for fw in (main_data.cl_filter, main_data.light_filter):
-            if fw is None:
-                continue
-            if main_data.streak_ccd.name in fw.affects.value:
-                axes["band"] = fw
-
-        return self._addRepStream(ts_stream, sem_ts_stream, axes=axes)
+        return self._addRepStream(ts_stream, sem_ts_stream)
 
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
         spg = self._getAffectingSpectrograph(main_data.spectrometer)
+
+        # TODO: band should be set to the pass-through by default
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg,
+                "slit-monochromator": spg,
+               }
+
+        axes = self._filter_axes(axes)
+
+        # Also add light filter if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.monochromator.name in fw.affects.value:
+                axes["filter"] = ("band", fw)
+                break
+
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Monochromator",
             main_data.monochromator,
@@ -2800,6 +2836,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator, self._main_data_model.hw_settings_config),
         )
@@ -2809,23 +2846,7 @@ class SparcStreamsController(StreamBarController):
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator",
                                                   [sem_stream, monoch_stream])
 
-        # TODO: all the axes, including the filter band should be local. The
-        # band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-                "slit-monochromator": spg,
-               }
-
-        # Also add light filter if it affects the detector
-        for fw in (main_data.cl_filter, main_data.light_filter):
-            if fw is None:
-                continue
-            if main_data.monochromator.name in fw.affects.value:
-                axes["band"] = fw
-
         return self._addRepStream(monoch_stream, sem_monoch_stream,
-                                  axes=axes,
                                   play=False
                                   )
 
@@ -2833,12 +2854,19 @@ class SparcStreamsController(StreamBarController):
         """ Create a Time Correlator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
+
+        axes = {"density": ("density", main_data.tc_od_filter),
+                "filter": ("band", main_data.tc_filter)}
+
+        axes = self._filter_axes(axes)
+
         tc_stream = acqstream.ScannedTemporalSettingsStream(
             "Time Correlator",
             main_data.time_correlator,
             main_data.time_correlator.data,
             main_data.ebeam,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
         )
 
@@ -2846,11 +2874,8 @@ class SparcStreamsController(StreamBarController):
         sem_stream = self._tab_data_model.semStream
         sem_tc_stream = acqstream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
-        axes = {"density": main_data.tc_od_filter,
-                "band": main_data.tc_filter}
         
         return self._addRepStream(tc_stream, sem_tc_stream,
-                                  axes=axes,
                                   play=False
                                   )
 
