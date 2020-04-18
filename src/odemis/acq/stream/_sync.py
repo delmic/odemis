@@ -755,7 +755,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
             leech_nimg (list of 0<int or None): For each leech, number of images before the leech should be
                                                 executed again. It's automatically updated inside the list.
                                                 (nimg = next image)
-            leech_time_pimg (float): Extra time needed on average for a single image for all leches (s).
+            leech_time_pimg (float): Extra time needed on average for a single image for all leeches (s).
         """
 
         leech_nimg = []  # contains number of images until leech should be executed again
@@ -801,9 +801,9 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         """
         One full SEM scan is stored for each polarisation, at the end assembleFinalData() will take care of
         integrating (aka averaging) them into a single one.
-        To integration/avaraging "live" would be diffucult and prone to error's since
+        To integration/averaging "live" would be difficult and prone to error's since
         an weighted average over the total number of polarisations in combination with the previous done
-        polarisations need te be made.
+        polarisations need to be made.
         :param n: (int) number of the current stream
         :param raw_data: acquired data of SEM stream
         :param px_idx: (tuple of int) pixel index: y, x
@@ -815,8 +815,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
-            md = raw_data[0].metadata.copy()
-            center, pxs = self._get_center_pxs(rep, tile_shape , raw_data)
+            md = raw_data.metadata.copy()
+            center, pxs = self._get_center_pxs(rep, tile_shape, raw_data)
             md.update({MD_POS: center,
                        MD_PIXEL_SIZE: pxs,
                        MD_DESCRIPTION: self._streams[n].name.value})
@@ -852,8 +852,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
-            md = raw_data[0].metadata.copy()
-            center, pxs = self._get_center_pxs(rep, (1,1) , raw_data)
+            md = raw_data.metadata.copy()
+            center, pxs = self._get_center_pxs(rep, (1, 1), raw_data)
             md.update({MD_POS: center,
                        MD_PIXEL_SIZE: pxs,
                        MD_DESCRIPTION: self._streams[n].name.value})
@@ -2186,7 +2186,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
-            md = raw_data[0].metadata.copy()
+            md = raw_data.metadata.copy()
             # Compute metadata based on SEM metadata
             semmd = self._live_data[0][pol_idx].metadata
             # handle sub-pixels (aka fuzzing)
@@ -2198,21 +2198,10 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
             # Shape of spectrum data = C11YX
             da = numpy.zeros(shape=(spec_shape[1], 1, 1, rep[1], rep[0]), dtype=raw_data.dtype)
-            self._live_data[n] = model.DataArray(da, md)
+            self._live_data[n].append(model.DataArray(da, md))
 
-        self._live_data[n][:, 0, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_shape[1])
+        self._live_data[n][pol_idx][:, 0, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_shape[1])
 
-    def _assembleFinalData(self, n, data):
-        """
-        :param n: (int) number of the current stream which is assembled into ._raw
-        :param data: all acquired data of the stream
-        This function post-processes/organizes the data for a stream and exports it into ._raw.
-        """
-        if n != self._ccd_idx:
-            return super(SEMSpectrumMDStream, self)._assembleFinalData(n, data)
-
-        # Add all the DataArrays of the AR independently
-        self._raw.append(data)
 
 class SEMTemporalMDStream(MultipleDetectorStream):
     """
@@ -2484,7 +2473,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         spec_res = raw_data.shape[1]
 
         if pol_idx > len(self._live_data[n]) - 1:
-            md = raw_data[0].metadata.copy()
+            md = raw_data.metadata.copy()
             # Compute metadata based on SEM metadata
             semmd = self._live_data[0][pol_idx].metadata
             # handle sub-pixels (aka fuzzing)
@@ -2496,23 +2485,12 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
             # Shape of spectrum data = CT1YX
             da = numpy.zeros(shape=(spec_res, temp_res, 1, rep[1], rep[0]), dtype=raw_data.dtype)
-            self._live_data[n] = model.DataArray(da, md)
+            self._live_data[n].append(model.DataArray(da, md))
 
         # Detector image has a shape of (time, lambda)
         raw_data = raw_data.T  # transpose to (lambda, time)
-        self._live_data[n][:, :, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, temp_res)
+        self._live_data[n][pol_idx][:, :, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, temp_res)
 
-    def _assembleFinalData(self, n, data):
-        """
-        :param n: (int) number of the current stream which is assembled into ._raw
-        :param data: all acquired data of the stream
-        This function post-processes/organizes the data for a stream and exports it into ._raw.
-        """
-        if n != self._ccd_idx:
-            return super(SEMTemporalSpectrumMDStream, self)._assembleFinalData(n, data)
-
-        # Add all the DataArray of the TempSpecData to the _raw
-        self._raw.append(data)
 
 class SEMARMDStream(SEMCCDMDStream):
     """
