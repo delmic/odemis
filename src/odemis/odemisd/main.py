@@ -744,7 +744,7 @@ def main(args):
 
         if options.settings is None:
             try:
-                options.settings = open(DEFAULT_SETTINGS_FILE, "a+")
+                options.settings = open(DEFAULT_SETTINGS_FILE, "r+")
             except IOError as ex:
                 logging.warning("%s. Will not be able to use persistent data", ex)
 
@@ -752,10 +752,6 @@ def main(args):
             cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
         else:
             cont_pol = BackendRunner.CONTAINER_SEPARATED
-
-        # Opening a file in append mode positions the stream at the end of the file in python3
-        if options.settings:
-            options.settings.seek(0)
 
         # let's become the back-end for real
         runner = BackendRunner(options.model, options.settings, options.daemon,
