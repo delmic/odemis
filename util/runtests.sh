@@ -60,6 +60,12 @@ export TEST_NOHW=1
 # This environment variable makes the bugreporter test skip test cases that involve ticket creation
 export TEST_NO_SUPPORT_TICKET=1
 
+# A random number, which is always the same, in order to force the dict order in Python 3.
+# This helps in reproducing issues, by making each run a little less different.
+# Note that this doesn't affect the back-end (as it's run in a separate user),
+# and there are many other things that can affect execution order (eg, threads).
+export PYTHONHASHSEED=1567315
+
 TESTLOG=./unittest-full-$DATE.log
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
