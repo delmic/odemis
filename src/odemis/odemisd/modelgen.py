@@ -908,6 +908,9 @@ class Instantiator(object):
         if f is None:
             return {}
 
+        # Make sure we start from the beginning, useful if the function
+        # is called several times in a row.
+        f.seek(0)
         try:
             data = yaml.safe_load(f)
             if not isinstance(data, dict):
