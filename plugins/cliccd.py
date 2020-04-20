@@ -29,7 +29,7 @@ from odemis import model
 from odemis.acq.stream import SEMCCDMDStream, ARSettingsStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_DESCRIPTION
+from odemis.model import MD_PIXEL_SIZE, MD_POS, MD_DIMS, MD_DESCRIPTION
 
 
 class SEMCLCCDStream(SEMCCDMDStream):
@@ -38,9 +38,6 @@ class SEMCLCCDStream(SEMCCDMDStream):
     It handles acquisition, but not rendering (so .image always returns an empty
     image).
     """
-    def _runAcquisition(self, future):
-        self._ccd_md = None
-        return super(SEMCLCCDStream, self)._runAcquisition(future)
 
     def _preprocessData(self, n, data, i):
         """
@@ -49,9 +46,6 @@ class SEMCLCCDStream(SEMCCDMDStream):
         # We only care about the CCD data
         if n < len(self.streams) - 1:
             return super(SEMCLCCDStream, self)._preprocessData(n, data, i)
-
-        if not self._ccd_md:
-            self._ccd_md = data.metadata
 
         # Computing the sum or the mean is theoretically equivalent, but the sum
         # provides gigantic values while the mean gives values in the same order
@@ -65,48 +59,32 @@ class SEMCLCCDStream(SEMCCDMDStream):
         if n != self._ccd_idx:
             return super(SEMCLCCDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
 
-        raw_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
-        self._live_data[n].append(raw_data)
-
-    def _assembleFinalData(self, n, data):
-        # Only override for the CCD data
-        if n < len(self._streams) - 1:
-            return super(SEMCLCCDStream, self)._assembleFinalData(n, data)
-
-        # Same as sem data, but without computing the data position from the
-        # CCD metadata
-        md = self._ccd_md.copy()
-        # Make sure it doesn't contain metadata related to AR
-        for k in (model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE,
-                  model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
-                  model.MD_AR_XMAX, model.MD_ROTATION):
-            md.pop(k, None)
-
-        try:
+        if pol_idx > len(self._live_data[n]) - 1:
+            # New polarization => new DataArray
+            md = raw_data.metadata.copy()
+            # Compute metadata based on SEM metadata
+            semmd = self._live_data[0][pol_idx].metadata
             # handle sub-pixels (aka fuzzing)
-            sem_data = self._raw[0]
-            sem_shape = sem_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
-            rep = self.repetition.value
-            tile_shape = (sem_shape[0] / rep[0], sem_shape[1] / rep[1])
-            pxs = (sem_data.metadata[model.MD_PIXEL_SIZE][0] * tile_shape[0],
-                   sem_data.metadata[model.MD_PIXEL_SIZE][1] * tile_shape[1])
-            md[model.MD_PIXEL_SIZE] = pxs
-        except KeyError:
-            logging.warning("Metadata missing from the SEM data")
+            md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
+                                 semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
+            md[MD_POS] = self._live_data[0][pol_idx].metadata[MD_POS]
+            md[MD_DIMS] = "YX"
+            md[MD_DESCRIPTION] = self._streams[n].name.value
+            # Make sure it doesn't contain metadata related to AR
+            for k in (model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE,
+                      model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
+                      model.MD_AR_XMAX, model.MD_ROTATION):
+                md.pop(k, None)
 
-        # concatenate data into one big array of (number of pixels,1)
-        flat_list = [ar.flatten() for ar in data]
-        rep_one = numpy.concatenate(flat_list)
-        # reshape to (Y, X)
-        rep_one.shape = rep[::-1]
-        rep_one = model.DataArray(rep_one, metadata=md)
+            da = numpy.zeros(shape=(rep[1], rep[0]), dtype=raw_data.dtype)
+            self._live_data[n].append(model.DataArray(da, md))
 
-        self._raw.append(rep_one)
+        self._live_data[n][pol_idx][px_idx] = raw_data
 
 
 class CLiCCDPlugin(Plugin):
     name = "CL intensity CCD"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
