@@ -41,9 +41,9 @@ DEFAULT_CONFIG = {"LOGLEVEL": "1",
 
 # Used to parse the back-end log, and display it nicely
 RE_MSG_BE_START = "Starting Odemis back-end"
-RE_MSG_BE_FAILURE = "ERROR: Failed to instantiate the model due to component"
-RE_MSG_BE_TRACEBACK = "ERROR: Full traceback of the error follows"
-RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+ \(\S+\) \S+:"
+RE_MSG_BE_FAILURE = "Failed to instantiate the model due to component"
+RE_MSG_BE_TRACEBACK = "Full traceback of the error follows"
+RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+\t\S+\t\S+:"
 
 
 def _add_var_config(config, var, content):
@@ -505,19 +505,23 @@ class BackendStarter(object):
                 lines = lines[-(i + 1):]
                 break
 
-        # TODO: first show a "simple" error message, by looking for:
+        # First show a "simple" error message, by looking for:
         # "Failed to instantiate the model due to component" (+all the backtrace)
         # If it exists -> only show it, and have a "Show details" button
 
         failurelb = None
-        failurele = None
+        failurebt = None
+        failurele = None  # First line which is not the backtrace
         for i, l in enumerate(lines):
             if failurelb is None:
                 if RE_MSG_BE_FAILURE in l:
                     failurelb = i
+            elif failurebt is None:
+                if RE_MSG_BE_TRACEBACK in l:
+                    failurebt = i  # Beginning of backtrace
             else:
-                if RE_MSG_BE_TRACEBACK not in l and re.match(RE_MSG_BE_HEADER, l):
-                    failurele = i
+                if re.match(RE_MSG_BE_HEADER, l):
+                    failurele = i  # End of backtrace
                     break
 
         if failurelb is not None:
