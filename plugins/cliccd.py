@@ -103,6 +103,9 @@ class CLiCCDPlugin(Plugin):
 
     def addst(self):
         main_data = self.main_app.main_data
+        stctrl = self._tab.streambar_controller
+
+        axes = stctrl._filter_axes({"filter": ("band", main_data.light_filter)})
 
         # TODO: special live stream?
         ar_stream = ARSettingsStream(
@@ -112,6 +115,7 @@ class CLiCCDPlugin(Plugin):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
+            axis_map=axes,
             detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
         )
         # TODO: Allow very large binning on the CCD
@@ -127,8 +131,5 @@ class CLiCCDPlugin(Plugin):
         sem_stream = self._tab.tab_data_model.semStream
         sem_cl_stream = SEMCLCCDStream("SEM CLi CCD", [sem_stream, ar_stream])
 
-        stctrl = self._tab.streambar_controller
-        return stctrl._addRepStream(ar_stream, sem_cl_stream,
-                                  axes={"band": main_data.light_filter}
-                                  )
+        return stctrl._addRepStream(ar_stream, sem_cl_stream)
 

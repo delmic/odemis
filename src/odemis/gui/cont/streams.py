@@ -91,7 +91,7 @@ class StreamController(object):
         self.view = view
         self._sb_ctrl = sb_ctrl
 
-        self._stream_config = data.get_stream_settings_config()
+        self._stream_config = data.get_stream_settings_config().get(type(stream), {})
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Allow changing the tint of all "flat" static streams, and FluoStreams (live)
@@ -149,6 +149,10 @@ class StreamController(object):
 
         self._add_stream_setting_controls()
 
+        if len(self.entries) > 0:  # TODO: only do so, if some other controls are displayed after
+            self.stream_panel.add_divider()
+
+        num_settings_entries = len(self.entries)
         if hasattr(self.stream, "axis_vas"):
             self._add_axis_controls()
 
@@ -159,6 +163,9 @@ class StreamController(object):
             self._add_excitation_ctrl()
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
+
+        if len(self.entries) > num_settings_entries:  # TODO: also only if other controls after
+            self.stream_panel.add_divider()
 
         # Add metadata button to show dialog with full list of metadata
         if isinstance(self.stream, acqstream.StaticStream):
@@ -274,8 +281,6 @@ class StreamController(object):
         else:
             detector_conf = {}
 
-        add_divider = False
-
         # TODO "integrationTime" not part of detector VAs now, as stream VA
         #  -> should be handled as detector VA as it replaces exposureTime VA
 
@@ -290,7 +295,6 @@ class StreamController(object):
                 logging.debug("%s hardware configuration found", name)
 
             self.add_setting_entry(name, va, self.stream.emitter, conf)
-            add_divider = True
 
         # Process the emitter VAs first
         vas_names = util.sorted_according_to(list(self.stream.emt_vas.keys()), list(emitter_conf.keys()))
@@ -303,7 +307,6 @@ class StreamController(object):
                               self.stream.emitter.role)
 
             self.add_setting_entry(name, va, self.stream.emitter, conf)
-            add_divider = True
 
         # Then process the detector
         vas_names = util.sorted_according_to(list(self.stream.det_vas.keys()), list(detector_conf.keys()))
@@ -316,36 +319,29 @@ class StreamController(object):
                               self.stream.detector.role)
 
             self.add_setting_entry(name, va, self.stream.detector, conf)
-            add_divider = True
-
-        if add_divider:  # TODO: only do so, if some other controls are displayed
-            self.stream_panel.add_divider()
 
     def _add_stream_setting_controls(self):
         """ Add control for the VAs of the stream
         Note: only the VAs which are defined in the stream_config are shown.
         """
-        stream_config = self._stream_config.get(type(self.stream), {})
-        for vaname, conf in stream_config.items():
+        for vaname, conf in self._stream_config.items():
             try:
                 va = getattr(self.stream, vaname)
             except AttributeError:
                 logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
                 continue
-            conf = stream_config.get(vaname)
+            conf = self._stream_config.get(vaname)
             self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
 
     def _add_axis_controls(self):
         """
         Add controls for the axes that are connected to the stream
         """
-        stream_config = self._stream_config.get(type(self.stream), {})
-
         # Add Axes (in same order as config)
         axes_names = util.sorted_according_to(list(self.stream.axis_vas.keys()), list(self._stream_config.keys()))
 
         for axisname in axes_names:
-            conf = stream_config.get(axisname)
+            conf = self._stream_config.get(axisname)
             self.add_setting_entry(axisname, self.stream.axis_vas[axisname], None, conf)
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
@@ -1402,8 +1398,6 @@ class StreamBarController(object):
         if hasattr(tab_data, "spotStream") and tab_data.spotStream:
             self._spot_stream = tab_data.spotStream
             self._scheduleStream(self._spot_stream)
-
-        self._stream_config = data.get_stream_settings_config()
 
     def pause(self):
         """ Pause (=freeze) SettingEntry related control updates """
@@ -2598,6 +2592,47 @@ class SparcStreamsController(StreamBarController):
                 for va_name, (axis_name, comp) in axes.items()
                 if comp and axis_name in comp.axes}
 
+    def _set_default_spectrum_axes(self, stream):
+        """
+        Try to guess good default values for a spectrum stream's axes
+        """
+        if hasattr(stream, "axisGrating") and hasattr(stream.axisGrating, "choices"):
+            # Anything *but* mirror is fine
+            choices = stream.axisGrating.choices
+
+            # Locate the mirror entry
+            mirror = None
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if "mirror" in desc.lower():  # poor's man definition of a mirror
+                        mirror = pos
+                        break
+
+            if mirror is not None and stream.axisGrating.value == mirror:
+                # Pick the first entry which is not a mirror
+                for pos in choices:
+                    if pos != mirror:
+                        stream.axisGrating.value = pos
+                        logging.debug("Picking grating %d for spectrum stream", pos)
+                        break
+
+        if hasattr(stream, "axisWavelength"):
+            # Wavelength should be > 0
+            if stream.axisWavelength.value == 0:
+                # 600 nm ought to be good for every stream...
+                # TODO: pick based on the grating's blaze
+                stream.axisWavelength.value = stream.axisWavelength.clip(600e-9)
+
+        if hasattr(stream, "axisFilter") and hasattr(stream.axisFilter, "choices"):
+            # Use pass-through if available
+            choices = stream.axisFilter.choices
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if desc == "pass-through":  # that's an official constant
+                        stream.axisFilter.value = pos
+                        logging.debug("Picking pass-through filter (%d) for spectrum stream", pos)
+                        break
+
     def _addRepStream(self, stream, mdstream, **kwargs):
         """
         Display and connect a new RepetitionStream to the GUI
@@ -2629,6 +2664,8 @@ class SparcStreamsController(StreamBarController):
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
+        axes = self._filter_axes({"filter": ("band", main_data.light_filter)})
+
         ar_stream = acqstream.ARSettingsStream(
             "Angle-resolved",
             main_data.ccd,
@@ -2637,6 +2674,7 @@ class SparcStreamsController(StreamBarController):
             main_data.pol_analyzer,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
+            axis_map=axes,
             # TODO: add a focuser for the SPARCv2?
             detvas=detvas,
         )
@@ -2652,9 +2690,7 @@ class SparcStreamsController(StreamBarController):
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
                                                 [sem_stream, ar_stream])
 
-        return self._addRepStream(ar_stream, sem_ar_stream,
-                                  axes={"band": main_data.light_filter}
-                                  )
+        return self._addRepStream(ar_stream, sem_ar_stream)
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
@@ -2721,7 +2757,6 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(detector)
 
-        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg),
@@ -2748,6 +2783,7 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
+        self._set_default_spectrum_axes(spec_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -2772,7 +2808,6 @@ class SparcStreamsController(StreamBarController):
 
         spg = self._getAffectingSpectrograph(main_data.streak_ccd)
 
-        # TODO: band should be set to the pass-through by default
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
                 "slit-in": ("slit-in", spg)}
@@ -2799,6 +2834,7 @@ class SparcStreamsController(StreamBarController):
             axis_map=axes,
             detvas=detvas,
             streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+        self._set_default_spectrum_axes(ts_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -2812,11 +2848,10 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
         spg = self._getAffectingSpectrograph(main_data.spectrometer)
 
-        # TODO: band should be set to the pass-through by default
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-                "slit-monochromator": spg,
+        axes = {"wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "slit-in": ("slit-in", spg),
+                "slit-monochromator": ("slit-monochromator", spg),
                }
 
         axes = self._filter_axes(axes)
@@ -2840,6 +2875,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator, self._main_data_model.hw_settings_config),
         )
+        self._set_default_spectrum_axes(monoch_stream)
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
