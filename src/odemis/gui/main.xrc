@@ -201,10 +201,7 @@
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -222,10 +219,7 @@
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -243,10 +237,7 @@
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -268,10 +259,7 @@
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -289,10 +277,7 @@
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -346,9 +331,6 @@
                 <bg>#1A1A1A</bg>
                 <font>
                   <size>10</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
                   <face>Monospace</face>
                 </font>
                 <style>wxBORDER_NONE|wxTE_MULTILINE|wxTE_RICH</style>
@@ -375,10 +357,7 @@
     <bg>#000000</bg>
     <font>
       <size>9</size>
-      <style>normal</style>
-      <weight>normal</weight>
-      <underlined>0</underlined>
-      <face>Ubuntu</face>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
     </font>
   </object>
   <object class="wxPanel" name="pnl_tab_secom_align">
@@ -420,10 +399,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <cellpos>0,0</cellpos>
@@ -434,10 +411,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <cellpos>0,3</cellpos>
@@ -448,10 +423,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxALIGN_RIGHT</flag>
@@ -463,10 +436,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <cellpos>3,3</cellpos>
@@ -478,10 +449,8 @@
                       <label>↖</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -499,10 +468,8 @@
                       <label>↗</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -520,10 +487,8 @@
                       <label>↙</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -541,10 +506,8 @@
                       <label>↘</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -576,10 +539,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -592,10 +553,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -608,10 +567,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_LEFT</style>
                     </object>
@@ -625,10 +582,8 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -642,10 +597,8 @@
                       <label>↑</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -663,10 +616,8 @@
                       <label>↓</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -684,10 +635,8 @@
                       <label>←</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -703,10 +652,8 @@
                       <label>→</label>
                       <font>
                         <size>24</size>
-                        <style>normal</style>
                         <weight>bold</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -1117,10 +1064,7 @@
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -1138,10 +1082,7 @@
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -1159,10 +1100,7 @@
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -1190,10 +1128,7 @@
                       <label>Translation</label>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxALL</flag>
@@ -1257,10 +1192,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1273,10 +1206,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1289,10 +1220,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -1306,10 +1235,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -1323,10 +1250,8 @@
                           <label>↑</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1344,10 +1269,8 @@
                           <label>↓</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1365,10 +1288,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1384,10 +1305,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1423,10 +1342,7 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxBOTTOM|wxALL</flag>
@@ -1464,10 +1380,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1480,10 +1394,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1496,10 +1408,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -1513,10 +1423,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -1530,10 +1438,8 @@
                           <label>↑</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1551,10 +1457,8 @@
                           <label>↓</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1572,10 +1476,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1591,10 +1493,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1631,10 +1531,7 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxBOTTOM|wxALL</flag>
@@ -1672,10 +1569,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1688,10 +1583,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1704,10 +1597,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -1721,10 +1612,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -1738,10 +1627,8 @@
                           <label>↑</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1759,10 +1646,8 @@
                           <label>↓</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1780,10 +1665,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1799,10 +1682,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1964,10 +1845,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -1987,10 +1865,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                             <encoding>UTF-8</encoding>
                           </font>
                           <style>wxALIGN_CENTRE</style>
@@ -2011,10 +1886,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2034,10 +1906,7 @@
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -2057,10 +1926,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2096,10 +1962,7 @@
 					  <fg>#E5E5E5</fg>
 					  <font>
 						<size>16</size>
-						<style>normal</style>
-						<weight>normal</weight>
-						<underlined>0</underlined>
-						<face>Ubuntu</face>
+						<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 					  </font>
 					</object>
 					<flag>wxBOTTOM|wxALL</flag>
@@ -2246,10 +2109,7 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxBOTTOM|wxALL</flag>
@@ -2294,10 +2154,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -2311,10 +2169,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -2329,10 +2185,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2349,10 +2203,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2388,10 +2240,7 @@
                       <label>Mirror</label>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxALL</flag>
@@ -2436,10 +2285,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2452,10 +2299,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2468,10 +2313,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -2485,10 +2328,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -2503,10 +2344,8 @@
                           <label>↑</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2525,10 +2364,8 @@
                           <label>↓</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2547,10 +2384,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2567,10 +2402,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2605,10 +2438,7 @@
                       <label>Streak</label>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxALL</flag>
@@ -2622,10 +2452,7 @@
                               <fg>#E5E5E5</fg>
                               <font>
                                 <size>9</size>
-                                <style>normal</style>
-                                <weight>normal</weight>
-                                <underlined>0</underlined>
-                                <face>Ubuntu</face>
+                                <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                               </font>
                             </object>
                             <flag>wxALL|wxALIGN_CENTRE</flag>
@@ -2693,10 +2520,7 @@
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
                     <flag>wxBOTTOM|wxALL</flag>
@@ -2741,10 +2565,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2757,10 +2579,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2773,10 +2593,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                         </object>
@@ -2790,10 +2608,8 @@
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -2808,10 +2624,8 @@
                           <label>↑</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2830,10 +2644,8 @@
                           <label>↓</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2852,10 +2664,8 @@
                           <label>←</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -2872,10 +2682,8 @@
                           <label>→</label>
                           <font>
                             <size>24</size>
-                            <style>normal</style>
                             <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -3115,10 +2923,7 @@
                 <fg>#1A1A1A</fg>
                 <font>
                   <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -3676,10 +3481,7 @@
                                   <fg>#DDDDDD</fg>
                                   <font>
                                     <size>10</size>
-                                    <style>normal</style>
-                                    <weight>normal</weight>
-                                    <underlined>0</underlined>
-                                    <face>Ubuntu</face>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                   </font>
                                   <XRCED>
                                     <assign_var>1</assign_var>
@@ -3745,10 +3547,7 @@
                       <fg>#FFFFFF</fg>
                       <font>
                         <size>15</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -4423,10 +4222,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <style>wxALIGN_LEFT</style>
                           <XRCED>
@@ -4449,10 +4245,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -4471,10 +4264,7 @@
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -4777,10 +4567,7 @@
                               <fg>#1A1A1A</fg>
                               <font>
                                 <size>9</size>
-                                <style>normal</style>
-                                <weight>normal</weight>
-                                <underlined>0</underlined>
-                                <face>Ubuntu</face>
+                                <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                               </font>
                               <XRCED>
                                 <assign_var>1</assign_var>
@@ -4937,10 +4724,7 @@
                 <fg>#DDDDDD</fg>
                 <font>
                   <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_RIGHT</style>
                 <XRCED>
@@ -4966,10 +4750,7 @@
                 <label>Close</label>
                 <font>
                   <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -5008,10 +4789,7 @@
     <bg>#000000</bg>
     <font>
       <size>9</size>
-      <style>normal</style>
-      <weight>normal</weight>
-      <underlined>0</underlined>
-      <face>Ubuntu</face>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
     </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
@@ -5138,10 +4916,7 @@
                         <fg>#DDDDDD</fg>
                         <font>
                           <size>10</size>
-                          <style>normal</style>
-                          <weight>normal</weight>
-                          <underlined>0</underlined>
-                          <face>Ubuntu</face>
+                          <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           <encoding>UTF-8</encoding>
                         </font>
                         <XRCED>
@@ -5186,10 +4961,7 @@
                             <fg>#DDDDDD</fg>
                             <font>
                               <size>14</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                             </font>
                             <XRCED>
                               <assign_var>1</assign_var>
@@ -5254,10 +5026,7 @@
     <bg>#000000</bg>
     <font>
       <size>9</size>
-      <style>normal</style>
-      <weight>normal</weight>
-      <underlined>0</underlined>
-      <face>Ubuntu</face>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
     </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
