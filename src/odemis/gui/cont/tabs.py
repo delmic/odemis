@@ -4101,6 +4101,11 @@ class Sparc2AlignTab(Tab):
                 # force wavelength 0
                 # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
                 main.spectrograph.moveAbsSync({"wavelength": 0})
+
+                self.panel.slider_focus.Enable(True)
+                self.panel.cmb_focus_gratings.Enable(True)
+                # Do no enable detector selection, as only the streak-ccd is available
+                # TODO: update the combobox to indicate the current detector is the streak-ccd
             else:
                 if align_mode == "lens-align":
                     self._enableFocusComponents(manual=True, ccd_stream=False)
@@ -4129,7 +4134,8 @@ class Sparc2AlignTab(Tab):
         if future.cancelled():
             return
 
-        if self._focus_streams:
+        align_mode = self.tab_data_model.align_mode.value
+        if align_mode != "streak-align" and self._focus_streams:
             istream = self.panel.cmb_focus_detectors.GetSelection()
             self._focus_streams[istream].should_update.value = True
 
