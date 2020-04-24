@@ -275,7 +275,8 @@ class AutomaticOverlayPlugin(Plugin):
         dlg.pnl_gauge.Hide()
         dlg.ShowModal() # Blocks until the window is closed
 
-        dlg.Destroy()
+        if dlg:
+            dlg.Destroy()
 
     def _update_im_ref(self):
         """
@@ -444,7 +445,7 @@ class AutomaticOverlayPlugin(Plugin):
         scont.stream_panel.show_remove_btn(True)
 
         # Finish by closing the window
-        dlg.Destroy()
+        dlg.Close()
 
     @limit_invocation(0.3)
     def _precompute_kp(self):
