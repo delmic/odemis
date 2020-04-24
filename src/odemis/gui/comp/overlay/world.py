@@ -1397,7 +1397,6 @@ class LabelGadget(GenericGadgetLine):
             self._mode = LABEL_MODE_EDIT_TEXT
         else:
             raise ValueError("No valid hover mode")
-
         self._view_to_phys()
 
     def on_motion(self, vpos, ctrl_down):
@@ -1545,7 +1544,7 @@ class LabelGadget(GenericGadgetLine):
         super(LabelGadget, self).draw(ctx, selected, canvas=canvas, font_size=font_size)
 
         # If no valid selection is made, do nothing
-        if None in (self.p_start_pos, self.p_end_pos) or self.p_start_pos == self.p_end_pos:
+        if None in (self.p_start_pos, self.p_end_pos):
             return
 
         # In case a canvas is passed, the rulers should be drawn on this given canvas.
