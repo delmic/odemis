@@ -30,7 +30,7 @@ import math
 import numbers
 import numpy
 from odemis import util
-from odemis.gui.comp.overlay.base import Label
+from odemis.gui.comp.overlay.base import Label, Vec, ViewOverlay
 from odemis.gui.util.conversion import change_brightness
 from odemis.util import peak
 import wx
@@ -186,6 +186,103 @@ class PlayIconOverlay(base.ViewOverlay):
 
         ctx.set_source_rgb(0, 0, 0)
         ctx.stroke()
+
+
+class PixelValueOverlay(ViewOverlay):
+    """ Render the raw value of a selected pixel in the spatial view """
+
+    def __init__(self, cnvs, view):
+        ViewOverlay.__init__(self, cnvs, view)
+
+        self._v_pos = None
+        self._p_pos = None  
+        self.view = view
+        self._raw_value = None
+
+        self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_LEGEND)
+        self.background_colour = conversion.hex_to_frgba(gui.BG_COLOUR_MAIN)
+        self._label = Label(
+            "",
+            pos=(0, 0),
+            font_size=14,
+            flip=True,
+            align=wx.ALIGN_CENTRE_HORIZONTAL,
+            colour=self.colour,
+            opacity=1.0,
+            deg=None,
+            background=self.background_colour
+        )
+
+        self._label.text = ""
+        self._left_dragging = False
+
+    def on_leave(self, evt):
+        """ Event handler called when the mouse cursor leaves the canvas """
+        if not self.active:
+            return super(ViewOverlay, self).on_leave(evt)
+        else:
+            self._v_pos = None
+            self._p_pos = None
+            self.cnvs.request_drawing_update()
+
+    def on_motion(self, evt):
+        """ Update the display of the raw pixel value based on the current mouse position """
+        if not self.active:
+            return super(ViewOverlay, self).on_motion(evt)
+
+        if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
+            # Already being handled by the canvas itself
+            evt.Skip()
+            return
+
+        if self._left_dragging:
+            evt.Skip()
+
+        else:
+            vpos = evt.Position
+            self._v_pos = Vec(vpos)
+            self.cnvs.request_drawing_update()
+
+    def _draw_legend(self, stream):
+        """ Get the pixel coordinates and the raw pixel value given a projection """
+        pixel_pos = stream.getPixelCoordinates(self._p_pos)
+        if pixel_pos:
+            name = stream.name.value
+            raw_value = stream.getRawValue(pixel_pos)
+            pixel_x = units.readable_str(pixel_pos[0])
+            pixel_y = units.readable_str(pixel_pos[1])
+            # In case of integers the significant number is None, no need to round the raw value
+            sig = None if isinstance(raw_value, (int, numpy.integer)) else 6
+            raw = units.readable_str(raw_value, sig=sig)
+            # The unicode for the arrow is not available in the current Cairo version
+            return name + ':' + '(' + pixel_x + ',' + pixel_y + ')' + u'->' + raw
+        else:
+            return None
+
+    def draw(self, ctx):
+        """ Display the stream name, pixel coordinates and pixel raw value for each projection of the spatial view """
+        # get the projections of the current view
+        streams = self.view.stream_tree.getProjections()
+
+        # a rough estimation of the width and height margins in order to get the position of the pixel raw value display
+        margin_w, margin_h = 5, 20
+        for stream in streams:
+            if self._v_pos:
+                self._p_pos = self.cnvs.view_to_phys(self._v_pos, self.cnvs.get_half_buffer_size())
+                view_pos = self.view_width - margin_w, self.view_height - margin_h
+                self._label.colour = self.colour
+                self._label.pos = Vec(view_pos[0], view_pos[1])
+
+                text = self._draw_legend(stream)
+                if text is not None:
+                    self._label.text = text
+                    self._label.align = wx.ALIGN_RIGHT
+                    self._label.draw(ctx)
+
+                    # the legend for the next projection is displayed above the last displayed legend
+                    # and a margin_r is roughly estimated and added for a better representation
+                    margin_r = 5
+                    margin_h += (self._label.text_size[1] + margin_r)
 
 
 class FocusOverlay(base.ViewOverlay):
@@ -665,7 +762,8 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 align=wx.ALIGN_LEFT | wx.ALIGN_TOP,
                 colour=self.colour_peaks,  # default to white
                 opacity=1.0,
-                deg=None
+                deg=None,
+                background=None
             )
             self.labels.append(peak_label)
             self.list_labels.append(peak_label)
@@ -1304,7 +1402,6 @@ class PolarOverlay(base.ViewOverlay):
 
             self.intensity_label.pos = (x, y)
             self.intensity_label.draw(ctx, self.canvas_padding, self.view_width, self.view_height)
-
 
 
 class PointSelectOverlay(base.ViewOverlay):

@@ -1126,7 +1126,8 @@ class RulerGadget(GenericGadgetLine):
             align=wx.ALIGN_CENTRE_HORIZONTAL,
             colour=self.colour,
             opacity=1.0,
-            deg=None
+            deg=None,
+            background=None
         )
         self.mode = NONE_RULER_MODE
         self.last_shiftscale = None  # previous shift & scale of the canvas to know whether it has changed
@@ -1359,6 +1360,7 @@ class LabelGadget(GenericGadgetLine):
             colour=self.colour,
             opacity=1.0,
             deg=None,
+            background=None
         )
         self._mode = LABEL_MODE_NONE
 

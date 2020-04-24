@@ -119,6 +119,7 @@ class Tab(object):
             self._connect_22view_event()
             self._connect_interpolation_event()
             self._connect_crosshair_event()
+            self._connect_pixelvalue_event()
 
             self.highlight(False)
 
@@ -233,6 +234,45 @@ class Tab(object):
             self.main_frame.menu_item_cross.Enable(False)
             self.main_frame.menu_item_cross.Check(False)
             self.main_frame.menu_item_cross.vamethod = None  # drop VA subscr.
+
+    def _connect_pixelvalue_event(self):
+        """ Connect the raw pixel value menu event to the focused view and its
+        `show_pixelvalue` VA to the menu item
+        """
+        # only if there's a focussed view that we can track
+        if hasattr(self.tab_data_model, 'focussedView'):
+
+            def set_pixel_value_check(fv):
+                """Called when focused view changes"""
+                if hasattr(fv, "show_pixelvalue"):
+                    fv.show_pixelvalue.subscribe(self.main_frame.menu_item_rawpixel.Check, init=True)
+                    self.main_frame.menu_item_rawpixel.Enable(True)
+                else:
+                    self.main_frame.menu_item_rawpixel.Enable(False)
+                    self.main_frame.menu_item_rawpixel.Check(False)
+
+            def on_switch_pixel_value(evt):
+                """Called when menu changes"""
+                foccused_view = self.tab_data_model.focussedView.value
+                # Extra check, which shouldn't be needed since if there's no
+                # `show_pixelvalue`, this code should never be called.
+                if hasattr(foccused_view, "show_pixelvalue"):
+                    show = self.main_frame.menu_item_rawpixel.IsChecked()
+                    foccused_view.show_pixelvalue.value = show
+
+            # Bind the function to the menu item, so it keeps the reference.
+            # The VigilantAttribute will not unsubscribe it, until replaced.
+            self.main_frame.menu_item_rawpixel.vamethod = set_pixel_value_check
+            self.tab_data_model.focussedView.subscribe(set_pixel_value_check, init=True)
+            # Assigning an event handler to the menu item, overrides
+            # any previously assigned ones.
+            self.main_frame.Bind(wx.EVT_MENU, on_switch_pixel_value, id=self.main_frame.menu_item_rawpixel.GetId())
+            self.main_frame.menu_item_rawpixel.Enable()
+        else:
+            # If the right elements are not found, simply disable the menu item
+            self.main_frame.menu_item_rawpixel.Enable(False)
+            self.main_frame.menu_item_rawpixel.Check(False)
+            self.main_frame.menu_item_rawpixel.vamethod = None  # drop VA subscr.
 
     def Hide(self):
         self.Show(False)
@@ -1250,6 +1290,7 @@ class ChamberTab(Tab):
         view = self.tab_data_model.focussedView.value
         view.interpolate_content.value = False
         view.show_crosshair.value = False
+        view.show_pixelvalue.value = False
 
         # With the lens, the image must be flipped to keep the mirror at the top and the sample
         # at the bottom.
@@ -2846,6 +2887,7 @@ class SparcAlignTab(Tab):
             mic_view = self.tab_data_model.focussedView.value
             mic_view.interpolate_content.value = False
             mic_view.show_crosshair.value = False
+            mic_view.show_pixelvalue.value = False
             mic_view.merge_ratio.value = 1
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
@@ -3219,6 +3261,9 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_lens.view.show_crosshair.value = False
         self.panel.vp_align_center.view.show_crosshair.value = False
         self.panel.vp_align_streak.view.show_crosshair.value = True
+        self.panel.vp_align_lens.view.show_pixelvalue.value = False
+        self.panel.vp_align_center.view.show_pixelvalue.value = False
+        self.panel.vp_align_streak.view.show_pixelvalue.value = True
 
         # The streams:
         # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment

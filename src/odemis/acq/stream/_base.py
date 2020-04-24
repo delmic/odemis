@@ -41,6 +41,9 @@ import weakref
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
+from odemis.util.img import mergeMetadata
+from odemis.util.transform import AffineTransform
+
 UNDEFINED_ROI = (0, 0, 0, 0)
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
@@ -1157,7 +1160,7 @@ class Stream(object):
                 # Pyramidal => use the smallest version
                 data = self._getMergedRawImage(data, data.maxzoom)
 
-            # We only do background subtraction when automatically selecting raw
+            # We only do backgrsrc/odemis/acq/stream/_base.pyound subtraction when automatically selecting raw
             bkg = self.background.value
             if bkg is not None:
                 try:
@@ -1201,30 +1204,67 @@ class Stream(object):
 
         self._shouldUpdateImage()
 
-    def getBoundingBox(self):
+    def getPixelCoordinates(self, p_pos):
         """
-        Get the bounding box in X/Y of the complete data contained.
-        return (tuple of floats(l,t,r,b)): Tuple with the bounding box
-        Raises:
-            ValueError: If the stream has no (spatial) data
+        Translate physical coordinates into data pixel coordinates
+        Args:
+            p_pos(tuple float, float): the position in physical coordinates
+
+        Returns(tuple int, int or None): the position in pixel coordinates or None if it's outside of the image
+
         """
         if not self.raw:
-            raise ValueError("Cannot compute bounding-box as stream has no data")
-        # Use .image if possible as the metadata is already processed but
-        # fallback to the raw, if the image is not yet available
-        if self.image.value is None:
-            data = self.raw[0]
-            md = self._find_metadata(data.metadata)
+            raise LookupError("Stream has no data")
+        raw = self.raw[0]
+        md = raw.metadata.copy()
+        mergeMetadata(md)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+        rotation = md.get(model.MD_ROTATION, 0)
+        shear = md.get(model.MD_SHEAR, 0)
+        translation = md.get(model.MD_POS, (0, 0))
+        size = raw.shape[-1], raw.shape[-2]
+        tform = AffineTransform(rotation=rotation, scale=pxs, shear=shear, translation=translation).inverse()
+        pixel_pos_c = tform(p_pos)
+        # a "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
+        pixel_pos = int(pixel_pos_c[0] + size[0] / 2), - int(pixel_pos_c[1] - size[1] / 2)
+        if 0 <= pixel_pos[0] < size[0] and 0 <= pixel_pos[1] < size[1]:
+            return pixel_pos
         else:
-            data = self.image.value
-            md = data.metadata
+            return None
 
-        # TODO: check img.getBoundingBox which is similar (but uses MD_DIMS)
-        shape = data.shape
-        pxs = md[model.MD_PIXEL_SIZE]
-        c = md[model.MD_POS]
-        w, h = shape[1] * pxs[0], shape[0] * pxs[1]
-        return c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2
+    def getRawValue(self, pixel_pos):
+        """
+        Translate pixel coordinates into raw pixel value
+        Args:
+            pixel_pos(tuple int, int): the position in pixel coordinates
+
+        Returns: the raw "value" of the position. In case the raw data has more than 2 dimensions, it returns an array.
+        Raise LookupError if raw data not found
+        """
+        raw = self.raw
+        if not raw:
+            raise LookupError("Cannot compute pixel raw value as stream has no data")
+        return raw[0][..., pixel_pos[1], pixel_pos[0]]
+
+    def getBoundingBox(self, im=None):
+        """
+        Get the bounding box in X/Y of the complete data contained.
+        Args:
+            im: (DataArray(Shadow) or None): the data of the image if provided. If None, the raw data of the stream
+            is used.
+        return (tuple of floats(l,t,r,b)): Tuple with the bounding box
+        Raises:
+            ValueError: If the stream has no (spatial) data and stream's image is not defined
+        """
+        if im is None:
+            im = self.image.value
+        if im is None and self.raw:
+            im = self.raw[0]
+
+        if im is None:
+            raise ValueError("Cannot compute bounding-box as stream has no data and stream's image is not defined")
+
+        return img.getBoundingBox(im)
 
     def getRawMetadata(self):
         """

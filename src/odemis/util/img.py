@@ -802,9 +802,9 @@ def getBoundingBox(content):
     # in physical coordinates, Y goes up. So top > bottom
     rect = (
         md_pos[0] - half_shape_wc[0],
-        md_pos[1] + half_shape_wc[1],
-        md_pos[0] + half_shape_wc[0],
         md_pos[1] - half_shape_wc[1],
+        md_pos[0] + half_shape_wc[0],
+        md_pos[1] + half_shape_wc[1],
     )
 
     # TODO: if MD_SHEAR or MD_ROTATION => need more
