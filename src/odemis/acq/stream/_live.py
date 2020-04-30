@@ -1014,7 +1014,7 @@ class FluoStream(CameraStream):
             em_band = fluo.get_one_band_em(self.emission.value, self.excitation.value)
             data.metadata[model.MD_OUT_WL] = em_band
 
-        data.metadata[model.MD_USER_TINT] = self.tint.value
+        data.metadata[model.MD_USER_TINT] = img.tint_to_md_format(self.tint.value)
         super(FluoStream, self)._onNewData(dataflow, data)
 
 

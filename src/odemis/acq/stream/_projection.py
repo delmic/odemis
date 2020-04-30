@@ -179,7 +179,7 @@ class RGBProjection(DataProjection):
             # And the metadata from raw will be used to generate the metadata of the merged
             # image from the tiles. So, in the end, the exported image metadata will be based
             # on the raw metadata
-            raw.metadata[model.MD_USER_TINT] = value
+            raw.metadata[model.MD_USER_TINT] = img.tint_to_md_format(value)
 
         self._shouldUpdateImage()
 
@@ -1034,11 +1034,15 @@ class RGBSpatialProjection(RGBProjection):
         """
         dims = tile.metadata.get(model.MD_DIMS, "CTZYX"[-tile.ndim::])
         ci = dims.find("C")  # -1 if not found
-        tint = tuple(self.stream.tint.value)
+        # handle the tint
+        tint = self.stream.tint.value
+        if isinstance(tint, list):
+            tint = tuple(tint)
+
         if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
             # Take the RGB data as-is, just needs to make sure it's in the right order
             tile = img.ensureYXC(tile)
-            if tint != (255, 255, 255):  # Tint not white => adjust the RGB channels
+            if tint != (255, 255, 255) and isinstance(tint, tuple):  # Tint not white => adjust the RGB channels
                 tile = tile.copy()
                 # Explicitly only use the first 3 values, to leave the alpha channel as-is
                 numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")

@@ -34,6 +34,9 @@ import cv2
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME
 from odemis.util.conversion import get_img_transformation_matrix
 from odemis.util import get_best_dtype_for_acc
+from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
+import matplotlib.colors as colors
+from matplotlib import cm
 
 # See if the optimised (cython-based) functions are available
 try:
@@ -87,6 +90,24 @@ except ImportError:
 #    """
 #    weave.inline(code, ["data", "ret", "irange", "tintr"])
 #    return ret
+
+
+def tint_to_md_format(tint):
+    """
+    Given a tint of a stream, which coudl be an RGB tup,le or colormap object,
+    put it into the format for metadata storage
+    """
+    if isinstance(tint, tuple) or isinstance(tint, list):
+        return tint
+    elif isinstance(tint, colors.Colormap):
+        return tint.name
+
+
+def md_format_to_tint(user_tint):
+    if isinstance(user_tint, tuple) or isinstance(user_tint, list):
+        return user_tint
+    elif isinstance(user_tint, str):
+        return cm.get_cmap(user_tint)
 
 
 def findOptimalRange(hist, edges, outliers=0):
@@ -304,8 +325,10 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         None => auto (min, max are from the data);
         0, max val of data => whole range is mapped.
         min must be < max, and must be of the same type as data.dtype.
-    :param tint: (3-tuple of 0 < int <256) RGB colour of the final image (each
+    :param tint: Could be:
+        - (3-tuple of 0 < int <256) RGB colour of the final image (each
         pixel is multiplied by the value. Default is white.
+        - colors.Colormap Object
     :return: (numpy.ndarray of 3*shape of uint8) converted image in RGB with the
         same dimension
     """
@@ -331,6 +354,19 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         # TODO: warn if irange looks too different from original value?
         if irange[0] == irange[1]:
             logging.info("Requested RGB conversion with null-range %s", irange)
+
+    # Determine if it is necessary to deal with the color map
+    # Otherwise, continue with the old method
+
+    if isinstance(tint, colors.Colormap):
+        # Normalize the data to the interval [0, 1.0]
+        # TODO: Add logarithmic normalization with LogNorm
+        # norm = colors.LogNorm(vmin=data.min(), vmax=data.max())
+        norm = colors.Normalize(vmin=data.min(), vmax=data.max())
+        rgb = tint(norm(data))  # returns an rgba array
+        rgb = rgb[:, :, :3]  # discard alpha channel
+        rgb = numpy.multiply(rgb, 255)
+        return rgb.astype(numpy.uint8)
 
     if data.dtype == numpy.uint8 and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
@@ -405,6 +441,36 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2], casting="unsafe")
 
     return rgb
+
+
+def getColorbar(color_map, width, height, alpha=False):
+    """
+    Returns an RGB gradient rectangle or colorbar (as numpy array with 2 dim of RGB tuples)
+    based on the color map inputed
+    color_map: (matplotlib colormap object)
+    width (int): pixel width of output rectangle
+    height (int): pixel height of output rectangle
+    alpha: (bool): set to true if you want alpha channel
+    return: numpy Array of uint8 RGB tuples
+    """
+    gradient = numpy.linspace(0.0, 1.0, width)
+    gradient = numpy.tile(gradient, (height, 1))
+    gradient = color_map(gradient)
+    if not alpha:
+        gradient = gradient[:, :, :3]  # discard alpha channel  # convert to rgb
+    gradient = numpy.multiply(gradient, 255)  # convert to rgb
+    return gradient.astype(numpy.uint8)
+
+
+def RGBTintToColormap(tint, name=""):
+    """
+    If a tint is a tuple of RGB values, convert it to a color map gradient
+    """
+    if isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
+        # make a gradient from black to the selected tint
+        tint = colors.LinearSegmentedColormap.from_list(name,
+            [(0, 0, 0), rgb_to_frgb(tint)])
+    return tint
 
 
 def getYXFromZYX(data, zIndex=0):

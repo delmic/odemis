@@ -337,7 +337,7 @@ class StaticFluoStream(Static2DStream):
 
         # colouration of the image
         tint = raw.metadata.get(model.MD_USER_TINT, default_tint)
-        self.tint.value = tint
+        self.tint.value = img.md_format_to_tint(tint)
 
 
 class StaticARStream(StaticStream):

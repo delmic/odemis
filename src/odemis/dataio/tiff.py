@@ -1414,10 +1414,11 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 # user tint is 3 tuple int
                 # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
-                if len(tint) == 3:
-                    tint = tuple(tint) + (255,) # need alpha channel
-                hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
-                chan.attrib["Color"] = "#%s" % hex_str
+                if not isinstance(tint, str):
+                    if len(tint) == 3:
+                        tint = tuple(tint) + (255,)  # need alpha channel
+                    hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()
+                    chan.attrib["Color"] = "#%s" % hex_str
 
             # Add info on detector
             attrib = {}

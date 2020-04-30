@@ -39,7 +39,7 @@ from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
-    OPT_NAME_EDIT, OPT_BTN_PEAK
+    OPT_NAME_EDIT, OPT_BTN_PEAK, OPT_FIT_RGB, OPT_NO_COLORMAPS
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
@@ -97,6 +97,11 @@ class StreamController(object):
         # Allow changing the tint of all "flat" static streams, and FluoStreams (live)
         if isinstance(stream, (acqstream.FluoStream, acqstream.Static2DStream, acqstream.RGBStream)):
             options |= OPT_BTN_TINT
+        if isinstance(stream, (acqstream.RGBStream,)):
+            options |= OPT_NO_COLORMAPS
+        if isinstance(stream, (acqstream.SpectrumStream,)):
+            options |= OPT_FIT_RGB
+
         # Allow changing the name of dyes (aka FluoStreams)
         if isinstance(stream, acqstream.FluoStream):
             options |= OPT_NAME_EDIT
@@ -721,12 +726,14 @@ class StreamController(object):
         self.entries.append(se)
 
     def _add_wl_ctrls(self):
+        """
+        # Deprecated: Fit RGB button
         btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
-
         se = SettingEntry(name="rgbfit", va=self.stream.fitToRGB, stream=self.stream,
                           value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
                           va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
         self.entries.append(se)
+        """
 
         self._sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
 

@@ -29,6 +29,7 @@ from odemis.util import recursive_dict_update
 import logging
 import re
 import wx
+from matplotlib import cm
 
 import odemis.gui.conf.util as util
 
@@ -894,6 +895,19 @@ def get_hw_config(hw_comp, hw_settings):
 
     # No match
     return {}
+
+
+# Name (str) to matplotlib.color.ColorMap object
+COLORMAPS = OrderedDict([
+    ("viridis", cm.get_cmap("viridis")),
+    ("inferno", cm.get_cmap("inferno")),
+    ("plasma", cm.get_cmap("plasma")),
+    ('magma', cm.get_cmap('magma')),
+    ('spring', cm.get_cmap('spring')),
+    ('summer', cm.get_cmap('summer')),
+    ('autumn', cm.get_cmap('autumn')),
+    ('winter', cm.get_cmap('winter')),
+])
 
 
 def get_local_vas(hw_comp, hw_settings):
