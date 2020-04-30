@@ -481,6 +481,15 @@ def main(args):
                  odemis.__version__, __file__, sys.version_info[0], sys.version_info[1])
     logging.info("wxPython v%s", wx.version())
 
+    if wx.MAJOR_VERSION <= 3:
+        logging.error("wxPython 3 is not supported anymore")
+        app = wx.App()
+        wx.MessageBox("Your system is using an old version of wxPython (%s) which is not supported anymore.\n"
+                      "Please update with \"sudo apt install python3-wxgtk4.0\"." % (wx.version(),),
+                      "Library needs to be updated",
+                      style=wx.OK | wx.ICON_ERROR)
+        return 129
+
     # Create application
     app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
 
