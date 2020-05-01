@@ -897,19 +897,26 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.warning("Pixels are not squares. Found pixel size of %s x %s", pxs[0], pxs[1])
 
             max_tile_shape_dt = int(math.sqrt(exp / (rng[0] * 2)))
-            # Largest resolution the SEM scale permits (assuming min scale = 1)
-            sem_pxs = self._emitter.pixelSize.value
-            max_tile_shape_scale = int(pxs[0] / sem_pxs[0])
+            # Largest resolution the SEM scale permits
+            rep = self.repetition.value
+            roi = self.roi.value
+            eshape = self._emitter.shape
+            min_scale = self._emitter.scale.range[0]
+            max_tile_shape_scale = min(int((roi[2] - roi[0]) * eshape[0] / (min_scale[0] * rep[0])),
+                                       int((roi[3] - roi[1]) * eshape[1] / (min_scale[1] * rep[1])))
+            # Largest resolution allowed by the scanner
+            max_tile_shape_res = min(self._emitter.resolution.range[1])
 
-            # the min of both is the real maximum we can do
-            ts = max(1, min(max_tile_shape_dt, max_tile_shape_scale))
+            # the min of all 3 is the real maximum we can do
+            ts = max(1, min(max_tile_shape_dt, max_tile_shape_scale, max_tile_shape_res))
             tile_shape = (ts, ts)
-            subpxs = pxs[0] / ts
             dt = (exp / numpy.prod(tile_shape)) / 2
-            scale = (subpxs / sem_pxs[0], subpxs / sem_pxs[1])
+            scale = (((roi[2] - roi[0]) * eshape[0]) / (rep[0] * ts),
+                     ((roi[3] - roi[1]) * eshape[1]) / (rep[1] * ts))
+            cscale = self._emitter.scale.clip(scale)
 
             # Double check fuzzing would work (and make sense)
-            if ts == 1 or not (rng[0] <= dt <= rng[1]) or scale[0] < 1 or scale[1] < 1:
+            if ts == 1 or not (rng[0] <= dt <= rng[1]) or scale != cscale:
                 logging.info("Disabled fuzzing because SEM wouldn't support it")
                 fuzzing = False
 
@@ -1707,15 +1714,16 @@ class SEMMDStream(MultipleDetectorStream):
         # dynamically.
         # We don't rely on the pixelSize from the RepetitionStream, because it's
         # used only for the GUI. Instead, recompute it based on the ROI and repetition.
-        epxs = self._emitter.pixelSize.value
-        pxs = self._getPixelSize()
-
-        scale = (pxs[0] / epxs[0], pxs[1] / epxs[1])
+        rep = self.repetition.value
+        roi = self.roi.value
+        eshape = self._emitter.shape
+        scale = (((roi[2] - roi[0]) * eshape[0]) / rep[0],
+                 ((roi[3] - roi[1]) * eshape[1]) / rep[1])
 
         cscale = self._emitter.scale.clip(scale)
         if cscale != scale:
-            logging.warning("Pixel size requested (%f x %f m) < SEM pixel size (%f m)",
-                            pxs[0], pxs[1], epxs[0])
+            logging.warning("Emitter scale requested (%s) != accepted (%s)",
+                            cscale, scale)
 
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).
@@ -1762,6 +1770,18 @@ class SEMMDStream(MultipleDetectorStream):
                 # get_next_rectangle() takes care of always fitting in the
                 # acquisition shape, even at the end.
                 self._emitter.resolution.value = (n_x, n_y)
+                em_res = self._emitter.resolution.value
+                if em_res != (n_x, n_y):
+                    # The hardware didn't like it and used a different resolution
+                    # Most likely it could happen because:
+                    # * the hardware only supports some resolution (eg power of 2)
+                    # * the RoI was a tiny bit too large, so the resolution got clipped by 1 px
+                    logging.warning("Emitter picked resolution %s instead of %s",
+                                    em_res, (n_x, n_y))
+                    # TODO: is there a nice way to adjust based on the hardware's resolution?
+                    #   Just go with the flow, and return this acquisition instead?
+                    raise ValueError("Failed to configure emitter resolution to %s, got %s",
+                                     (n_x, n_y), em_res)
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels)].mean(axis=0))
