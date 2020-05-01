@@ -925,7 +925,7 @@ class SA_MC_Pose(Structure):
         ("rx", c_double),
         ("ry", c_double),
         ("rz", c_double),
-        ]
+    ]
 
     def __add__(self, o):
         pose = SA_MC_Pose()
@@ -951,51 +951,42 @@ class SA_MC_Pose(Structure):
         return "5DOF Pose. x: %f, y: %f, z: %f, rx: %f, ry: %f, rz: %f" % \
             (self.x, self.y, self.z, self.rx, self.ry, self.rz)
 
+    def asdict(self):
+        """
+        Convert the pose to a coordinate dictionary (str) -> (double)
+        returns (dict str -> float): Coordinates as axis name -> value.
+        """
+        # Note: internally, the system uses metres and degrees for rotation
+        pos = {
+            'x': self.x,
+            'y': self.y,
+            'z': self.z,
+            'rx': math.radians(self.rx),
+            'rz': math.radians(self.rz)
+        }
+        return pos
 
-def SA_MC_pose_to_dict(pose):
-    """
-    Convert a SA_MC Pose (C structure) to a coordinate dictionary (str) -> (double)
-        pose: a Pose (C struct)
-    returns: Coordinate dictionary (str) -> (double) of axis name to value
-    """
-    pos = {}
-    pos['x'] = pose.x
-    pos['y'] = pose.y
-    pos['z'] = pose.z
-
-    # Note: internally, the system uses metres and degrees for rotation
-    pos['rx'] = math.radians(pose.rx)
-    pos['rz'] = math.radians(pose.rz)
-    return pos
-
-
-def dict_to_SA_MC_pose(pos, base=SA_MC_Pose()):
-    """
-    Convert a coordinate dictionary (str) -> (double) to a SA_MC Pose C struct
-        pos: Coordinate dictionary (str) -> (double) of axis name to value
-        base: A SA_MC_Pose to use as a base. Otherwise, if axes are missing in the dict,
-            the values will be initialized to the default values of 0.
-    returns: a Pose (C struct)
-    raises ValueError if an unsupported axis name is input
-    """
-
-    base.ry = 0
-
-    # Note: internally, the system uses metres and degrees for rotation
-    for an, v in pos.items():
-        if an == "x":
-            base.x = v
-        elif an == "y":
-            base.y = v
-        elif an == "z":
-            base.z = v
-        elif an == "rx":
-            base.rx = math.degrees(v)
-        elif an == "rz":
-            base.rz = math.degrees(v)
-        else:
-            raise ValueError("Invalid axis")
-    return base
+    def update(self, pos):
+        """
+        Changes the values of some of the axes.
+        pos (dict str -> float): Coordinates as axis name -> value. Not all axes have
+          to be defined.
+        raises ValueError if an unsupported axis name is input
+        """
+        # Note: internally, the system uses metres and degrees for rotation
+        for an, v in pos.items():
+            if an == "x":
+                self.x = v
+            elif an == "y":
+                self.y = v
+            elif an == "z":
+                self.z = v
+            elif an == "rx":
+                self.rx = math.degrees(v)
+            elif an == "rz":
+                self.rz = math.degrees(v)
+            else:
+                raise ValueError("Invalid axis")
 
 
 class MC_5DOF_DLL(CDLL):
@@ -1254,18 +1245,17 @@ class MC_5DOF(model.Actuator):
         super(MC_5DOF, self).terminate()
 
     def updateMetadata(self, md):
-        super(MC_5DOF, self).updateMetadata(md)
-        try:
+        if model.MD_PIVOT_POS in md:
             pivot = md[model.MD_PIVOT_POS]
-        except KeyError:
-            # there is no pivot position set
-            return
+            if not (isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
 
-        if not isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}:
-            raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
+            # TODO: warn if rx or rz != 0, as this means the current position is not correct anymore
+            #   or update the current position, based on the new pivot point.
+            logging.debug("Updating pivot point to %s.", pivot)
+            self.SetPivot(pivot)
 
-        logging.debug("Updating pivot point to %s.", pivot)
-        self.SetPivot(pivot)
+        super(MC_5DOF, self).updateMetadata(md)
 
     """
     API Calls
@@ -1316,8 +1306,9 @@ class MC_5DOF(model.Actuator):
 
         Raises: SA_MCError if a problem occurs
         """
-        # convert into a smartpad pose
-        newPose = dict_to_SA_MC_pose(pos, self.GetPose())
+        # convert into a pose, using the current position for non-moving axes
+        newPose = self.GetPose()
+        newPose.update(pos)
 
         if hold_time == float("inf"):
             ht = MC_5DOF_DLL.SA_MC_INFINITE
@@ -1408,7 +1399,7 @@ class MC_5DOF(model.Actuator):
         update the position VA
         """
         try:
-            p = SA_MC_pose_to_dict(self.GetPose())
+            p = self.GetPose().asdict()
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SA_MC is not referenced")
@@ -1453,11 +1444,10 @@ class MC_5DOF(model.Actuator):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        # Reset reference so that if it fails, it states the axes are not
-        # referenced (anymore)
         with future._moving_lock:
             try:
-                # set the referencing for all axes to fals
+                # Reset reference so that if it fails, it states the axes are not
+                # referenced (anymore)
                 self.referenced._value = {a: False for a in self.axes.keys()}
 
                 # The SA_MC references all axes at once. This function blocks
@@ -1493,7 +1483,6 @@ class MC_5DOF(model.Actuator):
             finally:
                 # We only notify after updating the position so that when a listener
                 # receives updates both values are already updated.
-                # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
 
     @isasync

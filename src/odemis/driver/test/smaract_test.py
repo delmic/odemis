@@ -307,16 +307,26 @@ class Test5DOF(unittest.TestCase):
         test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_pivot_set(self):
-        # Test setting the pivot to some value through metadata
-        old_pos = self.dev.position.value
-        new_pivot = {'x': 0.05, 'y': 0.05, 'z': 0.01}
-        self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-        test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+        # Check that the pivot position is available from the beginning
+        old_pivot = self.dev.getMetadata()[model.MD_PIVOT_POS]
+        try:
+            # Test setting the pivot to some value through metadata
+            old_pos = self.dev.position.value
+            new_pivot = {'x': 0.05, 'y': 0.05, 'z': 0.01}
+            self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
 
-        old_pos = self.dev.position.value
-        new_pivot = {'x': 0.01, 'y':-0.05, 'z': 0.01}
-        self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-        test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            old_pos = self.dev.position.value
+            new_pivot = {'x': 0.01, 'y':-0.05, 'z': 0.01}
+            self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+        finally:
+            self.dev.updateMetadata({model.MD_PIVOT_POS: old_pivot})
+            self.dev.moveRelSync({"x": 0})
 
 
 CONFIG_3DOF = {"name": "3DOF",
