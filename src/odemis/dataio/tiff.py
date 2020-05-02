@@ -4,7 +4,7 @@ Created on 17 Jul 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2020 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -21,31 +21,31 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
-
 from past.builtins import basestring
+from builtins import range
+
 import calendar
+from datetime import datetime
+import json
 from libtiff import TIFF
 import logging
 import math
 import numpy
 from odemis import model, util
 import odemis
+from odemis.model import DataArrayShadow, AcquisitionData
 from odemis.util import spectrum, img, fluo
+from odemis.util.conversion import get_tile_md_pos, JsonExtraEncoder
 import operator
 import os
 import re
 import sys
-import time
-import json
-import uuid
 import threading
-from odemis.model import DataArrayShadow, AcquisitionData
+import time
+import uuid
 
 import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
-from odemis.util.conversion import get_tile_md_pos
-from datetime import datetime
-from builtins import range
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -1266,7 +1266,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         sett = globalMD[model.MD_EXTRA_SETTINGS]
         extrase = ET.SubElement(ime, "ExtraSettings")
         try:
-            extrase.text = json.dumps(sett)  # serialize hw settings
+            extrase.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
         except Exception as ex:
             logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
             extrase.text = ''

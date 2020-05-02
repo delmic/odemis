@@ -2,7 +2,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012-2017 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2020 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -19,16 +19,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-
 from past.builtins import basestring, long
+
 import collections
+import cv2
+import json
 import logging
+import math
+import numpy
+from odemis import model
 import re
 import yaml
-from odemis import model
-import numpy
-import cv2
-import math
 
 
 # Inspired by code from:
@@ -458,3 +459,30 @@ def get_img_transformation_md(mat, timage, src_img):
     }
 
     return metadata
+
+
+class JsonExtraEncoder(json.JSONEncoder):
+    """Support for data types that JSON default encoder
+    does not do.
+    This includes:
+        * Numpy array or number
+        * Complex number
+        * Set
+        * Bytes
+
+    Based on astropy.utils.misc.JsonCustomEncoder.
+    Use as: json.dumps(obj, cls=JsonExtraEncoder)
+    """
+
+    def default(self, obj):
+        if isinstance(obj, (numpy.number, numpy.ndarray)):
+            return obj.tolist()
+        elif isinstance(obj, complex):
+            return [obj.real, obj.imag]
+        elif isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, bytes):
+            return obj.decode()
+
+        return json.JSONEncoder.default(self, obj)
+
