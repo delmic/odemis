@@ -454,7 +454,7 @@ class BackendStarter(object):
         except ValueError:
             index = len(self._known_comps)
             self._known_comps.append(name)
-            self._list.InsertStringItem(index, name)
+            self._list.InsertItem(index, name)
 
         if isinstance(state, Exception):
             colour = "#DD3939"  # Red
@@ -475,7 +475,7 @@ class BackendStarter(object):
         else:
             txt_state = u"%s" % state
 
-        self._list.SetStringItem(index, 1, txt_state)
+        self._list.SetItem(index, 1, txt_state)
 
     def _on_ghosts(self, ghosts):
         """ Called when the .ghosts changes """
