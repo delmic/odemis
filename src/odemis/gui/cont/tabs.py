@@ -4565,7 +4565,8 @@ class TabBarController(object):
         if tab.name not in self._tabs_fixed_big_text:
             self._fix_big_static_text(tab.panel)
             # Eventually, update the size of the parent, based on everything inside it
-            wx.CallLater(100, tab.panel.Layout)
+            wx.CallLater(100, self._update_layout_big_text, tab.panel)  # Quickly
+            wx.CallLater(500, self._update_layout_big_text, tab.panel)  # Later, in case the first time was too early
             self._tabs_fixed_big_text.add(tab.name)
 
     def terminate(self):
@@ -4584,6 +4585,10 @@ class TabBarController(object):
             logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
 
         evt.Skip()
+
+    def _update_layout_big_text(self, panel):
+        self._fix_big_static_text(panel)
+        panel.Layout()
 
     def _fix_big_static_text(self, root):
         # Force re-calculate the size of all StaticTexts contained in the object
