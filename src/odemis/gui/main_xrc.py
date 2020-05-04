@@ -1507,20 +1507,16 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
-                <size>-1,680</size>
                 <fg>#BBBBBB</fg>
                 <bg>#333333</bg>
-                <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
+                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
+              <option>1</option>
               <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>5</border>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
