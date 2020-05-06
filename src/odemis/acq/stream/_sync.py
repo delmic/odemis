@@ -371,9 +371,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         self._prog_sum += dur
         ratio = (tot - current) / (current - 1)
         left = self._prog_sum * ratio
-        time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
-        tot_left = left + time_assemble + bonus + 0.1
+        tot_left = left + bonus + 0.1
         logging.debug("Estimating another %g s left for the total acquisition.", tot_left)
         future.set_progress(end=time.time() + tot_left)
 
