@@ -37,6 +37,7 @@ from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray, apply_flip
 from odemis.util import units, limit_invocation
+from odemis.util.img import getBoundingBox
 import scipy.ndimage
 import time
 import weakref
@@ -449,8 +450,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         def get_area(d):
-            stream = d[3]
-            bbox = stream.getBoundingBox()
+            try:
+                # We use the stream, as for pyramidal image it'll give the whole
+                # area (correctly) instead of just the field of view.
+                s = d[3]
+                bbox = s.getBoundingBox()
+            except ValueError as ex:
+                # This can happen in some rare cases if the stream was reset in-between
+                logging.debug("image from %s s", time.time() - d[0].metadata[model.MD_ACQ_DATE])
+                bbox = getBoundingBox(d[0])
             width = bbox[2] - bbox[0]
             height = bbox[3] - bbox[1]
             return width * height
