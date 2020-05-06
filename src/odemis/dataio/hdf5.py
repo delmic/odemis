@@ -4,7 +4,7 @@ Created on 14 Jan 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2020 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -24,14 +24,15 @@ from past.builtins import basestring, unicode
 
 import collections
 import h5py
+import json
 import logging
 import numpy
-import odemis
 from odemis import model
+import odemis
 from odemis.util import spectrum, img, fluo
+from odemis.util.conversion import JsonExtraEncoder
 import os
 import time
-import json
 
 
 # User-friendly name
@@ -1012,7 +1013,7 @@ def _add_image_metadata(group, image, mds):
     sett = [md.get(model.MD_EXTRA_SETTINGS) for md in mds]
     if any(sett):
         try:
-            value = [json.dumps(s) for s in sett]
+            value = [json.dumps(s, cls=JsonExtraEncoder) for s in sett]
             state = [ST_INVALID if s is None else ST_REPORTED for s in sett]
             set_metadata(gp, "ExtraSettings", state, value)
         except Exception as ex:

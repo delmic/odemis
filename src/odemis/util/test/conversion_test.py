@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import json
 import math
 import numpy
 from odemis import model
@@ -30,7 +31,7 @@ from odemis.util.conversion import \
     convert_to_object, \
     reproduce_typed_value, \
     get_img_transformation_matrix, \
-    get_tile_md_pos, get_img_transformation_md, ensure_tuple
+    get_tile_md_pos, get_img_transformation_md, ensure_tuple, JsonExtraEncoder
 import unittest
 
 
@@ -313,6 +314,40 @@ class TestConversion(unittest.TestCase):
         numpy.testing.assert_almost_equal(tile_md_pos, [-0.00041236630212, -0.000413347328499])
         tile_md_pos = get_tile_md_pos((1, 1), (TILE_SIZE, TILE_SIZE), tile, origda)
         numpy.testing.assert_almost_equal(tile_md_pos, [0.00065225309200, -0.00051098638647])
+
+    def test_json_numpy(self):
+
+        # Lots of types which are not supported by default
+        obj = {"int": numpy.int64(65),  # Works on Python 2 without trick
+               "float": numpy.float64(-64.1),  # Actually works without trick
+               "2d": numpy.array([[1, 2], [3, 4]])
+        }
+
+        s = json.dumps(obj, cls=JsonExtraEncoder)
+
+        # decoding it back is not going to bring back the numpy types, but
+        # something equivalent
+        dec_obj = json.loads(s)
+        self.assertEqual(dec_obj["int"], 65)
+        self.assertEqual(dec_obj["float"], -64.1)
+        self.assertEqual(dec_obj["2d"], [[1, 2], [3, 4]])
+
+    def test_json_extra(self):
+
+        # Lots of types which are not supported by default
+        obj = {"set": {"a", "b"},
+               "complex": 1 + 2j,
+               "bytes": b"boo",  # only matters on Python 3
+        }
+
+        s = json.dumps(obj, cls=JsonExtraEncoder)
+
+        # decoding it back is not going to bring back the same types, but
+        # something close
+        dec_obj = json.loads(s)
+        self.assertEqual(sorted(dec_obj["set"]), ["a", "b"])  # a list in random order => sorted
+        self.assertEqual(dec_obj["complex"], [1, 2])  # as a list
+        self.assertEqual(dec_obj["bytes"], "boo")
 
 
 if __name__ == "__main__":
