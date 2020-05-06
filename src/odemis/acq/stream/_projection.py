@@ -852,7 +852,7 @@ class RGBSpatialProjection(RGBProjection):
             # sets the mpp as the X axis of the pixel size of the full image
             mpp_rng = (ps[0], max_mpp)
             self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
-            full_rect = img._getBoundingBox(raw)
+            full_rect = img.getBoundingBox(raw)
             l, t, r, b = full_rect
             rect_range = ((l, b, l, b), (r, t, r, t))
             self.rect = model.TupleContinuous(full_rect, rect_range)
