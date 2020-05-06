@@ -1310,10 +1310,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # Activate _updateImage thread
                     self._shouldUpdateImage()
-
-                    # Live update the setting stream with the new data
-                    self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
-
                     logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
 
                     self._acq_data = [[] for _ in self._streams]  # delete acq_data to use less RAM

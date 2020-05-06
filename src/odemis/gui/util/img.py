@@ -2275,7 +2275,7 @@ def _convert_to_bgra(data):
         # Split the bits in B,G,R,A
         return _pack_data_into_bgra(data)
 
-    raise TypeError("Data of type %s and shape %s cannot be packed in BGRA", data.dtype, data.shape)
+    raise TypeError("Data of type %s and shape %s cannot be packed in BGRA" % (data.dtype, data.shape))
 
 
 def _pack_data_into_bgra(data_raw):

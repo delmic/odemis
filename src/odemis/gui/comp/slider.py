@@ -103,10 +103,6 @@ class BaseSlider(wx.Control):
     def GetValue(self):
         pass
 
-    def OnCaptureLost(self, evt):
-        self.ReleaseMouse()
-        evt.Skip()
-
     def _send_scroll_event(self):
         """ This method fires the EVT_SCROLL_CHANGED event.
         This means that the value has changed to a definite position, and it
@@ -266,7 +262,6 @@ class Slider(BaseSlider):
         self.Bind(wx.EVT_MOTION, self.OnMotion)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
         # Layout Events
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -291,7 +286,6 @@ class Slider(BaseSlider):
             self.Unbind(wx.EVT_MOTION, self.OnMotion)
             self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
             self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
-            self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
             # Layout Events
             self.Unbind(wx.EVT_PAINT, self.OnPaint)
@@ -723,7 +717,6 @@ class VisualRangeSlider(BaseSlider):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
 
         self.mode = None
 
