@@ -469,12 +469,13 @@ class Instantiator(object):
             raise SemanticError("Error in microscope file: "
                                 "microscope class '%s' should not have 'dependencies' argument." % name)
         if "dependencies" in attr:
-            if "dependencies" not in init:
-                # in case of a mixed yaml-file with old-style and new-style children, the 'dependencies'
-                # argument might already exist.
-                init["dependencies"] = {}
+            if init.get("dependencies"):
+                # In case some children are dependencies (ie, old-style), but there
+                # are also explicit "dependencies" used, warn, as it should be
+                # completely converted.
+                logging.warning("Mix legacy dependent-component (%s) + dependencies", init["dependencies"].keys())
             else:
-                logging.warning("Mix legacy dependent-component (%s) + dependencies", init["dependencies"].keys)
+                init["dependencies"] = {}
             dep_names = attr["dependencies"]
             for internal_role, dep_name in dep_names.items():
                 init["dependencies"][internal_role] = self._get_component_by_name(dep_name)
@@ -607,9 +608,10 @@ class Instantiator(object):
             raise
 
         self.components.add(comp)
-        # Add all the children to our list of components. Useful only if child
-        # created by delegation, but can't hurt to add them all.
+        # Add all the children, which were created by delegation, to our list of components.
         self.components |= comp.children.value
+        for child in comp.children.value:
+            self._comp_container[child.name] = cont
 
         return comp
 
@@ -908,6 +910,9 @@ class Instantiator(object):
         if f is None:
             return {}
 
+        # Make sure we start from the beginning, useful if the function
+        # is called several times in a row.
+        f.seek(0)
         try:
             data = yaml.safe_load(f)
             if not isinstance(data, dict):
