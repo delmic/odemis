@@ -1348,6 +1348,7 @@ class Shamrock(model.Actuator):
         """
         return (dict int -> string): grating number to description
         """
+        logging.debug("Current turret: %s", self.GetTurret())
         ngratings = self.GetNumberGratings()
         gchoices = {}
         for g in range(1, ngratings + 1):
