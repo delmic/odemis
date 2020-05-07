@@ -33,10 +33,12 @@ import math
 import numpy
 from odemis import model, acq, dataio, util
 from odemis.acq import stitching, stream
+from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
     FluoStream, MultipleDetectorStream, MonochromatorSettingsStream, CLStream
 import odemis.gui
+from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main
@@ -47,7 +49,6 @@ import psutil
 import threading
 import time
 import wx
-from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 
 
 class TileAcqPlugin(Plugin):
@@ -451,11 +452,10 @@ class TileAcqPlugin(Plugin):
             # Discard the acquisition streams which are not visible
             stitch_ss = []
             for acs in acq_st:
-                if isinstance(acs, MultipleDetectorStream):
-                    if any(subs in live_st for subs in acs.streams):
-                        stitch_ss.append(acs)
-                        break
-                elif acs in live_st:
+                if (acs in live_st or
+                    (isinstance(acs, MultipleDetectorStream) and
+                     any(subs in live_st for subs in acs.streams))
+                   ):
                     stitch_ss.append(acs)
         else:
             # No special acquisition streams
@@ -885,7 +885,16 @@ class TileAcqPlugin(Plugin):
 
             # Open analysis tab
             if st_data:
+                popup.show_message(self.main_app.main_frame, "Tiled acquisition complete",
+                                   "Will display stitched image")
                 self.showAcquisition(fn)
+            else:
+                popup.show_message(self.main_app.main_frame, "Tiled acquisition complete",
+                                   "Will display last tile")
+                # It's easier to know the last filename, and it's also the most
+                # interesting for the user, as if something went wrong (eg, focus)
+                # it's the tile the most likely to show it.
+                self.showAcquisition(fn_tile)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
