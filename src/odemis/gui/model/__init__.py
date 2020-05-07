@@ -39,6 +39,7 @@ from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
 from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
+from odemis.gui.log import observe_comp_state
 import os
 import threading
 import time
@@ -265,8 +266,9 @@ class MainGUIData(object):
         if microscope:
             self.role = microscope.role
             comps_with_role = []
+            components = model.getComponents()
 
-            for c in model.getComponents():
+            for c in components:
                 if c.role is None:
                     continue
                 try:
@@ -287,6 +289,9 @@ class MainGUIData(object):
                     self.photo_ds.append(c)
 
                 # Otherwise, just not interested by this component
+
+            #If the state of an HW component changes create an OS pop up message
+            observe_comp_state(components)
 
             # Sort the list of detectors by role in alphabetical order, to keep behaviour constant
             for l in (self.photo_ds, self.ccds, self.sp_ccds, self.spectrometers):
