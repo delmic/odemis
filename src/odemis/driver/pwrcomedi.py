@@ -29,9 +29,8 @@ import logging
 from odemis import model
 import odemis
 from odemis.util import driver
-
 import odemis.driver.comedi_simple as comedi
-
+from past.builtins import long
 
 class Light(model.Emitter):
 
@@ -59,7 +58,7 @@ class Light(model.Emitter):
 
         try:
             self._device = comedi.open(device)
-#             self._fileno = comedi.fileno(self._device)
+        #             self._fileno = comedi.fileno(self._device)
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'" % device)
 
@@ -105,7 +104,7 @@ class Light(model.Emitter):
             # Find the best range to use
             try:
                 ri = comedi.find_range(self._device, self._ao_subd,
-                                      c, comedi.UNIT_volt, crv[0][0], crv[-1][0])
+                                       c, comedi.UNIT_volt, crv[0][0], crv[-1][0])
             except comedi.ComediError:
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (crv[0][0], crv[-1][0]))
@@ -124,33 +123,32 @@ class Light(model.Emitter):
                                      % (c, wl * 1e9))
             spect.append(tuple(wls))
 
-        max_power = max(crv[-1][1] for crv in self._pwr_curve)
-        # power of the whole device (=> max power of the device with max power)
-        self.power = model.FloatContinuous(0., (0., max_power), unit="W")
+        # Maximum power for channel to be used as a range for power
+        max_power = tuple([crv[-1][1] for crv in self._pwr_curve])
+        # Power value for each channel of the device
+        self.power = model.ListContinuous(value=[0.] * len(self._channels),
+                                          range=(tuple([0.] * len(self._channels)), max_power,),
+                                          unit="W", cls=(int, long, float),)
         self.power.subscribe(self._updatePower)
 
-        # ratio of power per channel
-        # => if some channel don't support max power, clamped before 1
-        self.emissions = model.ListVA([0.] * len(self._channels), unit="",
-                                      setter=self._setEmissions)
         # info on which channel is which wavelength
         self.spectra = model.ListVA(spect, unit="m", readonly=True)
 
         # make sure everything is off (turning on the HUB will turn on the lights)
-        self._updateIntensities(self.power.value, self.emissions.value)
+        self.power.value = self.power.range[0]
 
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
         lnx_ver = driver.get_linux_version()
         self._swVersion = "%s (driver %s, linux %s)" % (odemis.__version__,
-                                    self.getSwVersion(),
-                                    ".".join("%s" % v for v in lnx_ver))
+                                                        self.getSwVersion(),
+                                                        ".".join("%s" % v for v in lnx_ver))
         self._metadata[model.MD_SW_VERSION] = self._swVersion
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion # unknown
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion  # unknown
 
     def terminate(self):
         if self._device:
             # Make sure everything is powered off
-            self._updateIntensities(0, [0.] * len(self._channels))
+            self.power.value = self.power.range[0]
 
             comedi.close(self._device)
             self._device = None
@@ -211,30 +209,10 @@ class Light(model.Emitter):
         """
         return comedi.get_board_name(self._device)
 
-    def _updateIntensities(self, power, intensities):
-        for c, r, crv, intens in zip(self._channels, self._ranges, self._pwr_curve, intensities):
-            p = min(power * intens, crv[-1][1])
+    def _updatePower(self, value):
+        for c, r, crv, p in zip(self._channels, self._ranges, self._pwr_curve, value):
+            p = min(p, crv[-1][1])
             v = self._power_to_volt(p, crv)
             d = self._volt_to_data(v, c, r)
             logging.debug("Setting channel %d to %d = %g V = %g W", c, d, v, p)
             comedi.data_write(self._device, self._ao_subd, c, r, comedi.AREF_GROUND, d)
-
-    def _updatePower(self, value):
-        self._updateIntensities(value, self.emissions.value)
-
-    def _setEmissions(self, intensities):
-        """
-        intensities (list of N floats [0..1]): intensity of each source
-        """
-        if len(intensities) != len(self._channels):
-            raise ValueError("Emission must be an array of %d floats." % len(self._channels))
-
-        # clamp intensities which cannot reach the maximum power
-        cl_intens = []
-        for crv, intens in zip(self._pwr_curve, intensities):
-            cl_intens.append(min(max(0, intens), crv[-1][1] / self.power.range[1]))
-            # TODO: if the intensity is so small that the power would be 0, force
-            # it to 0.
-
-        self._updateIntensities(self.power.value, cl_intens)
-        return cl_intens

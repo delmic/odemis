@@ -262,12 +262,11 @@ class MetadataUpdater(model.Component):
         return True
 
     def observeLight(self, light, comp_affected):
-
-        def updateInputWL(emissions, light=light, comp_affected=comp_affected):
+        def updateLightPower(power, light=light, comp_affected=comp_affected):
             # MD_IN_WL expects just min/max => if multiple sources, we need to combine
             spectra = light.spectra.value
             wls = []
-            for i, intens in enumerate(emissions):
+            for i, intens in enumerate(power):
                 if intens > 0:
                     wls.append((spectra[i][0], spectra[i][-1]))
 
@@ -277,24 +276,11 @@ class MetadataUpdater(model.Component):
             else:
                 wl_range = (0, 0)
 
-            # FIXME: not sure how to combine
-            power = light.power.value
-            p = power * numpy.sum(emissions)
-
-            md = {model.MD_IN_WL: wl_range,
-                  model.MD_LIGHT_POWER: p}
-            comp_affected.updateMetadata(md)
-
-        def updateLightPower(power, light=light, comp_affected=comp_affected):
-            p = power * numpy.sum(light.emissions.value)
-            md = {model.MD_LIGHT_POWER: p}
+            md = {model.MD_IN_WL: wl_range, model.MD_LIGHT_POWER: sum(power)}
             comp_affected.updateMetadata(md)
 
         light.power.subscribe(updateLightPower, init=True)
         self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
-
-        light.emissions.subscribe(updateInputWL, init=True)
-        self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
 
         return True
 

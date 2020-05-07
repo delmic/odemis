@@ -137,6 +137,23 @@ class StreamController(object):
         if isinstance(self.stream, acqstream.StaticStream):
             self._display_metadata()
 
+        # Add current power VA setting entry (instead of using emtVas)
+        if hasattr(stream, "power"):
+            va = self.stream.power
+            name = "power"
+            if self.stream.emitter:
+                hw_settings = self.tab_data_model.main.hw_settings_config
+                emitter_conf = get_hw_config(self.stream.emitter, hw_settings)
+            else:
+                emitter_conf = {}
+
+            conf = emitter_conf.get(name)
+            if conf is not None:
+                logging.debug("%s emitter configuration found for %s", name,
+                              self.stream.emitter.role)
+
+            self.add_setting_entry(name, va, self.stream.emitter, conf)
+
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
 
@@ -820,6 +837,19 @@ class StreamController(object):
         center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
         self._add_emission_ctrl(wave2rgb(center_wl))
 
+    def _onExcitationChannelChange(self, _):
+        """
+        Event handler for the Excitation channel combobox selection.
+        Update the power slider range with the current power VA's
+        """
+        if not self._power_entry:
+            return
+        # Set the slider with min value first (in order to change the range in case new value is > current slider max)
+        self._power_entry.value_ctrl.SetValue(self._power_entry.vigilattr.min)
+        # Then set the range followed by the actual value (this way no exception is thrown by SetRange)
+        self._power_entry.value_ctrl.SetRange(self._power_entry.vigilattr.min, self._power_entry.vigilattr.max)
+        self._power_entry.value_ctrl.SetValue(self._power_entry.vigilattr.value)
+
     def _add_excitation_ctrl(self, center_wl_color=None):
         """
         Add excitation ctrl
@@ -842,6 +872,10 @@ class StreamController(object):
             choices = sorted(self.stream.excitation.choices, key=get_one_center)
             for b in choices:
                 value_ctrl.Append(to_readable_band(b), b)
+            # Bind the excitation combobox selection event to update the power slider range
+            value_ctrl.Bind(wx.EVT_COMBOBOX, self._onExcitationChannelChange)
+            # Store power entry to be used in _onExcitationChannelChange event handler
+            self._power_entry = next((spe for spe in self.entries if spe.name == "power"), None)
 
             def _excitation_2_va(value_ctrl=value_ctrl):
                 """
@@ -1483,24 +1517,24 @@ class StreamBarController(object):
 
     def _ensure_power_non_null(self, stream):
         """
-        Ensure the emtPower VA of a stream is not 0. The goal is to make sure
+        Ensure the power VA of a stream is not 0. The goal is to make sure
         that when the stream will start playing, directly some data will be
         obtained (to avoid confusing the user). In practice, if it is 0, a small
         value (10%) will be set.
-        stream (Stream): the stream with a emtPower VA
+        stream (Stream): the stream with a power VA
         """
-        if stream.emtPower.value > 0:
+        if stream.power.value > 0.:
             return
 
         # Automatically picks some power if it was at 0 W (due to the stream
         # defaulting to the current hardware settings), so that the user is not
         # confused when playing the stream and nothing happens.
-        if hasattr(stream.emtPower, "range"):
-            stream.emtPower.value = stream.emtPower.range[1] * 0.1
-        elif hasattr(stream.emtPower, "choices"):
-            stream.emtPower.value = sorted(stream.emtPower.choices)[1]
+        if hasattr(stream.power, "range"):
+            stream.power.value = stream.power.range[1] * 0.1
+        elif hasattr(stream.power, "choices"):
+            stream.power.value = sorted(stream.power.choices)[1]
         else:
-            logging.info("Stream emtPower has no info about min/max")
+            logging.info("Stream power has no info about min/max")
 
     def addFluo(self, **kwargs):
         """
@@ -1526,7 +1560,6 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
-            emtvas={"power"}
         )
         self._ensure_power_non_null(s)
 
@@ -1550,7 +1583,6 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
-            emtvas={"power"}
         )
         self._ensure_power_non_null(s)
 
@@ -1570,7 +1602,6 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
-            emtvas={"power"}
         )
         self._ensure_power_non_null(s)
 

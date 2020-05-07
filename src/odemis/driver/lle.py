@@ -32,7 +32,7 @@ import os
 import serial
 import threading
 import time
-
+from past.builtins import long
 
 # Colour name (lower case) to source ID (as used in the device)
 COLOUR_TO_SOURCE = {"red": 0,
@@ -64,6 +64,15 @@ DEFAULT_SOURCES = {"red": (615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9),
                    "yellow": (565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9),
                    "blue": (420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9),
                    "teal": (495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9),
+                  }
+# Maximum power taken from the manual file 4487-LUM.54-10009B.SPECTRA.X.pdf
+DEFAULT_SOURCES_POWERS = {"red":0.231,
+                          "green": 0.260,
+                          "cyan": 0.196,
+                          "uv": 0.295,
+                          "yellow": 0.310,
+                          "blue": 0.256,
+                          "teal": 0.62,
                   }
 
 
@@ -125,6 +134,7 @@ class LLE(model.Emitter):
         self._gy = [] # indexes of green and yellow source
         self._rcubt = [] # indexes of other sources
         spectra = [] # list of the 5 wavelength points
+        self._max_power = []
         for cn, wls in sources.items():
             cn = cn.lower()
             if cn not in COLOUR_TO_SOURCE:
@@ -143,21 +153,19 @@ class LLE(model.Emitter):
                 self._gy.append(len(spectra))
             else:
                 self._rcubt.append(len(spectra))
+            self._max_power.append(DEFAULT_SOURCES_POWERS[cn])
             spectra.append(tuple(wls))
 
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
-        self._max_power = 0.4 # W (According to doc: ~400mW)
-        self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
+        self.power = model.ListContinuous(value=[0.0] * len(spectra),
+                                          range=((0.,) * len(spectra), tuple(self._max_power),),
+                                          unit="W", cls=(int, long, float),)
 
-        # emissions is list of 0 <= floats <= 1.
-        self._intensities = [0.] * len(spectra) # start off
-        self.emissions = model.ListVA(list(self._intensities), unit="",
-                                      setter=self._setEmissions)
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
-        self._prev_intensities = [None] * len(spectra) # => will update for sure
+        self._prev_power = [None] * len(spectra) # => will update for sure
         self._updateIntensities() # turn off every source
 
         self.power.subscribe(self._updatePower)
@@ -278,7 +286,7 @@ class LLE(model.Emitter):
                 time.sleep(2)
 
         # it now should be accessible again
-        self._prev_intensities = [None] * 7 # => will update for sure
+        self._prev_power = [None] * len(self.power.value) # => will update for sure
         self._ser_access.release() # because it will try to write on the port
         self._updateIntensities() # reset the sources
         self._ser_access.acquire()
@@ -372,91 +380,79 @@ class LLE(model.Emitter):
 
         # Yellow has precedence over green
         if yellow_i is not None and intensities[yellow_i]: # don't use if None or 0
-            return intensities[yellow_i]
+            return intensities[yellow_i], yellow_i
         elif green_i is not None:
-            return intensities[green_i]
+            return intensities[green_i], green_i
         else:
-            return 0
+            # In case neither yellow or green found, just return yellow (as it has precedence)
+            return 0, yellow_i
 
     def _updateIntensities(self):
         """
         Update the sources setting of the hardware, if necessary
         """
         need_update = False
-        for i, intens in enumerate(self._intensities):
-            if self._prev_intensities[i] != intens:
+        for i, p in enumerate(self.power.value):
+            if self._prev_power[i] != p:
                 need_update = True
                 # Green and Yellow share the same source => do it later
                 if i in self._gy:
                     continue
                 sid = self._source_id[i]
-                self._setSourceIntensity(sid, int(round(intens * 255 / self._max_power)))
+                self._setSourceIntensity(sid, int(round(p * 255 / self._max_power[i])))
 
         # special for Green/Yellow: merge them
-        prev_gy = self._getIntensityGY(self._prev_intensities)
-        gy = self._getIntensityGY(self._intensities)
+        prev_gy = self._getIntensityGY(self._prev_power)
+        gy = self._getIntensityGY(self.power.value)
         if prev_gy != gy:
-            self._setSourceIntensity(1, int(round(gy * 255 / self._max_power)))
+            self._setSourceIntensity(1, int(round(gy[0] * 255 / self._max_power[gy[1]])))
 
         if need_update:
             toTurnOn = set()
-            for i, intens in enumerate(self._intensities):
-                if intens > self._max_power / 255:
+            for i, p in enumerate(self.power.value):
+                if p > self._max_power[i] / 255:
                     toTurnOn.add(self._source_id[i])
             self._enableSources(toTurnOn)
 
-        self._prev_intensities = list(self._intensities)
+        self._prev_power = self.power.value
 
     def _updatePower(self, value):
         # set the actual values
-        for i, intensity in enumerate(self.emissions.value):
-            self._intensities[i] = intensity * value
-        self._updateIntensities()
-
-    def _setEmissions(self, intensities):
-        """
-        intensities (list of N floats [0..1]): intensity of each source
-        """
-        if len(intensities) != len(self._intensities):
-            raise TypeError("Emission must be an array of %d floats." % len(self._intensities))
-
         # TODO need to do better for selection
         # Green (1) and Yellow (4) can only be activated independently
         # If only one of them selected: easy
         # If only other selected: easy
         # If only green and yellow: pick the strongest
         # If mix: if the max of GY > max other => pick G or Y, other pick others
-        intensities = list(intensities) # duplicate
-        max_gy = max([intensities[i] for i in self._gy] + [0]) # + [0] to always have a non-empty list
+        intensities = list(value)  # duplicate
+        max_gy = max([intensities[i] for i in self._gy] + [0])  # + [0] to always have a non-empty list
         max_others = max([intensities[i] for i in self._rcubt] + [0])
         if max_gy <= max_others:
             # we pick others => G/Y becomes 0
             for i in self._gy:
-                intensities[i] = 0
+                intensities[i] = 0.0
         else:
             # We pick G/Y (the strongest of the two)
             for i in self._rcubt:
-                intensities[i] = 0
-            if len(self._gy) == 2: # only one => nothing to do
+                intensities[i] = 0.0
+            if len(self._gy) == 2:  # only one => nothing to do
                 if intensities[self._gy[0]] > intensities[self._gy[1]]:
                     # first is the strongest
-                    intensities[self._gy[1]] = 0
-                else: # second is the strongest
-                    intensities[self._gy[0]] = 0
+                    intensities[self._gy[1]] = 0.
+                else:  # second is the strongest
+                    intensities[self._gy[0]] = 0.
 
         # set the actual values
         for i, intensity in enumerate(intensities):
             # clip + indicate minimum step
-            if intensity < 1 / 256:
+            if intensity / self._max_power[i] < 1 / 256:
                 logging.debug("Clipping intensity from %f to 0", intensity)
-                intensity = 0
-            elif intensity > 255 / 256:
-                intensity = 1
-            intensities[i] = intensity
-            self._intensities[i] = intensity * self.power.value
+                intensity = 0.
+            elif intensity / self._max_power[i] > 255 / 256:
+                intensity = self._max_power[i]
+            self.power.value[i] = intensity
+
         self._updateIntensities()
-        logging.debug("Final intensity computed is %s", intensities)
-        return intensities
 
     def terminate(self):
         if hasattr(self, "_temp_timer") and self._temp_timer:

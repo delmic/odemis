@@ -674,7 +674,7 @@ class CameraStream(LiveStream):
 
     def __init__(self, name, detector, dataflow, emitter, emtvas=None, **kwargs):
         # We use emission directly to control the emitter
-        if emtvas and "emission" in emtvas:
+        if emtvas and "power" in emtvas:
             raise ValueError("emission VA cannot be made local")
 
         super(CameraStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
@@ -708,10 +708,7 @@ class CameraStream(LiveStream):
 
         # Just change the intensity of each wavelengths, so that the power is
         # recorded.
-        emissions = [0.] * len(self._emitter.emissions.value)
-        self._emitter.emissions.value = emissions
-
-        # TODO: if emitter has not .emissions => just turn off .power
+        self._emitter.power.value = self._emitter.power.range[0]
 
         # TODO: might need to be more clever to avoid turning off and on the
         # light source when just switching between FluoStreams. => have a
@@ -727,6 +724,16 @@ class BrightfieldStream(CameraStream):
       all the spectrum), or a "light" emitter (with multiple channels, for
       various spectra). To activate the light, it just turns on all the channels.
     """
+    def __init__(self, name, detector, dataflow, emitter, emtvas=None, **kwargs):
+
+        if emitter is not None:
+            # Current power VA representing power for one channel only
+            cp_range = (emitter.power.range[0][0], emitter.power.range[1][0])
+            self.power = model.FloatContinuous(emitter.power.value[0], range=cp_range,
+                                               unit=emitter.power.unit)
+            self.power.subscribe(self._onPower)
+
+        super(BrightfieldStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
     def _onActive(self, active):
         if active:
@@ -743,8 +750,15 @@ class BrightfieldStream(CameraStream):
         # Turn everything to the maximum
         # TODO: display a warning if the final emission range is quite thinner
         # than a typical white spectrum?
-        em = [1.] * len(self._emitter.emissions.value)
-        self._emitter.emissions.value = em
+        self._emitter.power.value = self._emitter.power.range[1]
+
+    def _onPower(self, value):
+        """
+        Update the emitter power with the current channel value
+        :param value: current channel value
+        """
+        if self.is_active.value:
+            self._emitter.power.value[0] = value
 
 
 class CameraCountStream(CameraStream):
@@ -908,13 +922,20 @@ class FluoStream(CameraStream):
         self.excitation = model.VAEnumerated(current_exc, choices=exc_choices,
                                              unit="m")
         self.excitation.subscribe(self.onExcitation)
-
+        # Current channel index to be used for channel's power update
+        self._channel_idx = emitter.spectra.value.index(current_exc)
         # The wavelength band on the out path (set when emission changes)
         self.emission = model.VAEnumerated(current_em, choices=set(em_choices.values()),
                                            unit="m")
         self.emission.subscribe(self.onEmission)
 
-        # colouration of the image
+        # Current power VA representing power for one 'currently selected' channel only
+        cp_range = tuple(r[self._channel_idx] for r in emitter.power.range)
+        self.power = model.FloatContinuous(emitter.power.value[self._channel_idx], range=cp_range,
+                                           unit=emitter.power.unit)
+        self.power.clip_on_range = True
+        self.power.subscribe(self._onPower)
+        # Colouration of the image
         self.tint.value = conversion.wave2rgb(center_em)
 
     def _onActive(self, active):
@@ -930,6 +951,16 @@ class FluoStream(CameraStream):
         if self.is_active.value:
             self._setup_excitation()
 
+    def _onPower(self, value):
+        """
+        Update the emitter power with the current channel value
+        :param value: current channel value
+        """
+        if self.is_active.value:
+            self._emitter.power.value = self._emitter.power.range[0]
+            self._emitter.power.value[self._channel_idx] = value
+
+
     def onEmission(self, value):
         if self.is_active.value:
             self._setup_emission()
@@ -941,7 +972,7 @@ class FluoStream(CameraStream):
         the light is completely off.
         """
         # The current excitation is the band which has the highest intensity
-        intens = self._emitter.emissions.value
+        intens = self._emitter.power.value
         m = max(intens)
         if m == 0:
             return None
@@ -962,14 +993,15 @@ class FluoStream(CameraStream):
     def _setup_excitation(self):
         """
         Set-up the hardware to emit light in the excitation band.
-        The light power is not modified, and is expected to be > 0.
         """
         # All intensities to 0, but the one corresponding to the selected band
         choices = self._emitter.spectra.value
-        i = choices.index(self.excitation.value)
-        emissions = [0.] * len(choices)
-        emissions[i] = 1.
-        self._emitter.emissions.value = emissions
+        self._channel_idx = choices.index(self.excitation.value)
+        # Update the current power range
+        self.power.range = tuple(r[self._channel_idx] for r in self._emitter.power.range)
+        # Call _onPower to update emitter power
+        self._onPower(self.power.value)
+
 
     def _onNewData(self, dataflow, data):
         if model.MD_OUT_WL not in data.metadata:

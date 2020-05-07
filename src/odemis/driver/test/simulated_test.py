@@ -38,8 +38,8 @@ class LightTest(unittest.TestCase):
         light = simulated.Light("test", "light")
         self.assertGreaterEqual(len(light.spectra.value), 1)
         self.assertGreaterEqual(len(light.shape), 0)
-        light.power.value = 10
-        self.assertEqual(light.power.value, 10)
+        light.power.value[0] = 10.
+        self.assertEqual(light.power.value[0], 10.)
 
 class ActuatorTest(object):
     """
@@ -278,7 +278,7 @@ class ChamberTest(unittest.TestCase):
             else:
                 self.fail("Failed to find a position in %s different from %s" %
                           (n, cur_pos[n]))
-            
+
         f1 = self.dev.moveAbs(move)
         f2 = self.dev.moveAbs(move)
         time.sleep(0.001)

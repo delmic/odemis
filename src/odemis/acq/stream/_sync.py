@@ -2848,12 +2848,6 @@ class ScannedRemoteTCStream(LiveStream):
 
         return px_dt, nfr
 
-    def _setEmission(self, value):
-        # set all light emissions at once to a value
-        em = self._emitter.emissions.value
-        em = [value] * len(em)
-        self._emitter.emissions.value = em
-
     def _computeROISettings(self, roi):
         """
         roi (4 0<=floats<=1)
@@ -2889,7 +2883,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._detector.data.subscribe(self._onAcqStop)
 
             # Turn on the lights
-            self._setEmission(1)
+            self._emitter.power.value = self._emitter.power.range[1]
 
             # Start the acquisition
             self._tc_detector.data.subscribe(self._onNewData)
@@ -2937,7 +2931,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._detector.data.unsubscribe(self._onAcqStop)
             self._stream._unlinkHwVAs()
             # turn off the light
-            self._setEmission(0)
+            self._emitter.power.value = self._emitter.power.range[0]
 
             # If cancelled, some data might still be queued => forget about it
             self._data_queue = queue.Queue()

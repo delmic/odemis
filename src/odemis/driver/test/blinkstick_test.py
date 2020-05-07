@@ -32,7 +32,7 @@ logger = logging.getLogger().setLevel(logging.DEBUG)
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CLASS = blinkstick.WhiteLed
-KWARGS = dict(name="test", role="light", max_power=1, inversed=True)
+KWARGS = dict(name="test", role="light", max_power=1.0, inversed=True)
 
 
 class TestStatic(unittest.TestCase):
@@ -77,19 +77,16 @@ class TestWhiteLed(unittest.TestCase):
         self.dev.terminate()
 
     def test_power_va(self):
-        # Activate the emissions
-        self.dev.emissions.value = [1]
-
         # Set power value min and max and mean
         self.dev.power.value = self.dev.power.range[0]
-        self.assertEqual(self.dev.power.value, self.dev.power.range[0])
+        self.assertEqual(self.dev.power.value, list(self.dev.power.range[0]))
 
         self.dev.power.value = self.dev.power.range[1]
-        self.assertEqual(self.dev.power.value, self.dev.power.range[1])
+        self.assertEqual(self.dev.power.value, list(self.dev.power.range[1]))
 
         h = numpy.mean(self.dev.power.range)
-        self.dev.power.value = h
-        self.assertAlmostEqual(self.dev.power.value, h, delta=1 / 256)
+        self.dev.power.value = [h]
+        self.assertAlmostEqual(self.dev.power.value[0], h, delta=1 / 256)
 
 
 if __name__ == "__main__":

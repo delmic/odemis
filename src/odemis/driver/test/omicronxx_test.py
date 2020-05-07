@@ -29,7 +29,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-
 if TEST_NOHW:
     MXXPORTS = "/dev/fakeone"  # TODO: no simulator
     HUBPORT = "/dev/fakehub"
@@ -70,37 +69,31 @@ class TestGenericxX(object):
 
     def test_simple(self):
         # should start off
-        self.assertEqual(self.dev.power.value, 0)
+        self.assertEqual(self.dev.power.value, [0.0, 0.0])
 
         # turn on first source to 10%
-        self.dev.power.value = self.dev.power.range[1]
-        em = self.dev.emissions.value
-        em[0] = 0.1
-        self.dev.emissions.value = em
-        self.assertGreater(self.dev.emissions.value[0], 0)
+        self.dev.power.value[0] = self.dev.power.range[1][0] * 0.1
+        self.assertGreater(self.dev.power.value[0], 0)
 
         logging.debug("Found hardware %s", self.dev.hwVersion)
 
     def test_cycle(self):
         """
-        Test each emission source for 2 seconds at maximum intensity and then 1s
+        Test each power source for 2 seconds at maximum intensity and then 1s
         at 10%.
         """
-        em = self.dev.emissions.value
-        em = [0 for v in em]
-        self.dev.power.value = self.dev.power.range[1]
+        self.dev.power.value = self.dev.power.range[0]
 
         # can fully checked only by looking what the hardware is doing
-        print("Starting emission source cycle...")
-        for i in range(len(em)):
+        print("Starting power source cycle...")
+        for i in range(len(self.dev.power.value)):
             print("Turning on wavelength %g" % self.dev.spectra.value[i][2])
-            em[i] = 0.1
-            self.dev.emissions.value = em
+            self.dev.power.value[i] = self.dev.power.range[1][i] * 0.1
+            self.assertEqual(self.dev.power.value[i], self.dev.power.range[1][i] * 0.1)
             time.sleep(5)
-            self.assertEqual(self.dev.emissions.value, em)
-            em[i] = 0
-            self.dev.emissions.value = em
-            self.assertEqual(self.dev.emissions.value, em)
+
+            self.dev.power.value[i] = 0.0
+            self.assertEqual(self.dev.power.value[i], 0.0)
 
 
 class TestMultixX(TestGenericxX, unittest.TestCase):

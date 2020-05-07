@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import numbers
 import queue
 import argparse
 import logging
@@ -88,6 +89,9 @@ class HRAcquirer(object):
         """
         if power is None:
             power = self.light.power.range[-1]
+        elif isinstance(power, numbers.Number):
+            # Convert the power commandline argument float value into a list (to match light power type)
+            power = [power]
         self.power = power
 
         # find the fitting wavelength for the light
@@ -128,8 +132,7 @@ class HRAcquirer(object):
         # TODO: support cancellation
 
         # Switch on laser (at the right wavelength and power)
-        self.light.emissions.value = self._full_intensity
-        self.light.power.value = self.power
+        self.light.power.value = [ints * pw for ints,pw in zip(self._full_intensity, self.power)]
         self._n = 0
         self._startt = time.time()
         self.ccd.data.subscribe(self._on_continuous_image)
@@ -142,7 +145,7 @@ class HRAcquirer(object):
         logging.info("Finished with average %g fps", fps)
 
         # Switch off laser
-        self.light.power.value = 0
+        self.light.power.value = self.light.power.range[0]
 
     def save_data(self, data, n):
         """

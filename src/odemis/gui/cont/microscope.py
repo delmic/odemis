@@ -239,13 +239,7 @@ class SecomStateController(object):
         # TODO: do the same with the brightlight and backlight
         light = self._main_data.light
         if light is not None:
-            # Turn off emissions
-            try:
-                emissions = [0.] * len(light.emissions.value)
-                light.emissions.value = emissions
-            except AttributeError:
-                # No emission ? => turn off the power as only way to stop light
-                light.power.value = 0
+            light.power.value = light.power.range[0]
 
         # To listen to change in play/pause
         self._active_prev_stream = None

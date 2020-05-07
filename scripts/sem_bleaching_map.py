@@ -79,9 +79,11 @@ class Acquirer(object):
         self.light = model.getComponent(role="light")
         self.ccd = model.getComponent(role="ccd")
         self.stage = model.getComponent(role="stage")
-        
+
+        # Find the index with maximum power to use to set lpower
+        self.max_power_index = list(self.light.power.range[1]).index(max(self.light.power.range[1]))
         lprng = self.light.power.range
-        if not (lprng[0] < lpower < lprng[1]):
+        if not (lprng[0][self.max_power_index] < lpower < lprng[1][self.max_power_index]):
             raise ValueError("starting light power value must be between %s" % (lprng,))
 
         # counter-intuitively, to get the smaller pixel size, no sub-pixel
@@ -272,7 +274,7 @@ class Acquirer(object):
                       self.ccd.resolution.value,
                       self.ccd.binning.value)
         # Just to be sure, turn off the light
-        self.light.power.value = 0
+        self.light.power.value = self.light.power.range[0]
 
     def save_hw_settings(self):
         res = self.ebeam.resolution.value
@@ -385,13 +387,13 @@ class Acquirer(object):
         
         # Turn on the light
         # TODO: allow user to specify power (instead of using the maximum)
-        self.light.power.value = self.lpower
+        self.light.power.value[self.max_power_index] = self.lpower
         
         # Acquire an image of the fluorescence
         data = self.ccd.data.get()
         
         # Turn off the light again
-        self.light.power.value = 0
+        self.light.power.value = self.light.power.range[0]
 
         return data
 

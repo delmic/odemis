@@ -151,8 +151,7 @@ class TestTurnOnLight(unittest.TestCase):
         Test when chamber light is already on
         """
         bl = self.light
-        bl.emissions.value[0] = 1
-        bl.power.value = 10
+        bl.power.value[0] = 10
         # bright image - light is already on
         ccd = mock.FakeCCD(self.img_ccd_lon)
         f = turnOnLight(bl, ccd)

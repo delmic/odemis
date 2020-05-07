@@ -199,8 +199,8 @@ class TestWithBackend(unittest.TestCase):
         os.remove("test.txt")
     
     def test_set_attr(self):
-        # to read attribute power
-        regex = re.compile(b"\spower\s.*value:\s*([.0-9]+)")
+        # to read attribute power (which is a list of numbers)
+        regex = re.compile(b"\spower.+ value: \[(.*?)\]")
         
         # read before
         try:
@@ -215,8 +215,10 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        power = float(regex.search(output).group(1))
-        self.assertGreaterEqual(power, 0, "power should be bigger than 0")   
+        # Parse each individual power value from the power list
+        power_val_str = [val_str for val_str in str(regex.search(output).group(1)).split(",")]
+        power = [float(re.search(r"([.0-9]+)", val).group(0)) for val in power_val_str]
+        self.assertTrue(any(pw >= 0 for pw in power), "Power values should be bigger than 0")
         
         # set the new value
         try:
@@ -224,7 +226,7 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
             
-            cmdline = ["cli", "--set-attr", "Light Engine", "power", "0"]
+            cmdline = ["cli", "--set-attr", "Light Engine", "power", str([0.0 for _ in power])]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -243,8 +245,9 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        power = float(regex.search(output).group(1))
-        self.assertEqual(power, 0, "power should be 0")
+        power_val_str = [val_str for val_str in str(regex.search(output).group(1)).split(",")]
+        power = [float(re.search(r"([.0-9]+)", val).group(0)) for val in power_val_str]
+        self.assertTrue(all(pw == 0 for pw in power), "Power values should be 0")
         
     def test_set_attr_dict(self):
         # set a dict, which is a bit complicated structure
