@@ -21,9 +21,12 @@ from __future__ import division, print_function
 
 import collections
 import logging
+import time
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
 from odemis.gui.util import wxlimit_invocation, get_home_folder
+from odemis.gui.comp.popup import show_message
+from odemis.model import ST_RUNNING, HwError
 import os.path
 import sys
 import threading
@@ -202,3 +205,29 @@ class TextFieldHandler(logging.Handler):
                 self.textfield.Remove(0, first_new)
 
         self.textfield.Refresh()
+
+# List for passing component.name to the function stage_change_pop_up
+state_subscribers = []
+# List with reference to components observed for a state change
+observed_components = []
+def observe_comp_state(comps):
+    '''
+    Function which produces an warning/information pop-up in the OS if an error or recovery of an error occurs
+    :param comps: list with all the components and their data
+    '''
+    global observed_components
+    observed_components = comps
+    for component in comps:
+        def state_change_pop_up(component_state_value, component_name=component.name):
+            if component_state_value == ST_RUNNING:
+                show_message(wx.GetApp().main_frame, 'Recovered ' + component_name,
+                             'Functionality of the "' + component_name + '" is recovered successfully.',
+                             timeout=3.0, level=logging.INFO)
+
+            elif isinstance(component_state_value, HwError):
+                show_message(wx.GetApp().main_frame, 'Error in ' + component_name, str(component_state_value),
+                             timeout=5.0, level=logging.WARNING)
+
+        # Keep a reference to each subscriber function so they won't get dereferenced (because VA's use weakrefs)
+        state_subscribers.append(state_change_pop_up)
+        component.state.subscribe(state_change_pop_up)

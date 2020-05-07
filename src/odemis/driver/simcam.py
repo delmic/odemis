@@ -21,18 +21,20 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import threading
 from past.builtins import long
 from builtins import str
 import queue
 import logging
 import numpy
 from odemis import model, util, dataio
-from odemis.model import oneway
+from odemis.model import BASE_DIRECTORY, oneway
 import os
 from scipy import ndimage
 import time
 from PIL import Image, ImageDraw, ImageFont
 
+ERROR_STATE_FILE = "simcam-hw.error"
 
 class Camera(model.DigitalCamera):
     '''
@@ -142,6 +144,14 @@ class Camera(model.DigitalCamera):
         # Convenience event for the user to connect and fire
         self.softwareTrigger = model.Event()
 
+        # Include a thread which creates or fixes an hardware error in the simcam on the basis of the presence of the
+        # file ERROR_STATE_FILE in model.BASE_DIRECTORY
+        self._is_running = True
+        self._error_creation_thread = threading.Thread(target=self._state_error_run,
+                                                       name="Creating and state error")
+        self._error_creation_thread.daemon = True
+        self._error_creation_thread.start()
+
     def _setBinning(self, value):
         """
         value (2-tuple int)
@@ -196,6 +206,7 @@ class Camera(model.DigitalCamera):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
+        self._is_running = False #Stop error creation thread
         self._stop_generate()
 
     def _start_generate(self):
@@ -316,6 +327,28 @@ class Camera(model.DigitalCamera):
 
         return sim_img
 
+    def _state_error_run(self):
+        '''
+        Creates or fixes an hardware error in the simcam if an file is present.
+        Creating the file 'ERROR_STATE_FILE' (or by deleting this file) in the folder 'model.BASE_DIRECTORY' the
+        state of the simcam is changed to and error (or fixed by putting the state back to the standard 'running').
+        '''
+        try:
+            while self._is_running:
+                time.sleep(0.3)  # max 3 Hz
+
+                # Check if an error file is present
+                error_file_present = os.path.isfile(os.path.join(model.BASE_DIRECTORY, ERROR_STATE_FILE))
+                if error_file_present and not isinstance(self.state.value, model.HwError):
+                    self.state._set_value(
+                            model.HwError("Camera disconnected due to forced testing error."),
+                            force_write=True)
+
+                elif not error_file_present and isinstance(self.state.value, model.HwError):
+                    self.state._set_value(model.ST_RUNNING, force_write=True)
+
+        except Exception as e:
+            logging.warning("In changing states in SimCam the error '%s' occurred", e)
 
 class SimpleDataFlow(model.DataFlow):
     def __init__(self, ccd):
