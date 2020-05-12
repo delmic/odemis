@@ -773,25 +773,32 @@ def mergeTiles(tiles):
     return result
 
 
-# TODO: rename without _
-def _getBoundingBox(content):
+def getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)
     content (DataArray(Shadow)): The data of the image
     return (tuple(ltbr)): left,top,bottom,right positions in world coordinates
+    raise LookupError if metadata is not available
     """
-    md = content.metadata
+    # TODO: also handle if passed a 2D array of images? (as returned for pyramidal images)
+    md = content.metadata.copy()
+    mergeMetadata(md)  # apply the corrections
+
     # get the pixel size of the full image
-    ps = md[model.MD_PIXEL_SIZE]
+    try:
+        pxs = md[model.MD_PIXEL_SIZE]
+    except KeyError:
+        raise LookupError("Cannot compute physical coordinates without MD_PIXEL_SIZE")
+    if None in pxs:
+        # Some detectors set it to None when the dimensions are not
+        raise LookupError("Pixel size %s is not proper meters" % (pxs,))
 
     dims = md.get(model.MD_DIMS, "CTZYX"[-content.ndim::])
     img_shape = (content.shape[dims.index('X')], content.shape[dims.index('Y')])
     # half shape on world coordinates
-    half_shape_wc = (
-        img_shape[0] * ps[0] / 2,
-        img_shape[1] * ps[1] / 2,
-    )
-    md_pos = md.get(model.MD_POS, (0.0, 0.0))
+    half_shape_wc = (img_shape[0] * pxs[0] / 2, img_shape[1] * pxs[1] / 2)
+
+    md_pos = md.get(model.MD_POS, (0.0, 0.0))  # center
     # in physical coordinates, Y goes up. So top > bottom
     rect = (
         md_pos[0] - half_shape_wc[0],
@@ -799,5 +806,9 @@ def _getBoundingBox(content):
         md_pos[0] + half_shape_wc[0],
         md_pos[1] - half_shape_wc[1],
     )
+
+    # TODO: if MD_SHEAR or MD_ROTATION => need more
+    # Compute the location of all the 4 corners, and then pick the bounding box of them
+
     return rect
 

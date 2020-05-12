@@ -166,6 +166,9 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         # Acquisition end event
         self._acq_done = threading.Event()
 
+        # currently scanned area location based on px_idx, or None if no scanning
+        self._current_scan_area = None  # l,t,r,b (int)
+
         # Start threading event for live update overlay
         self._live_update_period = 0.33
         self._im_needs_recompute = threading.Event()
@@ -371,9 +374,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         self._prog_sum += dur
         ratio = (tot - current) / (current - 1)
         left = self._prog_sum * ratio
-        time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
-        tot_left = left + time_assemble + bonus + 0.1
+        tot_left = left + bonus + 0.1
         logging.debug("Estimating another %g s left for the total acquisition.", tot_left)
         future.set_progress(end=time.time() + tot_left)
 
@@ -907,6 +909,8 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
 
         acq_mask = self._acq_mask.copy() # because of threading issues this variable needs to be copied
         scan_area = self._current_scan_area
+        if scan_area is None:
+            return None
         data_acq = data[acq_mask]
 
         hist, edges = img.histogram(data_acq)
@@ -943,7 +947,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         self.streams[0].raw = [raw_data]  # For GetBoundingBox()
         rgbim = self._projectXY2RGB(raw_data)
         # Don't update if the acquisition is already over
-        if self._acq_done.is_set():
+        if self._current_scan_area is None:
             return
         self.streams[0].image.value = rgbim
 
@@ -1168,7 +1172,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._live_data = [[] for _ in self._streams]
             self._raw = []
             self._anchor_raw = []
-            self._current_scan_area = (0,0, 0,0) # currently scanned area location based on px_idx
+            self._current_scan_area = (0, 0, 0, 0)
             logging.debug("Starting repetition stream acquisition with components %s",
                           ", ".join(s._detector.name for s in self._streams))
 
@@ -1323,6 +1327,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 self._acq_state = FINISHED
+            self._current_scan_area = None  # Indicate we are done for the live update
 
             # Process all the (intermediary) ._live_data to the right shape/format for the final ._raw
             for stream_idx, das in enumerate(self._live_data):
@@ -1351,6 +1356,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         else:
             return self.raw
         finally:
+            self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             for s in self._streams:
                 s._unlinkHwVAs()
             self._dc_estimator = None
@@ -1648,7 +1654,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
             self._live_data = [[] for _ in self._streams]
-            self._current_scan_area = (0, 0, 0, 0)  # currently scanned area location based on px_idx
+            self._current_scan_area = (0, 0, 0, 0)
             self._raw = []
             self._anchor_raw = []
             logging.debug("Starting repetition stream acquisition with components %s and scan stage %s",
@@ -1832,6 +1838,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 self._acq_state = FINISHED
+            self._current_scan_area = None  # Indicate we are done for the live update
 
             # Process all the (intermediary) ._live_data to the right shape/format for the final ._raw
             for stream_idx, das in enumerate(self._live_data):
@@ -1860,6 +1867,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         else:
             return self.raw
         finally:
+            self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             if sstage:
                 # Move back the stage to the center
                 saxes = sstage.axes
@@ -1878,6 +1886,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._live_data = [[] for _ in self._streams]
             self._streams[0].raw = []
             self._streams[0].image.value = None
+
 
 class SEMMDStream(MultipleDetectorStream):
     """
@@ -1963,6 +1972,7 @@ class SEMMDStream(MultipleDetectorStream):
             rep = self.repetition.value
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
             self._live_data = [[] for s in self._streams]
+            self._current_scan_area = (0, 0, 0, 0)
             self._raw = []
             self._anchor_raw = []
             logging.debug("Starting e-beam sync acquisition with components %s",
@@ -2090,7 +2100,7 @@ class SEMMDStream(MultipleDetectorStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 self._acq_state = FINISHED
-            self._current_scan_area = None
+            self._current_scan_area = None  # Indicate we are done for the live update
 
             # broadcast all the self._live_data into self._raw and do post-processing
             for stream_idx, das in enumerate(self._live_data):
@@ -2110,7 +2120,6 @@ class SEMMDStream(MultipleDetectorStream):
                     logging.debug("Exception occurred during broadcast of all the self._live_data into self._raw and "
                                   "doing post-processing of CL or Monochromator stream\n"
                                   "reason: %e" % e)
-
 
             self._stopLeeches()
 
@@ -2135,6 +2144,7 @@ class SEMMDStream(MultipleDetectorStream):
         else:
             return self.raw
         finally:
+            self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             for s in self._streams:
                 s._unlinkHwVAs()
             self._acq_data = [[] for _ in self._streams]  # regain a bit of memory
@@ -2149,8 +2159,7 @@ class SEMMDStream(MultipleDetectorStream):
         """
         Function called by image update thread which handles updating the overlay of the SEM live update image
         """
-        # Display only the SEM image taken in the last polarization and convert to RGB + display
-        for stream_number, stream in enumerate(self._streams):
+        for stream_idx, stream in enumerate(self._streams):
             if isinstance(stream, MonochromatorSettingsStream):
                 # The Monochromator stream uses a chronogram view, which is not compatible with the RGB spatial image
                 # TODO: provide another stream to show the spatial image,
@@ -2158,25 +2167,26 @@ class SEMMDStream(MultipleDetectorStream):
                 #   there is no SEM image anyway.
                 continue
 
+            # Display only the image taken in the last polarization and convert to RGB + display
             try:
-                raw_data = self._live_data[stream_number][-1]
+                raw_data = self._live_data[stream_idx][-1]
             except IndexError:  # Can happen if the acquisition has just finished
-                if self._acq_done.is_set():
+                if self._current_scan_area is None:
                     logging.debug("Not updating live image, as acquisition is over")
                     return
-                elif stream_number == 0:
+                elif stream_idx == 0:
                     # Sometimes (e.g. Monochromator) there is no SEM data
                     continue
                 else:
                     raise
 
-            # Don't update if the acquisition is already over
-            if self._acq_done.is_set() or self._current_scan_area is None:
-                return
-
             stream.raw = [raw_data]  # For GetBoundingBox()
             rgbim = self._projectXY2RGB(raw_data)
+            # Don't update if the acquisition is already over
+            if self._current_scan_area is None:
+                return
             stream.image.value = rgbim
+
 
 class SEMSpectrumMDStream(SEMCCDMDStream):
     """
