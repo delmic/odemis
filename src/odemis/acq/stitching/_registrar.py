@@ -460,6 +460,9 @@ class GlobalShiftRegistrar(object):
         self.shifts_hor = [[None]]
         self.shifts_ver = [[None]]
 
+        # Calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array
+        self.registered_positions = None
+
         # List of 2D indices for grid positions in order of acquisition
         self.acq_order = []
 
@@ -487,8 +490,9 @@ class GlobalShiftRegistrar(object):
 
     def getPositions(self):
         """
-        Returns the registered positions.
-
+        Updates the registered positions (found using cross correlation and a min spanning tree) and returns the 
+        adjusted tile_positions & dep_tile_positions. When calling this function .registered_positions is updated with
+        the calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array.
         :returns tile_positions: (list of N tuples) the adjusted position in X/Y for each tile, in the
         order they were added
         :returns dep_tile_positions: (list of N tuples of K tuples of 2 floats) for each tile, it returns
@@ -499,9 +503,9 @@ class GlobalShiftRegistrar(object):
         tile_positions = []
         dep_tile_positions = []
 
-        registered_positions = self._assemble_mosaic()
+        self.registered_positions = self._assemble_mosaic()
         for ti in self.acq_order:
-            shift = registered_positions[ti[0]][ti[1]]
+            shift = self.registered_positions[ti[0]][ti[1]]
             tile_positions.append(((shift[0] + firstPosition[0]) * px_size[0],
                                    (firstPosition[1] - shift[1]) * px_size[1]))
 
@@ -618,7 +622,8 @@ class GlobalShiftRegistrar(object):
         prev_tile_roi = numpy.array(prev_tile)[t1:b1, l1:r1]
         tile_roi = numpy.array(tile)[t2:b2, l2:r2]
 
-        # Calculate the shift
+        # If you need to crop the tile without changing the output shift,
+        # you can do it here with the pattern tile_roi[t:-b, l:-r]
         shift = MeasureShift(tile_roi, prev_tile_roi)
         shift_total = numpy.subtract(exp_shift, shift)
 
@@ -681,7 +686,8 @@ class GlobalShiftRegistrar(object):
         Performs a global optimization to find the best path through the tile grid using 
         a minimum spanning tree.
 
-        :returns: (DataArray with shape num_rows x num_cols x 2) registered positions
+        :returns: (numpy array with shape: num_rows x num_cols x 2) registered positions relative to the upper left
+        tile in pixels
         """
         # Transform shifts and errors to adjacency matrices
         # The normalized cross correlation value needs to be transformed, so it can be
