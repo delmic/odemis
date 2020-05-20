@@ -194,12 +194,10 @@ class ToolBar(wx.Panel):
 
         main_sizer.Add(second_bmp)
 
-        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL):
-            main_sizer.SetItemMinSize(self.btn_panel, 50, -1)
-        elif self.orientation == wx.VERTICAL:
-            main_sizer.SetItemMinSize(self.btn_panel, 40, -1)
+        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL) or self.orientation == wx.VERTICAL:
+            main_sizer.SetItemMinSize(self.btn_panel, first_bmp.Bitmap.Width, -1)
         else:
-            main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
+            main_sizer.SetItemMinSize(self.btn_panel, -1, first_bmp.Bitmap.Height)
 
         self._buttons = {}
 
@@ -279,7 +277,7 @@ class ToolBar(wx.Panel):
                         break
                 else:
                     raise ValueError("No more space in toolbar")
-            self.btn_sizer.Add(btn, pos, border=5, flag=wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL)
+            self.btn_sizer.Add(btn, pos, border=5, flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL)
         elif self.orientation == wx.VERTICAL:
             self.btn_sizer.Add(btn, border=5, flag=wx.TOP | wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL)
         else:  # wx.HORIZONTAL
