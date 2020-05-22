@@ -330,3 +330,45 @@ StaticStream(Stream)
           It's only present if the data has a spectrum dimension.
 
 
+Blanker behaviour
+=================
+Three kinds of blanker behaviour:
+ * No control at all, it's entirely controlled by the SEM software
+ * Automatic: In this case, the e-beam has .blanker with choices None (automatically unblanked when
+   scanning), True (blanked), False (unblanked). The default is None. Usually Odemis
+   doesn't touch this setting, so the user can override the blanker state by using the
+   command line (``odemis-cli --set-attr e-beam blanker True``).
+   This is the case when the SEM blanker is controlled via the e-beam scan control cable,
+   (via the semcomedi). This is also done when the SEM API is also used to acquire
+   the image (eg, Phenom).
+ * Only forced: the e-beam will have a .blanker with choices True (blanked) and
+   False (unblanked). In such case, typically the user has the ability to override
+   the blanking state using the SEM software, until the next action of Odemis.
+   This is the case when the blanker is controlled via the SEM API, although the
+   acquisition is done via the scan cable (eg, Zeiss, Tescan, Hitachi, JEOL).
+
+SECOM alignment:
+----------------
+If blanker doesn't support automatic control, the blanker is forced off/on when
+playing the SEM stream (which is always active).
+This is done by passing the blanker argument to the SEMStream.
+
+During fine alignment, if blanker doesn't support automatic control, the blanker
+is disabled, and activated again after the end of the procedure.
+
+SECOM acquisition:
+------------------
+If blanker doesn't support automatic control, the blanker is forced off/on when
+playing the SEM stream (which is always active).
+This is done by passing the blanker argument to the SEMStream.
+
+DELPHI:
+-------
+Nothing special in the GUI: the blanker is automatically activated whenever the
+e-beam is not in use.
+
+SPARC alignment:
+----------------
+In mirror alignment mode, during background acquisition, the SEM is stopped to
+automatically activate the blanker (which will happen only if it's in the automatic setting).
+
