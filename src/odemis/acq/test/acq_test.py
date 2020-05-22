@@ -24,8 +24,9 @@ from __future__ import division
 from concurrent.futures._base import CancelledError
 import logging
 import numpy
-from odemis import model, acq
+from odemis import model
 import odemis
+from odemis.acq import acqmng
 from odemis.util import test
 import os
 import time
@@ -35,8 +36,7 @@ from unittest.case import skip
 from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
-from odemis.acq import SettingsObserver
-
+from odemis.acq.acqmng import SettingsObserver
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -120,21 +120,21 @@ class SECOMTestCase(unittest.TestCase):
     def test_simple(self):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertIsNone(e)
 
-        thumb = acq.computeThumbnail(st, f)
+        thumb = acqmng.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertIsNone(e)
 
-        thumb = acq.computeThumbnail(st, f)
+        thumb = acqmng.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
     def test_metadata(self):
@@ -152,7 +152,7 @@ class SECOMTestCase(unittest.TestCase):
         s1.detBinning.value = (2, 2)
         s2.detBinning.value = (4, 4)
         st = stream.StreamTree(streams=[s1, s2])
-        f = acq.acquire(st.getProjections(), settings_obs=settings_obs)
+        f = acqmng.acquire(st.getProjections(), settings_obs=settings_obs)
         data, e = f.result()
         for s in data:
             self.assertTrue(model.MD_EXTRA_SETTINGS in s.metadata, "Stream %s didn't save extra metadata." % s)
@@ -172,7 +172,7 @@ class SECOMTestCase(unittest.TestCase):
         self.end = None
         self.updates = 0
 
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
 
         data, e = f.result()
@@ -194,7 +194,7 @@ class SECOMTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -279,7 +279,7 @@ class SPARCTestCase(unittest.TestCase):
         specs2.detBinning.value = (4, specs2.detBinning.value[1])
         specs2.detExposureTime.value = 0.05
 
-        f = acq.acquire([sps, sps2], settings_obs)
+        f = acqmng.acquire([sps, sps2], settings_obs)
         data = f.result()
 
         spec1_data = data[0][1]
@@ -316,7 +316,7 @@ class SPARCTestCase(unittest.TestCase):
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
 
-        est_time = acq.estimateTime(st.getProjections())
+        est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -326,7 +326,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -337,7 +337,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsNone(e)
         self.assertEqual(len(data), num_ar + 2)
 
-        thumb = acq.computeThumbnail(st, f)
+        thumb = acqmng.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
@@ -375,7 +375,7 @@ class SPARCTestCase(unittest.TestCase):
         specs.repetition.value = (3, 2)
         num_ar = numpy.prod(ars.repetition.value)
 
-        est_time = acq.estimateTime(st.getProjections())
+        est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -385,7 +385,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -396,7 +396,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsNone(e)
         self.assertEqual(len(data), num_ar + 4)
 
-        thumb = acq.computeThumbnail(st, f)
+        thumb = acqmng.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
@@ -442,7 +442,7 @@ class SPARCTestCase(unittest.TestCase):
 
         pca.period.value = 10  # Only at beginning and end
 
-        est_time = acq.estimateTime(st.getProjections())
+        est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -452,7 +452,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getProjections())
+        f = acqmng.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -463,7 +463,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsNone(e)
         self.assertEqual(len(data), num_ar + 2)
 
-        thumb = acq.computeThumbnail(st, f)
+        thumb = acqmng.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1)  # at least one update at end

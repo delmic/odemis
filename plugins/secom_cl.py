@@ -44,7 +44,6 @@ import copy
 import logging
 import math
 import numpy
-from odemis.model import MD_DESCRIPTION
 
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
@@ -55,9 +54,9 @@ from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE
 
 from odemis import dataio, model, util, gui
-from odemis import acq
-from odemis.acq import stream, leech
+from odemis.acq import leech, acqmng
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf import util as cutil
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import img
 import os.path
@@ -755,7 +754,7 @@ class CLAcqPlugin(Plugin):
         self.binning = self.main_data.ccd.binning
         # Trick to pass the component (ccd to binning_1d_from_2d())
         self.vaconf["binning"]["choices"] = (lambda cp, va, cf:
-                                             gui.conf.util.binning_1d_from_2d(self.main_data.ccd, va, cf))
+                                             cutil.binning_1d_from_2d(self.main_data.ccd, va, cf))
 
         self._survey_stream = None
         self._optical_stream = acqstream.BrightfieldStream(
@@ -822,7 +821,7 @@ class CLAcqPlugin(Plugin):
         """
         tab_data = self.main_app.main_data.tab.value.tab_data_model
         for s in tab_data.streams.value:
-            if isinstance(s, stream.SEMStream):
+            if isinstance(s, acqstream.SEMStream):
                 return s
 
         logging.warning("No SEM stream found")
@@ -837,7 +836,7 @@ class CLAcqPlugin(Plugin):
 
         strs = [self._survey_stream, self._secom_sem_cl_stream]
 
-        dur = acq.estimateTime(strs)
+        dur = acqmng.estimateTime(strs)
         logging.debug("Estimating %g s acquisition for %d streams", dur, len(strs))
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(dur), force_write=True)
@@ -972,7 +971,7 @@ class CLAcqPlugin(Plugin):
         fn_prefix, fn_ext = os.path.splitext(self.filename.value)
 
         try:
-            f = acq.acquire(strs, self.main_app.main_data.settings_obs)
+            f = acqmng.acquire(strs, self.main_app.main_data.settings_obs)
             dlg.showProgress(f)
             das, e = f.result()  # blocks until all the acquisitions are finished
         except CancelledError:

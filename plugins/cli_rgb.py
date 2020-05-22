@@ -33,8 +33,8 @@ from __future__ import division
 from collections import OrderedDict
 from concurrent.futures import CancelledError
 import logging
-from odemis import dataio, model, acq
-from odemis.acq import stream, drift
+from odemis import dataio, model
+from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
@@ -311,7 +311,7 @@ class RGBCLIntensity(Plugin):
         try:
             # acquisition of SEM survey
             if self._survey_s:
-                ft._subf = acq.acquire([self._survey_s], self.main_app.main_data.settings_obs)
+                ft._subf = acqmng.acquire([self._survey_s], self.main_app.main_data.settings_obs)
                 d, e = ft._subf.result()
                 das.extend(d)
                 if e:
@@ -348,7 +348,7 @@ class RGBCLIntensity(Plugin):
                 ft.set_progress(end=time.time() + dur)
 
                 # acquire CL stream
-                ft._subf = acq.acquire([self._cl_int_s], self.main_app.main_data.settings_obs)
+                ft._subf = acqmng.acquire([self._cl_int_s], self.main_app.main_data.settings_obs)
                 d, e = ft._subf.result()
                 if e:
                     raise e

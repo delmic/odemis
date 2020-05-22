@@ -24,8 +24,8 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNIN
 import logging
 import math
 import numpy
-from odemis import dataio, model, acq
-from odemis.acq import stream
+from odemis import dataio, model
+from odemis.acq import stream, acqmng
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.model import TOOL_SPOT
@@ -279,8 +279,8 @@ def acquire_spec(wls, wle, res, dt, filename):
     # Acquire using the acquisition manager
     # Note: the monochromator scan stream is unknown to the acquisition manager,
     # so it'll be done last
-    expt = acq.estimateTime([survey_s, mchr_s])
-    f = acq.acquire([survey_s, mchr_s])
+    expt = acqmng.estimateTime([survey_s, mchr_s])
+    f = acqmng.acquire([survey_s, mchr_s])
 
     try:
         # Note: the timeout is important, as it allows to catch KeyboardInterrupt
@@ -531,7 +531,7 @@ class MonoScanPlugin(Plugin):
 
         try:
             # opm is the optical path manager, that ensures the path is set to the monochromator
-            f = acq.acquire(strs)
+            f = acqmng.acquire(strs)
             dlg.showProgress(f)
             das, e = f.result()
         except CancelledError:

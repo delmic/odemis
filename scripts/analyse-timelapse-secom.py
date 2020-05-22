@@ -22,7 +22,7 @@ from __future__ import division
 import argparse
 import glob
 import logging
-from odemis import dataio, model, acq
+from odemis import dataio, model
 from odemis.acq.align.shift import MeasureShift
 from odemis.acq.align import autofocus
 import os

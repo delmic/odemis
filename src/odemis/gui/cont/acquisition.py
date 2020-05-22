@@ -34,13 +34,13 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
 import math
-from odemis import model, dataio, acq
-from odemis.acq import align
+from odemis import model, dataio
+from odemis.acq import align, acqmng, stream
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
-from odemis.gui import conf, acqmng
+from odemis.gui import conf
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
-    get_local_settings_entries
+    get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
@@ -49,9 +49,9 @@ from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
+from odemis.model import DataArrayShadow
 from odemis.util import units
 from odemis.util.filename import guess_pattern, create_filename, update_counter
-from odemis.util.img import mergeTiles
 import os
 import re
 import subprocess
@@ -60,7 +60,6 @@ import time
 import wx
 
 import odemis.gui.model as guimod
-from odemis.model import DataArrayShadow
 
 
 class SnapshotController(object):
@@ -433,7 +432,7 @@ class SecomAcquiController(object):
             logging.exception("Failed to create acquisition dialog")
             raise
         finally:
-            acqmng.apply_preset(orig_settings)
+            apply_preset(orig_settings)
 
             settingsbar_controller.enable(True)
             settingsbar_controller.resume()
@@ -642,7 +641,7 @@ class SparcAcquiController(object):
             lvl = logging.WARN
         else:
             streams = self._tab_data_model.acquisitionStreams
-            acq_time = acq.estimateTime(streams)
+            acq_time = acqmng.estimateTime(streams)
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -747,7 +746,7 @@ class SparcAcquiController(object):
         self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        self.acq_future = acq.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
+        self.acq_future = acqmng.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
@@ -771,8 +770,8 @@ class SparcAcquiController(object):
         return (list of DataArray, filename): data exported and filename
         """
         streams = list(self._tab_data_model.acquisitionStreams)
-        st = acq.stream.StreamTree(streams=streams)
-        thumb = acq.computeThumbnail(st, acq_future)
+        st = stream.StreamTree(streams=streams)
+        thumb = acqmng.computeThumbnail(st, acq_future)
         data, exp = acq_future.result()
 
         filename = self.filename.value

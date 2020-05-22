@@ -31,8 +31,8 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import math
 import numpy
-from odemis import model, acq, dataio, util
-from odemis.acq import stitching, stream
+from odemis import model, dataio, util
+from odemis.acq import stitching, stream, acqmng
 from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
@@ -583,7 +583,7 @@ class TileAcqPlugin(Plugin):
 
         if remaining is None:
             remaining = self.nx.value * self.ny.value
-        acqt = acq.estimateTime(ss)
+        acqt = acqmng.estimateTime(ss)
 
         if self.stitch.value:
             # Estimate stitching time based on number of pixels in the overlapping part
@@ -799,7 +799,7 @@ class TileAcqPlugin(Plugin):
                 # Update the progress bar
                 ft.set_progress(end=self.estimate_time(nb - i) + time.time())
 
-                ft.running_subf = acq.acquire(ss, self.main_app.main_data.settings_obs)
+                ft.running_subf = acqmng.acquire(ss, self.main_app.main_data.settings_obs)
                 das, e = ft.running_subf.result()  # blocks until all the acquisitions are finished
                 if e:
                     logging.warning("Acquisition for tile %dx%d partially failed: %s",
