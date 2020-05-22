@@ -1186,7 +1186,9 @@ class Shamrock(model.Actuator):
     # Available since SDK 2.101, but only with newer firmware (ie, 1.2+,
     # after 2016-11). Earlier firmware will raises either "Communication error"
     # (for the Set) or "Parameter 3 invalid" (for the Get)
-    @callWithReconnect
+    # So for now, we don't support auto-reconnect on these functions. Because
+    # otherwise it would reboot the spectrograph every time the function is called.
+    # @callWithReconnect
     def SetSlitZeroPosition(self, index, offset):
         """
         Changes the offset for the position of the given slit, to ensure that
@@ -1203,7 +1205,7 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             self._dll.ShamrockSetSlitZeroPosition(self._device, index, offset)
 
-    @callWithReconnect
+    # @callWithReconnect
     def GetSlitZeroPosition(self, index):
         """
         Read the current calibration offset for the slit position.
