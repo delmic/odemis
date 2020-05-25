@@ -310,6 +310,8 @@ class OdemisBugreporter(object):
             outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'], timeout=60)
             outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'], timeout=5)
             outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'], timeout=30)
+            outputs["memory.txt"] = self._get_future_output(['/usr/bin/free'], timeout=5)
+            outputs["df.txt"] = self._get_future_output(['/bin/df'], timeout=10)
 
             # Compress files
             with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
