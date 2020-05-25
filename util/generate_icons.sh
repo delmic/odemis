@@ -12,6 +12,7 @@ ORIG_VIEWER=image/icon_gui_viewer.png
 WX_ICON_PATH=src/odemis/gui/img/icon/
 LINUX_ICON_PATH=install/linux/usr/share/icons/hicolor/
 WIN_ICON_PATH=install/windows/
+DOC_ICON_PATH=doc/develop/_static/
 
 # Calls pngcrush on the given file
 icrush() {
@@ -27,7 +28,7 @@ icrush $ORIG_VIEWER
 cp $ORIG_GUI $WX_ICON_PATH/ico_gui_full_256.png
 cp $ORIG_VIEWER $WX_ICON_PATH/ico_gui_viewer_256.png
 
-./src/odemis/gui/img/img2python.py
+#./src/odemis/gui/img/img2python.py
 
 
 # For Linux (menu & window manager)
@@ -56,3 +57,5 @@ convert $ORIG_VIEWER -bordercolor white -border 0 \
           \( -clone 0 -resize 64x64 \) \
           -alpha off -colors 256 $WIN_ICON_PATH/odemis-viewer.ico
 
+# For the doc/home/piel/.wine/drive_c/Program Files (x86)/Odemis Viewer/odemis/
+convert $ORIG_GUI -bordercolor white -border 0 -resize 16x16 $DOC_ICON_PATH/odemis.ico
