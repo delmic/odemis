@@ -2916,7 +2916,7 @@ class FakeMCS2_DLL(object):
                     
             elif self._current_move_finish < time.time():  # move is finished
                 self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
-                    int(self.target[ch.value])
+                    self.target[ch.value]
                 self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] &= \
                     ~ (SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
         # update the value of the key
@@ -2943,15 +2943,18 @@ class FakeMCS2_DLL(object):
         self.stopping.clear()
         if self._pos_in_range(ch.value, pos_pm.value):
             self._current_move_finish = time.time() + 1.0
-            if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
+            if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
                 self.target[ch.value] = pos_pm.value
                 logging.debug("sim MCS2: Abs move channel %d to %d pm" % (ch.value, pos_pm.value))
-            elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
+            elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
                 self.target[ch.value] = pos_pm.value + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
                 logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
             self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
         else:
             raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_RANGE_LIMIT_REACHED, "error")
+
+        self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
+                    self.target[ch.value]
 
     def SA_CTL_Stop(self, handle, ch, _):
         self.stopping.set()
