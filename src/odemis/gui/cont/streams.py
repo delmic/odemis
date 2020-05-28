@@ -726,15 +726,6 @@ class StreamController(object):
         self.entries.append(se)
 
     def _add_wl_ctrls(self):
-        """
-        # Deprecated: Fit RGB button
-        btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
-        se = SettingEntry(name="rgbfit", va=self.stream.fitToRGB, stream=self.stream,
-                          value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
-                          va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
-        self.entries.append(se)
-        """
-
         self._sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
 
         se = SettingEntry(name="spectrum", va=self.stream.spectrumBandwidth, stream=self.stream,

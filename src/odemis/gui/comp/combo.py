@@ -37,7 +37,7 @@ import wx.adv
 from matplotlib import cm
 import matplotlib.colors as colors
 import numpy
-from odemis.util.img import getColorbar, RGBTintToColormap
+from odemis.util.img import getColorbar, tintToColormap
 from PIL.ImageColor import getcolor
 
 
@@ -219,7 +219,7 @@ class ColorMapComboBox(ComboBox):
         if not color_map:
             return
 
-        color_map = RGBTintToColormap(color_map, item_name)
+        color_map = tintToColormap(color_map, item_name)
 
         # Draw color map
         colorbar_width = rect.width * COLOBAR_WITH_RATIO
@@ -256,7 +256,7 @@ class ColorMapComboBox(ComboBox):
         h = self.Size.GetHeight()
         
         color_map = self.colormap_dict.values()[self.GetSelection()]
-        color_map = RGBTintToColormap(color_map)
+        color_map = tintToColormap(color_map)
 
         gradient = getColorbar(color_map, w, h)
         bmp = wx.EmptyBitmap(*gradient.shape[1::-1])

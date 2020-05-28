@@ -209,7 +209,7 @@ class StreamPanelHeader(wx.Control):
                             ])
 
         if self.Parent.options & OPT_FIT_RGB:
-            self.colormap_chocies["Fit to RGB"] = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
+            self.colormap_chocies["Fit to RGB"] = "fitrgb"
         else:
             self.colormap_chocies.update(OrderedDict([
                             ("Red Tint", (255, 0, 0)),
@@ -240,8 +240,6 @@ class StreamPanelHeader(wx.Control):
 
         colormap_combo.Bind(wx.EVT_COMBOBOX, self._on_colormap_click)
         self.Parent.stream.tint.subscribe(self._on_colormap_value)
-        if self.Parent.options & OPT_FIT_RGB:
-            self.Parent.stream.fitToRGB.subscribe(self._on_colormap_fit_to_rgb)
         self._add_ctrl(colormap_combo)
         return colormap_combo
 
@@ -459,17 +457,11 @@ class StreamPanelHeader(wx.Control):
             if self.Parent.stream.tint.value == value:
                 self.combo_colormap.SetSelection(index)
                 break
+            elif self.Parent.stream.tint.value == "fitrgb":
+                self.combo_colormap.SetSelection(1)  # fit to RGB
+                break
         else:
             self.combo_colormap.SetSelection(4)  # custom tint
-
-    @call_in_wx_main
-    def _on_colormap_fit_to_rgb(self, state):
-        """ Update the colormap selector to reflect the value of the fit to RGB function """
-        # determine which value to select
-        if state:
-            self.combo_colormap.SetSelection(1)  # fit to RGB
-        else:
-            self.combo_colormap.SetSelection(0)  # original
 
     @call_in_wx_main
     def _on_colormap_click(self, evt):
@@ -477,7 +469,7 @@ class StreamPanelHeader(wx.Control):
 
         # check the value of the colormap
         index = self.combo_colormap.GetSelection()
-        name, color_map = self.colormap_chocies.items()[index]
+        name, tint = self.colormap_chocies.items()[index]
 
         if name == "Custom Tint":
             # Set default colour to the current value
@@ -492,23 +484,13 @@ class StreamPanelHeader(wx.Control):
                 # Setting the VA will automatically update the button's colour
                 self.custom_tint = colour
                 self.colormap_chocies["Custom Tint"] = self.custom_tint
-                color_map = colour
+                tint = colour
             else:
                 # if cancel was pressed, go to the previous value of colormap
                 self.combo_colormap.SetSelection(self.prev_colormap_index)
 
-        elif name == "Fit to RGB":
-            if hasattr(self.Parent.stream, "fitToRGB"):
-                self.Parent.stream.fitToRGB.value = True
-            else:
-                logging.warning("Fit to RGB called on stream that does not support it")
-        elif name == "Original":
-            if hasattr(self.Parent.stream, "fitToRGB"):
-                self.Parent.stream.fitToRGB.value = False
-
         self.prev_colormap_index = self.combo_colormap.GetSelection()
-
-        self.Parent.stream.tint.value = color_map
+        self.Parent.stream.tint.value = tint
 
     # END GUI event handlers
 

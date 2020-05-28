@@ -4468,7 +4468,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # Check RGB spatial projection
         time.sleep(0.2)
-        specs.fitToRGB.value = True
+        specs.tint.value = "fitrgb"
         time.sleep(0.5)  # wait a bit for the image to update
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
@@ -4680,7 +4680,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
 
         # Check RGB spatial projection
-        tss.fitToRGB.value = True
+        tss.tint.value = "fitrgb"
         time.sleep(0.2)
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))

@@ -230,9 +230,11 @@ class Stream(object):
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
         self.auto_bc_outliers.subscribe(self._onOutliers)
 
-        # The tint VA could be a list tuple RGB value (for a tint) or
-        # a matplotlib color map object for a custom color map
-        self.tint = model.VigilantAttribute((255, 255, 255), unit="RGB")
+        # The tint VA could be either:
+        # - a list tuple RGB value (for a tint) or
+        # - a matplotlib.colors.Colormap object for a custom color map
+        # - a string of value "fitrgb" to indicate fit RGB color mapping
+        self.tint = model.VigilantAttribute((255, 255, 255))
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to

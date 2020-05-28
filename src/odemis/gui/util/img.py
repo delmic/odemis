@@ -1773,7 +1773,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
         # Handle the stream colormap
         if (stream is None and
             (isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)) or
-             hasattr(s, "tint") and not hasattr(s, "fitToRGB")
+             hasattr(s, "tint") and s.tint.value != "fitrgb"
            )):
             tint = s.tint.value
             
@@ -1786,7 +1786,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                     b, g, r = tuple(tint)
                     tint = r, g, b
 
-                tint = img.RGBTintToColormap(tint)
+                tint = img.tintToColormap(tint)
             
                 # Draw a gradient of teh colormap
                 width = int(cell_x_step * 2 * COLORBAR_WIDTH_RATIO)
@@ -1815,16 +1815,6 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 legend_ctx.paint()
 
                 legend_x_pos += cell_x_step
-
-            """
-            # If stream has a simple tint, draw the colour in a little square next to the name
-            elif isinstance(tint, tuple) and tuple(s.tint.value) != (255, 255, 255):
-                legend_ctx.set_source_rgb(*conversion.rgb_to_frgb(tint))
-                legend_ctx.rectangle(legend_x_pos + cell_x_step - tint_box_size - small_font,
-                                 legend_y_pos - small_font,
-                                 tint_box_size, tint_box_size)
-                legend_ctx.fill()
-            """
 
             legend_ctx.set_source_rgb(*text_color)
 

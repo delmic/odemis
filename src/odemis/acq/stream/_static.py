@@ -638,11 +638,6 @@ class StaticSpectrumStream(StaticStream):
                                         cls=(int, long, float))
             self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
 
-            # Whether the (per bandwidth) display should be split intro 3 sub-bands
-            # which are applied to RGB
-            self.fitToRGB = model.BooleanVA(False)
-            self.fitToRGB.subscribe(self.onFitToRGB)
-
         # the raw data after calibration
         self.calibrated = model.VigilantAttribute(image)
 
@@ -658,6 +653,12 @@ class StaticSpectrumStream(StaticStream):
                                 image.shape)
 
         super(StaticSpectrumStream, self).__init__(name, [image], *args, **kwargs)
+
+        # Is there spectrum data? check again (after the super constructor is called)
+        if image.shape[0] > 1:
+            # Whether the (per bandwidth) display should be split intro 3 sub-bands
+            # which are applied to RGB
+            self.tint.subscribe(self.onTint)
 
         # Automatically select point/line if data is small (can only be done
         # after .raw is set)
@@ -845,12 +846,6 @@ class StaticSpectrumStream(StaticStream):
     def _onIntensityRange(self, irange):
         super(StaticSpectrumStream, self)._onIntensityRange(irange)
         self._force_selected_spectrum_update()
-
-    def onFitToRGB(self, value):
-        """
-        called when fitToRGB is changed
-        """
-        self._shouldUpdateImage()
 
     def onSpectrumBandwidth(self, value):
         """

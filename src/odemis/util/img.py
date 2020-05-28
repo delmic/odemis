@@ -462,14 +462,16 @@ def getColorbar(color_map, width, height, alpha=False):
     return gradient.astype(numpy.uint8)
 
 
-def RGBTintToColormap(tint, name=""):
+def tintToColormap(tint, name=""):
     """
-    If a tint is a tuple of RGB values, convert it to a color map gradient
+    If a tint is an RGB tuple, or fitrgb string convert it to a matplotlib.colors.Colormap object
     """
     if isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
         # make a gradient from black to the selected tint
         tint = colors.LinearSegmentedColormap.from_list(name,
             [(0, 0, 0), rgb_to_frgb(tint)])
+    elif isinstance(tint, str) and tint == "fitrgb":  # tint Fit to RGB constant
+        tint = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
     return tint
 
 
