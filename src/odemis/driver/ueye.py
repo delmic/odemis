@@ -668,9 +668,14 @@ class Camera(model.DigitalCamera):
 
             caminfo = self.GetCameraInfo()
             sensorinfo = self.GetSensorInfo()
-            self._metadata[model.MD_HW_NAME] = "%s %s (s/n %s)" % (caminfo.ID, sensorinfo.strSensorName, caminfo.SerNo)
-            self._hwVersion = "%s" % (caminfo.Version,)
-            self._metadata[model.MD_HW_VERSION] = self._hwVersion
+            cam_name = "%s %s (s/n %s)" % (caminfo.ID.decode("latin1"),
+                                           sensorinfo.strSensorName.decode("latin1"),
+                                           caminfo.SerNo.decode("latin1"))
+            cam_ver = "%s" % (caminfo.Version.decode("latin1"),)
+            self._metadata[model.MD_HW_NAME] = cam_name
+            self._metadata[model.MD_HW_VERSION] = cam_ver
+            self._hwVersion = cam_name + " " + cam_ver
+            logging.info("Connected to %s with libueye %s", self.hwVersion, self.swVersion)
 
             self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
@@ -769,9 +774,17 @@ class Camera(model.DigitalCamera):
         devcaps = c_uint32()
         self._dll.is_DeviceFeature(self._hcam, DEVICE_FEATURE_CMD_GET_SUPPORTED_FEATURES, byref(devcaps), sizeof(devcaps))
         if devcaps.value & DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING:
-            logging.debug("Setting rolling shutter")
-            smode = c_uint32(DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING)
-            self._dll.is_DeviceFeature(self._hcam, DEVICE_FEATURE_CMD_SET_SHUTTER_MODE, byref(smode), sizeof(smode))
+            try:
+                logging.debug("Setting rolling shutter")
+                smode = c_uint32(DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING)
+                self._dll.is_DeviceFeature(self._hcam, DEVICE_FEATURE_CMD_SET_SHUTTER_MODE, byref(smode), sizeof(smode))
+            except UEyeError as err:
+                # On some devices, although the flag is present in the capabilities,
+                # trying to read/write it fails with "NOT SUPPORTED"
+                if err.errno == 155:  # NOT_SUPPORTED
+                    logging.warning("Rolling shutter was indicated in capabilities (0x%x) but not supported", devcaps.value)
+                else:
+                    raise
 
         # Note: for now the default pixel clock seems fine. Moreover, reducing
         # it reduces the minimum exposure time (but we don't care), and the
