@@ -710,6 +710,7 @@ class SpectrumSettingsStream(CCDSettingsStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
@@ -882,6 +883,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.

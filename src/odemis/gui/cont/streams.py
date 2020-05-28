@@ -95,7 +95,11 @@ class StreamController(object):
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Allow changing the tint of all "flat" static streams, and FluoStreams (live)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.Static2DStream, acqstream.RGBStream)):
+        # TODO: Avoid spectrum spectrum helper setting streams
+        # TODO: remove tint va and test if it is present to determine this
+
+        # if isinstance(stream, (acqstream.Static2DStream, acqstream.RGBStream, acqstream.CameraStream, acqstream.SEMStream)):
+        if hasattr(stream, "tint"):
             options |= OPT_BTN_TINT
         if isinstance(stream, (acqstream.RGBStream,)):
             options |= OPT_NO_COLORMAPS

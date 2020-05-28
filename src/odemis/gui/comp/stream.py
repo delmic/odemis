@@ -43,6 +43,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.acq.stream import FIT_TO_RGB
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
@@ -61,12 +62,14 @@ OPT_BTN_REMOVE = 2  # remove the stream entry
 OPT_BTN_SHOW = 4  # show/hide the stream image
 OPT_BTN_UPDATE = 8  # update/stop the stream acquisition
 OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
-OPT_FIT_RGB = 64  # allow a Fit RGB colormap (for spectrum stremas)
 OPT_BTN_PEAK = 32  # show/hide the peak fitting data
+OPT_FIT_RGB = 64  # allow a Fit RGB colormap (for spectrum stremas)
 OPT_NO_COLORMAPS = 128  # do not allow additional colormaps. Typical for an RGB image
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
+
+TINT_CUSTOM_TEXT = u"Custom tint…"
 
 
 @decorator
@@ -127,8 +130,7 @@ class StreamPanelHeader(wx.Control):
         else:
             self.ctrl_label = self._add_label_ctrl()
         self.btn_peak = self._add_peak_btn() if self.Parent.options & OPT_BTN_PEAK else None
-        # self.btn_tint = self._add_tint_btn() if self.Parent.options & OPT_BTN_TINT else None
-        self.combo_colormap = self._add_colormap_combo() if self.Parent.options & OPT_BTN_TINT  or self.Parent.options & OPT_FIT_RGB else None
+        self.combo_colormap = self._add_colormap_combo() if self.Parent.options & OPT_BTN_TINT else None
         self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
@@ -171,72 +173,51 @@ class StreamPanelHeader(wx.Control):
         self._add_ctrl(label_ctrl, stretch=True)
         return label_ctrl
 
-    def _add_tint_btn(self):
-        """ Add a tint button to the stream header"""
-
-        tint_btn = buttons.ColourButton(
-            self, -1,
-            size=self.BUTTON_SIZE,
-            colour=self.Parent.stream.tint.value,
-            use_hover=True
-        )
-        tint_btn.SetToolTip("Stream display colour")
-
-        # Tint event handlers
-        tint_btn.Bind(wx.EVT_BUTTON, self._on_tint_click)
-        self.Parent.stream.tint.subscribe(self._on_tint_value)
-
-        self._add_ctrl(tint_btn)
-        return tint_btn
-
     def _add_colormap_combo(self):
         """ Add the colormap combobox (in place of tint btn) """
         cbstyle = wx.NO_BORDER | wx.TE_PROCESS_ENTER
 
         # Determine possible choices
         if not isinstance(self.Parent.stream.tint.value, colors.Colormap):
-            self.custom_tint = self.Parent.stream.tint.value
+            custom_tint = self.Parent.stream.tint.value
         else:
-            self.custom_tint = (0, 0, 0)
+            custom_tint = (0, 0, 0)
 
         if self.Parent.options & OPT_NO_COLORMAPS:
-            self.colormap_chocies = OrderedDict([
+            self.colormap_choices = OrderedDict([
                             ("Original", cm.get_cmap('hsv')),
                            ])
         else:
-            self.colormap_chocies = OrderedDict([
+            self.colormap_choices = OrderedDict([
                             ("Grayscale", (255, 255, 255)),
                             ])
 
         if self.Parent.options & OPT_FIT_RGB:
-            self.colormap_chocies["Fit to RGB"] = "fitrgb"
-        else:
-            self.colormap_chocies.update(OrderedDict([
-                            ("Red Tint", (255, 0, 0)),
-                            ("Green Tint", (0, 255, 0)),
-                            ("Blue Tint", (0, 0, 255)),
-                            ("Custom Tint", self.custom_tint),
-                           ]))
-            if not self.Parent.options & OPT_NO_COLORMAPS:
-                self.colormap_chocies.update(COLORMAPS)  # add the predefiend color maps
+            self.colormap_choices["Fit to RGB"] = FIT_TO_RGB
 
-        colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), colormap_dict=self.colormap_chocies, size=(-1, 16),
+        self.colormap_choices.update(OrderedDict([
+                        ("Red tint", (255, 0, 0)),
+                        ("Green tint", (0, 255, 0)),
+                        ("Blue tint", (0, 0, 255)),
+                        (TINT_CUSTOM_TEXT, custom_tint),
+                       ]))
+        if not self.Parent.options & OPT_NO_COLORMAPS:
+            self.colormap_choices.update(COLORMAPS)  # add the predefined color maps
+
+        colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), colormap_dict=self.colormap_choices, size=(-1, 16),
                               style=cbstyle)
 
         # determine which value to select
-        for index, value in enumerate(self.colormap_chocies.values()):
-            if self.Parent.stream.tint.value == value and not self.Parent.options & OPT_NO_COLORMAPS:
-                colormap_combo.SetSelection(index)
-                self.prev_colormap_index = index
-                break
-            elif self.Parent.stream.tint.value == value and self.Parent.options & OPT_NO_COLORMAPS:
-                colormap_combo.SetSelection(0)
-                self.prev_colormap_index = 0
+        for index, value in enumerate(self.colormap_choices.values()):
+            if self.Parent.stream.tint.value == value:
+                if self.Parent.options & OPT_NO_COLORMAPS:
+                    colormap_combo.SetSelection(0)
+                else:
+                    colormap_combo.SetSelection(index)
                 break
         else:
             # Set to grayscale by default
             colormap_combo.SetSelection(0)
-            self.prev_colormap_index = 0
 
         colormap_combo.Bind(wx.EVT_COMBOBOX, self._on_colormap_click)
         self.Parent.stream.tint.subscribe(self._on_colormap_value)
@@ -359,10 +340,6 @@ class StreamPanelHeader(wx.Control):
         """ Show or hide the show button """
         self._show_ctrl(self.btn_show, show)
 
-    def show_tint_btn(self, show):
-        """ Show or hide the tint button """
-        self._show_ctrl(self.btn_tint, show)
-
     def enable_remove_btn(self, enabled):
         """ Enable or disable the remove button """
         self.btn_remove.Enable(enabled)
@@ -378,10 +355,6 @@ class StreamPanelHeader(wx.Control):
     def enable_peak_btn(self, enabled):
         """ Enable or disable the peak button """
         self.btn_peak.Enable(enabled)
-
-    def enable_tint_btn(self, enabled):
-        """ Enable or disable the tint button """
-        self.btn_tint.Enable(enabled)
 
     def enable_colormap_combo(self, enabled):
         """ Enable or disable colormap dropdown """
@@ -428,36 +401,14 @@ class StreamPanelHeader(wx.Control):
             self.label_change_callback(self.ctrl_label.GetValue())
 
     @call_in_wx_main
-    def _on_tint_value(self, colour):
-        """ Update the colour button to reflect the provided colour """
-        self.btn_tint.set_colour(colour)
-
-    def _on_tint_click(self, evt):
-        """ Handle the mouse click event on the tint button """
-        # Remove the hover effect
-        self.btn_tint.OnLeave(evt)
-
-        # Set default colour to the current value
-        cldata = wx.ColourData()
-        cldata.SetColour(wx.Colour(*self.Parent.stream.tint.value))
-
-        dlg = wx.ColourDialog(self, cldata)
-
-        if dlg.ShowModal() == wx.ID_OK:
-            colour = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
-            logging.debug("Colour %r selected", colour)
-            # Setting the VA will automatically update the button's colour
-            self.Parent.stream.tint.value = colour
-
-    @call_in_wx_main
     def _on_colormap_value(self, colour):
         """ Update the colormap selector to reflect the provided colour """
         # determine which value to select
-        for index, value in enumerate(self.colormap_chocies.values()):
+        for index, value in enumerate(self.colormap_choices.values()):
             if self.Parent.stream.tint.value == value:
                 self.combo_colormap.SetSelection(index)
                 break
-            elif self.Parent.stream.tint.value == "fitrgb":
+            elif self.Parent.stream.tint.value == FIT_TO_RGB:
                 self.combo_colormap.SetSelection(1)  # fit to RGB
                 break
         else:
@@ -469,12 +420,11 @@ class StreamPanelHeader(wx.Control):
 
         # check the value of the colormap
         index = self.combo_colormap.GetSelection()
-        name, tint = self.colormap_chocies.items()[index]
+        name, tint = self.colormap_choices.items()[index]
 
-        if name == "Custom Tint":
+        if name == TINT_CUSTOM_TEXT:
             # Set default colour to the current value
             cldata = wx.ColourData()
-            cldata.SetColour(wx.Colour(*self.custom_tint))
     
             dlg = wx.ColourDialog(self, cldata)
     
@@ -482,14 +432,12 @@ class StreamPanelHeader(wx.Control):
                 colour = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
                 logging.debug("Colour %r selected", colour)
                 # Setting the VA will automatically update the button's colour
-                self.custom_tint = colour
-                self.colormap_chocies["Custom Tint"] = self.custom_tint
+                self.colormap_choices[TINT_CUSTOM_TEXT] = colour
                 tint = colour
             else:
-                # if cancel was pressed, go to the previous value of colormap
-                self.combo_colormap.SetSelection(self.prev_colormap_index)
+                self._on_colormap_value(self.Parent.stream.tint.value)
+                return
 
-        self.prev_colormap_index = self.combo_colormap.GetSelection()
         self.Parent.stream.tint.value = tint
 
     # END GUI event handlers

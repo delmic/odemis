@@ -30,7 +30,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
-from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
+from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS, FIT_TO_RGB
 from odemis.acq.stream import RGBSpatialSpectrumProjection, \
     SinglePointSpectrumProjection, SinglePointTemporalProjection, \
     LineSpectrumProjection, MeanSpectrumProjection
@@ -4468,7 +4468,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # Check RGB spatial projection
         time.sleep(0.2)
-        specs.tint.value = "fitrgb"
+        specs.tint.value = FIT_TO_RGB
         time.sleep(0.5)  # wait a bit for the image to update
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
@@ -4680,7 +4680,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
 
         # Check RGB spatial projection
-        tss.tint.value = "fitrgb"
+        tss.tint.value = FIT_TO_RGB
         time.sleep(0.2)
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))

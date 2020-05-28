@@ -37,6 +37,7 @@ from odemis.util import img
 import threading
 import time
 import weakref
+import matplotlib
 
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
@@ -45,6 +46,9 @@ from odemis.util.img import mergeMetadata
 from odemis.util.transform import AffineTransform
 
 UNDEFINED_ROI = (0, 0, 0, 0)
+
+# Constant for TINT
+FIT_TO_RGB = "fitrgb"
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
@@ -233,8 +237,8 @@ class Stream(object):
         # The tint VA could be either:
         # - a list tuple RGB value (for a tint) or
         # - a matplotlib.colors.Colormap object for a custom color map
-        # - a string of value "fitrgb" to indicate fit RGB color mapping
-        self.tint = model.VigilantAttribute((255, 255, 255))
+        # - a string of value FIT_TO_RGB to indicate fit RGB color mapping
+        self.tint = model.VigilantAttribute((255, 255, 255), setter=self._setTint)
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
@@ -1143,6 +1147,25 @@ class Stream(object):
                 irange = int(irange[0]), int(math.ceil(irange[1]))
 
         return irange
+
+    def _setTint(self, tint):
+        # The tint VA could be either:
+        # - a list tuple RGB value (for a tint) or
+        # - a matplotlib.colors.Colormap object for a custom color map
+        # - a string of value FIT_TO_RGB to indicate fit RGB color mapping
+        # Enforce this setting
+        if isinstance(tint, tuple):
+            # RGB tuple - enforce len of 3
+            return tint[:3]
+        elif isinstance(tint, list):
+            # convert to tuple of len 3
+            return tuple(tint[:3])
+        elif isinstance(tint, matplotlib.colors.Colormap):
+            return tint
+        elif tint == FIT_TO_RGB:
+            return tint
+        else:
+            raise ValueError("Invalid value for tint VA")
 
     def _onIntensityRange(self, irange):
         self._shouldUpdateImage()

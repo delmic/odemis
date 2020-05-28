@@ -30,7 +30,7 @@ import math
 import gc
 import numpy
 
-from odemis.acq.stream import POL_POSITIONS
+from odemis.acq.stream import POL_POSITIONS, FIT_TO_RGB
 
 try:
     import arpolarimetry
@@ -1036,8 +1036,6 @@ class RGBSpatialProjection(RGBProjection):
         ci = dims.find("C")  # -1 if not found
         # handle the tint
         tint = self.stream.tint.value
-        if isinstance(tint, list):
-            tint = tuple(tint)
 
         if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
             # Take the RGB data as-is, just needs to make sure it's in the right order
@@ -1046,6 +1044,8 @@ class RGBSpatialProjection(RGBProjection):
                 tile = tile.copy()
                 # Explicitly only use the first 3 values, to leave the alpha channel as-is
                 numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
+            else:
+                logging.error("Tuple Tint expected.")
 
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
@@ -1294,11 +1294,11 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
             irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
 
-            if not self.stream.tint.value == "fitrgb":
+            if self.stream.tint.value != FIT_TO_RGB:
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data)
-                rgbim = img.DataArray2RGB(av_data, irange)
+                rgbim = img.DataArray2RGB(av_data, irange, self.stream.tint.value)
 
             else:
                 # Note: For now this method uses three independent bands. To give

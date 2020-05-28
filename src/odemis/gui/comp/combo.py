@@ -38,6 +38,7 @@ from matplotlib import cm
 import matplotlib.colors as colors
 import numpy
 from odemis.util.img import getColorbar, tintToColormap
+import odemis.gui.util.img
 from PIL.ImageColor import getcolor
 
 
@@ -197,8 +198,6 @@ class ColorMapComboBox(ComboBox):
         super(ColorMapComboBox, self).__init__(*args, **kwargs)
         # self.SetForegroundColour(wx.Colour(0, 0, 0, alpha=wx.ALPHA_TRANSPARENT))
         # self.SetBackgroundColour(wx.Colour(0, 0, 0, alpha=wx.ALPHA_TRANSPARENT))
-        self.Bind(wx.EVT_ERASE_BACKGROUND, self._on_erase_background)
-        
 
     def OnMeasureItemWidth(self, item):
         return ITEM_WIDTH
@@ -242,11 +241,6 @@ class ColorMapComboBox(ComboBox):
         self.draw(dc)
         evt.Skip()  # Make sure the event propagates, so the drop-down button will be drawn
 
-    def _on_erase_background(self, evt):
-        dc = wx.BufferedPaintDC(self)
-        self.draw(dc)
-        evt.Skip()
-
     def draw(self, dc):
         """
         Override drawing of the combox box to show the colour
@@ -259,7 +253,6 @@ class ColorMapComboBox(ComboBox):
         color_map = tintToColormap(color_map)
 
         gradient = getColorbar(color_map, w, h)
-        bmp = wx.EmptyBitmap(*gradient.shape[1::-1])
-        bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+        bmp = odemis.gui.util.img.NDImage2wxBitmap(gradient)
         dc.DrawBitmap(bmp, 0, 0)
 

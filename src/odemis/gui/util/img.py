@@ -42,6 +42,7 @@ from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
+from odemis.acq.stream import FIT_TO_RGB
 from odemis.model import DataArrayShadow
 import matplotlib.colors as colors
 
@@ -1772,8 +1773,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
 
         # Handle the stream colormap
         if (stream is None and
-            (isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)) or
-             hasattr(s, "tint") and s.tint.value != "fitrgb"
+            (hasattr(s, "tint") and tuple(s.tint) != (255, 255, 255)
            )):
             tint = s.tint.value
             
@@ -1796,10 +1796,11 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 colorbar_start_y = legend_y_pos + 3
 
                 # draw colorbar scale
-                legend_ctx.move_to(legend_x_pos, legend_y_pos + SUB_UPPER * buffer_size[0])
-                legend_ctx.show_text(str(numpy.min(s.raw)))
-                legend_ctx.move_to(legend_x_pos + colorbar_start_x + width - 10, legend_y_pos + SUB_UPPER * buffer_size[0])
-                legend_ctx.show_text(str(numpy.max(s.raw)))
+                if s.tint.value != FIT_TO_RGB:
+                    legend_ctx.move_to(legend_x_pos, legend_y_pos + SUB_UPPER * buffer_size[0])
+                    legend_ctx.show_text(str(numpy.min(s.raw)))
+                    legend_ctx.move_to(legend_x_pos + colorbar_start_x + width - 10, legend_y_pos + SUB_UPPER * buffer_size[0])
+                    legend_ctx.show_text(str(numpy.max(s.raw)))
 
                 legend_ctx.rectangle(colorbar_start_x,
                                  colorbar_start_y,

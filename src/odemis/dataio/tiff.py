@@ -1411,10 +1411,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                     chan.attrib["EmissionWavelength"] = "%.15f" % (wl_list[c] * 1e9)
 
             if model.MD_USER_TINT in da.metadata:
-                # user tint is 3 tuple int
+                # user tint is 3 tuple int or a string
                 # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
-                if not isinstance(tint, str):
+                if isinstance(tint, tuple):
                     if len(tint) == 3:
                         tint = tuple(tint) + (255,)  # need alpha channel
                     hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()

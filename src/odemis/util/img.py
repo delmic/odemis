@@ -38,6 +38,8 @@ from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
 import matplotlib.colors as colors
 from matplotlib import cm
 
+FIT_TO_RGB = "fitrgb"
+
 # See if the optimised (cython-based) functions are available
 try:
     from odemis.util import img_fast
@@ -109,10 +111,10 @@ def md_format_to_tint(user_tint):
     if isinstance(user_tint, tuple) or isinstance(user_tint, list):
         return user_tint
     elif isinstance(user_tint, str):
-        if user_tint != "fitrgb":
+        if user_tint != FIT_TO_RGB:
             return cm.get_cmap(user_tint)
         else:
-            return "fitrgb"
+            return FIT_TO_RGB
 
 
 def findOptimalRange(hist, edges, outliers=0):
@@ -367,11 +369,12 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         # Normalize the data to the interval [0, 1.0]
         # TODO: Add logarithmic normalization with LogNorm
         # norm = colors.LogNorm(vmin=data.min(), vmax=data.max())
-        norm = colors.Normalize(vmin=data.min(), vmax=data.max())
+        norm = colors.Normalize(vmin=irange[0], vmax=irange[1], clip=True)
         rgb = tint(norm(data))  # returns an rgba array
         rgb = rgb[:, :, :3]  # discard alpha channel
-        rgb = numpy.multiply(rgb, 255)
-        return rgb.astype(numpy.uint8)
+        out = numpy.empty(rgb.shape, dtype=numpy.uint8)
+        numpy.multiply(rgb, 255, casting='unsafe', out=out)
+        return out
 
     if data.dtype == numpy.uint8 and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
@@ -469,13 +472,13 @@ def getColorbar(color_map, width, height, alpha=False):
 
 def tintToColormap(tint, name=""):
     """
-    If a tint is an RGB tuple, or fitrgb string convert it to a matplotlib.colors.Colormap object
+    If a tint is an RGB tuple, or FIT_TO_RGB string convert it to a matplotlib.colors.Colormap object
     """
     if isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
         # make a gradient from black to the selected tint
         tint = colors.LinearSegmentedColormap.from_list(name,
             [(0, 0, 0), rgb_to_frgb(tint)])
-    elif isinstance(tint, str) and tint == "fitrgb":  # tint Fit to RGB constant
+    elif tint == FIT_TO_RGB:  # tint Fit to RGB constant
         tint = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
     return tint
 
