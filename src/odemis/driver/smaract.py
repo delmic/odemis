@@ -1748,8 +1748,10 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
-        time.sleep(1.0)
+        time.sleep(0.25)
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
+        self.pose = copy.copy(self.target)
+
         logging.debug("sim MC5DOF: movement complete")
         # if a reference move was in process...
         if self._referencing and not self.stopping.is_set():
@@ -2911,7 +2913,6 @@ class FakeMCS2_DLL(object):
                 self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = int((self.target[ch.value] - \
                     self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]) / 2 + \
                     self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value])
-                    
             elif self._current_move_finish < time.time():  # move is finished
                 self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
                     int(self.target[ch.value])
@@ -2941,10 +2942,10 @@ class FakeMCS2_DLL(object):
         self.stopping.clear()
         if self._pos_in_range(ch.value, pos_pm.value):
             self._current_move_finish = time.time() + 1.0
-            if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
+            if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
                 self.target[ch.value] = pos_pm.value
                 logging.debug("sim MCS2: Abs move channel %d to %d pm" % (ch.value, pos_pm.value))
-            elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
+            elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
                 self.target[ch.value] = pos_pm.value + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
                 logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
             self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING

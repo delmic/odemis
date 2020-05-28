@@ -35,8 +35,8 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 COMP_ARGS = {
-    "atol": 1e-3,
-    "rtol": 1e-3,
+    "atol": 1e-7,
+    "rtol": 1e-5,
     }
 
 CONFIG_SMARTPOD = {"name": "SmarPod",
@@ -267,6 +267,8 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
+        # note: this test will fail with the simulator because it does not
+        # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
         new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
@@ -333,6 +335,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "role": "stage",
         "ref_on_init": True,
         "locator": "network:sn:MCS2-00001604",
+        # "locator": "fake",
         "speed": 0.1,
         "accel": 0.001,
         "hold_time": 1.0,
@@ -384,8 +387,8 @@ class TestTMCS2(unittest.TestCase):
 
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0}
-        pos2 = {'x':0, 'y': 0, 'z': 0}
-        pos3 = {'x': 0, 'y': 0, 'z': 1e-3}
+        pos2 = {'x':0, 'y':-1.2e-4, 'z': 0}
+        pos3 = {'x': 0.643e-3, 'y': 0, 'z': 1e-3}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -400,7 +403,6 @@ class TestTMCS2(unittest.TestCase):
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
         new_pos = {'x':1e-3, 'y': 0, 'z': 1e-3}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.05)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
