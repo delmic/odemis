@@ -1,5 +1,7 @@
 import logging
 import unittest
+
+import numpy
 from odemis import model
 from src.openapi_server.models.mega_field_meta_data import MegaFieldMetaData
 from src.openapi_server.models.cell_parameters import CellParameters as CellAcqParameters
@@ -7,7 +9,7 @@ from src.openapi_server.models.field_meta_data import FieldMetaData
 from datetime import datetime
 import time
 
-from odemis.driver.technolution import AcquisitionServer, ASMDataFlow, EBeamScanner, MirrorDescanner, MPPC
+from odemis.driver.technolution import AcquisitionServer, ASMDataFlow, MirrorDescanner
 from odemis.driver import technolution
 
 URL = "http://localhost:8080/v1"
@@ -18,7 +20,7 @@ _METHOD_POST = 2
 class TestAcquisitionServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        AcquisitionServer.simpleASMCall(URL +"/scan/finish_mega_field", _METHOD_POST, 204)
+        AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
         CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
         CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
         CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
@@ -47,27 +49,27 @@ class TestAcquisitionServer(unittest.TestCase):
 
     def test_clock_frequency_call(self):
         #Test class method
-        clock_freq = AcquisitionServer.simpleASMCall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
+        clock_freq = AcquisitionServer.ASMAPICall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
         self.assertIsInstance(clock_freq, int)
 
         #Test method via object
-        clock_freq = self.ASM_manager.simpleASMCall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
+        clock_freq = self.ASM_manager.ASMAPICall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
         self.assertIsInstance(clock_freq, int)
 
     def test_finish_mega_field_call(self):
         expected_status_code = 204
         # Test class method
-        status_code = AcquisitionServer.simpleASMCall(URL + "/scan/finish_mega_field", _METHOD_POST, expected_status_code)
+        status_code = AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, expected_status_code)
         self.assertEqual(status_code, expected_status_code)
 
         #Test method via object
-        status_code = self.ASM_manager.simpleASMCall(URL + "/scan/finish_mega_field", _METHOD_POST, expected_status_code)
+        status_code = self.ASM_manager.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, expected_status_code)
         self.assertEqual(status_code, expected_status_code)
 
 class TestEBeamScanner(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        AcquisitionServer.simpleASMCall(URL +"/scan/finish_mega_field", _METHOD_POST, 204)
+        AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
         CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
         CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
         CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
@@ -96,13 +98,8 @@ class TestEBeamScanner(unittest.TestCase):
 
     def test_clock_VAs(self):
         self.assertEqual(
-            self.EBeamScanner.clockFrequency.value,
-            AcquisitionServer.simpleASMCall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency'])
-        self.assertEqual(
             self.EBeamScanner.clockPeriod.value,
-            1 / AcquisitionServer.simpleASMCall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency'])
-
-
+            1 / AcquisitionServer.ASMAPICall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency'])
 
     def test__shape_VA(self):
         self.EBeamScanner._shape.value = (7000, 7000)
@@ -130,9 +127,9 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.resolution.value = (min_res  - 1, min_res  - 1)
         self.assertEqual(self.EBeamScanner.resolution.value, (max_res - 200, max_res - 200))
 
-        # Check if setter prevents settings of non-square resolutions
-        self.EBeamScanner.resolution.value = (6400, 6500)
-        self.assertEqual(self.EBeamScanner.resolution.value, (max_res - 200, max_res - 200))
+        # Check if it is allowed to have non-square resolutions
+        self.EBeamScanner.resolution.value = (6000, 6500)
+        self.assertEqual(self.EBeamScanner.resolution.value, (6000, 6500))
 
     def test_dwellTime_VA(self):
         min_dwellTime = self.EBeamScanner.dwellTime.range[0]
@@ -179,7 +176,7 @@ class TestEBeamScanner(unittest.TestCase):
 
         # Check if setter prevents settings of non-square pixelSize
         self.EBeamScanner.pixelSize.value = (600, 500)
-        self.assertEqual(self.EBeamScanner.pixelSize.value, (max_pixelSize - 200, max_pixelSize - 200))
+        self.assertEqual(self.EBeamScanner.pixelSize.value, (600, 600))
 
     def test_rotation_VA(self):
         min_rotation = self.EBeamScanner.rotation.range[0]
@@ -255,8 +252,8 @@ class TestEBeamScanner(unittest.TestCase):
         min_scanDelay = self.EBeamScanner.scanDelay.range[0][0]
         max_scanDelay = self.EBeamScanner.scanDelay.range[1][0]
 
-        # set _MPPC.acqDelay > max_scanDelay to allow all options to be set
-        self.EBeamScanner.parent._MPPC.acqDelay.value = 1.1 * max_scanDelay
+        # set _mppc.acqDelay > max_scanDelay to allow all options to be set
+        self.EBeamScanner.parent._mppc.acqDelay.value = 0.9 * max_scanDelay
 
         # Check if small scanDelay values are allowed
         self.EBeamScanner.scanDelay.value = (int(0.1 * max_scanDelay), int(0.1 * max_scanDelay))
@@ -272,12 +269,12 @@ class TestEBeamScanner(unittest.TestCase):
         self.assertEqual(self.EBeamScanner.scanDelay.value, (0.9 * max_scanDelay, 0.9 * max_scanDelay))
 
         with self.assertRaises(IndexError):
-            self.EBeamScanner.scanDelay.value = (int(-0.2 * min_scanDelay), int(-0.2 * min_scanDelay))
+            self.EBeamScanner.scanDelay.value = (int(-0.2 * max_scanDelay), int(-0.2 * max_scanDelay))
         self.assertEqual(self.EBeamScanner.scanDelay.value, (0.9 * max_scanDelay, 0.9 * max_scanDelay))
 
-        # Check if setter prevents from setting negative values for self.EBeamScanner.parent._MPPC.acqDelay.value - self.EBeamScanner.scanDelay.value[0]
+        # Check if setter prevents from setting negative values for self.EBeamScanner.parent._mppc.acqDelay.value - self.EBeamScanner.scanDelay.value[0]
         self.EBeamScanner.scanDelay.value = (min_scanDelay, min_scanDelay)
-        self.EBeamScanner.parent._MPPC.acqDelay.value = 0.5 * max_scanDelay
+        self.EBeamScanner.parent._mppc.acqDelay.value = 0.5 * max_scanDelay
         self.EBeamScanner.scanDelay.value = (int(0.6 * max_scanDelay), int(0.6 * max_scanDelay))
         self.assertEqual(self.EBeamScanner.scanDelay.value, (min_scanDelay, min_scanDelay))
 
@@ -353,7 +350,7 @@ class TestMirrorDescanner(unittest.TestCase):
 class TestMPPC(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        AcquisitionServer.simpleASMCall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
+        AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
         CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
         CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
         CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
@@ -387,40 +384,32 @@ class TestMPPC(unittest.TestCase):
         self.MPPC.path.value = "testing_path"
         self.assertEqual(self.MPPC.path.value, "testing_path")
 
-    def test_dataContent_VA(self):
-        self.MPPC.dataContent.value = "thumbnail"
-        self.assertEqual(self.MPPC.dataContent.value, "thumbnail")
-        self.assertEqual(self.MPPC._data_content2value(self.MPPC.dataContent.value), True)
-
-        self.MPPC.dataContent.value = "full"
-        self.assertEqual(self.MPPC.dataContent.value, "full")
-        self.assertEqual(self.MPPC._data_content2value(self.MPPC.dataContent.value), False)
-
-        self.MPPC.dataContent.value = "test"
-        with self.assertRaises(ValueError):
-            self.MPPC._data_content2value(self.MPPC.dataContent.value)
-        self.assertEqual(self.MPPC.dataContent.value, "test")
+        #Check if forbidden chracters are refused and the path remains unchanged
+        self.MPPC.path.value = "@testing_path"
+        self.assertEqual(self.MPPC.path.value, "testing_path")
 
     def test_file_name_VA(self):
         self.MPPC.filename.value = "testing_file_name"
         self.assertEqual(self.MPPC.filename.value, "testing_file_name")
-
+        self.MPPC.filename.value = "@testing_file_name"
+        self.assertEqual(self.MPPC.filename.value, "testing_file_name")
 
     def test_externalStorageURL_VA(self):
+        #TODO K.K. update test to new way of storing these values
         # Host
-        self.MPPC.externalStorageURL_host.value = "testing_host"
-        self.assertEqual(self.MPPC.externalStorageURL_host.value, "testing_host")
+        self.MPPC.externalStorageURL_ftp.value = "testing_host"
+        self.assertEqual(self.MPPC.externalStorageURL_path.value, "testing_host")
 
         # User
-        self.MPPC.externalStorageURL_user.value = "testing_user"
-        self.assertEqual(self.MPPC.externalStorageURL_user.value, "testing_user")
+        self.MPPC.externalStorageURL_ftp.value = "testing_user"
+        self.assertEqual(self.MPPC.externalStorageURL_ftp.value, "testing_user")
 
         # Password
-        self.MPPC.externalStorageURL_password.value = "testing_password"
-        self.assertEqual(self.MPPC.externalStorageURL_password.value, "testing_password")
+        self.MPPC.externalStorageURL_ftp.value = "testing_password"
+        self.assertEqual(self.MPPC.externalStorageURL_ftp.value, "testing_password")
 
     def test_acqDelay_VA(self):
-        # set _MPPC.acqDelay > max_scanDelay to allow all options to be set
+        # set _mppc.acqDelay > max_scanDelay to allow all options to be set
         max_acqDelay = 1000.0
 
         # Check if big acqDelay values are allowed
@@ -499,9 +488,12 @@ class TestMPPC(unittest.TestCase):
 
 
 class Test_ASM_HwComponent(unittest.TestCase):
+    """
+    Test method to test the wrapper without using the dataflow by directly acting on the HwComponent
+    """
     @classmethod
     def setUpClass(cls):
-        AcquisitionServer.simpleASMCall(URL +"/scan/finish_mega_field", _METHOD_POST, 204)
+        AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
         CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
         CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
         CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
@@ -529,9 +521,8 @@ class Test_ASM_HwComponent(unittest.TestCase):
         time.sleep(0.2)
 
     def test_connection_and_clock_frequency(self):
-        clock_freq = AcquisitionServer.simpleASMCall(URL +"/scan/clock_frequency", _METHOD_GET, 200)['frequency']
-        self.assertIsInstance(self.EBeamScanner.clockFrequency.value, int)
-        self.assertEqual(self.EBeamScanner.clockFrequency.value, clock_freq)
+        clock_freq = AcquisitionServer.ASMAPICall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
+        self.assertEqual(self.EBeamScanner.clockPeriod.value, 1/clock_freq)
 
     def test_acquire_mega_field(self):
         self.MPPC.start_acquisition()
@@ -556,18 +547,18 @@ class Test_ASM_HwComponent(unittest.TestCase):
 
         # Test another single field at location 3,3
         x = y = 3
-        self.MPPC.acquire_single_field(field_num=(x, y))
+        image = self.MPPC.acquire_single_field(field_num=(x, y))
         self.assertEqual(self.MPPC._field_data,
                          FieldMetaData(x * self.EBeamScanner._shape.value[0],
                                        y * self.EBeamScanner._shape.value[1])
                          )
+        self.assertIsInstance(image, model.DataArray)
 
 
 class Test_ASMDataFlow(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        AcquisitionServer.simpleASMCall(URL +"/scan/finish_mega_field", _METHOD_POST, 204)
         CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
         CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
         CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
@@ -585,49 +576,20 @@ class Test_ASMDataFlow(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
+        cls.MPPC.terminate()
+        time.sleep(0.2)
 
     def setUp(self):
+        AcquisitionServer.ASMAPICall(URL + "/scan/finish_mega_field", _METHOD_POST, 204)
         pass
 
     def tearDown(self):
-        self.MPPC.terminate()
-        time.sleep(0.2)
-
-    def test_get_field(self):
-        Dataflow = ASMDataFlow(self.ASM_manager, self.MPPC.start_acquisition, self.MPPC.get_next_field,
-                               self.MPPC.stop_acquisition,
-                               self.MPPC.acquire_single_field)
-        image = Dataflow.get()
-
-    def test_acquire_mega_field(self):
-        Dataflow = self.MPPC.data
-        Dataflow.start_generate()
-
-        for x in range(3):
-            for y in range(4):
-                Dataflow.next((x, y))
-                self.assertEqual(self.MPPC._field_data,
-                                 FieldMetaData(x * self.EBeamScanner._shape.value[0],
-                                               y * self.EBeamScanner._shape.value[1])
-                                 )
-
-        Dataflow.stop_generate()
+        pass
 
     def test_connection_and_clock_frequency(self):
-        clock_freq = AcquisitionServer.simpleASMCall(URL +"/scan/clock_frequency", _METHOD_GET, 200)['frequency']
-        self.assertIsInstance(self.EBeamScanner.clockFrequency.value, int)
-        self.assertEqual(self.EBeamScanner.clockFrequency.value, clock_freq)
-
-    def test_subscribe_get_field(self):
-        def image_received(dataflow, image):
-            print("image received")
-
-        Dataflow = self.MPPC.data
-        Dataflow.subscribe(image_received)
-
-        Dataflow.get()
-        #TODO K.K. check if image is returned
+        clock_freq = AcquisitionServer.ASMAPICall(URL + "/scan/clock_frequency", _METHOD_GET, 200)['frequency']
+        self.assertIsInstance(self.EBeamScanner.clockPeriod.value, float)
+        self.assertEqual(self.EBeamScanner.clockPeriod.value, 1/clock_freq)
 
     def test_subscribe_mega_field(self):
         #TODO K.K. test fails when entire file is runned, does pass if runned seperatly
@@ -640,7 +602,7 @@ class Test_ASMDataFlow(unittest.TestCase):
             counter += 1
             print("image received")
 
-        dataflow = self.MPPC.data
+        dataflow = self.MPPC.dataFlow
         dataflow.subscribe(image_received)
 
         for x in range(field_images[0]):
@@ -654,6 +616,28 @@ class Test_ASMDataFlow(unittest.TestCase):
         dataflow.stop_generate()
         time.sleep(5)
         self.assertEqual(field_images[0] * field_images[1], counter)
+        del counter
+
+    def test_get_field(self):
+        Dataflow = ASMDataFlow(self.ASM_manager, self.MPPC.start_acquisition, self.MPPC.get_next_field,
+                               self.MPPC.stop_acquisition,
+                               self.MPPC.acquire_single_field)
+        image = Dataflow.get()
+        self.assertIsInstance(image, model.DataArray)
+
+    def test_subscribe_get_field(self):
+        def image_received(dataflow, image):
+            print("image received")
+
+        Dataflow = self.MPPC.dataFlow
+
+        image = Dataflow.get()
+        self.assertIsInstance(image, model.DataArray)
+
+        Dataflow.subscribe(image_received)
+        with self.assertRaises(Exception):
+            #Check that image is not received is already on subscriber is present
+            image = Dataflow.get()
 
     def test_terminate(self):
         #TODO K.K. test fails when entire file is runned, does pass if runned seperatly
@@ -667,13 +651,13 @@ class Test_ASMDataFlow(unittest.TestCase):
             counter += 1
             print("image received")
 
-        dataflow = self.MPPC.data
+        dataflow = self.MPPC.dataFlow
         dataflow.subscribe(image_received)
 
         for x in range(field_images[0]):
             for y in range(field_images[1]):
-                if x == termination_point[0] and y == termination_point[1] :
-                    print("terminating command")
+                if x == termination_point[0] and y == termination_point[1]:
+                    print("Send terminating command")
                     self.MPPC.terminate()
                     time.sleep(0.5)
                     self.assertEqual(self.MPPC.acq_queue.qsize(), 0,
@@ -687,10 +671,9 @@ class Test_ASMDataFlow(unittest.TestCase):
                                  )
                 time.sleep(0.5)
 
-        #TODO K.K. properly stop acquisition and check this plus no running thread which prevents from stopping
-        # self.assertEqual(self.MPPC.acq_thread._is_stopped, True)
-        self.assertEqual(self.MPPC._current_status, "terminate")
+        self.assertEqual(self.MPPC._acquisition_in_progress, None)
         self.assertEqual((termination_point[0] * field_images[1]) + termination_point[1], counter)
+        del counter
 
 if __name__ == '__main__':
     unittest.main()
