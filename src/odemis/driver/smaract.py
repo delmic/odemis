@@ -1748,8 +1748,10 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
-        time.sleep(1.0)
+        time.sleep(0.25)
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
+        self.pose = copy.copy(self.target)
+
         logging.debug("sim MC5DOF: movement complete")
         # if a reference move was in process...
         if self._referencing and not self.stopping.is_set():

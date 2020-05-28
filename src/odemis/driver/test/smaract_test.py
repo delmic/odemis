@@ -267,6 +267,8 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
+        # note: this test will fail with the simulator because it does not
+        # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
         new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
