@@ -58,13 +58,16 @@ class TestUEye(VirtualTestCam, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not TEST_NOHW:
-            VirtualTestCam.setUpClass()
+        if TEST_NOHW:
+            raise unittest.SkipTest('No camera HW present. Skipping tests.')
+
+        super(TestUEye, cls).setUpClass()
 
     @classmethod
-    def tearDownClass(self):
-        if not TEST_NOHW:
-            VirtualTestCam.tearDown(self)
+    def tearDownClass(cls):
+        if TEST_NOHW:
+            return
+        super(TestUEye, cls).tearDownClass()
 
     def setUp(self):
         if TEST_NOHW:
