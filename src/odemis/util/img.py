@@ -101,13 +101,18 @@ def tint_to_md_format(tint):
         return tint
     elif isinstance(tint, colors.Colormap):
         return tint.name
+    else:
+        return tint
 
 
 def md_format_to_tint(user_tint):
     if isinstance(user_tint, tuple) or isinstance(user_tint, list):
         return user_tint
     elif isinstance(user_tint, str):
-        return cm.get_cmap(user_tint)
+        if user_tint != "fitrgb":
+            return cm.get_cmap(user_tint)
+        else:
+            return "fitrgb"
 
 
 def findOptimalRange(hist, edges, outliers=0):
