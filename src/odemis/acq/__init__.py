@@ -276,6 +276,9 @@ class AcquisitionTask(object):
         # when setting its state to running.
         self._future.set_progress(end=time.time() + expected_time)
 
+        logging.info("Starting acquisition of %s streams, with expected duration of %f s",
+                     len(self._streams), expected_time)
+
         # Keep order so that the DataArrays are returned in the order they were
         # acquired. Not absolutely needed, but nice for the user in some cases.
         raw_images = OrderedDict()  # stream -> list of raw images
