@@ -565,7 +565,9 @@ class GridScanner(object):
         self.configure_ccd(ccd_roi)
 
         if self.bgsub:
+            _set_blanker(self.escan, True)
             self.bg_image = ccd.data.get(asap=False)
+            _set_blanker(self.escan, False)
 
         et = dwell_time
         ccd.exposureTime.value = et  # s
@@ -637,7 +639,10 @@ class GridScanner(object):
                 raise CancelledError()
 
             if self.bgsub:
+                _set_blanker(self.escan, True)
                 self.bg_image = ccd.data.get(asap=False)
+                _set_blanker(self.escan, False)
+
             detector.data.subscribe(self._discard_data)
             self._min_acq_time = time.time()
             ccd.data.subscribe(self._onCCDImage)
