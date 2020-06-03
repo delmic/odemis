@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
 Created on 18 Mar 2020
@@ -64,7 +65,7 @@ def main(args):
     parser.add_argument("--set-address", dest="address", type=int,
                         help="set address of stage controller.")
 
-    parser.add_argument("--auto-config", dest="autoconf", type=int,
+    parser.add_argument("--auto-config", action='store_true', dest="autoconf", default=False,
                         help="Automatically configure axis, axis -> encoder's step per count")
 
     parser.add_argument("--port", dest="port", type=str, default="/dev/ttyUSB*",
@@ -87,16 +88,13 @@ def main(args):
 
     # All axes required for initialization of driver, values don't matter
     # for configuration functions
-    axes = {"x": {"axis_number": 0, "mode": 1, 'wfm_stepsize': 5e-9},
-            "y": {"axis_number": 0, "mode": 1, 'wfm_stepsize': 5e-9},
-            "z": {"axis_number": 0, "mode": 1, 'wfm_stepsize': 5e-9}
-            }
+    axes = {"x": {"axis_number": 0, "mode": 1, 'wfm_stepsize': 5e-9}}
     stage = PMD401Bus("PM Control", "stage", options.port, axes)
 
     if options.address is not None:
         set_address(options.address, stage)
 
-    if options.autoconf is not None:
+    if options.autoconf:
         auto_conf(options.autoconf, stage)
 
     return 0

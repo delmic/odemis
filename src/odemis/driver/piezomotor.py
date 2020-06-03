@@ -64,23 +64,18 @@ class PMDError(Exception):
 
 class PMD401Bus(Actuator):
     """
-    This represents the PMD401 motor controller bus for the PiezoMotor LEGS motors. The
-    three motor controllers (x, y, and z axes) are connected in a daisy chain. Only the first
+    This represents the PMD401 motor controller bus for the PiezoMotor LEGS motors. It supports multiple controllers
+    (each one handling one axis), connected in a daisy chain. Only the first
     controller is directly connected to the computer.
     The specification for the hardware interface can be found in the document
      "PiezoMotor_PMD401_Technical_Manual.pdf".
-
-    The class provides only part of the functionality of the model.Actuator interface. It fully
-    implements the functions moveRel and stop. However, there is no reference function and
-    moveAbs is only possible if we are operating in closed loop, i.e. an encoder (stage position sensor)
-    is present.
     """
 
     def __init__(self, name, role, port, axes, inverted=None, **kwargs):
         """
-        :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters (axis_number, range, unit, closed_loop, speed, wfm_stepsize)
-            axis_number (0 <= int <= 127), required (typically 1-3 for x-z)
-            wfm stepsize (int), stepsize (needs to be
+        :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters (address, range, unit, closed_loop, speed, wfm_stepsize)
+            address (0 <= int <= 127), required (typically 1-3 for x-z)
+            wfm stepsize (float), waveform stepsize
             range (tuple of float), default to [-1, 1]
             unit (str), default to m
             closed_loop (bool): True for closed loop (with encoder), default to True
@@ -92,17 +87,17 @@ class PMD401Bus(Actuator):
 
         # Parse axis parameters
         axes_def = {}  # axis name -> Axis object
-        # Require the user to define all 3 axes: x, y, z
-        if set(axes.keys()) != {'x', 'y', 'z'}:
-            raise ValueError("Invalid axes definition. Axes should contain x, y, z.")
+
         for axis_name, axis_par in axes.items():
             # Axis number
             try:
-                axis_num = axis_par['axis_number']
+                axis_num = axis_par['address']
             except KeyError:
                 raise ValueError("Axis %s has no axis number." % axis_name)
             if axis_num not in range(128):
                 raise ValueError("Invalid axis number %s, needs to be 0 <= int <= 127." % axis_num)
+            elif axis_num in self._axis_map.values():
+                raise ValueError("Invalid axis number %s, already assigned to axis %s." % (axis_num, self._axis_map[axis_num]))
             else:
                 self._axis_map[axis_name] = axis_par['axis_number']
 
@@ -138,7 +133,7 @@ class PMD401Bus(Actuator):
             try:
                 closed_loop = axis_par['closed_loop']
             except KeyError:
-                closed_loop = True
+                closed_loop = False
                 logging.info("Axis mode (closed/open loop) not specified for axis %s. Assuming closed loop.", axis_name)
             self._closed_loop[axis_name] = closed_loop
 
@@ -164,16 +159,21 @@ class PMD401Bus(Actuator):
                               "serial number: %s" % sn)
         self._hwVersion = ", ".join(hwVersions)
 
-        # Position and referenced VAs
-        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        self.referenced = model.VigilantAttribute({}, unit="m", readonly=True)
-
         # Configuration
         for axis in self._axis_map.values():
             self.setWaveform(axis, WAVEFORM_DELTA)
 
         driver_name = getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
+
+        # Position and referenced VAs
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self.referenced = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
+        for ax, closed_loop in self._closed_loop:  # only add closed_loop axes to .referenced
+            if closed_loop:
+                self.referenced.add({ax: False})  # just assume they haven't been referenced
+
 
     def terminate(self):
         # terminate can be called several times, do nothing if ._serial is already None
@@ -205,6 +205,7 @@ class PMD401Bus(Actuator):
         return f
 
     def reference(self, axes):
+        self._checkReference(axes)
         f = self._executor.submit(self._doReference, axes)
         return f
 
@@ -217,6 +218,7 @@ class PMD401Bus(Actuator):
                 self.stop()  # exit index mode
                 raise ValueError("Referencing axis %s failed." % self._axis_map[axname])
             self.stop()  # exit index mode
+            self.referenced[axname] = True
 
         # TODO: Note that this is a really basic referencing procedure. You typically want to do a fast search,
         #  and then do a second search at slow speed, to locate the index more precisely. Also, if the index is
@@ -234,7 +236,6 @@ class PMD401Bus(Actuator):
                 self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axis], encoder_cnts, speed_usteps))
                 targets[axis] = encoder_cnts
             else:
-                self._updatePosition()
                 target = val - self.position.value[axis]
                 wfm_steps = int(target / self._wfm_stepsizes[axis])  # number of waveform steps
                 usteps = int((target % self._wfm_stepsizes[axis]) * USTEPS_PER_WFM)   # number of µsteps
@@ -250,15 +251,12 @@ class PMD401Bus(Actuator):
             speed_usteps = round(self._speed / self._wfm_stepsizes[axis] * USTEPS_PER_WFM)  # steps / second
             if self._closed_loop[axis]:
                 encoder_cnts = round(val / ENCODER_STEPSIZE)
-                # There are two possibilities: move relative to current position (XC) and move relative to
-                # target position (XR). We are moving relative to the current position (might be more intuitive
-                # if something goes wrong and we're stuck in the wrong position).
-                self._sendCommand(b'X%dC%d,%d' % (self._axis_map[axis], encoder_cnts, speed_usteps))
+                self.runRelTargetMove(self._axis_map[axis], encoder_cnts)
                 targets[axis] = self.position.value[axis] / ENCODER_STEPSIZE + encoder_cnts
             else:
                 wfm_steps = int(val / self._wfm_stepsizes[axis])  # number of waveform steps
                 usteps = int((val % self._wfm_stepsizes[axis]) * USTEPS_PER_WFM)   # number of µsteps
-                self._sendCommand(b'X%dJ%d,%d,%d' % (self._axis_map[axis], wfm_steps, usteps, speed_usteps))
+
                 targets[axis] = None
         self._waitEndMotion(targets)
         self._updatePosition()
@@ -269,7 +267,7 @@ class PMD401Bus(Actuator):
         :arg targets (dict: str --> int): target (for closed-loop), None for open loop
         """
         # Expected time for move
-        move_length = sum([abs(self.position[ax] - targets[ax]) for ax in targets.keys()])
+        move_length = max(abs(self.position[ax] - target) for ax, target in targets.items())
         dur = move_length * self._speed
         max_dur = max(dur * 2, 0.1)  # wait at least 0.1 s
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
@@ -292,15 +290,15 @@ class PMD401Bus(Actuator):
     def _check_hw_error(self):
         for ax, axnum in self._axis_map.items():
             status = self.getStatus(axnum)
-            if status[0] == 8:
+            if status[0] & 8:
                 raise PMDError(1, "Communication Error (wrong baudrate, data collision, or buffer overflow)")
-            elif status[0] == 4:
+            elif status[0] & 4:
                 raise PMDError(2, "Encoder error(serial communication or reported error from serial encoder)")
-            elif status[0] == 2:
+            elif status[0] & 2:
                 raise PMDError(3, "Supply voltage or motor fault was detected.")
-            elif status[1] == 1:
+            elif status[1] & 1:
                 raise PMDError(4, "Command timeout occurred or a syntax error was detected when response was not allowed.")
-            elif status[1] == 8:
+            elif status[1] & 8:
                 raise PMDError(5, "Power-on/reset has occurred.")
 
     def _updatePosition(self):
@@ -330,9 +328,27 @@ class PMD401Bus(Actuator):
 
     def getEncoderPosition(self, axis):
         """
-        :returns (dict: str --> int): current position of axes as reported by encoders
+        :returns (float): current position of the axis as reported by encoders (in m)
         """
         return int(self._sendCommand(b'X%dE' % axis)) * ENCODER_STEPSIZE
+
+    def runRelTargetMove(self, axis, encoder_cnts):
+        """
+
+        """
+
+
+        # There are two possibilities: move relative to current position (XC) and move relative to
+        # target position (XR). We are moving relative to the current position (might be more intuitive
+        # if something goes wrong and we're stuck in the wrong position).
+        self._sendCommand(b'X%dC%d,%d' % (axis, encoder_cnts, wfm_steps))
+
+    def runMotorJog(self, axis, encoder_cnts):
+        """
+        Open loop stepping.
+        """
+
+        self._sendCommand(b'X%dJ%d,%d,%d' % (self._axis_map[axis], wfm_steps, usteps, speed_usteps))
 
     def setWaveform(self, axis, wf):
         """
@@ -345,7 +361,7 @@ class PMD401Bus(Actuator):
 
     def getStatus(self, axis):
         """
-        :returns (str): 4-number status code
+        :returns (list of 4 int): 4-bit status code
         The most important values are the following
         First bit:
         8: communication error (wrong baudrate, data collision, or buffer overflow)
@@ -359,7 +375,7 @@ class PMD401Bus(Actuator):
 
         For all codes, please refer to the PMD-401 manual.
         """
-        return self._sendCommand(b'X%dU0' % axis)
+        return [int(i) for i in self._sendCommand(b'X%dU0' % axis)]
 
     def isMovingClosedLoop(self, axis, target):
         """
@@ -378,11 +394,8 @@ class PMD401Bus(Actuator):
         :param axis (int): axis number
         :returns (bool): True if moving, False otherwise
         """
-        resp = self._sendCommand(b'X%dJ' % axis)
-        if int(resp) == 0:  # 1 if finished, 0 while moving
-            return True
-        else:
-            return False
+        resp = self._sendCommand(b'X%dJ' % axis)  # will be 1 if finished, otherwise 0
+        return int(resp) == 0
 
     def startIndexMode(self, axis):
         """
@@ -398,12 +411,54 @@ class PMD401Bus(Actuator):
 
     def getIndexStatus(self, axis):
         """
-        Return a short description of the index status, e.g. "1,132.,indexed". The dot after the logged
-        index position indicates that the position was logged since the last report. 'indexed'
-        means the position has been reset at index.
+        Returns a description of the index status.
+        :returns (tuple of 4):
+            mode (int): index mode (1 if position has been reset at index)
+            position (float):
+            logged (bool): position was logged since last report
+            indexed (bool): position has been reset at index
         """
         # Check if referencing was successful
-        return self._sendCommand(b'X%dN?' % axis)
+        # Response looks like this: "1,132.,indexed"
+        try:
+            ret = self._sendCommand(b'X%dN?' % axis).split(',')
+            mode = int(ret[0])
+            if ret[1][-1] == '.':
+                # . means position was logged since last report
+                logged = True
+                position = ret[1][:-1]
+            else:
+                logged = False
+                position = ret[1]
+            if len(ret) > 2 and ret[2] == 'indexed':
+                indexed = True
+            else:
+                indexed = False
+            return mode, position, logged, indexed
+        except Exception as ex:
+            logging.error("Failed to parse index status %s: %s" % (ret, ex))
+
+    def setAxisAddress(self, current_address, new_address):
+        """
+        Set the address of the axis. The factory default is 0 for all boards. Don't use this
+        command if multiple axes with the same number are connected.
+        :arg current_address (int): current axis number
+        :arg new_address (int): new axis number
+        """
+        self._sendCommand("X%dY40,%d" % (current_address, new_address))
+
+    def runAutoConf(self, axis):
+        """
+        Runs automatic configuration for the encoder parameters.
+        :arg axis (int): axis number
+        """
+        self._sendCommand("X%dY25" % axis)
+
+    def writeParamsToFlash(self, axis):
+        self._sendCommand("X%dY32" % axis)
+
+    def setParam(self, axis, param, value):
+        self._sendCommand("X%dY%d,%d" % (axis, param, value))
 
     def _sendCommand(self, cmd):
         """
@@ -449,7 +504,7 @@ class PMD401Bus(Actuator):
 
     def _tryRecover(self):
         self._recovering = True
-        self.state._set_value(HwError("USB connection lost"), force_write=True)
+        self.state._set_value(HwError("Connection lost, reconnecting..."), force_write=True)
         # Retry to open the serial port (in case it was unplugged)
         # _ser_access should already be acquired, but since it's an RLock it can be acquired
         # again in the same thread
@@ -550,30 +605,11 @@ class PMD401Bus(Actuator):
 
         return ser
 
-    def setAxisAddress(self, current_address, new_address):
-        """
-        Set the address of the axis. The factory default is 0 for all boards. Don't use this
-        command if multiple axes with the same number are connected.
-        :arg current_address (int): current axis number
-        :arg new_address (int): new axis number
-        """
-        self._sendCommand("X%dY40,%d" % (current_address, new_address))
-
-    def runAutoConf(self, axis):
-        """
-        Runs automatic configuration for the encoder parameters.
-        :arg axis (int): axis number
-        """
-        self._sendCommand("X%dY25" % axis)
-
-    def writeParamsToFlash(self, axis):
-        self._sendCommand("X%dY32" % axis)
-
-    def setParam(self, axis, param, value):
-        self._sendCommand("X%dY%d,%d" % (axis, param, value))
 
 class PMDSimulator(object):
-
+    """
+    Simulates beamshift controller with three axes on axes 1, 2 and 3.
+    """
     def __init__(self, timeout=0.3):
         self.timeout = timeout
         self._input_buf = ""  # use str internally instead of bytes, makes indexing easier
@@ -586,7 +622,7 @@ class PMDSimulator(object):
         self.is_moving = False
 
     def write(self, data):
-        self._input_buf += data.decode('utf-8')
+        self._input_buf += data.decode('ascii')
         msg = ""
         while self._input_buf[:len(EOL)] != sEOL:
             msg += self._input_buf[0]
@@ -602,7 +638,7 @@ class PMDSimulator(object):
         if len(ret) < size:
             # simulate timeout
             time.sleep(self.timeout)
-        return ret.encode('utf-8')
+        return ret.encode('ascii')
 
     def flush(self):
         self._input_buf = ""
