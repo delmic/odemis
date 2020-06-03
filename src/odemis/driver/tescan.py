@@ -1491,19 +1491,21 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self._shape = ()
-        self.power = model.ListContinuous([10., ], (0., 10.), unit="W", cls=(int, long, float),)
+        self.power = model.ListContinuous([10], ((0,), (10,)), unit="W", cls=(int, long, float),
+                                          setter=self._setPower)
         # turn on when initializing
         self.parent._device.ChamberLed(1)
-        self.power.subscribe(self._updatePower)
         # just one band: white
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
 
-    def _updatePower(self, value):
+    def _setPower(self, value):
         # Switch the chamber LED based on the power value (On in case of max,
         # off in case of min)
-        if value[0] == self.power.range[1]:
+        if value[0] == self.power.range[1][0]:
             self.parent._device.ChamberLed(1)
+            return self.power.range[1]
         else:
             self.parent._device.ChamberLed(0)
+            return self.power.range[0]

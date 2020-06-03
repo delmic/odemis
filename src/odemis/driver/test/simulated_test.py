@@ -41,6 +41,14 @@ class LightTest(unittest.TestCase):
         light.power.value[0] = 10.
         self.assertEqual(light.power.value[0], 10.)
 
+        # It can only be on/off
+        light.power.value[0] = 8.2
+        self.assertEqual(light.power.value[0], 0)
+
+        light.power.value = light.power.range[0]
+        self.assertEqual(light.power.value[0], 0)
+
+
 class ActuatorTest(object):
     """
     This abstract class should be able to test any type of actuator
