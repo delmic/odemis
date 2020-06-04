@@ -438,6 +438,28 @@ class TestTMCS2(unittest.TestCase):
         new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
         test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
+    def test_reference_cancel(self):
+        """Test canceling referencing"""
+
+        if not TEST_NOHW:
+            # For now, the simulator reports an axis is referenced as soon as the
+            # procedure is started, so this doesn't work.
+            # TODO: extend the simulator to report axis is referenced only at the end of referencing.
+            f = self.dev.reference()
+            time.sleep(0.1)
+            f.cancel()
+
+            for a, i in self.dev.referenced.value.items():
+                self.assertFalse(i)
+
+        f = self.dev.reference()
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
 
 if __name__ == '__main__':
     unittest.main()
