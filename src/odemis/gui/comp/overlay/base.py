@@ -49,7 +49,7 @@ from odemis.model import TupleVA
 class Label(object):
     """ Small helper class that stores label properties """
 
-    def __init__(self, text, pos, font_size, flip, align, colour, opacity, deg):
+    def __init__(self, text, pos, font_size, flip, align, colour, opacity, deg, background=None):
         self._text = text
         self._pos = pos
         self._font_size = font_size
@@ -58,6 +58,7 @@ class Label(object):
         self.colour = colour
         self.opacity = opacity
         self._deg = deg
+        self.background = background
 
         # The following attributes are used for caching, so they do not need
         # to be calculated on every redraw.
@@ -236,6 +237,15 @@ class Label(object):
                 ofst += self._font_size
                 ctx.show_text(part)
 
+        # Draw background
+        if self.background:
+            margin_x = 4  # margins for better representation of background
+            margin_y = 6
+            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * self.opacity)
+            rect = (x - margin_x, y + margin_y, self.text_size[0] + margin_x, -self.text_size[1] - margin_y)
+            ctx.rectangle(*rect)
+            ctx.fill()
+
         # Draw Text
         if self.colour:
             if len(self.colour) == 3:
@@ -339,7 +349,7 @@ class Overlay(with_metaclass(ABCMeta, object)):
         self.cnvs.Refresh()
 
     def add_label(self, text, pos=(0, 0), font_size=12, flip=True,
-                  align=wx.ALIGN_LEFT | wx.ALIGN_TOP, colour=None, opacity=1.0, deg=None):
+                  align=wx.ALIGN_LEFT | wx.ALIGN_TOP, colour=None, opacity=1.0, deg=None, background=None):
         """ Create a text label and add it to the list of labels
 
         :return: (Label) The created label
@@ -352,7 +362,8 @@ class Overlay(with_metaclass(ABCMeta, object)):
             align,
             colour or (1.0, 1.0, 1.0),  # default to white
             opacity,
-            deg
+            deg,
+            background
         )
         self.labels.append(label)
         self.cnvs.Refresh()  # Refresh the canvas, so the text will be drawn

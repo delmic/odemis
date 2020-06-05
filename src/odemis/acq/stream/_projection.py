@@ -143,7 +143,6 @@ class RGBProjection(DataProjection):
         self.stream.tint.subscribe(self._onTint)
         self.stream.intensityRange.subscribe(self._onIntensityRange)
 
-
     def _find_metadata(self, md):
         return self.stream._find_metadata(md)
 
@@ -898,30 +897,53 @@ class RGBSpatialProjection(RGBProjection):
         md[model.MD_DIMS] = "YXC"  # RGB format
         return model.DataArray(rgbim, md)
 
+    def getPixelCoordinates(self, p_pos):
+        """
+        Translate physical coordinates into data pixel coordinates
+        Args:
+            p_pos(tuple float, float): the position in physical coordinates
+
+        Returns(tuple int, int or None): the position in pixel coordinates or None if it's outside of the image
+
+        """
+        return self.stream.getPixelCoordinates(p_pos)
+
+    def getRawValue(self, pixel_pos):
+        """
+        Translate pixel coordinates into raw pixel value
+        Args:
+            pixel_pos(tuple int, int): the position in pixel coordinates
+
+        Returns: the raw "value" of the position. In case the raw data has more than 2 dimensions, it returns an array.
+        Raise LookupError if raw data not found
+
+        """
+
+        raw = self.stream.raw
+        if not raw:
+            raise LookupError("Failed to find raw data for %s stream", self.stream)
+        # if raw is a DataArrayShadow, the image is pyramidal
+        if isinstance(raw[0], model.DataArrayShadow):
+            tx, px = divmod(pixel_pos[0], raw.tile_shape[0])
+            ty, py = divmod(pixel_pos[1], raw.tile_shape[1])
+            raw_tile = raw[0].getTile(tx, ty, 0)
+            return raw_tile[py, px]
+        else:
+            return raw[0][pixel_pos[1], pixel_pos[0]]
+
     def _onZIndex(self, value):
         self._shouldUpdateImage()
 
     def getBoundingBox(self):
-        ''' Get the bounding box of the whole image, whether it`s tiled or not.
+        '''
+        Get the bounding box of the whole image, whether it`s tiled or not.
         return (tuple of floats(l,t,r,b)): Tuple with the bounding box
-        Raises:
-            ValueError: If the .image member is not set
         '''
         if hasattr(self, 'rect'):
             rng = self.rect.range
             return rng[0][0], rng[0][1], rng[1][0], rng[1][1]
         else:
-            im = self.image.value
-            if im is None:
-                raise ValueError("Stream's image not defined")
-            md = im.metadata
-            pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
-            pos = md.get(model.MD_POS, (0, 0))
-            if pxs[0] is None:
-                raise ValueError("Pixel size dimension missing.")
-            else:
-                w, h = im.shape[1] * pxs[0], im.shape[0] * pxs[1]
-            return [pos[0] - w / 2, pos[1] - h / 2, pos[0] + w / 2, pos[1] + h / 2]
+            return self.stream.getBoundingBox(self.image.value)
 
     def _zFromMpp(self):
         """
@@ -957,7 +979,7 @@ class RGBSpatialProjection(RGBProjection):
         # are relative to the top-left corner. So it also needs to sum half image.
         # The -1 are necessary on the right and bottom sides, as the coordinates of a pixel
         # are -1 relative to the side of the pixel
-        # The '-' before ps[1] is necessary due to the fact that 
+        # The '-' before ps[1] is necessary due to the fact that
         # Y in pixel coordinates grows down, and Y in physical coordinates grows up
         return (
             int(round(rect[0] / ps[0] + img_shape[0] / 2)),
@@ -1194,6 +1216,48 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
         except Exception:
             logging.exception("Projecting %s %s raw image", self.__class__.__name__, self.stream.name.value)
+
+    def getRawValue(self, pixel_pos):
+        """
+        Translate pixel coordinates into raw pixel value
+            Args:
+            pixel_pos(tuple int, int): the position in pixel coordinates
+
+        Returns(float): the raw value of the position
+        """
+        spec = self.stream.calibrated.value[..., pixel_pos[1], pixel_pos[0]]
+
+        # Average time values if they exist.
+        if spec.shape[1] > 1:
+            t = spec.shape[1] - 1
+            data = numpy.mean(spec[0:t], axis=1)
+            data = data[:, 0]
+        else:
+            data = spec[:, 0, 0]
+
+        # pick only the data inside the bandwidth
+        spec_range = self.stream._get_bandwidth_in_pixel()
+
+        # TODO: update the condition with self.stream.tint.value != "fittorgb"
+        if not hasattr(self.stream, "fitToRGB") or not self.stream.fitToRGB.value:
+            av_data = float(numpy.mean(data[spec_range[0]:spec_range[1] + 1]))
+            return av_data
+        else:
+            # divide the range into 3 sub-ranges (BRG) of almost the same length
+            len_rng = spec_range[1] - spec_range[0] + 1
+            brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+            grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+            rrange = [grange[1] + 1, spec_range[1]]
+            # ensure each range contains at least one pixel
+            brange[1] = max(brange)
+            grange[1] = max(grange)
+            rrange[1] = max(rrange)
+
+            av_b = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
+            av_g = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
+            av_r = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
+
+            return av_b, av_g, av_r
 
     def _updateImage(self):
         """
@@ -1687,10 +1751,10 @@ class SinglePointTemporalProjection(DataProjection):
         self._shouldUpdateImage()
 
     def _computeSpec(self):
-        
+
         if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[1] == 1:
             return None
-        
+
         x, y = self.stream.selected_pixel.value
         if model.hasVA(self.stream, "selected_wavelength"):
             c = numpy.searchsorted(self.stream._wl_px_values, self.stream.selected_wavelength.value)

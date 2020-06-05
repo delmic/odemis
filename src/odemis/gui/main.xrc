@@ -130,6 +130,15 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_rawpixel">
+          <label>Show pixel value</label>
+          <accel>Ctrl+U</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <label>View</label>
       </object>
       <object class="wxMenu">

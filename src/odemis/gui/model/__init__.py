@@ -1160,6 +1160,7 @@ class StreamView(View):
 
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
+        self.show_pixelvalue = model.BooleanVA(False)
         self.interpolate_content = model.BooleanVA(False)
 
         if zPos is not None:
@@ -1623,6 +1624,7 @@ class OverviewView(StreamView):
 
         self.show_crosshair.value = False
         self.interpolate_content.value = False
+        self.show_pixelvalue.value = False
 
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)

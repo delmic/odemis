@@ -109,6 +109,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._fps_ol = None
         self._last_frame_update = None
         self._focus_overlay = None
+        self._pixelvalue_ol = None
 
         self.pixel_overlay = None
         self.points_overlay = None
@@ -202,6 +203,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
 
+        self.view.show_pixelvalue.subscribe(self._on_pixel_value_show, init=True)
+
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
         # Only create the overlays which could possibly be used
@@ -291,6 +294,18 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _on_interpolate_content(self, activated):
         """ Activate or deactivate interpolation"""
         self.request_drawing_update()
+
+    def _on_pixel_value_show(self, activated):
+        """ Activate the pixelvalue view overlay"""
+        if activated:
+            if self._pixelvalue_ol is None:
+                view = self.view
+                self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
+            self.add_view_overlay(self._pixelvalue_ol)
+            self._pixelvalue_ol.activate()
+        elif self._pixelvalue_ol:
+            self._pixelvalue_ol.deactivate()
+            self.remove_view_overlay(self._pixelvalue_ol)
 
     @ignore_dead
     def _on_debug(self, activated):
@@ -1416,6 +1431,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_y = None
 
         self._crosshair_ol = None
+        self._pixelvalue_ol = None
 
         self.markline_overlay = view_overlay.MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
@@ -1502,6 +1518,7 @@ class TwoDPlotCanvas(BitmapCanvas):
 
         # handle cross hair
         self.view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
+        self.view.show_pixelvalue.subscribe(self._on_pixel_value_show, init=True)
 
     def _on_cross_hair_show(self, activated):
         """ Activate the cross hair view overlay """
@@ -1511,6 +1528,18 @@ class TwoDPlotCanvas(BitmapCanvas):
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
+
+        self.Refresh(eraseBackground=False)
+
+    def _on_pixel_value_show(self, activated):
+        """ Activate the pixelvalue view overlay"""
+        if activated:
+            if self._pixelvalue_ol is None:
+                view = self.view
+                self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
+            self.add_view_overlay(self._pixelvalue_ol)
+        elif self._pixelvalue_ol:
+            self.remove_view_overlay(self._pixelvalue_ol)
 
         self.Refresh(eraseBackground=False)
 
