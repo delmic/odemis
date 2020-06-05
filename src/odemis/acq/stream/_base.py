@@ -1216,8 +1216,7 @@ class Stream(object):
         if not self.raw:
             raise LookupError("Stream has no data")
         raw = self.raw[0]
-        md = raw.metadata.copy()
-        mergeMetadata(md)
+        md = self._find_metadata(raw.metadata)
         pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
         rotation = md.get(model.MD_ROTATION, 0)
         shear = md.get(model.MD_SHEAR, 0)

@@ -245,17 +245,19 @@ class PixelValueOverlay(ViewOverlay):
 
     def _draw_legend(self, stream):
         """ Get the pixel coordinates and the raw pixel value given a projection """
-        pixel_pos = stream.getPixelCoordinates(self._p_pos)
+        try:
+            pixel_pos = stream.getPixelCoordinates(self._p_pos)
+        except LookupError:  # No data
+            return None
+
         if pixel_pos:
             name = stream.name.value
             raw_value = stream.getRawValue(pixel_pos)
-            pixel_x = units.readable_str(pixel_pos[0])
-            pixel_y = units.readable_str(pixel_pos[1])
             # In case of integers the significant number is None, no need to round the raw value
             sig = None if isinstance(raw_value, (int, numpy.integer)) else 6
             raw = units.readable_str(raw_value, sig=sig)
             # The unicode for the arrow is not available in the current Cairo version
-            return name + ':' + '(' + pixel_x + ',' + pixel_y + ')' + u'->' + raw
+            return u"%s (%d, %d) -> %s" % (name, pixel_pos[0], pixel_pos[1], raw)
         else:
             return None
 
@@ -269,6 +271,19 @@ class PixelValueOverlay(ViewOverlay):
         for stream in streams:
             if self._v_pos:
                 self._p_pos = self.cnvs.view_to_phys(self._v_pos, self.cnvs.get_half_buffer_size())
+
+                # For SparcARCanvas which supports .flip. Note that this is a
+                # kind-of crude version of flipping. The image is actually flipped
+                # on its center position, which is not the same as mirroring the
+                # whole view. However, on this canvas, the canvas is always at 0,
+                # with the image at the center, so this works.
+                # TODO: support flip generically.
+                flip = self.cnvs.flip if hasattr(self.cnvs, "flip") else 0
+                if flip & wx.VERTICAL:
+                    self._p_pos = self._p_pos[0], -self._p_pos[1]
+                if flip & wx.HORIZONTAL:
+                    self._p_pos = -self._p_pos[0], self._p_pos[1]
+
                 view_pos = self.view_width - margin_w, self.view_height - margin_h
                 self._label.colour = self.colour
                 self._label.pos = Vec(view_pos[0], view_pos[1])
