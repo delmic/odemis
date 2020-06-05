@@ -1244,7 +1244,7 @@ class Stream(object):
         raw = self.raw
         if not raw:
             raise LookupError("Cannot compute pixel raw value as stream has no data")
-        return raw[0][..., pixel_pos[1], pixel_pos[0]]
+        return raw[0][..., pixel_pos[1], pixel_pos[0]].tolist()
 
     def getBoundingBox(self, im=None):
         """

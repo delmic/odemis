@@ -1240,7 +1240,8 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
         # TODO: update the condition with self.stream.tint.value != "fittorgb"
         if not hasattr(self.stream, "fitToRGB") or not self.stream.fitToRGB.value:
-            av_data = float(numpy.mean(data[spec_range[0]:spec_range[1] + 1]))
+            # Use .tolist() to force scalar (instead of array of 0 dims)
+            av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1]).tolist()
             return av_data
         else:
             # divide the range into 3 sub-ranges (BRG) of almost the same length
@@ -1253,9 +1254,9 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
             grange[1] = max(grange)
             rrange[1] = max(rrange)
 
-            av_b = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
-            av_g = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
-            av_r = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
+            av_b = numpy.mean(data[brange[0]:brange[1] + 1]).tolist()
+            av_g = numpy.mean(data[grange[0]:grange[1] + 1]).tolist()
+            av_r = numpy.mean(data[rrange[0]:rrange[1] + 1]).tolist()
 
             return av_b, av_g, av_r
 
