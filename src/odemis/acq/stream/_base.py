@@ -1160,7 +1160,7 @@ class Stream(object):
                 # Pyramidal => use the smallest version
                 data = self._getMergedRawImage(data, data.maxzoom)
 
-            # We only do backgrsrc/odemis/acq/stream/_base.pyound subtraction when automatically selecting raw
+            # We only do background subtraction when automatically selecting raw
             bkg = self.background.value
             if bkg is not None:
                 try:
