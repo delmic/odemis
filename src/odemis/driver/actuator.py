@@ -37,7 +37,7 @@ from past.builtins import basestring
 
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
-                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
+                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
 
 
 class MultiplexActuator(model.Actuator):
@@ -2189,7 +2189,7 @@ class LinkedHeightActuator(model.Actuator):
     collide with the bottom of the stage/sample. It also allows to handle the main need that moving the stage Z
     should also move the focus Z.
     """
-    def __init__(self, name, role, children, dependencies, **kwargs):
+    def __init__(self, name, role, children, dependencies, daemon=None, **kwargs):
         """
         :param name: (string)
         :param role: (string)
@@ -2229,9 +2229,8 @@ class LinkedHeightActuator(model.Actuator):
             axes_def[an] = copy.deepcopy(self._stage.axes[an])
             axes_def[an].canUpdate = False
 
-        model.Actuator.__init__(self, name, role, axes=axes_def, dependencies=dependencies,
+        model.Actuator.__init__(self, name, role, axes=axes_def, dependencies=dependencies, daemon=daemon,
                                 **kwargs)
-        self._metadata[model.MD_HW_NAME] = "LinkedHeightActuator"
 
         # will take care of executing axis moves asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -2251,7 +2250,7 @@ class LinkedHeightActuator(model.Actuator):
         # Create a linked height focus child object to control the movement of the lens stage Z axis
         if "focus" in children:
             ckwargs = children["focus"]
-            self._focus = LinkedHeightFocus(parent=self, dependencies={"lensz": self._lensz}, **ckwargs)
+            self._focus = LinkedHeightFocus(parent=self, daemon=daemon, dependencies={"lensz": self._lensz}, **ckwargs)
             self.children.value.add(self._focus)
         else:
             raise ValueError("Focus should be in actuator's children.")
@@ -2260,7 +2259,7 @@ class LinkedHeightActuator(model.Actuator):
         if model.hasVA(self._stage, "speed"):
             self.speed = self._stage.speed
 
-    @roattribute
+    @property
     def executor(self):
         """ Expose executor as property to be shared by the child focus object"""
         return self._executor
@@ -2508,16 +2507,15 @@ class LinkedHeightFocus(model.Actuator):
         actuator) -> actuator to be used for this axis (Presumably the lens Z axis)
         :param rng: the focus range
         """
-        self.parent = parent
-        self.range = rng
+        self._range = rng
         axes_def = {
             "z": model.Axis(unit="m", range=rng),
         }
-
-        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
-        self._metadata[model.MD_HW_NAME] = "LinkedHeightFocus"
         # Get the shared executor from the parent
         self._executor = parent.executor
+        # self._executor = None
+        model.Actuator.__init__(self, name, role, parent=parent, dependencies=dependencies, axes=axes_def, **kwargs)
+        self._metadata[model.MD_HW_NAME] = "LinkedHeightFocus"
 
         self.position = model.VigilantAttribute({},
                                                 unit="m", readonly=True)
@@ -2531,12 +2529,13 @@ class LinkedHeightFocus(model.Actuator):
 
         # Set the focus deactive value from the following special case:
         # (when the lens is in deactive mode & parent stage Z is at max)
-        focus_value = self._getFocusValue(target_lensz=self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE],
+        # focus_value = self._getFocusValue(target_lensz=self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z'],
+        focus_value = self._getFocusValue(target_lensz=-0.006,
                                           target_stagez=self.parent.axes['z'].range[1])
         self.updateMetadata({model.MD_FAV_POS_DEACTIVE: focus_value})
         # If the current initial position is not in focus, set md active position with focus range average
         if not self.isInFocus():
-            self.updateMetadata({model.MD_FAV_POS_ACTIVE: numpy.mean(self.range)})
+            self.updateMetadata({model.MD_FAV_POS_ACTIVE: self._range[0]})
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -2561,7 +2560,7 @@ class LinkedHeightFocus(model.Actuator):
         (the method is public to be used from the parent)
         :return: True if position in focus range, None otherwise
         """
-        if self.range[0] <= self.position.value['z'] <= self.range[1]:
+        if self._range[0] <= self.position.value['z'] <= self._range[1]:
             return True
 
     @isasync
@@ -2577,7 +2576,7 @@ class LinkedHeightFocus(model.Actuator):
         # Prevent movement when parent rx != 0
         self._checkParentRxRotation()
 
-        foc = pos["z"] * 1e3
+        foc = pos["z"]
         f = self._executor.submit(self._doMoveAbs, foc)
         return f
 
@@ -2594,7 +2593,7 @@ class LinkedHeightFocus(model.Actuator):
         # Prevent movement when parent rx != 0
         self._checkParentRxRotation()
 
-        foc = shift["z"] * 1e3
+        foc = shift["z"]
         f = self._executor.submit(self._doMoveRel, foc)
         return f
 
@@ -2651,7 +2650,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         lensz = self._lensz.position.value['z'] if target_lensz is None else target_lensz
         stagez = self.parent.position.value['z'] if target_stagez is None else target_stagez
-        focus_max = self.range[-1]
+        focus_max = self._range[1]
         focus_pos = lensz - stagez + self._metadata[model.MD_POS_COR] + focus_max
         return float(focus_pos)
 
@@ -2664,7 +2663,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         focus = self.position.value['z'] if target_focus is None else target_focus
         stagez = self.parent.position.value['z'] if target_stagez is None else target_stagez
-        focus_max = self.range[-1]
+        focus_max = self._range[1]
         lensz_pos = focus + stagez - self._metadata[model.MD_POS_COR] - focus_max
         return float(lensz_pos)
 
@@ -2688,7 +2687,7 @@ class LinkedHeightFocus(model.Actuator):
             self.updatePosition(self._lensz.position.value)
         except Exception:
             logging.exception("Unexpected failure when updating position")
-
+    #
     @isasync
     def reference(self, axes):
         """Reference the underlying lens stage"""
