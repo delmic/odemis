@@ -1,3 +1,21 @@
+odemis (3.0.3-1) xenial; urgency=medium
+
+  * New version 3.0.3
+  * Main bug fixes and improvements:
+    - Fix CL intensity stream sometimes failing due to SEM resolution off by 1.
+    - Fix regression on calibration of old Andor SR-193.
+    - After a Andor Shamrock to a mirror grating, the wavelength is always reset to 0
+    - Spectrum plot wavelength axis was sometimes playing hide-and-seek,
+      we told it that it's a little naughty. Now it'll behave well.
+    - Fix regression preventing the back-end from displaying the cause of an error.
+      We can finally have nice and clear errors again, or does that exist?
+    - In some rare cases some text in alignment tab would play hide-and-seek.
+      They also heard from us and will behave well.
+    - The tile plugin will now acquire all the SPARC streams, not just the first one.
+    - For IDS uEye cameras, don't fail to start if there is no shutter control.
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 08 Jun 2020 08:58:47 +0200
+
 odemis (3.0.2-1) xenial; urgency=medium
 
   * New version 3.0.2
