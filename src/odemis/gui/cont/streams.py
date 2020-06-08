@@ -1484,7 +1484,7 @@ class StreamBarController(object):
         if title in self.menu_actions:
             logging.debug("Removing %s action from stream panel", title)
             del self.menu_actions[title]
-            self._stream_bar.btn_add_stream.set_choices(self.menu_actions)
+            self._stream_bar.btn_add_stream.remove_choice(title)
 
     def to_static_mode(self):
         self.static_mode = True
