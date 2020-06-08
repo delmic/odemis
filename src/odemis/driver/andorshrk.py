@@ -1557,9 +1557,11 @@ class Shamrock(model.Actuator):
                 actions.append((axis, self._doSetWavelengthRel, s))
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusRel, s))
-            elif axis == self._slit_names.values():
+            elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((axis, self._doSetSlitRel, sid, s))
+            else:
+                raise NotImplementedError("Relative move of axis %s not supported" % (axis,))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
