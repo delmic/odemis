@@ -2250,19 +2250,16 @@ class LinkedHeightActuator(model.Actuator):
         # Create a linked height focus child object to control the movement of the lens stage Z axis
         if "focus" in children:
             ckwargs = children["focus"]
-            self._focus = LinkedHeightFocus(parent=self, daemon=daemon, dependencies={"lensz": self._lensz}, **ckwargs)
+            self._focus = LinkedHeightFocus(parent=self, executor=self._executor, daemon=daemon, dependencies={"lensz": self._lensz}, **ckwargs)
             self.children.value.add(self._focus)
+
+            self._focus.updatePosition(self._lensz.position.value)
         else:
             raise ValueError("Focus should be in actuator's children.")
 
         # Add speed if it's in stage
         if model.hasVA(self._stage, "speed"):
             self.speed = self._stage.speed
-
-    @property
-    def executor(self):
-        """ Expose executor as property to be shared by the child focus object"""
-        return self._executor
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -2456,7 +2453,7 @@ class LinkedHeightActuator(model.Actuator):
         # Only reference if the lens stage is already referenced and in deactive position
         if not model.hasVA(self._lensz, "referenced"):
             raise ValueError("Lens has to be initially referenced.")
-        f = self._lensz.moveAbs({'z': self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]})
+        f = self._lensz.moveAbs({'z': self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']})
         f.result()
         # Reference the dependant stage then update position
         f = self._stage.reference(axes)
@@ -2497,7 +2494,7 @@ class LinkedHeightFocus(model.Actuator):
     This wrapper is the child of LinkedHeightActuator, it controls the lens stage Z axis and provide the means to convert it to
     focus value and vice versa. It also shares the same executor for the movement functions with the parent.
     """
-    def __init__(self, name, role, parent, dependencies, rng, **kwargs):
+    def __init__(self, name, role, parent, dependencies, rng, executor, **kwargs):
         """
         :param name: (string)
         :param role: (string)
@@ -2512,30 +2509,45 @@ class LinkedHeightFocus(model.Actuator):
             "z": model.Axis(unit="m", range=rng),
         }
         # Get the shared executor from the parent
-        self._executor = parent.executor
-        # self._executor = None
+        self._executor = executor
         model.Actuator.__init__(self, name, role, parent=parent, dependencies=dependencies, axes=axes_def, **kwargs)
-        self._metadata[model.MD_HW_NAME] = "LinkedHeightFocus"
 
-        self.position = model.VigilantAttribute({},
-                                                unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
 
-        self.updateMetadata({model.MD_POS_COR: -0.005})
+        # self.updateMetadata({model.MD_POS_COR: -0.005})
+        self._metadata[model.MD_POS_COR] = {'z': 0}
         # Get the underlying lens stage from the passed dependencies list
-        self._lensz = list(dependencies.values())[0]
+        self._lensz = dependencies["lensz"]
         # position will be updated whenever the underlying lens stage is changed
-        self._lensz.position.subscribe(self.updatePosition)
-        self.updatePosition(self._lensz.position.value)
+        self._lensz.position.subscribe(self.updatePosition, init=True)
+        # self.updatePosition(self._lensz.position.value)
 
         # Set the focus deactive value from the following special case:
         # (when the lens is in deactive mode & parent stage Z is at max)
         # focus_value = self._getFocusValue(target_lensz=self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z'],
-        focus_value = self._getFocusValue(target_lensz=-0.006,
-                                          target_stagez=self.parent.axes['z'].range[1])
-        self.updateMetadata({model.MD_FAV_POS_DEACTIVE: focus_value})
+        # focus_value = self._getFocusValue(target_lensz=-0.006,
+        #                                   target_stagez=self.parent.axes['z'].range[1])
+        lens_deactive = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
+        focus_deactive_value = self._range[1] + (lens_deactive - self._lensz.axes['z'].range[1])
+        self._metadata[model.MD_FAV_POS_DEACTIVE] = {'z': focus_deactive_value}
+
         # If the current initial position is not in focus, set md active position with focus range average
         if not self.isInFocus():
             self.updateMetadata({model.MD_FAV_POS_ACTIVE: self._range[0]})
+
+        self.referenced = model.VigilantAttribute({}, readonly=True)
+        # listen to reference changes from the underlying stage
+        logging.debug("Subscribing to reference of dependency %s", self._lensz.name)
+        self._lensz.referenced.subscribe(self._ondepStageReferenced)
+        self._ondepStageReferenced(self._lensz.referenced.value)
+
+    def _ondepStageReferenced(self, cref):
+        """
+        Update the referenced value from the underlying stage
+        """
+        # Directly set the value from the updated argument
+        if 'z' in cref:
+            self.referenced._set_value(cref['z'], force_write=True)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -2552,7 +2564,8 @@ class LinkedHeightFocus(model.Actuator):
         self.position._set_value({'z': focus_val}, force_write=True)
         # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
         if self.isInFocus():
-            self.updateMetadata({model.MD_FAV_POS_ACTIVE: self.position.value['z']})
+            self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
+            # self.updateMetadata({model.MD_FAV_POS_ACTIVE: self.position.value['z']})
 
     def isInFocus(self):
         """
@@ -2573,6 +2586,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         if not pos:
             return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         # Prevent movement when parent rx != 0
         self._checkParentRxRotation()
 
@@ -2590,6 +2604,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         if not shift:
             return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
         # Prevent movement when parent rx != 0
         self._checkParentRxRotation()
 
@@ -2632,9 +2647,9 @@ class LinkedHeightFocus(model.Actuator):
         if adjust:
             # Get the lens value with the requested target parent stage Z position
             lens_pos = self._getLensZValue(target_stagez=pos)
-        elif pos == self._metadata[model.MD_FAV_POS_DEACTIVE]:
+        elif util.almost_equal(pos, self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], rtol=1e-3):
             # Set the lens position with the lens default deactive value
-            lens_pos = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+            lens_pos = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
         else:
             # Change focus in active range
             lens_pos = self._getLensZValue(target_focus=pos)
@@ -2648,10 +2663,13 @@ class LinkedHeightFocus(model.Actuator):
         :param target_stagez: the requested parent stage Z value, if None current value is taken
         :return: Calculated focus value
         """
+        if model.MD_POS_COR not in self._metadata:
+            logging.error("%s not in metadata" % model.MD_POS_COR)
+            return
         lensz = self._lensz.position.value['z'] if target_lensz is None else target_lensz
         stagez = self.parent.position.value['z'] if target_stagez is None else target_stagez
         focus_max = self._range[1]
-        focus_pos = lensz - stagez + self._metadata[model.MD_POS_COR] + focus_max
+        focus_pos = lensz - stagez + self._metadata[model.MD_POS_COR]['z'] + focus_max
         return float(focus_pos)
 
     def _getLensZValue(self, target_focus=None, target_stagez=None):
@@ -2664,14 +2682,15 @@ class LinkedHeightFocus(model.Actuator):
         focus = self.position.value['z'] if target_focus is None else target_focus
         stagez = self.parent.position.value['z'] if target_stagez is None else target_stagez
         focus_max = self._range[1]
-        lensz_pos = focus + stagez - self._metadata[model.MD_POS_COR] - focus_max
+        lensz_pos = focus + stagez - self._metadata[model.MD_POS_COR]['z'] - focus_max
         return float(lensz_pos)
 
     def _checkParentRxRotation(self):
         """
         Throws exception if the parent stage is rotated around the X axis (rx !=0)
         """
-        if self.parent.position.value['rx'] != 0:
+        if not util.almost_equal(self.parent.position.value['rx'], 0, atol=1e-3):
+        # if self.parent.position.value['rx'] != 0:
             raise ValueError("Focus movement is not allowed while parent stage Rx is not equal to 0.")
 
     def stop(self, axes=None):
