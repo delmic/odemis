@@ -56,7 +56,9 @@ CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [0.2, -0.1]}
 CONFIG_CNT = {"name": "cnt", "role": "cnt", "source":0}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3]],
                   "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3,
-                  "park": [8, 8]}
+                  "park": [8, 8],
+                  "scanning_ttl": {4: True, 2: [True, "external"], 3: [False, "blanker", True]}
+                  }
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
@@ -202,6 +204,12 @@ class TestSEM(unittest.TestCase):
         settle = self.scanner.settleTime
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_ttl(self):
+        # Just check the VA are created and support changing the values
+        for v in (True, False, None):
+            self.scanner.external.value = v
+            self.scanner.blanker.value = v
 
 #     @unittest.skip("simple")
     def test_acquire(self):

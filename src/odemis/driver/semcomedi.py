@@ -2594,13 +2594,16 @@ class Scanner(model.Emitter):
           (lower/upper limit in X) if magnification is 1 (in m)
         park (None or 2-tuple of (0<=float)): voltage of resting position,
           if None, it will default to top-left corner.
-        scanning_ttl (None or dict of int -> (bool or bool, str)): list of
-          digital output ports to indicate the ebeam is scanning or not.
-          If True, it is set to high when scanning, with False, the output is
-          inverted.
+        scanning_ttl (None or dict of int -> (bool or (bool, str), or (bool, str, bool))):
+          List of digital output ports to indicate the ebeam is scanning or not.
+          First boolean is "high_auto": if True, it is set to high when scanning,
+            with False, the output is inverted.
           If a str is provided, a VA with that name will be created, and will
-          allow to force the TTL to enabled (True) or disabled (False), with
-          None (auto) being the default.
+            allow to force the TTL to enabled (True) or disabled (False), in
+            addition to the automatic behaviour (None) which is the default.
+          The second boolean is "high_enabled": if True (default), it will be set
+            to high when VA is True. Otherwise, the TTL will be set to low when
+            the VA is True.
         fastpart (boolean): if True, will park immediately after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
         max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
@@ -2644,21 +2647,23 @@ class Scanner(model.Emitter):
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
 
-        self._scanning_ttl = {}
+        self._scanning_ttl = {}  # DO number -> high_auto (bool), high_enabled (bool), name (str)
         self._ttl_setters = []  # To hold the partial VA setters
         self._ttl_lock = threading.Lock()  # Acquire to change the hw TTL state
 
         if scanning_ttl:
-            self._scanning_ttl = {}
             for c, v in scanning_ttl.items():
                 if not isinstance(v, collections.Iterable):
                     # If no name given, put None as name
                     v = (v, None)
-                elif len(v) != 2:
-                    raise ValueError("scanning_ttl expects for each channel a boolean "
-                                     "and a name (or just a boolean), but got %s", v)
+                if len(v) == 2:
+                    # No "high_enabled" => default to True
+                    v = v[0], True, v[1]
+                elif len(v) == 3:
+                    v = v[0], v[2], v[1]  # reorder
                 else:
-                    v = tuple(v)
+                    raise ValueError("scanning_ttl expects for each channel a "
+                                     "[boolean, [name, [boolean]]], but got %s" % (v,))
                 self._scanning_ttl[c] = v
 
             if parent._dio_subdevice is None and not parent._test:
@@ -2671,7 +2676,7 @@ class Scanner(model.Emitter):
                     ndioc = comedi.get_n_channels(parent._device, parent._dio_subdevice)
                 else:
                     ndioc = 16
-                for c, (s, vaname) in self._scanning_ttl.items():
+                for c, (high_auto, high_enabled, vaname) in self._scanning_ttl.items():
                     if not 0 <= c <= ndioc:
                         raise ValueError("DAQ device '%s' only has %d digital output ports" %
                                          (parent._device_name, ndioc))
@@ -3018,15 +3023,15 @@ class Scanner(model.Emitter):
         return value
         """
         with self._ttl_lock:
-            for c, (s, name) in self._scanning_ttl.items():
+            for c, (high_auto, high_enabled, name) in self._scanning_ttl.items():
                 if name != vaname:
                     continue
                 try:
                     if value is None:
                         # Put it as the _set_scan_state would
-                        v = int(s == self._scan_state)
-                    else:  # Use the value as is (and invert it if s == False)
-                        v = int(s == value)
+                        v = int(high_auto == self._scan_state)
+                    else:  # Use the value as is (and invert it if not high_active)
+                        v = int(high_enabled == value)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
@@ -3066,12 +3071,12 @@ class Scanner(model.Emitter):
 
             logging.debug("Updating scanning state to %s", scanning)
             self._scan_state = scanning
-            for c, (s, name) in self._scanning_ttl.items():
+            for c, (high_auto, high_enabled, name) in self._scanning_ttl.items():
                 if name and getattr(self, name).value is not None:
                     logging.debug("Skipping digital output port %d set to manual", c)
                     continue
                 try:
-                    v = int(s == scanning)
+                    v = int(high_auto == scanning)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
                         comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)

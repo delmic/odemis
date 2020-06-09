@@ -78,6 +78,9 @@ SPARC2: {
         settle_time: 5.e-6, # s
         scan_active_delay: 0.5, # s
         hfw_nomag: 0.25, # m
+        # output ports -> True (high when scanning) or False (high when parked)
+        # + property name + True (high when set to True) or False (high when set to False)
+        scanning_ttl: {4: True, 2: [True, "external"], 3: [False, "blanker", True]},
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
