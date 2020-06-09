@@ -174,7 +174,7 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
         # Ideally this would be done in .acquire(), just after .prepare(), or in .prepare()
         # But as they return futures, it's a little more complex to do than just
         # here.
-        self._sccd._linkHwAxes()
+        self._sccd._changeLensAxes()
         return SEMSpectrumMDStream._adjustHardwareSettings(self)
 
     def _runAcquisition(self, future):
