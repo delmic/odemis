@@ -2309,6 +2309,11 @@ class MCS2(model.Actuator):
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
+        for name, channel in self._axis_map.items():
+            self._set_speed(channel, speed)
+            self._set_accel(channel, accel)
+            self._set_hold_time(channel, hold_time)
+
         self.position = model.VigilantAttribute({}, readonly=True)
 
         # will take care of executing axis move asynchronously
@@ -2329,11 +2334,6 @@ class MCS2(model.Actuator):
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
         self._updatePosition()
-
-        for name, channel in self._axis_map.items():
-            self._set_speed(channel, speed)
-            self._set_accel(channel, accel)
-            self._set_hold_time(channel, hold_time)
 
         self._speed = {}
         self._updateSpeed()
@@ -2491,7 +2491,7 @@ class MCS2(model.Actuator):
         """
         Ask the controller if it is referenced.
         """
-        return bool(self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel) | SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
+        return bool(self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
 
     def _is_channel_moving(self, channel):
         mask = SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
