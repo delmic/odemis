@@ -28,8 +28,8 @@ import copy
 import gc
 import logging
 import math
-from odemis import acq, model, dataio
-from odemis.acq import stream, path
+from odemis import model, dataio
+from odemis.acq import stream, path, acqmng
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
@@ -254,7 +254,7 @@ class AcquisitionDialog(xrcfr_acq):
         # Add the overlay stream if requested, and folds all the streams
         if streams and self.chkbox_fine_align.Value:
             streams.append(self._ovrl_stream)
-        self._acq_streams = acq.foldStreams(streams, self._acq_streams)
+        self._acq_streams = acqmng.foldStreams(streams, self._acq_streams)
         return self._acq_streams
 
     def find_current_preset(self):
@@ -355,7 +355,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         streams = self.get_acq_streams()
         if streams:
-            acq_time = acq.estimateTime(streams)
+            acq_time = acqmng.estimateTime(streams)
             acq_time = math.ceil(acq_time)  # round a bit pessimisticly
             txt = "The estimated acquisition time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -515,7 +515,7 @@ class AcquisitionDialog(xrcfr_acq):
                 pathname, base = os.path.split(self.filename.value)
                 s.filename.value = base
 
-        self.acq_future = acq.acquire(streams, self._main_data_model.settings_obs)
+        self.acq_future = acqmng.acquire(streams, self._main_data_model.settings_obs)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
@@ -585,7 +585,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.lbl_acqestimate.SetLabel("Saving file...")
         self.lbl_acqestimate.Parent.Layout()
         try:
-            thumb = acq.computeThumbnail(self._view.stream_tree, future)
+            thumb = acqmng.computeThumbnail(self._view.stream_tree, future)
             filename = self.filename.value
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)

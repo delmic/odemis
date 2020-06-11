@@ -35,8 +35,8 @@ from __future__ import division
 from collections import OrderedDict
 import logging
 import math
-from odemis import model, dataio, acq
-from odemis.acq import stream
+from odemis import model, dataio
+from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
     SpectrumStream, UNDEFINED_ROI, StaticStream, LiveStream, Stream
 import odemis.gui
@@ -124,13 +124,13 @@ class TimelapsePlugin(Plugin):
         p = self.period.value
         ss, last_ss = self._get_acq_streams()
 
-        sacqt = acq.estimateTime(ss)
+        sacqt = acqmng.estimateTime(ss)
         logging.debug("Estimating %g s acquisition for %d streams", sacqt, len(ss))
         intp = max(0, p - sacqt)
 
         dur = sacqt * nb + intp * (nb - 1)
         if last_ss:
-            dur += acq.estimateTime(ss + last_ss) - sacqt
+            dur += acqmng.estimateTime(ss + last_ss) - sacqt
 
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(dur), force_write=True)
@@ -335,7 +335,7 @@ class TimelapsePlugin(Plugin):
         self._start_saving_threads(4)
 
         ss, last_ss = self._get_acq_streams()
-        sacqt = acq.estimateTime(ss)
+        sacqt = acqmng.estimateTime(ss)
         p = self.period.value
         nb = self.numberOfAcquisitions.value
 
@@ -384,7 +384,7 @@ class TimelapsePlugin(Plugin):
         f._stream = st
         if last_ss:
             nb -= 1
-            extra_dur = acq.estimateTime([st] + last_ss)
+            extra_dur = acqmng.estimateTime([st] + last_ss)
         else:
             extra_dur = 0
         self._hijack_live_stream(st, f, nb, fn_pat, extra_dur)
@@ -408,8 +408,8 @@ class TimelapsePlugin(Plugin):
         if last_ss:
             logging.debug("Acquiring last acquisition, with all the streams")
             ss = [st] + last_ss
-            f.set_progress(end=time.time() + acq.estimateTime(ss))
-            das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
+            f.set_progress(end=time.time() + acqmng.estimateTime(ss))
+            das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
             self._save_data(fn_pat % (nb,), das)
 
         self._stop_saving_threads()  # Wait for all the data to be stored
@@ -466,7 +466,7 @@ class TimelapsePlugin(Plugin):
         bs, ext = splitext(fn)
         fn_pat = bs + "-%.5d" + ext
 
-        sacqt = acq.estimateTime(ss)
+        sacqt = acqmng.estimateTime(ss)
         intp = max(0, p - sacqt)
         if p < sacqt:
             logging.warning(
@@ -486,11 +486,11 @@ class TimelapsePlugin(Plugin):
             dur = sacqt * left + intp * (left - 1)
             if left == 1 and last_ss:
                 ss += last_ss
-                dur += acq.estimateTime(ss) - sacqt
+                dur += acqmng.estimateTime(ss) - sacqt
 
             startt = time.time()
             f.set_progress(end=startt + dur)
-            das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
+            das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
             if f.cancelled():
                 dlg.resumeSettings()
                 return

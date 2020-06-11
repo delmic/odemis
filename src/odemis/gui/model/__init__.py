@@ -30,7 +30,7 @@ import collections
 import logging
 import math
 from odemis import model
-from odemis.acq import path, leech, SettingsObserver
+from odemis.acq import path, leech, acqmng
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
     ARPolarimetryProjection
@@ -336,7 +336,7 @@ class MainGUIData(object):
 
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
-            self.settings_obs = SettingsObserver(comps_with_role)
+            self.settings_obs = acqmng.SettingsObserver(comps_with_role)
 
             # There are two kinds of SEM (drivers): the one that are able to
             # control the magnification, and the one that cannot. The former ones

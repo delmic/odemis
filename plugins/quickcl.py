@@ -27,8 +27,8 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 import numpy
-from odemis import dataio, model, gui, acq, util
-from odemis.acq import stream
+from odemis import dataio, model, gui, util
+from odemis.acq import stream, acqmng
 from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream, CLSettingsStream
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
@@ -500,7 +500,7 @@ class QuickCLPlugin(Plugin):
 
         # Acquire (even if it was live, to be sure it's the data is up-to-date)
         ss = self._get_acq_streams()
-        dur = acq.estimateTime(ss)
+        dur = acqmng.estimateTime(ss)
         startt = time.time()
         future._cur_f = InstantaneousFuture()
         future.task_canceller = self._acq_canceller
@@ -508,7 +508,7 @@ class QuickCLPlugin(Plugin):
         future.set_progress(end=startt + dur)
         dlg.showProgress(future)
 
-        future._cur_f = acq.acquire(ss, self.main_app.main_data.settings_obs)
+        future._cur_f = acqmng.acquire(ss, self.main_app.main_data.settings_obs)
         das, e = future._cur_f.result()
         if future.cancelled():
             raise CancelledError()

@@ -30,8 +30,8 @@ from __future__ import division
 
 import argparse
 import logging
-from odemis import dataio, model, acq
-from odemis.acq import stream
+from odemis import dataio, model
+from odemis.acq import stream, acqmng
 import sys
 import os
 import time
@@ -88,7 +88,7 @@ def acquire_timelapse(num, period, filename):
             start = time.time()
 
             # Acquire all the images
-            f = acq.acquire(acq_streams)
+            f = acqmng.acquire(acq_streams)
             data, e = f.result()
             if e:
                 logging.error("Acquisition failed with %s", e)

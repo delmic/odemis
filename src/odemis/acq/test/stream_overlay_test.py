@@ -23,9 +23,9 @@ This file is part of Odemis.
 from __future__ import division
 
 import logging
-from odemis import model, acq
+from odemis import model
 import odemis
-from odemis.acq import stream
+from odemis.acq import stream, acqmng
 from odemis.util import test
 import os
 import time
@@ -115,7 +115,7 @@ class TestOverlayStream(unittest.TestCase):
         ovrl.repetition.value = (4, 4)
 
         streams = [sems, fs1, fs2, ovrl]
-        est_time = acq.estimateTime(streams)
+        est_time = acqmng.estimateTime(streams)
 
         sum_est_time = sum(s.estimateAcquisitionTime() for s in streams)
         self.assertGreaterEqual(est_time, sum_est_time)
@@ -128,7 +128,7 @@ class TestOverlayStream(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(streams)
+        f = acqmng.acquire(streams)
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -145,7 +145,7 @@ class TestOverlayStream(unittest.TestCase):
             for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
                 self.assertNotIn(k, d.metadata)
 
-        # thumb = acq.computeThumbnail(st, f)
+        # thumb = acqmng.computeThumbnail(st, f)
         # self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end

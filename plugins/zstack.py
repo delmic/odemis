@@ -27,8 +27,8 @@ import copy
 import logging
 import math
 import numpy
-from odemis import model, dataio, acq
-from odemis.acq import stream
+from odemis import model, dataio
+from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
     SpectrumStream, UNDEFINED_ROI, StaticStream
 import odemis.gui
@@ -131,7 +131,7 @@ class ZStackPlugin(Plugin):
         step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
         ss = self._get_acq_streams()
 
-        sacqt = acq.estimateTime(ss)
+        sacqt = acqmng.estimateTime(ss)
         logging.debug("Estimating %g s acquisition for %d streams", sacqt, len(ss))
 
         dur = sacqt * nsteps + step_time * (nsteps - 1)
@@ -187,7 +187,7 @@ class ZStackPlugin(Plugin):
             # No special acquisition streams
             ss = live_st
 
-        self._acq_streams = acq.foldStreams(ss, self._acq_streams)
+        self._acq_streams = acqmng.foldStreams(ss, self._acq_streams)
         return self._acq_streams
 
     def start(self):
@@ -344,7 +344,7 @@ class ZStackPlugin(Plugin):
         nb = self.numberofAcquisitions.value
         ss = self._get_acq_streams()
 
-        sacqt = acq.estimateTime(ss)
+        sacqt = acqmng.estimateTime(ss)
         
         completed = False
 
@@ -369,7 +369,7 @@ class ZStackPlugin(Plugin):
 
                 startt = time.time()
                 f.set_progress(end=startt + dur)
-                das, e = acq.acquire(ss, self.main_app.main_data.settings_obs).result()
+                das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
                 if images is None:
                     # Copy metadata from the first acquisition
                     images = [[] for i in range(len(das))]

@@ -25,20 +25,20 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
 import math
 import numpy
-from odemis import dataio, model, acq
-from odemis.acq import stream, drift
+from odemis import dataio, model
+from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import executeAsyncTask
 import os.path
+from past.builtins import long
 import threading
 import time
 
@@ -886,7 +886,7 @@ class Correlator2D(Plugin):
         exporter = dataio.find_fittest_converter(fn)
 
         try:
-            f = acq.acquire(strs, self.main_app.main_data.settings_obs)
+            f = acqmng.acquire(strs, self.main_app.main_data.settings_obs)
             dlg.showProgress(f)
             das, e = f.result()  # blocks until all the acquisitions are finished
         except CancelledError:

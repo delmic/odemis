@@ -26,8 +26,7 @@ import logging
 import math
 from odemis import model
 import odemis
-from odemis import acq
-from odemis.acq import align, stream
+from odemis.acq import align, stream, acqmng
 from odemis.dataio import hdf5
 from odemis.driver.actuator import ConvertStage
 from odemis.util import test, mock
@@ -149,7 +148,7 @@ class TestAlignment(unittest.TestCase):
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
 
         # start one image acquisition (so it should do the calibration)
-        f = acq.acquire([st])
+        f = acqmng.acquire([st])
         received, _ = f.result()
         self.assertTrue(received, "No image received after 30 s")
 
@@ -168,7 +167,7 @@ class TestAlignment(unittest.TestCase):
         # Check the calibration doesn't happen again on a second acquisition
         bad_cor = (-1, -1) # stupid impossible value
         self.sed.updateMetadata({model.MD_POS_COR: bad_cor})
-        f = acq.acquire([st])
+        f = acqmng.acquire([st])
         received, _ = f.result()
         self.assertTrue(received, "No image received after 10 s")
 
@@ -182,7 +181,7 @@ class TestAlignment(unittest.TestCase):
         f.result() # make sure the move is over
         time.sleep(0.1) # make sure the stream had time to detect position has changed
 
-        f = acq.acquire([st])
+        f = acqmng.acquire([st])
         received, _ = f.result()
         self.assertTrue(received, "No image received after 30 s")
 
