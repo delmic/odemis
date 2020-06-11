@@ -46,8 +46,8 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
-        self.power = model.ListContinuous([0., ], ((0.,), (max_power,)), unit="W", cls=(int, long, float))
-        self.power.subscribe(self._updatePower)
+        self.power = model.ListContinuous([0], ((0,), (max_power,)), unit="W", cls=(int, long, float),
+                                          setter=self._setPower)
         # just one band: white
         # list of 5-tuples of floats
         if spectra is None:
@@ -56,11 +56,13 @@ class Light(model.Emitter):
             raise ValueError("spectra argument must be a list of list of 5 values")
         self.spectra = model.ListVA([tuple(spectra[0])], unit="m", readonly=True)
 
-    def _updatePower(self, value):
-        if value[0] == 0:
-            logging.info("Light is off")
-        else:
+    def _setPower(self, value):
+        if value[0] == self.power.range[1][0]:
             logging.info("Light is on")
+            return self.power.range[1]
+        else:
+            logging.info("Light is off")
+            return self.power.range[0]
 
 
 class Stage(model.Actuator):

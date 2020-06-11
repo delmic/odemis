@@ -37,15 +37,19 @@ class Light(model.Emitter):
         self.powerSupply.value = False  # immediately turn it off
 
         self._shape = ()
-        self.power = model.ListContinuous([0., ], ((0.,), (10.,)), unit="W", cls=(int, long, float),)
-        self.power.subscribe(self._updatePower)
+        self.power = model.ListContinuous([0], ((0,), (10,)), unit="W", cls=(int, long, float),
+                                          setter=self._setPower)
         # just one band: white
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
 
-    def _updatePower(self, value):
+    def _setPower(self, value):
         # Set powerSupply VA based on the power value (True in case of max,
         # False in case of min)
-        pw = value[0]
-        self.powerSupply.value = (pw == self.power.range[1])
+        self.powerSupply.value = (value[0] == self.power.range[1][0])
+
+        if self.powerSupply.value:
+            return self.power.range[1]
+        else:
+            return self.power.range[0]

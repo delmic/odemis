@@ -721,6 +721,10 @@ class ListVA(VigilantAttribute):
         value = _NotifyingList([] if value is None else value, notifier=self._internal_set_value)
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
+        # Wrap the setter
+        self._orig_setter = self._setter
+        self._setter = self._ensure_list_setter
+
     def _check(self, value):
         if not isinstance(value, collections.Iterable):
             raise TypeError("Value '%r' is not a list." % value)
@@ -730,14 +734,13 @@ class ListVA(VigilantAttribute):
         self._set_value(value, must_notify=True)
 
     # Redefine the setter, so we can force to listen to internal modifications
-    def _set_value(self, value, **kwargs):
-        value = _NotifyingList(value, notifier=self._internal_set_value)
-        VigilantAttribute._set_value(self, value, **kwargs)
+    def _ensure_list_setter(self, value):
+        try:
+            v = self._orig_setter(value)
+        except WeakRefLostError:
+            v = self.__default_setter(value)
 
-    value = property(VigilantAttribute._get_value,
-                     _set_value,
-                     VigilantAttribute._del_value,
-                     "The actual value")
+        return _NotifyingList(v, notifier=self._internal_set_value)
 
 
 class ListVAProxy(VigilantAttributeProxy):
@@ -1133,14 +1136,6 @@ class ListContinuous(ListVA, Continuous):
         self._cls = cls or value[0].__class__
         Continuous.__init__(self, range)
         ListVA.__init__(self, value, unit=unit, **kwargs)
-
-    def _set_value(self, value, **kwargs):
-        # force list
-        value = list(value)
-        ListVA._set_value(self, value, **kwargs)
-    # need to overwrite the whole property
-    value = property(ListVA._get_value, _set_value, ListVA._del_value,
-                     "The actual value")
 
     def _check(self, value):
         if not all(isinstance(v, self._cls) for v in value):
