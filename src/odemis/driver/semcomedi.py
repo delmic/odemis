@@ -3030,7 +3030,7 @@ class Scanner(model.Emitter):
                     if value is None:
                         # Put it as the _set_scan_state would
                         v = int(high_auto == self._scan_state)
-                    else:  # Use the value as is (and invert it if not high_active)
+                    else:  # Use the value as is (and invert it if not high_enabled)
                         v = int(high_enabled == value)
                     logging.debug("Setting digital output port %d to %d", c, v)
                     if not self.parent._test:
