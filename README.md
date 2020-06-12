@@ -7,19 +7,21 @@
 
 ## Requirements
 * Linux (tested on Ubuntu 16.04 and 18.04 x86 32-bits and 64-bits)
-* Python (v3.5)
+* Python (v3.5+)
 * Special (forked) version of Pyro4 from Delmic
 
-
 Note: the viewer part is also tested to run on Windows (7 and 10).
+
+For the complete list of dependencies, see the file `requirements.txt`.
 
 ## Installation
 See the `doc/INSTALL.txt` document for the complete installation procedure.
 
 ## Basic usage
 Launch the "Odemis" program, or type on a terminal:
-`odemis-start`  
+`odemis-start`
 Eventually the GUI (Graphical User Interface) will appear.
+As an argument it can take the name of the microscope file corresponding to the back-end.
 
 It is not usually necessary, but if you want, to fully stop odemis (GUI and back-end), type:
 `odemis-stop`
@@ -35,7 +37,7 @@ Run as `odemisd ...`, with ... replaced by the correct arguments. For all the
 possible commands see:
 `odemisd --help`
 
-For example:  
+For example:
 `odemisd --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml`
 
 
@@ -46,8 +48,11 @@ To use the command line interface use:
 To see the list of components:
 `odemis-cli --list`
 
-For example, to set the emission values for the light engine "Spectra", type:  
-`odemis-cli --set-attr Spectra emissions "0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0"`
+For example, to turn on the forth source of the "light" component, type:
+`odemis-cli --set-attr light power "0.0, 0.0, 0.0, 0.2"`
+
+For example, to move the Y axis of the "stage" component by 100µm, type:
+`odemis-cli --move stage y 100`
 
 
 ## License
@@ -62,9 +67,9 @@ make html
 # or
 make latexpdf
 ```
-Then it can be opened with:  
+Then it can be opened with: 
 `firefox _build/html/index.html`
-or  
+or
 `evince _build/latex/odemis-develop.pdf`
 
 ## Testing
