@@ -33,6 +33,7 @@ from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
 from odemis.gui.conf.data import COLORMAPS
+import wx
 import wx.adv
 from matplotlib import cm
 import matplotlib.colors as colors
@@ -178,7 +179,7 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         
 ITEM_WIDTH = 200
 ITEM_HEIGHT = 28
-COLOBAR_WITH_RATIO = 0.6
+COLOBAR_WITH_RATIO = 0.5
 
 
 class ColorMapComboBox(ComboBox):
@@ -194,10 +195,9 @@ class ColorMapComboBox(ComboBox):
         self.colormap_dict = kwargs['colormap_dict']
         self.choices = self.colormap_dict.keys()
         kwargs['choices'] = self.choices
+        kwargs['style'] |= wx.CB_READONLY
         del kwargs['colormap_dict']
         super(ColorMapComboBox, self).__init__(*args, **kwargs)
-        # self.SetForegroundColour(wx.Colour(0, 0, 0, alpha=wx.ALPHA_TRANSPARENT))
-        # self.SetBackgroundColour(wx.Colour(0, 0, 0, alpha=wx.ALPHA_TRANSPARENT))
 
     def OnMeasureItemWidth(self, item):
         return ITEM_WIDTH
@@ -206,10 +206,11 @@ class ColorMapComboBox(ComboBox):
         return ITEM_HEIGHT
 
     def SetCustomTintValue(self, value):
-        self._tint_value = value
         self.Refresh(eraseBackground=True)
 
     def OnDrawItem(self, dc, rect, item, flags):
+
+        r = wx.Rect(*rect)  # make a copy
 
         # Draw a rectangle of the color
         item_name = self.choices[item]
@@ -220,39 +221,27 @@ class ColorMapComboBox(ComboBox):
 
         color_map = tintToColormap(color_map, item_name)
 
-        # Draw color map
-        colorbar_width = rect.width * COLOBAR_WITH_RATIO
-        gradient = getColorbar(color_map, colorbar_width, rect.height)
-        bmp = wx.Bitmap(*gradient.shape[1::-1])
-        bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
-        # image = wx.ImageFromBuffer(*gradient.shape[1::-1], gradient)
-        dc.DrawBitmap(bmp, 0, item * rect.height)
-        dc.DrawText(item_name.title(), colorbar_width + 5, item * rect.height + 5)
+        if flags & wx.adv.ODCB_PAINTING_CONTROL:
+            # for painting the control itself
+            w = r.width
+            h = r.height
 
-    def on_paint(self, evt):
-        """ Handle the paint event
+            color_map = self.colormap_dict.values()[self.GetSelection()]
+            color_map = tintToColormap(color_map)
 
-        Because OwnerDrawnComboBox showed the white background 'behind' the text control (1px
-        at the bottom and to the right), which could not be gotten rid off, we are forced to
-        paint the background in the correct colour ourselves.
-
-        """
-        dc = wx.BufferedPaintDC(self)
-        self.draw(dc)
-        evt.Skip()  # Make sure the event propagates, so the drop-down button will be drawn
-
-    def draw(self, dc):
-        """
-        Override drawing of the combox box to show the colour
-        """
-
-        w = self.Size.GetWidth()
-        h = self.Size.GetHeight()
-        
-        color_map = self.colormap_dict.values()[self.GetSelection()]
-        color_map = tintToColormap(color_map)
-
-        gradient = getColorbar(color_map, w, h)
-        bmp = odemis.gui.util.img.NDImage2wxBitmap(gradient)
-        dc.DrawBitmap(bmp, 0, 0)
+            gradient = getColorbar(color_map, w, h)
+            bmp = wx.EmptyBitmap(*gradient.shape[1::-1])
+            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+            dc.DrawBitmap(bmp, 0, 0)
+            return
+        else:
+            # for painting the items in the popup
+            # Draw color map
+            colorbar_width = r.width * COLOBAR_WITH_RATIO
+            gradient = getColorbar(color_map, colorbar_width, r.height)
+            bmp = wx.Bitmap(*gradient.shape[1::-1])
+            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+            # image = wx.ImageFromBuffer(*gradient.shape[1::-1], gradient)
+            dc.DrawBitmap(bmp, 0, item * r.height)
+            dc.DrawText(item_name.title(), colorbar_width + 5, item * r.height + 5)
 
