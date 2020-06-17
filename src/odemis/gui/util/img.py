@@ -1772,23 +1772,20 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
             legend_ctx.show_text(s.name.value)
 
         # Handle the stream colormap
-        if (stream is None and
-            (hasattr(s, "tint") and tuple(s.tint) != (255, 255, 255)
-           )):
+        if stream is None and hasattr(s, "tint"):
             tint = s.tint.value
             
-            if isinstance(tint, colors.Colormap) or tuple(tint) != (255, 255, 255):
+            if isinstance(tint, colors.Colormap) or tint == FIT_TO_RGB and tint != (255, 255, 255):
 
                 # convert tint to a color map
-
-                if isinstance(tint, list) or isinstance(tint, tuple):
+                if isinstance(tint, tuple):
                     # swap r and b channels
                     b, g, r = tuple(tint)
                     tint = r, g, b
 
                 tint = img.tintToColormap(tint)
             
-                # Draw a gradient of teh colormap
+                # Draw a gradient of the colormap
                 width = int(cell_x_step * 2 * COLORBAR_WIDTH_RATIO)
                 height = int(tint_box_size)
 
@@ -1816,7 +1813,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 legend_ctx.paint()
 
                 legend_x_pos += cell_x_step
-
+                
             legend_ctx.set_source_rgb(*text_color)
 
         legend_x_pos += cell_x_step

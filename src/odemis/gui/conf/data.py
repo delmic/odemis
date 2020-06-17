@@ -899,14 +899,14 @@ def get_hw_config(hw_comp, hw_settings):
 
 # Name (str) to matplotlib.color.ColorMap object
 COLORMAPS = OrderedDict([
-    ("viridis", cm.get_cmap("viridis")),
-    ("inferno", cm.get_cmap("inferno")),
-    ("plasma", cm.get_cmap("plasma")),
-    ('magma', cm.get_cmap('magma')),
-    ('spring', cm.get_cmap('spring')),
-    ('summer', cm.get_cmap('summer')),
-    ('autumn', cm.get_cmap('autumn')),
-    ('winter', cm.get_cmap('winter')),
+    ("Viridis", cm.get_cmap("viridis")),
+    ("Inferno", cm.get_cmap("inferno")),
+    ("Plasma", cm.get_cmap("plasma")),
+    ('Magma', cm.get_cmap('magma')),
+    ('Spring', cm.get_cmap('spring')),
+    ('Summer', cm.get_cmap('summer')),
+    ('Autumn', cm.get_cmap('autumn')),
+    ('Winter', cm.get_cmap('winter')),
 ])
 
 
