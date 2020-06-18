@@ -4018,6 +4018,14 @@ class Sparc2AlignTab(Tab):
         """
         focus_streams = []
         dets = GetSpectrometerFocusingDetectors(focuser)
+
+        # Sort to have the first stream corresponding to the same detector as the
+        # stream in the alignment view. As this stream will be used for showing
+        # the slit line after the autofocus.
+        if self._ccd_stream:
+            ccd = self._ccd_stream.detector
+            dets = sorted(dets, key=lambda d: d.name == ccd.name, reverse=True)
+
         # One "line" stream per detector
         # Add a stream to see the focus, and the slit for lens alignment.
         # As it is a BrightfieldStream, it will turn on the emitter when

@@ -677,7 +677,8 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Turn off the light
     align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
     opm: OpticalPathManager
-    streams: list of streams
+    streams: list of streams. The first stream is used for displaying the last
+       image with the slit closed.
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
           which will eventually return a map of grating/detector -> focus position, the same as AutoFocusSpectrometer
     raises:
@@ -820,10 +821,12 @@ def GetSpectrometerFocusingDetectors(focuser):
         try:
             d = model.getComponent(name=n)
         except LookupError:
+            logging.info("Focuser affects non-existing component %s", n)
             continue
         if d.role.startswith("ccd") or d.role.startswith("sp-ccd"):  # catches ccd*, sp-ccd*
             dets.append(d)
     return dets
+
 
 def _getSpectrometerFocusingComponents(focuser):
     """
