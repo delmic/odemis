@@ -108,11 +108,11 @@ def stop_backend():
         raise IOError("Backend failed to stop, now %s" % status)
 
 
-def assert_pos_almost_equal(actual, expected, *args, **kwargs):
+def assert_pos_almost_equal(actual, expected, ignore_mismatch=False, *args, **kwargs):
     """
     Asserts that two stage positions have almost equal coordinates.
     """
-    if set(expected.keys()) != set(actual.keys()):
+    if not ignore_mismatch and set(expected.keys()) != set(actual.keys()):
         raise AssertionError("Dimensions of position do not match: %s != %s" %
                              (list(actual.keys()), list(expected.keys())))
 
