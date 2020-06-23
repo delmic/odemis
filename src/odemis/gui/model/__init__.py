@@ -1179,11 +1179,12 @@ class StreamView(View):
         ''' Updates .rect and .mpp members of all streams based on the field of view of the buffer
         '''
         half_fov = (self.fov_buffer.value[0] / 2, self.fov_buffer.value[1] / 2)
+        # view_rect is a tuple containing minx, miny, maxx, maxy
         view_rect = (
             self.view_pos.value[0] - half_fov[0],
-            self.view_pos.value[1] + half_fov[1],
-            self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
+            self.view_pos.value[0] + half_fov[0],
+            self.view_pos.value[1] + half_fov[1],
         )
         streams = self.stream_tree.getProjections()
         for stream in streams:

@@ -852,8 +852,8 @@ class RGBSpatialProjection(RGBProjection):
             mpp_rng = (ps[0], max_mpp)
             self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
             full_rect = img.getBoundingBox(raw)
-            l, t, r, b = full_rect
-            rect_range = ((l, b, l, b), (r, t, r, t))
+            minx, miny, maxx, maxy = full_rect
+            rect_range = ((minx, miny, minx, miny), (maxx, maxy, maxx, maxy))
             self.rect = model.TupleContinuous(full_rect, rect_range)
             self.mpp.subscribe(self._onMpp)
             self.rect.subscribe(self._onRect)
@@ -924,8 +924,8 @@ class RGBSpatialProjection(RGBProjection):
             raise LookupError("Failed to find raw data for %s stream", self.stream)
         # if raw is a DataArrayShadow, the image is pyramidal
         if isinstance(raw[0], model.DataArrayShadow):
-            tx, px = divmod(pixel_pos[0], raw.tile_shape[0])
-            ty, py = divmod(pixel_pos[1], raw.tile_shape[1])
+            tx, px = divmod(pixel_pos[0], raw[0].tile_shape[0])
+            ty, py = divmod(pixel_pos[1], raw[0].tile_shape[1])
             raw_tile = raw[0].getTile(tx, ty, 0)
             return raw_tile[py, px]
         else:
@@ -937,7 +937,7 @@ class RGBSpatialProjection(RGBProjection):
     def getBoundingBox(self):
         '''
         Get the bounding box of the whole image, whether it`s tiled or not.
-        return (tuple of floats(l,t,r,b)): Tuple with the bounding box
+        return (tuple of floats(minx, miny, maxx, maxy)): Tuple with the bounding box
         '''
         if hasattr(self, 'rect'):
             rng = self.rect.range
@@ -957,8 +957,8 @@ class RGBSpatialProjection(RGBProjection):
     def _rectWorldToPixel(self, rect):
         """
         Convert rect from world coordinates to pixel coordinates
-        rect (tuple containing x1, y1, x2, y2): Rect on world coordinates
-        return (tuple containing x1, y1, x2, y2): Rect on pixel coordinates
+        rect (tuple containing x1, y1, x2, y2): Rect on world coordinates where x1 < x2 and y1 < y2
+        return (tuple containing x1, y1, x2, y2): Rect on pixel coordinates where x1 < x2 and y1 < y2
         """
         das = self.stream.raw[0]
         md = das.metadata
@@ -977,15 +977,15 @@ class RGBSpatialProjection(RGBProjection):
         # Converts rect from physical to pixel coordinates.
         # The received rect is relative to the center of the image, but pixel coordinates
         # are relative to the top-left corner. So it also needs to sum half image.
-        # The -1 are necessary on the right and bottom sides, as the coordinates of a pixel
-        # are -1 relative to the side of the pixel
-        # The '-' before ps[1] is necessary due to the fact that
-        # Y in pixel coordinates grows down, and Y in physical coordinates grows up
+        # The -1 are necessary on the right and bottom sides (y coordinates), as the coordinates
+        # of a pixel are -1 relative to the side of the pixel
+        # The '-' before ps[1] plus switching the miny,maxy of world coordinates is necessary
+        # due to the fact that Y in pixel coordinates grows down, and Y in physical coordinates grows up
         return (
             int(round(rect[0] / ps[0] + img_shape[0] / 2)),
-            int(round(rect[1] / (-ps[1]) + img_shape[1] / 2)),
+            int(round(rect[3] / (-ps[1]) + img_shape[1] / 2)),
             int(round(rect[2] / ps[0] + img_shape[0] / 2)) - 1,
-            int(round(rect[3] / (-ps[1]) + img_shape[1] / 2)) - 1,
+            int(round(rect[1] / (-ps[1]) + img_shape[1] / 2)) - 1,
         )
 
     def _getTile(self, x, y, z, prev_raw_cache, prev_proj_cache):

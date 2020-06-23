@@ -777,7 +777,7 @@ def getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)
     content (DataArray(Shadow)): The data of the image
-    return (tuple(ltbr)): left,top,bottom,right positions in world coordinates
+    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom and left < right
     raise LookupError if metadata is not available
     """
     # TODO: also handle if passed a 2D array of images? (as returned for pyramidal images)
@@ -799,7 +799,6 @@ def getBoundingBox(content):
     half_shape_wc = (img_shape[0] * pxs[0] / 2, img_shape[1] * pxs[1] / 2)
 
     md_pos = md.get(model.MD_POS, (0.0, 0.0))  # center
-    # in physical coordinates, Y goes up. So top > bottom
     rect = (
         md_pos[0] - half_shape_wc[0],
         md_pos[1] - half_shape_wc[1],
