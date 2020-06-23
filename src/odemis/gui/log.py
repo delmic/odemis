@@ -173,7 +173,9 @@ class TextFieldHandler(logging.Handler):
 
             # Do the actual writing in a rate-limited thread, so logging won't
             # interfere with the GUI drawing process.
-            self._to_print.append((record, text_style))
+            # Note: we need to do the formatting now, otherwise it could end-up
+            # showing the content of a variable delayed by 0.2s.
+            self._to_print.append((self.format(record), text_style))
             self.write_to_field()
 
     @wxlimit_invocation(0.2)
@@ -185,11 +187,11 @@ class TextFieldHandler(logging.Handler):
             try:
                 prev_style = None
                 while True:
-                    record, text_style = self._to_print.popleft()
+                    txt, text_style = self._to_print.popleft()
                     if prev_style != text_style:
                         self.textfield.SetDefaultStyle(text_style)
                         prev_style = text_style
-                    self.textfield.AppendText(self.format(record) + "\n")
+                    self.textfield.AppendText(txt + "\n")
             except IndexError:
                 pass  # end of the queue
 
