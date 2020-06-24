@@ -1256,7 +1256,7 @@ class Stream(object):
         Args:
             im: (DataArray(Shadow) or None): the data of the image if provided. If None, the raw data of the stream
             is used.
-        return (tuple of floats(l,t,r,b)): Tuple with the bounding box
+        return (tuple of floats (minx, miny, maxx, maxy)): left,top,right,bottom positions of the bounding box where top < bottom and left < right
         Raises:
             ValueError: If the stream has no (spatial) data and stream's image is not defined
         """

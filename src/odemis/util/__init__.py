@@ -341,6 +341,7 @@ def intersect(ra, rb):
 
 def normalize_rect(rect):
     """ Ensure that the given rectangle actually is defined by top, left, bottom, right
+    so that top < bottom and left < right.
 
     rect (iterable of 4 floats): x1, y1, x2, y2
     return (iterable of 4 floats): left, top, right, bottom
