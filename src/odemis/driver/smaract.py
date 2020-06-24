@@ -1000,7 +1000,7 @@ class MC_5DOF_DLL(CDLL):
     # SmarAct MC error codes
 
     # No error
-    SA_MC_OK = 0x0000
+    SA_MC_ERROR_NONE = 0x0000
     # Unspecified error
     SA_MC_ERROR_OTHER = 0x0001
     # Invalid parameter in function call
@@ -1060,7 +1060,7 @@ class MC_5DOF_DLL(CDLL):
 
     # handles
     # handle value that means no object
-    SA_MC_INVALID_HANDLE = 0xffffffff
+    SA_MC_NO_HANDLE = 0xffffffff
     SA_MC_INFINITE = -1
 
     err_code = {
@@ -1112,7 +1112,7 @@ class MC_5DOF_DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        if result != MC_5DOF_DLL.SA_MC_OK:
+        if result != MC_5DOF_DLL.SA_MC_ERROR_NONE:
             raise SA_MCError(result, "Call to %s() failed with error 0x%x: %s" %
                              (func.__name__, result, MC_5DOF_DLL.err_code.get(result, "")))
 
@@ -1194,7 +1194,7 @@ class MC_5DOF(model.Actuator):
             axes_def[axis_name] = ad
 
         # Connect to the device
-        self._id = c_uint32(MC_5DOF_DLL.SA_MC_INVALID_HANDLE)
+        self._id = c_uint32(MC_5DOF_DLL.SA_MC_NO_HANDLE)
         option_string = "model %d\n locator %s" % (MC_5DOF_DLL.hwModel, locator)
         options = c_char_p(option_string.encode("ascii"))
         try:
@@ -1707,7 +1707,7 @@ class FakeMC_5DOF_DLL(object):
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
         logging.debug("sim MC5DOF: position: %s" % (self.pose,))
-        return MC_5DOF_DLL.SA_MC_OK
+        return MC_5DOF_DLL.SA_MC_ERROR_NONE
 
     def SA_MC_Stop(self, id):
         logging.debug("sim MC5DOF: Stopping")
