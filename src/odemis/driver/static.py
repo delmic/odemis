@@ -115,6 +115,10 @@ class OpticalLens(model.HwComponent):
         if parabola_f is not None:
             self.parabolaF = model.FloatVA(parabola_f, unit="m")
         if rotation is not None:
+            # In theory, we only allow between 0 and 2 Pi. But haven't enforced it
+            # for a long time, and honestly for small negative rotation, it's easier
+            # to read if it's negative. So automatically fit it within the range.
+            rotation %= 2 * math.pi
             self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi),
                                                   unit="rad")
         if configurations is not None:
