@@ -126,6 +126,7 @@ class VigilantAttribute(VigilantAttributeBase):
                            than the generator).
         """
         VigilantAttributeBase.__init__(self, initval, *args, **kwargs)
+        self._check(initval)
 
         self.readonly = readonly
         if setter is None:
