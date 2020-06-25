@@ -936,7 +936,7 @@ def __init_resources():
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxTOP|wxRIGHT</flag>
+              <flag>wxRIGHT|wxALIGN_CENTRE</flag>
               <border>10</border>
             </object>
           </object>
