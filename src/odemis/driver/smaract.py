@@ -1401,7 +1401,7 @@ class MC_5DOF(model.Actuator):
         try:
             p = self.GetPose().asdict()
         except SA_MCError as ex:
-            if ex.errno == MC_5DOF_DLL.SA_MC_NOT_REFERENCED_ERROR:
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
                 p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
             else:
