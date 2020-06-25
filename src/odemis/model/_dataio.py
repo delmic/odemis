@@ -37,7 +37,7 @@ class DataArrayShadow(with_metaclass(ABCMeta, object)):
     def __init__(self, shape, dtype, metadata=None, maxzoom=None, tile_shape=None):
         """
         Constructor
-        shape (tuple of int): The shape of the corresponding DataArray
+        shape (tuple of 0<=int): The shape of the corresponding DataArray
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
         maxzoom (0<=int): the maximum zoom level possible. If the data isn't
@@ -45,15 +45,21 @@ class DataArrayShadow(with_metaclass(ABCMeta, object)):
             The shape of the images in each zoom level is as following:
             (shape of full image) // (2**z)
             where z is the index of the zoom level
-        tile_shape (tuple): the shape of the tile, if the image is tiled. It is only present
-            when maxzoom is also present
+        tile_shape (0<int, 0<int): the shape of the tile (X, Y) , if the image is tiled.
+           It is only present when maxzoom is also present
         """
+        if not all (0 <= v for v in shape):
+            raise ValueError("shape should be positives ints, but got %s" % (shape,))
         self.shape = shape
         self.ndim = len(shape)
         self.dtype = dtype
         self.metadata = metadata if metadata else {}
         if maxzoom is not None:
+            if not isinstance(maxzoom, int) or maxzoom < 0:
+                raise ValueError("Zoom must be 0<int, but got %s" % (maxzoom,))
             self.maxzoom = maxzoom
+            if len(tile_shape) != 2 or not all (0 < v for v in tile_shape):
+                raise ValueError("tile_shape should be 2 positives ints, but got %s" % (tile_shape,))
             self.tile_shape = tile_shape
 
     @abstractmethod
@@ -84,5 +90,9 @@ class AcquisitionData(with_metaclass(ABCMeta, object)):
     """
 
     def __init__(self, content, thumbnails=None):
+        """
+        content (tuple of DataArrayShadows))
+        thumbnails (tuple of DataArrayShadows)
+        """
         self.content = content
         self.thumbnails = thumbnails if thumbnails else ()
