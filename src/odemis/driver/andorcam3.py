@@ -649,6 +649,7 @@ class AndorCam3(model.DigitalCamera):
 
     def GetString(self, prop):
         """
+        prop (str): unicode string corresponding to the name of the feature
         Return a unicode string corresponding to the given property
         """
         assert(isinstance(prop, str))

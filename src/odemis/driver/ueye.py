@@ -688,7 +688,7 @@ class Camera(model.DigitalCamera):
 
             if sensorinfo.SensorID not in KNOWN_SENSORS:
                 logging.warning("This driver hasn't been tested for this sensor 0x%X (%s)",
-                                sensorinfo.SensorID, sensorinfo.strSensorName)
+                                sensorinfo.SensorID, sensorinfo.strSensorName.decode("latin1"))
 
             if sensorinfo.nColorMode != COLORMODE_MONOCHROME:
                 logging.warning("This driver is only tested for monochrome sensors")
@@ -1243,7 +1243,7 @@ class Camera(model.DigitalCamera):
 
         else:
             for n in range(cl.dwCount):
-                if cl.uci[n].SerNo == sn:
+                if cl.uci[n].SerNo.decode("latin1") == sn:
                     # Set the handle as camera ID
                     hcam.value = cl.uci[n].dwCameraID
                     break
@@ -1330,7 +1330,7 @@ class Camera(model.DigitalCamera):
             return found
 
         for n in range(cl.dwCount):
-            found.append((cl.uci[n].FullModelName, {"device": cl.uci[n].SerNo}))
+            found.append((cl.uci[n].FullModelName.decode("latin1"), {"device": cl.uci[n].SerNo.decode("latin1")}))
 
         return found
 

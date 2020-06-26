@@ -34,6 +34,7 @@ from odemis.model import HwError, oneway
 from odemis.util import img
 import os
 import random
+import sys
 import threading
 import time
 import weakref
@@ -867,7 +868,10 @@ class AndorCam2(model.DigitalCamera):
 
         logging.debug("Initialising with path %s", self._initpath)
         try:
-            self.atcore.Initialize(self._initpath)
+            path = self._initpath
+            if sys.version_info[0] >= 3:  # Python 3
+                path = os.fsencode(path)
+            self.atcore.Initialize(path)
         except AndorV2Error as exp:
             if exp.errno == 20992:  # DRV_NOT_AVAILABLE
                 raise HwError("Failed to connect to Andor camera. "

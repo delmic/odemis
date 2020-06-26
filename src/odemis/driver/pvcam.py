@@ -228,7 +228,7 @@ class PVCam(model.DigitalCamera):
                               "the computer. "
                               "You might need to turn it off and on again."
                               % (name, device))
-            self._devname = device
+            self._devname = device.encode("ascii")
         else:
             raise ValueError("Unexpected type for device: %s" % device)
 
@@ -474,7 +474,7 @@ class PVCam(model.DigitalCamera):
         """
         return the name, from the device number
         num (int >= 0): camera number
-        return (string): name
+        return (bytes): name
         """
         assert(num >= 0)
         cam_name = create_string_buffer(pv.CAM_NAME_LEN)
@@ -484,7 +484,7 @@ class PVCam(model.DigitalCamera):
     def cam_open(self, name, mode):
         """
         Reserve and initializes the camera hardware
-        name (string): camera name
+        name (bytes): camera name
         mode (int): open mode
         returns (int): handle
         """
