@@ -22,23 +22,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from future.utils import with_metaclass
-import queue
 from past.builtins import long
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
-import functools
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 from functools import reduce
+import functools
 import logging
 import math
 import numpy
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, oneway
+import queue
 import re
 import suds
 from suds.client import Client
+import sys
 import threading
 import time
 import weakref
@@ -98,7 +98,6 @@ import weakref
 #       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
 #       lot of such problems and might be worth to use if the standard SUDS
 #       version gets really too much annoying.
-
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -1760,7 +1759,7 @@ class ChamberPressure(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
-        # Tuple containing sample holder ID and type, or None, None if absent
+        # Tuple containing sample holder ID (int) and type (int), or None, None if absent
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
 
         # VA used for the sample holder registration
@@ -1826,10 +1825,19 @@ class ChamberPressure(model.Actuator):
         if holder.status == "SAMPLE-ABSENT":
             val = (None, None)
         else:
-            # Convert base64 to long int
-            s = base64.decodestring(holder.holderID.id[0])
-            holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
+            # Convert base64 (to raw bytes of uint128-be) to long int.
+            # As it comes from HTTP, id[0] is already converted back to string, but
+            # we need bytes for the base64 function => encode back to bytes.
+            # TODO: once Python 3-only, switch to decodebytes
+            s = base64.decodestring(holder.holderID.id[0].encode("ascii"))
+            if sys.version_info[0] >= 3:  # Python 3
+                holderID = reduce(lambda a, n: (a << 8) + n, (v for v in s), 0)
+            else:
+                holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
             val = (holderID, holder.holderType)
+
+            logging.debug("Sample holder 0x%x of type %s has status %s",
+                          val[0], val[1], holder.status)
 
         # Status can be of 4 kinds, only when it's "present" that it means the
         # sample holder is registered
