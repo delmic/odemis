@@ -853,12 +853,14 @@ class Detector(model.Detector):
         self._updateBrightness()
 
     def start_acquire(self, callback):
+        logging.debug("New SEM acquisition requested")
         # Check if Phenom is in the proper mode
         area = self._acq_device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
+            logging.debug("Starting acquisition thread")
             if self.parent._scanner.blanker.value is None:
                 try:
                     self.parent._scanner._blank_beam(False)
