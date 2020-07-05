@@ -30,6 +30,10 @@ import logging
 import math
 import numbers
 import threading
+import time
+from concurrent.futures._base import FINISHED
+
+from asyncio.base_futures import CancelledError
 from concurrent import futures
 
 import numpy
@@ -37,7 +41,7 @@ from past.builtins import basestring
 
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
-                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
+                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, CANCELLED)
 
 
 class MultiplexActuator(model.Actuator):
@@ -438,7 +442,6 @@ class CoupledStage(model.Actuator):
         # listen to changes from dependencies
         for c in self.dependencies.value:
             if model.hasVA(c, "referenced"):
-                logging.debug("Subscribing to reference of dependency %s", c.name)
                 c.referenced.subscribe(self._ondepReferenced)
         self._updateReferenced()
 
@@ -2183,17 +2186,14 @@ class RotationActuator(model.Actuator):
         if hasattr(self, "referenced"):
             self._dependency.referenced.subscribe(self._updateReferenced)
 
-# Possible movements of the stage Z axi
-MoveDown, NoZMove, MoveUp = -1, 0, 1
-# Possible rotation of the stage Rx axis. NoRxMove means 0 degrees
-CurrentRx, NoRxMove, TargetRx = -1, 0, 1
-
+# Possible movements of the stage Z axis
+MOVE_DOWN, NO_ZMOVE, MOVE_UP = -1, 0, 1
 
 class LinkedHeightActuator(model.Actuator):
     """
-    The goal of this wrapper is to connect the lens Z and stage/sample. It ensures that the top of the lens doesn’t
-    collide with the bottom of the stage/sample. It also allows to handle the main need that moving the stage Z
-    should also move the focus Z.
+    The goal of this wrapper is to connect the sample stage with lens stage Z axis. It ensures that the top of the
+    lens does not collide with the bottom of the sample stage. It also allows to handle the main need that moving the
+    stage Z should also move the focus Z.
     """
 
     def __init__(self, name, role, children, dependencies, daemon=None, **kwargs):
@@ -2204,23 +2204,23 @@ class LinkedHeightActuator(model.Actuator):
             be in .children (Presumably the focus actuator).
         :param dependencies (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis (Presumably the sample stage and lensz).
         """
-        # Cryo sample stage
-        self._stage = None
-        # FM Optical stage
-        self._lensz = None
+        self._stage = None  # Cryo sample stage
+        self._lensz = None  # FM Optical stage
 
         for crole, dep in dependencies.items():
-            # Check if dependencies are actuators
+            # Check if dependencies are indeed actuators
             if not isinstance(dep, model.ComponentBase):
                 raise ValueError("Dependency %s is not a component." % dep)
             if not hasattr(dep, "axes") or not isinstance(dep.axes, dict):
                 raise ValueError("Dependency %s is not an actuator." % dep.name)
-
+            # Check if dependencies have the right axes
             if crole == "lensz":
                 if "z" not in dep.axes:
                     raise ValueError("Dependency %s doesn't have z axis" % dep.name)
                 self._lensz = dep
             elif crole == "stage":
+                if "z" not in dep.axes or "rx" not in dep.axes:
+                    raise ValueError("Dependency %s doesn't have both z and rx axes" % dep.name)
                 self._stage = dep
             else:
                 raise ValueError(
@@ -2243,31 +2243,25 @@ class LinkedHeightActuator(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # position will be updated directly from the underlying stage
-        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, readonly=True)
         self._stage.position.subscribe(self._updatePosition, init=True)
 
         self.referenced = model.VigilantAttribute({}, readonly=True)
         # listen to reference changes from the underlying stage
-        logging.debug("Subscribing to reference of dependency %s", self._stage.name)
-        self._stage.referenced.subscribe(self._ondepStageReferenced)
-        self._ondepStageReferenced(self._stage.referenced.value)
+        self.referenced = self._stage.referenced
 
         self._focus = None
         # Create a linked height focus child object to control the movement of the lens stage Z axis
-        if "focus" in children:
-            ckwargs = children["focus"]
-            self._focus = LinkedHeightFocus(parent=self, executor=self._executor, daemon=daemon,
-                                            dependencies={"lensz": self._lensz}, **ckwargs)
-            self.children.value.add(self._focus)
-        else:
+        if not "focus" in children:
             raise ValueError("Focus should be in actuator's children.")
+        ckwargs = children["focus"]
+        self._focus = LinkedHeightFocus(parent=self, executor=self._executor, daemon=daemon,
+                                        dependencies={"lensz": self._lensz}, **ckwargs)
+        self.children.value.add(self._focus)
 
         # Add speed if it's in stage
         if model.hasVA(self._stage, "speed"):
             self.speed = self._stage.speed
-
-    def updateMetadata(self, md):
-        self._metadata.update(md)
 
     def _updatePosition(self, value):
         """
@@ -2279,13 +2273,13 @@ class LinkedHeightActuator(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         """
-        Move the sample stage to the defined position in m for each axis given, and adjust focus if needed. This is an
+        Move the sample stage to the defined position for each axis given, and adjust focus if needed. This is an
         asynchronous method.
-        pos dict(string-> float): name of the axis and new position in m
+        pos dict(string-> float): name of the axis and new position
         returns (Future): object to control the move request
         """
         if not pos:
-            pos = self.position.value
+            return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
 
         f = self._createFuture()
@@ -2324,6 +2318,7 @@ class LinkedHeightActuator(model.Actuator):
     def _getOrderedMoves(self, future, vector_value, rel=False):
         """
         Get the ordered movement sequence of the underlying stage and the focus to ensure no collision
+        :param future: Cancellable future of the whole task (with sub future to run sub movements)
         :param vector_value: The target vector value (absolute position or shift)
         :param rel: Whether it's relative movement or absolute
         :return: A list of either one to two functions and their arguments ordered by execution priority
@@ -2331,25 +2326,25 @@ class LinkedHeightActuator(model.Actuator):
         ordered_moves = []
         stage_fn = self._doMoveRelStage if rel else self._doMoveAbsStage
 
-        # Determine movement and direction of the Z and Rx axes
-        z_move = self._checkZDirection(vector_value, rel)
-        rx_move = self._checkRxMovement(vector_value, rel)
+        # Determine movement and direction of the Z (up, down, none) and Rx (yes, no) axes
+        z_move_direction = self._computeZDirection(vector_value, rel)
+        no_rx_move = self._checkRxMovement(vector_value, rel)
 
         # Order the stage and focus movements to ensure no collision
         # The initial movement would increase the distance between the two stages,
-        # while the subsequent move would bring back the focus value
-        if z_move == MoveUp:
+        # while the subsequent move would bring back the focus value (or vice versa)
+        if z_move_direction == MOVE_UP:
             # Move stage first then focus
             ordered_moves.append((stage_fn, future, vector_value))
-            if rx_move == NoRxMove:
+            if no_rx_move:
                 # Pass None in case of absolute move (so that the focus would take it from the updated stage position)
                 target_stagez = vector_value['z'] if rel else None
                 ordered_moves.append((self._focus.adjustFocus, future, target_stagez, rel))
             else:
                 logging.warning("Focus movement is dropped due to movement in rx != 0")
-        elif z_move == MoveDown:
+        elif z_move_direction == MOVE_DOWN:
             # Move focus first then stage
-            if rx_move == NoRxMove:
+            if no_rx_move:
                 ordered_moves.append((self._focus.adjustFocus, future, vector_value['z'], rel))
             else:
                 logging.warning("Focus movement is dropped due to movement in rx != 0")
@@ -2362,41 +2357,24 @@ class LinkedHeightActuator(model.Actuator):
     def _executeMoves(self, ordered_moves):
         """
         Call the list of move functions in respect to their ordered execution
-        :param ordered_moves: List of ordered moves functions
+        :param ordered_moves: List of ordered moves functions and their arguments
         """
-        for i, ordered_move in enumerate(ordered_moves):
+        for i, (move_func, *args) in enumerate(ordered_moves):
             try:
-                move_func, *args = ordered_move
                 move_func(*args)
-                if i == 1:
-                    # Re-update the focus position after the second move
-                    self._focus._updatePosition(self._lensz.position.value)
-            except Exception as ex:
-                logging.warning("Failed to move further (%s)", ex)
+            except CancelledError:
+                logging.info("Movement cancelled.")
+                # Re-update the focus position (in case canceling happened during stage movement)
+                self._focus._updatePosition(self._lensz.position.value)
                 raise
-        # try:
-        #     initial_move, *args = ordered_moves.pop(0)
-        #     initial_move(*args)
-        # except Exception as ex:
-        #     logging.warning("Failed to move further (%s)", ex)
-        # # Call the subsequent move only if the initial move is done without exceptions
-        # else:
-        #     if ordered_moves:
-        #         subsequent_move, *args = ordered_moves.pop()
-        #         subsequent_move(*args)
-        #         # If focus is the initial move, re-update the focus position following the stage subsequent movement
-        #         if subsequent_move.__name__ in dir(self):
-        #             self._focus._updatePosition(self._lensz.position.value)
+            except Exception as ex:
+                logging.exception("Failed to move further.")
+                raise
+        # Re-update the focus position only after the second move
+        if len(ordered_moves) > 1:
+            self._focus._updatePosition(self._lensz.position.value)
 
-    # class ZDirection(enum.Enum):
-    #     """Possible movements of the stage Z axis"""
-    #     MoveDown, NoZMove, MoveUp = -1, 0, 1
-    #
-    # class StageRxMove(enum.Enum):
-    #     """Possible rotation of the stage Rx axis. NoRxMove means 0 degrees"""
-    #     CurrentRx, NoRxMove, TargetRx = -1, 0, 1
-
-    def _checkZDirection(self, pos, rel=False):
+    def _computeZDirection(self, pos, rel=False):
         """
         Check if target position contains a movement in Z axis and determine its direction in respect to the
         current Z axis value
@@ -2405,86 +2383,100 @@ class LinkedHeightActuator(model.Actuator):
         :return: Direction of movement in Z value
         """
         if 'z' not in pos:
-            return NoZMove
+            return NO_ZMOVE
         current_z = self.position.value['z']
         target_z = pos['z']
         if rel:
             target_z += current_z  # To compare relative value
         # Compare current and target Z values and return the direction
         if target_z > current_z:
-            return MoveUp
+            return MOVE_UP
         elif target_z < current_z:
-            return MoveDown
+            return MOVE_DOWN
         else:
-            return NoZMove
+            return NO_ZMOVE
 
     def _checkRxMovement(self, pos, rel=False):
         """
         Check if target position contains a movement in Rx axis and compare its value to Rx = 0
+        The rules are the following:
+        - If Rx is not moved (ie, not in pos, or with null movement) => it's fine
+        - Otherwise, if focus is deactive => it's fine
+        - Otherwise (ie, moving Rx with focus active), raise a ValueError
         :param pos: The target position
         :param rel: whether it's a relative movement or absolute
-        :return: Direction of movement in Rx value
+        :return: (bool) whether there is a movement in Rx axis or not
+        :raises: (ValueError) when moving Rx with focus active
         """
         current_rx = self.position.value['rx']
         if not util.almost_equal(current_rx, 0, atol=1e-3):
             # Stage Rx is already not 0 => Do not move focus
-            return CurrentRx
+            return False
         target_rx = pos['rx'] if 'rx' in pos else None
         if target_rx is None:
-            return NoRxMove
+            return True  # No movement found in Rx => Save to move
         if rel:
             target_rx += current_rx  # To compare relative value
 
-        if not util.almost_equal(current_rx, target_rx, atol=1e-3):
-            # Only allow a movement in Rx when focus is not active
+        if util.almost_equal(current_rx, target_rx, atol=1e-3):
+            return True  # Both current and target is 0 => Save to move
+        else:
+            # Only allow a movement in Rx when focus is not in active range
             if self._focus._isInRange():
                 raise ValueError("Movement in Rx is not allowed while focus is in active position.")
             else:
-                return TargetRx
-        else:
-            return NoRxMove
+                return False  # Target Rx is not 0 => Do not move focus
 
     def _doMoveAbsStage(self, future, pos):
         """
         Carry out the absolute movement of the underlying stage dependency
+        :param future: Cancellable future of the task
         :param pos: The target absolute position
         """
         with future._moving_lock:
-            self._stage.moveAbsSync(pos)
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._stage.moveAbs(pos)
+        future._running_subf.result()
 
     def _doMoveRelStage(self, future, shift):
         """
         Carry out the relative movement of the underlying stage dependency
-        :param pos: The target relative position
+        :param future: Cancellable future of the task
+        :param shift: The target relative position
         """
         with future._moving_lock:
-            self._stage.moveRelSync(shift)
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._stage.moveRel(shift)
+        future._running_subf.result()
 
-    def _ondepStageReferenced(self, cref):
-        """
-        Update the referenced value from the underlying stage
-        """
-        # Directly set the value from the updated argument
-        self.referenced._set_value(cref, force_write=True)
-
-    def _doReference(self, axes):
+    def _doReference(self, future, axes):
         """"
         Perform sample stage reference procedure
+        :param future: Cancellable future of the task
+        :param axes: the axes to be referenced
         """
-        # Only reference if the lens stage is already referenced and in deactive position
-        if not model.hasVA(self._lensz, "referenced"):
+        # Only reference if focus is already referenced and in deactive position
+        if not self._focus.referenced.value.get("z", False):
             raise ValueError("Lens has to be initially referenced.")
-        if self._focus._isInRange():
-            raise ValueError("Focus should be in deactive position")
-        # Reference the dependant stage then update position
-        f = self._stage.reference(axes)
-        f.result()
+        if not util.almost_equal(self._focus.position.value['z'], self._focus._metadata[model.MD_FAV_POS_DEACTIVE]['z'],
+                                 atol=1e-3):
+            raise ValueError("Focus should be in FAV_POS_DEACTIVE position.")
+        # Reference the dependant stage
+        with future._moving_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._stage.reference(axes)
+        future._running_subf.result()
 
     @isasync
-    def reference(self, axes):
+    def reference(self, axes=None):
         """Start the referencing of the given axes"""
         self._checkReference(axes)
-        return self._executor.submit(self._doReference, axes)
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
+        return f
 
     def stop(self, axes=None):
         """
@@ -2493,8 +2485,15 @@ class LinkedHeightActuator(model.Actuator):
         """
         # Empty the queue (and already stop the stage if a future is running)
         self._executor.cancel()
-        # Stop the underlying stage
-        logging.debug("Stopping all axes: %s", ", ".join(self.axes))
+
+        all_axes = set(self.axes.keys())
+        axes = axes or all_axes
+        unknown_axes = axes - all_axes
+        if unknown_axes:
+            logging.error("Attempting to stop unknown axes: %s", ", ".join(unknown_axes))
+            axes &= all_axes
+        logging.debug("Stopping axes: %s...", str(axes))
+        # Stop the underlying stage axes
         self._stage.stop(axes)
         # Stop the focus as well
         self._focus.stop()
@@ -2507,31 +2506,34 @@ class LinkedHeightActuator(model.Actuator):
 
     def _createFuture(self):
         """
+        Create a cancellable future with the following parameters:
+         - sub running future: to carry out the underlying movements (stage + possible focus)
+         - must stop event: to signal the movement should be stopped
+         - moving lock: to protect the sub movement during running
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
         f._moving_lock = threading.Lock()  # taken while moving
         f._must_stop = threading.Event()  # cancel of the current future requested
-        f._was_stopped = False  # if cancel was successful
+        f._running_subf = None
         f.task_canceller = self._cancelCurrentMove
         return f
 
     def _cancelCurrentMove(self, future):
         """
-        Cancels the current move (both absolute or relative). Non-blocking.
-        future (Future): the future to stop. Unused, only one future must be
-         running at a time.
+        Cancels the current move (both absolute or relative) or current reference
+        future (Future): the future to stop.
         return (bool): True if it successfully cancelled (stopped) the move.
         """
-        logging.debug("Cancelling current move")
+        logging.debug("Cancelling current move...")
         future._must_stop.set()  # tell the thread taking care of the move it's over
-        # Stop both dependencies
-        self._stage.stop()
-        self._lensz.stop()
         with future._moving_lock:
-            if not future._was_stopped:
-                logging.debug("Cancelling failed")
-            return future._was_stopped
+            if future._state == FINISHED:
+                return False
+            # If future has and underlying move it should be cancelled
+            if future._running_subf:
+                future._running_subf.cancel()
+        return True
 
 
 class LinkedHeightFocus(model.Actuator):
@@ -2556,7 +2558,7 @@ class LinkedHeightFocus(model.Actuator):
         if rng[0] > rng[1]:
             raise ValueError("Range left side should be less than right side.")
         if (rng[1] - rng[0]) > (self._lensz.axes['z'].range[1] - self._lensz.axes['z'].range[0]):
-            raise ValueError("Focus range should be lower than the underlying lens range. ")
+            raise ValueError("Focus range should be lower than the underlying lens range.")
         self._range = rng
         axes_def = {
             "z": model.Axis(unit="m", range=rng),
@@ -2566,82 +2568,83 @@ class LinkedHeightFocus(model.Actuator):
         model.Actuator.__init__(self, name, role, parent=parent, dependencies=dependencies, axes=axes_def, **kwargs)
 
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        # position will be updated whenever the underlying lens stage is changed
+        # Position will be updated whenever the underlying lens stage is changed
         self._lensz.position.subscribe(self._updatePosition, init=True)
 
-        # Set the focus deactive position from the following special case:
-        # focus deactive = focus range + (lens deactive position - lens range)
+        # Check if underlying lens has FAV_POS_DEACTIVE metadata
         if model.MD_FAV_POS_DEACTIVE not in self._lensz.getMetadata():
-            raise ValueError("The underlying lens stage is missing a favourite DEACTIVE position.")
+            raise ValueError("The underlying lens stage is missing a FAV_POS_DEACTIVE metadata.")
+        # Check if underlying lens FAV_POS_DEACTIVE is not within its active range
         lens_deactive = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
         if not (self._lensz.axes['z'].range[0] <= lens_deactive <= self._lensz.axes['z'].range[1]):
-            logging.warning("Lens %s is not within its range." % model.MD_FAV_POS_DEACTIVE)
+            raise ValueError("Lens stage FAV_POS_DEACTIVE is not within its range.")
+        # Calculate the focus FAV_POS_DEACTIVE position from the following special case:
+        # focus_deactive = focus_range_max + (lens_deactive_position - lens_range_max)
         focus_deactive_value = self._range[1] + (lens_deactive - self._lensz.axes['z'].range[1])
+        # Check the calculated value is not within active range
         if self._range[0] <= focus_deactive_value <= self._range[1]:
-            raise ValueError("The lens DEACTIVE is either not low enough, or the the focus range is too big.")
+            raise ValueError("The focus FAV_POS_DEACTIVE value of %s is in active range. The lens FAV_POS_DEACTIVE is "
+                             "either not low enough, or the the focus range is too big." % focus_deactive_value)
         self._metadata[model.MD_FAV_POS_DEACTIVE] = {'z': focus_deactive_value}
-        logging.info("%s changed to %s", model.MD_FAV_POS_DEACTIVE, self._metadata[model.MD_FAV_POS_DEACTIVE])
+        logging.info("Focus FAV_POS_DEACTIVE changed to %s.", self._metadata[model.MD_FAV_POS_DEACTIVE])
 
-        # Set the initial focus active position with range 0
+        # Set the initial focus active position with range min
         self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self._range[0]}
-        logging.info("%s changed to %s", model.MD_FAV_POS_ACTIVE, self._metadata[model.MD_FAV_POS_ACTIVE])
+        logging.info("Focus FAV_POS_ACTIVE changed to %s.", self._metadata[model.MD_FAV_POS_ACTIVE])
 
         self.referenced = model.VigilantAttribute({}, readonly=True)
         # listen to reference changes from the underlying stage
-        logging.debug("Subscribing to reference of dependency %s", self._lensz.name)
-        self._lensz.referenced.subscribe(self._ondepStageReferenced)
-        self._ondepStageReferenced(self._lensz.referenced.value)
+        self._lensz.referenced.subscribe(self._onLensReferenced, init=True)
 
-    def _ondepStageReferenced(self, cref):
+    def _onLensReferenced(self, cref):
         """
-        Update the referenced value from the underlying stage
+        Update the referenced value from the underlying lens stage
         """
         # Directly set the value from the updated argument
         if 'z' in cref:
-            self.referenced._set_value(cref['z'], force_write=True)
+            self.referenced._set_value({'z': cref['z']}, force_write=True)
 
     def updateMetadata(self, md):
+        # Prevent manual update of focus FAV_POS_ACTIVE and FAV_POS_DEACTIVE
         if model.MD_FAV_POS_ACTIVE in md or model.MD_FAV_POS_DEACTIVE in md:
-            raise ValueError("%s and %s cannot be set manually" % model.MD_FAV_POS_ACTIVE % model.MD_FAV_POS_DEACTIVE)
+            raise ValueError("Focus FAV_POS_ACTIVE and FAV_POS_DEACTIVE cannot be set manually.")
 
         super(LinkedHeightFocus, self).updateMetadata(md)
-        # self._metadata.update(md)
+        # Re-update focus position if POS_COR is modified
         if model.MD_POS_COR in md:
             self._updatePosition(self._lensz.position.value)
 
     def _updatePosition(self, lens_pos):
         """
-        update the position VA from the underlying dependency
-        (the method is public to be used from the parent)
+        Update the position VA from the underlying dependency
+        :param lens_pos: (dict string-> float) the lens Z value
         """
         # Only update position when MD_POS_COR is already configured
         if model.MD_POS_COR not in self._metadata:
-            logging.error("%s not in metadata" % model.MD_POS_COR)
+            logging.error("Focus POS_COR is not found in metadata.")
             return
-        focus_val = self._getFocusValue(target_lensz=lens_pos['z'])
-        logging.debug("Reporting focus position %s", focus_val)
+        if util.almost_equal(lens_pos['z'], self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z'], atol=1e-3):
+            # Set focus FAV_POS_DEACTIVE when the lens pos is FAV_POS_DEACTIVE
+            focus_val = self._metadata[model.MD_FAV_POS_DEACTIVE]['z']
+        else:
+            focus_val = self._getFocusValue(target_lensz=lens_pos['z'])
+        logging.debug("Updating focus position %s.", focus_val)
         self.position._set_value({'z': focus_val}, force_write=True)
-
-        # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
-        if self._isInRange():
-            self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
-            logging.info("%s changed to %s", model.MD_FAV_POS_ACTIVE, self._metadata[model.MD_FAV_POS_ACTIVE])
 
     def _isInRange(self, pos=None):
         """
         A helper function to check if current position is in focus range
-        :return: True if position in focus range, None otherwise
+        :return: True if position in focus range, False otherwise
         """
         pos = self.position.value['z'] if pos is None else pos
         # Add 1% margin for hardware slight errors
         margin = (self._range[1] - self._range[0]) * 0.01
-        if (self._range[0] - margin) <= pos <= (self._range[1] + margin):
-            return True
+        return (self._range[0] - margin) <= pos <= (self._range[1] + margin)
 
     @isasync
     def moveAbs(self, pos):
         """
-        Move the focus to the defined position in m for the Z axis. This is an
+        Move the focus to the defined position for the Z axis. This is an
         asynchronous method.
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): object to control the move request
@@ -2651,11 +2654,9 @@ class LinkedHeightFocus(model.Actuator):
         # check pos value is in range (except when it's = deactive)
         if not self._isInRange(pos['z']) and not util.almost_equal(pos['z'],
                                                                    self._metadata[model.MD_FAV_POS_DEACTIVE]['z'],
-                                                                   rtol=1e-3):
+                                                                   atol=1e-3):
             raise ValueError(
                 "Position %s for axis z outside of range %f->%f" % (pos['z'], self._range[0], self._range[1]))
-        # Prevent movement when parent rx != 0
-        self._checkParentRxRotation()
 
         f = self.parent._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos['z'])
@@ -2664,22 +2665,17 @@ class LinkedHeightFocus(model.Actuator):
     @isasync
     def moveRel(self, shift):
         """
-        Move the focus by the defined values in m for the Z axis. This is an
-        asynchronous method.
-        shift dict(string-> float): name of the axis and shift in m
+        Move the focus by the defined shift. This is an asynchronous method.
+        shift dict(string-> float): name of the axis and shift value
         returns (Future): object to control the move request
         """
         if not shift:
             return model.InstantaneousFuture()
         # Prevent movement if focus is in deactive position
-        if util.almost_equal(self.position.value['z'], self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], rtol=1e-3):
-            raise ValueError("Cannot move while focus is not active")
-
+        if util.almost_equal(self.position.value['z'], self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], atol=1e-3):
+            raise ValueError("Cannot move while focus is not in active range.")
+        # Initial check for potential out of range
         self._checkMoveRel(shift)
-        if not self._isInRange(self.position.value['z'] + shift['z']):
-            raise ValueError("Relative movement would go outside of range")
-        # Prevent movement when parent rx != 0
-        self._checkParentRxRotation()
 
         f = self.parent._createFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
@@ -2688,12 +2684,10 @@ class LinkedHeightFocus(model.Actuator):
     def adjustFocus(self, future, vector_value, rel):
         """
         Acts as an interface for the parent stage to call when it moves, and focus needs to be adjusted accordingly
+        :param future: Cancellable future of the task
         :param vector_value: name of the axis 'z' and new position value
         :param rel: whether it's a relative movement or absolute
         """
-        # Only move focus when it's in active range
-        if not self._isInRange():
-            return
         if rel:
             self._doMoveRel(future, {'z': vector_value})
         else:
@@ -2702,11 +2696,24 @@ class LinkedHeightFocus(model.Actuator):
     def _doMoveRel(self, future, shift):
         """
         Move the focus with the requested relative value
+        :param future: Cancellable future of the task
         :param shiftz: the relative value coming from either the parent or self
         """
+        # Check resultant rel move still in range
+        if not self._isInRange(self.position.value['z'] + shift['z']):
+            raise ValueError("Relative movement would go outside of range")
+        # Prevent movement when current parent rx != 0
+        self._checkParentRxRotation()
         # Move the underlying lens with the relative shift value
         with future._moving_lock:
-            self._lensz.moveRel(shift).result()
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._lensz.moveRel(shift)
+        future._running_subf.result()
+        # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
+        if self._isInRange():
+            self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
+            logging.info("Focus FAV_POS_ACTIVE changed to %s" % self._metadata[model.MD_FAV_POS_ACTIVE])
 
     def _doMoveAbs(self, future, pos, adjust=False):
         """
@@ -2715,21 +2722,32 @@ class LinkedHeightFocus(model.Actuator):
         2- Move the absolute focus to deactive position
         3- Adjust the absolute focus with the same value as the parent stage position
         foc (float): unit mm
+        :param future: Cancellable future of the task
         :param pos: the absolute value of either the focus of parent stage Z axis
         :param adjust: Whether this is a call from the parent to adjust focus (default False)
         """
+        # Prevent movement when parent rx != 0
+        self._checkParentRxRotation()
+
         with future._moving_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
             if adjust:
                 # Get the lens value with the requested target parent stage Z position
                 lens_pos = self._getLensZValue(target_stagez=pos)
-            elif util.almost_equal(pos, self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], rtol=1e-3):
+            elif util.almost_equal(pos, self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], atol=1e-3):
                 # Set the lens position with the lens default deactive value
                 lens_pos = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
             else:
                 # Change focus in active range
                 lens_pos = self._getLensZValue(target_focus=pos)
             # Move the underlying lens with the calculated lens position
-            self._lensz.moveAbs({"z": lens_pos}).result()
+            future._running_subf = self._lensz.moveAbs({"z": lens_pos})
+        future._running_subf.result()
+        # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
+        if self._isInRange():
+            self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
+            logging.info("Focus FAV_POS_ACTIVE changed to %s" % self._metadata[model.MD_FAV_POS_ACTIVE])
 
     def _getFocusValue(self, target_lensz=None, target_stagez=None):
         """
@@ -2759,7 +2777,7 @@ class LinkedHeightFocus(model.Actuator):
 
     def _checkParentRxRotation(self):
         """
-        Throws exception if the parent stage is rotated around the X axis (rx !=0)
+        Throws exception if the parent stage is rotated around the X axis (Rx !=0)
         """
         if not util.almost_equal(self.parent.position.value['rx'], 0, atol=1e-3):
             raise ValueError("Focus movement is not allowed while parent stage Rx is not equal to 0.")
@@ -2771,12 +2789,27 @@ class LinkedHeightFocus(model.Actuator):
         # Empty the queue (and already stop the stage if a future is running)
         self._executor.cancel()
 
-        logging.debug("Stopping all axes: %s", ", ".join(self.axes))
-        self._lensz.stop(axes)
+        logging.debug("Stopping the underlying lens Z axis")
+        self._lensz.stop({"z"})
 
     @isasync
     def reference(self, axes):
-        """Reference the underlying lens stage"""
-        # Directly call reference() of the lens stage
-        f = self._lensz.reference(axes)
+        """Reference the focus"""
+        self._checkReference(axes)
+
+        f = self.parent._createFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
         return f
+
+    def _doReference(self, future, axes):
+        """"
+        Perform focus reference procedure
+        :param future: Cancellable future of the task
+        :param axes: the axes to be referenced
+        """
+        # Directly call reference of the lens stage
+        with future._moving_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._lensz.reference(axes)
+        future._running_subf.result()
