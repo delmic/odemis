@@ -1000,7 +1000,7 @@ class MC_5DOF_DLL(CDLL):
     # SmarAct MC error codes
 
     # No error
-    SA_MC_ERROR_NONE = 0x0000
+    SA_MC_OK = 0x0000
     # Unspecified error
     SA_MC_ERROR_OTHER = 0x0001
     # Invalid parameter in function call
@@ -1046,7 +1046,7 @@ class MC_5DOF_DLL(CDLL):
 
     # property symbols
     SA_MC_PKEY_PIVOT_POINT_MODE = 0x00001001
-    SA_MC_PKEY_IS_REFERENCED = 0x00002a00
+    SA_MC_PKEY_IS_REFERENCED = 0x00002a01
     SA_MC_PKEY_HOLD_TIME = 0x00002000
     SA_MC_PKEY_MAX_SPEED_LINEAR_AXES = 0x00002010
     SA_MC_PKEY_MAX_SPEED_ROTARY_AXES = 0x00002011
@@ -1060,7 +1060,7 @@ class MC_5DOF_DLL(CDLL):
 
     # handles
     # handle value that means no object
-    SA_MC_NO_HANDLE = 0xffffffff
+    SA_MC_INVALID_HANDLE = 0xffffffff
     SA_MC_INFINITE = -1
 
     err_code = {
@@ -1112,7 +1112,7 @@ class MC_5DOF_DLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        if result != MC_5DOF_DLL.SA_MC_ERROR_NONE:
+        if result != MC_5DOF_DLL.SA_MC_OK:
             raise SA_MCError(result, "Call to %s() failed with error 0x%x: %s" %
                              (func.__name__, result, MC_5DOF_DLL.err_code.get(result, "")))
 
@@ -1194,7 +1194,7 @@ class MC_5DOF(model.Actuator):
             axes_def[axis_name] = ad
 
         # Connect to the device
-        self._id = c_uint32(MC_5DOF_DLL.SA_MC_NO_HANDLE)
+        self._id = c_uint32(MC_5DOF_DLL.SA_MC_INVALID_HANDLE)
         option_string = "model %d\n locator %s" % (MC_5DOF_DLL.hwModel, locator)
         options = c_char_p(option_string.encode("ascii"))
         try:
@@ -1237,6 +1237,7 @@ class MC_5DOF(model.Actuator):
         # Use a default actuator speed
         self.set_linear_speed(linear_speed)
         self.set_rotary_speed(math.degrees(rotary_speed))
+        self.set_hold_time(float("inf"))
         self._updatePosition()
 
     def terminate(self):
@@ -1257,10 +1258,8 @@ class MC_5DOF(model.Actuator):
 
         super(MC_5DOF, self).updateMetadata(md)
 
-    """
-    API Calls
-    Functions to set the property values in the controller, categorized by data type
-    """
+    # API Calls
+    # Functions to set the property values in the controller, categorized by data type
 
     def SetProperty_f64(self, property_key, value):
         self.core.SA_MC_SetProperty_f64(self._id, c_uint32(property_key), c_double(value))
@@ -1278,11 +1277,18 @@ class MC_5DOF(model.Actuator):
         self.core.SA_MC_GetProperty_i32(self._id, c_uint32(property_key), byref(ret_val))
         return ret_val.value
 
-    def WaitForEvent(self, timeout):
-        # blocks until event is triggered or timeout.
-        # returns the event code that was triggered
+    def WaitForEvent(self, timeout=float("inf")):
+        """
+        Blocks until event is triggered or timeout.
+        timeout (float): maximum time to wait in s. If inf, it will wait forever.
+        returns (SA_MC_Event): the event code that was triggered
+        """
+        if timeout == float("inf"):
+            t = MC_5DOF_DLL.SA_MC_INFINITE
+        else:
+            t = c_uint(int(timeout * 1000))
         ev = SA_MC_Event()
-        self.core.SA_MC_WaitForEvent(self._id, byref(ev), c_int(int(timeout)))
+        self.core.SA_MC_WaitForEvent(self._id, byref(ev), t)
         return ev
 
     def Reference(self):
@@ -1295,27 +1301,17 @@ class MC_5DOF(model.Actuator):
         """
         return bool(self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED))
 
-    def Move(self, pos, hold_time=0, block=False):
+    def Move(self, pos):
         """
         Move to pose command.
         pos: (dict str -> float) axis name -> position
             This is converted to the pose C-struct which is sent to the SA_MC DLL
-        hold_time: (float) specify in seconds how long to hold after the move.
-            If set to float(inf), will hold forever until a stop command is issued.
-        block: (bool) Set to True if the function should block until the move completes
 
         Raises: SA_MCError if a problem occurs
         """
         # convert into a pose, using the current position for non-moving axes
         newPose = self.GetPose()
         newPose.update(pos)
-
-        if hold_time == float("inf"):
-            ht = MC_5DOF_DLL.SA_MC_INFINITE
-        else:
-            ht = int(hold_time * 1000.0)
-
-        self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
         self.core.SA_MC_Move(self._id, byref(newPose))
 
     def GetPose(self):
@@ -1335,6 +1331,12 @@ class MC_5DOF(model.Actuator):
         logging.debug("Stopping...")
         self.core.SA_MC_Stop(self._id)
 
+    def get_linear_speed(self):
+        """
+        Returns (double) the linear speed of the SA_MC motion in m/s
+        """
+        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
+
     def set_linear_speed(self, value):
         """
         Set the linear speed of the SA_MC motion on all axes
@@ -1342,6 +1344,12 @@ class MC_5DOF(model.Actuator):
         """
         logging.debug("Setting linear speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
+
+    def get_rotary_speed(self):
+        """
+        Returns (double) the rotary speed of the SA_MC motion in deg/s
+        """
+        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
 
     def set_rotary_speed(self, value):
         """
@@ -1351,17 +1359,30 @@ class MC_5DOF(model.Actuator):
         logging.debug("Setting rotary speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES, value)
 
-    def get_linear_speed(self):
+    def get_hold_time(self, value):
         """
-        Returns (double) the linear speed of the SA_MC motion in m/s
+        returns (float): time to hold the axis in s. float("inf") if holds forever.
         """
-        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
+        ht = self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
 
-    def get_rotary_speed(self):
+        if ht == MC_5DOF_DLL.SA_MC_INFINITE:
+            return float("inf")
+        else:
+            return ht / 1000
+
+    def set_hold_time(self, value):
         """
-        Returns (double) the rotary speed of the SA_MC motion in deg/s
+        Set the duration that the axis should actively hold in position after the
+          end of a move.
+        value: (float) time to hold the axis in s. Use inf to hold forever.
         """
-        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
+        if value == float("inf"):
+            ht = MC_5DOF_DLL.SA_MC_INFINITE
+        else:
+            ht = c_uint(int(value * 1000))
+
+        logging.debug("Setting hold time to %s", ht)
+        self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
 
     def SetPivot(self, piv_dict):
         """
@@ -1369,7 +1390,6 @@ class MC_5DOF(model.Actuator):
 
         piv_dict (dict str -> float): Position dictionary
             must have 'x', 'y', 'z'
-
         """
         pivot = SA_MC_Vec3()
         pivot.x = piv_dict["x"]
@@ -1382,7 +1402,6 @@ class MC_5DOF(model.Actuator):
         Get the pivot point from the controller
 
         returns: a dictionary (str -> float) of the axis and the pivot point
-
         """
         pivot = SA_MC_Vec3()
         self.core.SA_MC_GetPivot(self._id, byref(pivot))
@@ -1453,11 +1472,16 @@ class MC_5DOF(model.Actuator):
 
                 # The SA_MC references all axes at once. This function blocks
                 self.Reference()
+                logging.debug("Starting referencing")
                 # wait till reference completes
                 while True:
-                    ev = self.WaitForEvent(MC_5DOF_DLL.SA_MC_INFINITE)
+                    ev = self.WaitForEvent(100)
                     # check if move is done
                     if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                        logging.debug("Referencing finished")
+                        if ev.i32 != MC_5DOF_DLL.SA_MC_OK:
+                            logging.error("Referencing failed with error %s", ev.i32)
+                            raise IOError("Referencing failed with error %s" % (ev.i32,))
                         break
                     else:
                         logging.warning("Returned event type 0x%x", ev.type)
@@ -1516,51 +1540,51 @@ class MC_5DOF(model.Actuator):
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
 
-        with future._moving_lock:
-            try:
-                self.Move(pos, hold_time=float("inf"))
-                while not future._must_stop.is_set():
-                    ev = self.WaitForEvent(timeout)
-                    # check if move is done
-                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
-                        break
+        try:
+            with future._moving_lock:
+                self.Move(pos)
+            while not future._must_stop.is_set():
+                ev = self.WaitForEvent(timeout)
+                # check if move is done
+                if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                    break
 
-                    now = time.time()
-                    if now > timeout:
-                        logging.warning("Stopping move due to timeout after %g s.", max_dur)
-                        self.stop()
-                        raise TimeoutError("Move is not over after %g s, while "
-                                           "expected it takes only %g s" %
-                                           (max_dur, dur))
-
-                    # Update the position from time to time (10 Hz)
-                    if now - last_upd > 0.1:
-                        self._updatePosition()
-                        last_upd = time.time()
-
-                    # Wait half of the time left (maximum 0.1 s)
-                    left = end - time.time()
-                    sleept = max(0.001, min(left / 2, 0.1))
-                    future._must_stop.wait(sleept)
-                else:
+                now = time.time()
+                if now > timeout:
+                    logging.warning("Stopping move due to timeout after %g s.", max_dur)
                     self.stop()
-                    future._was_stopped = True
-                    raise CancelledError()
+                    raise TimeoutError("Move is not over after %g s, while "
+                                       "expected it takes only %g s" %
+                                       (max_dur, dur))
 
-            except SA_MCError as ex:
+                # Update the position from time to time (10 Hz)
+                if now - last_upd > 0.1:
+                    self._updatePosition()
+                    last_upd = time.time()
+
+                # Wait half of the time left (maximum 0.1 s)
+                left = end - time.time()
+                sleept = max(0.001, min(left / 2, 0.1))
+                future._must_stop.wait(sleept)
+            else:
+                self.stop()
                 future._was_stopped = True
-                # This occurs if a stop command interrupts referencing
-                if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
-                    logging.debug("movement stopped: %s", ex)
-                    raise CancelledError()
-                else:
-                    raise
-            except Exception:
-                logging.exception("Move failure")
-                raise
+                raise CancelledError()
 
-            finally:
-                self._updatePosition()
+        except SA_MCError as ex:
+            future._was_stopped = True
+            # This occurs if a stop command interrupts referencing
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
+                logging.debug("movement stopped: %s", ex)
+                raise CancelledError()
+            else:
+                raise
+        except Exception:
+            logging.exception("Move failure")
+            raise
+
+        finally:
+            self._updatePosition()
 
         logging.debug("move successfully completed")
 
@@ -1708,7 +1732,7 @@ class FakeMC_5DOF_DLL(object):
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
         logging.debug("sim MC5DOF: position: %s" % (self.pose,))
-        return MC_5DOF_DLL.SA_MC_ERROR_NONE
+        return MC_5DOF_DLL.SA_MC_OK
 
     def SA_MC_Stop(self, id):
         logging.debug("sim MC5DOF: Stopping")
@@ -2177,6 +2201,22 @@ class SA_CTLDLL(CDLL):
     SA_CTL_MOVE_MODE_SCAN_RELATIVE = 3
     SA_CTL_MOVE_MODE_STEP = 4
 
+    # referencing options
+    SA_CTL_REF_OPT_BIT_NORMAL = 0x00000000
+    SA_CTL_REF_OPT_BIT_START_DIR = 0x00000001
+    SA_CTL_REF_OPT_BIT_REVERSE_DIR = 0x00000002
+    SA_CTL_REF_OPT_BIT_AUTO_ZERO = 0x00000004
+    SA_CTL_REF_OPT_BIT_ABORT_ON_ENDSTOP = 0x00000008
+    SA_CTL_REF_OPT_BIT_CONTINUE_ON_REF_FOUND = 0x00000010
+    SA_CTL_REF_OPT_BIT_STOP_ON_REF_FOUND = 0x00000020
+
+    # calibration options
+    SA_CTL_CALIB_OPT_BIT_DIRECTION = 0x00000001
+    SA_CTL_CALIB_OPT_BIT_DIST_CODE_INV_DETECT = 0x00000002
+    SA_CTL_CALIB_OPT_BIT_ASC_CALIBRATION = 0x00000004
+    SA_CTL_CALIB_OPT_BIT_REF_MARK_TEST = 0x00000008
+    SA_CTL_CALIB_OPT_BIT_LIMITED_TRAVEL_RANGE = 0x00000100
+
     SA_CTL_INFINITE = 0xffffffff
 
     def __init__(self):
@@ -2186,7 +2226,7 @@ class SA_CTLDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractctl.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractctl.so.1", RTLD_GLOBAL)
 
         self.SA_CTL_GetFullVersionString.restype = c_char_p
         self.SA_CTL_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
@@ -2442,6 +2482,10 @@ class MCS2(model.Actuator):
     def Reference(self, channel):
         # Reference the controller. Note - this is asynchronous
         self.core.SA_CTL_Reference(self._id, c_int8(channel), c_int8(0))
+
+    def Calibrate(self, channel):
+        # Calibrate the controller. Note - this is asynchronous
+        self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
 
     def Move(self, pos, channel, moveMode):
         """
@@ -2805,6 +2849,9 @@ class MCS2(model.Actuator):
                         raise CancelledError()
                     channel = self._axis_map[a]
                     self.referenced._value[a] = False
+                    # set property key for normal referencing.
+                    self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
+                            channel, SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)
                     self.Reference(channel)  # search for the negative limit signal to set an origin
                     self._waitEndMove(future, (channel,), time.time() + 100)  # block until it's over
                     self.referenced._value[a] = self._is_channel_referenced(channel)
@@ -2831,6 +2878,47 @@ class MCS2(model.Actuator):
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
 
+    @isasync
+    def calibrate(self, axes=None):
+        if axes is None:
+            # then reference all axes
+            axes = self._axis_map.keys()
+
+        f = self._createMoveFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
+        return f
+
+    def _doCalibrate(self, future, axes):
+        """
+        Actually runs the calibration code
+        axes (set of str)
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        with future._moving_lock:
+            try:
+                # do the referencing for each axis sequentially
+                # (because each referencing is synchronous)
+                for a in axes:
+                    if future._must_stop.is_set():
+                        raise CancelledError()
+                    channel = self._axis_map[a]
+                    self.Calibrate(channel)  # calibrate command
+                    self._waitEndMove(future, (channel,), time.time() + 100)  # block until it's over
+
+            except CancelledError:
+                logging.warning("Calibration cancelled")
+                future._was_stopped = True
+                raise
+            except Exception:
+                logging.exception("Referencing failure")
+                raise
+            finally:
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self._updatePosition()
+
 
 class FakeMCS2_DLL(object):
     """
@@ -2853,6 +2941,8 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [b"Simulated"],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
+            SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
+            SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
         }
 
         self.target = [0, 0, 0]
@@ -2935,9 +3025,12 @@ class FakeMCS2_DLL(object):
         val.value = self.properties[property_key.value][ch.value]
 
     def SA_CTL_Reference(self, handle, ch, _):
-        logging.debug("sim MCS2: Referencing channel %d" % (ch.value,))
+        logging.debug("sim MCS2: Referencing channel %d", ch.value)
         property_key = SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE
         self.properties[property_key][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED
+
+    def SA_CTL_Calibrate(self, handle, ch, _):
+        logging.debug("sim MCS2: Calibrating channel %d", ch.value)
 
     def SA_CTL_Move(self, handle, ch, pos_pm, _):
         self.stopping.clear()
@@ -2955,4 +3048,3 @@ class FakeMCS2_DLL(object):
 
     def SA_CTL_Stop(self, handle, ch, _):
         self.stopping.set()
-
