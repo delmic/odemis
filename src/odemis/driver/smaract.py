@@ -1313,9 +1313,10 @@ class MC_5DOF(model.Actuator):
         if hold_time == float("inf"):
             ht = MC_5DOF_DLL.SA_MC_INFINITE
         else:
-            ht = c_uint(int(hold_time * 1000.0))
+            ht = int(hold_time * 1000.0)
 
-        self.core.SA_MC_Move(self._id, byref(newPose), ht, c_int(block))
+        self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
+        self.core.SA_MC_Move(self._id, byref(newPose))
 
     def GetPose(self):
         """
