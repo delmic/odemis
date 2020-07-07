@@ -43,7 +43,7 @@ XT_CANCEL = "cancel"
 
 class SEM(model.HwComponent):
     """
-    Class to communicate with a Microscope server via the ZeroRPC protocol.
+    Class to communicate with a Microscope server via Pyro5.
     """
 
     def __init__(self, name, role, children, address, daemon=None,
