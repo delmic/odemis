@@ -1,3 +1,15 @@
+odemis (3.0.4-1) xenial; urgency=medium
+
+  * New version 3.0.4
+  * Main bug fixes (only for the Python 3 early-lovers):
+    - Fix andorcam2 failing to load a firmware at init when using Python 3
+    - Fix find IDS uEye camera via a serial number when using Python 3
+    - Fix connecting to the Phenom when using Python 3
+    - Fix starting the manual calibration on Delphi when using Python 3
+    - Fix nfpm scan when (guess...) using Python 3
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 07 Jul 2020 09:50:55 +0200
+
 odemis (3.0.3-1) xenial; urgency=medium
 
   * New version 3.0.3
