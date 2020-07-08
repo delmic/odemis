@@ -1602,6 +1602,7 @@ class MC_5DOF(model.Actuator):
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
+            self._executor.cancel()
             if not future._was_stopped:
                 logging.debug("Canceling failed")
             self._updatePosition()
@@ -2226,7 +2227,7 @@ class SA_CTLDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractctl.so.1", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractctl.so", RTLD_GLOBAL)
 
         self.SA_CTL_GetFullVersionString.restype = c_char_p
         self.SA_CTL_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
@@ -2805,6 +2806,7 @@ class MCS2(model.Actuator):
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
+            self._executor.cancel()
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
             return future._was_stopped
