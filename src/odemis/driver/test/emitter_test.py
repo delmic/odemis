@@ -152,8 +152,8 @@ class TestExtendedLight(unittest.TestCase):
         Test 1: If power > 0, the wave generator power
         should be active (1) and the light power should be the same as ex_light power
         '''
-        self.ex_light.power.value = [max_r *  0.5 for max_r in self.ex_light.power.range[1]]
-        self.assertEqual(self.ex_light.power.value, [5.0])
+        self.ex_light.power.value = [max_r for max_r in self.ex_light.power.range[1]]
+        self.assertEqual(self.ex_light.power.value, list(self.ex_light.power.range[1]))
         self.assertEqual(self.wg.power.value, 1)
         self.assertEqual(self.light.power.value, self.ex_light.power.value)
         '''

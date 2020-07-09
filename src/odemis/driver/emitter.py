@@ -50,7 +50,7 @@ class MultiplexLight(model.Emitter):
 
         spectra = []
         max_power = []
-        for n, child in dependencies.items():
+        for n, child in sorted(dependencies.items()):
             if not (model.hasVA(child, "power") and
                     model.hasVA(child, "spectra")
                    ):
