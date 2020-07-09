@@ -30,9 +30,11 @@ import numpy
 from odemis import model
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
-from odemis.util.transform import AffineTransform
+from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
+from odemis.util.transform import AffineTransform
+import os
 from scipy.spatial import cKDTree as KDTree
 import threading
 import time
@@ -64,7 +66,7 @@ def MeasureSNR(image):
     return snr
 
 
-def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=None):
+def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=None, logpath=None):
     """
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
@@ -97,10 +99,11 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=N
 
     # Run in separate thread
     executeAsyncTask(f, _DoAlignSpot,
-                     args=(f, ccd, stage, escan, focus, type, dfbkg, rng_f))
+                     args=(f, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath))
     return f
 
-def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
+
+def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath):
     """
     Adjusts settings until we have a clear and well focused optical spot image,
     detects the spot and manipulates the stage so as to move the spot center to
@@ -161,6 +164,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                 image = AcquireNoBackground(ccd, dfbkg)
                 snr = MeasureSNR(image)
             logging.debug("Using exposure time of %g s", ccd.exposureTime.value)
+            if logpath:
+                tiff.export(os.path.join(logpath, "align_spot_init.tiff"), [image])
 
         hqet = ccd.exposureTime.value  # exposure time for high-quality (binning == 1x1)
         if ccd.binning.value == (2, 2):
@@ -201,6 +206,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                     dist, vector = future._centerspotf.result()
 
             if dist is not None:
+                if logpath:
+                    image = AcquireNoBackground(ccd, dfbkg)
+                    tiff.export(os.path.join(logpath, "align_spot_found.tiff"), [image])
                 break
         else:
             raise IOError('Spot alignment failure. Spot not found')
@@ -227,7 +235,11 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         if future._task_state == CANCELLED:
             raise CancelledError()
         logging.debug("Aligning spot...")
-        future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type, dfbkg)
+        # No need to be so precise with a stage move (eg, on the DELPHI), as the
+        # stage is quite imprecise anyway and the alignment is further adjusted
+        # using the beam shift (later).
+        mx_steps = FINE_MOVE if type != STAGE_MOVE else ROUGH_MOVE
+        future._centerspotf = CenterSpot(ccd, stage, escan, mx_steps, type, dfbkg, logpath)
         dist, vector = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
@@ -402,7 +414,7 @@ def CropFoV(ccd, dfbkg=None):
     ccd.binning.value = (1, 1)
 
 
-def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None):
+def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None, logpath=None):
     """
     Wrapper for _DoCenterSpot.
     ccd (model.DigitalCamera): The CCD
@@ -429,11 +441,11 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None):
 
     # Run in separate thread
     executeAsyncTask(f, _DoCenterSpot,
-                     args=(f, ccd, stage, escan, mx_steps, type, dfbkg))
+                     args=(f, ccd, stage, escan, mx_steps, type, dfbkg, logpath))
     return f
 
 
-def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
+def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg, logpath):
     """
     Iteratively acquires an optical image, finds the coordinates of the spot
     (center) and moves the stage to this position. Repeats until the found
@@ -462,12 +474,12 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
         while True:
             if future._spot_center_state == CANCELLED:
                 raise CancelledError()
-            # Or once max number of steps is reached
-            if steps >= mx_steps:
-                break
 
             # Wait to make sure no previous spot is detected
             image = AcquireNoBackground(ccd, dfbkg)
+            if logpath:
+                tiff.export(os.path.join(logpath, "center_spot_%d.tiff" % (steps,)), [image])
+
             try:
                 spot_pxs = FindSpot(image)
             except LookupError:
@@ -484,9 +496,10 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
             tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
             tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
             logging.debug("Found spot @ %s px", spot_pxs)
+
+            # Stop if spot near the center or max number of steps is reached
             dist = math.hypot(*tab)
-            # If we are already there, stop
-            if dist <= err_mrg:
+            if steps >= mx_steps or dist <= err_mrg:
                 break
 
             # Move to the found spot
