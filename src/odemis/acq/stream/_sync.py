@@ -42,7 +42,7 @@ from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS
 from odemis.model import hasVA
-from odemis.util import units, executeAsyncTask, almost_equal, get_best_dtype_for_acc, img
+from odemis.util import units, executeAsyncTask, almost_equal, img
 import queue
 import threading
 import time
@@ -74,6 +74,7 @@ EBEAM_DETECTORS = ("se-detector", "bs-detector", "cl-detector", "monochromator",
                    "ebic-detector")
 GUI_BLUE = (47, 167, 212) # FG_COLOUR_EDIT - from src/odemis/gui/__init__.py
 GUI_ORANGE = (255, 163, 0) # FG_COLOUR_HIGHLIGHT - from src/odemis/gui/__init__.py
+
 
 class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
     """
@@ -951,6 +952,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
             return
         self.streams[0].image.value = rgbim
 
+
 class SEMCCDMDStream(MultipleDetectorStream):
     """
     Abstract class for multiple detector Stream made of SEM + CCD.
@@ -1170,6 +1172,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
             self._live_data = [[] for _ in self._streams]
+            # In case of long integration time, one ImageIntegrator per stream
+            self._img_intor = [None for _ in self._streams]
             self._raw = []
             self._anchor_raw = []
             self._current_scan_area = (0, 0, 0, 0)
@@ -1303,11 +1307,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
                         except Exception:
                             logging.exception("Failed to update CCD live view")
+                        # integrate the acquired images one after another
+                        for stream_idx, das in enumerate(self._acq_data):
+                            if self._img_intor[stream_idx] is None:
+                                self._img_intor[stream_idx] = img.ImageIntegrator(integration_count)
+                            self._acq_data[stream_idx] = [self._img_intor[stream_idx].append(das[-1])]
 
                         n += 1  # number of images acquired so far
-
-                    # integrate/sum images
-                    self._integrateImages(integration_count)
 
                     for i, das in enumerate(self._acq_data):
                         self._assembleLiveData(i, das[-1], px_idx, rep, pol_idx)
@@ -1316,6 +1322,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     self._shouldUpdateImage()
                     logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
 
+                    self._img_intor = [None for _ in self._streams]
                     self._acq_data = [[] for _ in self._streams]  # delete acq_data to use less RAM
 
             # acquisition done!
@@ -1368,70 +1375,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._live_data = [[] for _ in self._streams]
             self._streams[0].raw = []
             self._streams[0].image.value = None
-
-    def _integrateImages(self, n):
-        """
-        Integrate/sum the last n acquired images in self._acq_data and replace by the
-        integrated image. If values overflow, clip the image. If number of images = 1,
-        no image integration necessary.
-        :param n: (int) Number of images that need to be integrated (summed).
-        """
-        # check if we need to integrate images
-        if n == 1:
-            return
-
-        for stream_idx, das in enumerate(self._acq_data):
-            # get the metadata from last image (should be the same for all images)
-            md = das[-1].metadata
-            det_type = md.get(model.MD_DET_TYPE, model.MD_DT_INTEGRATING)
-            # get the images, which need to be averaged/integrated
-            data2process = das[-n:]
-            orig_dtype = data2process[0].dtype
-
-            if det_type == model.MD_DT_NORMAL:  # SEM
-                logging.debug("Average %s images", n)
-                # get the images corresponding to the last acquisition and average
-                data = numpy.mean(data2process, axis=0).astype(orig_dtype)
-
-            else:
-                if not det_type == model.MD_DT_INTEGRATING:  # optical
-                    logging.warning("Unknown detector type %s for image integration. "
-                                    "Will perform image integration anyways.", det_type)
-
-                logging.debug("Integrate %s images", n)
-                best_dtype = get_best_dtype_for_acc(orig_dtype, n)  # avoid saturation and overflow
-                data = numpy.sum(data2process, axis=0, dtype=best_dtype)
-
-                if model.MD_BASELINE in md:
-                    baseline = md[model.MD_BASELINE]
-                    # Subtract baseline (aka black level) to avoid it from being multiplied.
-                    # Remove baseline from n-1 images, keep one baseline as bg level.
-
-                    minv = float(data.min())
-
-                    # If the baseline is too high compared to the actual black, we
-                    # could end up subtracting too much, and values would underflow
-                    # => be extra careful and never subtract more than min value.
-                    baseline_sum = n * baseline  # sum of baselines for n images.
-                    extra_bl = (n - 1) * baseline  # sum of baselines for n-1 images, keep one baseline as bg level.
-                    # check if we underflow the data values
-                    if extra_bl > minv:
-                        extra_bl = minv
-                        logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
-                                     baseline, n, extra_bl)
-
-                    # Same as "data -= extra_bl", but also works if extra_bl < 0
-                    numpy.subtract(data, extra_bl, out=data, casting="unsafe")
-                    md[model.MD_BASELINE] = baseline_sum - extra_bl
-
-            if MD_DWELL_TIME in md:
-                md[model.MD_DWELL_TIME] *= n  # total time ebeam stayed on same pixel/position
-            if MD_EXP_TIME in md:
-                md[model.MD_EXP_TIME] *= n
-            md[model.MD_INTEGRATION_COUNT] = n
-
-            # replace images, which needed to be averaged/integrated, with averaged/integrated image
-            self._acq_data[stream_idx][-n:] = [model.DataArray(data, md)]
+            self._img_intor = [None for _ in self._streams]
 
     def _waitForImage(self, img_time):
         """
