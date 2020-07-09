@@ -52,7 +52,8 @@ SPEC_PLOT_SIZE = 1024
 SPEC_SCALE_WIDTH = 150  # ticks + text vertically
 SPEC_SCALE_HEIGHT = 100  # ticks + text horizontally
 SMALL_SCALE_WIDTH = 10  # just ticks
-SPEC_FONT_SIZE = 0.03  # Ratio of the whole output width
+SPEC_FONT_SIZE = 0.035  # Ratio of the whole output width
+AR_FONT_SIZE = 0.03
 # legend ratios
 CELL_WIDTH = 0.2
 MAIN_LAYER = 0.05
@@ -228,7 +229,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, margin=0):
     # Calculate the characteristic values
     center_x = client_size[0] / 2
     center_y = client_size[1] / 2
-    font_size = max(3, client_size[0] * SPEC_FONT_SIZE)
+    font_size = max(3, client_size[0] * AR_FONT_SIZE)
     inner_radius = min(center_x, center_y)
     radius = inner_radius + 1
     ticks = []
@@ -862,14 +863,15 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     num_ticks = pixel_space // tick_spacing
 
     # set the list of possible value steps
-    spacing_values = [2, 5.0, 7.5, 10.0]
+    spacing_values = [1, 2, 5, 7.5]
 
-    # set a very small value step (less than 1 pico)
-    value_step = 1e-13
+    # set the initial value of value_step
+    value_step = abs(value_space) / (num_ticks + 1)
 
     while value_step and abs(value_space)/value_step > num_ticks:
+        # round down to a power of 10
+        power = int(math.log10(value_step))
         for step in spacing_values:
-            power = numpy.floor(numpy.log10(value_step)).astype(int)
             value_step = step * 10 ** power
             if abs(value_space) / value_step < num_ticks:
                 break
@@ -1208,8 +1210,12 @@ def spectrum_to_export_data(proj, raw, vp=None):
             # Limit to the displayed ranges
             range_x = vp.hrange.value
             range_y = vp.vrange.value
-            if min(range_y) < 10:
-                range_y = (0, max(range_y))
+            # Check if the range is near 0, and if so, extend it slightly to include it.
+            # We define "near" as 10% of the range.
+            ext = (range_y[1] - range_y[0]) * 0.1
+            if range_y[0] - ext <= 0 <= range_y[1] + ext:
+                range_y_and_0 = sorted([range_y[0], 0, range_y[1]])
+                range_y = range_y_and_0[0], range_y_and_0[-1]
             spectrum_range, spec = clip_data_window(range_x, range_y, spectrum_range, spec)
         else:
             # calculate data characteristics
@@ -1229,7 +1235,7 @@ def spectrum_to_export_data(proj, raw, vp=None):
 
         # Draw bottom horizontal scale legend
         tick_spacing = client_size[0] // 6
-        font_size = client_size[0] * 0.035
+        font_size = client_size[0] * SPEC_FONT_SIZE
         scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
                               tick_spacing, text_colour, unit, font_size, "Wavelength")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
