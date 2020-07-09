@@ -220,6 +220,24 @@ class TestMicroscope(unittest.TestCase):
 
     def test_blank_beam(self):
         """Test that the beam is blanked after blank beam is called."""
+        #TODO K.K. remove this calls to different test cases
+        A = self.scanner.apply_autostigmator("channel 1", "stop")
+        B = self.scanner.apply_auto_contrast_brightness("channel 1", "stop")
+        print(self.microscope.is_autofocusing())
+        self.efocus.apply_autofocus("channel 1", "start")
+        print(self.microscope.is_autofocusing())
+        D = self.efocus.apply_autofocus("channel 1", "stop")
+        print(self.microscope.is_autofocusing())
+        self.efocus.apply_autofocus("channel 1", "start")
+        print(self.microscope.is_autofocusing())
+        C = self.efocus.apply_autofocus("channel 1", "error")
+        print(self.microscope.is_autofocusing())
+
+        C = self.efocus.apply_autofocus("channel 1", "error")
+        D = self.efocus.apply_autofocus("channel 1", "stop")
+        E = self.efocus.apply_autofocus("channel 1", "error")
+        F = self.efocus.apply_autofocus("channel 1", "stop")
+
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
