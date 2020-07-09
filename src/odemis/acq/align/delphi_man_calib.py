@@ -35,23 +35,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 import argparse
+from builtins import input
 import collections
 import logging
 import math
-from odemis import model
+from odemis import model, util
 from odemis.acq import align
 from odemis.acq.align import spot
 from odemis.gui.conf import get_calib_conf
 import os
 import shutil
 import sys
+import termios
 import threading
 import time
 import tty
 
 import odemis.acq.align.delphi as aligndelphi
-import termios
-from builtins import input
 
 YES_CHARS = {"Y", "y", ''}
 YES_NO_CHARS = {"Y", "y", "N", "n", ''}
@@ -136,12 +136,14 @@ class ArrowFocus(object):
             else:
                 mov = self._moves_ebeam.popleft()
                 f = self.ebeam_focus.moveRel({'z': mov})
+                logging.info(u"Moving ebeam focus by %g µm", mov * 1e6)
                 f.result()
             if not self._moves_opt:
                 pass
             else:
                 mov = self._moves_opt.popleft()
                 f = self.opt_focus.moveRel({'z': mov})
+                logging.info(u"Moving optical focus by %g µm", mov * 1e6)
                 f.result()
 
     def focusByArrow(self, rollback_pos=None):
@@ -472,6 +474,17 @@ def man_calib(logpath, keep_loaded=False):
                     rollback_pos = None
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, 10e-6)
                 ar.focusByArrow(rollback_pos)
+
+                # Did the user adjust the ebeam-focus? If so, let's use this,
+                # as it's probably better than the focus for the hole.
+                new_ebeam_focus = ebeam_focus.position.value.get('z')
+                new_hole_focus = new_ebeam_focus + aligndelphi.GOOD_FOCUS_OFFSET
+                if not util.almost_equal(new_hole_focus, hole_focus, atol=10e-6):
+                    print_col(ANSI_CYAN, "Updating e-beam focus: %s (ie, hole focus: %s)" %
+                                         (new_ebeam_focus, new_hole_focus))
+                    good_focus = new_ebeam_focus
+                    hole_focus = new_hole_focus
+
                 detector.data.unsubscribe(_discard_data)
                 print_col(ANSI_BLACK, "Twin stage calibration starting, please wait...")
                 try:
@@ -566,18 +579,16 @@ def man_calib(logpath, keep_loaded=False):
                 f.result()
                 if pure_offset is not None:
                     f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
-                    f.result()
                 elif offset is not None:
                     f = sem_stage.moveAbs({"x":offset[0] * scaling[0], "y":offset[1] * scaling[1]})
-                    f.result()
                 else:
                     f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
-                    f.result()
 
-                f = focus.moveAbs({"z": opt_focus})
+                fof = focus.moveAbs({"z": opt_focus})
+                fef = ebeam_focus.moveAbs({"z": good_focus})
                 f.result()
-                f = ebeam_focus.moveAbs({"z": good_focus})
-                f.result()
+                fof.result()
+                fef.result()
 
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
@@ -652,11 +663,6 @@ def man_calib(logpath, keep_loaded=False):
     except Exception:
         logging.exception("Unexpected failure during calibration")
     finally:
-        if not keep_loaded:
-            # Eject the sample holder
-            print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
-            f = chamber.moveAbs({"pressure": vented_pressure})
-
         aligndelphi.restore_hw_settings(escan, ccd, hw_settings)
 
         # Store the final version of the calibration file in the log folder
@@ -665,8 +671,13 @@ def man_calib(logpath, keep_loaded=False):
         except Exception:
             logging.info("Failed to log calibration file", exc_info=True)
 
+        if not keep_loaded:
+            # Eject the sample holder
+            print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
+            f = chamber.moveAbs({"pressure": vented_pressure})
+            f.result()
+
         ans = input_col(ANSI_MAGENTA, "Press Enter to close")
-        f.result()
 
 
 def main(args):
