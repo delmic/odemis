@@ -25,14 +25,6 @@ class MultiplexLight(model.Emitter):
     """
     Light composed of multiple Lights
     """
-    # There are different solutions to map power * intensities to the dependencies.
-    # In any case, the child with the max power will have the power and
-    # intensities copied.
-    # For the other dependencies, the power is set with the same ratio as the
-    # parent power, and the intensities are inversely proportional to the
-    # max power ratio.
-    # => the intensities and power are set independently
-
     def __init__(self, name, role, dependencies, **kwargs):
         """
         dependencies (dict str -> Emitter): arbitrary role -> emitter to be used as
@@ -49,6 +41,7 @@ class MultiplexLight(model.Emitter):
         self._child_idx = {} # Emitter -> index (shift) in the power/spectra
 
         spectra = []
+        min_power = []
         max_power = []
         for n, child in dependencies.items():
             if not (model.hasVA(child, "power") and
@@ -57,43 +50,42 @@ class MultiplexLight(model.Emitter):
                 raise ValueError("Child %s is not a light emitter" % (n,))
             self._child_idx[child] = len(spectra)
             spectra.extend(child.spectra.value)
+            min_power.extend(child.power.range[0])
             max_power.extend(child.power.range[1])
             # Subscribe to each child power to update self.power
             child.power.subscribe(self._updateMultiplexPower)
 
         # Child with the maximum power range
-        self.power = model.ListContinuous(value=[0.0] * len(max_power),
-                                          range=(tuple([0.0] * len(max_power)), tuple(max_power),),
-                                          unit="W", cls=(int, long, float),)
-        self.power.subscribe(self._updateChildPower)
+        self.power = model.ListContinuous(value=[0] * len(spectra),
+                                          range=(tuple(min_power), tuple(max_power)),
+                                          unit="W", cls=(int, long, float))
+        self.power.subscribe(self._setChildPower)
         self._updateMultiplexPower(None)
         # info on which source is which wavelength
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
-    def _updateChildPower(self, power):
+    def _setChildPower(self, power):
         """
-        Whenever the self.power changes, the .power of the correct dependency is adjusted accordingly
+        Whenever the self.power changes, the .power of the corresponding dependency is adjusted
         """
-        # Prevent re-updating child power if power values are the same
-        # To avoid infinite loop from alternating subscriber calls
-        child_power = []
-        for child in self._child_idx.keys():
-            child_power.extend(child.power.value)
-        if power == child_power:
-            return
         # Update child powers with new values
         power = copy.copy(power)  # Not to be attached to self.power.value
         for child, idx in self._child_idx.items():
-            child.power.value = power[idx:idx+len(child.power.value)]
-            logging.debug("Setting %s as %s W",
-                          child.name, str(child.power.value))
+            # Prevent re-updating child power if power values are the same
+            # To avoid infinite loop from alternating subscriber calls
+            cpwr = power[idx:idx+len(child.power.value)]
+            if child.power.value != cpwr:
+                child.power.value = cpwr
+            logging.debug("Setting %s to %s W", child.name, cpwr)
 
     def _updateMultiplexPower(self, _):
         """
         Whenever the .power of a dependency changes, the self.power is updated appropriately
         """
+        pwr = list(self.power.value)
         for child, idx in self._child_idx.items():
-            self.power.value[idx:idx+len(child.power.value)] = child.power.value[:]
+            pwr[idx:idx + len(child.power.value)] = child.power.value[:]
+        self.power.value = pwr
 
 
 class ExtendedLight(model.Emitter):
