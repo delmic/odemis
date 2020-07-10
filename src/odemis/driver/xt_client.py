@@ -38,12 +38,13 @@ msgpack_numpy.patch()
 
 XT_RUN = "run"
 XT_STOP = "stop"
-XT_CANCEL = "cancel"
 
 
 class SEM(model.HwComponent):
     """
-    Class to communicate with a Microscope server via the ZeroRPC protocol.
+    Driver to communicate with XT software on TFS microscopes. XT is the software TFS uses to control their microscopes.
+    To use this driver the XT adapter developed by Delmic should be running on the TFS PC. Communication to the
+    Microscope server is done via Pyro5.
     """
 
     def __init__(self, name, role, children, address, daemon=None,
@@ -390,7 +391,7 @@ class SEM(model.HwComponent):
 
         Parameters
         ----------
-        desired_state: "run", "stop" or "cancel"
+        desired_state: XT_RUN or XT_STOP
             The state the channel should change into.
         name: str
             name of channel.
@@ -402,7 +403,7 @@ class SEM(model.HwComponent):
             self.server.wait_for_state_changed(desired_state, name, timeout)
 
     def get_channel_state(self, name):
-        """Returns: (str) the state of the channel: "run", "stop" or "cancel"."""
+        """Returns: (str) the state of the channel: XT_RUN or XT_STOP."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_channel_state(name)
@@ -461,7 +462,7 @@ class SEM(model.HwComponent):
         ----------
         name: str
             Name of one of the electron channels, the channel must be running.
-        state: "start", "cancel" or "stop"
+        state: XT_RUN or XT_STOP
             If state is start, autofocus starts. States cancel and stop both stop the autofocusing. Some microscopes
             might need stop, while others need cancel. The Apreo system requires stop.
         """
@@ -483,9 +484,9 @@ class SEM(model.HwComponent):
         ----------
         name: str
             Name of one of the electron channels.
-        state: "start", "cancel" or "stop"
+        state: XT_RUN or XT_STOP
             If state is start, auto contrast brightness starts. States cancel and stop both stop the auto contrast
-            brightness. Some microscopes might need stop, while others need cancel. The Apreo system requires stop.
+            brightness.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -587,7 +588,7 @@ class SEM(model.HwComponent):
         ----------
         channel_name: str
             Name of one of the electron channels, the channel must be running.
-        state: "start", "cancel" or "stop"
+        state: XT_RUN or XT_STOP
             State is start, starts the autostigmator. States cancel and stop both stop the autostigmator, some
             microscopes might need stop, while others need cancel.
         """
