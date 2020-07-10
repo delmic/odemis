@@ -28,6 +28,7 @@ import time
 import unittest
 
 from odemis.driver import xt_client
+from odemis.model import ProgressiveFuture
 
 logging.basicConfig(level=logging.INFO)
 
@@ -220,24 +221,6 @@ class TestMicroscope(unittest.TestCase):
 
     def test_blank_beam(self):
         """Test that the beam is blanked after blank beam is called."""
-        #TODO K.K. remove this calls to different test cases
-        A = self.scanner.apply_autostigmator("channel 1", "stop")
-        B = self.scanner.apply_auto_contrast_brightness("channel 1", "stop")
-        print(self.microscope.is_autofocusing())
-        self.efocus.apply_autofocus("channel 1", "start")
-        print(self.microscope.is_autofocusing())
-        D = self.efocus.apply_autofocus("channel 1", "stop")
-        print(self.microscope.is_autofocusing())
-        self.efocus.apply_autofocus("channel 1", "start")
-        print(self.microscope.is_autofocusing())
-        C = self.efocus.apply_autofocus("channel 1", "error")
-        print(self.microscope.is_autofocusing())
-
-        C = self.efocus.apply_autofocus("channel 1", "error")
-        D = self.efocus.apply_autofocus("channel 1", "stop")
-        E = self.efocus.apply_autofocus("channel 1", "error")
-        F = self.efocus.apply_autofocus("channel 1", "stop")
-
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
@@ -299,6 +282,90 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
 
+    def test_apply_autostigmator(self):
+        """
+        Test for the auto functionality of the apply_autostigmator.
+        Runs the apply_autostigmator multiple times and checks (using "get_stigmator()) if the found stigmator values
+        are equal each run. Checks the returned state, the return object and if an error is raised for an incorrect input state.
+        """
+        #TODO The is_autostigmating call is commented because this does not work currently on the simulator
+
+        unique_stigmator_values_x = set() # Set holding only the unique stigmator values in x direction
+        unique_stigmator_values_y = set() # Set holding only the unique stigmator values in y direction
+        # Run apply_autostigmator multiple times and afterwards check if the outcome is the same for each run
+        for i in range(0,5):
+            autostigmator_return = self.scanner.apply_autostigmator("electron1", "start")
+            time.sleep(1.0) # Give microscope/simulator the time to update the state
+            # autostigmator_state = self.microscope.is_autostigmating()
+            # self.assertEqual(autostigmator_state, "start")
+            self.assertIsInstance(autostigmator_return, ProgressiveFuture)
+
+            autostigmator_return = self.scanner.apply_autostigmator("electron1", "stop")
+            time.sleep(1.0) # Give microscope/simulator the time to update the state
+            # autostigmator_state = self.microscope.is_autostigmating()
+            # self.assertEqual(autostigmator_state, "stop")
+            self.assertIsInstance(autostigmator_return, ProgressiveFuture)
+
+            unique_stigmator_values_x.add(self.microscope.get_stigmator()[0])
+            unique_stigmator_values_y.add(self.microscope.get_stigmator()[1])
+
+        # Check if all the stigmator values are the same for each run
+        self.assertEqual(len(unique_stigmator_values_x), 1,
+                         "'apply_autostigamtor' does not provide the same stigmator valueseach time in x direction.")
+        self.assertEqual(len(unique_stigmator_values_y), 1,
+                          "'apply_autostigamtor' does not provide the same stigmator values each time in y direction.")
+
+        with self.assertRaises(ValueError):
+            self.scanner.apply_autostigmator("electron1", "error_expected")
+        time.sleep(1.0) # Give microscope/simulator the time to update the state
+        # autostigmator_state = self.microscope.is_autostigmating()
+        # self.assertEqual(autostigmator_state, "stop")
+
+    def test_apply_auto_contrast_brightness(self):
+        """
+        Test for the auto functionality of the apply_auto_contrast_brightness.
+        Only checks the returned state, the return object and if an error is raised for an incorrect input state.
+        """
+        auto_contrast_brightness_return = self.scanner.apply_auto_contrast_brightness("electron1", "start")
+        time.sleep(1.0) # Give microscope/simulator the time to update the state
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness()
+        self.assertEqual(auto_contrast_brightness_state, "start")
+        self.assertIsInstance(auto_contrast_brightness_return, ProgressiveFuture)
+
+        auto_contrast_brightness_return = self.scanner.apply_auto_contrast_brightness("electron1", "stop")
+        time.sleep(1.0) # Give microscope/simulator the time to update the state
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness()
+        self.assertEqual(auto_contrast_brightness_state, "stop")
+        self.assertIsInstance(auto_contrast_brightness_return, ProgressiveFuture)
+
+        with self.assertRaises(ValueError):
+            self.scanner.apply_auto_contrast_brightness("electron1", "error_expected")
+        time.sleep(1.0) # Give microscope/simulator the time to update the state
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness()
+        self.assertEqual(auto_contrast_brightness_state, "stop")
+
+    def test_apply_autofocus(self):
+        """
+        Test for the auto functionality of the autofocus.
+        Only checks the returned state, the return object and if an error is raised for an incorrect input state.
+        """
+        autofocus_return = self.efocus.apply_autofocus("electron1", "start")
+        time.sleep(1.0)  # Give microscope/simulator the time to update the state
+        autofocus_state = self.microscope.is_autofocusing()
+        self.assertEqual(autofocus_state, "start")
+        self.assertIsInstance(autofocus_return, ProgressiveFuture)
+
+        autofocus_return = self.efocus.apply_autofocus("electron1", "stop")
+        time.sleep(1.0)  # Give microscope/simulator the time to update the state
+        autofocus_state = self.microscope.is_autofocusing()
+        self.assertEqual(autofocus_state, "stop")
+        self.assertIsInstance(autofocus_return, ProgressiveFuture)
+
+        with self.assertRaises(ValueError):
+            self.efocus.apply_autofocus("electron1", "error_expected")
+        time.sleep(1.0)  # Give microscope/simulator the time to update the state
+        autofocus_state = self.microscope.is_autofocusing()
+        self.assertEqual(autofocus_state, "stop")
 
 if __name__ == '__main__':
     unittest.main()
