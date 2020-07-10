@@ -1052,6 +1052,10 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_PKEY_MAX_SPEED_ROTARY_AXES = 0x00002011
     SA_MC_PKEY_PIEZO_MAX_CLF_LINEAR_AXES = 0x00002020
     SA_MC_PKEY_PIEZO_MAX_CLF_ROTARY_AXES = 0x00002021
+
+    SA_MC_PKEY_REF_DIR_Y = 0x1532  # 2 = positive direction, 1 = negative direction
+    SA_MC_PKEY_REF_DIR_TILT = 0x1542  # 2 = positive direction, 1 = negative direction
+
     SA_MC_PIVOT_POINT_MODE_RELATIVE = 0
     SA_MC_PIVOT_POINT_MODE_ABSOLUTE = 1
 
@@ -1211,20 +1215,21 @@ class MC_5DOF(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        # TODO: A way to query the DLL version?
-        self._hwname = "Model Code: %d, Model name: %s" % (self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE),
-                                                              self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME))
-        self._swVersion = self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_VERSION_STRING)
-
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
-        self._metadata[model.MD_HW_NAME] = self._hwname
-        logging.debug("Using SA_MC library version %s", self._swVersion)
+        self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
+                                                   self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
+        logging.debug("Connected to controller %s", self._hwVersion)
+        # TODO: a way to check the actual version of the library? PKEY_VERSION_STRING is private and doesn't work
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+
+        # Reference tilted positioners towards the negative position
+        # FIXME: temporary hack while the controller can take care of it itself
+        # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
+        # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
 
         referenced = self._is_referenced()
         # define the referenced VA from the query
@@ -1280,8 +1285,9 @@ class MC_5DOF(model.Actuator):
          - outBuffer: A string
         """
         buf = create_string_buffer(bufferSize)
-        self.core.SA_MC_GetProperty_s(self._id, c_uint32(property_key), buf, c_int(bufferSize))
-        return buf.value
+        slen = c_size_t(len(buf))
+        self.core.SA_MC_GetProperty_s(self._id, c_uint32(property_key), buf, byref(slen))
+        return buf.value.decode("latin1")
 
     def SetProperty_f64(self, property_key, value):
         self.core.SA_MC_SetProperty_f64(self._id, c_uint32(property_key), c_double(value))
@@ -2375,10 +2381,10 @@ class MCS2(model.Actuator):
         self._swVersion = self.GetFullVersionString()
         devname = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
         sn = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER, 0)
-        self._hwVersion = "SmarAct %s (s/n %s)" % (devname, sn)
+        pos_types = [self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME, self._axis_map[a])
+                     for a in sorted(self._axis_map)]
+        self._hwVersion = "SmarAct %s (s/n %s) with positioners %s" % (devname, sn, ", ".join(pos_types))
 
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
         for name, channel in self._axis_map.items():
@@ -2558,26 +2564,37 @@ class MCS2(model.Actuator):
         returns (int32): the state
         """
 
-        state = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel)
+        return self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel)
+
+    def _check_channel_error(self, channel):
+        """
+        channel (int)
+        raise a HwError if the channel reports an error
+        """
+        state = self._get_channel_state(channel)
         if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED:
             if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_END_STOP_REACHED:
-                logging.error("Error in channel %d: End stop reached", channel)
-            if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED:
-                logging.error("Error in channel %d: Reached limit", channel)
-            if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED:
-                logging.error("Error in channel %d: Following limit reached", channel)
-        return state
+                raise model.HwError("Channel %d: reached end-stop" % (channel,))
+            elif state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED:
+                raise model.HwError("Channel %d reached range limit" % (channel,))
+            elif state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED:
+                raise model.HwError("Channel %d reached following limit" % (channel,))
+            else:
+                raise model.HwError("Channel %d movement failed for unknown reason" % (channel,))
 
     def _is_channel_referenced(self, channel):
         """
-        Ask the controller if it is referenced.
+        channel (int)
+        return (bool): True if the axis is referenced
         """
-        return bool(self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
+        return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
 
     def _is_channel_moving(self, channel):
-        mask = SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
-        state = self._get_channel_state(channel)
-        return bool(state & mask)
+        """
+        channel (int)
+        return (bool): True if the axis is moving
+        """
+        return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
 
     def _get_position(self, channel):
         """
@@ -2726,21 +2743,26 @@ class MCS2(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
-            end = 0  # expected end
-            moving_axes = set()
-            for an, v in pos.items():
-                channel = self._axis_map[an]
-                moving_axes.add(channel)
-                self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
-                # compute expected end
-                dur = driver.estimateMoveDuration(abs(v),
-                                self._speed[an],
-                                self._accel[an])
+            try:
+                end = 0  # expected end
+                moving_axes = set()
+                for an, v in pos.items():
+                    channel = self._axis_map[an]
+                    moving_axes.add(channel)
+                    self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
+                    # compute expected end
+                    dur = driver.estimateMoveDuration(abs(v),
+                                    self._speed[an],
+                                    self._accel[an])
 
-                end = max(time.time() + dur, end)
+                    end = max(time.time() + dur, end)
 
-            self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+                self._waitEndMove(future, moving_axes, end)
+            except Exception as ex:
+                logging.error("Move by %s failed: %s", pos, ex)
+                raise
+
+        logging.debug("Relative move successfully completed")
 
     def _doMoveAbs(self, future, pos):
         """
@@ -2752,21 +2774,25 @@ class MCS2(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
-            end = 0  # expected end
-            old_pos = self._applyInversion(self.position.value)
-            moving_axes = set()
-            for an, v in pos.items():
-                channel = self._axis_map[an]
-                moving_axes.add(channel)
-                self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
-                d = abs(v - old_pos[an])
-                dur = driver.estimateMoveDuration(d,
-                                                  self._speed[an],
-                                                  self._accel[an])
-                end = max(time.time() + dur, end)
+            try:
+                end = 0  # expected end
+                old_pos = self._applyInversion(self.position.value)
+                moving_axes = set()
+                for an, v in pos.items():
+                    channel = self._axis_map[an]
+                    moving_axes.add(channel)
+                    self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
+                    d = abs(v - old_pos[an])
+                    dur = driver.estimateMoveDuration(d,
+                                                      self._speed[an],
+                                                      self._accel[an])
+                    end = max(time.time() + dur, end)
+                    self._waitEndMove(future, moving_axes, end)
+            except Exception as ex:
+                logging.error("Move to %s failed: %s", pos, ex)
+                raise
 
-            self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+        logging.debug("Absolute move successfully completed")
 
     def _waitEndMove(self, future, axes, end=0):
         """
@@ -2792,6 +2818,8 @@ class MCS2(model.Actuator):
                 for channel in moving_axes.copy():  # need copy to remove during iteration
                     if not self._is_channel_moving(channel):
                         moving_axes.discard(channel)
+                        self._check_channel_error(channel)
+
                 if not moving_axes:
                     # no more axes to wait for
                     break
@@ -2820,7 +2848,7 @@ class MCS2(model.Actuator):
                 logging.debug("Move of axes %s cancelled before the end", axes)
                 # stop all axes still moving them
                 for i in moving_axes:
-                    self.Stop(self._axis_map(i))
+                    self.Stop(i)
                 future._was_stopped = True
                 raise CancelledError()
         finally:
@@ -2841,7 +2869,6 @@ class MCS2(model.Actuator):
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
-            self._executor.cancel()
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
             return future._was_stopped
