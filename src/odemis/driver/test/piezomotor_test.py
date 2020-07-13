@@ -35,6 +35,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
+
 class TestPMD401(unittest.TestCase):
     """
     Test the PMD401 class.
@@ -55,6 +56,13 @@ class TestPMD401(unittest.TestCase):
                       'wfm_stepsize': 5e-9}
                 }
         self.stage = PMD401Bus("PM Control", "stage", port, axes)
+
+    def tearDown(self):
+        self.stage.terminate()
+
+    def test_one_axis(self):
+        move = {'x': 0.01e-6}
+        self.stage.moveRelSync(move)
 
     def test_simple(self):
         # For now, just test for any errors, e.g. TimeoutError due to improper handling of the

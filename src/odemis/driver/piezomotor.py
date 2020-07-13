@@ -36,11 +36,10 @@ from odemis.model import HwError
 from odemis.util.driver import getSerialDriver
 
 BAUDRATE = 115200
-# TODO: Is this always the same for all encoders? Otherwise, it needs to be a parameters in the yaml file.
-# WFM_STEPSIZE = 5e-6  # m / step
+
 USTEPS_PER_WFM = 8192
-# TODO: set encoder stepsize to proper value
-ENCODER_STEPSIZE = 1e-9  # m / step
+ENCODER_STEPSIZE = 4.5e-6  # m / step
+DEFAULT_WFM_STEPSIZE = 225  # wfm steps / encoder steps
 DEFAULT_AXIS_SPEED = 0.01  # m / s
 
 EOL = b'\r'  # 0x0D, carriage return
@@ -50,6 +49,7 @@ sEOL = '\r'  # string version of EOL
 WAVEFORM_RHOMB = 1  # fast max speed
 WAVEFORM_DELTA = 2  # preferred, higher accuracy
 WAVEFORM_PARK = 4  # power off
+
 
 class PMDError(Exception):
     def __init__(self, errno, strerror, *args, **kwargs):
@@ -84,6 +84,7 @@ class PMD401Bus(Actuator):
         self._axis_map = {}  # axis name -> axis number used by controller
         self._closed_loop = {}  # axis name (str) -> bool (True if closed loop)
         self._wfm_stepsizes = {}
+        self._portpattern = port
 
         # Parse axis parameters
         axes_def = {}  # axis name -> Axis object
@@ -91,9 +92,10 @@ class PMD401Bus(Actuator):
         for axis_name, axis_par in axes.items():
             # Axis number
             try:
-                axis_num = axis_par['address']
+                axis_num = axis_par['axis_number']
             except KeyError:
                 raise ValueError("Axis %s has no axis number." % axis_name)
+
             if axis_num not in range(128):
                 raise ValueError("Invalid axis number %s, needs to be 0 <= int <= 127." % axis_num)
             elif axis_num in self._axis_map.values():
@@ -105,7 +107,8 @@ class PMD401Bus(Actuator):
             try:
                 self._wfm_stepsizes[axis_name] = axis_par['wfm_stepsize']  # approximately 5e-6 m / step
             except KeyError:
-                raise ValueError("Axis %s has no wfm stepsize." % axis_name)
+                logging.info("Axis %s has no wfm stepsize." % axis_name)
+                self._wfm_stepsizes[axis_name] = DEFAULT_WFM_STEPSIZE  # 5 * encoder resolution (um)
 
             # Axis range
             try:
@@ -170,10 +173,9 @@ class PMD401Bus(Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self.referenced = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
-        for ax, closed_loop in self._closed_loop:  # only add closed_loop axes to .referenced
+        for ax, closed_loop in self._closed_loop.items():  # only add closed_loop axes to .referenced
             if closed_loop:
-                self.referenced.add({ax: False})  # just assume they haven't been referenced
-
+                self.referenced.value[ax]: False  # just assume they haven't been referenced
 
     def terminate(self):
         # terminate can be called several times, do nothing if ._serial is already None
@@ -230,16 +232,17 @@ class PMD401Bus(Actuator):
         self._check_hw_error()
         targets = {}
         for axis, val in pos.items():
+            speed_wfmsteps = round(self._speed / ENCODER_STEPSIZE * self._wfm_stepsizes[axis])  # wfm steps / second
             if self._closed_loop[axis]:
                 encoder_cnts = round(val / ENCODER_STEPSIZE)
-                speed_usteps = round(self._speed / self._wfm_stepsizes[axis])  # wfm steps / second
-                self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axis], encoder_cnts, speed_usteps))
+                self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axis], encoder_cnts, speed_wfmsteps))
                 targets[axis] = encoder_cnts
             else:
                 target = val - self.position.value[axis]
-                wfm_steps = int(target / self._wfm_stepsizes[axis])  # number of waveform steps
-                usteps = int((target % self._wfm_stepsizes[axis]) * USTEPS_PER_WFM)   # number of µsteps
-                self._sendCommand(b'X%dJ%d,%d,%d' % (self._axis_map[axis], wfm_steps, usteps, speed_usteps))
+                encoder_cnts = round(target / ENCODER_STEPSIZE)
+                wfm_steps = int(encoder_cnts / self._wfm_stepsizes[axis])  # number of waveform steps
+                usteps = int((encoder_cnts * self._wfm_stepsizes[axis] - wfm_steps) * USTEPS_PER_WFM)   # number of µsteps
+                self.runMotorJog(self._axis_map[axis], wfm_steps, usteps, speed_wfmsteps)
         self._waitEndMotion(targets)
         self._updatePosition()
 
@@ -248,15 +251,15 @@ class PMD401Bus(Actuator):
         targets = {}
         self._updatePosition()
         for axis, val in shift.items():
-            speed_usteps = round(self._speed / self._wfm_stepsizes[axis] * USTEPS_PER_WFM)  # steps / second
+            speed_wfmsteps = round(self._speed / ENCODER_STEPSIZE * self._wfm_stepsizes[axis])  # steps / second
+            encoder_cnts = round(val / ENCODER_STEPSIZE)
             if self._closed_loop[axis]:
-                encoder_cnts = round(val / ENCODER_STEPSIZE)
                 self.runRelTargetMove(self._axis_map[axis], encoder_cnts)
-                targets[axis] = self.position.value[axis] / ENCODER_STEPSIZE + encoder_cnts
+                targets[axis] = self.position.value[axis] + val
             else:
-                wfm_steps = int(val / self._wfm_stepsizes[axis])  # number of waveform steps
-                usteps = int((val % self._wfm_stepsizes[axis]) * USTEPS_PER_WFM)   # number of µsteps
-
+                wfm_steps = int(encoder_cnts * self._wfm_stepsizes[axis])  # number of waveform steps
+                usteps = int((encoder_cnts * self._wfm_stepsizes[axis] - wfm_steps) * USTEPS_PER_WFM)   # number of µsteps
+                self.runMotorJog(self._axis_map[axis], wfm_steps, usteps, speed_wfmsteps)
                 targets[axis] = None
         self._waitEndMotion(targets)
         self._updatePosition()
@@ -307,7 +310,7 @@ class PMD401Bus(Actuator):
         """
         pos = {}
         for axname, axis in self._axis_map.items():
-            pos[axname] = self.getEncoderPosition(axis)
+            pos[axname] = self.getEncoderPosition(axis) * ENCODER_STEPSIZE
         logging.debug("Reporting new position at %s", pos)
         self.position._set_value(pos, force_write=True)
 
@@ -336,19 +339,17 @@ class PMD401Bus(Actuator):
         """
 
         """
-
-
         # There are two possibilities: move relative to current position (XC) and move relative to
         # target position (XR). We are moving relative to the current position (might be more intuitive
         # if something goes wrong and we're stuck in the wrong position).
-        self._sendCommand(b'X%dC%d,%d' % (axis, encoder_cnts, wfm_steps))
+        wfm_steps = 0
+        self._sendCommand(b'X%dR%d' % (axis, encoder_cnts))
 
-    def runMotorJog(self, axis, encoder_cnts):
+    def runMotorJog(self, axis, wfm_steps, usteps, speed):
         """
         Open loop stepping.
         """
-
-        self._sendCommand(b'X%dJ%d,%d,%d' % (self._axis_map[axis], wfm_steps, usteps, speed_usteps))
+        self._sendCommand(b'X%dJ%d,%d,%d' % (axis, wfm_steps, usteps, speed))
 
     def setWaveform(self, axis, wf):
         """
@@ -567,7 +568,7 @@ class PMD401Bus(Actuator):
                     self._port = n
                     return serial  # found it!
             except Exception as ex:
-                logging.debug("Port %s doesn't seem to have a TMCM device connected: %s",
+                logging.debug("Port %s doesn't seem to have a PMD device connected: %s",
                               n, ex)
             serial.close()  # make sure to close/unlock that port
         else:
@@ -767,3 +768,16 @@ class PMDSimulator(object):
     def _do_move(self):
         time.sleep(1)
         self.current_pos = copy.deepcopy(self.target_pos)
+
+
+logging.getLogger().setLevel(logging.DEBUG)
+
+axes = {'x': {'axis_number': 0, 'wfm_stepsize': 225, 'speed': 0.001, 'closed_loop': True}}
+pmd = PMD401Bus('test', 'test', '/dev/ttyUSB*', axes)
+
+print(pmd.getVersion(0))
+#pmd.reference({'x'})
+#ret = pmd.moveAbs({'x': -0.01})
+#ret = pmd.moveRel({'x': 0.01})
+pmd.stop(0)
+print(pmd.position.value)
