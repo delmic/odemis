@@ -83,19 +83,32 @@ class TestMultiplexLight(unittest.TestCase):
         # turn on second source (first channel) to 90%
         self.dev.power.value[2] = self.dev.power.range[1][2] * 0.9
         self.assertGreater(self.dev.power.value[2], 0)
-    #
+
     def test_child_update(self):
+        channel_to_child = []  # For each index in .power, the corresponding child
+        for spec in self.dev.spectra.value:
+            for c in (self.dependency1, self.dependency2):
+                if any(spec == cs for cs in c.spectra.value):
+                    channel_to_child.append(c)
+                    break
+            else:
+                raise ValueError("Failed to find spectra %s in children" % (spec,))
+
+        # The first and last ones are normally always from different children
+        c1 = channel_to_child[0]
+        c2 = channel_to_child[-1]
+        self.assertNotEqual(c1, c2)
+
         # Test if child light is updated multiplex light is updated as well and vice versa
-        self.dependency1.power.value[0] = self.dev.power.range[1][0] * 0.5
-        self.assertEqual(self.dev.power.value[0], self.dependency1.power.value[0])
-        self.dependency2.power.value[0] = self.dev.power.range[1][2] * 0.9
-        self.assertEqual(self.dev.power.value[2], self.dependency2.power.value[0])
+        c1.power.value[0] = self.dev.power.range[1][0] * 0.5
+        self.assertEqual(self.dev.power.value[0], c1.power.value[0])
+        c2.power.value[-1] = self.dev.power.range[1][-1] * 0.9
+        self.assertEqual(self.dev.power.value[-1], c2.power.value[-1])
 
-        self.dev.power.value[1] = self.dev.power.range[1][1] * 0.5
-        self.assertEqual(self.dev.power.value[1], self.dependency1.power.value[1])
-        self.dev.power.value[3] = self.dev.power.range[1][3] * 0.9
-        self.assertEqual(self.dev.power.value[3], self.dependency2.power.value[1])
-
+        self.dev.power.value[0] = self.dev.power.range[1][0] * 0.2
+        self.assertEqual(self.dev.power.value[0], c1.power.value[0])
+        self.dev.power.value[-1] = self.dev.power.range[1][-1] * 0.7
+        self.assertEqual(self.dev.power.value[-1], c2.power.value[-1])
 
     def test_multi(self):
         """

@@ -57,12 +57,8 @@ class Light(model.Emitter):
         self.spectra = model.ListVA([tuple(spectra[0])], unit="m", readonly=True)
 
     def _setPower(self, value):
-        if value[0] == self.power.range[1][0]:
-            logging.info("Light is on")
-            return self.power.range[1]
-        else:
-            logging.info("Light is off")
-            return self.power.range[0]
+        logging.info("Light is at %g W", value[0])
+        return value
 
 
 class Stage(model.Actuator):
