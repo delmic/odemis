@@ -199,8 +199,8 @@ class SpectraPro(model.Actuator):
             self._turret = self.GetTurret()
 
         # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
-        max_speed = 1000e-9 / 10 # about 1000 nm takes 10s => max speed in m/s
-        self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
+        wl_speed = 1000e-9 / 10  # about 1000 nm takes 10s => max speed in m/s
+        self.speed = model.MultiSpeedVA({"wavelength": wl_speed}, range=[wl_speed, wl_speed], unit="m/s",
                                         readonly=True)
 
         gchoices = self.GetGratingChoices()
@@ -217,7 +217,7 @@ class SpectraPro(model.Actuator):
         # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
         # TODO: what's the min? 200nm seems the actual min working, although wavelength is set to 0 by default !?
         axes = {"wavelength": model.Axis(unit="m", range=(0, 2400e-9),
-                                         speed=(max_speed, max_speed)),
+                                         speed=(wl_speed, wl_speed)),
                 "grating": model.Axis(choices=gchoices)
                 }
         # provides a ._axes
