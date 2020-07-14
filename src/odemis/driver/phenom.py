@@ -22,23 +22,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from future.utils import with_metaclass
-import queue
 from past.builtins import long
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
-import functools
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 from functools import reduce
+import functools
 import logging
 import math
 import numpy
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, oneway
+import queue
 import re
 import suds
 from suds.client import Client
+import sys
 import threading
 import time
 import weakref
@@ -98,7 +98,6 @@ import weakref
 #       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
 #       lot of such problems and might be worth to use if the standard SUDS
 #       version gets really too much annoying.
-
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -107,6 +106,7 @@ MAX_FRAMES = 255
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
 
+# TODO: depends on the Phenom -> Update range on first time it's possible to read them
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
 HFW_RANGE = (2.5e-06, 0.0031)
@@ -164,9 +164,9 @@ class SEM(model.HwComponent):
                           "the network." % (host,))
         # Decide if we still need to blank/unblank the beam by tweaking the
         # source tilt or we can just access the blanking Phenom API methods
-        phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
-        logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        if "SEMBlankBeam" not in phenom_methods:
+        self._phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
+        logging.debug("Methods available in Phenom host: %s", self._phenom_methods)
+        if "SEMBlankBeam" not in self._phenom_methods:
             raise HwError("This Phenom version doesn't support beam blanking! Version 4.4 or later is required.")
         self._device = client.service
 
@@ -324,12 +324,17 @@ class Scanner(model.Emitter):
 
         # (float, float) in m => physically moves the e-beam. The move is
         # clipped within the actual limits by the setter function.
-        shift_rng = ((-1, -1),
-                     (1, 1))
-        self.shift = model.TupleContinuous((0, 0), shift_rng,
-                                              cls=(int, long, float), unit="m",
-                                              setter=self._setShift)
-        self.shift.subscribe(self._onShift, init=True)
+        try:
+            # Just to check that the SEMImageShift is allowed
+            rng = self.parent._device.GetSEMImageShiftRange()
+            shift_rng = ((-1, -1),
+                         (1, 1))
+            self.shift = model.TupleContinuous((0, 0), shift_rng,
+                                                  cls=(int, long, float), unit="m",
+                                                  setter=self._setShift)
+            self.shift.subscribe(self._onShift, init=True)
+        except suds.WebFault as ex:
+            logging.warning("Disabling shift as ImageShift is not supported (%s)", ex)
 
         # (-0.5<=float<=0.5, -0.5<=float<=0.5) translation in ratio of the SEM
         # image shape
@@ -645,6 +650,20 @@ class Scanner(model.Emitter):
         self._trans = (value[0] / self._shape[0], value[1] / self._shape[1])
         return value
 
+    def transToPhy(self, trans):
+        """
+        Converts a position in ratio of FoV to physical unit (m), given the
+          current magnification.
+          Note: the convention is that in internal coordinates Y goes down, while
+          in physical coordinates, Y goes up.
+        trans (-0.5<float<0.5, -0.5<float<0.5): shift from the center of pixels
+        returns (tuple of 2 floats): physical position in meters
+        """
+        pxs = self.pixelSize.value # m/px
+        phy_pos = (trans[0] * self._shape[0] * pxs[0],
+                   -trans[1] * self._shape[1] * pxs[1]) # - to invert Y
+        return phy_pos
+
     def _onShift(self, shift):
         beamShift = self.parent._objects.create('ns0:position')
         with self.parent._acq_progress_lock:
@@ -697,6 +716,10 @@ class Detector(model.Detector):
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
+
+        # TODO: if the SED is available, it should be seen as a separate
+        # detector, to match the Odemis API.
+        self._has_sed = "SEMHasSED" in parent._phenom_methods and parent._device.SEMHasSED()
 
         # will take care of executing autocontrast asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -830,12 +853,14 @@ class Detector(model.Detector):
         self._updateBrightness()
 
     def start_acquire(self, callback):
+        logging.debug("New SEM acquisition requested")
         # Check if Phenom is in the proper mode
         area = self._acq_device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
+            logging.debug("Starting acquisition thread")
             if self.parent._scanner.blanker.value is None:
                 try:
                     self.parent._scanner._blank_beam(False)
@@ -945,6 +970,14 @@ class Detector(model.Detector):
             metadata = self.parent._metadata.copy()
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
+            # Update position (if there is one known) by the translation.
+            # Note that the beam shift is not taken into account, as that control
+            # is used for calibration, so to ensure that the center of the image
+            # matches the given position metadata.
+            center = metadata.get(model.MD_POS, (0, 0))
+            trans_phy = self.parent._scanner.transToPhy(trans)
+            metadata[model.MD_POS] = (center[0] + trans_phy[0],
+                                      center[1] + trans_phy[1])
 
             # Spot is achieved by setting a scale = 0
             # The Phenom needs _some_ resolution. Smaller is better because
@@ -997,7 +1030,7 @@ class Detector(model.Detector):
 
                 logging.debug("Returning spot SEM image with data %d", sem_img[0, 0])
                 return model.DataArray(sem_img, metadata)
-            elif res[0] <= 128 or res[1] <= 128:
+            elif res[0] * res[1] <= (16 * 16):
                 # Scan spot by spot (as fast as possible)
                 logging.debug("Grid scanning of %s...", res)
 
@@ -1036,6 +1069,7 @@ class Detector(model.Detector):
                 nframes = self.parent._scanner._nr_frames
                 logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                               res, bpp, nframes)
+                # With the SW 5.4, Phenom XL works fine down to (at least) 32x32 px
                 if res[0] < 256 or res[1] < 256:
                     logging.warning("Scanning at resolution < 256 %s, which is unsupported.", res)
 
@@ -1051,7 +1085,12 @@ class Detector(model.Detector):
 
                 scan_params, need_set = self._get_viewing_mode(res, nframes, shift, fovscale)
                 scan_params.HDR = (bpp == 16)
-                scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
+
+                if (self._has_sed and
+                    self._acq_device.SEMGetSEDState() in ("SED-STATE-ENABLED", "SED-STATE-ENABLING")):
+                    scan_params.detector = 'SEM-DETECTOR-MODE-SED'
+                else:
+                    scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
 
                 # last check before we initiate the actual acquisition
                 if self._acquisition_must_stop.is_set():
@@ -1083,8 +1122,8 @@ class Detector(model.Detector):
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
-                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth * fovscale,
-                                                 img_str.aAcqState.pixelHeight * fovscale)
+                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
+                                                 img_str.aAcqState.pixelHeight)
                 metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
                 dtype = {8: numpy.uint8, 16: numpy.uint16}[img_str.image.descriptor.bits]
@@ -1760,7 +1799,7 @@ class ChamberPressure(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
-        # Tuple containing sample holder ID and type, or None, None if absent
+        # Tuple containing sample holder ID (int) and type (int), or None, None if absent
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
 
         # VA used for the sample holder registration
@@ -1826,10 +1865,19 @@ class ChamberPressure(model.Actuator):
         if holder.status == "SAMPLE-ABSENT":
             val = (None, None)
         else:
-            # Convert base64 to long int
-            s = base64.decodestring(holder.holderID.id[0])
-            holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
+            # Convert base64 (to raw bytes of uint128-be) to long int.
+            # As it comes from HTTP, id[0] is already converted back to string, but
+            # we need bytes for the base64 function => encode back to bytes.
+            # TODO: once Python 3-only, switch to decodebytes
+            s = base64.decodestring(holder.holderID.id[0].encode("ascii"))
+            if sys.version_info[0] >= 3:  # Python 3
+                holderID = reduce(lambda a, n: (a << 8) + n, (v for v in s), 0)
+            else:
+                holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
             val = (holderID, holder.holderType)
+
+            logging.debug("Sample holder 0x%x of type %s has status %s",
+                          val[0], val[1], holder.status)
 
         # Status can be of 4 kinds, only when it's "present" that it means the
         # sample holder is registered
@@ -1940,8 +1988,14 @@ class ChamberPressure(model.Actuator):
                     # new operational mode is reached. Moreover, immediately
                     # GetOperationalMode() returns the new mode, quite
                     # before the event is sent and the system is actually ready.
-                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-                    TimeUpdater.cancel()
+                    try:
+                        self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    except suds.WebFault as ex:
+                        opmode = self._pressure_device.GetOperationalMode()
+                        if opmode in ("OPERATIONAL-MODE-ACQUIRESEMIMAGE", "OPERATIONAL-MODE-LIVESEM"):
+                            logging.warning("Moved raised an error but seems to have moved as expected to %s (%s)", opmode, ex)
+                        else:
+                            raise
 
                     # Typically, it will first go to ACQUIRESEMIMAGE, then LIVESEM
                     try:
@@ -1977,7 +2031,6 @@ class ChamberPressure(model.Actuator):
                         return
 
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-                    TimeUpdater.cancel()
 
                     # Typically, it will first go to ACQUIRENAVCAMIMAGE, then LIVENAVCAM
                     try:
@@ -1994,12 +2047,13 @@ class ChamberPressure(model.Actuator):
 
                 elif p == PRESSURE_UNLOADED:
                     self._pressure_device.UnloadSample()
-                    TimeUpdater.cancel()
                 else:
                     raise ValueError("Unexpected pressure %g" % (p,))
             except Exception as ex:
                 logging.exception("Failed to move to pressure %g: %s", p, ex)
                 raise
+            finally:
+                TimeUpdater.cancel()
 
         # Wait for position to be updated (via the chamber_move event listener thread)
         self._position_event.wait(10)
