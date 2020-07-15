@@ -79,7 +79,8 @@ provides four functions:
     :returns: an opened file
     :rtype: AcquisitionData
 
-.. TODO: describe the helper functions of dataio
+.. TODO: describe the helper functions of dataio and util.dataio
+.. TODO: describe AcquisitionData class
 
 Example usage
 -------------
@@ -103,6 +104,63 @@ To read data from an OME-TIFF file, one could write:
    print(das[0].metadata[model.MD_PIXEL_SIZE])
    print(das[0].metadata[model.MD_LENS_MAG])
    print(das[0].metadata)
+
+Image position metadata
+=======================
+Most of the data stored corresponds to "spatial" data, i.e., an image representing
+the sample with axes in X and Y. In order to ensure a perfect overlay between data from
+different acquisition types, the metadata describes precisely how the image should
+be positioned. The following metadata has influence:
+
+* ``MD_PIXEL_SIZE``: size of a pixel (in m) in X and Y. In other words, this is the scale.
+* ``MD_POS``: the position (in m) of the *center of the image* in X and Y. In other words, this is the translation.
+* ``MD_ROTATION``: counter-clockwise rotation (in radians) applied to the image from its center
+* ``MD_SHEAR``: *vertical* shear
+
+All values default to 0, excepted for the ``MD_PIXEL_SIZE`` which is required.
+
+Note that during acquisition, all these metadata have a twin-brother named with an extra
+`_COR` in order to record the correction on the image display. The function ``util.img.mergeMetadata()``
+can be used to merge these corrections into the main metadata. Before saving data
+to a file, the correction is automatically merged. So typically, after opening a
+file, the data will not have any of these extra correction metadata.
+
+When converting from pixel coordinates to "physical" coordinates (in meters), the
+first thing to pay attention is that pixel coordinates are "left-handed": the Y
+axis goes from the "top of the screen" to the "bottom" (following the convention
+in computer software). On the opposite, physical coordinates in Odemis are "right-handed".
+The Y axis increases while going towards the top of the screen (following the convention
+used in mathematics and physics).
+
+For a given pixel situated at coordinates *p = i, j* in an image of size *sx, sy*,
+its "physical" position *P = x, y* (in meters) can be computed by first computing
+*pc = [i - sx / 2, -(j - sy / 2)]* and then applying the following formula *P = RSLpc + T*,
+where *R* is the rotation, *S* is the scale, *L* is the shear, and *T* is the translation.
+
+In Python, this can be done with:
+
+.. code-block:: python
+
+   from odemis import model
+   from odemis.util.transform import AffineTransform
+
+   img_size = da.shape[-1], da.shape[-2]
+   pxs = da.metadata[model.MD_PIXEL_SIZE]
+   translation = da.metadata.get(model.MD_POS, (0, 0))
+   rotation = da.metadata.get(model.MD_ROTATION, 0)
+   shear = da.metadata.get(model.MD_SHEAR, 0)
+
+   tform = AffineTransform(rotation=rotation, scale=pxs, translation=translation)
+   # Shear is computed apart because the AffineTransform uses a horizontal shear
+   L = numpy.array([(1, 0), (-shear, 1)])
+   tform.transformation_matrix = numpy.dot(tform.transformation_matrix, L)
+
+   pc = (p[0] - img_size[0] / 2), -(p[1] - img_size[1] / 2)
+   P = tform(pc)
+
+   # To convert back to pixel coordinates
+   pc = tform.inverse()(P)
+   p = (pc[0] + img_size[0] / 2), -(pc[1] - img_size[1] / 2)
 
 
 OME-TIFF
