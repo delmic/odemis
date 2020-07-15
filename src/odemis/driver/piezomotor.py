@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 18 Mar 2020
 
 @author: Philip Winkler
@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import glob
@@ -36,10 +36,6 @@ from odemis.model import HwError
 from odemis.util.driver import getSerialDriver
 
 BAUDRATE = 115200
-
-USTEPS_PER_WFM = 8192
-ENCODER_STEPSIZE = 4.5e-6  # m / step
-DEFAULT_WFM_STEPSIZE = 225  # wfm steps / encoder steps
 DEFAULT_AXIS_SPEED = 0.01  # m / s
 
 EOL = b'\r'  # 0x0D, carriage return
@@ -50,10 +46,16 @@ WAVEFORM_RHOMB = 1  # fast max speed
 WAVEFORM_DELTA = 2  # preferred, higher accuracy
 WAVEFORM_PARK = 4  # power off
 
+COUNTS_PER_METER = 1 / 1.25e-6
+DEFAULT_SPC = 1.25e-6 / 4.5e-6  # steps per count (encoder steplength / motor steplength)
+USTEPS_PER_STEP = 8192
+
+STROKE_RANGE = 23.1e-3  # m
+
 
 class PMDError(Exception):
-    def __init__(self, errno, strerror, *args, **kwargs):
-        super(PMDError, self).__init__(errno, strerror, *args, **kwargs)
+    def __init__(self, errno, strerror, *args):
+        super(PMDError, self).__init__(errno, strerror, *args)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
@@ -73,66 +75,58 @@ class PMD401Bus(Actuator):
 
     def __init__(self, name, role, port, axes, inverted=None, **kwargs):
         """
-        :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters (address, range, unit, closed_loop, speed, wfm_stepsize)
+        :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters
             address (0 <= int <= 127), required (typically 1-3 for x-z)
-            wfm stepsize (float), waveform stepsize
-            range (tuple of float), default to [-1, 1]
+            spc (float), motor (wfm) steps per encoder count, default to 80000
+            range (tuple of float), default to (0, STROKE_RANGE)
             unit (str), default to m
             closed_loop (bool): True for closed loop (with encoder), default to True
             speed (float): speed in m/s
         """
         self._axis_map = {}  # axis name -> axis number used by controller
         self._closed_loop = {}  # axis name (str) -> bool (True if closed loop)
-        self._wfm_stepsizes = {}
+        self._steps_per_count = {}  # axis name (str) -> float
+        self._steps_per_meter = {}  # axis name (str) -> float
+        self._speed_steps = {}  # axis name (str) -> int
         self._portpattern = port
 
         # Parse axis parameters
         axes_def = {}  # axis name -> Axis object
-
         for axis_name, axis_par in axes.items():
-            # Axis number
             try:
                 axis_num = axis_par['axis_number']
             except KeyError:
                 raise ValueError("Axis %s has no axis number." % axis_name)
-
             if axis_num not in range(128):
                 raise ValueError("Invalid axis number %s, needs to be 0 <= int <= 127." % axis_num)
             elif axis_num in self._axis_map.values():
-                raise ValueError("Invalid axis number %s, already assigned to axis %s." % (axis_num, self._axis_map[axis_num]))
+                axname = self._axis_map[axis_num]
+                raise ValueError("Invalid axis number %s, already assigned to axis %s." % (axis_num, axname))
             else:
                 self._axis_map[axis_name] = axis_par['axis_number']
-
-            # WFM stepsize
             try:
-                self._wfm_stepsizes[axis_name] = axis_par['wfm_stepsize']  # approximately 5e-6 m / step
+                self._steps_per_count[axis_name] = axis_par['spc']  # approximately 5e-6 m / step
+                self._steps_per_meter[axis_name] = axis_par['spc'] * COUNTS_PER_METER
             except KeyError:
                 logging.info("Axis %s has no wfm stepsize." % axis_name)
-                self._wfm_stepsizes[axis_name] = DEFAULT_WFM_STEPSIZE  # 5 * encoder resolution (um)
-
-            # Axis range
+                self._steps_per_count[axis_name] = DEFAULT_SPC
+                self._steps_per_meter[axis_name] = DEFAULT_SPC * COUNTS_PER_METER
             try:
                 axis_range = axis_par['range']
             except KeyError:
-                logging.info("Axis %s has no range. Assuming (-1, 1)", axis_name)
-                axis_range = (-1, 1)
-
-            # Axis unit
+                axis_range = (0, STROKE_RANGE)
+                logging.info("Axis %s has no range. Assuming %s", axis_name, axis_range)
             try:
                 axis_unit = axis_par['unit']
             except KeyError:
                 axis_unit = "m"
                 logging.info("Axis %s has no unit. Assuming %s", axis_name, axis_unit)
-
-            # Axis speed
             try:
                 self._speed = axis_par['speed']
             except KeyError:
-                # m if linear, "rad" otherwise
                 self._speed = DEFAULT_AXIS_SPEED
                 logging.info("Axis %s was not given a speed value. Assuming %s", axis_name, self._speed)
-
-            # Axis mode (closed loop/ open loop)
+            self._speed_steps[axis_name] = round(self._speed * self._steps_per_meter[axis_name])
             try:
                 closed_loop = axis_par['closed_loop']
             except KeyError:
@@ -143,7 +137,7 @@ class PMD401Bus(Actuator):
             ad = model.Axis(canAbs=closed_loop, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
 
-        Actuator.__init__(self, name, role, axes=axes, inverted=inverted, **kwargs)
+        Actuator.__init__(self, name, role, axes=axes_def, inverted=inverted, **kwargs)
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
         self._ser_access = threading.RLock()
 
@@ -167,7 +161,7 @@ class PMD401Bus(Actuator):
             self.setWaveform(axis, WAVEFORM_DELTA)
 
         driver_name = getSerialDriver(self._port)
-        self._swVersion = "serial driver: %s" % (driver_name,)
+        self._swVersion = "Serial driver: %s" % (driver_name,)
 
         # Position and referenced VAs
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
@@ -175,22 +169,22 @@ class PMD401Bus(Actuator):
         self._updatePosition()
         for ax, closed_loop in self._closed_loop.items():  # only add closed_loop axes to .referenced
             if closed_loop:
-                self.referenced.value[ax]: False  # just assume they haven't been referenced
+                self.referenced.value[ax] = False  # just assume they haven't been referenced
 
     def terminate(self):
         # terminate can be called several times, do nothing if ._serial is already None
         if self._serial is None:
             return
+        self._serial.close()
         self._serial = None
         for axis in self._axis_map.values():
             self.setWaveform(axis, WAVEFORM_PARK)  # power off
-        self._serial.close()
 
     def stop(self, axes=None):
         self._executor.cancel()
-        axes = axes or self.axes
+        axes = axes or self._axis_map.keys()
         for ax in axes:
-            self.stopAxis(ax)
+            self.stopAxis(self._axis_map[ax])
 
     def moveRel(self, shift):
         if not shift:
@@ -213,36 +207,45 @@ class PMD401Bus(Actuator):
 
     def _doReference(self, axes):
         self._check_hw_error()
+        # Request referencing on all axes
         for axname in axes:
             self.startIndexMode(self._axis_map[axname])
             self.moveToIndex(self._axis_map[axname])
-            if 'index' not in self.getIndexStatus(self._axis_map[axname]):
-                self.stop()  # exit index mode
-                raise ValueError("Referencing axis %s failed." % self._axis_map[axname])
-            self.stop()  # exit index mode
-            self.referenced[axname] = True
+
+        # Wait until referencing is done
+        timeout = 2 * (STROKE_RANGE / self._speed)
+        startt = time.time()
+        for axname in axes:
+            while not self.getIndexStatus(self._axis_map[axname])[-1]:
+                time.sleep(0.1)
+                if time.time() - startt > timeout:
+                    self.stop()  # exit index mode
+                    raise ValueError("Referencing axis %s failed." % self._axis_map[axname])
+            logging.debug("Finished referencing axis %s." % axname)
+            self.stopAxis(self._axis_map[axname])
+            self.referenced.value[axname] = True
 
         # TODO: Note that this is a really basic referencing procedure. You typically want to do a fast search,
         #  and then do a second search at slow speed, to locate the index more precisely. Also, if the index is
         #  somewhere in the middle, you'll need to handle the fact you might have picked the wrong direction
         #  (in which case, after while you'll bump into the limit switch) and in such case, continue by going in
         #  the other direction.
+        #  Referencing currently doesn't work if we already start at the target position.
 
     def _doMoveAbs(self, pos):
         self._check_hw_error()
         targets = {}
-        for axis, val in pos.items():
-            speed_wfmsteps = round(self._speed / ENCODER_STEPSIZE * self._wfm_stepsizes[axis])  # wfm steps / second
-            if self._closed_loop[axis]:
-                encoder_cnts = round(val / ENCODER_STEPSIZE)
-                self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axis], encoder_cnts, speed_wfmsteps))
-                targets[axis] = encoder_cnts
+        for axname, val in pos.items():
+            if self._closed_loop[axname]:
+                encoder_cnts = round(val * COUNTS_PER_METER)
+                self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axname], encoder_cnts, self._speed_steps[axname]))
+                targets[axname] = val
             else:
-                target = val - self.position.value[axis]
-                encoder_cnts = round(target / ENCODER_STEPSIZE)
-                wfm_steps = int(encoder_cnts / self._wfm_stepsizes[axis])  # number of waveform steps
-                usteps = int((encoder_cnts * self._wfm_stepsizes[axis] - wfm_steps) * USTEPS_PER_WFM)   # number of µsteps
-                self.runMotorJog(self._axis_map[axis], wfm_steps, usteps, speed_wfmsteps)
+                target = val - self.position.value[axname]
+                steps_float = target * self._steps_per_meter[axname]
+                steps = int(steps_float)
+                usteps = int((steps_float - steps) * USTEPS_PER_STEP)
+                self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
         self._waitEndMotion(targets)
         self._updatePosition()
 
@@ -250,17 +253,17 @@ class PMD401Bus(Actuator):
         self._check_hw_error()
         targets = {}
         self._updatePosition()
-        for axis, val in shift.items():
-            speed_wfmsteps = round(self._speed / ENCODER_STEPSIZE * self._wfm_stepsizes[axis])  # steps / second
-            encoder_cnts = round(val / ENCODER_STEPSIZE)
-            if self._closed_loop[axis]:
-                self.runRelTargetMove(self._axis_map[axis], encoder_cnts)
-                targets[axis] = self.position.value[axis] + val
+        for axname, val in shift.items():
+            if self._closed_loop[axname]:
+                targets[axname] = self.position.value[axname] + val
+                encoder_cnts = val * COUNTS_PER_METER
+                self.runRelTargetMove(self._axis_map[axname], encoder_cnts)
             else:
-                wfm_steps = int(encoder_cnts * self._wfm_stepsizes[axis])  # number of waveform steps
-                usteps = int((encoder_cnts * self._wfm_stepsizes[axis] - wfm_steps) * USTEPS_PER_WFM)   # number of µsteps
-                self.runMotorJog(self._axis_map[axis], wfm_steps, usteps, speed_wfmsteps)
-                targets[axis] = None
+                steps_float = val * self._steps_per_meter[axname]
+                steps = int(steps_float)
+                usteps = int((steps_float - steps) * USTEPS_PER_STEP)
+                self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
+                targets[axname] = None
         self._waitEndMotion(targets)
         self._updatePosition()
 
@@ -270,23 +273,24 @@ class PMD401Bus(Actuator):
         :arg targets (dict: str --> int): target (for closed-loop), None for open loop
         """
         # Expected time for move
-        move_length = max(abs(self.position[ax] - target) for ax, target in targets.items())
-        dur = move_length * self._speed
+        move_length = max(abs(self.position.value[ax] - target) for ax, target in targets.items())
+        dur = move_length / self._speed
         max_dur = max(dur * 2, 0.1)  # wait at least 0.1 s
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
 
-        for ax, target in targets.items():
+        for axname, target in targets.items():
+            axis = self._axis_map[axname]
             moving = True
-            end_time = time.time() + 5  # 5 s until timeout
+            end_time = time.time() + max_dur
             while moving:
                 if time.time() > end_time:
-                    raise IOError("Timeout while waiting for end of motion on axis %s" % ax)
-                if self._closed_loop[ax]:
+                    raise IOError("Timeout while waiting for end of motion on axis %s" % axis)
+                if self._closed_loop[axname]:
                     if target is None:
-                        raise ValueError("No target provided for closed-loop move on axis %s." % ax)
-                    moving = self.isMovingClosedLoop(ax, target)
+                        raise ValueError("No target provided for closed-loop move on axis %s." % axis)
+                    moving = self.isMovingClosedLoop(axis, target)
                 else:
-                    moving = self.isMovingOpenLoop(ax)
+                    moving = self.isMovingOpenLoop(axis)
                 self._check_hw_error()
                 time.sleep(0.05)
 
@@ -299,8 +303,9 @@ class PMD401Bus(Actuator):
                 raise PMDError(2, "Encoder error(serial communication or reported error from serial encoder)")
             elif status[0] & 2:
                 raise PMDError(3, "Supply voltage or motor fault was detected.")
-            elif status[1] & 1:
-                raise PMDError(4, "Command timeout occurred or a syntax error was detected when response was not allowed.")
+            elif status[0] & 1:
+                raise PMDError(4, "Command timeout occurred or a syntax error was detected when response was not "
+                                  "allowed.")
             elif status[1] & 8:
                 raise PMDError(5, "Power-on/reset has occurred.")
 
@@ -310,12 +315,12 @@ class PMD401Bus(Actuator):
         """
         pos = {}
         for axname, axis in self._axis_map.items():
-            pos[axname] = self.getEncoderPosition(axis) * ENCODER_STEPSIZE
+            pos[axname] = self.getEncoderPosition(axis)
         logging.debug("Reporting new position at %s", pos)
         self.position._set_value(pos, force_write=True)
 
     def stopAxis(self, axis):
-        self._sendCommand(b'X%dS' % self._axis_map[axis])
+        self._sendCommand(b'X%dS' % axis)
 
     def getVersion(self, axis):
         """
@@ -333,7 +338,7 @@ class PMD401Bus(Actuator):
         """
         :returns (float): current position of the axis as reported by encoders (in m)
         """
-        return int(self._sendCommand(b'X%dE' % axis)) * ENCODER_STEPSIZE
+        return int(self._sendCommand(b'X%dE' % axis)) / COUNTS_PER_METER
 
     def runRelTargetMove(self, axis, encoder_cnts):
         """
@@ -342,8 +347,7 @@ class PMD401Bus(Actuator):
         # There are two possibilities: move relative to current position (XC) and move relative to
         # target position (XR). We are moving relative to the current position (might be more intuitive
         # if something goes wrong and we're stuck in the wrong position).
-        wfm_steps = 0
-        self._sendCommand(b'X%dR%d' % (axis, encoder_cnts))
+        self._sendCommand(b'X%dC%d,%d' % (axis, encoder_cnts, self._speed_steps['x']))
 
     def runMotorJog(self, axis, wfm_steps, usteps, speed):
         """
@@ -380,20 +384,20 @@ class PMD401Bus(Actuator):
 
     def isMovingClosedLoop(self, axis, target):
         """
-        :param axis (int): axis number
-        :param target (float): target position for axes
+        :param axis: (int) axis number
+        :param target:  (float) target position for axes
         :returns (bool): True if moving, False otherwise
         """
-        resp = self._sendCommand(b'X%dE' % axis)
-        if abs(float(target) - float(resp)) < 1e-9:  # 1 nm accuracy
-            return True
-        else:
+        position = float(self._sendCommand(b'X%dE' % axis)) / COUNTS_PER_METER
+        if abs(position - target) < 2 / COUNTS_PER_METER:  # 1 encoder count precision (difference less than 2 counts)
             return False
+        else:
+            return True
 
     def isMovingOpenLoop(self, axis):
         """
-        :param axis (int): axis number
-        :returns (bool): True if moving, False otherwise
+        :param axis: (int) axis number
+        :returns: (bool) True if moving, False otherwise
         """
         resp = self._sendCommand(b'X%dJ' % axis)  # will be 1 if finished, otherwise 0
         return int(resp) == 0
@@ -408,22 +412,23 @@ class PMD401Bus(Actuator):
         """
         Move towards the index until it's found.
         """
-        self._sendCommand(b'X%dI-16' % axis)
+        maxdist = int(-21.3e-3 * COUNTS_PER_METER * DEFAULT_SPC)  # complete rodlength
+        self._sendCommand(b'X%dI%d' % (axis, maxdist))
 
     def getIndexStatus(self, axis):
         """
         Returns a description of the index status.
         :returns (tuple of 4):
-            mode (int): index mode (1 if position has been reset at index)
+            string! mode (int): index mode (1 if position has been reset at index)
             position (float):
             logged (bool): position was logged since last report
             indexed (bool): position has been reset at index
         """
         # Check if referencing was successful
         # Response looks like this: "1,132.,indexed"
+        ret = self._sendCommand(b'X%dN?' % axis).split(',')
         try:
-            ret = self._sendCommand(b'X%dN?' % axis).split(',')
-            mode = int(ret[0])
+            mode = ret[0]
             if ret[1][-1] == '.':
                 # . means position was logged since last report
                 logged = True
@@ -431,7 +436,7 @@ class PMD401Bus(Actuator):
             else:
                 logged = False
                 position = ret[1]
-            if len(ret) > 2 and ret[2] == 'indexed':
+            if len(ret) > 2 and 'indexed' in ret[2]:
                 indexed = True
             else:
                 indexed = False
@@ -446,20 +451,20 @@ class PMD401Bus(Actuator):
         :arg current_address (int): current axis number
         :arg new_address (int): new axis number
         """
-        self._sendCommand("X%dY40,%d" % (current_address, new_address))
+        self._sendCommand(b"X%dY40,%d" % (current_address, new_address))
 
     def runAutoConf(self, axis):
         """
         Runs automatic configuration for the encoder parameters.
         :arg axis (int): axis number
         """
-        self._sendCommand("X%dY25" % axis)
+        self._sendCommand(b"X%dY25,1" % axis)
 
     def writeParamsToFlash(self, axis):
-        self._sendCommand("X%dY32" % axis)
+        self._sendCommand(b"X%dY32" % axis)
 
     def setParam(self, axis, param, value):
-        self._sendCommand("X%dY%d,%d" % (axis, param, value))
+        self._sendCommand(b"X%dY%d,%d" % (axis, param, value))
 
     def _sendCommand(self, cmd):
         """
@@ -476,8 +481,8 @@ class PMD401Bus(Actuator):
                 try:
                     char = self._serial.read()
                 except IOError:
-                    logging.warn("Failed to read from PMT Control firmware, "
-                                 "trying to reconnect.")
+                    logging.warning("Failed to read from PMT Control firmware, "
+                                    "trying to reconnect.")
                     if self._recovering:
                         raise
                     else:
@@ -492,7 +497,7 @@ class PMD401Bus(Actuator):
             logging.debug("Received response %s", to_str_escape(resp))
 
             # Check response (command should be echoed back)
-            if not resp.startswith(cmd[:-len(EOL)]):
+            if not resp.startswith(cmd[:-len(EOL)-1]):
                 raise IOError("Response starts with %s != %s", resp[:len(cmd)], cmd)
             if b"_??_" in resp:
                 raise ValueError("Received response %s, command %s not understood." % (resp, cmd))
@@ -513,7 +518,8 @@ class PMD401Bus(Actuator):
             with self._ser_access:
                 while True:
                     try:
-                        self._serial.close()
+                        if self._serial:
+                            self._serial.close()
                         self._serial = None
                     except Exception:
                         pass
@@ -575,7 +581,6 @@ class PMD401Bus(Actuator):
             raise IOError("Failed to find a PMD controller on ports '%s'. "
                           "Check that the device is turned on and "
                           "connected to the computer." % (port,))
-
 
     @staticmethod
     def _openSerialPort(port):
@@ -688,7 +693,7 @@ class PMDSimulator(object):
                 if not args:
                     self._output_buf += ":%d" % self.waveform[axis]
                 elif len(args) == 1:
-                    self.waveform = int(args[0])
+                    self.waveform[axis] = int(args[0])
                 else:
                     raise ValueError()
             elif cmd == "?":
@@ -768,16 +773,3 @@ class PMDSimulator(object):
     def _do_move(self):
         time.sleep(1)
         self.current_pos = copy.deepcopy(self.target_pos)
-
-
-logging.getLogger().setLevel(logging.DEBUG)
-
-axes = {'x': {'axis_number': 0, 'wfm_stepsize': 225, 'speed': 0.001, 'closed_loop': True}}
-pmd = PMD401Bus('test', 'test', '/dev/ttyUSB*', axes)
-
-print(pmd.getVersion(0))
-#pmd.reference({'x'})
-#ret = pmd.moveAbs({'x': -0.01})
-#ret = pmd.moveRel({'x': 0.01})
-pmd.stop(0)
-print(pmd.position.value)
