@@ -280,7 +280,7 @@ class AxisLegend(wx.Panel):
 
         self._orientation = orientation
         self._max_tick_width = 32  # Largest pixel width of any label in use
-        self._tick_spacing = 120 if orientation == wx.HORIZONTAL else 80
+        self._tick_spacing = 60
         self._unit = None
         self._lo_ellipsis = False
         self._hi_ellipsis = False
