@@ -31,6 +31,11 @@ override_dh_installdocs:
 	# Install the "normal" documentation files (not needed? taken care by setup.py?)
 	#dh_installdocs
 
+override_dh_python:
+	# Leave the scripts marked as /usr/bin/python as-is. We'll switch to Python 3
+	# explicitily.
+	dh_python --no-shebang-rewrite
+
 override_dh_python3:
 	# Leave the scripts marked as /usr/bin/python as-is. We'll switch to Python 3
 	# explicitily.

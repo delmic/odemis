@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Checks the reference switches of each axis of the mirror.
 # Normally, they should be opposite from each other. If not, it's a sign of a

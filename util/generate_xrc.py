@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Embed a XRC file into a Python file.
 # python ~/alien/Phoenix/wx/tools/pywxrc.py -p -e -o src/odemis/gui/main_xrc.py.new src/odemis/gui/main.xrc

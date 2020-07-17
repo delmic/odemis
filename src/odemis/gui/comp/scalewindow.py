@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 13 Feb 2012
@@ -251,4 +250,3 @@ class ScaleWindow(BufferedWindow):
         # gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
         # # could use strokelines
 
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

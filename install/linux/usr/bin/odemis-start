@@ -4,4 +4,4 @@
 
 export PYTHONPATH
 
-${PYTHON_INTERPRETER:-/usr/bin/python} -m ${START:-odemis.odemisd.start} "$@"
+${PYTHON_INTERPRETER:-/usr/bin/python3} -m ${START:-odemis.odemisd.start} "$@"

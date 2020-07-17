@@ -5,4 +5,4 @@
 
 export PYTHONPATH
 
-${PYTHON_INTERPRETER:-/usr/bin/python} -m $CLI_CONVERT "$@"
+${PYTHON_INTERPRETER:-/usr/bin/python3} -m $CLI_CONVERT "$@"
