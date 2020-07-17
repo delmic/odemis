@@ -673,7 +673,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
         try:
             # Move the sem_stage instead of objective lens
             future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus,
-                                                 type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE)
+                                                 type=spot.STAGE_MOVE, dfbkg=detector.data,
+                                                 rng_f=FOCUS_RANGE, logpath=logpath)
             dist, vector = future.running_subf.result()
         except IOError:
             if future._task_state == CANCELLED:
