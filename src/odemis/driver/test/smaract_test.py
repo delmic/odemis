@@ -441,25 +441,46 @@ class TestTMCS2(unittest.TestCase):
 
     def test_reference_cancel(self):
         """Test canceling referencing"""
+        # First, reference it
+        f = self.dev.reference()
+        f.result()
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
 
-        if not TEST_NOHW:
-            # For now, the simulator reports an axis is referenced as soon as the
-            # procedure is started, so this doesn't work.
-            # TODO: extend the simulator to report axis is referenced only at the end of referencing.
-            f = self.dev.reference()
-            time.sleep(0.1)
-            f.cancel()
+        f = self.dev.reference()
+        time.sleep(0.1)
+        f.cancel()
 
-            for a, i in self.dev.referenced.value.items():
-                self.assertFalse(i)
+        for a, i in self.dev.referenced.value.items():
+            self.assertFalse(i)
 
+    def test_reference(self):
         f = self.dev.reference()
         f.result()
 
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-        test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+        # TODO: some hardware have fancy multi-marks, which means that the referencing
+        # doesn't necessarily end-up at 0, and everytime the axis is referenced
+        # it can end up at a different mark.
+        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+        # Try again, after a move
+        shift = {'x': 1e-3, 'y':-1e-3}
+        self.dev.moveRel(shift).result()
+        pos_move = dict(self.dev.position.value)
+
+        f = self.dev.reference()
+        f.result()
+        pos_refd = dict(self.dev.position.value)
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # Check that at least the position changed
+        self.assertNotEqual(pos_move["x"], pos_refd["x"])
+        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
 
 
 if __name__ == '__main__':

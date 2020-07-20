@@ -2766,7 +2766,7 @@ class MCS2(model.Actuator):
                                                       self._speed[an],
                                                       self._accel[an])
                     end = max(time.time() + dur, end)
-                    self._waitEndMove(future, moving_axes, end)
+                self._waitEndMove(future, moving_axes, end)
             except Exception as ex:
                 logging.error("Move to %s failed: %s", pos, ex)
                 raise
@@ -2885,20 +2885,23 @@ class MCS2(model.Actuator):
         # referenced (anymore)
         with future._moving_lock:
             try:
-                # do the referencing for each axis sequentially
-                # (because each referencing is synchronous)
+                moving_channels = set()
                 for a in axes:
                     if future._must_stop.is_set():
                         raise CancelledError()
                     channel = self._axis_map[a]
+                    moving_channels.add(channel)
                     self.referenced._value[a] = False
                     self.Reference(channel)  # search for the negative limit signal to set an origin
-                    self._waitEndMove(future, (channel,), time.time() + 100)  # block until it's over
-                    self.referenced._value[a] = self._is_channel_referenced(channel)
 
-                    if self.referenced._value[a] == False:
-                        pass
-                    # TODO: Raise some error here
+                self._waitEndMove(future, moving_channels, time.time() + 100)  # block until it's over
+
+                for a in axes:
+                    self.referenced._value[a] = self._is_channel_referenced(self._axis_map[a])
+
+                    if not self.referenced._value[a]:
+                        logging.warning("Axis %s not referenced after the end of referencing", a)
+                        # TODO: Raise some error here
 
             except CancelledError:
                 # FIXME: if the referencing is stopped, the device refuses to
@@ -2940,6 +2943,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [b"Simulated"],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
+            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: ["F4K3", "F4K3", "F4K3"],
         }
 
         self.target = [0, 0, 0]
@@ -2998,9 +3002,8 @@ class FakeMCS2_DLL(object):
         if property_key.value == SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE:
             if self.stopping.is_set():  # stopped before move could complete
                 # set the position to someplace in between
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = int((self.target[ch.value] - \
-                    self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]) / 2 + \
-                    self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value])
+                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = int(
+                     (self.target[ch.value] + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]) / 2)
             elif self._current_move_finish < time.time():  # move is finished
                 self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
                     int(self.target[ch.value])
@@ -3023,8 +3026,13 @@ class FakeMCS2_DLL(object):
 
     def SA_CTL_Reference(self, handle, ch, _):
         logging.debug("sim MCS2: Referencing channel %d" % (ch.value,))
-        property_key = SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE
-        self.properties[property_key][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED
+        self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED
+
+        # Simulating a move to 0 in 5 s
+        self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
+        self.stopping.clear()
+        self._current_move_finish = time.time() + 5
+        self.target[ch.value] = 0
 
     def SA_CTL_Move(self, handle, ch, pos_pm, _):
         self.stopping.clear()
