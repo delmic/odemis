@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 18 Mar 2020
 
 @author: Philip Winkler
@@ -21,32 +21,49 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 
-
 Purpose of this script: Before using the piezomotor stage, the individual axes of the
 controller stack need to be configured. This involves mainly the assignment of
-an axis number. The firmware also provides a script to get certain parameters,
-which need to be added to the yaml file.
-TODO: do we need to run this script for the parameters or are they always the same and can be
-    hardcoded?
-'''
+an axis number. The firmware also provides a script to get the spc parameter, which
+converts encoder counts to motor steps.
+"""
 from __future__ import division
 import argparse
 import logging
 import sys
+import time
 from odemis.driver.piezomotor import PMD401Bus
 
-# TODO: figure out what parameters need to be configured
 
+def set_address(old_address, new_address, stage):
+    logging.info("Setting address of axis %s to %s." % (old_address, new_address))
+    stage.setAxisAddress(old_address, new_address)
+    time.sleep(1)
+    stage.writeParamsToFlash(new_address)
 
-def set_address(address, stage):
-    logging.info("Setting address to %s." % address)
-    stage.setAxisAddress(0, address)
-    stage.writeParamsToFlash(address)
 
 def auto_conf(address, stage):
+    # Not accurate enough, use manual configuration instead
     logging.info("Running auto configuration on address %s." % address)
     stage.runAutoConf(address)
+    time.sleep(3)
     stage.writeParamsToFlash(address)
+    logging.info("SPC value %s saved to flash.", stage.readParam(address, 11))
+
+
+def manual_conf(address, stage):
+    axname = [name for name, num in stage._axis_map.items() if num == address][0]  # get axis name from number
+    stage._updatePosition()
+    startpos = stage.position.value[axname]
+    stage.runMotorJog(address, -200, 0, 200)
+    time.sleep(3)
+    stage._updatePosition()
+    endpos = stage.position.value['x']
+    spc = 200 / abs(endpos - startpos) / stage._counts_per_meter[axname]
+    stage.setParam(address, 11, spc * (65536 * 4))
+    time.sleep(1)
+    stage.writeParamsToFlash(address)
+    logging.info("SPC value %s saved to flash.", stage.readParam(address, 11))
+
 
 def main(args):
     """
@@ -62,7 +79,10 @@ def main(args):
     parser.add_argument("--log-level", dest="loglev", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
 
-    parser.add_argument("--set-address", dest="address", type=int,
+    parser.add_argument("--address", dest="address", type=int, default=0,
+                        help="current address of controller")
+
+    parser.add_argument("--target-address", dest="target_address", type=int,
                         help="set address of stage controller.")
 
     parser.add_argument("--auto-config", action='store_true', dest="autoconf", default=False,
@@ -88,14 +108,19 @@ def main(args):
 
     # All axes required for initialization of driver, values don't matter
     # for configuration functions
-    axes = {"x": {"axis_number": 0, "mode": 1, 'wfm_stepsize': 5e-9}}
+    axes = {"x": {"axis_number": options.address}}
     stage = PMD401Bus("PM Control", "stage", options.port, axes)
 
-    if options.address is not None:
-        set_address(options.address, stage)
+    spc_address = options.address  # address used for spc configuration (if target address is provided, use target address, otherwise use address)
+    if options.target_address is not None:
+        spc_address = options.target_address
+        set_address(options.address, options.target_address, stage)
+        # Restart
+        axes = {"x": {"axis_number": options.target_address}}
+        stage = PMD401Bus("PM Control", "stage", options.port, axes)
 
     if options.autoconf:
-        auto_conf(options.autoconf, stage)
+        manual_conf(spc_address, stage)
 
     return 0
 

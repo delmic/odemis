@@ -46,11 +46,18 @@ WAVEFORM_RHOMB = 1  # fast max speed
 WAVEFORM_DELTA = 2  # preferred, higher accuracy
 WAVEFORM_PARK = 4  # power off
 
-COUNTS_PER_METER = 1 / 1.25e-6
+# Length of the rod available for moves
+STROKE_RANGE = 23.1e-3  # m
+
+# There are two different units for a move: motor (waveform) steps and encoder counts.
+# The encoder counts are fixed and given by the encoder resolution. The motor steps
+# vary depending on the load of the motor. Therefore, a calibration is required before
+# the first use of the driver to determine the conversion factor between encoder counts
+# and motor steps. This conversion factor can be stored in the controller flash memory.
+# A motor step is equivalent to 8192 microsteps.
+DEFAULT_COUNTS_PER_METER = 1 / 1.25e-6  # TODO: update default value (current value is for starter kit)
 DEFAULT_SPC = 1.25e-6 / 4.5e-6  # steps per count (encoder steplength / motor steplength)
 USTEPS_PER_STEP = 8192
-
-STROKE_RANGE = 23.1e-3  # m
 
 
 class PMDError(Exception):
@@ -76,63 +83,98 @@ class PMD401Bus(Actuator):
     def __init__(self, name, role, port, axes, inverted=None, **kwargs):
         """
         :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters
-            address (0 <= int <= 127), required (typically 1-3 for x-z)
-            spc (float), motor (wfm) steps per encoder count, default to 80000
-            range (tuple of float), default to (0, STROKE_RANGE)
-            unit (str), default to m
-            closed_loop (bool): True for closed loop (with encoder), default to True
-            speed (float): speed in m/s
+            Each axis is specified by a set of parameters.
+            After successful configuration with the pmconfig.py script, the only required parameter for a default motor
+            is the address which was set during the configuration process.
+            The spc parameter (conversion between motor steps and encoder counts) is typically saved in the flash
+            memory of the controller during the configuration process. The flash value is overridden by the
+            value in the parameter dict.
+            Depending on the type of motor, the encoder_resolution and range might need to be adjusted.
+
+            Axis parameters:
+                axis_number (0 <= int <= 127): typically 1-3 for x-z, required
+                closed_loop (bool): True for closed loop (with encoder), default to True
+                encoder_resolution (float): encoder resolution in m/step
+                limit_type (0 <= int <= 2): type of limit switch, 0: no limit, 1: active high, 2: active low, default 0
+                range (tuple of float): in m, default to (0, STROKE_RANGE)
+                spc (float): motor (wfm) steps per encoder count, default to value in flash
+                speed (float): speed in m/s
+                unit (str), default to m
         """
         self._axis_map = {}  # axis name -> axis number used by controller
         self._closed_loop = {}  # axis name (str) -> bool (True if closed loop)
-        self._steps_per_count = {}  # axis name (str) -> float
-        self._steps_per_meter = {}  # axis name (str) -> float
-        self._speed_steps = {}  # axis name (str) -> int
+        self._speed_steps = {}  # axis name (str) -> int, speed in steps per meter
         self._portpattern = port
 
-        # Parse axis parameters
+        # Conversion factors
+        # Count refers to encoder counts, step refers to motor steps. The encoder counts are fixed and given
+        # as a parameter to the axis, the motor counts are determined during configuration and are usually
+        # stored in flash memory.
+        # ._steps_per_meter is redundant, but convenient
+        self._steps_per_count = {}  # axis name (str) -> float
+        self._steps_per_meter = {}  # axis name (str) -> float
+        self._counts_per_meter = {}  # axis name (str) -> float
+
+        # Parse axis parameters and create axis
         axes_def = {}  # axis name -> Axis object
         for axis_name, axis_par in axes.items():
-            try:
+            if 'axis_number' in axis_par.keys():
                 axis_num = axis_par['axis_number']
-            except KeyError:
-                raise ValueError("Axis %s has no axis number." % axis_name)
-            if axis_num not in range(128):
-                raise ValueError("Invalid axis number %s, needs to be 0 <= int <= 127." % axis_num)
-            elif axis_num in self._axis_map.values():
-                axname = self._axis_map[axis_num]
-                raise ValueError("Invalid axis number %s, already assigned to axis %s." % (axis_num, axname))
+                if axis_num not in range(128):
+                    raise ValueError("Invalid axis number %s, needs to be 0 <= int <= 127." % axis_num)
+                elif axis_num in self._axis_map.values():
+                    axname = self._axis_map[axis_num]
+                    raise ValueError("Invalid axis number %s, already assigned to axis %s." % (axis_num, axname))
+                else:
+                    self._axis_map[axis_name] = axis_par['axis_number']
             else:
-                self._axis_map[axis_name] = axis_par['axis_number']
-            try:
-                self._steps_per_count[axis_name] = axis_par['spc']  # approximately 5e-6 m / step
-                self._steps_per_meter[axis_name] = axis_par['spc'] * COUNTS_PER_METER
-            except KeyError:
-                logging.info("Axis %s has no wfm stepsize." % axis_name)
-                self._steps_per_count[axis_name] = DEFAULT_SPC
-                self._steps_per_meter[axis_name] = DEFAULT_SPC * COUNTS_PER_METER
-            try:
-                axis_range = axis_par['range']
-            except KeyError:
-                axis_range = (0, STROKE_RANGE)
-                logging.info("Axis %s has no range. Assuming %s", axis_name, axis_range)
-            try:
-                axis_unit = axis_par['unit']
-            except KeyError:
-                axis_unit = "m"
-                logging.info("Axis %s has no unit. Assuming %s", axis_name, axis_unit)
-            try:
-                self._speed = axis_par['speed']
-            except KeyError:
-                self._speed = DEFAULT_AXIS_SPEED
-                logging.info("Axis %s was not given a speed value. Assuming %s", axis_name, self._speed)
-            self._speed_steps[axis_name] = round(self._speed * self._steps_per_meter[axis_name])
-            try:
+                raise ValueError("Axis %s has no axis number." % axis_name)
+
+            if 'closed_loop' in axis_par.keys():
                 closed_loop = axis_par['closed_loop']
-            except KeyError:
+            else:
                 closed_loop = False
                 logging.info("Axis mode (closed/open loop) not specified for axis %s. Assuming closed loop.", axis_name)
             self._closed_loop[axis_name] = closed_loop
+
+            if 'encoder_resolution' in axis_par.keys():
+                self._counts_per_meter[axis_name] = 1 / axis_par['encoder_resolution']  # approximately 5e-6 m / step
+            else:
+                self._counts_per_meter[axis_name] = DEFAULT_COUNTS_PER_METER
+                logging.info("Axis %s has no encoder resolution, assuming %s." % (axis_name, 1 / DEFAULT_COUNTS_PER_METER))
+
+            if 'limit_type' in axis_par.keys():
+                limit_type = axis_par['limit_type']
+            else:
+                logging.info("Axis %s has not limit switch." % axis_name)
+                limit_type = 0
+
+            if 'range' in axis_par.keys():
+                axis_range = axis_par['range']
+            else:
+                axis_range = (0, STROKE_RANGE)
+                logging.info("Axis %s has no range. Assuming %s", axis_name, axis_range)
+
+            if 'spc' in axis_par.keys():
+                self._steps_per_count[axis_name] = axis_par['spc']  # approximately 5e-6 m / step
+                self._steps_per_meter[axis_name] = axis_par['spc'] * self._counts_per_meter[axis_name]
+            else:
+                logging.info("Axis %s has no spc parameter, will use value from flash." % axis_name)
+                # None for now, will read value from flash later.
+                self._steps_per_count[axis_name] = None
+                self._steps_per_meter[axis_name] = None
+
+            if 'speed' in axis_par.keys():
+                self._speed = axis_par['speed']
+            else:
+                self._speed = DEFAULT_AXIS_SPEED
+                logging.info("Axis %s was not given a speed value. Assuming %s", axis_name, self._speed)
+
+            if 'unit' in axis_par.keys():
+                axis_unit = axis_par['unit']
+            else:
+                axis_unit = "m"
+                logging.info("Axis %s has no unit. Assuming %s", axis_name, axis_unit)
 
             ad = model.Axis(canAbs=closed_loop, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
@@ -167,9 +209,36 @@ class PMD401Bus(Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self.referenced = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
-        for ax, closed_loop in self._closed_loop.items():  # only add closed_loop axes to .referenced
-            if closed_loop:
-                self.referenced.value[ax] = False  # just assume they haven't been referenced
+        for axname in self._axis_map.keys():
+            self.referenced.value[axname] = False  # just assume they haven't been referenced
+
+        # Load values from flash, write spc if provided, otherwise read spc
+        for axname, axis in self._axis_map.items():
+            # Load values from flash
+            self.initFromFlash(axis)
+
+            if self._steps_per_count[axname]:
+                # Write SPC if provided
+                # Value that's writte to register needs to be multiplied by (65536 * 4) (see manual)
+                self.writeParam(axis, 11, self._steps_per_count[axname] * (65536 * 4))
+            else:
+                # Read spc from flash. If value is not reasonable, use default
+                val = int(self.readParam(axis, 11))
+                if not 20000 <= val <= 150000:
+                    # that's not a reasonable value, the flash was probably not configured
+                    logging.warning("Axis %s spc value not configured properly, current value: %s" % (axis, val))
+                    logging.info("Axis %s using spc value %s" % (axis, DEFAULT_SPC))
+                    val = DEFAULT_SPC
+                else:
+                    val = val / (65536 * 4)
+                    logging.info("Axis %s is using spc value from flash: %s" % (axis, val))
+                self._steps_per_count[axname] = val
+            self._steps_per_meter[axname] = self._steps_per_count[axname] * self._counts_per_meter[axname]
+            self._speed_steps[axis_name] = round(self._speed * self._steps_per_meter[axis_name])
+
+        # Limit switch
+        for axis in self._axis_map.values():
+            self.setLimitType(axis, limit_type)
 
     def terminate(self):
         # terminate can be called several times, do nothing if ._serial is already None
@@ -237,7 +306,7 @@ class PMD401Bus(Actuator):
         targets = {}
         for axname, val in pos.items():
             if self._closed_loop[axname]:
-                encoder_cnts = round(val * COUNTS_PER_METER)
+                encoder_cnts = round(val * self._counts_per_meter[axname])
                 self._sendCommand(b'X%dT%d,%d' % (self._axis_map[axname], encoder_cnts, self._speed_steps[axname]))
                 targets[axname] = val
             else:
@@ -246,6 +315,7 @@ class PMD401Bus(Actuator):
                 steps = int(steps_float)
                 usteps = int((steps_float - steps) * USTEPS_PER_STEP)
                 self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
+                targets[axname] = None
         self._waitEndMotion(targets)
         self._updatePosition()
 
@@ -256,7 +326,7 @@ class PMD401Bus(Actuator):
         for axname, val in shift.items():
             if self._closed_loop[axname]:
                 targets[axname] = self.position.value[axname] + val
-                encoder_cnts = val * COUNTS_PER_METER
+                encoder_cnts = val * self._counts_per_meter[axname]
                 self.runRelTargetMove(self._axis_map[axname], encoder_cnts)
             else:
                 steps_float = val * self._steps_per_meter[axname]
@@ -272,8 +342,12 @@ class PMD401Bus(Actuator):
         Wait until move is done
         :arg targets (dict: str --> int): target (for closed-loop), None for open loop
         """
-        # Expected time for move
-        move_length = max(abs(self.position.value[ax] - target) for ax, target in targets.items())
+        move_length = 0
+        for ax, target in targets.items():
+            if target is not None:
+                move_length = max(abs(self.position.value[ax] - target), move_length)
+        if move_length == 0:  # open loop
+            move_length = STROKE_RANGE
         dur = move_length / self._speed
         max_dur = max(dur * 2, 0.1)  # wait at least 0.1 s
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
@@ -334,11 +408,25 @@ class PMD401Bus(Actuator):
         """
         return self._sendCommand(b'X%dY42' % axis)
 
+    def initFromFlash(self, axis):
+        """
+        Initialize settings from values stored in flash (most importantly spc parameter).
+        """
+        # 2 for init from flash, 3 for factory values
+        self._sendCommand(b'X%dY1,2' % axis)
+
+    def setLimitType(self, axis, limit_type):
+        """
+        :param limit_type: (0 <= int <= 3) 0 no limit, 1 active high, 2 active low
+        """
+        self._sendCommand(b'X%dY2,%d' % (axis, limit_type))
+
     def getEncoderPosition(self, axis):
         """
         :returns (float): current position of the axis as reported by encoders (in m)
         """
-        return int(self._sendCommand(b'X%dE' % axis)) / COUNTS_PER_METER
+        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
+        return int(self._sendCommand(b'X%dE' % axis)) / self._counts_per_meter[axname]
 
     def runRelTargetMove(self, axis, encoder_cnts):
         """
@@ -388,8 +476,9 @@ class PMD401Bus(Actuator):
         :param target:  (float) target position for axes
         :returns (bool): True if moving, False otherwise
         """
-        position = float(self._sendCommand(b'X%dE' % axis)) / COUNTS_PER_METER
-        if abs(position - target) < 2 / COUNTS_PER_METER:  # 1 encoder count precision (difference less than 2 counts)
+        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
+        position = float(self._sendCommand(b'X%dE' % axis)) / self._counts_per_meter[axname]
+        if abs(position - target) < 2 / self._counts_per_meter[axname]:  # 1 encoder count precision (difference less than 2 counts)
             return False
         else:
             return True
@@ -399,8 +488,8 @@ class PMD401Bus(Actuator):
         :param axis: (int) axis number
         :returns: (bool) True if moving, False otherwise
         """
-        resp = self._sendCommand(b'X%dJ' % axis)  # will be 1 if finished, otherwise 0
-        return int(resp) == 0
+        resp = self._sendCommand(b'X%dJ' % axis)  # will be 0 if finished, otherwise +/-222 (contrary to manual!)
+        return int(resp) != 0
 
     def startIndexMode(self, axis):
         """
@@ -412,7 +501,8 @@ class PMD401Bus(Actuator):
         """
         Move towards the index until it's found.
         """
-        maxdist = int(-21.3e-3 * COUNTS_PER_METER * DEFAULT_SPC)  # complete rodlength
+        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
+        maxdist = int(-21.3e-3 * self._counts_per_meter[axname] * DEFAULT_SPC)  # complete rodlength
         self._sendCommand(b'X%dI%d' % (axis, maxdist))
 
     def getIndexStatus(self, axis):
@@ -465,6 +555,12 @@ class PMD401Bus(Actuator):
 
     def setParam(self, axis, param, value):
         self._sendCommand(b"X%dY%d,%d" % (axis, param, value))
+
+    def readParam(self, axis, param):
+        """
+        :returns (str):
+        """
+        return self._sendCommand(b"X%dY%d" % (axis, param))
 
     def _sendCommand(self, cmd):
         """
@@ -773,3 +869,46 @@ class PMDSimulator(object):
     def _do_move(self):
         time.sleep(1)
         self.current_pos = copy.deepcopy(self.target_pos)
+
+
+#logging.getLogger().setLevel(logging.DEBUG)
+
+# axs = {'x': {'axis_number': 1, 'speed': 0.001}}
+# stage = PMD401Bus('test', 'test', '/dev/ttyUSB*', axs)
+# stage._closed_loop['x'] = False
+# stage.moveAbsSync({'x': 0.01})
+# stage.moveAbsSync({'x': 0})
+# stage._closed_loop['x'] = True
+# stage.moveAbsSync({'x': 0.01})
+# stage.moveAbsSync({'x': 0})
+
+# pmd.runRelTargetMove(1, -2000)
+# pmd._updatePosition()
+# print(pmd.position.value)
+
+#pmd._sendCommand(b"X1Y25,1")
+#time.sleep(1)
+# pmd._updatePosition()
+# print(pmd.position.value)
+# time.sleep(1)
+#print(pmd._sendCommand(b"X1Y11"))
+#pmd.runMotorJog(1, -200, 0, 200)
+#time.sleep(3)
+# pmd._updatePosition()
+# print(pmd.position.value)
+# #pmd.runRelTargetMove(1, -8000)
+# pmd.runMotorJog(1, 2200, 0, 200)
+# pmd.moveRelSync({'x': 0.005})
+# pmd.reference({'x'}).result()
+#
+#pmd.stop(['x'])
+#pmd.moveAbsSync({'x': 0.005})
+#pmd.reference({'x'}).result()
+# pmd.moveAbsSync({'x': 0.005})
+#pmd.moveRelSync({'x': -0.005})
+# pmd._closed_loop['x'] = False
+# pmd.moveRelSync({'x': -0.005})
+
+# pmd.reference({'x'})
+#pmd.moveAbsSync({'x': 0.31})
+# pmd.stop(['x'])

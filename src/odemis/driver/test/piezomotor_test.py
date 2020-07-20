@@ -47,59 +47,60 @@ class TestPMD401(unittest.TestCase):
         else:
             port = "/dev/ttyUSB*"
 
-        axes = {"x": {"axis_number": 1,
-                      "mode": 1,
-                      'wfm_stepsize': 5e-9},
-                "y": {"axis_number": 2,
-                      'wfm_stepsize': 5e-9},
-                "z": {"axis_number": 3,
-                      'wfm_stepsize': 5e-9}
-                }
-        self.stage = PMD401Bus("PM Control", "stage", port, axes)
-
-    def tearDown(self):
-        self.stage.terminate()
-
-    def test_one_axis(self):
-        move = {'x': 0.01e-6}
-        self.stage.moveRelSync(move)
+        axes = {'x': {'axis_number': 1, 'speed': 0.001}}
+        self.stage = PMD401Bus('test', 'test', port, axes)
 
     def test_simple(self):
-        # For now, just test for any errors, e.g. TimeoutError due to improper handling of the
-        # received messages
+        self.stage.moveRel({'x': 0.001})  # referencing doesn't work at position 0
+        self.stage.reference({'x'}).result()
 
-        # Relative move
-        move = {'x': 0.01e-6, 'y': 0.01e-6}
-        self.stage.moveRelSync(move)
+        self.stage._closed_loop['x'] = False
+        self.stage.moveAbsSync({'x': 0.01})
+        self.stage.moveAbsSync({'x': 0})
+        self.stage._closed_loop['x'] = True
+        self.stage.moveAbsSync({'x': 0.01})
+        self.stage.moveAbsSync({'x': 0})
 
-        # Only one axis, negative value
-        move = {'x': -0.01e-6}
-        self.stage.moveRelSync(move)
+        self.stage._closed_loop['x'] = False
+        self.stage.moveRelSync({'x': 0.01})
+        self.stage.moveRelSync({'x': -0.01})
+        self.stage._closed_loop['x'] = True
+        self.stage.moveRelSync({'x': 0.01})
+        self.stage.moveRelSync({'x': -0.01})
 
-        # Absolute move
-        move = {'x': 0.01e-6, 'y': 0.01e-6}
-        self.stage.moveAbsSync(move)
+    def test_range(self):
+        with self.assertRaises(ValueError):
+            self.stage.moveAbsSync({'x': 2.4})
 
     def test_queued(self):
-        # Big move
-        move = {'x': 1e-6, 'y': 1e-6}
-        self.stage.moveRel(move)
-        # don't wait
-        move = {'x': 0.01e-6, 'y': 0.01e-6}
-        self.stage.moveRel(move)
-        move = {'x': 0, 'y': 0}
-        f = self.stage.moveAbs(move)
+        self.stage._closed_loop['x'] = True
+        self.stage.moveRel({'x': 0.001})  # referencing doesn't work at position 0
+        self.stage.reference({'x'})
+        self.stage.moveRel({'x': 0.01})
+        self.stage.moveRel({'x': -0.01})
+        self.stage.moveAbs({'x': 0.01})
+        f = self.stage.moveAbs({'x': 0})
+        f.result()
+        self.assertTrue(f.done())
+
+        self.stage._closed_loop['x'] = False
+        self.stage.moveRel({'x': 0.001})  # referencing doesn't work at position 0
+        self.stage.reference({'x'})
+        self.stage.moveRel({'x': 0.01})
+        self.stage.moveRel({'x': -0.01})
+        self.stage.moveAbs({'x': 0.01})
+        f = self.stage.moveAbs({'x': 0})
         f.result()
         self.assertTrue(f.done())
 
     def test_stop(self):
         # Big move
-        move = {'x': 1e-6, 'y': 1e-6}
+        move = {'x': 1e-3}
         self.stage.moveRel(move)
         # don't wait
-        move = {'x': 0.01e-6, 'y': 0.01e-6}
+        move = {'x': -0.01}
         self.stage.moveRel(move)
-        move = {'x': 0, 'y': 0}
+        move = {'x': 0}
         self.stage.moveAbs(move)
 
         self.stage.stop()
