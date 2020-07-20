@@ -1138,7 +1138,7 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), ** kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1157,6 +1157,9 @@ class MC_5DOF(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
+        hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
+            Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
+            Is set to the same value for all channels.
         linear_speed: (double) the default speed (in m/s) of the linear actuators
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
