@@ -179,6 +179,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "ref_on_init": True,
         "linear_speed": 0.001,  # m/s
         "locator": "network:sn:MCS2-00001602",
+        # "locator": "fake",
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],

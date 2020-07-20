@@ -1046,12 +1046,16 @@ class MC_5DOF_DLL(CDLL):
 
     # property symbols
     SA_MC_PKEY_PIVOT_POINT_MODE = 0x00001001
-    SA_MC_PKEY_IS_REFERENCED = 0x00002a00
+    SA_MC_PKEY_IS_REFERENCED = 0x00002a01
     SA_MC_PKEY_HOLD_TIME = 0x00002000
     SA_MC_PKEY_MAX_SPEED_LINEAR_AXES = 0x00002010
     SA_MC_PKEY_MAX_SPEED_ROTARY_AXES = 0x00002011
     SA_MC_PKEY_PIEZO_MAX_CLF_LINEAR_AXES = 0x00002020
     SA_MC_PKEY_PIEZO_MAX_CLF_ROTARY_AXES = 0x00002021
+
+    SA_MC_PKEY_REF_DIR_Y = 0x1532  # 2 = positive direction, 1 = negative direction
+    SA_MC_PKEY_REF_DIR_TILT = 0x1542  # 2 = positive direction, 1 = negative direction
+
     SA_MC_PIVOT_POINT_MODE_RELATIVE = 0
     SA_MC_PIVOT_POINT_MODE_ABSOLUTE = 1
 
@@ -1062,6 +1066,10 @@ class MC_5DOF_DLL(CDLL):
     # handle value that means no object
     SA_MC_INVALID_HANDLE = 0xffffffff
     SA_MC_INFINITE = -1
+
+    SA_MC_PKEY_MODEL_CODE = 0x0a02
+    SA_MC_PKEY_MODEL_NAME = 0x0a03
+    SA_MC_PKEY_VERSION_STRING = 0xf001
 
     err_code = {
 0x0000: "No error",
@@ -1130,7 +1138,7 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1149,6 +1157,9 @@ class MC_5DOF(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
+        hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
+            Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
+            Is set to the same value for all channels.
         linear_speed: (double) the default speed (in m/s) of the linear actuators
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
@@ -1207,17 +1218,21 @@ class MC_5DOF(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        # TODO: A way to query the DLL version?
-        self._swVersion = "Unknown"
-
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
-        # logging.debug("Using SA_MC library version %s", self._swVersion)
+        self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
+                                                   self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
+        logging.debug("Connected to controller %s", self._hwVersion)
+        # TODO: a way to check the actual version of the library? PKEY_VERSION_STRING is private and doesn't work
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+
+        # Reference tilted positioners towards the negative position
+        # FIXME: temporary hack while the controller can take care of it itself
+        # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
+        # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
 
         referenced = self._is_referenced()
         # define the referenced VA from the query
@@ -1235,8 +1250,11 @@ class MC_5DOF(model.Actuator):
                 logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
 
         # Use a default actuator speed
-        self.set_linear_speed(linear_speed)
-        self.set_rotary_speed(math.degrees(rotary_speed))
+        self.linear_speed = linear_speed
+        self.set_linear_speed(self.linear_speed)
+        self.rotary_speed = rotary_speed
+        self.set_rotary_speed(math.degrees(self.rotary_speed))
+        self.set_hold_time(hold_time)
         self._updatePosition()
 
     def terminate(self):
@@ -1257,10 +1275,24 @@ class MC_5DOF(model.Actuator):
 
         super(MC_5DOF, self).updateMetadata(md)
 
-    """
-    API Calls
-    Functions to set the property values in the controller, categorized by data type
-    """
+    # API Calls
+    # Functions to set the property values in the controller, categorized by data type
+
+    def GetProperty_s(self, property_key, bufferSize=256):
+        """
+        Parameters:
+         - property_key: The property key.
+         - bufferSize = 256: In: the size of the buffer.  Out: the written
+        number of characters +1 (for the string termination 0-byte)  if
+        successful or the required buffer size, if not.
+
+        Return value(s):
+         - outBuffer: A string
+        """
+        buf = create_string_buffer(bufferSize)
+        slen = c_size_t(len(buf))
+        self.core.SA_MC_GetProperty_s(self._id, c_uint32(property_key), buf, byref(slen))
+        return buf.value.decode("latin1")
 
     def SetProperty_f64(self, property_key, value):
         self.core.SA_MC_SetProperty_f64(self._id, c_uint32(property_key), c_double(value))
@@ -1278,11 +1310,18 @@ class MC_5DOF(model.Actuator):
         self.core.SA_MC_GetProperty_i32(self._id, c_uint32(property_key), byref(ret_val))
         return ret_val.value
 
-    def WaitForEvent(self, timeout):
-        # blocks until event is triggered or timeout.
-        # returns the event code that was triggered
+    def WaitForEvent(self, timeout=float("inf")):
+        """
+        Blocks until event is triggered or timeout.
+        timeout (float): maximum time to wait in s. If inf, it will wait forever.
+        returns (SA_MC_Event): the event code that was triggered
+        """
+        if timeout == float("inf"):
+            t = MC_5DOF_DLL.SA_MC_INFINITE
+        else:
+            t = c_uint(int(timeout * 1000))
         ev = SA_MC_Event()
-        self.core.SA_MC_WaitForEvent(self._id, byref(ev), c_int(int(timeout)))
+        self.core.SA_MC_WaitForEvent(self._id, byref(ev), t)
         return ev
 
     def Reference(self):
@@ -1295,27 +1334,18 @@ class MC_5DOF(model.Actuator):
         """
         return bool(self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED))
 
-    def Move(self, pos, hold_time=0, block=False):
+    def Move(self, pos):
         """
         Move to pose command.
         pos: (dict str -> float) axis name -> position
             This is converted to the pose C-struct which is sent to the SA_MC DLL
-        hold_time: (float) specify in seconds how long to hold after the move.
-            If set to float(inf), will hold forever until a stop command is issued.
-        block: (bool) Set to True if the function should block until the move completes
 
         Raises: SA_MCError if a problem occurs
         """
         # convert into a pose, using the current position for non-moving axes
         newPose = self.GetPose()
         newPose.update(pos)
-
-        if hold_time == float("inf"):
-            ht = MC_5DOF_DLL.SA_MC_INFINITE
-        else:
-            ht = c_uint(int(hold_time * 1000.0))
-
-        self.core.SA_MC_Move(self._id, byref(newPose), ht, c_int(block))
+        self.core.SA_MC_Move(self._id, byref(newPose))
 
     def GetPose(self):
         """
@@ -1334,6 +1364,12 @@ class MC_5DOF(model.Actuator):
         logging.debug("Stopping...")
         self.core.SA_MC_Stop(self._id)
 
+    def get_linear_speed(self):
+        """
+        Returns (double) the linear speed of the SA_MC motion in m/s
+        """
+        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
+
     def set_linear_speed(self, value):
         """
         Set the linear speed of the SA_MC motion on all axes
@@ -1341,6 +1377,12 @@ class MC_5DOF(model.Actuator):
         """
         logging.debug("Setting linear speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
+
+    def get_rotary_speed(self):
+        """
+        Returns (double) the rotary speed of the SA_MC motion in deg/s
+        """
+        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
 
     def set_rotary_speed(self, value):
         """
@@ -1350,17 +1392,30 @@ class MC_5DOF(model.Actuator):
         logging.debug("Setting rotary speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES, value)
 
-    def get_linear_speed(self):
+    def get_hold_time(self, value):
         """
-        Returns (double) the linear speed of the SA_MC motion in m/s
+        returns (float): time to hold the axis in s. float("inf") if holds forever.
         """
-        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
+        ht = self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME)
 
-    def get_rotary_speed(self):
+        if ht == MC_5DOF_DLL.SA_MC_INFINITE:
+            return float("inf")
+        else:
+            return ht / 1000
+
+    def set_hold_time(self, value):
         """
-        Returns (double) the rotary speed of the SA_MC motion in deg/s
+        Set the duration that the axis should actively hold in position after the
+          end of a move.
+        value: (float) time to hold the axis in s. Use inf to hold forever.
         """
-        return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
+        if value == float("inf"):
+            ht = MC_5DOF_DLL.SA_MC_INFINITE
+        else:
+            ht = c_uint(int(value * 1000))
+
+        logging.debug("Setting hold time to %s", ht)
+        self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
 
     def SetPivot(self, piv_dict):
         """
@@ -1368,7 +1423,6 @@ class MC_5DOF(model.Actuator):
 
         piv_dict (dict str -> float): Position dictionary
             must have 'x', 'y', 'z'
-
         """
         pivot = SA_MC_Vec3()
         pivot.x = piv_dict["x"]
@@ -1381,7 +1435,6 @@ class MC_5DOF(model.Actuator):
         Get the pivot point from the controller
 
         returns: a dictionary (str -> float) of the axis and the pivot point
-
         """
         pivot = SA_MC_Vec3()
         self.core.SA_MC_GetPivot(self._id, byref(pivot))
@@ -1401,7 +1454,7 @@ class MC_5DOF(model.Actuator):
         try:
             p = self.GetPose().asdict()
         except SA_MCError as ex:
-            if ex.errno == MC_5DOF_DLL.SA_MC_NOT_REFERENCED_ERROR:
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
                 p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
             else:
@@ -1418,12 +1471,8 @@ class MC_5DOF(model.Actuator):
         """
         f = CancellableFuture()
         f._moving_lock = threading.Lock()  # taken while moving
-        f._must_stop = threading.Event()  # cancel of the current future requested
-        f._was_stopped = False  # if cancel was successful
-        if not ref:
-            f.task_canceller = self._cancelCurrentMove
-        else:
-            f.task_canceller = self._cancelReference
+        f._must_stop = False  # cancel of the current future requested
+        f.task_canceller = self._cancelCurrentMove
         return f
 
     @isasync
@@ -1444,46 +1493,59 @@ class MC_5DOF(model.Actuator):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        with future._moving_lock:
-            try:
+        try:
+            with future._moving_lock:
+                if future._must_stop:
+                    raise CancelledError()
+
                 # Reset reference so that if it fails, it states the axes are not
                 # referenced (anymore)
                 self.referenced._value = {a: False for a in self.axes.keys()}
 
-                # The SA_MC references all axes at once. This function blocks
+                # The SA_MC references all axes at once.
+                logging.debug("Starting referencing")
                 self.Reference()
-                # wait till reference completes
-                while True:
-                    ev = self.WaitForEvent(MC_5DOF_DLL.SA_MC_INFINITE)
-                    # check if move is done
-                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
-                        break
-                    else:
-                        logging.warning("Returned event type 0x%x", ev.type)
-                        # keep waiting as the referencing continues
 
-                if self._is_referenced():
-                    self.referenced._value = {a: True for a in self.axes.keys()}
-                    self._updatePosition()
-                    logging.info("Referencing successful.")
-
-            except SA_MCError as ex:
-                future._was_stopped = True
-                # This occurs if a stop command interrupts referencing
-                if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
-                    logging.info("Referencing stopped: %s", ex)
-                    raise CancelledError()
+            # wait till reference completes
+            while not future._must_stop:
+                ev = self.WaitForEvent(100)  # large timeout
+                # check if move is done
+                if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                    logging.debug("Referencing finished")
+                    if ev.i32 != MC_5DOF_DLL.SA_MC_OK:
+                        raise SA_MCError(ev.i32, "Referencing failed with error 0x%x: %s" %
+                                                 (ev.i32, MC_5DOF_DLL.err_code.get(ev.i32, "")))
+                    break
                 else:
-                    raise
+                    logging.warning("Returned event type 0x%x", ev.type)
+                    # keep waiting as the referencing continues
 
-            except Exception:
-                logging.exception("Referencing failure")
+                logging.info("Referencing successful.")
+
+        except SA_MCError as ex:
+            # This occurs if a stop command interrupts referencing
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
+                logging.info("Referencing stopped: %s", ex)
+                raise CancelledError()
+            elif future._must_stop:
+                raise CancelledError()
+            else:
+                logging.error("Referencing failed: %s", ex)
                 raise
+        except CancelledError:
+            logging.debug("Movement canceled")
+            raise  # No fuss, pass it as-is
+        except Exception:
+            logging.exception("Referencing failure")
+            raise
+        finally:
+            # We only notify after updating the position so that when a listener
+            # receives updates both values are already updated.
+            if self._is_referenced():
+                self.referenced._value = {a: True for a in self.axes.keys()}
+                self._updatePosition()
 
-            finally:
-                # We only notify after updating the position so that when a listener
-                # receives updates both values are already updated.
-                self.referenced.notify(self.referenced.value)
+            self.referenced.notify(self.referenced.value)
 
     @isasync
     def moveAbs(self, pos):
@@ -1499,6 +1561,21 @@ class MC_5DOF(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
+    def _estimateMoveDuration(self, new_pos):
+        """
+        Estimate the maximum duration of a move
+        new_pos: (dict str -> float): axis name -> absolute target position
+        returns: the duration of the move in seconds
+        """
+        pos = self.position.value
+        return max(
+            abs(new_pos.get('x', 0) - pos['x']) / self.linear_speed,
+            abs(new_pos.get('y', 0) - pos['y']) / self.linear_speed,
+            abs(new_pos.get('z', 0) - pos['z']) / self.linear_speed,
+            abs(new_pos.get('rx', 0) - pos['rx']) / self.rotary_speed,
+            abs(new_pos.get('rz', 0) - pos['rz']) / self.rotary_speed,
+            )
+
     def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
@@ -1508,60 +1585,57 @@ class MC_5DOF(model.Actuator):
             SA_MCError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
         """
-        last_upd = time.time()
-        dur = 30  # TODO: Calculate an estimated move duration
+        dur = self._estimateMoveDuration(pos)
         end = time.time() + dur
         max_dur = dur * 2 + 1
-        logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
-        timeout = last_upd + max_dur
+        logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
-        with future._moving_lock:
-            try:
-                self.Move(pos, hold_time=float("inf"))
-                while not future._must_stop.is_set():
-                    ev = self.WaitForEvent(timeout)
-                    # check if move is done
-                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
-                        break
-
-                    now = time.time()
-                    if now > timeout:
-                        logging.warning("Stopping move due to timeout after %g s.", max_dur)
-                        self.stop()
-                        raise TimeoutError("Move is not over after %g s, while "
-                                           "expected it takes only %g s" %
-                                           (max_dur, dur))
-
-                    # Update the position from time to time (10 Hz)
-                    if now - last_upd > 0.1:
-                        self._updatePosition()
-                        last_upd = time.time()
-
-                    # Wait half of the time left (maximum 0.1 s)
-                    left = end - time.time()
-                    sleept = max(0.001, min(left / 2, 0.1))
-                    future._must_stop.wait(sleept)
-                else:
-                    self.stop()
-                    future._was_stopped = True
+        try:
+            with future._moving_lock:
+                if future._must_stop:
                     raise CancelledError()
+                self.Move(pos)
 
-            except SA_MCError as ex:
-                future._was_stopped = True
-                # This occurs if a stop command interrupts referencing
-                if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
-                    logging.debug("movement stopped: %s", ex)
-                    raise CancelledError()
-                else:
-                    raise
-            except Exception:
-                logging.exception("Move failure")
+            # Wait until the move is done
+            while not future._must_stop:
+                ev = self.WaitForEvent(max_dur)
+                # check if move is done
+                if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                    if ev.i32 != MC_5DOF_DLL.SA_MC_OK:
+                        raise SA_MCError(ev.i32, "Move failed with error 0x%x: %s" %
+                                                 (ev.i32, MC_5DOF_DLL.err_code.get(ev.i32, "")))
+                    break
+
+                now = time.time()
+                if now > end:
+                    logging.warning("Stopping move due to timeout after %g s.", max_dur)
+                    self.Stop()
+                    raise TimeoutError("Move is not over after %g s, while "
+                                       "expected it takes only %g s" %
+                                       (max_dur, dur))
+            else:
+                raise CancelledError()
+
+        except SA_MCError as ex:
+            # This occurs if a stop command interrupts moves
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
+                logging.debug("Movement stopped: %s", ex)
+                raise CancelledError()
+            elif future._must_stop:
+                raise CancelledError()
+            else:
+                logging.error("Move failed: %s", ex)
                 raise
+        except CancelledError:
+            logging.debug("Movement canceled")
+            raise  # No fuss, pass it as-is
+        except Exception:
+            logging.exception("Move failure")
+            raise
+        finally:
+            self._updatePosition()
 
-            finally:
-                self._updatePosition()
-
-        logging.debug("move successfully completed")
+        logging.debug("Move successfully completed")
 
     def _cancelCurrentMove(self, future):
         """
@@ -1575,28 +1649,11 @@ class MC_5DOF(model.Actuator):
         #  * the task is finishing (about to say that it finished successfully)
         logging.debug("Canceling current move")
 
-        future._must_stop.set()  # tell the thread taking care of the move it's over
+        future._must_stop = True  # tell the thread taking care of the move it's over
         with future._moving_lock:
-            if not future._was_stopped:
-                logging.debug("Canceling failed")
-            self._updatePosition()
-            return future._was_stopped
+            self.Stop()
 
-    def _cancelReference(self, future):
-        # The difficulty is to synchronize correctly when:
-        #  * the task is just starting (about to request axes to move)
-        #  * the task is finishing (about to say that it finished successfully)
-        logging.debug("Canceling current referencing")
-
-        self.Stop()
-        future._must_stop.set()  # tell the thread taking care of the referencing it's over
-
-        # Synchronise with the ending of the future
-        with future._moving_lock:
-
-            if not future._was_stopped:
-                logging.debug("Cancelling failed")
-            return future._was_stopped
+        return True
 
     @isasync
     def moveRel(self, shift):
@@ -1632,6 +1689,10 @@ class FakeMC_5DOF_DLL(object):
             MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES: c_double(0.1),
             MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES: c_double(5),
             MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED: c_int32(0),
+            MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE: c_int32(1),
+            MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME: b"Simulated",
+            MC_5DOF_DLL.SA_MC_PKEY_VERSION_STRING: b"Simulated version",
+            MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME: c_int32(1000),
             }
         self._pivot = SA_MC_Vec3()
 
@@ -1682,7 +1743,7 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = _deref(p_piv, SA_MC_Vec3)
         logging.debug("sim MC5DOF: Setting pivot to (%f, %f, %f)" % (self._pivot.x, self._pivot.y, self._pivot.z))
 
-    def SA_MC_Move(self, id, p_pose, hold_time, block):
+    def SA_MC_Move(self, id, p_pose):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
@@ -1745,6 +1806,11 @@ class FakeMC_5DOF_DLL(object):
 
         val = _deref(p_val, c_int32)
         val.value = self.properties[prop.value].value
+
+    def SA_MC_GetProperty_s(self, id, property_key, val, ioArraySize):
+        if not property_key.value in self.properties:
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_INVALID_PROPERTY, "error")
+        val.value = self.properties[property_key.value]
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
@@ -2303,10 +2369,10 @@ class MCS2(model.Actuator):
         self._swVersion = self.GetFullVersionString()
         devname = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
         sn = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER, 0)
-        self._hwVersion = "SmarAct %s (s/n %s)" % (devname, sn)
+        pos_types = [self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME, self._axis_map[a])
+                     for a in sorted(self._axis_map)]
+        self._hwVersion = "SmarAct %s (s/n %s) with positioners %s" % (devname, sn, ", ".join(pos_types))
 
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
         for name, channel in self._axis_map.items():
@@ -2477,26 +2543,37 @@ class MCS2(model.Actuator):
         returns (int32): the state
         """
 
-        state = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel)
+        return self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel)
+
+    def _check_channel_error(self, channel):
+        """
+        channel (int)
+        raise a HwError if the channel reports an error
+        """
+        state = self._get_channel_state(channel)
         if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED:
             if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_END_STOP_REACHED:
-                logging.error("Error in channel %d: End stop reached", channel)
-            if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED:
-                logging.error("Error in channel %d: Reached limit", channel)
-            if state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED:
-                logging.error("Error in channel %d: Following limit reached", channel)
-        return state
+                raise model.HwError("Channel %d: reached end-stop" % (channel,))
+            elif state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED:
+                raise model.HwError("Channel %d reached range limit" % (channel,))
+            elif state & SA_CTLDLL.SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED:
+                raise model.HwError("Channel %d reached following limit" % (channel,))
+            else:
+                raise model.HwError("Channel %d movement failed for unknown reason" % (channel,))
 
     def _is_channel_referenced(self, channel):
         """
-        Ask the controller if it is referenced.
+        channel (int)
+        return (bool): True if the axis is referenced
         """
-        return bool(self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE, channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
+        return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED)
 
     def _is_channel_moving(self, channel):
-        mask = SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
-        state = self._get_channel_state(channel)
-        return bool(state & mask)
+        """
+        channel (int)
+        return (bool): True if the axis is moving
+        """
+        return bool(self._get_channel_state(channel) & SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
 
     def _get_position(self, channel):
         """
@@ -2645,21 +2722,26 @@ class MCS2(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
-            end = 0  # expected end
-            moving_axes = set()
-            for an, v in pos.items():
-                channel = self._axis_map[an]
-                moving_axes.add(channel)
-                self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
-                # compute expected end
-                dur = driver.estimateMoveDuration(abs(v),
-                                self._speed[an],
-                                self._accel[an])
+            try:
+                end = 0  # expected end
+                moving_axes = set()
+                for an, v in pos.items():
+                    channel = self._axis_map[an]
+                    moving_axes.add(channel)
+                    self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
+                    # compute expected end
+                    dur = driver.estimateMoveDuration(abs(v),
+                                    self._speed[an],
+                                    self._accel[an])
 
-                end = max(time.time() + dur, end)
+                    end = max(time.time() + dur, end)
 
-            self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+                self._waitEndMove(future, moving_axes, end)
+            except Exception as ex:
+                logging.error("Move by %s failed: %s", pos, ex)
+                raise
+
+        logging.debug("Relative move successfully completed")
 
     def _doMoveAbs(self, future, pos):
         """
@@ -2671,21 +2753,25 @@ class MCS2(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
-            end = 0  # expected end
-            old_pos = self._applyInversion(self.position.value)
-            moving_axes = set()
-            for an, v in pos.items():
-                channel = self._axis_map[an]
-                moving_axes.add(channel)
-                self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
-                d = abs(v - old_pos[an])
-                dur = driver.estimateMoveDuration(d,
-                                                  self._speed[an],
-                                                  self._accel[an])
-                end = max(time.time() + dur, end)
+            try:
+                end = 0  # expected end
+                old_pos = self._applyInversion(self.position.value)
+                moving_axes = set()
+                for an, v in pos.items():
+                    channel = self._axis_map[an]
+                    moving_axes.add(channel)
+                    self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
+                    d = abs(v - old_pos[an])
+                    dur = driver.estimateMoveDuration(d,
+                                                      self._speed[an],
+                                                      self._accel[an])
+                    end = max(time.time() + dur, end)
+                    self._waitEndMove(future, moving_axes, end)
+            except Exception as ex:
+                logging.error("Move to %s failed: %s", pos, ex)
+                raise
 
-            self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+        logging.debug("Absolute move successfully completed")
 
     def _waitEndMove(self, future, axes, end=0):
         """
@@ -2711,6 +2797,8 @@ class MCS2(model.Actuator):
                 for channel in moving_axes.copy():  # need copy to remove during iteration
                     if not self._is_channel_moving(channel):
                         moving_axes.discard(channel)
+                        self._check_channel_error(channel)
+
                 if not moving_axes:
                     # no more axes to wait for
                     break
@@ -2739,7 +2827,7 @@ class MCS2(model.Actuator):
                 logging.debug("Move of axes %s cancelled before the end", axes)
                 # stop all axes still moving them
                 for i in moving_axes:
-                    self.Stop(self._axis_map(i))
+                    self.Stop(i)
                 future._was_stopped = True
                 raise CancelledError()
         finally:
@@ -2954,4 +3042,3 @@ class FakeMCS2_DLL(object):
 
     def SA_CTL_Stop(self, handle, ch, _):
         self.stopping.set()
-
