@@ -2239,22 +2239,6 @@ class SA_CTLDLL(CDLL):
     SA_CTL_MOVE_MODE_SCAN_RELATIVE = 3
     SA_CTL_MOVE_MODE_STEP = 4
 
-    # referencing options
-    SA_CTL_REF_OPT_BIT_NORMAL = 0x00000000
-    SA_CTL_REF_OPT_BIT_START_DIR = 0x00000001
-    SA_CTL_REF_OPT_BIT_REVERSE_DIR = 0x00000002
-    SA_CTL_REF_OPT_BIT_AUTO_ZERO = 0x00000004
-    SA_CTL_REF_OPT_BIT_ABORT_ON_ENDSTOP = 0x00000008
-    SA_CTL_REF_OPT_BIT_CONTINUE_ON_REF_FOUND = 0x00000010
-    SA_CTL_REF_OPT_BIT_STOP_ON_REF_FOUND = 0x00000020
-
-    # calibration options
-    SA_CTL_CALIB_OPT_BIT_DIRECTION = 0x00000001
-    SA_CTL_CALIB_OPT_BIT_DIST_CODE_INV_DETECT = 0x00000002
-    SA_CTL_CALIB_OPT_BIT_ASC_CALIBRATION = 0x00000004
-    SA_CTL_CALIB_OPT_BIT_REF_MARK_TEST = 0x00000008
-    SA_CTL_CALIB_OPT_BIT_LIMITED_TRAVEL_RANGE = 0x00000100
-
     SA_CTL_INFINITE = 0xffffffff
 
     def __init__(self):
@@ -2520,15 +2504,6 @@ class MCS2(model.Actuator):
     def Reference(self, channel):
         # Reference the controller. Note - this is asynchronous
         self.core.SA_CTL_Reference(self._id, c_int8(channel), c_int8(0))
-
-    def Calibrate(self, channel):
-        """
-        Calibrate the controller. Note - this is blocking
-        channel (int): the channel to calibrate
-        """
-        self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
-        while self._is_channel_moving(channel):
-            time.sleep(0.1)
 
     def Move(self, pos, channel, moveMode):
         """
@@ -2914,9 +2889,6 @@ class MCS2(model.Actuator):
                         raise CancelledError()
                     channel = self._axis_map[a]
                     self.referenced._value[a] = False
-                    # set property key for normal referencing.
-                    self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
-                            channel, SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)
                     self.Reference(channel)  # search for the negative limit signal to set an origin
                     self._waitEndMove(future, (channel,), time.time() + 100)  # block until it's over
                     self.referenced._value[a] = self._is_channel_referenced(channel)
@@ -2965,8 +2937,6 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [b"Simulated"],
             SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
-            SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
         }
 
         self.target = [0, 0, 0]
@@ -3049,12 +3019,9 @@ class FakeMCS2_DLL(object):
         val.value = self.properties[property_key.value][ch.value]
 
     def SA_CTL_Reference(self, handle, ch, _):
-        logging.debug("sim MCS2: Referencing channel %d", ch.value)
+        logging.debug("sim MCS2: Referencing channel %d" % (ch.value,))
         property_key = SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE
         self.properties[property_key][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED
-
-    def SA_CTL_Calibrate(self, handle, ch, _):
-        logging.debug("sim MCS2: Calibrating channel %d", ch.value)
 
     def SA_CTL_Move(self, handle, ch, pos_pm, _):
         self.stopping.clear()
