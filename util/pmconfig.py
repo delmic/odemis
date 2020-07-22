@@ -22,9 +22,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 
 Purpose of this script: Before using the piezomotor stage, the individual axes of the
-controller stack need to be configured. This involves mainly the assignment of
-an axis number. The firmware also provides a script to get the spc parameter, which
-converts encoder counts to motor steps.
+controller stack need to be configured. This involves
+1) the assignment of an axis number
+2) setting the spc parameter for conversion between encoder counts and motor steps
+
+Example usage:
+python3 pmconfig.py --address 0 --target-address 1 --spc-config
+or
+python3 pmconfig.py --address 1 --spc-config
 """
 from __future__ import division
 import argparse
@@ -41,24 +46,42 @@ def set_address(old_address, new_address, stage):
     stage.writeParamsToFlash(new_address)
 
 
-def auto_conf(address, stage):
-    # Not accurate enough, use manual configuration instead
+def spc_auto_conf(address, stage):
+    """
+    Set spc parameter with automatic configuration procedure.
+    """
     logging.info("Running auto configuration on address %s." % address)
     stage.runAutoConf(address)
-    time.sleep(3)
+    time.sleep(3)  # wait for autoconf to finish
     stage.writeParamsToFlash(address)
     logging.info("SPC value %s saved to flash.", stage.readParam(address, 11))
 
 
-def manual_conf(address, stage):
+def spc_manual_conf(address, stage, steps=200):
+    """
+    Set spc parameter with manual configuration procedure.
+    This procedure uses a larger move to determine the parameter and is move accurate than the
+    automatic configuration procedure.
+    """
     axname = [name for name, num in stage._axis_map.items() if num == address][0]  # get axis name from number
+
+    # Move to a position in the middle of the axis
+    stage.reference({'x'}).result()
+    stage.moveAbsSync({'x': 0.005})
+
+    # Move by a certain number of motor steps. Read the encoder position before and after the move.
+    # The quotient of encoder counts and motor steps is the spc parameter.
     stage._updatePosition()
     startpos = stage.position.value[axname]
-    stage.runMotorJog(address, -200, 0, 200)
+    stage.runMotorJog(address, -steps, 0, stage._speed_steps[axname])
     time.sleep(3)
     stage._updatePosition()
     endpos = stage.position.value['x']
-    spc = 200 / abs(endpos - startpos) / stage._counts_per_meter[axname]
+    encoder_cnts = (abs(endpos - startpos) * stage._counts_per_meter[axname])
+    spc = steps / encoder_cnts
+
+    # Write spc parameter to flash
+    # Parameter needs to be multiplied by (65536 * 4) (see manual)
     stage.setParam(address, 11, spc * (65536 * 4))
     time.sleep(1)
     stage.writeParamsToFlash(address)
@@ -85,16 +108,11 @@ def main(args):
     parser.add_argument("--target-address", dest="target_address", type=int,
                         help="set address of stage controller.")
 
-    parser.add_argument("--auto-config", action='store_true', dest="autoconf", default=False,
+    parser.add_argument("--spc-config", action='store_true', dest="spcconf", default=False,
                         help="Automatically configure axis, axis -> encoder's step per count")
 
     parser.add_argument("--port", dest="port", type=str, default="/dev/ttyUSB*",
                         help="port (e.g. /dev/ttyUSB*)")
-
-    # parser.add_argument('--read', dest="read", type=argparse.FileType('w'),
-    #                     help="Will read all the parameters and save them in a file (use - for stdout)")
-    # parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
-    #                     help="Will write all the parameters as read from the file (use - for stdin)")
 
     options = parser.parse_args(args[1:])
 
@@ -106,21 +124,25 @@ def main(args):
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
     logging.getLogger().setLevel(loglev)
 
-    # All axes required for initialization of driver, values don't matter
-    # for configuration functions
-    axes = {"x": {"axis_number": options.address}}
+    # Initialize driver with one axis ('x'), closed loop
+    axes = {"x": {"axis_number": options.address, "closed_loop": True, 'speed': 0.001}}
     stage = PMD401Bus("PM Control", "stage", options.port, axes)
 
-    spc_address = options.address  # address used for spc configuration (if target address is provided, use target address, otherwise use address)
+    # Address used for spc configuration (if target address is provided, use target address,
+    # otherwise use address)
+    spc_address = options.address
+
+    # Change axis number
     if options.target_address is not None:
         spc_address = options.target_address
         set_address(options.address, options.target_address, stage)
-        # Restart
+        # Restart driver with new address
         axes = {"x": {"axis_number": options.target_address}}
         stage = PMD401Bus("PM Control", "stage", options.port, axes)
 
-    if options.autoconf:
-        manual_conf(spc_address, stage)
+    # SPC configuration
+    if options.spcconf:
+        spc_manual_conf(spc_address, stage)
 
     return 0
 
