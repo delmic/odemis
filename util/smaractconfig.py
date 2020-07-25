@@ -1,0 +1,159 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+'''
+Created on June 18 2020
+
+@author: Anders Muskens
+Copyright © 2020 Anders Muskens, Delmic
+
+This is a script that allows you to change the referencing mode on the Smaract 3DOF stage, and run a reference move. 
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+
+from odemis.driver import smaract
+import sys
+import argparse
+import logging
+import time
+
+CONFIG_3DOF = {
+        "name": "3DOF",
+        "role": "stage",
+        "ref_on_init": False,
+        "speed": 0.1,
+        "accel": 0.001,
+        "hold_time": 1.0,
+}
+
+
+def calibrate(dev, channels):
+    """
+    Set calibration option bits to calibration_options. See section 2.7.1 in programmer manual
+    0 is for a default calibration
+    """
+
+    if not channels:
+        return
+
+    """
+    The following flags can be used here:
+    smaract.SA_CTLDLL.SA_CTL_CALIB_OPT_BIT_DIRECTION
+    smaract.SA_CTLDLL.SA_CTL_CALIB_OPT_BIT_DIST_CODE_INV_DETECT
+    smaract.SA_CTLDLL.SA_CTL_CALIB_OPT_BIT_ASC_CALIBRATION
+    smaract.SA_CTLDLL.SA_CTL_CALIB_OPT_BIT_REF_MARK_TEST
+    smaract.SA_CTLDLL.SA_CTL_CALIB_OPT_BIT_LIMITED_TRAVEL_RANGE
+    """
+    calibration_options = 0
+
+    for channel in channels:
+        logging.info("Calibrating channel %d", channel)
+        # set calibration options
+        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS,
+                        channel, calibration_options)
+
+        dev.Calibrate(channel)
+
+
+def autozero(dev, channels):
+    if not channels:
+        return
+
+    # Set auto-zero mode
+    for channel in channels:
+        logging.info("Setting auto-zero mode for channel %d", channel)
+        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
+                            channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO)  # auto zero
+
+    # Run the referencing
+    logging.info("Starting reference...")
+    dev.reference().result()
+    time.sleep(0.1)
+    logging.info("Complete")
+
+    # Set normal referencing mode
+    for channel in  channels:
+        logging.info("Setting the reference mode to normal for channel %d", channel)
+        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
+                            channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)  # normal
+
+
+def set_zero(dev, channels):
+    """
+    Using the scale offset, set the current position of the controller to 0.
+    """
+    if not channels:
+        return
+
+    logging.info("Setting scale offsets. Current position: %s", dev.position.value)
+
+    for channel in channels:
+        logging.info("Setting the scale offset for channel %d", channel)
+        scale_offset = dev.GetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET, channel)
+        position = dev.GetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_POSITION, channel)
+        # set the new scale offset
+        dev.SetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET, channel, scale_offset + position)
+
+    dev._updatePosition()
+    logging.info("New position: %s", dev.position.value)
+    logging.info("Complete.")
+
+
+def main(args):
+
+    parser = argparse.ArgumentParser(prog="smaractconfig",
+                                     description='Run a one time config for the SmarAct ')
+
+    parser.add_argument('--locator', required=True, type=str,
+                        help='Specify the locator string for the device. e.g. "network:sn:MCS2-00001601" or "fake" for simulator', action="store")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
+    parser.add_argument('--calibrate', metavar='N', type=int, nargs='+', default=[],
+                    help="Run the calibration command. Specify the channel to calibrate (0, 1, 2)")
+
+    parser.add_argument('--autozero', metavar='N', type=int, nargs='+', default=[],
+                    help="Run referencing with autozero functionality. Specify the channel to calibrate (0, 1, 2)")
+
+    parser.add_argument('--setzero', metavar='N', type=int, nargs='+', default=[],
+                    help="Force the current position on a channel to be 0 by setting the scale offset. Specify the channel to calibrate (0, 1, 2)")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    locator = options.locator
+    channels = set(options.calibrate + options.autozero + options.setzero)
+    axes = { str(c): {"range": [-1, 1], "unit": "m", "channel": c} for c in channels }
+
+    dev = smaract.MCS2(locator=locator, axes=axes, **CONFIG_3DOF)
+    
+    calibrate(dev, options.calibrate)
+    autozero(dev, options.autozero)
+    set_zero(dev, options.setzero)
+
+    logging.info("Completed all operations.")
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
+    
