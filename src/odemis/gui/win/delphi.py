@@ -31,6 +31,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 import subprocess
+import sys
 import threading
 import wx
 
@@ -241,6 +242,6 @@ def ManualCalibration():
 
 def _threadManualCalib():
     logging.info("Starting manual calibration for sample holder")
-    ret = subprocess.call(["gnome-terminal", "-e", "python -m odemis.acq.align.delphi_man_calib"])
+    ret = subprocess.call(["gnome-terminal", "-e", sys.executable + " -m odemis.acq.align.delphi_man_calib"])
     if ret != 0:
         logging.error("Manual calibration returned %d", ret)

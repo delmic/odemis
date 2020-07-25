@@ -31,10 +31,10 @@ from odemis import util
 from odemis.util import driver, to_str_escape
 import os
 import signal
+import sys
 import threading
 import time
 import itertools
-
 
 # Constants from ShamrockCIF.h
 ACCESSORYMIN = 0  # changed in the latest version (from 1->2)
@@ -630,6 +630,9 @@ class Shamrock(model.Actuator):
             path = self._camera._initpath
         else:
             path = ""
+
+        if sys.version_info[0] >= 3:  # Python 3
+            path = os.fsencode(path)
 
         # TODO: Catch the signal and raise an HwError in case it took too long.
         # Unfortunately, as we are calling C code from Python it's really hard,

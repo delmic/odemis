@@ -52,7 +52,8 @@ SPEC_PLOT_SIZE = 1024
 SPEC_SCALE_WIDTH = 150  # ticks + text vertically
 SPEC_SCALE_HEIGHT = 100  # ticks + text horizontally
 SMALL_SCALE_WIDTH = 10  # just ticks
-SPEC_FONT_SIZE = 0.03  # Ratio of the whole output width
+SPEC_FONT_SIZE = 0.035  # Ratio of the whole output width
+AR_FONT_SIZE = 0.03
 # legend ratios
 CELL_WIDTH = 0.2
 MAIN_LAYER = 0.05
@@ -228,7 +229,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, margin=0):
     # Calculate the characteristic values
     center_x = client_size[0] / 2
     center_y = client_size[1] / 2
-    font_size = max(3, client_size[0] * SPEC_FONT_SIZE)
+    font_size = max(3, client_size[0] * AR_FONT_SIZE)
     inner_radius = min(center_x, center_y)
     radius = inner_radius + 1
     ticks = []
@@ -391,7 +392,7 @@ def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_he
     ofst = 0
     for part in parts:
         ctx.move_to(x, y + ofst)
-        ofst += l.font_size + 1
+        ofst += l.font_size + 3
         ctx.show_text(part)
 
     ctx.restore()
@@ -839,11 +840,11 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     # Get the horizontal/vertical space in pixels
     if orientation == wx.HORIZONTAL:
         pixel_space = client_size[0]
-        min_pixel = 0
-    else:
-        pixel_space = client_size[1]
         # Don't display ticks too close from the left border
         min_pixel = 10
+    else:
+        pixel_space = client_size[1]
+        min_pixel = 0
 
     # Range width
     value_space = abs(max_val - min_val)
@@ -860,27 +861,26 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     epsilon = (1 / vtp_ratio) / 10  # "tiny" value: a 10th of a pixel
 
     num_ticks = pixel_space // tick_spacing
-    # Calculate the best step size in powers of 10, so it will cover at
-    # least the distance `val_dist`
-    value_step = 1e-12
 
-    # Increase the value step tenfold while it fits more than num_ticks times
-    # in the range
-    while value_step and abs(value_space) / value_step > num_ticks:
-        value_step *= 10
-    # logging.debug("Value step is %s after first iteration with range %s",
-    #               value_step, value_space)
+    # set the list of possible value steps
+    spacing_values = [1, 2, 5, 7.5]
 
-    # Divide the value step by two,
-    while value_step and abs(value_space) / value_step < num_ticks:
-        value_step /= 2
-    # logging.debug("Value step is %s after second iteration with range %s",
-    #               value_step, value_space)
+    # set the initial value of value_step
+    value_step = abs(value_space) / (num_ticks + 1)
+
+    while value_step and abs(value_space)/value_step > num_ticks:
+        # round down to a power of 10
+        power = int(math.log10(value_step))
+        for step in spacing_values:
+            value_step = step * 10 ** power
+            if abs(value_space) / value_step < num_ticks:
+                break
+    logging.debug("Value step is %s with range %s", value_step, value_space)
 
     first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
     # logging.debug("Setting first tick at value %s", first_val)
 
-    tick_values = [min_val]
+    tick_values = [min_val] if min_val == 0 else []
     cur_val = first_val
 
     if min_val < max_val:
@@ -956,7 +956,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
     ctx.set_font_size(font_size)
 
     ctx.set_source_rgb(*fill_colour)
-    ctx.set_line_width(2)
+    ctx.set_line_width(3)
     ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
     if orientation == wx.VERTICAL:
@@ -981,6 +981,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
     max_width = 0
     prev_lpos = 0 if orientation == wx.HORIZONTAL else client_size[1]
 
+
     if scale_label:
         ctx.save()
         prefix = ""
@@ -995,7 +996,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
         # TODO: probably not correctly placed in case of mirror (but no one cares)
         if orientation == wx.HORIZONTAL:
             ctx.move_to(((client_size[0] - client_size[1]) / 2) - lbl_width / 2,
-                        client_size[1] - int(font_size * 0.4))
+                        client_size[1] - int(font_size * 0.3))
         else:
             ctx.move_to(int(font_size * 1.2),
                         ((client_size[1] - client_size[0]) / 2) + lbl_width / 2)
@@ -1019,7 +1020,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
                     ctx.move_to(pos, client_size[1] - 5)
                     ctx.line_to(pos, client_size[1])
                 else:
-                    ctx.move_to(lpos, lbl_height + 8)
+                    ctx.move_to(lpos, lbl_height + 17)
                     ctx.show_text(label)
                     ctx.move_to(pos, 5)
                     ctx.line_to(pos, 0)
@@ -1033,10 +1034,10 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
                 if mirror:
 #                     ctx.move_to(client_size[0] - lbl_width - 9, client_size[1] - lpos)
 #                     ctx.show_text(label)
-                    ctx.move_to(client_size[0] - 5, client_size[1] - pos)
-                    ctx.line_to(client_size[0], client_size[1] - pos)
+                    ctx.move_to(client_size[0] - 8, client_size[1] - pos)
+                    ctx.line_to(client_size[0] - 4, client_size[1] - pos)
                 else:
-                    ctx.move_to(client_size[0] - lbl_width - 9, lpos)
+                    ctx.move_to(client_size[0] - lbl_width - 17, lpos)
                     ctx.show_text(label)
                     ctx.move_to(client_size[0] - 5, pos)
                     ctx.line_to(client_size[0], pos)
@@ -1127,10 +1128,11 @@ def bar_plot(ctx, data, range_x, range_y, client_size, fill_colour):
 
     ctx.close_path()
     ctx.fill()
-    
+
+
 def clip_data_window(hrange, vrange, xd, yd):
     """
-    Clip  a winodw from data values (xd, yd) using two range tuples
+    Clip  a window from data values (xd, yd) using two range tuples
     hrange and vrange
     returns: xs, ys (the clipped dataset as a tuple)
     """
@@ -1208,6 +1210,12 @@ def spectrum_to_export_data(proj, raw, vp=None):
             # Limit to the displayed ranges
             range_x = vp.hrange.value
             range_y = vp.vrange.value
+            # Check if the range is near 0, and if so, extend it slightly to include it.
+            # We define "near" as 10% of the range.
+            ext = (range_y[1] - range_y[0]) * 0.1
+            if range_y[0] - ext <= 0 <= range_y[1] + ext:
+                range_y_and_0 = sorted([range_y[0], 0, range_y[1]])
+                range_y = range_y_and_0[0], range_y_and_0[-1]
             spectrum_range, spec = clip_data_window(range_x, range_y, spectrum_range, spec)
         else:
             # calculate data characteristics
@@ -1226,7 +1234,7 @@ def spectrum_to_export_data(proj, raw, vp=None):
         text_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        tick_spacing = client_size[0] // 4
+        tick_spacing = client_size[0] // 6
         font_size = client_size[0] * SPEC_FONT_SIZE
         scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
                               tick_spacing, text_colour, unit, font_size, "Wavelength")

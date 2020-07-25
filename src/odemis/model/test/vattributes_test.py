@@ -273,6 +273,10 @@ class VigilantAttributeTest(unittest.TestCase):
 
         prop.unsubscribe(self.callback_test_notify)
 
+        # Wrong type at init
+        with self.assertRaises((TypeError, ValueError)):
+            prop = model.FloatContinuous("Not a number", [-1, 3.4])
+
         # Test a bit the IntContinuous
         prop2 = model.IntContinuous(2, [1, 34], unit="px")
         self.assertEqual(prop2.value, 2)
@@ -281,6 +285,14 @@ class VigilantAttributeTest(unittest.TestCase):
         prop2.value = 30
         self.assertEqual(prop2.value, 30)
         self.assertIsInstance(prop2.value, int)
+
+        # Wrong type (string) at init
+        with self.assertRaises((TypeError, ValueError)):
+            prop2 = model.IntContinuous("Not a number", [-1, 34])
+
+        # Wrong type (float) at init
+        with self.assertRaises((TypeError, ValueError)):
+            prop2 = model.IntContinuous(3.2, [-1, 34])
 
     def test_enumerated(self):
         prop = model.StringEnumerated("a", {"a", "c", "bfds"})
@@ -388,9 +400,9 @@ class VigilantAttributeTest(unittest.TestCase):
         """
         Test ListContinuous behavior
         """
-        va = model.ListContinuous([0.1, 10, .5], ((-1.3, 12, 0), (100., 150., 1.)), cls=(int, long, float))
+        va = model.ListContinuous([0.1, 10, .5], ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, long, float))
         self.assertEqual(va.value, [0.1, 10, .5])
-        self.assertEqual(va.range, ((-1.3, 12, 0), (100., 150., 1.)))
+        self.assertEqual(va.range, ((-1.3, 9, 0), (100., 150., 1.)))
 
         # must convert anything to a list
         va.value = (-1, 150, .5)
@@ -407,9 +419,10 @@ class VigilantAttributeTest(unittest.TestCase):
         """
         TupleContinuous
         """
-        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 12, 0), (100., 150., 1.)), cls=(int, long, float))
-        self.assertEqual(va.value, (0.1,10,.5))
-        self.assertEqual(va.range, ((-1.3,12,0), (100.,150.,1.)))
+
+        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, long, float))
+        self.assertEqual(va.value, (0.1, 10, .5))
+        self.assertEqual(va.range, ((-1.3, 9, 0), (100., 150., 1.)))
 
         # must convert anything to a tuple
         va.value = [-1, 150, .5]
@@ -427,6 +440,10 @@ class VigilantAttributeTest(unittest.TestCase):
             self.fail("Assigning a 2-tuple to a 3-tuple should not be allowed.")
         except TypeError:
             pass # as it should be
+
+        # Test creating a VA with value out of range
+        with self.assertRaises(IndexError):
+            va = model.TupleContinuous((0.1, 10), ((-1.3, 12), (100., 150.)), cls=(int, long, float))
 
     def test_weakref(self):
         """

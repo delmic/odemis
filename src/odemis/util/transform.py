@@ -56,12 +56,11 @@ The code can be extended to include weighted estimations and/or to support
 from __future__ import division
 
 from abc import ABCMeta, abstractmethod
-
+from future.utils import with_metaclass
+import numbers
 import numpy
 import scipy.optimize
-from future.utils import with_metaclass
 from numpy.linalg import LinAlgError
-
 from odemis.util.linalg import qrp, tri_inv
 
 
@@ -197,6 +196,60 @@ def _optimal_rotation(x, y):
 class GeometricTransform(with_metaclass(ABCMeta, object)):
     """Base class for geometric transformations."""
 
+    def __init__(self, matrix=None, **kwargs):
+        """
+        Basic initialisation helper.
+        Note: if rotation, scale, shear, translation are not passed, the respective
+         attributes will *not* be set. If they are set to None, the attributes will
+         be set to default values.
+        matrix : (2, 2) array, optional
+            Transformation matrix, does not include translation.
+            passing it will set .transformation_matrix
+        rotation : float, optional
+            Rotation angle in counter-clockwise direction as radians.
+        scale : (sx, sy) as array, list, or tuple, optional
+            x, y scale factors.
+        shear : float, optional
+            Shear factor.
+        translation : (tx, ty) as array, list, or tuple, optional
+            x, y translation parameters.
+        """
+        params = any(kwargs.get(param) is not None
+                     for param in ("rotation", "scale", "shear"))
+
+        if params and matrix is not None:
+            raise ValueError("You cannot specify the transformation matrix "
+                             "and the implicit parameters at the same time.")
+        elif matrix is not None:
+            matrix = numpy.asarray(matrix)
+            if matrix.shape != (2, 2):
+                raise ValueError("Transformation matrix should be 2x2, but got %s" % (matrix,))
+            self.transformation_matrix = matrix
+        else:
+            if "rotation" in kwargs:
+                rotation = kwargs.get("rotation")
+                self.rotation = 0 if rotation is None else rotation
+                if not isinstance(self.rotation, numbers.Real):
+                    raise ValueError("Rotation should be a number, but got %s" % (self.rotation,))
+
+            if "scale" in kwargs:
+                scale = kwargs.get("scale")
+                self.scale = (1, 1) if scale is None else scale
+                if len(self.scale) != 2 or not all(isinstance(a, numbers.Real) for a in self.scale):
+                    raise ValueError("Scale should be 2 floats, but got %s" % (self.scale,))
+
+            if "shear" in kwargs:
+                shear = kwargs.get("shear")
+                self.shear = 0 if shear is None else shear
+                if not isinstance(self.shear, numbers.Real):
+                    raise ValueError("Shear should be a number, but got %s" % (self.shear,))
+
+        if "translation" in kwargs:
+            translation = kwargs.get("translation")
+            self.translation = (0, 0) if translation is None else translation
+            if len(self.translation) != 2 or not all(isinstance(a, numbers.Real) for a in self.translation):
+                raise ValueError("Translation should be 2 floats, but got %s" % (self.translation,))
+
     def __call__(self, x):
         """
         Apply the forward transformation to a (set of) input coordinates.
@@ -272,18 +325,8 @@ class RigidTransform(GeometricTransform):
     """
 
     def __init__(self, matrix=None, rotation=None, translation=None):
-        params = any(param is not None
-                     for param in (rotation,))
-
-        if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
-        elif matrix is not None:
-            self.transformation_matrix = matrix
-        else:
-            self.rotation = 0. if rotation is None else rotation
-
-        self.translation = (0., 0.) if translation is None else translation
+        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
+                                    translation=translation)
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -389,21 +432,19 @@ class SimilarityTransform(RigidTransform):
 
     """
 
-    def __init__(self, matrix=None, rotation=None, scale=None,
-                 translation=None):
-        params = any(param is not None
-                     for param in (rotation, scale))
+    def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
+        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
+                                    translation=translation)
 
-        if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
-        elif matrix is not None:
-            self.transformation_matrix = matrix
+        # It's special as .scale is a single float, instead of 2 floats typically
+        if matrix is not None:
+            if scale is not None:
+                raise ValueError("You cannot specify the transformation matrix "
+                                 "and the implicit parameters at the same time.")
         else:
-            self.rotation = 0. if rotation is None else rotation
-            self.scale = 1. if scale is None else scale
-
-        self.translation = (0., 0.) if translation is None else translation
+            self.scale = 1 if scale is None else scale
+            if not isinstance(self.scale, numbers.Real):
+                raise ValueError("Scale should be a single number, but got %s" % (self.scale,))
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -513,21 +554,9 @@ class ScalingTransform(RigidTransform):
 
     """
 
-    def __init__(self, matrix=None, rotation=None, scale=None,
-                 translation=None):
-        params = any(param is not None
-                     for param in (rotation, scale))
-
-        if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
-        elif matrix is not None:
-            self.transformation_matrix = matrix
-        else:
-            self.rotation = 0. if rotation is None else rotation
-            self.scale = numpy.ones(2) if scale is None else scale
-
-        self.translation = (0., 0.) if translation is None else translation
+    def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
+        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
+                                    scale=scale, translation=translation)
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -631,7 +660,7 @@ class ScalingTransform(RigidTransform):
         transformation.
 
         """
-        sinv = 1. / self.scale  # S is diagonal
+        sinv = 1 / numpy.asarray(self.scale)  # S is diagonal
         Ainv = numpy.transpose(sinv * self.rotation_matrix)
         tinv = -numpy.dot(Ainv, self.translation)
         return AffineTransform(matrix=Ainv, translation=tinv)
@@ -686,20 +715,8 @@ class AffineTransform(RigidTransform):
 
     def __init__(self, matrix=None, rotation=None, scale=None, shear=None,
                  translation=None):
-        params = any(param is not None
-                     for param in (rotation, scale, shear))
-
-        if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
-        elif matrix is not None:
-            self.transformation_matrix = matrix
-        else:
-            self.rotation = 0. if rotation is None else rotation
-            self.scale = (1., 1.) if scale is None else scale
-            self.shear = 0. if shear is None else shear
-
-        self.translation = (0., 0.) if translation is None else translation
+        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
+                                    scale=scale, shear=shear, translation=translation)
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -859,7 +876,7 @@ class AnamorphosisTransform(AffineTransform):
         Scale factors.
     shear : float
         Shear factor.
-    coeffs : tuple
+    coeffs : tuple of 7 floats
         Tuple of transform coefficients.
     nlcoeffs : tuple
         Tuple of non-linear transform coefficients.
@@ -886,11 +903,11 @@ class AnamorphosisTransform(AffineTransform):
         elif coeffs is not None:
             self.coeffs = coeffs
         else:
-            self.rotation = 0. if rotation is None else rotation
-            self.scale = (1., 1.) if scale is None else scale
-            self.shear = 0. if shear is None else shear
+            GeometricTransform.__init__(self, rotation=rotation, scale=scale,
+                                        shear=shear, translation=translation)
             self.nlcoeffs = (0., 0., 0., 0., 0., 0., 0.) if nlcoeffs is None else nlcoeffs
-            self.translation = (0., 0.) if translation is None else translation
+            if len(self.nlcoeffs) != 7 or not all(isinstance(a, numbers.Real) for a in self.nlcoeffs):
+                raise ValueError("nlcoeffs should be 7 floats, but got %s" % (self.nlcoeffs,))
 
     @staticmethod
     def _vandermonde(w):
@@ -919,7 +936,7 @@ class AnamorphosisTransform(AffineTransform):
         v = numpy.dot(M, self.coeffs)
 
         if x.ndim == 1:
-            return np.array((v.real, v.imag))
+            return numpy.array((v.real, v.imag))
         return numpy.column_stack((v.real, v.imag))
 
     @classmethod

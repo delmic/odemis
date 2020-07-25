@@ -4969,7 +4969,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         with self.assertRaises(IndexError):
             pj.rect.value = (0.0, 0.0, 10e10, 10e10)
         # full image
-        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
+        pj.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0] + 0.001, POS[1] + 0.0005)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
@@ -4979,7 +4979,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(pj.image.value[3][1].shape, (244, 232, 3))
 
         # half image
-        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
+        pj.rect.value = (POS[0] - 0.001, POS[1], POS[0], POS[1] + 0.0005)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
@@ -5015,7 +5015,7 @@ class StaticStreamsTestCase(unittest.TestCase):
             pj.rect.value = (0.0, 0.0, 10e10, 10e10)
 
         # full image
-        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
+        pj.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0] + 0.001, POS[1] + 0.0005)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(1.0)
@@ -5025,10 +5025,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(pj.image.value[3][1].shape, (244, 232, 3))
 
         # half image
-        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
+        pj.rect.value = (POS[0] - 0.001, POS[1], POS[0], POS[1] + 0.0005)
 
         # Wait a little bit to make sure the image has been generated
-        time.sleep(0.5)
+        time.sleep(1.0)
         self.assertEqual(len(pj.image.value), 2)
         self.assertEqual(len(pj.image.value[0]), 1)
 
@@ -5066,7 +5066,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # and .mpp are initialized to the maxzoom image
         self.assertEqual(4, len(read_tiles))
 
-        full_image_rect = (POS[0] - 0.0015, POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
+        full_image_rect = (POS[0] - 0.0015, POS[1] - 0.001, POS[0] + 0.0015, POS[1] + 0.001)
 
         pj.mpp.value = 2e-6 # second zoom level
         # full image
@@ -5078,7 +5078,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value[0]), 4)
 
         # half image (left side), all tiles are cached
-        pj.rect.value = (POS[0] - 0.0015, POS[1] + 0.001, POS[0], POS[1] - 0.001)
+        pj.rect.value = (POS[0] - 0.0015, POS[1] - 0.001, POS[0], POS[1] + 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(28, len(read_tiles))
@@ -5086,7 +5086,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value[0]), 4)
 
         # half image (right side), only the center tiles will are cached
-        pj.rect.value = (POS[0], POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
+        pj.rect.value = (POS[0], POS[1] - 0.001, POS[0] + 0.0015, POS[1] + 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(40, len(read_tiles))
@@ -5094,7 +5094,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value[0]), 4)
 
         # really small rect on the center, the tile is in the cache
-        pj.rect.value = (POS[0], POS[1] + 0.00001, POS[0] + 0.00001, POS[1])
+        pj.rect.value = (POS[0], POS[1] - 0.00001, POS[0] + 0.00001, POS[1])
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
@@ -5104,7 +5104,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # rect out of the image
         with self.assertRaises(IndexError): # "rect out of bounds"
-            pj.rect.value = (POS[0] - 15, POS[1] + 15, POS[0] + 16, POS[1] - 16)
+            pj.rect.value = (POS[0] - 15, POS[1] - 15, POS[0] + 16, POS[1] + 16)
             # Wait a little bit to make sure the image has been generated
             time.sleep(0.5)
 
@@ -5157,7 +5157,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(4, len(read_tiles))
 
         # delta full rect
-        dfr = [ -0.0015, 0.001, 0.0015, -0.001]
+        dfr = [-0.0015, -0.001, 0.0015, 0.001]
         full_image_rect = (POS[0] + dfr[0], POS[1] + dfr[1], POS[0] + dfr[2], POS[1] + dfr[3])
 
         # change both .rect and .mpp at the same time, to the same values

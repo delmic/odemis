@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from __future__ import division, print_function
 import logging
@@ -52,12 +52,11 @@ def scan():
                     try:
                         # Look for the hostname (default is like "8742-15433\x00")
                         end_hn = data.index(b"\x00", 19)
-                        hn = data[19:end_hn]
-                        print(b"%s\t%s\t%d" % (hn, addr, p))
+                        hn = data[19:end_hn].decode("latin1")
+                        print("%s\t%s\t%d" % (hn, addr, p))
                     except Exception:
                         logging.exception("Failed to decode packet %r from %s",
-                                          data,
-                                          addr)
+                                          data, addr)
                 else:
                     logging.debug("Skipping unknown packet %r from %s", data, addr)
         except socket.timeout:

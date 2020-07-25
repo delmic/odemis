@@ -73,7 +73,7 @@ class TestMicroscope(unittest.TestCase):
 
     def test_acquisition(self):
         """Test acquiring an image."""
-        image = self.microscope.acquire_image(channel_name='electron1')
+        image = self.microscope.get_latest_image(channel_name='electron1')
         self.assertEqual(len(image.shape), 2)
 
     @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
@@ -121,21 +121,16 @@ class TestMicroscope(unittest.TestCase):
         """
         scanfield_range = self.microscope.scanning_size_info()['range']
         new_scanfield_x = scanfield_range['x'][1]
-        new_scanfield_y = scanfield_range['y'][1]
-        self.microscope.set_scanning_size(new_scanfield_x, new_scanfield_y)
+        self.microscope.set_scanning_size(new_scanfield_x)
         self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[1], new_scanfield_y)
         # Test it still works for different values.
         new_scanfield_x = scanfield_range['x'][0]
-        new_scanfield_y = scanfield_range['y'][0]
-        self.microscope.set_scanning_size(new_scanfield_x, new_scanfield_y)
+        self.microscope.set_scanning_size(new_scanfield_x)
         self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[1], new_scanfield_y)
         # set value out of range
         x = 1000000  # [m]
-        y = 100
         with self.assertRaises(Exception):
-            self.microscope.set_scanning_size(x, y)
+            self.microscope.set_scanning_size(x)
 
     def test_hfov(self):
         """
@@ -265,7 +260,7 @@ class TestMicroscope(unittest.TestCase):
         self.microscope.set_channel_state(name='optical4', state=xt_client.XT_RUN)
         self.microscope.wait_for_state_changed(xt_client.XT_RUN,
                                                name='optical4')  # timeout is handled on the server side
-        image = self.microscope.acquire_image(channel_name='optical4')
+        image = self.microscope.get_latest_image(channel_name='optical4')
         self.assertEqual(len(image.shape), 2)
 
     def test_set_beam_shift(self):

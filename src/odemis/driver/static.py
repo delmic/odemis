@@ -28,10 +28,11 @@ from __future__ import division
 
 import collections
 import math
+import numbers
 from numpy.polynomial import polynomial
 from odemis import model
-from odemis.model import isasync
 import odemis
+from odemis.model import isasync
 
 # dictionary that relates the attibute names related to the mirror with their corresponding vigilant attributes
 CONFIG_2_VA = {"pole_pos": "polePosition", "focus_dist": "focusDistance", "hole_diam": "holeDiameter", "parabola_f": "parabolaF", "x_max": "xMax"}
@@ -55,7 +56,7 @@ class OpticalLens(model.HwComponent):
           If None, the magnification will be allowed for any value between 1e-3 to 1e6.
         na (float > 0): numerical aperture
         ri (0.01 < float < 100): refractive index
-        pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
+        pole_pos (2 floats >= 0): position of the pole on the CCD (in px, without
           binning, with the top-left pixel as origin).
           Used for angular resolved imaging on SPARC (only). cf MD_AR_POLE
         x_max (float): the distance between the parabola origin and the cutoff
@@ -100,12 +101,14 @@ class OpticalLens(model.HwComponent):
         self.refractiveIndex = model.FloatContinuous(ri, range=(0.01, 10), unit="")
 
         if pole_pos is not None:
+            # Use 1 million as the arbitrary max value (increase if you have a bigger CCD!)
             if (not isinstance(pole_pos, collections.Iterable) or
-                len(pole_pos) != 2 or any(not 0 < v < 1e6 for v in pole_pos)):
+                len(pole_pos) != 2 or any(not 0 <= v < 1e6 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
-            self.polePosition = model.ResolutionVA(tuple(pole_pos),
-                                                   rng=((0, 0), (1e6, 1e6)),
-                                                   unit="px")
+            self.polePosition = model.TupleContinuous(tuple(pole_pos),
+                                                      range=((0, 0), (1e6, 1e6)),
+                                                      cls=numbers.Real,
+                                                      unit="px")
         if x_max is not None:
             self.xMax = model.FloatVA(x_max, unit="m")
         if hole_diam is not None:
@@ -115,6 +118,10 @@ class OpticalLens(model.HwComponent):
         if parabola_f is not None:
             self.parabolaF = model.FloatVA(parabola_f, unit="m")
         if rotation is not None:
+            # In theory, we only allow between 0 and 2 Pi. But haven't enforced it
+            # for a long time, and honestly for small negative rotation, it's easier
+            # to read if it's negative. So automatically fit it within the range.
+            rotation %= 2 * math.pi
             self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi),
                                                   unit="rad")
         if configurations is not None:
