@@ -805,7 +805,6 @@ def _DoSparc2ManualFocus(opm, bl, align_mode, toggled=True):
     # Go to the special focus mode (=> close the slit)
     f = opm.setPath(align_mode)
     bl.power.value = bl.power.range[(1 * toggled)]  # When mf_toggled = False 1 will be 0
-    bl.emissions.value = [(1 * toggled)] * len(bl.emissions.value)
     f.result()
 
 
