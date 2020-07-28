@@ -21,10 +21,6 @@ This file is part of Odemis.
 """
 
 from __future__ import division
-import sys
-sys.path.insert(0, "/home/cryo-poc/development/odemis/src/odemis/driver/test")
-sys.path.insert(0, "/home/cryo-poc/development/odemis/src")
-# sys.path = [s for s in sys.path if 'packages' not in s]
 
 import logging
 import math
@@ -1331,7 +1327,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
         # return
         # Only the z axis downward
@@ -1339,7 +1335,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Move all axes (focus won't be moved)
@@ -1350,7 +1346,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # move all axes (focus won't change)
@@ -1359,7 +1355,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         # Put focus back in active, so it can be adjusted if needed
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
@@ -1369,7 +1365,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
     def test_move_rel(self):
@@ -1386,7 +1382,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         target_pos = {'z': -0.002}
@@ -1394,7 +1390,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         target_pos = {'x': -0.002, 'y': -0.002, 'z': 0.002, 'rx': .002, 'rz': .002}
@@ -1403,7 +1399,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         target_pos = {'x': 0.002, 'y': 0.002, 'z': -0.002, 'rx': -.002, 'rz': -.002}
@@ -1411,7 +1407,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         f = focus.moveAbs({'z': focus._range[1] / 2})
@@ -1421,7 +1417,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
     def test_move_rx(self):
@@ -1443,7 +1439,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         f = stage.moveAbs(target_pos)
         f.result()
         # Stage should have reached the target rx position
-        test.assert_pos_almost_equal(stage.position.value, target_pos, ignore_mismatch=True, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         # And now trying to move the focus to active range won't be allowed
         with self.assertRaises(ValueError):
             focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE]).result()
