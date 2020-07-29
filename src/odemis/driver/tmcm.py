@@ -2,9 +2,9 @@
 '''
 Created on 20 May 2014
 
-@author: Éric Piel
+@author: Éric Piel, Philip Winkler
 
-Copyright © 2014-2018 Éric Piel, Delmic
+Copyright © 2014-2020 Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -31,25 +31,31 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from past.builtins import basestring
-from collections import OrderedDict
-from concurrent.futures import CancelledError
-import fcntl
 import glob
 import logging
-import numpy
-from odemis import model, util
-import odemis
-from odemis.model import (isasync, ParallelThreadPoolExecutor,
-                          CancellableFuture, HwError)
-from odemis.util import driver, TimeoutError, to_str_escape
 import os
 import random
 import re
-import serial
 import struct
+import subprocess
 import threading
+from collections import OrderedDict
+from concurrent.futures import CancelledError
+
+import canopen
+import fcntl
+import math
+import numpy
+import serial
 import time
+from canopen.profiles.p402 import Homing, State402
+from past.builtins import basestring
+
+import odemis
+from odemis import model, util
+from odemis.model import (isasync, ParallelThreadPoolExecutor, CancellableThreadPoolExecutor,
+                          CancellableFuture, HwError)
+from odemis.util import driver, TimeoutError, to_str_escape
 
 
 class TMCLError(Exception):
@@ -84,6 +90,7 @@ REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't suppor
 
 # Model number (int) of devices tested
 KNOWN_MODELS = {1140, 3110, 6110, 3214}
+KNOWN_MODELS_CAN = {'PD-1240', 'PD-1240-fake'}
 # These models report the velocity/accel in internal units of the TMC429
 USE_INTERNAL_UNIT_429 = {1110, 1140, 3110, 6110}
 
@@ -153,6 +160,50 @@ SHIFT_2XFF_INT = 10  # Each interrupt handler must be < 10 instructions
 
 # General purpose 32-bit variable in Bank 2
 AREF_USER_VAR = 117  # Global parameter should be between 56-255
+
+
+# CANopen constants
+
+# Communication area
+DEVICE_NAME = 0x1008
+HW_VERSION = 0x1009
+IDENTITY = 0x1018
+
+# Manufacturer specific area
+SWITCH_PARAM = 0x2005
+PULLUP_RESISTORS = 0x2710
+
+# Profile specific area
+CONTROL_WORD = 0x6040
+STATUS_WORD = 0x6041
+MODE_OF_OPERATION = 0x6060
+ACTUAL_POSITION = 0x6064
+POSITION_WINDOW = 0x6067
+POSITION_WINDOW_TIME = 0x6068
+SENSOR_SELECTION = 0x606a
+TARGET_POSITION = 0x607a
+HOMING_METHOD = 0x6098
+HOME_OFFSET = 0x607C
+QUICK_STOP_OPTION = 0x605A
+PROFILE_VELOCITY = 0x6081
+PROFILE_ACCELERATION = 0x6083
+
+# Mode of operation (node.op_mode)
+HOMING_MODE = "HOMING"
+PP_MODE = 'PROFILED POSITION'
+
+# States
+START = "START"
+NOT_READY_TO_SWITCH_ON = "NOT READY TO SWITCH ON"
+SWITCH_ON_DISABLED = "SWITCH ON DISABLED"
+READY_TO_SWITCH_ON = "READY TO SWITCH ON"
+SWITCHED_ON = "SWITCHED ON"
+OPERATION_ENABLED = "OPERATION ENABLED"
+QUICK_STOP_ACTIVE = "QUICK STOP ACTIVE"
+
+# 200 steps / cycle and 2 ** 8 µsteps per step
+DEFAULT_STEPSIZE = 2 * math.pi / (200 * 2 ** 8)  # µstep size in rad
+
 
 class TMCLController(model.Actuator):
     """
@@ -2502,3 +2553,871 @@ class TMCMSimulator(object):
         else:
             logging.warning("SIM: Unsupported instruction %d", inst)
             self._sendReply(inst, status=2) # wrong instruction
+
+
+class CANController(model.Actuator):
+    """
+    Represents one Trinamic TMCL-compatible controller using a CANopen interface.
+    """
+
+    def __init__(self, name, role, channel, node_id, datasheet, axes, ustepsize=None,
+                 rng=None, unit=None, refproc=None, **kwargs):
+        """
+        channel (str): can port name, currently supported are "can0" and "fake" (simulator).
+            "can0" is started with a udev rule when the device is plugged in
+        node_id (0 <= int <= 255): Address of the controller
+        datasheet (str): path to .dcf configuration file
+        axes (list of str): names of the axes, from the 1st to the last.
+          If an axis is not connected, put a "".
+        ustepsize (list of float): size of a microstep in rad (the smaller, the
+          bigger will be a move for a given distance in m)
+        rng (list of tuples of 2 floats or None): min/max position allowed for
+          each axis. 0 must be part of the range.
+          Note: If the axis is inverted, the values provided will be inverted too.
+        unit (None or list of str): The unit of each axis. When it's None, it
+          defaults to "rad" for all the axes.
+        refproc (str or None): referencing (aka homing) procedure type. Use
+          None to indicate it's not possible (no reference/limit switch) or the
+          name of the procedure. For now only "Standard" is accepted.
+        """
+
+        if ustepsize is None:
+            ustepsize = [DEFAULT_STEPSIZE] * len(axes)
+        if len(axes) != len(ustepsize):
+            raise ValueError("Expecting %d ustepsize (got %s)" % (len(axes), ustepsize))
+
+        self._name_to_axis = {}  # str -> int: name -> axis number
+        if rng is None:
+            rng = [None] * len(axes)
+        rng += [None] * (len(axes) - len(rng))  # ensure it's long enough
+
+        if unit is None:
+            unit = ["rad"] * len(axes)
+        elif len(unit) != len(axes):
+            raise ValueError("unit argument must be the same length as axes")
+
+        for i, n in enumerate(axes):
+            if not n:  # skip this non-connected axis
+                continue
+            # sz is typically ~1e-4 rad/m, so > 0.01 is very fishy
+            sz = ustepsize[i]
+            if not (0 < sz <= 10e-3):
+                raise ValueError("ustepsize should be between 0 and 0.01 rad, but got %g m" % (sz,))
+            self._name_to_axis[n] = i
+
+        self._ustepsize = ustepsize
+
+        # Only support standard referencing and None
+        if not (refproc == REFPROC_STD or refproc is None):
+            raise ValueError("Reference procedure %s unknown" % (refproc,))
+
+        self._network, self._node = self._openCanNode(channel, node_id, datasheet)
+
+        # For ensuring only one updatePosition() at the same time
+        self._pos_lock = threading.Lock()
+
+        self._modl, vmaj, vmin = self.GetVersion()
+        if self._modl not in KNOWN_MODELS_CAN:
+            logging.warning("Controller TMCM-%d is not supported, will try anyway",
+                            self._modl)
+
+        # Check that the device support that many axes
+        try:
+            self.GetAxisParam(max(self._name_to_axis.values()), ACTUAL_POSITION)  # current pos
+        except canopen.sdo.SdoCommunicationError as ex:
+            raise ValueError("Device %s doesn't support %d axes (got %s)" %
+                             (name, max(self._name_to_axis.values()) + 1, axes))
+
+        # will take care of executing axis move asynchronously
+        self._executor = ParallelThreadPoolExecutor()  # one task at a time
+
+        self._ref_max_length = {}  # int -> float: axis ID -> max distance during referencing
+        axes_def = {}
+        for n, i in self._name_to_axis.items():
+            if not n:
+                continue
+            sz = ustepsize[i]
+            phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
+            sw_rng = rng[i]
+            if sw_rng is not None:
+                if not sw_rng[0] <= 0 <= sw_rng[1]:
+                    raise ValueError("Range of axis %d doesn't include 0: %s" % (i, sw_rng))
+                phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
+                self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
+            else:
+                # For safety, for referencing timeout, consider that the range
+                # is not too long (ie, 4M µsteps).
+                # If it times out, the user should specify an axis range.
+                self._ref_max_length[i] = sz * 4e6  # m
+
+            if not isinstance(unit[i], basestring):
+                raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
+            axes_def[n] = model.Axis(range=phy_rng, unit=unit[i])
+            self._init_axis(i)
+            try:
+                self._checkErrorFlag(i)
+            except HwError as ex:
+                # Probably some old error left-over, no need to worry too much
+                logging.warning(str(ex))
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        self._swVersion = "%s" % odemis.__version__
+        self._hwVersion = "%s (firmware %d.%02d)" % (self._modl, vmaj, vmin)
+
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
+
+        # TODO: for axes with encoders, refresh position regularly
+
+        # TODO: add support for changing speed.
+        self.speed = model.VigilantAttribute({}, unit="rad/s", readonly=True)
+        self._updateSpeed()
+
+        self._accel = {}
+        for n, i in self._name_to_axis.items():
+            self._accel[n] = self._readAccel(i)
+            if self._accel[n] == 0:
+                logging.warning("Acceleration of axis %s is null, most probably due to a bad hardware configuration", n)
+
+        if refproc is None:
+            axes_ref = {}
+        else:
+            axes_ref = {a: False for a, i in self._name_to_axis.items()}
+
+        self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+        # Disconnect from the CAN bus
+        logging.debug("Shutting down ...")
+        if self._network:
+            for node_id in self._network:
+                node = self._network[node_id]
+                node.nmt.state = 'PRE-OPERATIONAL'
+                node.nmt.stop_node_guarding()
+            self._network.sync.stop()
+            self._network.disconnect()
+
+    def _init_axis(self, axis):
+        """
+        Initialise the given axis with "good" values for our needs
+        axis (int): axis number
+        """
+        # NOTE: Some objects can only be written when the drive is in the
+        #       SWITCHED_ON_DISABLED state (but is always readable).
+        self._node.state = SWITCH_ON_DISABLED
+        self.SetAxisParam(axis, SWITCH_PARAM, 0x3)  # Disable the limit switch inputs.
+        self.SetAxisParam(axis, PULLUP_RESISTORS, 0x1)  # Enable pull-up resistor for HOME input
+        # Encoder: 0 internal magnetic encoder, -1 (default) no encoder, -2 external encoder
+        self.SetAxisParam(axis, SENSOR_SELECTION, 0)  # Use Internal magnetic encoder
+        self.SetAxisParam(axis, POSITION_WINDOW, 0)  # enable position window 0 (target = demand position)
+        self.SetAxisParam(axis, POSITION_WINDOW_TIME, 100)  # remain in window for 100 ms before setting status bit
+
+        self._node.op_mode = HOMING_MODE
+        self.SetAxisParam(axis, HOMING_METHOD, Homing.HM_ON_POSITIVE_INDEX_PULSE)
+        self._node.state = OPERATION_ENABLED
+        self._node.op_mode = PP_MODE
+
+        self.SetAxisParam(axis, HOME_OFFSET, 0)  # set home offset (value to be set after referencing) to 0
+
+        # There is a small bug in the canopen library. By default, after entering "QUICK STOP ACTIVE" state,
+        # the state is automatically changed to "SWITCH ON DISABLED". However, when calling "QUICK STOP ACTIVE",
+        # the state setter (canopen.profiles.p402 l 445) will try to change the state to "QUICK STOP ACTIVE" in a loop
+        # until this state is reached. If the state is changed automatically from "QUICK STOP ACTIVE" to "SWITCHED ON
+        # DISABLE" before the loop condition is evaluated, it will attempt a transition from "SWITCHED ON DISABLE" to
+        # "QUICK STOP ACTIVE". This transition is not allowed, so it will raise an error.
+        # To avoid this, we change the settings to disable the automatic change to "SWITCH ON DISABLED" state
+        # and do it manually in the StopAxis() function.
+        self.SetAxisParam(axis, QUICK_STOP_OPTION, 6)  # stay in quick stop active state
+
+    # Low level functions
+    def GetVersion(self, axis=0):
+        """
+        return (int, int, int):
+             Controller ID
+             Firmware major version number
+             Firmware minor version number
+        """
+        cont = self.GetAxisParam(axis, DEVICE_NAME)
+        vmaj = self.GetAxisParam(axis, HW_VERSION)  # e.g. '1.0'
+        vmin = self.GetAxisParam(axis, IDENTITY, 3)
+        return cont, int(float(vmaj)), int(vmin)
+
+    def GetAxisParam(self, axis, param, idx=None):
+        """
+        Read the axis/parameter setting from the RAM
+        axis (0<=int<=5): axis number
+        param (0<=int<=255): parameter number
+        return (0<=int): the value stored for the given axis/parameter
+        idx in case of record object
+        """
+        if idx:
+            val = self._node.sdo[param + 0x800 * axis][idx].raw
+        else:
+            val = self._node.sdo[param + 0x800 * axis].raw
+        return val
+
+    def SetAxisParam(self, axis, param, val):
+        """
+        Write the axis/parameter setting from the RAM
+        axis (0<=int<=3): axis number
+        param (0<=int<=255): parameter number
+        val (int): the value to store
+        """
+        # Axis 0 start with 0, axis 1 with 0x800, etc.
+        self._node.sdo[param + 0x800 * axis].raw = val
+
+    def MoveAbsPos(self, axis, pos):
+        """
+        Requests a move to an absolute position. This is non-blocking.
+        axis (0<=int<=5): axis number
+        pos (-2**31 <= int 2*31-1): position
+        """
+        self._node.controlword = 0x0f  # switch on
+        self.SetAxisParam(axis, TARGET_POSITION, pos)
+        # Bit 6 of controlword: absolute (0) or relative (1)
+        # Bits 0-3 to 1: switch on and enable (see p 71 of canopen firmware manual)
+        # Bit 4: start positioning
+        self._node.controlword = 0x1f
+
+    def MoveRelPos(self, axis, offset):
+        """
+        Requests a move to a relative position. This is non-blocking.
+        axis (0<=int<=5): axis number
+        offset (-2**31 <= int 2*31-1): relative position
+        """
+        self.SetAxisParam(axis, TARGET_POSITION, offset)
+        # Bit 6 of controlword: absolute (0) or relative (1)
+        # Bits 0-3 to 1: switch on and enable (see p 71 of canopen firmware manual)
+        # Bit 4: start positioning
+        self._node.controlword = 0xf  # switch on (transition to state 3)
+        self._node.controlword = 0b1011111
+
+    def MotorStop(self):
+        """
+        Stop all axes. It's not possible to only stop a single axis.
+        """
+        if self._node.state == OPERATION_ENABLED:
+            # only allowed state from which to transition to quick stop active
+            self._node.state = QUICK_STOP_ACTIVE
+            self._node.state = SWITCH_ON_DISABLED
+        self._node.state = READY_TO_SWITCH_ON  # back to state from where we can start a command
+
+    def GetStatusRefSearch(self, axis):
+        """
+        return (bool): False if reference is not active, True if reference is active.
+        """
+        self._node.op_mode = HOMING_MODE
+        stat = self._node.statusword
+        # 10th bit (0x400) is set if zero position has been found or homing has been stopped
+        # 12th bit (0x1000) is set if position is found
+        homing_done = not (stat & 0x400) or (stat & 0x400 and not stat & 0x1000)
+        self._node.op_mode = PP_MODE
+        return bool(homing_done)
+
+    def _isOnTarget(self, axis):
+        """
+        return (bool): True if the target position is reached
+        """
+        # 14th bit (target reached): 1 if target reached
+        # ._node.statusword is not updated frequently enough, so directly ask for the status via .sdo
+        return bool((self._node.sdo[STATUS_WORD].raw & 0x400))
+
+    def _checkErrorFlag(self, axis):
+        """
+        Raises an HWError if the axis error flag reports an issue
+        """
+        stat = self._node.statusword
+        if stat & 0b1000:
+            raise TMCLError(stat, "Fault detected.")
+
+    def _cancelReference(self, future):
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (about to request axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
+        logging.debug("Cancelling current referencing")
+
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
+        with future._init_lock:
+            # cancel the referencing on the current axis
+            self.MotorStop()  # It's ok to call this even if the axis is not referencing
+        return True
+
+    # high-level methods (interface)
+    def _updatePosition(self, axes=None, do_axes=None):
+        """
+        update the position VA
+        axes (set of str): names of the axes to update or None if all should be
+          updated
+        """
+        # uses the current values (converted to internal representation)
+        pos = {}
+        for n, i in self._name_to_axis.items():
+            if axes is None or n in axes:
+                pos[n] = self.GetAxisParam(i, ACTUAL_POSITION) * self._ustepsize[i]  # if encoder is not avilable? same? TODO
+
+        pos = self._applyInversion(pos)
+
+        # Need a lock to ensure that no other thread is updating the position
+        # about another axis simultaneously. If this happened, our update would
+        # be lost.
+        with self._pos_lock:
+            if axes is not None:
+                pos_full = dict(self.position.value)
+                pos_full.update(pos)
+                pos = pos_full
+            logging.debug("Updated position to %s", pos)
+            self.position._set_value(pos, force_write=True)
+
+    def _updateSpeed(self):
+        """
+        Update the speed VA from the controller settings
+        """
+        speed = {}
+        for n, i in self._name_to_axis.items():
+            speed[n] = self._readSpeed(i)
+            if speed[n] == 0:
+                logging.warning("Speed of axis %s is null, most probably due to a bad hardware configuration", n)
+
+        # it's read-only, so we change it via _value
+        self.speed._value = speed
+        self.speed.notify(self.speed.value)
+
+    def _readSpeed(self, a, param=4):
+        """
+        param (int): the parameter number from which to read the speed.
+          It's normally 4 (= maximum speed), but could also be 194 (reference
+          search) or 195 (reference switch)
+        return (float): the speed of the axis in m/s
+        """
+        return float(self.GetAxisParam(a, PROFILE_VELOCITY)) * self._ustepsize[a]  # profile velocity
+
+    def _readAccel(self, a):
+        """
+        return (float): the acceleration of the axis in m/s²
+        """
+        return float(self.GetAxisParam(a, PROFILE_ACCELERATION)) * self._ustepsize[a]  # profile acceleration
+
+    def _createMoveFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f.task_canceller = self._cancelCurrentMove
+        return f
+
+    @isasync
+    def moveRel(self, shift):
+        self._checkMoveRel(shift)
+        shift = self._applyInversion(shift)
+        dependences = set(shift.keys())
+
+        # Check if the distance is big enough to make sense
+        for an, v in list(shift.items()):
+            aid = self._name_to_axis[an]
+            if abs(v) < self._ustepsize[aid]:
+                # TODO: store and accumulate all the small moves instead of dropping them?
+                del shift[an]
+                logging.info("Dropped too small move of %g m < %g m",
+                             abs(v), self._ustepsize[aid])
+
+        if not shift:
+            return model.InstantaneousFuture()
+
+        f = self._createMoveFuture()
+        f = self._executor.submitf(dependences, f, self._doMoveRel, f, shift)
+        return f
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        for a, p in pos.items():
+            if not self.referenced.value.get(a, True) and p != self.position.value[a]:
+                logging.warning("Absolute move on axis '%s' which has not be referenced", a)
+
+        pos = self._applyInversion(pos)
+        dependences = set(pos.keys())
+        f = self._createMoveFuture()
+        self._executor.submitf(dependences, f, self._doMoveAbs, f, pos)
+        return f
+
+    moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
+
+    def _createRefFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage referencing
+        """
+        f = CancellableFuture()
+        f._init_lock = threading.Lock()  # taken when starting a new axis
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f._current_axis = None  # (int or None) axis which is being referenced
+        f.task_canceller = self._cancelReference
+        return f
+
+    @isasync
+    def reference(self, axes):
+        self._checkReference(axes)
+
+        refaxes = set(axes)
+        if not refaxes:
+            return model.InstantaneousFuture()
+
+        dependences = set(refaxes)
+        f = self._createRefFuture()
+        self._executor.submitf(dependences, f, self._doReference, f, refaxes)
+        return f
+
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self, axes=None):
+        """
+        Stop all axes and cancel pending moves.
+        It is not possible to stop the axes individually.
+        :param axes: will be ignored (just there to match signature of Actuator class)
+        """
+        self._executor.cancel()
+        self.MotorStop()
+
+    def _checkMoveRelFull(self, shift):
+        """
+        Check that the argument passed to moveRel() is within range
+        shift (dict string -> float): the shift for a moveRel(), in user coordinates
+        raise ValueError: if the argument is incorrect
+        """
+        cur_pos = self.position.value
+        refd = self.referenced.value
+        for axis, val in shift.items():
+            axis_def = self.axes[axis]
+            if not hasattr(axis_def, "range"):
+                continue
+
+            tgt_pos = cur_pos[axis] + val
+            rng = axis_def.range
+            if not refd.get(axis, False):
+                # Double the range as we don't know where the axis started
+                rng_mid = (rng[0] + rng[1]) / 2
+                rng_width = rng[1] - rng[0]
+                rng = (rng_mid - rng_width, rng_mid + rng_width)
+
+            if not rng[0] <= tgt_pos <= rng[1]:
+                # TODO: if it's already outside, then allow to go back
+                rng = axis_def.range
+                raise ValueError("Position %s for axis %s outside of range %f->%f"
+                                 % (val, axis, rng[0], rng[1]))
+
+    def _checkMoveAbs(self, pos):
+        """
+        Check that the argument passed to moveAbs() is (potentially) correct
+        Same as super(), but allows to go 2x the range if the axis is not referenced
+        pos (dict string -> float): the new position for a moveAbs()
+        raise ValueError: if the argument is incorrect
+        """
+        refd = self.referenced.value
+        for axis, val in pos.items():
+            if axis in self.axes:
+                axis_def = self.axes[axis]
+                if hasattr(axis_def, "choices") and val not in axis_def.choices:
+                    raise ValueError("Unsupported position %s for axis %s"
+                                     % (val, axis))
+                elif hasattr(axis_def, "range"):
+                    rng = axis_def.range
+                    # TODO: do we really need to allow this? Absolute move without
+                    # referencing is not recommended anyway.
+                    if not refd.get(axis, False):
+                        # Double the range as we don't know where the axis started
+                        rng_mid = (rng[0] + rng[1]) / 2
+                        rng_width = rng[1] - rng[0]
+                        rng = (rng_mid - rng_width, rng_mid + rng_width)
+
+                    if not rng[0] <= val <= rng[1]:
+                        raise ValueError("Position %s for axis %s outside of range %f->%f"
+                                         % (val, axis, rng[0], rng[1]))
+            else:
+                raise ValueError("Unknown axis %s" % (axis,))
+
+    def _doMoveRel(self, future, pos):
+        """
+        Blocking and cancellable relative move
+        future (Future): the future it handles
+        pos (dict str -> float): axis name -> relative target position
+        raise:
+            ValueError: if the target position is
+            TMCLError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
+        """
+        with future._moving_lock:
+            self._checkMoveRelFull(self._applyInversion(pos))
+
+            end = 0  # expected end
+            moving_axes = set()
+            for an, v in pos.items():
+                aid = self._name_to_axis[an]
+                moving_axes.add(aid)
+                usteps = int(round(v / self._ustepsize[aid]))
+                self.MoveRelPos(aid, usteps)
+                # compute expected end
+                try:
+                    d = abs(usteps) * self._ustepsize[aid]
+                    dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                except Exception:  # Can happen if config is wrong and report speed or accel == 0
+                    logging.exception("Failed to estimate move duration")
+                    dur = 60
+                end = max(time.time() + dur, end)
+
+            self._waitEndMove(future, moving_axes, end)
+        logging.debug("move successfully completed")
+
+    def _doMoveAbs(self, future, pos):
+        """
+        Blocking and cancellable absolute move
+        future (Future): the future it handles
+        pos (dict str -> float): axis name -> absolute target position
+        raise:
+            TMCLError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
+        """
+        with future._moving_lock:
+            end = 0  # expected end
+            old_pos = self._applyInversion(self.position.value)
+            moving_axes = set()
+            for an, v in pos.items():
+                    aid = self._name_to_axis[an]
+                    moving_axes.add(aid)
+                    usteps = int(round(v / self._ustepsize[aid]))
+                    self.MoveAbsPos(aid, usteps)
+                    # compute expected end
+                    try:
+                        d = abs(v - old_pos[an])
+                        dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                    except Exception:  # Can happen if config is wrong and report speed or accel == 0
+                        logging.exception("Failed to estimate move duration")
+                        dur = 60
+                    end = max(time.time() + dur, end)
+            self._waitEndMove(future, moving_axes, end)
+        logging.debug("move successfully completed")
+
+    def _waitEndMove(self, future, axes, end=0):
+        """
+        Wait until all the given axes are finished moving, or a request to
+        stop has been received.
+        future (Future): the future it handles
+        axes (set of int): the axes IDs to check
+        do_axes (set of int): channel numbers of moves on digital output axes
+        end (float): expected end time
+        raise:
+            TimeoutError: if took too long to finish the move
+            CancelledError: if cancelled before the end of the move
+        """
+        moving_axes = set(axes)
+        last_upd = time.time()
+        dur = max(0.01, min(end - last_upd, 100))
+        max_dur = dur * 2 + 1
+        logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
+        timeout = last_upd + max_dur
+        last_axes = moving_axes.copy()
+        try:
+            while not future._must_stop.is_set():
+                for aid in moving_axes.copy():  # need copy to remove during iteration
+                    if self._isOnTarget(aid):
+                        moving_axes.discard(aid)
+                    # Check whether the move has stopped due to an error
+                    self._checkErrorFlag(aid)
+
+                now = time.time()
+                if not moving_axes:
+                    # no more axes to wait for
+                    break
+
+                if now > timeout:
+                    logging.warning("Stopping move due to timeout after %g s.", max_dur)
+                    self.MotorStop()
+                    raise TimeoutError("Move is not over after %g s, while expected it takes only %g s" % (max_dur, dur))
+
+                # Update the position from time to time (10 Hz)
+                if now - last_upd > 0.1 or last_axes != moving_axes:
+                    last_names = set(n for n, i in self._name_to_axis.items() if i in last_axes)
+                    self._updatePosition(last_names)
+                    last_upd = time.time()
+                    last_axes = moving_axes.copy()
+
+                # Wait half of the time left (maximum 0.1 s)
+                left = end - time.time()
+                sleept = max(0.001, min(left / 2, 0.1))
+                future._must_stop.wait(sleept)
+            else:
+                logging.debug("Move of axes %s cancelled before the end", axes)
+                future._was_stopped = True
+                raise CancelledError()
+        finally:
+            # TODO: check if the move succeded ? (= Not failed due to stallguard/limit switch)
+            self._updatePosition()  # update (all axes) with final position
+            self.MotorStop()  # stop axes to make sure that the encoder stops adjusting the position
+
+    def _cancelCurrentMove(self, future):
+        """
+        Cancels the current move (both absolute or relative). Non-blocking.
+        future (Future): the future to stop. Unused, only one future must be
+         running at a time.
+        return (bool): True if it successfully cancelled (stopped) the move.
+        """
+        # The difficulty is to synchronise correctly when the task is just starting
+        # (not finished requesting axes to move)
+        logging.debug("Cancelling current move")
+        future._must_stop.set()  # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed")
+            return future._was_stopped
+
+    def _doReference(self, future, axes, timeout=30):
+        """
+        Actually runs the referencing code
+        future (Future): the future it handles
+        axes (set of str)
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        # Reset reference so that if it fails, it states the axes are not
+        # referenced (anymore)
+        with future._moving_lock:
+            try:
+                for ax in axes:
+                    self.referenced._value[ax] = False
+                    homing_done = self.homing(future, timeout, True)
+                    if homing_done:
+                        self.referenced._value[ax] = True
+            except RuntimeError as ex:
+                # _node.homing doesn't distinguish between CancelledError, TimeoutError and other exceptions,
+                # in any of those cases a Runtime exception is raised (but with a different message).
+                logging.exception("Referencing failure.")
+                raise
+            finally:
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self._updatePosition(axes)
+                # read-only so manually notify
+                self.referenced.notify(self.referenced.value)
+                # # Update the global variable, based on the referenced axes
+                # self._update_ref()
+
+    def homing(self, future, timeout=30, set_new_home=True):
+        """
+        Function to execute the configured Homing Method on the node.
+        This function does exactly the same as the corresponding function of canopen.BaseNode402 except that
+        it is compatible with the cancelling procedure, especially when cancelling very early (this is not
+        possible with the original function).
+        :param CancellableFuture future: the future for the referencing thread
+        :param int timeout: Timeout value (default: 30)
+        :param bool set_new_home: Defines if the node should set the home offset
+        object (0x607C) to the current position after the homing procedure (default: true)
+        :return bool: If the homing was complete with success
+        """
+        # Use init lock to make sure we're not cancelling during the state changes.
+        with future._init_lock:
+            if future._must_stop.is_set():
+                # Cancelled before homing started (init_lock acquired here after cancelling function)
+                return False
+            previus_op_mode = self._node.op_mode
+            self._node.state = 'SWITCHED ON'
+            self._node.op_mode = 'HOMING'
+            # The homing process will initialize at operation enabled
+            self._node.state = 'OPERATION ENABLED'
+            homingstatus = 'IN PROGRESS'
+            self._node.controlword = State402.CW_OPERATION_ENABLED | Homing.CW_START
+        t = time.time() + timeout
+        try:
+            while homingstatus not in ('TARGET REACHED', 'ATTAINED'):
+                for key, value in Homing.STATES.items():
+                    # check if the value after applying the bitmask (value[0])
+                    # corresponds with the value[1] to determine the current status
+                    bitmaskvalue = self._node.statusword & value[0]
+                    if bitmaskvalue == value[1]:
+                        homingstatus = key
+                if homingstatus in ('INTERRUPTED', 'ERROR VELOCITY IS NOT ZERO', 'ERROR VELOCITY IS ZERO'):
+                    raise RuntimeError('Unable to home. Reason: {0}'.format(homingstatus))
+                time.sleep(0.001)
+                if time.time() > t:
+                    raise RuntimeError('Unable to home, timeout reached')
+            if set_new_home:
+                actual_position = self._node.sdo[ACTUAL_POSITION].raw
+                self._node.sdo[HOME_OFFSET].raw = actual_position  # home offset (0x607C)
+                logging.info('Homing offset set to {0}'.format(actual_position))
+            logging.info('Homing mode carried out successfully.')
+            return True
+        except RuntimeError as e:
+            logging.info(str(e))
+        finally:
+            self._node.op_mode = previus_op_mode
+        return False
+
+    @staticmethod
+    def _openCanNode(channel, nodeid, datasheet):
+        """
+        Create a single-node network.
+
+        raise HwError: if the serial port cannot be opened (doesn't exist, or
+          already opened)
+        """
+        # For debugging purpose
+        if channel == "fake":
+            return None, CANNodeSimulator(naxes=1)
+
+        # Start with creating a network representing one CAN bus
+        network = canopen.Network()
+
+        # Connect to the CAN bus
+        network.connect(bustype='socketcan', channel=channel)
+        network.check()
+
+        # Add some nodes with corresponding Object Dictionaries
+        node = canopen.BaseNode402(nodeid, datasheet)
+        network.add_node(node)
+
+        # Reset network
+        node.nmt.state = 'RESET COMMUNICATION'
+        node.nmt.wait_for_bootup(15)
+        logging.debug('node state 1) = {0}'.format(node.nmt.state))
+
+        # Transmit SYNC every 100 ms
+        network.sync.start(0.1)
+
+        node.load_configuration()
+        node.setup_402_state_machine()
+        return network, node
+
+
+class CANNodeSimulator(object):
+    """
+    Simulates the basic functionality of a CAN node.
+    """
+
+    def __init__(self, naxes=1):
+        self._status = SDOObject(0)
+        self.state = READY_TO_SWITCH_ON
+        self._op_mode = PP_MODE
+        self.device_name = SDOObject("PD-1240-fake")
+        self.hw_version = SDOObject(1)
+        self.identity = SDOObject(1)
+        self.position = SDOObject(0)
+        self.switch_param = SDOObject(0)
+        self.pullup = SDOObject(0)
+        self.sensor = SDOObject(0)
+        self.position_window = SDOObject(0)
+        self.position_window_time = SDOObject(0)
+        self.homing = SDOObject(0)
+        self.homing_offset = SDOObject(0)
+        self.quickstop = SDOObject(0)
+        self.acceleration = SDOObject(1e-6)
+
+        self._is_moving = False
+        self.speed = SDOObject(10000)
+
+        self.target_pos = SDOObject(0)
+
+        # Each axis has its own attributes starting from 0x800 * i (i=0,1,2,...).
+        self.sdo = {}
+        for i in range(naxes):
+            self.sdo.update({
+                    0x800 * i + DEVICE_NAME: self.device_name,
+                    0x800 * i + HW_VERSION: self.hw_version,
+                    0x800 * i + IDENTITY: [None, None, None, self.identity],
+                    0x800 * i + ACTUAL_POSITION: self.position,
+                    0x800 * i + SWITCH_PARAM: self.switch_param,
+                    0x800 * i + PULLUP_RESISTORS: self.pullup,
+                    0x800 * i + SENSOR_SELECTION: self.sensor,
+                    0x800 * i + POSITION_WINDOW_TIME: self.position_window_time,
+                    0x800 * i + POSITION_WINDOW: self.position_window,
+                    0x800 * i + HOMING_METHOD: self.homing,
+                    0x800 * i + HOME_OFFSET: self.homing_offset,
+                    0x800 * i + QUICK_STOP_OPTION: self.quickstop,
+                    0x800 * i + PROFILE_VELOCITY: self.speed,
+                    0x800 * i + PROFILE_ACCELERATION: self.acceleration,
+                    0x800 * i + TARGET_POSITION: self.target_pos,
+                    0x800 * i + STATUS_WORD: self._status,
+                    })
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+    @property
+    def controlword(self):
+        raise RuntimeError('The Controlword is write-only.')
+
+    @controlword.setter
+    def controlword(self, val):
+        if self.op_mode == HOMING_MODE:
+            self.position.raw = 0
+            self.state = READY_TO_SWITCH_ON
+            self.statusword = 0x1400
+        else:
+            if val & 0b111 and self.state == READY_TO_SWITCH_ON:
+                self.state = SWITCHED_ON
+            elif val & 0b111 and (self.state == SWITCHED_ON or self.state == OPERATION_ENABLED):
+                self.state = OPERATION_ENABLED
+                self.statusword = 0
+                if val >> 6:
+                    # Relative move (6th bit set)
+                    self._executor.submit(self._start_moving_rel, self.target_pos.raw)
+                else:
+                    # Absolute move (6th bit cleared)
+                    self._executor.submit(self._start_moving_abs, self.target_pos.raw)
+
+    @property
+    def op_mode(self):
+        return self._op_mode
+
+    @op_mode.setter
+    def op_mode(self, val):
+        if self._op_mode == val:
+            # canopen library raises error if new opmode is the same as previous opmode
+            raise ValueError("Opmode already %s." % val)
+        self._op_mode = val
+
+    @property
+    def statusword(self):
+        # allow acces via .statusword and .sdo[STATUS_WORD].raw
+        return self._status.raw
+
+    @statusword.setter
+    def statusword(self, val):
+        self._status.raw = val
+
+    def _check_transition(self, cur_val, new_val):
+        pass
+
+    def _start_moving_rel(self, shift):
+        """ Simulate relative move of length shift. """
+        self.statusword &= ~0x400
+        time.sleep(max(0.1, abs(shift / self.speed.raw)))
+        self.position.raw += shift
+        self.state = READY_TO_SWITCH_ON
+        self.statusword |= 0x400
+
+    def _start_moving_abs(self, pos):
+        """ Simulate absolute move of length shift. """
+        self.statusword &= ~0x400
+        time.sleep(max(0.1, abs(self.position.raw - pos) / self.speed.raw))
+        self.position.raw = pos
+        self.state = READY_TO_SWITCH_ON
+        self.statusword |= 0x400
+
+
+class SDOObject(object):
+    """
+    SDO Attributes are accessed via .raw. This class simulates a simple SDO object.
+    """
+    def __init__(self, val):
+        self.raw = val
