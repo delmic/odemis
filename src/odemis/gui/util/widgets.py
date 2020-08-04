@@ -334,6 +334,7 @@ class ProgressiveFutureConnector(object):
         past = now - self._start
         left = max(0, self._end - now)
         prev_left = self._prev_left
+        logging.debug("Past %f now %f left %f", past, now, left)
 
         # Avoid back and forth estimation (but at least every 10 s)
         can_update = True

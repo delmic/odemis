@@ -309,7 +309,9 @@ class OverviewController(object):
         # Timer to detect when the stage ends moving
         self._timer_pos = wx.PyTimer(self.add_pos_to_history)
 
-        m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
+        if hasattr(m_view, "merge_ratio"):
+            m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
+
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)

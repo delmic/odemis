@@ -102,7 +102,6 @@ component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 
-
 ### gui.comp.viewport.MicroscopeViewport and subclasses
 
 msvps = [

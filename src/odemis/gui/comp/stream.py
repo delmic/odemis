@@ -1408,6 +1408,16 @@ class StreamBar(wx.Panel):
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
         self.btn_add_stream.Show(add_btn)
 
+        self.btn_add_overview = ImageTextButton(
+            self, -1,
+            label="ADD OVERVIEW",
+            style=wx.ALIGN_CENTER,
+            height=16,
+        )
+        # self.btn_add_overview.SetForegroundColour("#999999")
+        self._sz.Add(self.btn_add_overview, flag=wx.ALL, border=10)
+        self.btn_add_overview.Show(False)
+
         self.fit_streams()
 
     def fit_streams(self):
@@ -1484,6 +1494,9 @@ class StreamBar(wx.Panel):
     def hide_add_button(self):
         self.btn_add_stream.Hide()
         self.fit_streams()
+
+    def show_overview_button(self):
+        self.btn_add_overview.Show()
 
     def is_empty(self):
         return len(self.stream_panels) == 0

@@ -47,7 +47,7 @@ from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
-from odemis.gui.win.acquisition import AcquisitionDialog, \
+from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
 from odemis.util import units
@@ -448,6 +448,75 @@ class SecomAcquiController(object):
             tab = main_data.getTabByName('analysis')
             main_data.tab.value = tab
             tab.load_data(acq_dialog.last_saved_file)
+
+
+class OverviewStreamAcquiController(object):
+    """ controller to handle high-res image acquisition of the overview for the cryo-secom
+    """
+
+    def __init__(self, tab_data, tab_panel):
+        """
+        tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        tab_panel: (wx.Frame): the frame which contains the 4 viewports
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+
+    def on_acquire(self, evt):
+        self.open_acquisition_dialog()
+
+    def open_acquisition_dialog(self):
+        main_data = self._tab_data_model.main
+        secom_localization_tab = main_data.getTabByName("cryosecom-localization")
+
+        # Indicate we are acquiring, especially important for the SEM which
+        # need to get the external signal to not scan (cf MicroscopeController)
+        main_data.is_acquiring.value = True
+
+        # save the original settings
+        settingsbar_controller = secom_localization_tab.settingsbar_controller
+        orig_entries = get_global_settings_entries(settingsbar_controller)
+        for sc in secom_localization_tab.streambar_controller.stream_controllers:
+            orig_entries += get_local_settings_entries(sc)
+        orig_settings = preset_as_is(orig_entries)
+        settingsbar_controller.pause()
+        settingsbar_controller.enable(False)
+
+        # pause all the live acquisitions
+        streambar_controller = secom_localization_tab.streambar_controller
+        streambar_controller.pauseStreams()
+        streambar_controller.pause()
+
+        streambar_controller.enable(False)
+
+        # create the dialog
+        try:
+            acq_dialog = OverviewAcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
+            parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
+
+            acq_dialog.SetSize(parent_size)
+            acq_dialog.Center()
+            action = acq_dialog.ShowModal()
+        except Exception:
+            logging.exception("Failed to create acquisition dialog")
+            raise
+        finally:
+            apply_preset(orig_settings)
+
+            settingsbar_controller.enable(True)
+            settingsbar_controller.resume()
+
+            streambar_controller.enable(True)
+            streambar_controller.resume()
+
+            main_data.is_acquiring.value = False
+            acq_dialog.Destroy()
+
+        if action == wx.ID_OPEN:
+            tab = main_data.getTabByName("cryosecom-localization")
+            main_data.tab.value = tab
+            tab.load_data(acq_dialog.data)
 
 
 class SparcAcquiController(object):
