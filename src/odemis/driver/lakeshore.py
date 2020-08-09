@@ -1,0 +1,518 @@
+# -*- coding: utf-8 -*-
+'''
+Created on 12 June 2020
+
+@author: Anders Muskens
+
+Copyright © 2020 Anders Muskens, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+from __future__ import division
+
+from concurrent.futures import CancelledError, TimeoutError
+import logging
+import fcntl
+import glob
+from odemis import model
+from odemis.model import HwError
+from odemis.util import to_str_escape
+import os
+import re
+import serial
+import threading
+import time
+from odemis.model._vattributes import FloatVA, IntEnumerated
+from _ast import Pass
+
+KEYPAD_UNLOCK = 0
+POLL_INTERVAL = 0.5  # interval to poll new temperature
+
+LAKESHORE_STATUS_BYTE = {
+    128: "Power on",
+    32: "Command Error",
+    16: "Execution error",
+    4: "Query Error",
+    1: "Operation complete"
+    }
+
+POWER_ON = 128
+COMMAND_ERROR = 32
+EXECUTION_ERROR = 16
+QUERY_ERROR = 4
+OPC = 1
+
+
+class LakeshoreError(model.HwError):
+    """
+    Exception used to indicate a problem reported by the device.
+    """
+
+    def __init__(self, msg, byte=None):
+        self.byte = byte
+        model.HwError.__init__(self, msg + " Status byte: %x" % (self.byte,))
+
+
+class Lakeshore(model.HwComponent):
+
+    def __init__(self, name, role, port, sensor_input='b', output_channel=2, **kwargs):
+        """
+        A driver for the Lakeshore 310 temperature controller.
+
+        name: (str)
+        role: (str)
+        port: (str) port name. Can be a pattern, in which case all the ports
+          fitting the pattern will be tried.
+          Use /dev/fake for a simulator
+        sensor_input (str): The sensor input to use, typically 'a' or 'b'
+        output_channel: (int): The channel output to control, typically 1 or 2
+        """
+
+        # Connect to serial port
+        self._ser_access = threading.Lock()
+        self._serial = None
+        self._file = None
+        self._sensor_input = sensor_input
+        self._output_channel = output_channel
+        self._port, self._version = self._findDevice(port)  # sets ._serial and ._file
+        logging.info("Found Lakeshore 310 device on port %s, Ver: %s",
+                     self._port, self._version)
+
+        # Clear errors at start
+        try:
+            self.checkError()
+        except LakeshoreError:
+            pass
+
+        manufacturer, md, serial = self.GetIdentifier()
+
+        self._hwVersion = str(md)
+        # self._swVersion = self._version.decode(serial)
+
+        # Vigilant attributes of the controller
+        self.temperature = FloatVA(unit='K', value=self.GetSensorTemperature(), readonly=True)
+        self.targetTemperature = FloatVA(unit='K', setter=self._set_targetTemperature, value=self.GetSetpoint())
+
+        """
+        VA to control the current of the heater
+        For Outputs 1 and 2 in Current mode: 0 = Off, 1 = Low, 
+            2 = Medium, 3 = High
+            For Output 2 in Voltage mode: 0 = Off, 1 = On
+        """
+        self.heating = IntEnumerated(value=self.GetHeaterRange(), choices={0: "Off", 1: "Low", 2: "Medium", 3: "High"},
+                                     setter=self._set_heating)
+
+        self.checkError()
+
+        self._shutdown_flag = False
+        self._poll_thread = threading.Thread(target=self._poll)
+
+    def terminate(self):
+        self._shutdown_flag = True
+
+        if self._serial.isOpen():
+            self.UnlockKeypad()
+
+        with self._ser_access:
+            self._serial.close()
+
+    @staticmethod
+    def _openSerialPort(port, baudrate):
+        """
+        Opens the given serial port the right way for a Power control device.
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        baudrate (int)
+        return (serial): the opened serial port
+        """
+        ser = serial.Serial(
+            port=port,
+            baudrate=baudrate,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            rtscts=True,
+            timeout=1  # s
+        )
+
+        # Purge
+        ser.flush()
+        ser.flushInput()
+
+        # Try to read until timeout to be extra safe that we properly flushed
+        ser.timeout = 0
+        while True:
+            char = ser.read()
+            if char == b'':
+                break
+        ser.timeout = 1
+
+        return ser
+
+    def _findDevice(self, ports, baudrate=19200):
+        """
+        Look for a compatible device
+        ports (str): pattern for the port name
+        baudrate (0<int)
+        return:
+           (str): the name of the port used
+           (str): the hardware version string
+           Note: will also update ._file and ._serial
+        raises:
+            IOError: if no devices are found
+        """
+        # For debugging purpose
+        if ports == "/dev/fake":
+            self._serial = LakeshoreSimulator(timeout=1)
+            self._file = None
+            _, ve, _ = self.GetIdentifier()
+            return ports, ve
+
+        if os.name == "nt":
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
+
+        for n in names:
+            try:
+                # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
+                self._file = open(n)  # Open in RO, just to check for lock
+                try:
+                    fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # Raises IOError if cannot lock
+                except IOError:
+                    logging.info("Port %s is busy, will not use", n)
+                    continue
+
+                self._serial = self._openSerialPort(n, baudrate)
+
+                try:
+                    ve = self.GetVersion()
+                    if not "ESP301" in ve.upper():
+                        raise IOError("Device at %s is not an ESP301 controller. Reported version string: %s" % (ports, ve))
+
+                except LakeshoreError as e:
+                    # Can happen if the device has received some weird characters
+                    # => try again (now that it's flushed)
+                    logging.info("Device answered by an error %s, will try again", e)
+                    ve = self.GetVersion()
+                return n, ve
+            except (IOError, LakeshoreError) as e:
+                logging.debug(e)
+                logging.info("Skipping device on port %s, which didn't seem to be compatible", n)
+                # not possible to use this port? next one!
+                continue
+        else:
+            raise HwError("Failed to find a device on ports '%s'. "
+                          "Check that the device is turned on and connected to "
+                          "the computer." % (ports,))
+
+    def _sendOrder(self, cmd):
+        """
+        cmd (byte str): command to be sent to device (without the CR)
+        """
+        cmd = cmd + b"\r"
+        with self._ser_access:
+            logging.debug("Sending command %s", to_str_escape(cmd))
+            self._serial.write(cmd)
+
+    def _sendQuery(self, cmd):
+        """
+        cmd (byte str): command to be sent to device (without the CR, but with the ?)
+        returns (byte str): answer received from the device (without \n or \r)
+        raise:
+            IOError if no answer is returned in time
+        """
+        cmd = cmd + b"\r"
+        with self._ser_access:
+            logging.debug("Sending command %s", to_str_escape(cmd))
+            self._serial.write(cmd)
+
+            self._serial.timeout = 1
+            ans = b''
+            while ans[-1:] != b'\r':
+                char = self._serial.read()
+                if not char:
+                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
+                ans += char
+
+            logging.debug("Received answer %s", to_str_escape(ans))
+
+            return ans.strip()
+
+    # Low level serial commands.
+    # Note: These all convert to internal units of the controller
+
+    def GetStatusByte(self):
+        # Checks the device error register
+        return int(self._sendQuery(b"*STB??"))
+
+    def ClearStatusByte(self):
+        # Clear the status register after checking it
+        self._sendOrder(b"*CLS")
+
+    def checkError(self):
+        # Checks if an error occurred and raises an exception accordingly.
+        status_byte = self.GetStatusByte()
+        self.ClearStatusByte()
+        
+        errors = []
+        
+        if status_byte & COMMAND_ERROR:
+            errors.append(LAKESHORE_STATUS_BYTE.get(COMMAND_ERROR))
+
+        if status_byte & EXECUTION_ERROR:
+            errors.append(LAKESHORE_STATUS_BYTE.get(EXECUTION_ERROR))
+
+        if status_byte & QUERY_ERROR:
+            errors.append(LAKESHORE_STATUS_BYTE.get(QUERY_ERROR))
+
+        if errors:
+            raise LakeshoreError(str(errors), status_byte)
+
+    def GetIdentifier(self):
+        identity = self._sendQuery(b'*IDN?')
+        (manufacturer, md, serial) = identity.split(',')
+        return (manufacturer, md, serial)
+
+    def GetStatus(self):
+        return self._sendQuery('*STB?')
+
+    def Setpoint(self, temp):
+        """
+        Set the temperature setpoint
+        temp (float): the temperature to set, in the defined units
+        """
+        self._sendOrder(b"SETP %d,%f" % (self._output_channel, temp))
+
+    def GetSetpoint(self):
+        """
+        Get the temperature setpoint
+        """
+        return float(self._sendQuery(b"SETP? %d" % (self._output_channel,)))
+
+    def GetSensorTemperature(self):
+        """
+        Get the current temperature of the sensor input
+        """
+        return float(self._sendQuery(b"SRDG? %s" % (self._sensor_input,)))
+
+    def LockKeypad(self):
+        """
+        Lock keypad on device from preventing bad user input
+        """
+        self._sendOrder(b"LOCK 1")
+
+    def UnlockKeypad(self):
+        """
+        Unlock keypad on device from preventing bad user input
+        """
+        self._sendOrder(b"LOCK 0")
+
+    def HeaterSetup(self,
+                    output_type,
+                    heater_resistance,
+                    max_current,
+                    max_user_current,
+                    current_or_power):
+        """
+        Send a heater setup command to the device
+
+        output_type (int): Output type (Output 2 only): 0=Current, 1=Voltage
+        heater_resistance (int): Heater Resistance Setting: 1 = 25 ), 2 = 50 ).
+        max_current (int): Specifies the maximum heater output current: 
+            0 = User Specified, 1 = 0.707 A, 2 = 1 A, 3 = 1.141 A,
+            4 = 1.732 A
+        max_user_current (int): Specifies the maximum heater output current if 
+            max current is set to User Specified.
+        current_or_power (int): Specifies whether the heater output displays in current or 
+            power (current mode only). Valid entries: 1 = current, 2 = power.
+        """
+        self._sendOrder(b"HTRSET %d,%d,%d,%d,%d,%d" % (self._output_channel,
+                    output_type,
+                    heater_resistance,
+                    max_current,
+                    max_user_current,
+                    current_or_power))
+
+    def GetHeaterSetup(self):
+        """
+        Query heater setup from device
+
+        returns: tuple of ints with the setup parameters in sequence
+        """
+        htr_setup = self._sendQuery(b'HTRSET? %d' % (self._output_channel,))
+        (output_type,
+            heater_resistance,
+            max_current,
+            max_user_current,
+            current_or_power) = htr_setup.split(',')
+
+        return (int(output_type),
+            int(heater_resistance),
+            int(max_current),
+            int(max_user_current),
+            int(current_or_power))
+
+    def SetHeaterRange(self, hrange):
+        """
+        Set the heater range
+        hrange (int): For Outputs 1 and 2 in Current mode: 0 = Off, 1 = Low, 
+            2 = Medium, 3 = High
+            For Output 2 in Voltage mode: 0 = Off, 1 = On
+        """
+        self._sendOrder(b"RANGE %d,%d" % (self._output_channel, hrange))
+
+    def GetHeaterRange(self):
+        """
+        Query heater range enum int from the device
+        reutrns: (int): Depending on setup, for Outputs 1 and 2 in Current mode: 0 = Off, 1 = Low, 
+            2 = Medium, 3 = High
+            For Output 2 in Voltage mode: 0 = Off, 1 = On
+        """
+        return int(self._sendQuery(b'RANGE? %d' % (self._output_channel,)))
+
+    # Internal API functions
+    def _set_targetTemperature(self, value):
+        """
+        Setter for the targetTemperature VA
+        """
+        self.Setpoint(value)
+        # Read back the new value from the device
+        svalue = self.GetSetpoint()
+        self.checkError()
+        if svalue != value:
+            logging.warning("Did not set new target temperature to %f", value)
+        return svalue
+
+    def _set_heating(self, value):
+        """
+        Setter for the heater range VA
+        """
+        self.SetHeaterRange(value)
+        # Read back the new value from the device
+        svalue = self.GetHeaterRange()
+        self.checkError()
+        if svalue != value:
+            logging.warning("Did not set new heating range to %d", value)
+        return svalue
+
+    def _poll(self):
+        '''
+        This method runs in a separate thread and polls the device for the temperature
+        '''
+        logging.info("Starting poll thread...")
+        
+        while not self._shutdown_flag:
+            try:
+                temp = self.GetSensorTemperature()
+                self.temperature._set_value(temp, force_write=True)
+                self.checkError()
+                time.sleep(POLL_INTERVAL)
+            except Exception as e:
+                # another exception. End running.
+                logging.exception(e)
+
+        # called if shutdown flag is set and loop exits
+        logging.debug("Shutting down polling thread...")
+
+        
+
+
+class LakeshoreSimulator(object):
+    """
+    Simulates a Lakeshore 310
+    Same interface as the serial port
+    """
+
+    def __init__(self, timeout=1):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = b""  # what the commands sends back to the "host computer"
+        self._input_buf = b""  # what we receive from the "host computer"
+        self._status_byte = 0
+
+        self._setpoint = 10
+        self._temperature = 50
+        self._heating = 1
+
+    def write(self, data):
+        self._input_buf += data
+        msgs = self._input_buf.split(b"\r")
+        for m in msgs[:-1]:
+            self._parseMessage(m)  # will update _output_buf
+
+        self._input_buf = msgs[-1]
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def flush(self):
+        pass
+
+    def flushInput(self):
+        self._output_buf = b""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def isOpen(self):
+        return hasattr(self, "_output_buf")
+
+    def _sendAnswer(self, ans):
+        self._output_buf += b"%s\r" % (ans,)
+
+    def _parseMessage(self, msg):
+        """
+        msg (str): the message to parse (without the \r)
+        return None: self._output_buf is updated if necessary
+        """
+        logging.debug("SIM: parsing %s", to_str_escape(msg))
+        msg = msg.strip()  # remove leading and trailing whitespace
+        msg = b"".join(msg.split())  # remove all space characters
+
+        if msg == b"*STB??":
+            self._sendAnswer(b"%d" % (self._status_byte,))
+        elif msg == b"*CLS":
+            self._status_byte = 0
+        elif msg == b"*IDN?":
+            self._sendAnswer(b"SIM,310,fake")
+        elif re.match(b'LOCK', msg):
+            pass
+        # Query setpoint
+        elif re.match(b'SETP\?', msg):
+            self._sendAnswer(b"%f" % (self._setpoint,))
+        # set setpoint
+        elif re.match(b"SETP", msg):
+            vals = msg[4:].split(',')
+            self._setpoint = float(vals[1])
+        # Query heating range
+        elif re.match(b'RANGE\?', msg):
+            self._sendAnswer(b"%d" % (self._heating,))
+        # set heating range
+        elif re.match(b"RANGE", msg):
+            vals = msg[5:].split(',')
+            self._heating = int(vals[1])
+        # Query temperature
+        elif re.match(b'SRDG\?', msg):
+            self._sendAnswer(b"%f" % (self._temperature,))
+        else:
+            self._status_byte |= COMMAND_ERROR
+
