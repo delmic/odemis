@@ -2188,7 +2188,8 @@ class RotationActuator(model.Actuator):
 
 # Possible movements of the stage Z axis
 MOVE_DOWN, NO_ZMOVE, MOVE_UP = -1, 0, 1
-ATOL_LENS_POS = 100e-6
+ATOL_LINEAR_LENS_POS = 100e-6   # m
+ATOL_ROTATION_LENS_POS = 1e-3
 
 class LinkedHeightActuator(model.Actuator):
     """
@@ -2329,7 +2330,7 @@ class LinkedHeightActuator(model.Actuator):
 
         # Determine movement and direction of the Z (up, down, none)
         z_move_direction = self._computeZDirection(vector_value, rel)
-         # Check that it's ok to move in Rx axis
+        # Check that it's ok to move in Rx axis
         self._checkRxMovement(vector_value, rel)
 
         # Order the stage and focus movements to ensure no collision
@@ -2337,17 +2338,17 @@ class LinkedHeightActuator(model.Actuator):
         # while the subsequent move would bring back the focus value (or vice versa)
         if z_move_direction == MOVE_UP:
             # Move stage first then focus
-            ordered_moves.append((stage_fn, future, vector_value))
+            ordered_moves.append((stage_fn, (future, vector_value)))
             # Pass None in case of absolute move (so that the focus would take it from the updated stage position)
             target_stagez = vector_value['z'] if rel else None
-            ordered_moves.append((self._focus.adjustFocus, future, target_stagez, rel))
+            ordered_moves.append((self._focus.adjustFocus, (future, target_stagez, rel)))
         elif z_move_direction == MOVE_DOWN:
             # Move focus first then stage
-            ordered_moves.append((self._focus.adjustFocus, future, vector_value['z'], rel))
-            ordered_moves.append((stage_fn, future, vector_value))
+            ordered_moves.append((self._focus.adjustFocus, (future, vector_value['z'], rel)))
+            ordered_moves.append((stage_fn, (future, vector_value)))
         else:
             # No Z move => No movement in focus
-            ordered_moves.append((stage_fn, future, vector_value))
+            ordered_moves.append((stage_fn, (future, vector_value)))
         return ordered_moves
 
     def _executeMoves(self, ordered_moves):
@@ -2355,7 +2356,7 @@ class LinkedHeightActuator(model.Actuator):
         Call the list of move functions in respect to their ordered execution
         :param ordered_moves: List of ordered moves functions and their arguments
         """
-        for move_func, *args in ordered_moves:
+        for move_func, args in ordered_moves:
             try:
                 move_func(*args)
             except CancelledError:
@@ -2409,10 +2410,10 @@ class LinkedHeightActuator(model.Actuator):
         target_rx = pos['rx']
         if rel:
             target_rx += current_rx  # To compare relative value
-        if util.almost_equal(current_rx, target_rx, atol=ATOL_LENS_POS):
+        if util.almost_equal(current_rx, target_rx, atol=ATOL_ROTATION_LENS_POS):
             return  # Not moving
-        if self._focus._isInRange():
-            raise ValueError("Movement in Rx is not allowed while focus is in active position.")
+        if not self._focus._isParked():
+            raise ValueError("Movement in Rx is not allowed while focus is not in parked position.")
 
     def _doMoveAbsStage(self, future, pos):
         """
@@ -2610,7 +2611,7 @@ class LinkedHeightFocus(model.Actuator):
         if model.MD_POS_COR not in self._metadata:
             logging.error("Focus POS_COR is not found in metadata.")
             return
-        if util.almost_equal(lens_pos['z'], self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z'], atol=ATOL_LENS_POS):
+        if util.almost_equal(lens_pos['z'], self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z'], atol=ATOL_LINEAR_LENS_POS):
             # Set focus FAV_POS_DEACTIVE when the lens pos is FAV_POS_DEACTIVE
             focus_val = self._metadata[model.MD_FAV_POS_DEACTIVE]['z']
         else:
@@ -2625,7 +2626,7 @@ class LinkedHeightFocus(model.Actuator):
         :return: True if position is ~ MD_FAV_POS_DEACTIVE, False otherwise
         """
         pos = self.position.value['z'] if pos is None else pos
-        return util.almost_equal(pos, self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], atol=ATOL_LENS_POS)
+        return util.almost_equal(pos, self._metadata[model.MD_FAV_POS_DEACTIVE]['z'], atol=ATOL_LINEAR_LENS_POS)
 
     def _isInRange(self, pos=None):
         """
@@ -2778,7 +2779,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         Throws exception if the parent stage is rotated around the X axis (Rx !=0)
         """
-        if not util.almost_equal(self.parent.position.value['rx'], 0, atol=ATOL_LENS_POS):
+        if not util.almost_equal(self.parent.position.value['rx'], 0, atol=ATOL_ROTATION_LENS_POS):
             raise ValueError("Focus movement is not allowed while parent stage Rx is not equal to 0.")
 
     def stop(self, axes=None):
