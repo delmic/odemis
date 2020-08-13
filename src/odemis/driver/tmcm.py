@@ -43,6 +43,8 @@ from collections import OrderedDict
 from concurrent.futures import CancelledError
 
 import canopen
+from can import CanError
+from canopen.nmt import NmtError
 import fcntl
 import math
 import numpy
@@ -68,6 +70,7 @@ class TMCLError(Exception):
         status, value, cmd = self.args
         return ("%d: %s (val = %d, reply from %s)" %
                 (status, TMCL_ERR_STATUS[status], value, cmd))
+
 
 # Status codes from replies which indicate everything went fine
 TMCL_OK_STATUS = {100, # successfully executed
@@ -167,6 +170,7 @@ AREF_USER_VAR = 117  # Global parameter should be between 56-255
 # Communication area
 DEVICE_NAME = 0x1008
 HW_VERSION = 0x1009
+SW_VERSION = 0x100A
 IDENTITY = 0x1018
 
 # Manufacturer specific area
@@ -200,9 +204,12 @@ READY_TO_SWITCH_ON = "READY TO SWITCH ON"
 SWITCHED_ON = "SWITCHED ON"
 OPERATION_ENABLED = "OPERATION ENABLED"
 QUICK_STOP_ACTIVE = "QUICK STOP ACTIVE"
-
-# 200 steps / cycle and 2 ** 8 µsteps per step
-DEFAULT_STEPSIZE = 2 * math.pi / (200 * 2 ** 8)  # µstep size in rad
+IN_PROGRESS = 'IN PROGRESS'
+TARGET_REACHED = 'TARGET REACHED'
+ATTAINED = 'ATTAINED'
+INTERRUPTED = 'INTERRUPTED'
+ERROR_VEL_NOT_ZERO = 'ERROR VELOCITY IS NOT ZERO'
+ERROR_VEL_ZERO = 'ERROR VELOCITY IS ZERO'
 
 
 class TMCLController(model.Actuator):
@@ -2560,29 +2567,29 @@ class CANController(model.Actuator):
     Represents one Trinamic TMCL-compatible controller using a CANopen interface.
     """
 
-    def __init__(self, name, role, channel, node_id, datasheet, axes, ustepsize=None,
-                 rng=None, unit=None, refproc=None, **kwargs):
+    def __init__(self, name, role, channel, node_id, datasheet, axes, ustepsize,
+                 param_file, rng=None, unit=None, refproc=None, **kwargs):
         """
-        channel (str): can port name, currently supported are "can0" and "fake" (simulator).
-            "can0" is started with a udev rule when the device is plugged in
+        channel (str): can port name, on linux, this is typically "can0". For testing
+            with the simulator, use "fake".
         node_id (0 <= int <= 255): Address of the controller
         datasheet (str): path to .dcf configuration file
         axes (list of str): names of the axes, from the 1st to the last.
           If an axis is not connected, put a "".
-        ustepsize (list of float): size of a microstep in rad (the smaller, the
+        ustepsize (list of float): size of a microstep in unit (the smaller, the
           bigger will be a move for a given distance in m)
+        param_file (str or None): (absolute) path to a tmcm.tsv file which will
+          be used to initialise the axis parameters (and IO).
         rng (list of tuples of 2 floats or None): min/max position allowed for
           each axis. 0 must be part of the range.
           Note: If the axis is inverted, the values provided will be inverted too.
         unit (None or list of str): The unit of each axis. When it's None, it
-          defaults to "rad" for all the axes.
+          defaults to "m" for all the axes.
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
           name of the procedure. For now only "Standard" is accepted.
         """
 
-        if ustepsize is None:
-            ustepsize = [DEFAULT_STEPSIZE] * len(axes)
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" % (len(axes), ustepsize))
 
@@ -2592,17 +2599,18 @@ class CANController(model.Actuator):
         rng += [None] * (len(axes) - len(rng))  # ensure it's long enough
 
         if unit is None:
-            unit = ["rad"] * len(axes)
+            unit = ["m"] * len(axes)
         elif len(unit) != len(axes):
             raise ValueError("unit argument must be the same length as axes")
 
         for i, n in enumerate(axes):
             if not n:  # skip this non-connected axis
                 continue
-            # sz is typically ~1e-4 rad/m, so > 0.01 is very fishy
+            # sz is typically ~1µm, so > 1 cm is very fishy
+            # in case of rad as unit, sz is typically ~1e-4 rad/m, so it should also be < 0.01
             sz = ustepsize[i]
             if not (0 < sz <= 10e-3):
-                raise ValueError("ustepsize should be between 0 and 0.01 rad, but got %g m" % (sz,))
+                raise ValueError("ustepsize should be between 0 and 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
 
         self._ustepsize = ustepsize
@@ -2616,7 +2624,7 @@ class CANController(model.Actuator):
         # For ensuring only one updatePosition() at the same time
         self._pos_lock = threading.Lock()
 
-        self._modl, vmaj, vmin = self.GetVersion()
+        self._modl, hw_version, sw_version, vmaj, vmin = self.GetVersion()
         if self._modl not in KNOWN_MODELS_CAN:
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             self._modl)
@@ -2653,7 +2661,6 @@ class CANController(model.Actuator):
             if not isinstance(unit[i], basestring):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
             axes_def[n] = model.Axis(range=phy_rng, unit=unit[i])
-            self._init_axis(i)
             try:
                 self._checkErrorFlag(i)
             except HwError as ex:
@@ -2662,16 +2669,29 @@ class CANController(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
-        self._swVersion = "%s" % odemis.__version__
+        if param_file:
+            try:
+                f = open(param_file)
+            except Exception as ex:
+                raise ValueError("Failed to open file %s: %s" % (param_file, ex))
+            try:
+                axis_params = self.parse_tsv_config(f)
+            except Exception as ex:
+                raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
+            f.close()
+            logging.debug("Extracted param file config: %s", axis_params)
+            self.apply_config(axis_params)
+
+        self._swVersion = "CANopen %s" % sw_version
         self._hwVersion = "%s (firmware %d.%02d)" % (self._modl, vmaj, vmin)
 
-        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
 
         # TODO: for axes with encoders, refresh position regularly
 
         # TODO: add support for changing speed.
-        self.speed = model.VigilantAttribute({}, unit="rad/s", readonly=True)
+        self.speed = model.VigilantAttribute({}, readonly=True)
         self._updateSpeed()
 
         self._accel = {}
@@ -2703,50 +2723,33 @@ class CANController(model.Actuator):
             self._network.sync.stop()
             self._network.disconnect()
 
-    def _init_axis(self, axis):
+    def apply_config(self, axis_params):
         """
-        Initialise the given axis with "good" values for our needs
-        axis (int): axis number
+        Configure the device according to the given 'user configuration'.
+        axis_params (dict (int, int) -> int): axis number/param number -> value
         """
-        # NOTE: Some objects can only be written when the drive is in the
-        #       SWITCHED_ON_DISABLED state (but is always readable).
         self._node.state = SWITCH_ON_DISABLED
-        self.SetAxisParam(axis, SWITCH_PARAM, 0x3)  # Disable the limit switch inputs.
-        self.SetAxisParam(axis, PULLUP_RESISTORS, 0x1)  # Enable pull-up resistor for HOME input
-        # Encoder: 0 internal magnetic encoder, -1 (default) no encoder, -2 external encoder
-        self.SetAxisParam(axis, SENSOR_SELECTION, 0)  # Use Internal magnetic encoder
-        self.SetAxisParam(axis, POSITION_WINDOW, 0)  # enable position window 0 (target = demand position)
-        self.SetAxisParam(axis, POSITION_WINDOW_TIME, 100)  # remain in window for 100 ms before setting status bit
-
-        self._node.op_mode = HOMING_MODE
-        self.SetAxisParam(axis, HOMING_METHOD, Homing.HM_ON_POSITIVE_INDEX_PULSE)
+        for (ax, ad), v in axis_params.items():
+            self.SetAxisParam(ax, ad, v)
         self._node.state = OPERATION_ENABLED
-        self._node.op_mode = PP_MODE
-
-        self.SetAxisParam(axis, HOME_OFFSET, 0)  # set home offset (value to be set after referencing) to 0
-
-        # There is a small bug in the canopen library. By default, after entering "QUICK STOP ACTIVE" state,
-        # the state is automatically changed to "SWITCH ON DISABLED". However, when calling "QUICK STOP ACTIVE",
-        # the state setter (canopen.profiles.p402 l 445) will try to change the state to "QUICK STOP ACTIVE" in a loop
-        # until this state is reached. If the state is changed automatically from "QUICK STOP ACTIVE" to "SWITCHED ON
-        # DISABLE" before the loop condition is evaluated, it will attempt a transition from "SWITCHED ON DISABLE" to
-        # "QUICK STOP ACTIVE". This transition is not allowed, so it will raise an error.
-        # To avoid this, we change the settings to disable the automatic change to "SWITCH ON DISABLED" state
-        # and do it manually in the StopAxis() function.
-        self.SetAxisParam(axis, QUICK_STOP_OPTION, 6)  # stay in quick stop active state
 
     # Low level functions
     def GetVersion(self, axis=0):
         """
-        return (int, int, int):
+        return (str, str, str, int, int):
              Controller ID
+             Hardware version
+             Software version
              Firmware major version number
              Firmware minor version number
         """
         cont = self.GetAxisParam(axis, DEVICE_NAME)
-        vmaj = self.GetAxisParam(axis, HW_VERSION)  # e.g. '1.0'
-        vmin = self.GetAxisParam(axis, IDENTITY, 3)
-        return cont, int(float(vmaj)), int(vmin)
+        hw_version = self.GetAxisParam(axis, HW_VERSION)  # e.g. '1.0'
+        sw_version = self.GetAxisParam(axis, SW_VERSION)
+        id = int(self.GetAxisParam(axis, IDENTITY, 3))
+        vmaj = 0xFF00 & id  # first 16 bits
+        vmin = 0x00FF & id  # last 16 bits
+        return cont, hw_version, sw_version, vmaj, vmin
 
     def GetAxisParam(self, axis, param, idx=None):
         """
@@ -2778,12 +2781,12 @@ class CANController(model.Actuator):
         axis (0<=int<=5): axis number
         pos (-2**31 <= int 2*31-1): position
         """
-        self._node.controlword = 0x0f  # switch on
         self.SetAxisParam(axis, TARGET_POSITION, pos)
         # Bit 6 of controlword: absolute (0) or relative (1)
         # Bits 0-3 to 1: switch on and enable (see p 71 of canopen firmware manual)
         # Bit 4: start positioning
-        self._node.controlword = 0x1f
+        self._node.controlword = 0b0001111  # switch on
+        self._node.controlword = 0b0011111
 
     def MoveRelPos(self, axis, offset):
         """
@@ -2795,8 +2798,10 @@ class CANController(model.Actuator):
         # Bit 6 of controlword: absolute (0) or relative (1)
         # Bits 0-3 to 1: switch on and enable (see p 71 of canopen firmware manual)
         # Bit 4: start positioning
-        self._node.controlword = 0xf  # switch on (transition to state 3)
-        self._node.controlword = 0b1011111
+        # We need to set the controlword twice, first to get into the "switched on" state, then
+        # to go to the "operation enabled" state.
+        self._node.controlword = 0b0001111  # switch on (state transition 3)
+        self._node.controlword = 0b1011111  # operation enable (state transition 4)
 
     def MotorStop(self):
         """
@@ -2816,9 +2821,9 @@ class CANController(model.Actuator):
         stat = self._node.statusword
         # 10th bit (0x400) is set if zero position has been found or homing has been stopped
         # 12th bit (0x1000) is set if position is found
-        homing_done = not (stat & 0x400) or (stat & 0x400 and not stat & 0x1000)
+        homing_active = not (stat & 0x400) or (stat & 0x400 and not stat & 0x1000)
         self._node.op_mode = PP_MODE
-        return bool(homing_done)
+        return bool(homing_active)
 
     def _isOnTarget(self, axis):
         """
@@ -2830,11 +2835,11 @@ class CANController(model.Actuator):
 
     def _checkErrorFlag(self, axis):
         """
-        Raises an HWError if the axis error flag reports an issue
+        Raises an HwError if the axis error flag reports an issue
         """
         stat = self._node.statusword
         if stat & 0b1000:
-            raise TMCLError(stat, "Fault detected.")
+            raise HwError("Fault detected.")
 
     def _cancelReference(self, future):
         # The difficulty is to synchronise correctly when:
@@ -2888,11 +2893,8 @@ class CANController(model.Actuator):
         self.speed._value = speed
         self.speed.notify(self.speed.value)
 
-    def _readSpeed(self, a, param=4):
+    def _readSpeed(self, a):
         """
-        param (int): the parameter number from which to read the speed.
-          It's normally 4 (= maximum speed), but could also be 194 (reference
-          search) or 195 (reference switch)
         return (float): the speed of the axis in m/s
         """
         return float(self.GetAxisParam(a, PROFILE_VELOCITY)) * self._ustepsize[a]  # profile velocity
@@ -3197,7 +3199,7 @@ class CANController(model.Actuator):
             try:
                 for ax in axes:
                     self.referenced._value[ax] = False
-                    homing_done = self.homing(future, timeout, True)
+                    homing_done = self.homing(future, self._name_to_axis[ax], timeout, True)
                     if homing_done:
                         self.referenced._value[ax] = True
             except RuntimeError as ex:
@@ -3214,7 +3216,7 @@ class CANController(model.Actuator):
                 # # Update the global variable, based on the referenced axes
                 # self._update_ref()
 
-    def homing(self, future, timeout=30, set_new_home=True):
+    def homing(self, future, axis, timeout=30, set_new_home=True):
         """
         Function to execute the configured Homing Method on the node.
         This function does exactly the same as the corresponding function of canopen.BaseNode402 except that
@@ -3226,28 +3228,32 @@ class CANController(model.Actuator):
         object (0x607C) to the current position after the homing procedure (default: true)
         :return bool: If the homing was complete with success
         """
+        # TODO: Homing currently only works with one axis
+        if axis != 0:
+            raise ValueError("Homing not supported for axis %s != 0." % axis)
+
         # Use init lock to make sure we're not cancelling during the state changes.
         with future._init_lock:
             if future._must_stop.is_set():
                 # Cancelled before homing started (init_lock acquired here after cancelling function)
                 return False
-            previus_op_mode = self._node.op_mode
-            self._node.state = 'SWITCHED ON'
-            self._node.op_mode = 'HOMING'
+            previous_op_mode = self._node.op_mode
+            self._node.state = SWITCHED_ON
+            self._node.op_mode = HOMING_MODE
             # The homing process will initialize at operation enabled
-            self._node.state = 'OPERATION ENABLED'
-            homingstatus = 'IN PROGRESS'
+            self._node.state = OPERATION_ENABLED
+            homingstatus = IN_PROGRESS
             self._node.controlword = State402.CW_OPERATION_ENABLED | Homing.CW_START
         t = time.time() + timeout
         try:
-            while homingstatus not in ('TARGET REACHED', 'ATTAINED'):
+            while homingstatus not in (TARGET_REACHED, ATTAINED):
                 for key, value in Homing.STATES.items():
                     # check if the value after applying the bitmask (value[0])
                     # corresponds with the value[1] to determine the current status
                     bitmaskvalue = self._node.statusword & value[0]
                     if bitmaskvalue == value[1]:
                         homingstatus = key
-                if homingstatus in ('INTERRUPTED', 'ERROR VELOCITY IS NOT ZERO', 'ERROR VELOCITY IS ZERO'):
+                if homingstatus in (INTERRUPTED, ERROR_VEL_ZERO, ERROR_VEL_NOT_ZERO):
                     raise RuntimeError('Unable to home. Reason: {0}'.format(homingstatus))
                 time.sleep(0.001)
                 if time.time() > t:
@@ -3260,8 +3266,9 @@ class CANController(model.Actuator):
             return True
         except RuntimeError as e:
             logging.info(str(e))
+            raise
         finally:
-            self._node.op_mode = previus_op_mode
+            self._node.op_mode = previous_op_mode
         return False
 
     @staticmethod
@@ -3269,7 +3276,7 @@ class CANController(model.Actuator):
         """
         Create a single-node network.
 
-        raise HwError: if the serial port cannot be opened (doesn't exist, or
+        raise HwError: if the CAN port cannot be opened (doesn't exist, or
           already opened)
         """
         # For debugging purpose
@@ -3280,24 +3287,67 @@ class CANController(model.Actuator):
         network = canopen.Network()
 
         # Connect to the CAN bus
-        network.connect(bustype='socketcan', channel=channel)
-        network.check()
+        try:
+            network.connect(bustype='socketcan', channel=channel)
+            network.check()
+        except CanError as ex:
+            raise HwError("Failed to establish connection on channel %s, ex: %s" % (channel, ex))
+        except OSError:
+            raise HwError("CAN adapter not found on channel %s." % channel)
 
         # Add some nodes with corresponding Object Dictionaries
         node = canopen.BaseNode402(nodeid, datasheet)
         network.add_node(node)
 
         # Reset network
-        node.nmt.state = 'RESET COMMUNICATION'
-        node.nmt.wait_for_bootup(15)
-        logging.debug('node state 1) = {0}'.format(node.nmt.state))
+        try:
+            node.nmt.state = 'RESET COMMUNICATION'
+            node.nmt.wait_for_bootup(15)
+            logging.debug('Device state after reset = {0}'.format(node.nmt.state))
+        except NmtError:
+            raise HwError("Node with id %s not present on channel %s." % (nodeid, channel))
 
         # Transmit SYNC every 100 ms
         network.sync.start(0.1)
 
-        node.load_configuration()
-        node.setup_402_state_machine()
+        try:
+            node.load_configuration()
+            node.setup_402_state_machine()
+        except ValueError as ex:
+            raise HwError("Exception connecting to state machine for node %s on %s: %s." % (nodeid, channel, ex))
         return network, node
+
+    @staticmethod
+    def parse_tsv_config(f):
+        """
+        Parse a tab-separated value (TSV) file in the following format:
+          bank/axis    param   value    # comment
+          bank/axis A0->A5 (axis: number)
+          param is the parameter number in hexadecimal format (starting with 0x)
+          value is a number in hexadecimal format (starting with 0x)
+        f (File): opened file
+        return:
+          axis_params (dict (int, int) -> int): axis number/param number -> value
+        """
+        axis_params = {}  # (axis/add) -> val (int)
+
+        # read the parameters "database" the file
+        for l in f:
+            # comment or empty line?
+            mc = re.match(r"\s*(#|$)", l)
+            if mc:
+                logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
+                continue
+            m = re.match(r"(?P<type>[AGO])(?P<num>[0-9]+)\t(?P<param>0x[0-9a-fA-F]+)\t(?P<value>0x[0-9a-fA-F]+)\s*(#.*)?$", l)
+            if not m:
+                raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
+            typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("param"), 16), int(m.group("value"), 16)
+            if typ == "A":
+                axis_params[(num, add)] = val
+            else:
+                raise ValueError("Unexpected line '%s'" % l.rstrip("\n\r"))
+
+        return axis_params
 
 
 class CANNodeSimulator(object):
@@ -3311,6 +3361,7 @@ class CANNodeSimulator(object):
         self._op_mode = PP_MODE
         self.device_name = SDOObject("PD-1240-fake")
         self.hw_version = SDOObject(1)
+        self.sw_version = SDOObject(1)
         self.identity = SDOObject(1)
         self.position = SDOObject(0)
         self.switch_param = SDOObject(0)
@@ -3334,6 +3385,7 @@ class CANNodeSimulator(object):
             self.sdo.update({
                     0x800 * i + DEVICE_NAME: self.device_name,
                     0x800 * i + HW_VERSION: self.hw_version,
+                    0x800 * i + SW_VERSION: self.sw_version,
                     0x800 * i + IDENTITY: [None, None, None, self.identity],
                     0x800 * i + ACTUAL_POSITION: self.position,
                     0x800 * i + SWITCH_PARAM: self.switch_param,

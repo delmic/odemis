@@ -1,0 +1,12 @@
+# Parameters from PD-1240
+# Bank/Axis	Address	Value	Description
+# Axis 0 = S
+A0	0x2005	0x03	# Limit switch inputs
+A0	0x2710	0x01	# Pull-up resistors
+A0	0x606a	0x00	# Sensor selection
+A0	0x6067	0x00	# Position window
+A0	0x6068	0x64	# Position window time
+A0	0x6098	0x22	# Homing method
+A0	0x607C	0x00	# Home offset
+A0	0x605A	0x06	# Quick stop option
+

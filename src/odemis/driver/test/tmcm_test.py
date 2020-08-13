@@ -585,14 +585,16 @@ class TestCanActuator(unittest.TestCase):
 
     def setUp(self):
         if TEST_NOHW:
-            address = "fake"
+            channel = "fake"
         else:
-            address = "can0"
+            channel = "can0"
 
         current_dir = os.path.abspath(os.path.dirname(__file__))
-        parent_dir = os.path.abspath(current_dir + "/../")
-        datasheet = os.path.join(parent_dir, 'TMCM-1240_CANopen_V322.dcf')
-        self.dev = tmcm.CANController("Can Actuator", None, address, 1, datasheet, ['x'], refproc=tmcm.REFPROC_STD)
+        datasheet = os.path.join(current_dir, "..", 'TMCM-1240_CANopen_V322.dcf')
+        # 200 steps / cycle and 2 ** 8 µsteps per step
+        sz = [2 * math.pi / (200 * 2 ** 8)]  # µstep size in rad
+        self.dev = tmcm.CANController("Can Actuator", None, channel, 1, datasheet, ['x'], refproc="Standard",
+                                      param_file=ABS_PATH + "/tmcm-pd1240.tmcm.tsv", ustepsize=sz)
         self.orig_pos = dict(self.dev.position.value)
 
     def tearDown(self):
@@ -601,7 +603,7 @@ class TestCanActuator(unittest.TestCase):
     def test_simple(self):
         # The accuracy is one encoder step. This value will be improved when using a gearbox.
         stepsize = 2 * math.pi / 1024  # 1 step, 1024 encoder steps per cycle'
-        accuracy = stepsize + 1e-5  # allow for some rounding errors
+        accuracy = 2 * stepsize + 1e-5  # allow for some rounding errors
 
         # First, reference
         self.dev.reference({'x'}).result()
@@ -687,9 +689,6 @@ class TestCanActuator(unittest.TestCase):
 
         move = {a: math.pi}
         f = self.dev.moveRel(move)
-        # When cancelling right away (<0.1s), the move is stopped, but .cancelled() will return False.
-        # This is probably not a problem.
-        time.sleep(0.1)
         self.assertTrue(f.cancel())
         self.assertTrue(f.cancelled())
 
