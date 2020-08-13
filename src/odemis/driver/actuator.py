@@ -2189,7 +2189,7 @@ class RotationActuator(model.Actuator):
 # Possible movements of the stage Z axis
 MOVE_DOWN, NO_ZMOVE, MOVE_UP = -1, 0, 1
 ATOL_LINEAR_LENS_POS = 100e-6   # m
-ATOL_ROTATION_LENS_POS = 1e-3
+ATOL_ROTATION_LENS_POS = 1e-3  #rad
 
 class LinkedHeightActuator(model.Actuator):
     """
@@ -2558,14 +2558,13 @@ class LinkedHeightFocus(model.Actuator):
         # Position will be updated whenever the underlying lens stage is changed
         self._lensz.position.subscribe(self._updatePosition, init=True)
 
-        # Check if underlying lens has FAV_POS_DEACTIVE metadata
-        if model.MD_FAV_POS_DEACTIVE not in self._lensz.getMetadata():
+        try:
+            # Check if underlying lens FAV_POS_DEACTIVE is not within its active range
+            lens_deactive = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
+            if not (self._lensz.axes['z'].range[0] <= lens_deactive <= self._lensz.axes['z'].range[1]):
+                raise ValueError("Lens stage FAV_POS_DEACTIVE is not within its range.")
+        except KeyError:
             raise ValueError("The underlying lens stage is missing a FAV_POS_DEACTIVE metadata.")
-        # Check if underlying lens FAV_POS_DEACTIVE is not within its active range
-        lens_deactive = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
-        if not (self._lensz.axes['z'].range[0] <= lens_deactive <= self._lensz.axes['z'].range[1]):
-            raise ValueError("Lens stage FAV_POS_DEACTIVE is not within its range.")
-
         # Calculate the focus FAV_POS_DEACTIVE position from the following special case:
         # focus_deactive = focus_range_max + (lens_deactive_position - lens_range_max)
         focus_deactive_value = self._range[1] + (lens_deactive - self._lensz.axes['z'].range[1])
@@ -2721,7 +2720,6 @@ class LinkedHeightFocus(model.Actuator):
         1- Move the absolute focus with a value in active range
         2- Move the absolute focus to deactive position
         3- Adjust the absolute focus with the same value as the parent stage position
-        foc (float): unit mm
         :param future: Cancellable future of the task
         :param pos: the absolute value of either the focus of parent stage Z axis
         :param adjust: Whether this is a call from the parent to adjust focus (default False)
