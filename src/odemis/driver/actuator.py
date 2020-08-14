@@ -24,24 +24,19 @@ from __future__ import division
 
 import collections
 import copy
-import enum
 import itertools
 import logging
 import math
 import numbers
 import threading
-import time
-from concurrent.futures._base import FINISHED
-
-from asyncio.base_futures import CancelledError
+from concurrent.futures._base import CancelledError, FINISHED
 from concurrent import futures
-
 import numpy
 from past.builtins import basestring
 
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
-                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, CANCELLED)
+                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
 
 
 class MultiplexActuator(model.Actuator):

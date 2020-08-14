@@ -25,12 +25,11 @@ from __future__ import division
 import logging
 import math
 import random
-from asyncio import CancelledError
 
 from odemis import model
 import odemis
 print(odemis.__file__)
-from odemis.driver import simulated, tmcm, smaract
+from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
     LinkedHeightFocus
