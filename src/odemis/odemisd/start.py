@@ -230,16 +230,23 @@ class BackendStarter(object):
         returns when the process ends.
         returns (list of strings, list of strings): out, err
         """
+        # To be able to directly pass the bytes to the output (display)
+        if sys.version_info.major >= 3:
+            raw_output = sys.stdout.buffer
+        else:  # Python 2
+            raw_output = sys.stdout
+
         def read_file(f, store):
             try:
                 for l in f:
                     store.append(l)
                     # logging.debug("Read %d bytes", len(l))
-                    print(l, end="")
+                    # Also pass on the output
+                    raw_output.write(l)
             except Exception:
                 logging.exception("failed to read")
             finally:
-                logging.info("readed ended")
+                logging.info("read ended")
 
         out = []
         err = []
@@ -563,7 +570,7 @@ def run_model_selector(cmd_str):
     cmd = shlex.split(cmd_str)
     logging.debug("Getting the model filename using %s", cmd)
     try:
-        out = subprocess.check_output(cmd).splitlines()
+        out = subprocess.check_output(cmd).decode("utf-8", "ignore_error").splitlines()
         if not out:
             show_error_box("Error starting Odemis back-end",
                            "No microscope file name provided by MODEL_SELECTOR %s.\n\n"
