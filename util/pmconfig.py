@@ -60,13 +60,16 @@ def spc_auto_conf(address, stage):
 def spc_manual_conf(address, stage, steps=200):
     """
     Set spc parameter with manual configuration procedure.
-    This procedure uses a larger move to determine the parameter and is move accurate than the
+    This procedure uses a larger move to determine the parameter and is more accurate than the
     automatic configuration procedure.
     """
     axname = [name for name, num in stage._axis_map.items() if num == address][0]  # get axis name from number
 
     # Move to a position in the middle of the axis
+    # WARNING:  Moving and referencing might not be very reliable since the hardware hasn't been configured.
     stage.reference({'x'}).result()
+    # TODO: this move is specific to the current hardware where the reference switch is very close to 0
+    #   In the future, this might need to be extended to be more generic.
     stage.moveAbsSync({'x': 0.005})
 
     # Move by a certain number of motor steps. Read the encoder position before and after the move.
@@ -79,6 +82,7 @@ def spc_manual_conf(address, stage, steps=200):
     endpos = stage.position.value['x']
     encoder_cnts = (abs(endpos - startpos) * stage._counts_per_meter[axname])
     spc = steps / encoder_cnts
+    logging.info("Found spc of %s." % spc)
 
     # Write spc parameter to flash
     # Parameter needs to be multiplied by (65536 * 4) (see manual)

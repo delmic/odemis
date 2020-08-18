@@ -515,9 +515,9 @@ class PMD401Bus(Actuator):
         :param target:  (float) target position for axes
         :returns: (bool) True if moving, False otherwise
         """
-        # Check d3 (third status value) bit 4 (targetLimit) and bit 1 (targetReached)
+        # Check d3 (third status value) bit 2 (targetLimit) and bit 0 (targetReached)
         _, _, d3, _ = self.getStatus(axis)
-        if d3 & 1 or d3 & 4:
+        if d3 & 0b0101:
             # target or limit reached
             return False
         else:
@@ -550,7 +550,7 @@ class PMD401Bus(Actuator):
         """
         Returns a description of the index status.
         :returns (tuple of 4):
-            mode (int): index mode (if position has been reset at index, can be)
+            mode (0 or 1): index mode (1 if position has been reset at index)
             position (float):
             logged (bool): position was logged since last report
             indexed (bool): position has been reset at index
@@ -577,7 +577,7 @@ class PMD401Bus(Actuator):
                 indexed = False
             return mode, position, logged, indexed
         except Exception as ex:
-            logging.exception("Failed to parse index status %s: %s" % (ret, ex))
+            logging.exception("Failed to parse index status %s", ret)
             raise
 
     def setAxisAddress(self, current_address, new_address):
