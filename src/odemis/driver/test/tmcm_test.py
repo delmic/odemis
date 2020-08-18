@@ -583,7 +583,8 @@ class TestActuatorRelEnc(TestActuator):
 
 class TestCanActuator(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         if TEST_NOHW:
             channel = "fake"
         else:
@@ -593,12 +594,21 @@ class TestCanActuator(unittest.TestCase):
         datasheet = os.path.join(current_dir, "..", 'TMCM-1240_CANopen_V322.dcf')
         # 200 steps / cycle and 2 ** 8 µsteps per step
         sz = [2 * math.pi / (200 * 2 ** 8)]  # µstep size in rad
-        self.dev = tmcm.CANController("Can Actuator", None, channel, 1, datasheet, ['x'], refproc="Standard",
-                                      param_file=ABS_PATH + "/tmcm-pd1240.tmcm.tsv", ustepsize=sz)
-        self.orig_pos = dict(self.dev.position.value)
+        cls.dev = tmcm.CANController(name="Can Actuator",
+                                     role=None,
+                                     channel=channel,
+                                     node_id=1,
+                                     datasheet=datasheet,
+                                     axes=['x'],
+                                     refproc="Standard",
+                                     param_file=ABS_PATH + "/tmcm-pd1240.tmcc.tsv",
+                                     ustepsize=sz,
+                                     rng=[[-2 * math.pi, 2 * math.pi]],
+                                     unit=["rad"])
 
-    def tearDown(self):
-        pass
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
 
     def test_simple(self):
         # The accuracy is one encoder step. This value will be improved when using a gearbox.

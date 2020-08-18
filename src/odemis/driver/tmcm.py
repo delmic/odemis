@@ -45,6 +45,7 @@ from concurrent.futures import CancelledError
 import canopen
 from can import CanError
 from canopen.nmt import NmtError
+from canopen.sdo.exceptions import SdoAbortedError
 import fcntl
 import math
 import numpy
@@ -2682,6 +2683,12 @@ class CANController(model.Actuator):
             logging.debug("Extracted param file config: %s", axis_params)
             self.apply_config(axis_params)
 
+        try:
+            self._node.op_mode = PP_MODE
+        except SdoAbortedError:
+            # Will be raised if we're already in PP_MODE
+            pass
+
         self._swVersion = "CANopen %s" % sw_version
         self._hwVersion = "%s (firmware %d.%02d)" % (self._modl, vmaj, vmin)
 
@@ -2733,6 +2740,19 @@ class CANController(model.Actuator):
             self.SetAxisParam(ax, ad, v)
         self._node.state = OPERATION_ENABLED
 
+        # There is a small bug in the canopen library. By default, after entering "QUICK STOP ACTIVE" state,
+        # the state is automatically changed to "SWITCH ON DISABLED". However, when calling "QUICK STOP ACTIVE",
+        # the state setter (canopen.profiles.p402 l 445) will try to change the state to "QUICK STOP ACTIVE" in a loop
+        # until this state is reached. If the state is changed automatically from "QUICK STOP ACTIVE" to "SWITCHED ON
+        # DISABLE" before the loop condition is evaluated, it will attempt a transition from "SWITCHED ON DISABLE" to
+        # "QUICK STOP ACTIVE". This transition is not allowed, so it will raise an error.
+        # To avoid this, we change the settings to disable the automatic change to "SWITCH ON DISABLED" state
+        # and do it manually in the StopAxis() function.
+        for axis in self._name_to_axis.values():
+            val = self.GetAxisParam(axis, QUICK_STOP_OPTION)
+            if val != 6:
+                logging.warning("Quick stop option %s != 6 is not supported by current canopen version." % val)
+
     # Low level functions
     def GetVersion(self, axis=0):
         """
@@ -2747,7 +2767,7 @@ class CANController(model.Actuator):
         hw_version = self.GetAxisParam(axis, HW_VERSION)  # e.g. '1.0'
         sw_version = self.GetAxisParam(axis, SW_VERSION)
         id = int(self.GetAxisParam(axis, IDENTITY, 3))
-        vmaj = 0xFF00 & id  # first 16 bits
+        vmaj = (0xFF00 & id) >> 16  # first 16 bits
         vmin = 0x00FF & id  # last 16 bits
         return cont, hw_version, sw_version, vmaj, vmin
 
@@ -2785,6 +2805,7 @@ class CANController(model.Actuator):
         # Bit 6 of controlword: absolute (0) or relative (1)
         # Bits 0-3 to 1: switch on and enable (see p 71 of canopen firmware manual)
         # Bit 4: start positioning
+        # Controlword has to be set twice, cf MoveRelPos
         self._node.controlword = 0b0001111  # switch on
         self._node.controlword = 0b0011111
 
@@ -2854,7 +2875,7 @@ class CANController(model.Actuator):
         return True
 
     # high-level methods (interface)
-    def _updatePosition(self, axes=None, do_axes=None):
+    def _updatePosition(self, axes=None):
         """
         update the position VA
         axes (set of str): names of the axes to update or None if all should be
@@ -3210,6 +3231,7 @@ class CANController(model.Actuator):
             finally:
                 # We only notify after updating the position so that when a listener
                 # receives updates both values are already updated.
+                time.sleep(0.1)  # it takes some time to adjust position after referencing
                 self._updatePosition(axes)
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
@@ -3230,7 +3252,7 @@ class CANController(model.Actuator):
         """
         # TODO: Homing currently only works with one axis
         if axis != 0:
-            raise ValueError("Homing not supported for axis %s != 0." % axis)
+            raise NotImplementedError("Homing not supported for axis %s != 0." % axis)
 
         # Use init lock to make sure we're not cancelling during the state changes.
         with future._init_lock:
@@ -3293,7 +3315,7 @@ class CANController(model.Actuator):
         except CanError as ex:
             raise HwError("Failed to establish connection on channel %s, ex: %s" % (channel, ex))
         except OSError:
-            raise HwError("CAN adapter not found on channel %s." % channel)
+            raise HwError("CAN adapter not found on channel %s." % (channel,))
 
         # Add some nodes with corresponding Object Dictionaries
         node = canopen.BaseNode402(nodeid, datasheet)
@@ -3338,14 +3360,11 @@ class CANController(model.Actuator):
             if mc:
                 logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
                 continue
-            m = re.match(r"(?P<type>[AGO])(?P<num>[0-9]+)\t(?P<param>0x[0-9a-fA-F]+)\t(?P<value>0x[0-9a-fA-F]+)\s*(#.*)?$", l)
+            m = re.match(r"(?P<num>[0-9]+)\t(?P<param>0x[0-9a-fA-F]+)\t(?P<value>0x[0-9a-fA-F]+)\s*(#.*)?$", l)
             if not m:
                 raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
-            typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("param"), 16), int(m.group("value"), 16)
-            if typ == "A":
-                axis_params[(num, add)] = val
-            else:
-                raise ValueError("Unexpected line '%s'" % l.rstrip("\n\r"))
+            num, add, val = int(m.group("num")), int(m.group("param"), 16), int(m.group("value"), 16)
+            axis_params[(num, add)] = val
 
         return axis_params
 
