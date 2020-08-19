@@ -687,19 +687,16 @@ class Scanner(model.Emitter):
         the beam must be turned on. This call is non-blocking.
 
         :param channel_name (str): Name of one of the electron channels, the channel must be running.
-        :param state (str):  "start", or "stop"
+        :param state (str):  "run", or "stop"
         :return: Future object
         """
-        #TODO K.K. check return in case of correct and faulted execution in future (what will be returned for an
-        # incorrect input on the TFS microscope?)
-        if state not in ['start', "stop"]:
+        if state not in ["run", "stop"]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
         est_start = time.time() + 0.1
-        #TODO K.K. double check time estimate of 8 seconds.
         f = ProgressiveFuture(start=est_start,
-                                    end=est_start + 8)  # rough time estimation
+                              end=est_start + 20)  # rough time estimation
         f._move_lock = threading.Lock()
         return self._executor.submitf(f, self.parent.set_autostigmator, channel_name, state)
 
@@ -710,19 +707,17 @@ class Scanner(model.Emitter):
         state of auto_contrast_brightness, beam must be turned on. This call is non-blocking.
 
         :param channel_name (str): Name of one of the electron channels, the channel must be running.
-        :param state (str):  "start", or "stop"
+        :param state (str):  "run", or "stop"
         :return: Future object
 
         """
-        # TODO K.K. check return in case of correct and faulted execution in future (what will be returned for an
-        #  incorrect input on the TFS microscope?)
-        if state not in ['start', "stop"]:
+        if state not in ["run", "stop"]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
         est_start = time.time() + 0.1
         f = ProgressiveFuture(start=est_start,
-                                    end=est_start + 8)  # rough time estimation
+                              end=est_start + 5)  # rough time estimation
         f._move_lock = threading.Lock()
         return self._executor.submitf(f, self.parent.set_auto_contrast_brightness, channel_name, state)
 
@@ -1054,19 +1049,16 @@ class Focus(model.Actuator):
         beam must be turned on. This call is non-blocking.
 
         :param channel_name (str): Name of one of the electron channels, the channel must be running.
-        :param state (str):  "start", or "stop"
+        :param state (str):  "run", or "stop"
         :return: Future object
         """
-        # TODO K.K. check return in case of correct and faulted execution in future (what will be returned for an
-        #  incorrect input on the TFS microscope?)
-        if state not in ['start', "stop", "error"]:
+        if state not in ["run", "stop"]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
         est_start = time.time() + 0.1
-        # TODO K.K. double check time estimate of 8 seconds.
         f = ProgressiveFuture(start=est_start,
-                                    end=est_start + 8)  # rough time estimation
+                              end=est_start + 20)  # rough time estimation
         f._move_lock = threading.Lock()
         return self._executor.submitf(f, self.parent.set_autofocusing, channel_name, state)
 
