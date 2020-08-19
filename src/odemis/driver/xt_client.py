@@ -470,11 +470,17 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_autofocusing(name, state)
 
-    def is_autofocusing(self):
-        """Returns: (bool) True if autofocus is running and False if autofocus is not running."""
+    def is_autofocusing(self, channel_name):
+        """
+        Parameters
+        ----------
+            channel_name (str): Holds the channels name on which the state is checked.
+
+        Returns: (bool) True if autofocus is running and False if autofocus is not running.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.is_autofocusing()
+            return self.server.is_autofocusing(channel_name)
 
     def set_auto_contrast_brightness(self, name, state):
         """
@@ -492,14 +498,18 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_auto_contrast_brightness(name, state)
 
-    def is_running_auto_contrast_brightness(self):
+    def is_running_auto_contrast_brightness(self, channel_name):
         """
+        Parameters
+        ----------
+            channel_name (str): Holds the channels name on which the state is checked.
+
         Returns: (bool) True if auto contrast brightness is running and False if auto contrast brightness is not
         running.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.is_running_auto_contrast_brightness()
+            return self.server.is_running_auto_contrast_brightness(channel_name)
 
     def get_beam_shift(self):
         """Returns: (float) the current beam shift x and y values in meters."""
@@ -574,11 +584,17 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_beam_is_on()
 
-    def is_autostigmating(self):
-        """Returns True if autostigmator is running and False if autostigmator is not running."""
+    def is_autostigmating(self, channel_name):
+        """
+        Parameters
+        ----------
+            channel_name (str): Holds the channels name on which the state is checked.
+
+        Returns True if autostigmator is running and False if autostigmator is not running.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.is_autostigmating()
+            return self.server.is_autostigmating(channel_name)
 
     def set_autostigmator(self, channel_name, state):
         """
