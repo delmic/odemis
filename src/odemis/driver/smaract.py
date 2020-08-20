@@ -1412,7 +1412,7 @@ class MC_5DOF(model.Actuator):
         if value == float("inf"):
             ht = MC_5DOF_DLL.SA_MC_INFINITE
         else:
-            ht = c_uint(int(value * 1000))
+            ht = int(value * 1000)
 
         logging.debug("Setting hold time to %s", ht)
         self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
