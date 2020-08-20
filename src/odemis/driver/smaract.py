@@ -2971,7 +2971,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: ["F4K3", "F4K3", "F4K3"],
+            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
         }
 
         self.target = [0, 0, 0]
