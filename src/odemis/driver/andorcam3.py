@@ -511,7 +511,7 @@ class AndorCam3(model.DigitalCamera):
                     try:
                         f = open(p)
                         snp = f.read().strip()
-                    except IOError:
+                    except (IOError, UnicodeDecodeError):
                         logging.debug("Failed to read %s, skipping device", p)
                     if snp == sn:
                         break
