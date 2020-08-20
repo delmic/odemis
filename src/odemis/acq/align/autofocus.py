@@ -1281,6 +1281,9 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
                 except Exception:
                     logging.exception("Failed to move to 0th order for grating %s", g)
 
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
+
                 tstart = time.time()
                 # Note: we could try to reuse the focus position from the previous
                 # grating or detector, and pass it as good_focus, to save a bit
