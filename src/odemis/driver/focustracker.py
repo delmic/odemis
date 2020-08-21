@@ -78,10 +78,10 @@ class FocusTrackerCO(model.HwComponent):
         self._metadata[model.MD_GAIN_P] = self._proportional_gain_sdo.raw
         self._metadata[model.MD_GAIN_I] = self._integral_gain_sdo.raw
         self._metadata[model.MD_GAIN_I] = self._derivative_gain_sdo.raw
-        self.targetPosition = model.FloatContinuous(self._target_pos_sdo.raw, TARGET_POSITION_RANGE, unit="m",
+        self.targetPosition = model.FloatContinuous(self._get_target_pos(), TARGET_POSITION_RANGE, unit="m",
                                                     getter=self._get_target_pos, setter=self._set_target_pos)
-        self.position = model.FloatVA(self._position_sdo.raw, unit="m", readonly=True, getter=self._get_position)
-        self.tracking = model.BooleanVA(self._tracking_sdo.raw, getter=self._get_tracking,
+        self.position = model.FloatVA(self._get_position(), unit="m", readonly=True, getter=self._get_position)
+        self.tracking = model.BooleanVA(self._get_tracking(), getter=self._get_tracking,
                                         setter=self._set_tracking)
 
     def terminate(self):

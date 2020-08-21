@@ -1412,7 +1412,7 @@ class MC_5DOF(model.Actuator):
         if value == float("inf"):
             ht = MC_5DOF_DLL.SA_MC_INFINITE
         else:
-            ht = c_uint(int(value * 1000))
+            ht = int(value * 1000)
 
         logging.debug("Setting hold time to %s", ht)
         self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_HOLD_TIME, ht)
@@ -2971,7 +2971,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: ["F4K3", "F4K3", "F4K3"],
+            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
         }
 
         self.target = [0, 0, 0]
