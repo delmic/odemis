@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Allows to tune PID values for closed loop moves of Physik Instrumente controllers.
 # It allows to do a move while recording commanded and actual position, and

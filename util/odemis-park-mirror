@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Attempt to park the mirror of the SPARCv2, even if no backend is running
 '''

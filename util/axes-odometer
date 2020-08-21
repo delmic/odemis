@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # A utility to compute the distance travelled by axes out of log messages that
 # look like:
