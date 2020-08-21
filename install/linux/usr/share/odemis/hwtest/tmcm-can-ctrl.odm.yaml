@@ -1,0 +1,20 @@
+SimOptical: {
+    class: Microscope,
+    role: brightfield,
+    children: [Rotator],
+}
+
+Rotator: {
+    class: tmcm.CANController,
+    role: rotator,
+    init: {
+        channel: "can0",
+        node_id: 1,
+        datasheet: "TMCM-1240_CANopen_V322.dcf",
+        axes: {"x"},
+        refproc: "Standard",
+        param_file: "test/tmcm-pd1240.tmcc.tsv",
+        ustepsize: [0.0001227184630308513],  # 2 * math.pi / (200 * 2 ** 8)
+        unit: ["rad"],
+    }
+}

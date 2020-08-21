@@ -581,6 +581,347 @@ class TestActuatorRelEnc(TestActuator):
         pass
 
 
+class TestCanActuator(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            channel = "fake"
+        else:
+            channel = "can0"
+
+        current_dir = os.path.abspath(os.path.dirname(__file__))
+        datasheet = os.path.join(current_dir, "..", 'TMCM-1240_CANopen_V322.dcf')
+        # 200 steps / cycle and 2 ** 8 µsteps per step
+        sz = [2 * math.pi / (200 * 2 ** 8)]  # µstep size in rad
+        cls.dev = tmcm.CANController(name="Can Actuator",
+                                     role=None,
+                                     channel=channel,
+                                     node_id=1,
+                                     datasheet=datasheet,
+                                     axes=['x'],
+                                     refproc="Standard",
+                                     param_file=ABS_PATH + "/tmcm-pd1240.tmcc.tsv",
+                                     ustepsize=sz,
+                                     rng=[[-2 * math.pi, 2 * math.pi]],
+                                     unit=["rad"])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_simple(self):
+        # The accuracy is one encoder step. This value will be improved when using a gearbox.
+        stepsize = 2 * math.pi / 1024  # 1 step, 1024 encoder steps per cycle'
+        accuracy = 2 * stepsize + 1e-5  # allow for some rounding errors
+
+        # First, reference
+        self.dev.reference({'x'}).result()
+
+        # Blocking move
+        self.dev.moveAbsSync({'x': math.pi})
+        self.assertLessEqual(abs(math.pi - self.dev.position.value["x"]), accuracy)  # allow small rounding error
+        self.dev.moveRelSync({'x': -math.pi})
+        self.assertLessEqual(abs(self.dev.position.value["x"]), accuracy)
+
+        # Non-blocking move
+        self.dev.moveAbs({'x': math.pi})
+        time.sleep(0.1)
+        self.dev.moveRelSync({'x': -math.pi})  # rel move will start from next target
+        self.assertLessEqual(abs(self.dev.position.value["x"]), accuracy)
+
+    def test_sync(self):
+        # For moves big enough, sync should always take more time than async
+        delta = 0.0001  # s
+
+        move = {'x': math.pi}
+        start = time.time()
+        f = self.dev.moveRel(move)
+        dur_async = time.time() - start
+        f.result()
+        self.assertTrue(f.done())
+
+        move = {'x': -math.pi}
+        start = time.time()
+        f = self.dev.moveRel(move)
+        f.result()  # wait
+        dur_sync = time.time() - start
+        self.assertTrue(f.done())
+
+        self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
+
+        move = {'x': 1e-3}
+        f = self.dev.moveRel(move)
+        # timeout = 0.001s should be too short for such a long move
+        self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
+        f.cancel()
+
+    def test_linear_pos(self):
+        """
+        Check that the position reported during a move is always increasing
+        (or decreasing, depending on the direction)
+        """
+        move = {'x': math.pi / 4}
+        self.prev_pos = self.dev.position.value
+        self.direction = 1
+        self.dev.position.subscribe(self.pos_listener)
+
+        f = self.dev.moveRel(move)
+
+        f.result()  # wait
+        time.sleep(0.1)  # make sure the listener has also received the info
+
+        # same, in the opposite direction
+        move = {'x': -math.pi / 2}
+        self.direction = -1
+        f = self.dev.moveRel(move)
+        f.result()  # wait
+
+        self.dev.position.unsubscribe(self.pos_listener)
+
+    def pos_listener(self, pos):
+        diff_pos = pos["x"] - self.prev_pos["x"]
+        if diff_pos == 0:
+            return  # no update/change on X
+
+        self.prev_pos = pos
+
+        # TODO: on closed-loop axis it's actually possible to go very slightly
+        # back (at the end, in case of overshoot)
+        self.assertGreater(diff_pos * self.direction, -20e-6)  # negative means opposite dir
+
+    def test_stop(self):
+        self.dev.stop()
+        if "y" in self.dev.axes:
+            a = "y"
+        else:
+            a = next(iter(self.dev.axes.keys()))
+
+        move = {a: math.pi}
+        f = self.dev.moveRel(move)
+        self.assertTrue(f.cancel())
+        self.assertTrue(f.cancelled())
+
+        # Try similar but with stop (should cancel every futures)
+        move = {a: -math.pi}
+        f = self.dev.moveRel(move)
+        time.sleep(0.1)  # also wait a bit, so stop is called in the middle of the move
+        self.dev.stop()
+        self.assertTrue(f.cancelled())
+
+        # Stop queue
+        move_forth = {'x': math.pi}
+        move_back = {'x': -math.pi}
+        f0 = self.dev.moveRel(move_forth)
+        f1 = self.dev.moveRel(move_back)
+        f2 = self.dev.moveRel(move_forth)
+        f3 = self.dev.moveRel(move_back)
+        time.sleep(0.01)
+        self.dev.stop()
+        [self.assertTrue(f.cancelled()) for f in [f0, f1, f2, f3]]
+
+    def test_queue(self):
+        # long moves
+        move_forth = {'x': math.pi}
+        move_back = {'x': -math.pi}
+        start = time.time()
+        expected_time = 4 * move_forth["x"] / self.dev.speed.value["x"]
+        logging.info("Speed = %g m/s -> expecting %g s", self.dev.speed.value["x"], expected_time)
+        f0 = self.dev.moveRel(move_forth)
+        f1 = self.dev.moveRel(move_back)
+        f2 = self.dev.moveRel(move_forth)
+        f3 = self.dev.moveRel(move_back)
+
+        # intentionally skip some sync (it _should_ not matter)
+        #        f0.result()
+        f1.result()
+        #        f2.result()
+        f3.result()
+
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, expected_time)
+
+    def test_cancel(self):
+        # long moves
+        move_forth = {'x': math.pi / 4}
+        move_back = {'x': -math.pi / 4}
+        # test cancel during action
+        f = self.dev.moveRel(move_forth)
+        time.sleep(0.01)  # to make sure the action is being handled
+        self.assertTrue(f.running())
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
+        pos = self.dev.position.value
+        self.assertNotAlmostEqual(move_forth["x"], pos["x"])
+
+        # test cancel in queue
+        f1 = self.dev.moveRel(move_forth)
+        f2 = self.dev.moveRel(move_back)
+        f2.cancel()
+        self.assertFalse(f1.done())
+        self.assertTrue(f2.cancelled())
+        self.assertTrue(f2.done())
+
+        # test cancel after already cancelled
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        self.assertTrue(f.done())
+
+        f1.result()  # wait for the move to be finished
+
+    def test_not_cancel(self):
+        small_move_forth = {'x': 0.1}
+        # test cancel after done => not cancelled
+        f = self.dev.moveRel(small_move_forth)
+        time.sleep(1)
+        self.assertFalse(f.running())
+        f.cancel()
+        self.assertFalse(f.cancelled())
+        self.assertTrue(f.done())
+
+        # test cancel after result()
+        f = self.dev.moveRel(small_move_forth)
+        f.result()
+        f.cancel()
+        self.assertFalse(f.cancelled())
+        self.assertTrue(f.done())
+
+        # test not cancelled
+        f = self.dev.moveRel(small_move_forth)
+        f.result()
+        self.assertFalse(f.cancelled())
+        self.assertTrue(f.done())
+
+    def test_move_circle(self):
+
+        radius = 1e-3  # m
+        # each step has to be big enough so that each move is above imprecision
+        steps = 100
+        cur_pos = (0, 0)
+        move = {}
+        for i in range(steps):
+            next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
+                        radius * math.sin(2 * math.pi * float(i) / steps))
+            move['x'] = next_pos[0] - cur_pos[0]
+            print(next_pos, move)
+            f = self.dev.moveRel(move)
+            f.result()  # wait
+            cur_pos = next_pos
+
+    def test_future_callback(self):
+        move_forth = {'x': math.pi / 4}
+        move_back = {'x': -math.pi / 4}
+
+        # test callback while being executed
+        self.called = 0
+        f = self.dev.moveRel(move_forth)
+        time.sleep(0.0)  # give it some time to be scheduled (but not enough to be finished)
+        f.add_done_callback(self.callback_test_notify)
+        f.result()
+        time.sleep(0.01)  # make sure the callback had time to be called
+        self.assertEquals(self.called, 1)
+        self.assertTrue(f.done())
+
+        # test callback while in the queue
+        self.called = 0
+        f1 = self.dev.moveRel(move_back)
+        f2 = self.dev.moveRel(move_forth)
+        f2.add_done_callback(self.callback_test_notify)
+        self.assertFalse(f1.done())
+        f2.result()
+        self.assertTrue(f1.done())
+        time.sleep(0.01)  # make sure the callback had time to be called
+        self.assertEquals(self.called, 1)
+        self.assertTrue(f2.done())
+
+        # It should work even if the action is fully done
+        f2.add_done_callback(self.callback_test_notify2)
+        self.assertEquals(self.called, 2)
+
+        # test callback called after being cancelled
+        move_forth = {'x': 12e-3}
+        self.called = 0
+        f = self.dev.moveRel(move_forth)
+        time.sleep(0.0)
+        self.assertTrue(f.cancel())  # Returns false if already over
+        f.add_done_callback(self.callback_test_notify)
+        time.sleep(0.01)  # make sure the callback had time to be called
+        self.assertEquals(self.called, 1)
+        self.assertTrue(f.cancelled())
+
+    def callback_test_notify(self, future):
+        self.assertTrue(future.done())
+        self.called += 1
+        # Don't display future with %s or %r as it uses lock, which can deadlock
+        # with the logging
+        logging.debug("received done for future %s", id(future))
+
+    def callback_test_notify2(self, future):
+        self.assertTrue(future.done())
+        self.called += 1
+        logging.debug("received (2) done for future %s", id(future))
+
+    def test_reference(self):
+        """
+        Try referencing each axis
+        """
+        axes = set(self.dev.referenced.value.keys())  # don't reference do axes (raises error)
+        accuracy = 2 * math.pi / 1024  # 1 step, 1024 encoder steps per cycle, will be more accurate with gear box
+
+        # first try one by one
+        for a in axes:
+            self.dev.moveRelSync({a: -math.pi / 4})  # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            f.result()
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertLessEqual(self.dev.position.value[a], accuracy + 1e-3)
+
+        # try all axes simultaneously
+        mv = {a: 1e-3 for a in axes}
+        self.dev.moveRel(mv)
+        f = self.dev.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertLess(self.dev.position.value[a], accuracy + 1e-3)
+
+    def test_ref_cancel(self):
+        """
+        Try cancelling referencing
+        """
+        axes = set(self.dev.referenced.value.keys())
+        accuracy = 2 * math.pi / 1024  # 1 step, 1024 encoder steps per cycle, will be more accurate with gear box
+
+        # first try one by one => cancel during ref
+        for a in axes:
+            self.dev.moveRelSync({a: math.pi / 8})  # move a bit
+            f = self.dev.reference({a})
+            self.assertTrue(f.cancel())
+            self.assertFalse(self.dev.referenced.value[a])
+            self.assertTrue(f.cancelled())
+            return
+        # try cancelling too late (=> should do nothing)
+        for a in axes:
+            self.dev.moveRelSync({a: -math.pi / 8})  # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            f.result()
+            self.assertFalse(f.cancel())
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertLessEqual(abs(self.dev.position.value[a]), accuracy + 1e-3)
+            self.assertFalse(f.cancelled())
+
+        # try all axes simultaneously, and cancel during ref
+        # (for now all the axes are referenced)
+        self.dev.moveRelSync({'x': -math.pi / 8})  # move a bit
+        f = self.dev.reference(axes).result()
+        time.sleep(0.5)  # wait for it to start
+        # self.assertTrue(f.cancel())
+        # self.assertTrue(f.cancelled())
+        # # Some axes might have had time to be referenced, but not all
+        # self.assertFalse(all(self.dev.referenced.value.values()))
+
+
 if __name__ == "__main__":
     unittest.main()
 
