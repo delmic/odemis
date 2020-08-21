@@ -21,28 +21,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from builtins import range
 import cairo
 import logging
 import numpy
-import os
-import threading
-import time
-import unittest
-import wx
-from builtins import range
-
 from odemis import model, dataio
 from odemis.acq import stream
-from odemis.gui.util import img
-from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen
-from odemis.dataio import tiff
 from odemis.acq.stream import SinglePointSpectrumProjection, \
     RGBSpatialProjection, LineSpectrumProjection, \
     SinglePointTemporalProjection, POL_POSITIONS, POL_POSITIONS_RESULTS
-import odemis.gui.test as test
-from odemis.gui.model import TOOL_RULER, TOOL_LABEL
-import odemis.gui.comp.miccanvas as miccanvas
+from odemis.dataio import tiff
 from odemis.gui.comp.overlay import world as wol
+from odemis.gui.model import TOOL_RULER, TOOL_LABEL
+from odemis.gui.util import img
+from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen, \
+    calculate_ticks
+import os
+import time
+import unittest
+import wx
+
+import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.test as test
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -114,6 +114,38 @@ class TestRGBA(unittest.TestCase):
         # Check the channels were swapped to BGR
         self.assertTrue((bgraim[1, 1] == [200, 100, 1, 255]).all())
         self.assertTrue((bgraim[2, 2] == [200, 100, 1, 0]).all())
+
+
+class TestCalculateTicks(unittest.TestCase):
+
+    def test_simple(self):
+        # Various "simple" inputs which should return a couple of ticks with a value to pixel ratio > 0
+        ranges = [(100, 1000), (0, 9500), (1e-3, 8e-3), (-5, 6), (-2, -1000)]
+
+        csize = (500, 600)
+        for rng in ranges:
+
+            ticks, vtp = calculate_ticks(rng, csize, wx.HORIZONTAL, csize[0] / 10)
+            # we expect 10 ticks or a bit less
+            self.assertGreaterEqual(len(ticks), 4)
+            self.assertLessEqual(len(ticks), 20)
+            # ticks are made of 2 values
+            self.assertEqual(len(ticks[0]), 2)
+            self.assertGreater(vtp, 0)
+
+            ticks, vtp = calculate_ticks(rng, csize, wx.VERTICAL, csize[1] / 30)
+            # we expect 30 ticks or a bit less
+            self.assertGreaterEqual(len(ticks), 10)
+            self.assertLessEqual(len(ticks), 30)
+            # ticks are made of 2 values
+            self.assertEqual(len(ticks[0]), 2)
+            self.assertGreater(vtp, 0)
+
+    def test_empty_range(self):
+        # Should display just one tick: the value of the range
+        ticks, vtp = calculate_ticks((900, 900), (50, 600), wx.HORIZONTAL, 20)
+        self.assertEqual(len(ticks), 1)
+        self.assertEqual(len(ticks[0]), 2)
 
 
 class TestARExport(unittest.TestCase):
