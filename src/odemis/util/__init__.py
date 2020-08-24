@@ -102,6 +102,26 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     return False
 
 
+def rot_almost_equal(a, b, atol=1e-18, rtol=1e-7):
+    """
+    Check the rotation difference between two radian angles is within a margin
+    a (float) an angle, in radians
+    b (float) an angle, in radians
+    atol (float): absolute tolerance
+    rtol (float): relative tolerance
+    returns (bool): True if a and b rotation is within a margin
+    """
+    if a == b:
+        return True
+
+    tau = 2 * math.pi
+    tol = max(atol, max(abs(a % tau), abs(b % tau)) * rtol)
+    if abs(((a - b) + math.pi) % tau - math.pi) <= tol:
+        return True
+
+    return False
+
+
 if sys.version_info[0] < 3:
     def to_str_escape(s):
         """
