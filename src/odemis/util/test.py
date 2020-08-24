@@ -111,7 +111,7 @@ def stop_backend():
 def assert_pos_almost_equal(actual, expected, match_all=True, *args, **kwargs):
     """
     Asserts that two stage positions have almost equal coordinates.
-    :param match_all: if False, only the expected keys are checked, and actual can have more keys
+    :param match_all: (bool) if False, only the expected keys are checked, and actual can have more keys
     """
     if match_all and set(expected.keys()) != set(actual.keys()):
         raise AssertionError("Dimensions of position do not match: %s != %s" %
@@ -120,6 +120,24 @@ def assert_pos_almost_equal(actual, expected, match_all=True, *args, **kwargs):
     for k in expected.keys():
         if not util.almost_equal(actual[k], expected[k], *args, **kwargs):
             raise AssertionError("Position %s != %s" % (actual, expected))
+
+
+def assert_pos_not_almost_equal(actual, expected, match_all=True, *args, **kwargs):
+    """
+    Asserts that two stage positions do not have almost equal coordinates. This means at least one of the axes has a
+    different value.
+    :param match_all: (bool) if False, only the expected keys are checked, and actual can have more keys
+    """
+    if match_all and set(expected.keys()) != set(actual.keys()):
+        raise AssertionError("Dimensions of position do not match: %s != %s" %
+                             (list(actual.keys()), list(expected.keys())))
+
+    # Check that at least one of the axes not equal
+    for k in expected.keys():
+        if not util.almost_equal(actual[k], expected[k], *args, **kwargs):
+            return
+    # Otherwise coordinates are almost equal
+    raise AssertionError("Position %s == %s" % (actual, expected))
 
 
 def assert_array_not_equal(a, b, msg="Arrays are equal"):
