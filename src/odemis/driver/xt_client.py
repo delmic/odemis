@@ -681,16 +681,17 @@ class Scanner(model.Emitter):
         self._va_poll.start()
 
     @isasync
-    def apply_autostigmator(self, channel_name, state):
+    def applyAutoStigmator(self, channel_name, state):
         """
         Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-        the beam must be turned on. This call is non-blocking.
+        the beam must be turned on unblanked. This call is non-blocking.
 
-        :param channel_name (str): Name of one of the electron channels, the channel must be running.
+        :param channel_name (str): Name of one of the electron channels, if the channel is not running, it will start
+        running
         :param state (str):  "run", or "stop"
         :return: Future object
         """
-        if state not in ["run", "stop"]:
+        if state not in [XT_RUN, XT_STOP]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
@@ -701,17 +702,18 @@ class Scanner(model.Emitter):
         return self._executor.submitf(f, self.parent.set_autostigmator, channel_name, state)
 
     @isasync
-    def apply_auto_contrast_brightness(self, channel_name, state):
+    def applyAutoContrastBrightness(self, channel_name, state):
         """
-        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It sets the
-        state of auto_contrast_brightness, beam must be turned on. This call is non-blocking.
+        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It sets
+        the state of auto_contrast_brightness, the beam must be turned on unblanked. Auto contrast brightness works
+        best if there is a feature visible in the image. This call is non-blocking.
 
         :param channel_name (str): Name of one of the electron channels, the channel must be running.
         :param state (str):  "run", or "stop"
         :return: Future object
 
         """
-        if state not in ["run", "stop"]:
+        if state not in [XT_RUN, XT_STOP]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
@@ -1043,16 +1045,18 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def apply_autofocus(self, channel_name, state):
+    def applyAutofocus(self, channel_name, state):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
-        beam must be turned on. This call is non-blocking.
+        the beam must be turned on unblanked. Also a a reasonable manual focus is needed. When the image is to far
+        out of focus not correct focus can be found using the autofocus functionality.
+        This call is non-blocking.
 
         :param channel_name (str): Name of one of the electron channels, the channel must be running.
         :param state (str):  "run", or "stop"
         :return: Future object
         """
-        if state not in ["run", "stop"]:
+        if state not in [XT_RUN, XT_STOP]:
             raise ValueError("Invalid state provided")
 
         # Create ProgressiveFuture and update its state
