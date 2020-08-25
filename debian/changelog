@@ -1,3 +1,14 @@
+odemis (3.0.5-1) xenial; urgency=medium
+
+  * New version 3.0.5
+  * Main bug fixes (mostly for the Python 3 early-lovers):
+    - Fix the model selector when using Python 3
+    - Fix odemis-start never using the development version, even if selected
+    - Fix andorcam3 not checking that the camera is over USB3
+    - Fix some old PI controllers with Python 3 when sending weird multi-lines
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 25 Aug 2020 16:50:48 +0200
+
 odemis (3.0.4-1) xenial; urgency=medium
 
   * New version 3.0.4
