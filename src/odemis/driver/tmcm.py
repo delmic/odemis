@@ -31,6 +31,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from past.builtins import basestring
 import glob
 import logging
 import os
@@ -42,17 +43,21 @@ import threading
 from collections import OrderedDict
 from concurrent.futures import CancelledError
 
-import canopen
-from can import CanError
-from canopen.nmt import NmtError
-from canopen.sdo.exceptions import SdoAbortedError
+try:
+    import canopen
+    from can import CanError
+    from canopen.nmt import NmtError
+    from canopen.sdo.exceptions import SdoAbortedError
+    from canopen.profiles.p402 import Homing, State402
+except ImportError:
+    # Do not fail if python-can or python-canopen are not installed
+    canopen = None
+
 import fcntl
 import math
 import numpy
 import serial
 import time
-from canopen.profiles.p402 import Homing, State402
-from past.builtins import basestring
 
 import odemis
 from odemis import model, util
@@ -2590,6 +2595,12 @@ class CANController(model.Actuator):
           None to indicate it's not possible (no reference/limit switch) or the
           name of the procedure. For now only "Standard" is accepted.
         """
+
+        # If canopen module is not available, only fail loading at runtime, as
+        # to allow still loading the Serial/USB TMCM component
+        # TODO: drop it once python3-canopen is part of the Odemis dependencies
+        if canopen is None:
+            raise HwError("CANopen module missing, run \"sudo apt install python-canopen python3-canopen\".")
 
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" % (len(axes), ustepsize))
