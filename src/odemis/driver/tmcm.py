@@ -3454,7 +3454,7 @@ class CANNodeSimulator(object):
     def op_mode(self, val):
         if self._op_mode == val:
             # canopen library raises error if new opmode is the same as previous opmode
-            raise ValueError("Opmode already %s." % val)
+            raise SdoAbortedError("Opmode already %s." % val)
         self._op_mode = val
 
     @property
