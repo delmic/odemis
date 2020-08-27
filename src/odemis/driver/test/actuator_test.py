@@ -1282,36 +1282,35 @@ STEP_SIZE = 5.9e-9
 
 class TestLinkedHeightActuator(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
         """
         Construct LinkedHeightActuator object with its dependants and child focus
         """
         # Construct the underlying sample and lens stages
         # Using TMCLController to correctly simulate movement
-        cls.sample_stage = tmcm.TMCLController(name="sample_stage", role="test_sample",
+        self.sample_stage = tmcm.TMCLController(name="sample_stage", role="test_sample",
                                                port="/dev/fake6",
                                                axes=["x", "y", "z", "rx", "rz"],
                                                ustepsize=[STEP_SIZE, STEP_SIZE, STEP_SIZE, STEP_SIZE, STEP_SIZE],
                                                rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3], [-0.4293, 0.4293],
                                                     [-0.4293, 0.4293]],
                                                refproc="Standard")
-        cls.lens_stage = tmcm.TMCLController(name="lens_stage", role="test_lens",
+        self.lens_stage = tmcm.TMCLController(name="lens_stage", role="test_lens",
                                              port="/dev/fake3",
                                              axes=["x", "y", "z"],
                                              ustepsize=[STEP_SIZE, STEP_SIZE, STEP_SIZE],
                                              rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3]],
                                              refproc="Standard")
-        cls.lens_stage.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -6.e-3}})
+        self.lens_stage.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -6.e-3}})
         # Create Linked height stage from the dependant stages
-        cls.stage = LinkedHeightActuator("Linked Stage Z", "stage",
-                                         children={"focus": {"name": "LinkedHeightFocus", "role": "focus",
-                                                             "rng": [0, 4.2e-3]}},
-                                         dependencies={"stage": cls.sample_stage, "lensz": cls.lens_stage}, )
-        cls.focus = next((c for c in cls.stage.children.value if c.role == 'focus'), None)
-        if not isinstance(cls.focus, LinkedHeightFocus):
+        self.stage = LinkedHeightActuator("Linked Stage Z", "stage",
+                                     children={"focus": {"name": "LinkedHeightFocus", "role": "focus",
+                                                         "rng": [0, 4.2e-3]}},
+                                     dependencies={"stage": self.sample_stage, "lensz": self.lens_stage}, )
+        self.focus = next((c for c in self.stage.children.value if c.role == 'focus'), None)
+        if not isinstance(self.focus, LinkedHeightFocus):
             raise Exception("Focus should be an instance of LinkedHeightFocus")
-        cls.focus.updateMetadata({model.MD_POS_COR: {'z': -0.0045}})
+        self.focus.updateMetadata({model.MD_POS_COR: {'z': -0.0045}})
 
     def test_move_abs(self):
         """
