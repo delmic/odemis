@@ -580,8 +580,19 @@ class GlobalShiftRegistrar(object):
                     self.tiles[i].append(None)
                     self.shifts_hor[i].append(None)
                     self.shifts_ver[i].append(None)
-        else:
+        elif abs(hor_diff) == 0 and abs(ver_diff) == 0:
             raise ValueError("Cannot insert multiple tiles at the same position.")
+        elif abs(ver_diff) == abs(hor_diff):
+            # Purely diagonal shift. In practice, this will never happen because the smallest difference will be
+            # picked up by one of the previous if-statements. This exception is likely to be triggered only in
+            # artificial tests.
+            raise ValueError("Horizontal and vertical shift are exactly equal and show a pure diagonal shift which is "
+                             "a sign of missing tile.")
+        else:
+            # This should never happen
+            raise ValueError("Unexpected error. Was not able to insert the tile into the grid for a horizontal "
+                             "difference of %s meters with the closest tile and a vertical difference of %s meters "
+                             "with the closest tile." % (hor_diff, ver_diff))
 
         self.tiles[row][col] = tile
         self.acq_order.append([row, col])
