@@ -70,6 +70,7 @@ class TestMicroscope(unittest.TestCase):
             self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
+        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def test_acquisition(self):
         """Test acquiring an image."""
@@ -114,6 +115,18 @@ class TestMicroscope(unittest.TestCase):
         with self.assertRaises(Exception):
             f = self.stage.moveAbs(position)
             f.result()
+
+    def test_stop_stage_movement(self):
+        """Test that stopping stage movement, stops moving the stage."""
+        init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
+        # move stage to a different position
+        position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
+        self.microscope.move_stage(position)
+        self.microscope.stop_stage_movement()
+        time.sleep(1)
+        self.assertFalse(self.microscope.stage_is_moving())
+        # Move stage back to initial position
+        self.microscope.move_stage(init_pos)
 
     def test_set_scan_field_size(self):
         """
@@ -163,7 +176,8 @@ class TestMicroscope(unittest.TestCase):
     def test_set_selected_area(self):
         """Test setting a selected area in the field of view."""
         start_pos = (0, 0)
-        size = (200, 200)
+        area_range = self.microscope.selected_area_info()["range"]
+        size = (area_range[0][1] - 100, area_range[1][1] - 100)
         self.microscope.set_selected_area(start_pos, size)
         x, y, w, h = self.microscope.get_selected_area()
         self.assertEqual(start_pos + size, (x, y, w, h))
@@ -171,6 +185,7 @@ class TestMicroscope(unittest.TestCase):
         size = (20000, 200)
         with self.assertRaises(Exception):
             self.microscope.set_selected_area(start_pos, size)
+        self.microscope.reset_selected_area()
 
     def test_reset_selected_area(self):
         """Test resetting the selected area to select the entire image.."""
@@ -214,7 +229,9 @@ class TestMicroscope(unittest.TestCase):
         self.assertAlmostEqual(new_voltage, self.scanner.accelVoltage.value)
 
     def test_blank_beam(self):
-        """Test that the beam is blanked after blank beam is called."""
+        """Test that the beam is unblanked after unblank beam is called, and blanked after blank is called."""
+        self.scanner.blanker.value = False
+        self.assertFalse(self.scanner.blanker.value)
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
@@ -275,6 +292,137 @@ class TestMicroscope(unittest.TestCase):
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+
+    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    def test_beam_power(self):
+        """Test turning the beam on and off."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        self.microscope.set_beam_power(True)
+        beam_on = self.microscope.get_beam_is_on()
+        self.assertTrue(beam_on)
+        self.microscope.set_beam_power(False)
+        beam_on = self.microscope.get_beam_is_on()
+        self.assertFalse(beam_on)
+
+    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    def test_autofocus(self):
+        """Test running and stopping autofocus."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        self.microscope.set_beam_power(True)
+        self.microscope.unblank_beam()
+        self.microscope.set_scan_mode("full_frame")
+        self.microscope.set_autofocusing("electron1", "run")
+        self.assertTrue(self.microscope.is_autofocusing("electron1"))
+        time.sleep(0.5)  # wait for the system to register it started running autofocus.
+        t = time.time()
+        while self.microscope.is_autofocusing("electron1"):
+            if time.time() - t > 20:
+                self.microscope.set_autofocusing("electron1", "stop")
+                raise ValueError("Stopping autofocus, taking too long. ")
+            time.sleep(0.01)
+            continue
+        self.assertFalse(self.microscope.is_autofocusing("electron1"))
+        self.microscope.set_autofocusing("electron1", "run")
+        self.microscope.set_autofocusing("electron1", "stop")
+        self.assertFalse(self.microscope.is_autofocusing("electron1"))
+        self.microscope.set_beam_power(False)
+
+    @unittest.skip("Autostigmation not working. And: Before running this test "
+                   "make sure it is safe to turn on the beam.")
+    def test_autostigmator(self):
+        """Test running and stopping autostigmator."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        self.microscope.set_beam_power(True)
+        self.microscope.unblank_beam()
+        self.microscope.set_scan_mode("full_frame")
+        self.microscope.set_autostigmator("electron1", "run")
+        self.assertTrue(self.microscope.is_autostigmating("electron1"))
+        self.microscope.set_autostigmator("electron1", "stop")
+        self.assertFalse(self.microscope.is_autostigmating("electron1"))
+        self.microscope.set_beam_power(False)
+
+    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    def test_auto_contrast_brightness(self):
+        """Test running and stopping auto contrast brightness."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        self.microscope.set_beam_power(True)
+        self.microscope.set_scan_mode("full_frame")
+        self.microscope.set_auto_contrast_brightness("electron1", "run")
+        auto_cb_running = self.microscope.is_running_auto_contrast_brightness("electron1")
+        self.assertTrue(auto_cb_running)
+        time.sleep(0.5)  # wait for the system to register it started running auto contrast brightness.
+        t = time.time()
+        while self.microscope.is_running_auto_contrast_brightness("electron1"):
+            if time.time() - t > 20:
+                self.microscope.set_auto_contrast_brightness("electron1", "stop")
+                raise ValueError("Stopping auto contrast brightness, taking too long. ")
+            time.sleep(0.01)
+        self.microscope.set_auto_contrast_brightness("electron1", "run")
+        self.microscope.set_auto_contrast_brightness("electron1", "stop")
+        auto_cb_running = self.microscope.is_running_auto_contrast_brightness("electron1")
+        self.assertFalse(auto_cb_running)
+        self.microscope.set_beam_power(False)
+
+    def test_scan_mode(self):
+        """Test setting the scan mode to a different mode."""
+        init_scan_mode = self.microscope.get_scan_mode()
+        self.microscope.set_scan_mode("external")
+        self.assertEqual(self.microscope.get_scan_mode(), "external")
+        self.microscope.set_scan_mode("full_frame")
+        self.assertEqual(self.microscope.get_scan_mode(), "full_frame")
+        # Set scan mode back to initial value
+        self.microscope.set_scan_mode(init_scan_mode)
+
+    def test_get_pressure(self):
+        pressure = self.microscope.get_pressure()
+        self.assertTrue(isinstance(pressure, (int, float)))
+
+    def test_free_working_distance(self):
+        """Test setting and getting the free working distance."""
+        fwd_range = self.microscope.fwd_info()["range"]
+        init_fwd = self.microscope.get_free_working_distance()
+        new_fwd = init_fwd + 1e-6
+        new_fwd = new_fwd if fwd_range[0] < new_fwd < fwd_range[1] else init_fwd - 1e-6
+        self.microscope.set_free_working_distance(new_fwd)
+        self.assertEqual(new_fwd, self.microscope.get_free_working_distance())
+        # Set free working distance back to initial value
+        self.microscope.set_free_working_distance(init_fwd)
+
+    def test_fwd_follows_z(self):
+        """Test setting fwd follows z."""
+        init_fwd_follows_z = self.microscope.get_fwd_follows_z()
+        self.microscope.set_fwd_follows_z(True)
+        fwd_follows_z = self.microscope.get_fwd_follows_z()
+        self.assertTrue(fwd_follows_z)
+        self.microscope.set_fwd_follows_z(False)
+        fwd_follows_z = self.microscope.get_fwd_follows_z()
+        self.assertFalse(fwd_follows_z)
+        # Set fwd follows z back to initial value
+        self.microscope.set_fwd_follows_z(init_fwd_follows_z)
+
+    def test_stigmator(self):
+        """Test setting and getting stigmator values."""
+        stig_range = self.microscope.stigmator_info()["range"]
+        init_stig = self.microscope.get_stigmator()
+        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
+        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-6
+        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-6
+        new_stig = (stig_x, stig_y)
+        self.microscope.set_stigmator(*new_stig)
+        self.assertEqual(self.microscope.get_stigmator()[0], new_stig[0])
+        self.assertEqual(self.microscope.get_stigmator()[1], new_stig[1])
+        self.microscope.set_stigmator(*init_stig)
+
+    def test_rotation(self):
+        """Test setting the rotation."""
+        init_rotation = self.scanner.rotation.value
+        self.scanner.rotation.value += 0.01
+        self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
+        self.scanner.rotation.value = init_rotation
 
 
 if __name__ == '__main__':
