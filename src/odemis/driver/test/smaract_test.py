@@ -363,7 +363,8 @@ CONFIG_3DOF = {"name": "3DOF",
 if TEST_NOHW:
     CONFIG_3DOF['locator'] = 'fake'
 
-class TestTMCS2(unittest.TestCase):
+
+class TestMCS2(unittest.TestCase):
     """
     Tests cases for the SmarAct MCS2 controller
     """
