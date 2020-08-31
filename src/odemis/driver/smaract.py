@@ -2377,6 +2377,9 @@ class MCS2(model.Actuator):
         except SA_CTLError as ex:
             if ex.errno == SA_CTLDLL.SA_CTL_ERROR_DEVICE_NOT_FOUND:
                 raise model.HwError("Failed to find device, check it is connected and turned on")
+            elif ex.errno == SA_CTLDLL.SA_CTL_ERROR_NO_SENSOR_PRESENT:
+                raise model.HwError("Failed to find any axis, check the actuators are connected to the controller")
+
             raise
         logging.debug("Connected to SA_CTL Controller ID %d with %d channels", self._id.value, self._get_number_of_channels())
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
