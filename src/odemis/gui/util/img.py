@@ -822,18 +822,18 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     """
     Calculate which values in the range to represent as ticks on the axis
 
-    value_range (tuple of floats): value range
-    client_size (int, int): number of pixels in X,Y
-    orientation (int): legend orientation
-    tick_spacing (float): space between ticks
+    value_range (float, float): values at the bottom and top (can be in any order)
+    client_size (int > 0, int > 0): number of pixels in X,Y
+    orientation (wx.HORIZONTAL or wx.VERTICAL): legend orientation
+    tick_spacing (float > 0): approximate space between ticks (number of pixels)
 
     returns (list of tuples of floats): list of pixel position and value pairs
             (float): value to pixel ratio
-
     """
 
     if value_range is None:
-        return
+        logging.info("Trying to compute legend tick without range")
+        return None, None
 
     min_val, max_val = value_range
 
@@ -860,24 +860,28 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     vtp_ratio = abs(pixel_space / value_space)  # px/unit
     epsilon = (1 / vtp_ratio) / 10  # "tiny" value: a 10th of a pixel
 
-    num_ticks = pixel_space // tick_spacing
+    # Find the ticks to show so that it looks good for the user. It must have a
+    # constant spacing between the ticks, and this spacing should be a "easy
+    # number": 1, 2, 5, 7.5, or any of these values multiplied by a power of 10.
+    # For example, 150 is not good, but 200 is fine.
 
-    # set the list of possible value steps
-    spacing_values = [1, 2, 5, 7.5]
+    # minimum number of ticks that we want
+    num_ticks = max(2, pixel_space // tick_spacing + 1)
 
-    # set the initial value of value_step
-    value_step = abs(value_space) / (num_ticks + 1)
+    # minimum tick spacing for getting the number of ticks
+    min_value_step = abs(value_space) / (num_ticks - 1)
 
-    while value_step and abs(value_space)/value_step > num_ticks:
-        # round down to a power of 10
-        power = int(math.log10(value_step))
-        for step in spacing_values:
-            value_step = step * 10 ** power
-            if abs(value_space) / value_step < num_ticks:
-                break
-    logging.debug("Value step is %s with range %s", value_step, value_space)
+    # Start with the power of 10 just below
+    power = math.floor(math.log10(min_value_step))
 
-    first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
+    for step in [1, 2, 5, 7.5, 10]:
+        value_step = step * 10 ** power
+        if value_step > min_value_step:
+            break
+    logging.debug("Value step is %s with range %s and requested spacing %s px",
+                  value_step, value_space, tick_spacing)
+
+    first_val = (int(min_val / value_step) + 1) * value_step
     # logging.debug("Setting first tick at value %s", first_val)
 
     tick_values = [min_val] if min_val == 0 else []

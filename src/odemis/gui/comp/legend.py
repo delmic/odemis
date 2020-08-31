@@ -280,7 +280,7 @@ class AxisLegend(wx.Panel):
 
         self._orientation = orientation
         self._max_tick_width = 32  # Largest pixel width of any label in use
-        self._tick_spacing = 60
+        self._tick_spacing = 50
         self._unit = None
         self._lo_ellipsis = False
         self._hi_ellipsis = False
@@ -293,8 +293,8 @@ class AxisLegend(wx.Panel):
             self.SetMinSize((42, -1))
 
         # The following properties are volatile, meaning that they can change often
-        self._value_range = None  # 2 tuple with the minimum and maximum value
-        self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
+        self._value_range = None  # 2-tuple with the minimum and maximum value
+        self._tick_list = None  # List of 2-tuples, containing the pixel position and value
         self._vtp_ratio = None  # Ratio to convert value to pixel
         self._pixel_space = None  # Number of available pixels
 
