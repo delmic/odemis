@@ -80,26 +80,35 @@ class TestBeamShiftController(unittest.TestCase):
         """
         shift = (0, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=9)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (-5e-6, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(numpy.subtract(self.bc.shift.value, shift), (0, 0), places=7)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (-5e-6, -5e-6)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(numpy.subtract(self.bc.shift.value, shift), (0, 0), places=7)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (0, -5e-6)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(numpy.subtract(self.bc.shift.value, shift), (0, 0), places=7)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
 
         shift = (0, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(numpy.subtract(self.bc.shift.value, shift), (0, 0), places=7)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+
+        # Large shift
+        shift = (500e-6, 0)
+        with self.assertRaises(ValueError):
+            self.bc.shift.value = shift
+
+        shift = (0, 500e-6)
+        with self.assertRaises(ValueError):
+            self.bc.shift.value = shift
 
     def test_write_time(self):
         startt = time.time()
@@ -107,7 +116,7 @@ class TestBeamShiftController(unittest.TestCase):
         self.bc.shift.value = shift
         self.assertLess(time.time() - startt, 0.03, "Reading/writing took more than 30 ms.")
         logging.debug("Shift value set to %s", self.bc.shift.value)
-        self.assertTupleAlmostEqual(numpy.subtract(self.bc.shift.value, shift), (0, 0), places=7)
+        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
 
     def test_transform_coordinates(self):
         val = (0, 4e-6)
@@ -117,9 +126,23 @@ class TestBeamShiftController(unittest.TestCase):
               (0.0006217507619527259, 0.00012699407486043473))
         expected = [0x6f7e, 0x835f, 0x7874, 0x7e75]  # from testing with example script
         ret = tfsbc.transform_coordinates(val, *md)
-        self.assertTupleAlmostEqual(ret, expected, places=5)
+        self.assertEqual(ret, expected)
         rev = tfsbc.transform_coordinates_reverse(ret, *md)
         self.assertTupleAlmostEqual(val, rev, places=5)
+
+    def test_update_incorrect_md(self):
+        bs = (-0.00027788219369730165, 0.0013604844623992785)
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        bs = None
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        bs = ((-0.00027788219369730165, 0.0013604844623992785))
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        bs = ((-0.00027788219369730165), (-0.00027788219369730165, 0.0013604844623992785),
+              (-0.00027788219369730165, 0.0013604844623992785), (-0.00027788219369730165, 0.0013604844623992785))
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        bs = (("-0.00027788219369730165", "0.0013604844623992785"), (-0.00027788219369730165, 0.0013604844623992785),
+              (-0.00027788219369730165, 0.0013604844623992785), (-0.00027788219369730165, 0.0013604844623992785))
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
 
 
 if __name__ == "__main__":

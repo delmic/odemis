@@ -104,7 +104,7 @@ def transform_coordinates(value, xlower, ylower, xupper, yupper):
     currLY = DCREVERSCOEF * DCROTLOWYY * dc_ylower
 
     for current in [currLX, currLY, currUX, currUY]:
-        if current < C_MIN_DBL_SHIFT or current > C_MAX_DBL_SHIFT:
+        if not C_MIN_DBL_SHIFT <= current <= C_MAX_DBL_SHIFT:
             raise ValueError("Beam deflection %s exceeds limits (%s, %s) of DC coils."
                              % (current, C_MIN_DBL_SHIFT, C_MAX_DBL_SHIFT))
 
@@ -144,9 +144,6 @@ def transform_coordinates_reverse(register_values, xlower, ylower, xupper, yuppe
     b = numpy.array([dc_xupper, dc_xlower, dc_yupper, dc_ylower])
     value, *_ = numpy.linalg.lstsq(A, b)
 
-    # A = numpy.array([[xupper[0], yupper[0]], [xlower[0], ylower[0]]])
-    # b = numpy.array([dc_xupper, dc_xlower])
-    # value = numpy.linalg.solve(A, b)
     value = (value[0] * 1e-6, value[1] * 1e-6)  # µm --> m
     return value
 
@@ -163,7 +160,8 @@ class BeamShiftController(model.HwComponent):
 
     def __init__(self, name, role, port=None, serialnum=None, **kwargs):
         """
-        :param port (str): port (e.g. /dev/ttyUSB0)
+        :param port (str): (e.g. "/dev/ttyUSB0") or pattern for port ("/dev/ttyUSB*"),
+            "/dev/fake" will start the simulator
         :param serialnum (str): serial number of RS485 adapter
         """
         # .hwVersion, .swVersion not available
@@ -175,30 +173,31 @@ class BeamShiftController(model.HwComponent):
 
         # Shift VA
         # Range depends on metadata and will be checked in ._write_registers
+        # The value is not correct until the metadata is set.
         self.shift = model.TupleContinuous((0, 0), range=((-1, -1), (1, 1)),
                                            cls=(int, float), unit="m",
                                            setter=self._setShift)
 
-    def _findDevice(self, ports=None, serialnum=None):
+    def _findDevice(self, port=None, serialnum=None):
         """
-        Look for a compatible device. Requires at least one of the arguments ports and serialnum.
-        ports (str): port (e.g. "/dev/ttyUSB0") or pattern for port ("/dev/ttyUSB*"), "/dev/fake" will start the simulator
+        Look for a compatible device. Requires at least one of the arguments port and serialnum.
+        port (str): port (e.g. "/dev/ttyUSB0") or pattern for port ("/dev/ttyUSB*"), "/dev/fake" will start the simulator
         serialnum (str): serial number
         return (str): the name of the port used
         raises:
             ValueError: if no device on the ports with the given serial number is found
         """
-        # At least one of the arguments ports and serialnum must be specified
-        if not ports and not serialnum:
-            raise ValueError("At least one of the arguments 'ports' and 'serialnum' must be specified.")
+        # At least one of the arguments port and serialnum must be specified
+        if not port and not serialnum:
+            raise ValueError("At least one of the arguments 'port' and 'serialnum' must be specified.")
 
         # For debugging purpose
-        if ports == "/dev/fake":
-            return ports
+        if port == "/dev/fake":
+            return port
 
         # If no ports specified, check all available ports
-        if ports:
-            names = list(serial.tools.list_ports.grep(ports))
+        if port:
+            names = list(serial.tools.list_ports.grep(port))
         else:
             names = serial.tools.list_ports.comports()  # search all serial ports
 
@@ -218,7 +217,7 @@ class BeamShiftController(model.HwComponent):
             elif len(names) > 1:
                 raise HwError("Multiple ports detected for beam controller. Please specify a serial number.")
             else:
-                raise HwError("Beam controller device not found for port %s. Check the connection." % ports)
+                raise HwError("Beam controller device not found for port %s. Check the connection." % port)
 
     def _openSerialPort(self, port):
         if self._port == "/dev/fake":
@@ -233,10 +232,13 @@ class BeamShiftController(model.HwComponent):
         """
         :param value (float, float): x, y shift from the center (in m)
         """
-        xlower, ylower, xupper, yupper = self._metadata.get(model.MD_CALIB_BEAMSHIFT)
-
-        if None in (xlower, ylower, xupper, yupper):
+        try:
+            xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB_BEAMSHIFT]
+        except KeyError:
             raise ValueError("Cannot set shift, MD_CALIB_BEAMSHIFT metadata not specified.")
+        except ValueError as ex:
+            # Wrong format data, e.g. missing value or None
+            raise ValueError("Failed to parse MD_CALIB_BEAMSHIFT metadata, ex: %s" % ex)
 
         # Transform to register values (including scaling and rotation)
         register_values = transform_coordinates(value, xlower, ylower, xupper, yupper)
@@ -310,19 +312,31 @@ class BeamShiftController(model.HwComponent):
         self.state._set_value(model.ST_RUNNING, force_write=True)
 
     def updateMetadata(self, md):
-        logging.debug("Updating metadata %s." % md)
-        if model.MD_CALIB_BEAMSHIFT in md and self._metadata.get(model.MD_CALIB_BEAMSHIFT):
-            # Transform to register values with old metadata
-            xlower, ylower, xupper, yupper = self._metadata.get(model.MD_CALIB_BEAMSHIFT)
-            vals = transform_coordinates(self.shift.value, xlower, ylower, xupper, yupper)
+        if model.MD_CALIB_BEAMSHIFT in md:
+            # Check format
+            bs = md[model.MD_CALIB_BEAMSHIFT]
+            try:
+                if not len(bs) == 4:  # 4 tuples required
+                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: 4 tuples required." % (bs,))
+                if not all(len(val) == 2 for val in bs):  # each of the 4 values is a tuple of 2
+                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: Two values per tuple required." % (bs,))
+                if not all(all([type(val) in (int, float) for val in tup]) for tup in bs):  # each element is a number
+                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: Values must be numbers." % (bs,))
+            except Exception as ex:
+                raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s, ex: %s" % (bs, ex,))
 
-            # Transform back with new metadata
-            xlower, ylower, xupper, yupper = md[model.MD_CALIB_BEAMSHIFT]
-            new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
-            # Update .shift (but don't set value in hardware)
-            logging.debug("Shift after metadata update: %s" % (new_shift,))
-            self.shift._value = new_shift
-            self.shift.notify(new_shift)
+            # If MD_CALIB_BEAMSHIFT was already available, transform current shift to fit new metadata value.
+            if self._metadata.get(model.MD_CALIB_BEAMSHIFT):
+                # Read register values from hardware
+                vals = self._read_registers()
+
+                # Transform back with new metadata
+                xlower, ylower, xupper, yupper = md[model.MD_CALIB_BEAMSHIFT]
+                new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
+                # Update .shift (but don't set value in hardware)
+                logging.debug("Shift after metadata update: %s" % (new_shift,))
+                self.shift._value = new_shift
+                self.shift.notify(new_shift)
         model.HwComponent.updateMetadata(self, md)
 
 
