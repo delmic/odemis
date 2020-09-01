@@ -247,6 +247,15 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         _vattributes.load_vigilant_attributes(self, vas)
         _dataflow.load_events(self, events)
 
+    def __setattr__(self, name, value):
+        # Detect that the user is trying to replace a VigilantAttribute, which is
+        # most likely a typo of forgetting VA.value .
+        # On a Component, it's fishy, but on a Proxy, there is just no reason to
+        # do that.
+        if hasVA(self, name):
+            raise AttributeError("Cannot override existing VigilantAttribute %s" % (name,))
+        super(ComponentProxy, self).__setattr__(name, value)
+
     def __str__(self):
         try:
             return "Proxy of Component '%s'" % (self.name,)
