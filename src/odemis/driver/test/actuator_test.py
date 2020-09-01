@@ -28,11 +28,12 @@ import random
 
 from odemis import model
 import odemis
+
 print(odemis.__file__)
-from odemis.driver import simulated, tmcm
+from odemis.driver import simulated, tmcm, smaract
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
-    LinkedHeightFocus
+    LinkedHeightFocus, DualChannelPositionSensor
 from odemis.util import test
 import os
 import time
@@ -1590,6 +1591,83 @@ class TestLinkedHeightActuator(unittest.TestCase):
         self.assertTrue(cancelled)
         # Some axes could be referenced during this time but not all
         self.assertFalse(all(stage.referenced.value.values()))
+
+
+class TestDualChannelPositionSensor(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Construct DualChannelPositionSensor object and its dependent sensor.
+        """
+        sensor = smaract.Picoscale(name="Stage Metrology",
+                                   role="metrology",
+                                   ref_on_init=False,
+                                   locator="fake",
+                                   channels={'x1': 0, 'x2': 1, 'y1': 2},
+                                   )
+        cls.dev = DualChannelPositionSensor(name="",
+                                            role="",
+                                            dependencies={"sensor": sensor},
+                                            channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                            distance=1e-6,
+                                            )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_position_rotation_update(self):
+        """
+        The .position and .rotation VAs should be updated every time the .position VA of the sensor is updated.
+        """
+        self.pos_updated = False
+        self.rot_updated = False
+
+        def on_position(_):
+            self.pos_updated = True
+
+        def on_rotation(_):
+            self.rot_updated = True
+
+        self.dev.position.subscribe(on_position)
+        self.dev.rotation.subscribe(on_rotation)
+
+        # New sensor position
+        self.dev.sensor.core.position0 = 2.5e-6
+
+        time.sleep(1.1)
+        self.assertEqual(self.pos_updated, True)
+        self.assertEqual(self.rot_updated, True)
+
+        self.dev.position.unsubscribe(on_position)
+        self.dev.position.unsubscribe(on_rotation)
+
+    def test_calculation(self):
+        """
+        Test the calculation of the position and angle.
+        """
+        # Force sensor positions in simulator
+        self.dev.sensor.core.position0 = 0
+        self.dev.sensor.core.position1 = 1e-6
+        self.dev.sensor.core.position2 = 0
+        self.assertEqual(self.dev.position.value['x'], 0.5e-6)
+        # Position difference same as distance between sensors, angle should be 45 degrees
+        self.assertEqual(self.dev.rotation.value, math.pi / 4)
+
+        # Force sensor positions in simulator
+        self.dev.sensor.core.position0 = 0
+        self.dev.sensor.core.position1 = 0
+        self.dev.sensor.core.position2 = 0
+        self.assertEqual(self.dev.position.value['x'], 0)
+        self.assertEqual(self.dev.rotation.value, 0)
+
+        # Force sensor positions in simulator
+        self.dev.sensor.core.position0 = 0
+        self.dev.sensor.core.position1 = -1e-6
+        self.dev.sensor.core.position2 = 0
+        self.assertEqual(self.dev.position.value['x'], -0.5e-6)
+        self.assertEqual(self.dev.rotation.value, -math.pi / 4)
 
 
 if __name__ == "__main__":
