@@ -1009,6 +1009,19 @@ class Camera(model.DigitalCamera):
         self._dll.is_CaptureStatus(self._hcam, CAPTURE_STATUS_INFO_CMD_RESET,
                                    None, 0)
 
+    def GetActSeqBuf(self):
+        """
+        return int, int, int:
+           number of images currently used
+           address of memory used for image capturing
+           address of memory used of last image captured
+        """
+        pnNum = c_int32()
+        ppcMem = POINTER(c_uint8)()
+        ppcMemLast = POINTER(c_uint8)()
+        self._dll.is_GetActSeqBuf(self._hcam, byref(pnNum), byref(ppcMem), byref(ppcMemLast))
+        return pnNum.value, cast(ppcMem, c_void_p).value, cast(ppcMemLast, c_void_p).value
+
     def SetHardwareGain(self, master, red=None, green=None, blue=None):
         """
         master (0<=int<=100): percentage of gain (0 = no gain == x1)
@@ -1289,6 +1302,11 @@ class Camera(model.DigitalCamera):
                     logging.debug("Binned by %s, data now has shape %s", binning, array.shape)
 
                 self.data.notify(self._transposeDAToUser(array))
+
+                # Log memory info
+                num, memnow, memprev = self.GetActSeqBuf()
+                logging.debug("Number of images in buffer: %d, current image=0x%x, previous image:0x%x",
+                              num, memnow, memprev)
 
                 # force the GC to free non-used buffers, for some reason, without
                 # this the GC runs only after we've managed to fill up the memory
