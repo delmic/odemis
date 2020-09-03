@@ -718,6 +718,12 @@ class RemoteTest(unittest.TestCase):
         self.last_value = value
         self.assertIsInstance(value, (int, float))
 
+    def test_va_override(self):
+        self.comp.prop.value = 42
+        with self.assertRaises(AttributeError):
+            # Simulate typo of "self.comp.prop.value = 42"
+            self.comp.prop = 42
+
 #    @unittest.skip("simple")
     def test_enumerated_va(self):
         # enumerated
