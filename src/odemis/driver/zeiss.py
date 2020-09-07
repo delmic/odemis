@@ -205,7 +205,7 @@ class SEM(model.HwComponent):
         """
         Send query/order to device
         cmd: valid query command for Remcon SEM
-        returns str if successful, otherwise raises error
+        returns bytes if successful, otherwise raises error
         """
         cmd = cmd + self.eol
         with self._ser_access:
@@ -260,7 +260,7 @@ class SEM(model.HwComponent):
         """
         return (String): version number
         """
-        return self._SendCmd(b'VER?')
+        return self._SendCmd(b'VER?').decode("latin1")
 
     def GetStagePosition(self):
         """
