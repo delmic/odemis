@@ -77,22 +77,23 @@ class TestMicroscope(unittest.TestCase):
         image = self.microscope.get_latest_image(channel_name='electron1')
         self.assertEqual(len(image.shape), 2)
 
-    @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
     def test_move_stage(self):
         """
         Test that moving the microscope stage to a certain x, y, z position moves it to that position.
         """
-        pos = self.stage.position.value.copy()
+        if self.xt_type == 'xttoolkit':
+            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
+        init_pos = self.stage.position.value.copy()
         f = self.stage.moveRel({"x": 2e-6, "y": 3e-6})
         f.result()
-        self.assertNotEqual(self.stage.position.value, pos)
+        self.assertNotEqual(self.stage.position.value, init_pos)
 
-        init_pos = self.stage.position.value.copy()  # returns [x, y, z, r, t]  in [m]
+        new_pos = self.stage.position.value.copy()  # returns [x, y, z, r, t]  in [m]
         # move stage to a different position
-        position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
+        position = {'x': new_pos['x'] - 1e-6, 'y': new_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
         f = self.stage.moveAbs(position)
         f.result()
-        self.assertNotEqual(self.stage.position.value, pos)
+        self.assertNotEqual(self.stage.position.value, new_pos)
 
         stage_position = self.stage.position.value.copy()
         # test move_stage method actually moves HW by the requested value
@@ -100,24 +101,28 @@ class TestMicroscope(unittest.TestCase):
         self.assertAlmostEqual(stage_position['y'], position['y'])
         self.assertAlmostEqual(stage_position['z'], position['z'])
         # test relative movement
-        init_pos = self.stage.position.value.copy()  # returns [x, y, z, r, t]  in [m]
+        new_pos = self.stage.position.value.copy()  # returns [x, y, z, r, t]  in [m]
         relative_position = {'x': 100e-6, 'y': 200e-6}  # [m]
         f = self.stage.moveRel(relative_position)
         f.result()
 
         stage_position = self.stage.position.value.copy()
         # test move_stage method actually moves HW by the requested value
-        self.assertAlmostEqual(stage_position['x'], relative_position['x'] + init_pos['x'])
-        self.assertAlmostEqual(stage_position['y'], relative_position['y'] + init_pos['y'])
+        self.assertAlmostEqual(stage_position['x'], relative_position['x'] + new_pos['x'])
+        self.assertAlmostEqual(stage_position['y'], relative_position['y'] + new_pos['y'])
 
         # move to a position out of range -> should be impossible
         position = {'x': 1, 'y': 300}  # [m]
         with self.assertRaises(Exception):
             f = self.stage.moveAbs(position)
             f.result()
+        # Move stage back to initial position
+        self.stage.moveAbs(init_pos)
 
     def test_stop_stage_movement(self):
         """Test that stopping stage movement, stops moving the stage."""
+        if self.xt_type == 'xttoolkit':
+            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
         init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
         # move stage to a different position
         position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
@@ -133,6 +138,7 @@ class TestMicroscope(unittest.TestCase):
         Test setting the field of view (aka the size, which can be scanned with the current settings).
         """
         scanfield_range = self.microscope.scanning_size_info()['range']
+        init_scan_size = self.microscope.get_scanning_size()[0]
         new_scanfield_x = scanfield_range['x'][1]
         self.microscope.set_scanning_size(new_scanfield_x)
         self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
@@ -144,6 +150,8 @@ class TestMicroscope(unittest.TestCase):
         x = 1000000  # [m]
         with self.assertRaises(Exception):
             self.microscope.set_scanning_size(x)
+        # set scanfield back to initial value
+        self.microscope.set_scanning_size(init_scan_size)
 
     def test_hfov(self):
         """
@@ -196,6 +204,7 @@ class TestMicroscope(unittest.TestCase):
 
     def test_set_ebeam_spotsize(self):
         """Setting the ebeam spot size."""
+        init_spotsize = self.scanner.spotSize.value
         spotsize_range = self.scanner.spotSize.range
         new_spotsize = spotsize_range[1] - 1
         self.scanner.spotSize.value = new_spotsize
@@ -204,9 +213,12 @@ class TestMicroscope(unittest.TestCase):
         new_spotsize = spotsize_range[0] + 1
         self.scanner.spotSize.value = new_spotsize
         self.assertAlmostEqual(new_spotsize, self.scanner.spotSize.value)
+        # set spotSize back to initial value
+        self.scanner.spotSize.value = init_spotsize
 
     def test_set_dwell_time(self):
         """Setting the dwell time."""
+        init_dwell_time = self.scanner.dwellTime.value
         dwell_time_range = self.scanner.dwellTime.range
         new_dwell_time = dwell_time_range[0] + 1.5e-6
         self.scanner.dwellTime.value = new_dwell_time
@@ -215,10 +227,13 @@ class TestMicroscope(unittest.TestCase):
         new_dwell_time = dwell_time_range[1] - 1.5e-6
         self.scanner.dwellTime.value = new_dwell_time
         self.assertAlmostEqual(new_dwell_time, self.scanner.dwellTime.value)
+        # set dwellTime back to initial value
+        self.scanner.dwellTime.value = init_dwell_time
 
-    @unittest.skip("do not test setting voltage on the hardware.")
+    @unittest.skip("Do not test setting voltage on the hardware.")
     def test_set_ht_voltage(self):
         """Setting the HT Voltage."""
+        init_voltage = self.scanner.accelVoltage.value
         ht_voltage_range = self.scanner.accelVoltage.range
         new_voltage = ht_voltage_range[1] - 1e3
         self.scanner.accelVoltage.value = new_voltage
@@ -227,6 +242,8 @@ class TestMicroscope(unittest.TestCase):
         new_voltage = ht_voltage_range[0] + 1e3
         self.scanner.accelVoltage.value = new_voltage
         self.assertAlmostEqual(new_voltage, self.scanner.accelVoltage.value)
+        # set accelVoltage back to initial value
+        self.scanner.accelVoltage.value = init_voltage
 
     def test_blank_beam(self):
         """Test that the beam is unblanked after unblank beam is called, and blanked after blank is called."""
@@ -243,9 +260,10 @@ class TestMicroscope(unittest.TestCase):
         self.microscope.pump()
         self.assertEqual(self.microscope.get_vacuum_state(), 'vacuum')
 
-    @unittest.skip("Skip because the microscope stage is not used, an external stage is used.")
     def test_home_stage(self):
         """Test that the stage is homed after home_stage is called."""
+        if self.xt_type == 'xttoolkit':
+            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
         self.microscope.home_stage()
         tstart = time.time()
         while self.microscope.stage_is_moving() and time.time() < tstart + 5:
@@ -282,6 +300,7 @@ class TestMicroscope(unittest.TestCase):
 
     def test_set_beam_shift(self):
         """Setting the beam shift."""
+        init_beam_shift = self.scanner.beamShift.value
         beam_shift_range = self.scanner.beamShift.range
         new_beam_shift_x = beam_shift_range[1][0] - 1e-6
         new_beam_shift_y = beam_shift_range[0][1] + 1e-6
@@ -292,6 +311,8 @@ class TestMicroscope(unittest.TestCase):
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        # set beamShift back to initial value
+        self.scanner.beamShift.value = init_beam_shift
 
     @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
     def test_beam_power(self):
