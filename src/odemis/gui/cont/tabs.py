@@ -2588,8 +2588,11 @@ class SecomAlignTab(Tab):
             # as we expect no acquisition active when changing tab, it will always
             # lead to subscriptions to VA
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
+            # Subscribe to lens aligner movement to update its FAV_POS_ACTIVE metadata
+            self._aligner_xy.position.subscribe(self._onAlignPos)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
+            self._aligner_xy.position.unsubscribe(self._onAlignPos)
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -2825,9 +2828,27 @@ class SecomAlignTab(Tab):
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
+    def _onAlignPos(self, pos):
+        """
+        Called when the aligner is moved (and the tab is shown)
+        :param pos: (dict str->float) updated position of the aligner
+        """
+        # Return if aligner doesn't have MD_FAV_POS_ACTIVE and MD_FAV_POS_DEACTIVE metadata
+        md = self._aligner_xy.getMetadata()
+        if (model.MD_FAV_POS_ACTIVE and model.MD_FAV_POS_DEACTIVE) not in md:
+            return
+        # Check if updated position is close to FAV_POS_DEACTIVE
+        dist_deactive = math.hypot(pos["x"] - md[model.MD_FAV_POS_DEACTIVE]["x"],
+                                   pos["y"] - md[model.MD_FAV_POS_DEACTIVE]["y"])
+        if dist_deactive <= 0.1e-3:  # within 0.1mm of deactive is considered deactivated.
+            logging.warning("Aligner seems parked, not updating FAV_POS_ACTIVE")
+            return
+        # Save aligner position as the "calibrated" one
+        self._aligner_xy.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role == "secom":
+        if main_data.role in ("secom", 'cryo-secom'):
             return 1
         else:
             return None
