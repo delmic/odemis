@@ -127,7 +127,7 @@ def _convertToTiffTag(metadata):
             pos_cm = [100 + v * 100 for v in val]
             tiffmd[T.TIFFTAG_XPOSITION] = max(0, pos_cm[0])
             tiffmd[T.TIFFTAG_YPOSITION] = max(0, pos_cm[1])
-            if [tiffmd[T.TIFFTAG_XPOSITION], tiffmd[T.TIFFTAG_YPOSITION]] != pos_cm:
+            if [tiffmd[T.TIFFTAG_XPOSITION], tiffmd[T.TIFFTAG_YPOSITION]] != pos_cm[:2]:
                 logging.warning("Position metadata clipped to avoid negative position %s", pos_cm)
 
 #         elif key == model.MD_ROTATION:
