@@ -117,6 +117,7 @@ class Lakeshore(model.HwComponent):
 
         self._shutdown_flag = False
         self._poll_thread = threading.Thread(target=self._poll)
+        self._poll_thread.start()
 
     def terminate(self):
         self._shutdown_flag = True
@@ -513,6 +514,7 @@ class LakeshoreSimulator(object):
         # Query temperature
         elif re.match(b'SRDG\?', msg):
             self._sendAnswer(b"%f" % (self._temperature,))
+            self._temperature += 1
         else:
             self._status_byte |= COMMAND_ERROR
 

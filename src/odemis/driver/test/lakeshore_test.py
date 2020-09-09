@@ -86,6 +86,14 @@ class TestLakeshore(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.dev.heating.value = 5
 
+    def test_temperature_poll(self):
+        # Test that the temperature polls.
+        # Designed to work with the simulator - the temperature will not be exactly the same
+        temp1 = self.dev.temperature.value
+        time.sleep(3)
+        temp2 = self.dev.temperature.value
+        self.assertNotEqual(temp1, temp2)
+
 
 if __name__ == "__main__":
     unittest.main()
