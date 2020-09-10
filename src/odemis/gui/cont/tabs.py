@@ -2544,6 +2544,8 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        # To check that aligner move to FAV_POS_ACTIVE position is initiated
+        self._aligner_activated = False
 
     def _on_ccd_should_update(self, update):
         """
@@ -2588,6 +2590,9 @@ class SecomAlignTab(Tab):
             # as we expect no acquisition active when changing tab, it will always
             # lead to subscriptions to VA
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
+            # Reset _aligner_activated and call _onAlignPos to initially move aligner to FAV_POS_ACTIVE position
+            self._aligner_activated = False
+            self._onAlignPos(None)
             # Subscribe to lens aligner movement to update its FAV_POS_ACTIVE metadata
             self._aligner_xy.position.subscribe(self._onAlignPos)
         else:
@@ -2831,12 +2836,19 @@ class SecomAlignTab(Tab):
     def _onAlignPos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
-        :param pos: (dict str->float) updated position of the aligner
+        :param pos: (dict str->float or None) updated position of the aligner
         """
-        # Return if aligner doesn't have MD_FAV_POS_ACTIVE and MD_FAV_POS_DEACTIVE metadata
+        # Return if aligner doesn't have both MD_FAV_POS_ACTIVE and MD_FAV_POS_DEACTIVE metadata
         md = self._aligner_xy.getMetadata()
         if (model.MD_FAV_POS_ACTIVE and model.MD_FAV_POS_DEACTIVE) not in md:
             return
+        # Move aligner on tab showing to FAV_POS_ACTIVE position (if all axes are referenced)
+        if not self._aligner_activated:
+            if all(self._aligner_xy.referenced.value.values()):
+                self._aligner_xy.moveAbs(md[model.MD_FAV_POS_ACTIVE]).result()  # Wait till movement done
+                self._aligner_activated = True
+            return
+
         # Check if updated position is close to FAV_POS_DEACTIVE
         dist_deactive = math.hypot(pos["x"] - md[model.MD_FAV_POS_DEACTIVE]["x"],
                                    pos["y"] - md[model.MD_FAV_POS_DEACTIVE]["y"])
