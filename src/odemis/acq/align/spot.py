@@ -378,15 +378,12 @@ def FindGridSpots(image, repetition):
     if len(spot_positions) < repetition[0] * repetition[1]:
         logging.warning('Not enough spots found, returning only the found spots.')
         return spot_positions, None, None, None
-    # Estimate the two most common directions in the grid of spots, these form the transformation matrix.
+    # Estimate the two most common (orthogonal) directions in the grid of spots, defined in the image coordinate system.
     lattice_constants = EstimateLatticeConstant(spot_positions)
-    # Transpose to put the primary axis on the first row instead of the first column. In a transformation matrix, the
-    # first row should represent the transform for the primary axis, second row for the secondary, etc..
+    # The two directions form the transformation matrix. Transpose because we want to describe a grid in the coordinate
+    # system of the lattice, in the image coordinate system.
     transformation_matrix = numpy.transpose(lattice_constants)
-    if numpy.linalg.det(lattice_constants) < 0.:
-        # If the determinant is smaller than zero flip the transformation matrix to make it a right handed
-        # transformation matrix.
-        transformation_matrix = numpy.fliplr(transformation_matrix)
+
     # Translation is the mean of the spots, which is the distance from the origin to the center of the grid of spots.
     translation = numpy.mean(spot_positions, axis=0)
     transform_to_spot_positions = AffineTransform(matrix=transformation_matrix, translation=translation)
@@ -395,7 +392,7 @@ def FindGridSpots(image, repetition):
     spot_grid = transform_to_spot_positions(grid)
     tree = KDTree(spot_positions)
     dd, ii = tree.query(spot_grid, k=1)
-    # Sort the original spot positions to know which spot is which.
+    # Sort the original spot positions by mapping them to the order of the GridPoints.
     pos_sorted = spot_positions[ii.ravel(), :]
     # Find the transformation from a grid centered around the origin to the sorted positions.
     transformation = AffineTransform.from_pointset(grid, pos_sorted)

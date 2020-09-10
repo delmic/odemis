@@ -116,7 +116,7 @@ def SpotIntensity(data, background=None):
               min(int(center[1]), data0.shape[0] - 3))
     # Take the 3x3 image around the center
     neighborhood = data0[(center[1] - 1):(center[1] + 2),
-                         (center[0] - 1):(center[0] + 2)]
+                   (center[0] - 1):(center[0] + 2)]
     intens = neighborhood.sum() / total
     return float(intens)
 
@@ -321,13 +321,13 @@ def EstimateLatticeConstant(pos):
     Parameters
     ----------
     pos : array like
-        A 2D array of shape (N, 2) containing the coordinates of the points.
+        A 2D array of shape (N, 2) containing the (x, y) coordinates of the points.
 
     Returns
     -------
-    kxy : array like [2x2]
-        lattice constants. First row is the first i, j direction,
-        second row is the second i, j direction.
+    lattice_constants : array like [2x2]
+        The lattice constants. The first row corresponds to the (x, y) direction of the fist lattice constant,
+        the second row corresponds to the (x, y) direction of the second lattice constant.
 
     """
     # Find the closest 4 neighbours (excluding itself) for each point.
@@ -357,16 +357,20 @@ def EstimateLatticeConstant(pos):
     # For each point add a label of which of the two most common directions it belongs to.
     labels = numpy.argmin(cdist(X, centroids), axis=1)
     # Find the median of each of the two most common directions.
-    kxy = numpy.array([numpy.median(X[labels.ravel() == 0], axis=0),
-                       numpy.median(X[labels.ravel() == 1], axis=0)])
+    lattice_constants = numpy.array([numpy.median(X[labels.ravel() == 0], axis=0),
+                                     numpy.median(X[labels.ravel() == 1], axis=0)])
 
     # The angle between the two directions should be close to 90 degrees.
-    alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*kxy)), numpy.dot(*kxy))
+    alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*lattice_constants)), numpy.dot(*lattice_constants))
     if abs(alpha - math.pi / 2) > math.radians(2.5):
         logging.warning('Estimated lattice angle differs from 90 degrees by '
                         'more than 2.5 degrees. Input data could be wrong')
+    if numpy.linalg.det(lattice_constants) < 0.:
+        # A negative determinant means the first axis is rotated 90 degrees CCW compared to the second.
+        # Flip to make the lattice constants consistent with the pos input.
+        lattice_constants = numpy.flipud(lattice_constants)
 
-    return kxy
+    return lattice_constants
 
 
 def GridPoints(grid_size_x, grid_size_y):
