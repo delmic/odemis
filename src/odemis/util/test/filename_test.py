@@ -33,9 +33,11 @@ daterev = time.strftime("%d%m%Y")
 timeshrt = time.strftime("%H%M")
 timeshrt_colon = time.strftime("%H:%M")
 timelng = time.strftime("%H%M%S")
-date_sl = time.strftime("%Y/%m/%d")
-timelng_sl = time.strftime("%H/%M/%S")
+# date_sl = time.strftime("%Y/%m/%d")
+# timelng_sl = time.strftime("%H/%M/%S")
 current_year = time.strftime("%Y")
+dateshrt = time.strftime("%y%m%d")
+dshrtrev_hyphen = time.strftime("%d-%m-%y")
 
 EXTS = ('.tiff', '.ome.tiff', '.0.ome.tiff', '.h5', '.hdf5')
 PATH = get_home_folder()
@@ -55,8 +57,11 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
                    '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
                    'test-0070': ('test-{cnt}', '0070'),  # test-0000 gives the wrong result at midnight
+                   '4580-test-%s' % dateshrt: ('{cnt}-test-{dateshrt}', '4580'),
+                   '4580-test:%s' % dshrtrev_hyphen: ('{cnt}-test:{dshrtrev_hyphen}', '4580'),
                    '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
                    'test2-45': ('test2-{cnt}', '45'),
+                   'test 1980-08-23': ('test 1980-08-{cnt}', '23'),  # a date, but not *now*
                    'test': ('test-{cnt}', '001'),
                    'test%s' % timeshrt: ('test{timelng}', '001'),
                    '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),

@@ -54,17 +54,30 @@ def guess_pattern(fn):
     # Detect date
     # First check daterev, then datelng because sequence daterev + timelng might otherwise
     # be mistaken to be number + datelng + counter
-    date_ptn = '[0-3][0-9](0[1-9]|1[0-2])%s' % time.strftime('%Y')
+    date_ptn = time.strftime("%d%m%Y")
     fn_ptn = re.sub(date_ptn, "{daterev}", fn_ptn)
 
-    date_ptn = '%s(0[1-9]|1[0-2])[0-3][0-9]' % time.strftime('%Y')
+    date_ptn = time.strftime("%Y%m%d")
     fn_ptn = re.sub(date_ptn, "{datelng}", fn_ptn)
 
-    date_ptn = '[0-3][0-9]-(0[1-9]|1[0-2])-%s' % time.strftime('%Y')
+    date_ptn = time.strftime("%d-%m-%Y")
     fn_ptn = re.sub(date_ptn, "{daterev_hyphen}", fn_ptn)
 
-    date_ptn = '%s-(0[1-9]|1[0-2])-[0-3][0-9]' % time.strftime('%Y')
+    date_ptn = time.strftime("%Y-%m-%d")
     fn_ptn = re.sub(date_ptn, "{datelng_hyphen}", fn_ptn)
+
+    # Short dates second, only in case the long version had no match
+    date_ptn = time.strftime("%d%m%y")
+    fn_ptn = re.sub(date_ptn, "{dshrtrev}", fn_ptn)
+
+    date_ptn = time.strftime("%y%m%d")
+    fn_ptn = re.sub(date_ptn, "{dateshrt}", fn_ptn)
+
+    date_ptn = time.strftime("%d-%m-%y")
+    fn_ptn = re.sub(date_ptn, "{dshrtrev_hyphen}", fn_ptn)
+
+    date_ptn = time.strftime("%y-%m-%d")
+    fn_ptn = re.sub(date_ptn, "{dateshrt_hyphen}", fn_ptn)
 
     year_ptn = '%s' % time.strftime('%Y')
     fn_ptn = re.sub(year_ptn, "{year}", fn_ptn)
@@ -147,6 +160,10 @@ def create_filename(path, ptn, ext, count="001"):
                           daterev=time.strftime("%d%m%Y"),
                           datelng_hyphen=time.strftime("%Y-%m-%d"),
                           daterev_hyphen=time.strftime("%d-%m-%Y"),
+                          dateshrt=time.strftime("%y%m%d"),
+                          dshrtrev=time.strftime("%d%m%y"),
+                          dateshrt_hyphen=time.strftime("%y-%m-%d"),
+                          dshrtrev_hyphen=time.strftime("%d-%m-%y"),
                           year="%Y",
                           timelng=time.strftime("%H%M%S"),
                           timelng_colon=time.strftime("%H:%M:%S"),
