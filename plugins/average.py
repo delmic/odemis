@@ -37,9 +37,11 @@ from collections import OrderedDict
 import logging
 import numpy
 from odemis import model, dataio
+from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 import os
 import threading
 import time
@@ -47,7 +49,7 @@ import time
 
 class AveragePlugin(Plugin):
     name = "Frame Average"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -75,6 +77,7 @@ class AveragePlugin(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("expectedDuration", {
         }),
