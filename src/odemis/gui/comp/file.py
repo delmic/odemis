@@ -25,15 +25,17 @@ Content:
 
 """
 from __future__ import division
-import os
-import logging
 
+import fnmatch
+import logging
+from odemis.gui import img
+import odemis.gui
+from odemis.util.dataio import splitext
+import os
 import wx
 import wx.lib.newevent
 
-import odemis.gui
 from .buttons import ImageTextButton, ImageButton
-from odemis.gui import img
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
@@ -183,6 +185,28 @@ class FileBrowser(wx.Panel):
     def clear(self):
         self.SetValue(None)
 
+    def _get_all_exts_from_wildcards(self, wildcards):
+        """
+        Decode a wildcard list into a list of extensions
+        wildcards (str): in the format "User text|*.glob;*.ext|..."
+        return (list of list of str): for each format, each extension in a separate string
+        """
+        # Separate the parts of the wildcards, and skip the user-friendly text
+        exts = wildcards.split("|")[1::2]
+        return [es.split(";") for es in exts]
+
+    def _get_exts_from_wildcards(self, wildcards, i):
+        """
+        Locate the extension corresponding to the given index in a wildcard list
+        wildcards (str): in the format "User text|*.glob;*.ext|..."
+        i (int>=0): the wildcard index number
+        return (list of str): all the extensions for the given format, in a separate string
+        raise IndexError: if the index is not in the wildcards
+        """
+        # Separate the parts of the wildcards, and skip the user-friendly text
+        exts = wildcards.split("|")[1::2]
+        return exts[i].split(";")
+
     def _on_browse(self, evt):
         current = self.GetValue() or ""
         if current and os.path.isdir(current):
@@ -198,8 +222,36 @@ class FileBrowser(wx.Panel):
                             wildcard=self.wildcard,
                             style=self.dialog_style)
 
+        if self.dialog_style & wx.FD_SAVE and bn != "":
+            # Select the format corresponding to the current file extension
+            all_exts = self._get_all_exts_from_wildcards(self.wildcard)
+            for i, exts in enumerate(all_exts):
+                if any(fnmatch.fnmatch(bn, ext) for ext in exts):
+                    dlg.SetFilterIndex(i)
+                    break
+            else:
+                logging.debug("File %s didn't match any extension", bn)
+
         if dlg.ShowModal() == wx.ID_OK:
             fullpath = dlg.GetPath()
+
+            if self.dialog_style & wx.FD_SAVE:
+                # Make sure the extension fits the select file format
+                exts = self._get_exts_from_wildcards(self.wildcard, dlg.GetFilterIndex())
+                for ext in exts:
+                    if fnmatch.fnmatch(fullpath, ext) or ext == "*.*":
+                        logging.debug("File %s matches extension %s", fullpath, ext)
+                        break  # everything is fine
+                else:
+                    # Remove the current extension, and use a fitting one
+                    bn, oldext = splitext(fullpath)
+                    try:
+                        newext = "." + exts[0].split(".", 1)[1]
+                        fullpath = bn + newext
+                        logging.debug("Adjusted file extension to %s", newext)
+                    except Exception:
+                        logging.exception("Failed to adjust filename to extensions %s" % (exts,))
+
             self._SetValue(fullpath, raise_event=True)
             # Update default_dir so that if the value is cleared, we start from
             # this directory
