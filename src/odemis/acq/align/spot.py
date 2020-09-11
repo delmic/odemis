@@ -362,8 +362,8 @@ def FindGridSpots(image, repetition):
         in respect to the top left of the image.
     translation : tuple of two floats
         Translation from the origin to the center of the grid in image space,
-        origin is top left of the image. Primary axis points down and the
-        secondary axis points to the right.
+        origin is top left of the image. Primary axis points right and the
+        secondary axis points down.
     scaling : tuple of two floats
         Scaling factors for primary and secondary axis.
     rotation : float

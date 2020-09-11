@@ -116,7 +116,7 @@ def SpotIntensity(data, background=None):
               min(int(center[1]), data0.shape[0] - 3))
     # Take the 3x3 image around the center
     neighborhood = data0[(center[1] - 1):(center[1] + 2),
-                   (center[0] - 1):(center[0] + 2)]
+                         (center[0] - 1):(center[0] + 2)]
     intens = neighborhood.sum() / total
     return float(intens)
 
