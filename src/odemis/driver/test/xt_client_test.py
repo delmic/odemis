@@ -296,10 +296,10 @@ class TestMicroscope(unittest.TestCase):
         stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
         stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
         stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
-        new_stig = (stig_x, stig_y)
-        self.microscope.set_primary_stigmator(*new_stig)
-        self.assertEqual(self.microscope.get_primary_stigmator()[0], new_stig[0])
-        self.assertEqual(self.microscope.get_primary_stigmator()[1], new_stig[1])
+        self.microscope.set_primary_stigmator(stig_x, stig_y)
+        self.assertEqual(self.microscope.get_primary_stigmator()[0], stig_x)
+        self.assertEqual(self.microscope.get_primary_stigmator()[1], stig_y)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_primary_stigmator(*init_stig)
 
     def test_secondary_stigmator(self):
@@ -311,10 +311,10 @@ class TestMicroscope(unittest.TestCase):
         stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
         stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
         stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
-        new_stig = (stig_x, stig_y)
-        self.microscope.set_secondary_stigmator(*new_stig)
-        self.assertEqual(self.microscope.get_secondary_stigmator()[0], new_stig[0])
-        self.assertEqual(self.microscope.get_secondary_stigmator()[1], new_stig[1])
+        self.microscope.set_secondary_stigmator(stig_x, stig_y)
+        self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
+        self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_secondary_stigmator(*init_stig)
 
     def test_dc_coils(self):
