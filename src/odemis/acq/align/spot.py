@@ -380,8 +380,8 @@ def FindGridSpots(image, repetition):
         return spot_positions, None, None, None
     # Estimate the two most common (orthogonal) directions in the grid of spots, defined in the image coordinate system.
     lattice_constants = EstimateLatticeConstant(spot_positions)
-    # The two directions form the transformation matrix. Transpose because we want to describe a grid in the coordinate
-    # system of the lattice, in the image coordinate system.
+    # Each row in the lattice_constants array corresponds to one direction. By transposing the array the direction
+    # vectors are on the columns of the array. This allows us to directly use them as a transformation matrix.
     transformation_matrix = numpy.transpose(lattice_constants)
 
     # Translation is the mean of the spots, which is the distance from the origin to the center of the grid of spots.
