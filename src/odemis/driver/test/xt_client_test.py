@@ -72,17 +72,12 @@ class TestMicroscope(unittest.TestCase):
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
-    def test_acquisition(self):
-        """Test acquiring an image."""
-        image = self.microscope.get_latest_image(channel_name='electron1')
-        self.assertEqual(len(image.shape), 2)
-
     def test_move_stage(self):
         """
         Test that moving the microscope stage to a certain x, y, z position moves it to that position.
         """
         if self.xt_type == 'xttoolkit':
-            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
+            self.skipTest("Microscope stage not tested, too dangerous.")
         init_pos = self.stage.position.value.copy()
         f = self.stage.moveRel({"x": 2e-6, "y": 3e-6})
         f.result()
@@ -119,40 +114,6 @@ class TestMicroscope(unittest.TestCase):
         # Move stage back to initial position
         self.stage.moveAbs(init_pos)
 
-    def test_stop_stage_movement(self):
-        """Test that stopping stage movement, stops moving the stage."""
-        if self.xt_type == 'xttoolkit':
-            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
-        init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
-        # move stage to a different position
-        position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
-        self.microscope.move_stage(position)
-        self.microscope.stop_stage_movement()
-        time.sleep(1)
-        self.assertFalse(self.microscope.stage_is_moving())
-        # Move stage back to initial position
-        self.microscope.move_stage(init_pos)
-
-    def test_set_scan_field_size(self):
-        """
-        Test setting the field of view (aka the size, which can be scanned with the current settings).
-        """
-        scanfield_range = self.microscope.scanning_size_info()['range']
-        init_scan_size = self.microscope.get_scanning_size()[0]
-        new_scanfield_x = scanfield_range['x'][1]
-        self.microscope.set_scanning_size(new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
-        # Test it still works for different values.
-        new_scanfield_x = scanfield_range['x'][0]
-        self.microscope.set_scanning_size(new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
-        # set value out of range
-        x = 1000000  # [m]
-        with self.assertRaises(Exception):
-            self.microscope.set_scanning_size(x)
-        # set scanfield back to initial value
-        self.microscope.set_scanning_size(init_scan_size)
-
     def test_hfov(self):
         """
         Test setting the horizontal field of view (aka the size, which can be scanned with the current settings).
@@ -180,27 +141,6 @@ class TestMicroscope(unittest.TestCase):
         # Reset
         ebeam.horizontalFoV.value = orig_fov
         self.assertAlmostEqual(orig_fov, ebeam.horizontalFoV.value)
-
-    def test_set_selected_area(self):
-        """Test setting a selected area in the field of view."""
-        start_pos = (0, 0)
-        area_range = self.microscope.selected_area_info()["range"]
-        size = (area_range[0][1] - 100, area_range[1][1] - 100)
-        self.microscope.set_selected_area(start_pos, size)
-        x, y, w, h = self.microscope.get_selected_area()
-        self.assertEqual(start_pos + size, (x, y, w, h))
-        # set value out of range
-        size = (20000, 200)
-        with self.assertRaises(Exception):
-            self.microscope.set_selected_area(start_pos, size)
-        self.microscope.reset_selected_area()
-
-    def test_reset_selected_area(self):
-        """Test resetting the selected area to select the entire image.."""
-        start_pos = (0, 0)
-        size = (200, 200)
-        self.microscope.set_selected_area(start_pos, size)
-        self.microscope.reset_selected_area()
 
     def test_set_ebeam_spotsize(self):
         """Setting the ebeam spot size."""
@@ -252,6 +192,99 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
+    def test_rotation(self):
+        """Test setting the rotation."""
+        init_rotation = self.scanner.rotation.value
+        self.scanner.rotation.value += 0.01
+        self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
+        self.scanner.rotation.value = init_rotation
+
+
+class TestMicroscopeInternal(unittest.TestCase):
+    """
+    Test calling the internal of the Microscope client class directly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+
+        cls.microscope = xt_client.SEM(**CONFIG_SEM)
+
+        for child in cls.microscope.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.efocus = child
+            elif child.name == CONFIG_STAGE["name"]:
+                cls.stage = child
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware available.")
+        if self.microscope.get_vacuum_state() != 'vacuum':
+            self.skipTest("Chamber needs to be in vacuum, please pump.")
+        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
+
+    def test_acquisition(self):
+        """Test acquiring an image."""
+        image = self.microscope.get_latest_image(channel_name='electron1')
+        self.assertEqual(len(image.shape), 2)
+
+    def test_stop_stage_movement(self):
+        """Test that stopping stage movement, stops moving the stage."""
+        if self.xt_type == 'xttoolkit':
+            self.skipTest("Microscope stage not tested, too dangerous.")
+        init_pos = self.microscope.get_stage_position()  # returns [x, y, z, r, t]  in [m]
+        # move stage to a different position
+        position = {'x': init_pos['x'] - 1e-6, 'y': init_pos['y'] - 2e-6, 'z': 10e-6}  # [m]
+        self.microscope.move_stage(position)
+        self.microscope.stop_stage_movement()
+        time.sleep(1)
+        self.assertFalse(self.microscope.stage_is_moving())
+        # Move stage back to initial position
+        self.microscope.move_stage(init_pos)
+
+    def test_set_scan_field_size(self):
+        """
+        Test setting the field of view (aka the size, which can be scanned with the current settings).
+        """
+        scanfield_range = self.microscope.scanning_size_info()['range']
+        init_scan_size = self.microscope.get_scanning_size()[0]
+        new_scanfield_x = scanfield_range['x'][1]
+        self.microscope.set_scanning_size(new_scanfield_x)
+        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        # Test it still works for different values.
+        new_scanfield_x = scanfield_range['x'][0]
+        self.microscope.set_scanning_size(new_scanfield_x)
+        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        # set value out of range
+        x = 1000000  # [m]
+        with self.assertRaises(Exception):
+            self.microscope.set_scanning_size(x)
+        # set scanfield back to initial value
+        self.microscope.set_scanning_size(init_scan_size)
+
+    def test_set_selected_area(self):
+        """Test setting a selected area in the field of view."""
+        start_pos = (0, 0)
+        area_range = self.microscope.selected_area_info()["range"]
+        size = (area_range[0][1] - 100, area_range[1][1] - 100)
+        self.microscope.set_selected_area(start_pos, size)
+        x, y, w, h = self.microscope.get_selected_area()
+        self.assertEqual(start_pos + size, (x, y, w, h))
+        # set value out of range
+        size = (20000, 200)
+        with self.assertRaises(Exception):
+            self.microscope.set_selected_area(start_pos, size)
+        self.microscope.reset_selected_area()
+
+    def test_reset_selected_area(self):
+        """Test resetting the selected area to select the entire image.."""
+        start_pos = (0, 0)
+        size = (200, 200)
+        self.microscope.set_selected_area(start_pos, size)
+        self.microscope.reset_selected_area()
+
     @unittest.skip("slow, takes about 3 or 4 minutes. When not skipped, increase the timeout in the init.")
     def test_vent_and_pump(self):
         """Test venting and then pumping."""
@@ -263,7 +296,7 @@ class TestMicroscope(unittest.TestCase):
     def test_home_stage(self):
         """Test that the stage is homed after home_stage is called."""
         if self.xt_type == 'xttoolkit':
-            self.skipTest("Skip because the microscope stage is not used, an external stage is used.")
+            self.skipTest("Microscope stage not tested, too dangerous.")
         self.microscope.home_stage()
         tstart = time.time()
         while self.microscope.stage_is_moving() and time.time() < tstart + 5:
@@ -272,27 +305,27 @@ class TestMicroscope(unittest.TestCase):
 
     def test_change_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change."""
-        self.microscope.set_channel_state('electron1', xt_client.XT_RUN)
+        self.microscope.set_channel_state('electron1', True)
         self.microscope.wait_for_state_changed(xt_client.XT_RUN, 'electron1')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state('electron1'), xt_client.XT_RUN)
-        self.microscope.set_channel_state('electron1', xt_client.XT_STOP)
+        self.microscope.set_channel_state('electron1', False)
         self.microscope.wait_for_state_changed(xt_client.XT_STOP, 'electron1')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state('electron1'), xt_client.XT_STOP)
 
     def test_change_ccd_channel_state(self):
         """Test changing the channel state and waiting for the channel state to change for the optical channel."""
-        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_RUN)
+        self.microscope.set_channel_state(name='optical4', state=True)
         self.microscope.wait_for_state_changed(xt_client.XT_RUN,
                                                name='optical4')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(name='optical4'), xt_client.XT_RUN)
-        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_STOP)
+        self.microscope.set_channel_state(name='optical4', state=False)
         self.microscope.wait_for_state_changed(xt_client.XT_STOP,
                                                name='optical4')  # timeout is handled on the server side
         self.assertEqual(self.microscope.get_channel_state(name='optical4'), xt_client.XT_STOP)
 
     def test_acquire_ccd_image(self):
         """Test acquiring an image from the optical channel."""
-        self.microscope.set_channel_state(name='optical4', state=xt_client.XT_RUN)
+        self.microscope.set_channel_state(name='optical4', state=True)
         self.microscope.wait_for_state_changed(xt_client.XT_RUN,
                                                name='optical4')  # timeout is handled on the server side
         image = self.microscope.get_latest_image(channel_name='optical4')
@@ -437,13 +470,6 @@ class TestMicroscope(unittest.TestCase):
         self.assertEqual(self.microscope.get_stigmator()[0], new_stig[0])
         self.assertEqual(self.microscope.get_stigmator()[1], new_stig[1])
         self.microscope.set_stigmator(*init_stig)
-
-    def test_rotation(self):
-        """Test setting the rotation."""
-        init_rotation = self.scanner.rotation.value
-        self.scanner.rotation.value += 0.01
-        self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
-        self.scanner.rotation.value = init_rotation
 
 
 if __name__ == '__main__':
