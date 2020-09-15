@@ -252,6 +252,7 @@ class OdemisBugreporter(object):
         files = [LOGFILE_BACKEND, os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
                  os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png',
+                 os.path.join(home_dir, 'odemis-model-selector.log'),  # another name for odemis-mic-selector.log
                  '/etc/odemis-settings.yaml']
 
         # If odemis.log is < 2M, it might not have enough info, so also get odemis.log.1
