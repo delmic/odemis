@@ -39,7 +39,6 @@ from scipy.spatial import cKDTree as KDTree
 import threading
 import time
 
-
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
 FOV_MARGIN = 250  # pixels
@@ -345,7 +344,9 @@ def FindSpot(image, sensitivity_limit=100):
 
 def FindGridSpots(image, repetition):
     """
-    Find a grid of spots in an image.
+    Find the coordinates of a grid of spots in an image. And find the
+    corresponding transformation to transform a grid centered around the origin
+    to the spots in an image.
 
     Parameters
     ----------
@@ -357,22 +358,33 @@ def FindGridSpots(image, repetition):
     Returns
     -------
     spot_coordinates : array like
-        A 2D array of shape (N, 2) containing the coordinates of the spots.
+        A 2D array of shape (N, 2) containing the coordinates of the spots,
+        in respect to the top left of the image.
     translation : tuple of two floats
+        Translation from the origin to the center of the grid in image space,
+        origin is top left of the image. Primary axis points right and the
+        secondary axis points down.
     scaling : tuple of two floats
+        Scaling factors for primary and secondary axis.
     rotation : float
+        Rotation in image space, positive rotation is clockwise.
     shear : float
+        Horizontal shear factor. A positive shear factor transforms a coordinate
+        in the positive x direction parallel to the x axis.
 
     """
+    # Find the center coordinates of the spots in the image.
     spot_positions = MaximaFind(image, repetition[0] * repetition[1])
     if len(spot_positions) < repetition[0] * repetition[1]:
         logging.warning('Not enough spots found, returning only the found spots.')
         return spot_positions, None, None, None
-    # Estimate transformation
+    # Estimate the two most common (orthogonal) directions in the grid of spots, defined in the image coordinate system.
     lattice_constants = EstimateLatticeConstant(spot_positions)
+    # Each row in the lattice_constants array corresponds to one direction. By transposing the array the direction
+    # vectors are on the columns of the array. This allows us to directly use them as a transformation matrix.
     transformation_matrix = numpy.transpose(lattice_constants)
-    if numpy.linalg.det(lattice_constants) < 0.:
-        transformation_matrix = numpy.fliplr(transformation_matrix)
+
+    # Translation is the mean of the spots, which is the distance from the origin to the center of the grid of spots.
     translation = numpy.mean(spot_positions, axis=0)
     transform_to_spot_positions = AffineTransform(matrix=transformation_matrix, translation=translation)
     # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
@@ -380,8 +392,9 @@ def FindGridSpots(image, repetition):
     spot_grid = transform_to_spot_positions(grid)
     tree = KDTree(spot_positions)
     dd, ii = tree.query(spot_grid, k=1)
-
+    # Sort the original spot positions by mapping them to the order of the GridPoints.
     pos_sorted = spot_positions[ii.ravel(), :]
+    # Find the transformation from a grid centered around the origin to the sorted positions.
     transformation = AffineTransform.from_pointset(grid, pos_sorted)
     spot_coordinates = transformation(grid)
     return spot_coordinates, translation, transformation.scale, transformation.rotation, transformation.shear
