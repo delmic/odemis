@@ -25,7 +25,7 @@ from odemis.driver import powerctrl
 from odemis.util import driver
 import subprocess
 import sys
-
+import os
 
 LSUSB_BIN = "/usr/bin/lsusb"
 
@@ -62,6 +62,7 @@ def count_usb_device(usbid):
             return 0
         else:
             raise ex
+    out = out.decode("utf-8", "ignore_error")
     return out.count(usbid)
 
 
@@ -117,8 +118,13 @@ def guess_hw(config):
     if any(c.eeprom for c in config):
         try:
             eids = get_eeprom_ids()  # If backend is running, it will fail
-        except Exception:
-            logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
+        except Exception as ex:
+            # That's bad, but maybe if there is a config without eeprom that's fine
+            if all(c.eeprom for c in config):
+                logging.exception("Failed to read EEPROM IDs")
+                raise IOError("Failed to read EEPROM IDs: %s" % (ex,))
+            else:
+                logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
 
     for c in config:
         if not c.eeprom <= eids:
@@ -202,25 +208,29 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
-    # Parse the config arguments
-    config = []
-    for carg in options.config:
-        if len(carg) == 1:
-            raise ValueError("Config argument must at least have one ID specified, "
-                             "but got none for %s" % (carg[0],))
-        c = ConfigMatcher(carg[0])
-        for idc in carg[1:]:
-            if idc.endswith("tmcm.tsv"):
-                if c.tmcmconfig is not None:
-                    raise ValueError("Multiple tmcm files specified for config %s", c.file)
-                c.tmcmconfig = idc
-            elif ":" in idc:  # USB
-                c.usb.add(idc)
-            else:  # Must be EEPROM ID then
-                # Convert IDs as hexadecimal to numbers
-                c.eeprom.add(int(idc, 16))
-        config.append(c)
     try:
+        # Parse the config arguments
+        config = []
+        for carg in options.config:
+            if len(carg) == 1:
+                raise ValueError("Config argument must at least have one ID specified, "
+                                 "but got none for %s" % (carg[0],))
+            c = ConfigMatcher(carg[0])
+            for idc in carg[1:]:
+                if idc.endswith("tmcm.tsv"):
+                    if c.tmcmconfig is not None:
+                        raise ValueError("Multiple tmcm files specified for config %s" % (c.file,))
+                    elif not os.path.isfile(idc):
+                        raise ValueError("Missing tmcm file %s" % (idc,))
+                    c.tmcmconfig = idc
+                elif ":" in idc:  # USB
+                    c.usb.add(idc)
+                else:  # Must be EEPROM ID then
+                    # Convert IDs as hexadecimal to numbers
+                    c.eeprom.add(int(idc, 16))
+            config.append(c)
+
+        # Lookup the config
         c = guess_hw(config)
         if c is None:
             if options.fallback:
@@ -233,8 +243,9 @@ def main(args):
             if c.tmcmconfig:
                 try:
                     update_tmcm(c.tmcmconfig, options.tmcmadd)
-                except Exception:
+                except Exception as ex:
                     logging.exception("Failed to update the TMCM board at address %d", options.tmcmadd)
+                    raise IOError("Failed to run tmcmconfig: %s" % (ex,))
 
         print(micf)
     except KeyboardInterrupt:
