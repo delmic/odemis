@@ -24,7 +24,7 @@ import odemis
 from odemis import model
 from odemis import util
 from odemis.acq.move import LOADING, IMAGING, TILTED, LOADING_PATH, RTOL_PROGRESS
-from odemis.acq.move import cryoTiltSample, cryoLoadSample, getLoadingProgress, getCurrentPositionLabel
+from odemis.acq.move import cryoTiltSample, cryoLoadSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util import test
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -179,24 +179,24 @@ class TestCryoMove(unittest.TestCase):
 
     def test_get_progress(self):
         """
-        Test getLoadingProgress function behaves as expected
+        Test getMovementProgress function behaves as expected
         """
         start_point = {'x': 0, 'y': 0, 'z': 0}
         end_point = {'x': 2, 'y': 2, 'z': 2}
         current_point = {'x': 1, 'y': 1, 'z': 1}
-        progress = getLoadingProgress(current_point, start_point, end_point)
+        progress = getMovementProgress(current_point, start_point, end_point)
         self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
         current_point = {'x': .998, 'y': .999, 'z': .999}  # slightly off the line
-        progress = getLoadingProgress(current_point, start_point, end_point)
+        progress = getMovementProgress(current_point, start_point, end_point)
         self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
         current_point = {'x': 3, 'y': 3, 'z': 3}  # away from the line
-        progress = getLoadingProgress(current_point, start_point, end_point)
+        progress = getMovementProgress(current_point, start_point, end_point)
         self.assertIsNone(progress)
         current_point = {'x': 1, 'y': 1, 'z': 3}  # away from the line
-        progress = getLoadingProgress(current_point, start_point, end_point)
+        progress = getMovementProgress(current_point, start_point, end_point)
         self.assertIsNone(progress)
         current_point = {'x': -1, 'y': 0, 'z': 0}  # away from the line
-        progress = getLoadingProgress(current_point, start_point, end_point)
+        progress = getMovementProgress(current_point, start_point, end_point)
         self.assertIsNone(progress)
 
     def test_get_current_position(self):

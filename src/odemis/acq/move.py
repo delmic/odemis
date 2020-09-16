@@ -68,7 +68,7 @@ def getCurrentPositionLabel(current_pos, stage):
         return LOADING
 
     # Check the current position is near the line between ACTIVE and DEACTIVE
-    loading_progress = getLoadingProgress(current_pos, stage_active, stage_deactive)
+    loading_progress = getMovementProgress(current_pos, stage_active, stage_deactive)
     if loading_progress is not None:
         return LOADING_PATH
 
@@ -76,13 +76,13 @@ def getCurrentPositionLabel(current_pos, stage):
     return UNKNOWN
 
 
-def getLoadingProgress(current_pos, start_pos, end_pos):
+def getMovementProgress(current_pos, start_pos, end_pos):
     """
-    Computes the position on the path between LOADING and IMAGING.
-    If it’s too far from the line between LOADING → IMAGING, then it’s considered out of the path.
+    Compute the position on the path between start and end positions of a stage movement (such as LOADING to IMAGING)
+    If it’s too far from the line between the start and end positions, then it’s considered out of the path.
     :param current_pos: (dict str->float) Current position of the stage
-    :param start_pos: (dict str->float) Either LOADING or IMAGING position to start the movement from
-    :param end_pos: (dict str->float)Either LOADING or IMAGING position to end the movement to
+    :param start_pos: (dict str->float) A position to start the movement from
+    :param end_pos: (dict str->float) A position to end the movement to
     :return:(0<=float<=1, or None) Ratio of the progress, None if it's far away from of the path
     """
 
@@ -187,7 +187,7 @@ def _doCryoLoadSample(future, stage, focus, target):
                     logging.warning("Axis %s position is out of active range.", axis)
             # Check that current position is near the ACTIVE to DEACTIVE line
             # (ie, in case it was previously stopped half-way through loading/unloading)
-            if getLoadingProgress(stage.position.value, stage_active, stage_deactive) is None:
+            if getMovementProgress(stage.position.value, stage_active, stage_deactive) is None:
                 logging.warning("Stage position is not near the ACTIVE to DEACTIVE line.")
 
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
