@@ -22,9 +22,9 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import LOADING, IMAGING, getLoadingProgress, RTOL_PROGRESS
-from odemis.acq.move import cryoTiltSample, cryoLoadSample
 from odemis import util
+from odemis.acq.move import LOADING, IMAGING, TILTED, LOADING_PATH, RTOL_PROGRESS
+from odemis.acq.move import cryoTiltSample, cryoLoadSample, getLoadingProgress, getCurrentPositionLabel
 from odemis.util import test
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -130,12 +130,14 @@ class TestCryoMove(unittest.TestCase):
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {'rx': 0.003, 'rz': 0.003}, match_all=False,
                                      atol=ATOL_STAGE)
+        # Untilt the stage for further unit tests to proceed
+        f = cryoTiltSample(rx=0, rz=0)
+        f.result()
 
     def test_tilting_from_loading(self):
         """
         Test it's not possible to do tilting movement while the stage is in Loading position
         """
-        stage = self.stage
         f = cryoLoadSample(LOADING)
         f.result()
         with self.assertRaises(ValueError):
@@ -196,3 +198,46 @@ class TestCryoMove(unittest.TestCase):
         current_point = {'x': -1, 'y': 0, 'z': 0}  # away from the line
         progress = getLoadingProgress(current_point, start_point, end_point)
         self.assertIsNone(progress)
+
+    def test_get_current_position(self):
+        """
+        Test getCurrentPositionLabel function behaves as expected
+        """
+        stage = self.stage
+        focus = self.focus
+        # Move to loading position
+        f = cryoLoadSample(LOADING)
+        f.result()
+        current_pos = getCurrentPositionLabel(stage.position.value, stage)
+        self.assertEqual(current_pos, LOADING)
+        # Move to imaging position and cancel the movement before reaching there
+        f = focus.moveAbs(self.focus_deactive)  # park focus to skip first sub move
+        f.result()
+        f = cryoLoadSample(IMAGING)
+        time.sleep(2)
+        f.cancel()
+        current_pos = getCurrentPositionLabel(stage.position.value, stage)
+        self.assertEqual(current_pos, LOADING_PATH)
+
+        # Move to imaging position
+        f = cryoLoadSample(LOADING)
+        f.result()
+        f = cryoLoadSample(IMAGING)
+        f.result()
+        current_pos = getCurrentPositionLabel(stage.position.value, stage)
+        self.assertEqual(current_pos, IMAGING)
+
+        f = focus.moveAbs(self.focus_deactive)
+        f.result()
+        f = cryoTiltSample(rx=0.003, rz=0.003)
+        f.result()
+        current_pos = getCurrentPositionLabel(stage.position.value, stage)
+        self.assertEqual(current_pos, TILTED)
+
+        # Untilt the stage for further unit tests to proceed
+        f = cryoTiltSample(rx=0, rz=0)
+        f.result()
+
+
+if __name__ == "__main__":
+    unittest.main()
