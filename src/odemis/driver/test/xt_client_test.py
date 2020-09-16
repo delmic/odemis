@@ -334,10 +334,8 @@ class TestMicroscope(unittest.TestCase):
 
         # Check if all the stigmator values are within the required range each run
         stigmator_range = self.microscope.stigmator_info()['range']
-        min_x_stig_values = stigmator_range['x'][0]
-        max_x_stig_values = stigmator_range['x'][1]
-        min_y_stig_values = stigmator_range['y'][0]
-        max_y_stig_values = stigmator_range['y'][1]
+        min_x_stig_values, max_x_stig_values = stigmator_range['x']
+        min_y_stig_values, max_y_stig_values = stigmator_range['y']
         self.assertGreaterEqual(min(stigmator_values_x), min_x_stig_values)
         self.assertLessEqual(max(stigmator_values_x), max_x_stig_values)
         self.assertGreaterEqual(min(stigmator_values_y), min_y_stig_values)
