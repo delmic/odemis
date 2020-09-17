@@ -690,7 +690,7 @@ class Scanner(model.Emitter):
     # def applyAutoStigmator(self, detector):
     #     """
     #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-    #     the beam must be turned on unblanked. This call is non-blocking.
+    #     the beam must be turned on and unblanked. This call is non-blocking.
     #
     #     :param detector (str): Name of one of the detector.
     #     :return: Future object
@@ -711,7 +711,7 @@ class Scanner(model.Emitter):
     # def _applyAutoStigmator(self, future):
     #     """
     #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
-    #     :param future (Future): the future to stop. Unused, only one future must be running at a time.
+    #     :param future (Future): the future to start running.
     #     """
     #     channel_name = future.channel_name
     #     with future._auto_stigmator_lock:
@@ -729,7 +729,7 @@ class Scanner(model.Emitter):
     # def _cancelAutoStigmator(self, future):
     #     """
     #     Cancels the auto stigmator. Non-blocking.
-    #     :param future (Future): the future to stop. Unused, only one future must be running at a time.
+    #     :param future (Future): the future to stop.
     #     :return (bool): True if it successfully cancelled (stopped) the move.
     #     """
     #     logging.debug("Cancelling current move")
@@ -742,9 +742,10 @@ class Scanner(model.Emitter):
     @isasync
     def applyAutoContrastBrightness(self, detector):
         """
-        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It sets
-        the state of auto_contrast_brightness, the beam must be turned on unblanked. Auto contrast brightness works
-        best if there is a feature visible in the image. This call is non-blocking.
+        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
+        automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
+        contrast brightness functionality works best if there is a feature visible in the image. This call is
+        non-blocking.
 
         :param detector (str): Name of one of the detector.
         :return: Future object
@@ -763,7 +764,7 @@ class Scanner(model.Emitter):
     def _applyAutoContrastBrightness(self, future):
         """
         Starts applying auto contrast brightness and checks if the process is finished for the ProgressiveFuture object.
-        :param future (Future): the future to stop. Unused, only one future must be running at a time.
+        :param future (Future): the future to start running.
         """
         channel_name = future.channel_name
         with future._auto_contrast_brighness_lock:
@@ -781,7 +782,7 @@ class Scanner(model.Emitter):
     def _cancelAutoContrastBrightness(self, future):
         """
         Cancels the autofocussing. Non-blocking.
-        :param future (Future): the future to stop. Unused, only one future must be running at a time.
+        :param future (Future): the future to stop.
         :return (bool): True if it successfully cancelled (stopped) the move.
         """
         logging.debug("Cancelling current move")
@@ -1116,11 +1117,11 @@ class Focus(model.Actuator):
     def applyAutofocus(self, detector):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
-        the beam must be turned on unblanked. Also a a reasonable manual focus is needed. When the image is to far
+        the beam must be turned on and unblanked. Also a a reasonable manual focus is needed. When the image is too far
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Name of one of the detector..
+        :param detector (str): Name of one of the detector.
         :param state (str):  "run", or "stop"
         :return: Future object
         """
@@ -1137,6 +1138,7 @@ class Focus(model.Actuator):
     def _applyAutofocus(self, future):
         """
         Starts autofocussing and checks if the autofocussing process is finished for ProgressiveFuture.
+        :param future (Future): the future to start running.
         """
         channel_name = future.channel_name
         with future._autofocus_lock:
@@ -1154,7 +1156,7 @@ class Focus(model.Actuator):
     def _cancelAutoFocus(self, future):
         """
         Cancels the autofocussing. Non-blocking.
-        :param future (Future): the future to stop. Unused, only one future must be running at a time.
+        :param future (Future): the future to stop.
         :return (bool): True if it successfully cancelled (stopped) the move.
         """
         logging.debug("Cancelling current move")
