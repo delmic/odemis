@@ -582,7 +582,7 @@ def run_model_selector(cmd_str):
         logging.info("Will use model %s", modelfile)
     except subprocess.CalledProcessError as ex:
         if ex.output:
-            output = ":\n%s" % (ex.output.strip(),)
+            output = ":\n%s" % (ex.output.decode("utf-8", "ignore_error").strip(),)
         else:
             output = "."
         show_error_box("Error starting Odemis back-end",
