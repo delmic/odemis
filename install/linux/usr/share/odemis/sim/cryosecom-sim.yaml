@@ -165,7 +165,7 @@ CryoSECOM: {
   class: tmcm.TMCLController,
   init: {
     port: "/dev/fake6",
-    ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9],
+    ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-6, 5.9e-6],
     refproc: "Standard",
     axes: {
       'x': {
@@ -181,7 +181,7 @@ CryoSECOM: {
         unit: 'm',
       },
       'rx': {
-        range: [-0.4293, 0.4293],
+        range: [-0.49, 0.49], # ~28°
         unit: 'rad',
       },
       'rz': {
@@ -233,6 +233,7 @@ CryoSECOM: {
     FAV_POS_ACTIVE: {'rx': 0.00, 'rz': 0.0, 'x':  0.0, 'y':  -0.002, 'z':  0.002},
     FAV_POS_DEACTIVE:  {'rx': 0.00, 'rz': 0.0, 'x':  0.01, 'y':  0.00, 'z':  -0.001},
     FAV_AREA:  [-0.001, -0.001, 0.001, 0.001]  # left, top, right, bottom
+    FAV_POS_COATING: {'rx': 0.4363, 'rz': 0.0, 'x':  0.0, 'y':  -0.001, 'z':  -0.001},
   },
    affects: ["Camera"],
 }
