@@ -727,6 +727,8 @@ class BrightfieldStream(CameraStream):
     def __init__(self, name, detector, dataflow, emitter, emtvas=None, **kwargs):
 
         if emitter is not None:
+            # TODO: display a warning if the final emission range is quite thinner
+            # than a typical white spectrum?
             # Current power VA representing power for one channel only
             cp_range = (emitter.power.range[0][0], emitter.power.range[1][0])
             self.power = model.FloatContinuous(emitter.power.value[0], range=cp_range,
@@ -747,10 +749,7 @@ class BrightfieldStream(CameraStream):
         if self._emitter is None:
             return
 
-        # Turn everything to the maximum
-        # TODO: display a warning if the final emission range is quite thinner
-        # than a typical white spectrum?
-        self._emitter.power.value = self._emitter.power.range[1]
+        self._onPower(self.power.value)
 
     def _onPower(self, value):
         """
@@ -758,7 +757,9 @@ class BrightfieldStream(CameraStream):
         :param value: current channel value
         """
         if self.is_active.value:
-            self._emitter.power.value[0] = value
+            # Put all the channels to the requested power, clipped to their own maximum
+            pwr = [min(value, mx) for mx in self._emitter.power.range[1]]
+            self._emitter.power.value = pwr
 
 
 class CameraCountStream(CameraStream):
@@ -940,8 +941,11 @@ class FluoStream(CameraStream):
 
     def _onActive(self, active):
         if active:
-            self._setup_excitation()
             self._setup_emission()
+            # Excitation affects the sample, so do it last, to reduce sample
+            # exposure. It's especially useful when the the emission uses a
+            # filter-wheel, as it can take several seconds to setup.
+            self._setup_excitation()
             super(FluoStream, self)._onActive(active)
         else:
             super(FluoStream, self)._onActive(active)
@@ -957,9 +961,9 @@ class FluoStream(CameraStream):
         :param value: current channel value
         """
         if self.is_active.value:
-            self._emitter.power.value = self._emitter.power.range[0]
-            self._emitter.power.value[self._channel_idx] = value
-
+            pwr = list(self._emitter.power.range[0])
+            pwr[self._channel_idx] = value
+            self._emitter.power.value = pwr
 
     def onEmission(self, value):
         if self.is_active.value:
