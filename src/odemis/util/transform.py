@@ -193,6 +193,70 @@ def _optimal_rotation(x, y):
     return numpy.dot(V.T, U.T)
 
 
+def to_physical_space(ji, shape, pixel_size=None):
+    """
+    Converts an image index into a coordinate in physical space.
+
+    Images are displayed on a computer screen with the origin in the top-left
+    corner. The column-index `i` is used as the primary axis and the row-index
+    `j` is used as the secondary axis. This represents a left-handed coordinate
+    system. Physical coordinates are typically described in a right-handed
+    coordinate system.
+
+    Calculations should be done preferably in the right-handed physical
+    coordinate system. Calculations using mixed left-handed and right-handed
+    coordinates should be avoided.
+
+    `to_physical_space` converts an image index into a coordinate in physical
+    space. The sign of the row-index is changed such that is increasing in the
+    upward direction, the origin is moved to the center of the image, and the
+    `x`-axis is made the primary axis.
+
+
+    Parameters
+    ----------
+    ji : tuple, list of tuples, ndarray
+        Pixel index, or list of indices, into a 2-dimensional array.
+    shape : tuple
+        Shape of the image.
+    pixel_size : float, tuple (optional)
+        Pixel size. Can be either a scalar or a 2-tuple.
+
+    Returns
+    -------
+    xy : ndarray
+
+    Raises
+    ------
+    IndexError
+        If either the index is negative or out-of-bounds.
+
+    Examples
+    --------
+    >>> ji = (0, 0)
+    >>> shape = (8, 5)
+    >>> to_physical_space(ji, shape)
+    array([-2. ,  3.5])
+
+    """
+    ji = numpy.asarray(ji)
+    n, m = shape
+
+    if numpy.any(ji < 0):
+        raise IndexError("Negative indices (wrap-around) are not supported.")
+    if numpy.any(ji >= shape):
+        raise IndexError("Index out of bounds.")
+
+    xy = numpy.empty(ji.shape, dtype=float)
+    xy[..., 0] = ji[..., 1] - 0.5 * (m - 1)
+    xy[..., 1] = 0.5 * (n - 1) - ji[..., 0]
+
+    if pixel_size is not None:
+        xy *= pixel_size
+
+    return xy
+
+
 class GeometricTransform(with_metaclass(ABCMeta, object)):
     """Base class for geometric transformations."""
 

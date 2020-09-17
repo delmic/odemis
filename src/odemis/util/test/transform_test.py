@@ -30,6 +30,7 @@ import unittest
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
+                                   to_physical_space,
                                    RigidTransform, SimilarityTransform,
                                    ScalingTransform, AffineTransform,
                                    AnamorphosisTransform)
@@ -327,6 +328,47 @@ def _angle_diff(x, y):
     the branch cut at the negative x-axis.
     """
     return min(y - x, y - x + 2.0 * numpy.pi, y - x - 2.0 * numpy.pi, key=abs)
+
+
+class ToPhysicalSpaceKnownValues(unittest.TestCase):
+
+    def setUp(self):
+        self._ji = [(0, 0), (0, 4), (7, 0), (7, 4)]
+        self._xy = [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5)]
+        self._shape = (8, 5)
+
+    def test_to_physical_space_known_values(self):
+        """
+        to_physical_space should return known result with known input.
+
+        """
+        for ji, xy in zip(self._ji, self._xy):
+            res = to_physical_space(ji, self._shape)
+            numpy.testing.assert_array_almost_equal(xy, res)
+
+    def test_to_physical_space_multiple(self):
+        """
+        to_physical_space should return the same result when called on a list
+        of indices, or on individual indices.
+
+        """
+        _xy = to_physical_space(self._ji, self._shape)
+        for ji, xy in zip(self._ji, _xy):
+            res = to_physical_space(ji, self._shape)
+            numpy.testing.assert_array_almost_equal(xy, res)
+
+    def test_to_physical_space_raises_index_error(self):
+        """
+        to_physical_space should raise an IndexError when the provided index is
+        negative or out-of-bounds.
+
+        """
+        self.assertRaises(IndexError, to_physical_space, (-1, 0), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (0, -1), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (-1, -1), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (8, 0), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (0, 5), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (8, 5), self._shape)
 
 
 class RotationMatrixKnownValues(unittest.TestCase):
