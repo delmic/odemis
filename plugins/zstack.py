@@ -43,7 +43,7 @@ import wx
 
 class ZStackPlugin(Plugin):
     name = "Z Stack"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Anders Muskens"
     __license__ = "GPLv2"
 
@@ -65,9 +65,6 @@ class ZStackPlugin(Plugin):
         ("zstart", {
             "control_type": odemis.gui.CONTROL_FLT,
         }),
-        ("zstop", {
-            "control_type": odemis.gui.CONTROL_FLT,
-        }),
     ))
 
     def __init__(self, microscope, main_app):
@@ -81,8 +78,9 @@ class ZStackPlugin(Plugin):
         self.focus = main_data.focus
         self._zrange = self.focus.axes['z'].range
         zunit = self.focus.axes['z'].unit
-        self.old_pos = self.focus.position.value
-        self.zstart = model.FloatContinuous(self.old_pos['z'], range=self._zrange, unit=zunit)
+        self._old_pos = self.focus.position.value
+        z = max(self._zrange[0], min(self._old_pos['z'], self._zrange[1]))
+        self.zstart = model.FloatContinuous(z, range=self._zrange, unit=zunit)
         self.zstep = model.FloatContinuous(1e-6, range=(-1e-5, 1e-5), unit=zunit, setter=self._setZStep)
         self.numberofAcquisitions = model.IntContinuous(3, (2, 999), setter=self._setNumberOfAcquisitions)
 
@@ -122,13 +120,23 @@ class ZStackPlugin(Plugin):
             u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
+    def _estimate_step_duration(self):
+        """
+        return (float > 0): estimated time (in s) that it takes to move the focus
+          by one step.
+        """
+        if model.hasVA(self.focus, "speed"):
+            speed = self.focus.speed.value['z']
+        else:
+            speed = 10e-6  # m/s, pessimistic
+        return driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
+
     def _update_exp_dur(self, _=None):
         """
         Called when VA that affects the expected duration is changed
         """
         nsteps = self.numberofAcquisitions.value
-        speed = self.focus.speed.value['z']
-        step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
+        step_time = self._estimate_step_duration()
         ss = self._get_acq_streams()
 
         sacqt = acqmng.estimateTime(ss)
@@ -190,6 +198,17 @@ class ZStackPlugin(Plugin):
         self._acq_streams = acqmng.foldStreams(ss, self._acq_streams)
         return self._acq_streams
 
+    def _on_focus_pos(self, pos):
+        # Do not listen to zstart when we change it, to make sure there is no loop
+        self.zstart.unsubscribe(self._on_zstart)
+        self.zstart.value = pos["z"]
+        self.zstart.subscribe(self._on_zstart)
+
+    def _on_zstart(self, zpos):
+        self.focus.moveAbs({"z": zpos})
+        # Don't wait for it to finish moving, eventually it will update the
+        # focus position... and will set the zstart value
+
     def start(self):
         # Fail if the live tab is not selected
         tab = self.main_app.main_data.tab.value
@@ -230,6 +249,10 @@ class ZStackPlugin(Plugin):
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
+        # Connect zstart with the actual focus position
+        self.zstart.subscribe(self._on_zstart)
+        self.focus.position.subscribe(self._on_focus_pos, init=True)
+
         # Update acq time when streams are added/removed
         dlg.view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         dlg.hidden_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
@@ -247,6 +270,9 @@ class ZStackPlugin(Plugin):
             logging.info("Acquisition completed")
         else:
             logging.warning("Got unknown return code %s", ans)
+
+        self.focus.position.unsubscribe(self._on_focus_pos)
+        self.zstart.unsubscribe(self._on_zstart)
 
         # Don't hold references
         self._acq_streams = None
@@ -298,10 +324,11 @@ class ZStackPlugin(Plugin):
 
         # Move the focus to the start z position
         logging.debug("Preparing Z Stack acquisition. Moving focus to start position")
-        self.old_pos = self.focus.position.value
+        self._old_pos = self.focus.position.value
         self.focus.moveAbs({'z': self.zstart.value}).result()
-        speed = self.focus.speed.value['z']
-        return driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
+        self.focus.position.unsubscribe(self._on_focus_pos)  # to not update zstart when going through the steps
+        self.zstart.unsubscribe(self._on_zstart)
+        return self._estimate_step_duration()
 
     def stepAcquisition(self, i, images):
         """
@@ -318,9 +345,11 @@ class ZStackPlugin(Plugin):
         """
         # Mvoe back to start
         if completed:
-            logging.info("Z Stack acquisiition complete.")
-        logging.debug("Returning focus to start position %s", self.old_pos)
-        self.focus.moveAbs(self.old_pos).result()
+            logging.info("Z Stack acquisition complete.")
+        logging.debug("Returning focus to start position %s", self._old_pos)
+        self.focus.moveAbs(self._old_pos).result()
+        self.focus.position.subscribe(self._on_focus_pos)
+        self.zstart.subscribe(self._on_zstart)
         
     def postProcessing(self, images):
         """
