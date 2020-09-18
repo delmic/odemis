@@ -32,14 +32,15 @@ import os
 import re
 import serial
 import threading
+import random
+from odemis.util import RepeatingTimer, driver
 import time
-from odemis.model._vattributes import FloatVA, IntEnumerated
-from _ast import Pass
+from odemis.model import IntEnumerated, FloatContinuous, FloatVA
 
-KEYPAD_UNLOCK = 0
 POLL_INTERVAL = 0.5  # interval to poll new temperature
+KELVIN_CONVERT = 273.15  # shift to convert K to C
 
-LAKESHORE_STATUS_BYTE = {
+STATUS_BYTE = {
     128: "Power on",
     32: "Command Error",
     16: "Execution error",
@@ -54,14 +55,14 @@ QUERY_ERROR = 4
 OPC = 1
 
 
-class LakeshoreError(model.HwError):
+class LakeshoreError(IOError):
     """
     Exception used to indicate a problem reported by the device.
     """
 
     def __init__(self, msg, byte=None):
         self.byte = byte
-        model.HwError.__init__(self, msg + " Status byte: %x" % (self.byte,))
+        IOError.__init__(self, msg + " Status byte: %x" % (self.byte,))
 
 
 class Lakeshore(model.HwComponent):
@@ -83,47 +84,50 @@ class Lakeshore(model.HwComponent):
         self._ser_access = threading.Lock()
         self._serial = None
         self._file = None
-        self._sensor_input = sensor_input
+
+        # Check input and output channels
+        self._sensor_input = sensor_input.upper()
+        if not self._sensor_input in ('A', 'B'):
+            raise ValueError("Sensor input must be a string of 'A' or 'B'")
+        
         self._output_channel = output_channel
-        self._port, self._version = self._findDevice(port)  # sets ._serial and ._file
-        logging.info("Found Lakeshore 310 device on port %s, Ver: %s",
-                     self._port, self._version)
+        if not self._output_channel in (1, 2):
+            raise ValueError("Invalid output channel. Should be an int of 1 or 2")
+        
+        self._port = self._findDevice(port)  # sets ._serial and ._file
+        logging.info("Found Lakeshore 310 device on port %s", self._port)
 
         # Clear errors at start
         try:
             self.checkError()
-        except LakeshoreError:
-            pass
+        except LakeshoreError as e:
+            logging.exception(e)
 
-        manufacturer, md, serial = self.GetIdentifier()
+        manufacturer, md, serialn = self.GetIdentifier()
 
-        self._hwVersion = str(md)
-        # self._swVersion = self._version.decode(serial)
+        self._hwVersion = "%s %s S/N: %s" % (manufacturer, md, serialn)
+        driver_name = driver.getSerialDriver(self._port)
+        self._swVersion = "serial driver: %s" % (driver_name,)
 
-        # Vigilant attributes of the controller
-        self.temperature = FloatVA(unit='K', value=self.GetSensorTemperature(), readonly=True)
-        self.targetTemperature = FloatVA(unit='K', setter=self._set_targetTemperature, value=self.GetSetpoint())
-
-        """
-        VA to control the current of the heater
-        For Outputs 1 and 2 in Current mode: 0 = Off, 1 = Low, 
-            2 = Medium, 3 = High
-            For Output 2 in Voltage mode: 0 = Off, 1 = On
-        """
+        # Vigilant attributes of the controller.
+        self.temperature = FloatVA(unit=u"°C", value=self.GetSensorTemperature(), readonly=True)
+        self.targetTemperature = FloatContinuous(unit=u"°C", range=[-273, 50], setter=self._set_targetTemperature, value=self.GetSetpoint())
         self.heating = IntEnumerated(value=self.GetHeaterRange(), choices={0: "Off", 1: "Low", 2: "Medium", 3: "High"},
                                      setter=self._set_heating)
 
         self.checkError()
 
-        self._shutdown_flag = False
-        self._poll_thread = threading.Thread(target=self._poll)
-        self._poll_thread.start()
+        self._poll_timer = RepeatingTimer(POLL_INTERVAL, self._poll,
+                                                "Lakeshore Polling update")
+
+        self._poll_timer.start()
+
+        # lock the keypad
+        self.LockKeypad(True)
 
     def terminate(self):
-        self._shutdown_flag = True
-
         if self._serial.isOpen():
-            self.UnlockKeypad()
+            self.LockKeypad(False)
 
         with self._ser_access:
             self._serial.close()
@@ -151,7 +155,7 @@ class Lakeshore(model.HwComponent):
         ser.flushInput()
 
         # Try to read until timeout to be extra safe that we properly flushed
-        ser.timeout = 0
+        ser.timeout = 0.01
         while True:
             char = ser.read()
             if char == b'':
@@ -167,7 +171,6 @@ class Lakeshore(model.HwComponent):
         baudrate (0<int)
         return:
            (str): the name of the port used
-           (str): the hardware version string
            Note: will also update ._file and ._serial
         raises:
             IOError: if no devices are found
@@ -176,8 +179,7 @@ class Lakeshore(model.HwComponent):
         if ports == "/dev/fake":
             self._serial = LakeshoreSimulator(timeout=1)
             self._file = None
-            _, ve, _ = self.GetIdentifier()
-            return ports, ve
+            return ports
 
         if os.name == "nt":
             raise NotImplementedError("Windows not supported")
@@ -195,18 +197,7 @@ class Lakeshore(model.HwComponent):
                     continue
 
                 self._serial = self._openSerialPort(n, baudrate)
-
-                try:
-                    ve = self.GetVersion()
-                    if not "ESP301" in ve.upper():
-                        raise IOError("Device at %s is not an ESP301 controller. Reported version string: %s" % (ports, ve))
-
-                except LakeshoreError as e:
-                    # Can happen if the device has received some weird characters
-                    # => try again (now that it's flushed)
-                    logging.info("Device answered by an error %s, will try again", e)
-                    ve = self.GetVersion()
-                return n, ve
+                return n
             except (IOError, LakeshoreError) as e:
                 logging.debug(e)
                 logging.info("Skipping device on port %s, which didn't seem to be compatible", n)
@@ -268,56 +259,53 @@ class Lakeshore(model.HwComponent):
         
         errors = []
         
-        if status_byte & COMMAND_ERROR:
-            errors.append(LAKESHORE_STATUS_BYTE.get(COMMAND_ERROR))
-
-        if status_byte & EXECUTION_ERROR:
-            errors.append(LAKESHORE_STATUS_BYTE.get(EXECUTION_ERROR))
-
-        if status_byte & QUERY_ERROR:
-            errors.append(LAKESHORE_STATUS_BYTE.get(QUERY_ERROR))
+        for err in (COMMAND_ERROR, EXECUTION_ERROR, QUERY_ERROR):
+            if status_byte & err:
+                errors.append(STATUS_BYTE[err])
 
         if errors:
             raise LakeshoreError(str(errors), status_byte)
 
     def GetIdentifier(self):
+        """
+        Get the identifier from the controller
+        Returns 3 strings: manufacturer, model number, and serial number
+        """
         identity = self._sendQuery(b'*IDN?')
-        (manufacturer, md, serial) = identity.split(',')
-        return (manufacturer, md, serial)
+        manufacturer, md, serialn = identity.decode("latin1").split(',')
+        return manufacturer, md, serialn
 
     def GetStatus(self):
         return self._sendQuery('*STB?')
 
-    def Setpoint(self, temp):
+    def SetSetpoint(self, temp):
         """
         Set the temperature setpoint
-        temp (float): the temperature to set, in the defined units
+        temp (float): the temperature to set, in Kelvin
         """
         self._sendOrder(b"SETP %d,%f" % (self._output_channel, temp))
 
     def GetSetpoint(self):
         """
-        Get the temperature setpoint
+        Get the temperature setpoint. Returns a float in Kelvin
         """
         return float(self._sendQuery(b"SETP? %d" % (self._output_channel,)))
 
     def GetSensorTemperature(self):
         """
-        Get the current temperature of the sensor input
+        Get the current temperature of the sensor input. Returns a float in Kelvin
         """
         return float(self._sendQuery(b"SRDG? %s" % (self._sensor_input,)))
 
-    def LockKeypad(self):
+    def LockKeypad(self, lock):
         """
-        Lock keypad on device from preventing bad user input
+        Lock or unlock keypad on device from preventing bad user input
+        lock (bool): True to lock, False to unlock
         """
-        self._sendOrder(b"LOCK 1")
-
-    def UnlockKeypad(self):
-        """
-        Unlock keypad on device from preventing bad user input
-        """
-        self._sendOrder(b"LOCK 0")
+        if lock:
+            self._sendOrder(b"LOCK 1")
+        else:
+            self._sendOrder(b"LOCK 0")
 
     def HeaterSetup(self,
                     output_type,
@@ -329,7 +317,7 @@ class Lakeshore(model.HwComponent):
         Send a heater setup command to the device
 
         output_type (int): Output type (Output 2 only): 0=Current, 1=Voltage
-        heater_resistance (int): Heater Resistance Setting: 1 = 25 ), 2 = 50 ).
+        heater_resistance (int): Heater Resistance Setting: 1 = 25 Ohm, 2 = 50 Ohm.
         max_current (int): Specifies the maximum heater output current: 
             0 = User Specified, 1 = 0.707 A, 2 = 1 A, 3 = 1.141 A,
             4 = 1.732 A
@@ -386,10 +374,11 @@ class Lakeshore(model.HwComponent):
     def _set_targetTemperature(self, value):
         """
         Setter for the targetTemperature VA
+        VA is in Celsius, but controller uses Kelvin
         """
-        self.Setpoint(value)
+        self.SetSetpoint(value + KELVIN_CONVERT)
         # Read back the new value from the device
-        svalue = self.GetSetpoint()
+        svalue = self.GetSetpoint() - KELVIN_CONVERT
         self.checkError()
         if svalue != value:
             logging.warning("Did not set new target temperature to %f", value)
@@ -411,22 +400,14 @@ class Lakeshore(model.HwComponent):
         '''
         This method runs in a separate thread and polls the device for the temperature
         '''
-        logging.info("Starting poll thread...")
-        
-        while not self._shutdown_flag:
-            try:
-                temp = self.GetSensorTemperature()
-                self.temperature._set_value(temp, force_write=True)
-                self.checkError()
-                time.sleep(POLL_INTERVAL)
-            except Exception as e:
-                # another exception. End running.
-                logging.exception(e)
-
-        # called if shutdown flag is set and loop exits
-        logging.debug("Shutting down polling thread...")
-
-        
+        try:
+            temp = self.GetSensorTemperature() - KELVIN_CONVERT
+            self.temperature._set_value(temp, force_write=True)
+            logging.debug(u"Lakeshore temperature: %f °C", self.temperature.value)
+            self.checkError()
+        except Exception as e:
+            # another exception. End running.
+            logging.exception(e)
 
 
 class LakeshoreSimulator(object):
@@ -440,7 +421,7 @@ class LakeshoreSimulator(object):
         self.timeout = timeout
         self._output_buf = b""  # what the commands sends back to the "host computer"
         self._input_buf = b""  # what we receive from the "host computer"
-        self._status_byte = 0
+        self._status_byte = POWER_ON
 
         self._setpoint = 10
         self._temperature = 50
@@ -514,7 +495,7 @@ class LakeshoreSimulator(object):
         # Query temperature
         elif re.match(b'SRDG\?', msg):
             self._sendAnswer(b"%f" % (self._temperature,))
-            self._temperature += 1
+            self._temperature += random.randint(-5, 5)
         else:
             self._status_byte |= COMMAND_ERROR
 

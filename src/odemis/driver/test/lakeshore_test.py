@@ -42,6 +42,7 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CONFIG = {"name": "Lakeshore Test",
           "role": "temperature-controller",
           "port": "/dev/fake",
+          # "port": "/dev/ttyUSB*",
           "sensor_input": 'b',
           "output_channel": 2,
 }
@@ -71,10 +72,10 @@ class TestLakeshore(unittest.TestCase):
 
         self.assertNotEqual(self.dev.temperature.value, 0)
 
-        temps = range(1, 25)
+        temps = (0, -50, -100)
         for temp in temps:
             self.dev.targetTemperature.value = temp
-            self.assertEqual(self.dev.targetTemperature.value, temp)
+            self.assertAlmostEqual(self.dev.targetTemperature.value, temp)
 
         # set heating range
         self.dev.heating.value = 0
