@@ -610,7 +610,7 @@ class Scanner(model.Emitter):
     def __init__(self, name, role, parent, hfw_nomag, **kwargs):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        # will take care of executing autocontrast and autostigmator asynchronously
+        # will take care of executing auto contrast/brightness and auto stigmator asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self._hfw_nomag = hfw_nomag
@@ -683,7 +683,7 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
-    ## TODO Commented out code because it is currently not supproted by XT. An update or another implementation may be
+    # TODO Commented out code because it is currently not supproted by XT. An update or another implementation may be
     # made later
 
     # @isasync
@@ -692,7 +692,7 @@ class Scanner(model.Emitter):
     #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
     #     the beam must be turned on and unblanked. This call is non-blocking.
     #
-    #     :param detector (str): Name of one of the detector.
+    #     :param detector (str): Name of the detector.
     #     :return: Future object
     #     """
     #     # Create ProgressiveFuture and update its state
@@ -747,7 +747,7 @@ class Scanner(model.Emitter):
         contrast brightness functionality works best if there is a feature visible in the image. This call is
         non-blocking.
 
-        :param detector (str): Name of one of the detector.
+        :param detector (str): Name of the detector.
         :return: Future object
 
         """
@@ -1121,7 +1121,7 @@ class Focus(model.Actuator):
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Name of one of the detector.
+        :param detector (str): Name of the detector.
         :param state (str):  "run", or "stop"
         :return: Future object
         """

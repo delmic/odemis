@@ -283,34 +283,37 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
 
-    @unittest.skip("Currently this functionality is not supported by the XT client and the code is commented out")
+    @unittest.skip("Currently the auto stigmator functionality is not supported by the XT client and the code is "
+                   "commented out")
+    # TODO Update test_apply_autostigmator code and make test work on XT client when auto stigmator functionality
+    #  works again.
     def test_apply_autostigmator(self):
         """
         Test for the auto stigmation functionality.
         """
-        detector = 'se-detector'  # Test autostigmator only for se-detector, channel=electron1
-        ## Start with basic check on starting and stopping the auto stigmation functionality
-        # Start auto stigmation and check it is running.
+        detector = 'se-detector'  # autostigmator only works for the se-detector with channel=electron1
+
+        # Start auto stigmation and check if it is running.
         autostigmator_future = self.scanner.applyAutoStigmator(detector)
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
         autostigmator_state = self.microscope.is_autostigmating(detector2ChannelName[detector])
         self.assertEqual(autostigmator_state, True)
         self.assertIsInstance(autostigmator_future, ProgressiveFuture)
 
-        # Cancel auto stigmation process and check it is cancelled successfully.
+        # Stop auto stigmation and check if it stopped running.
         autostigmator_future.cancel()
         time.sleep(5.0)  # Give microscope/simulator the time to update the state
         autostigmator_state = self.microscope.is_autostigmating(detector2ChannelName[detector])
         self.assertEqual(autostigmator_state, False)
 
-        ## Test if repeated autostigmating gives results within the allowed range and check the time it takes to auto
-        # stigmate.
+        # Test if repeated autostigmating gives results within the allowed range and check the time it takes to auto
+        # stigmate is not to long.
 
-        # Create lists holding stigmator values to check if the outcome is within the allowed range.
+        # Create lists of stigmator values to check if the results are reproducible.
         stigmator_values_x = []  # List of stigmator values in x direction
         stigmator_values_y = []  # List of stigmator values in y direction
 
-        # Run apply_autostigmator multiple times and afterwards check if the outcome is within the allowed range
+        # Run apply_autostigmator multiple times and afterwards check if the outcome is within the allowed range.
         for i in range(0, 5):
             autostigmator_future = self.scanner.applyAutoStigmator(detector)
             time.sleep(0.5)  # Give microscope/simulator the time to update the state
@@ -321,12 +324,12 @@ class TestMicroscope(unittest.TestCase):
             starting_time = time.time()
             time.sleep(0.5)  # Give microscope/simulator the time to update the state
             while self.microscope.is_autostigmating(detector2ChannelName[detector]):
-                time.sleep(0.2)  # Wait until the autofocus is finished
+                time.sleep(0.2)  # Wait until the autostigmation is finished
                 if time.time() - starting_time > 30:
                     break
 
             # Check if the time too perform the autofocus is not to long
-            self.assertLess(time.time() - starting_time, 30, "Execution auto-stigmation is slow.")
+            self.assertLess(time.time() - starting_time, 30, "Execution of auto-stigmation is slow.")
             # Line to inspect the execution time to update the expected time
             print("Execution time was %s seconds " % (time.time() - starting_time))
 
@@ -337,10 +340,8 @@ class TestMicroscope(unittest.TestCase):
         stigmator_range = self.microscope.stigmator_info()['range']
         min_x_stig_values, max_x_stig_values = stigmator_range['x']
         min_y_stig_values, max_y_stig_values = stigmator_range['y']
-        self.assertGreaterEqual(min(stigmator_values_x), min_x_stig_values)
-        self.assertLessEqual(max(stigmator_values_x), max_x_stig_values)
-        self.assertGreaterEqual(min(stigmator_values_y), min_y_stig_values)
-        self.assertLessEqual(max(stigmator_values_y), max_y_stig_values)
+        # TODO When autostigmation works implement a check if on the reproducibility of the auto stigmation values and
+        #  define the range with which they may differ from each other. In theory similar values should be returned.
 
         # Test if an error is raised when an invalid detector name is provided
         with self.assertRaises(KeyError):
@@ -351,33 +352,38 @@ class TestMicroscope(unittest.TestCase):
 
     def test_apply_auto_contrast_brightness(self):
         """
-        Test for the auto contrast brightness functionlaity.
+        Test for the auto contrast brightness functionality.
         """
         # Check all the different detector types by looping over them
         for detector in detector2ChannelName:
+            # Start auto contrast brightness and check if it is running.
             auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(detector)
             time.sleep(2.5)  # Give microscope/simulator the time to update the state
             auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(detector2ChannelName[detector])
             self.assertEqual(auto_contrast_brightness_state, True)
             self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
+            # Stop auto auto contrast brightness and check if it stopped running.
             auto_contrast_brightness_future.cancel()
             time.sleep(5.0)  # Give microscope/simulator the time to update the state
             auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(detector2ChannelName[detector])
             self.assertEqual(auto_contrast_brightness_state, False)
             self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
+            # Start auto-contrast brightness
+            max_execution_time = 30
             self.scanner.applyAutoContrastBrightness(detector)
             starting_time = time.time()
             time.sleep(0.5)  # Give microscope/simulator the time to update the state
             while self.microscope.is_running_auto_contrast_brightness(detector2ChannelName[detector]):
                 time.sleep(0.2)  # Wait until the autofocus is finished
-                if time.time() - starting_time > 30:
+                if time.time() - starting_time > max_execution_time:
                     break
             # Check if the time to perform the autofocus is not too long
-            self.assertLess(time.time() - starting_time, 30, "Execution auto-contrast brightness is slow.")
-            # Line to inspect the execution time to update the expected time
-            print("Execution time was %s seconds " % (time.time() - starting_time))
+            self.assertLess(time.time() - starting_time, max_execution_time,
+                            "Execution of auto-contrast brightness was stopped because it took more than %s seconds."
+                            % max_execution_time)
+
             auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(detector2ChannelName[detector])
             self.assertEqual(auto_contrast_brightness_state, False)
 
@@ -394,29 +400,34 @@ class TestMicroscope(unittest.TestCase):
         """
         # Check all the different detector types by looping over them
         for detector in detector2ChannelName:
+            # Start auto focus and check if it is running.
             autofocus_future = self.efocus.applyAutofocus(detector)
             time.sleep(2.5)  # Give microscope/simulator the time to update the state
             autofocus_state = self.microscope.is_autofocusing(detector2ChannelName[detector])
             self.assertEqual(autofocus_state, True)
             self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
+            # Stop auto focus and check if it stopped running.
             autofocus_future.cancel()
             time.sleep(5.0)  # Give microscope/simulator the time to update the state
             autofocus_state = self.microscope.is_autofocusing(detector2ChannelName[detector])
             self.assertEqual(autofocus_state, False)
             self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
+            # Start autofocus
+            max_execution_time = 40
             autofocus_future = self.efocus.applyAutofocus(detector)
             starting_time = time.time()
             time.sleep(0.5)  # Give microscope/simulator the time to update the state
             while self.microscope.is_autofocusing(detector2ChannelName[detector]):
                 time.sleep(0.2)  # Wait until the autofocus is finished
-                if time.time() - starting_time > 40:
+                if time.time() - starting_time > max_execution_time:
                     break
             # Check if the time to perform the autofocus is not too long
-            self.assertLess(time.time() - starting_time, 40)
-            # Line to inspect the execution time to update the expected time
-            print("Execution time was %s seconds " % (time.time() - starting_time))
+            self.assertLess(time.time() - starting_time, max_execution_time,
+                            "Execution auto-contrast brightness was stopped because it took more than %s seconds."
+                            % max_execution_time)
+
             autofocus_state = self.microscope.is_autofocusing(detector2ChannelName[detector])
             self.assertEqual(autofocus_state, False)
 
