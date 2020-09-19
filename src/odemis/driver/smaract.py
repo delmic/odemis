@@ -36,7 +36,7 @@ import threading
 
 from odemis import model
 from odemis.util import driver, RepeatingTimer
-from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync
+from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, MultiSpeedVA
 
 
 def add_coord(pos1, pos2):
@@ -1254,8 +1254,19 @@ class MC_5DOF(model.Actuator):
         self.set_linear_speed(self.linear_speed)
         self.rotary_speed = rotary_speed
         self.set_rotary_speed(math.degrees(self.rotary_speed))
+
+        self.speed = MultiSpeedVA({'x': self.linear_speed,
+                                   'y': self.linear_speed,
+                                   'z': self.linear_speed,
+                                   'rx': self.rotary_speed,
+                                   'rz': self.rotary_speed},
+                                   range=(0, 100),  # arbitrary range because of mixed units
+                                   readonly=True)
+
+        # create a timer thread that will be used to update the position while waiting for events
+        self.update_position_timer = RepeatingTimer(0.05, self._updatePosition)
+        self.update_position_timer.start()
         self.set_hold_time(hold_time)
-        self._updatePosition()
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -1590,42 +1601,9 @@ class MC_5DOF(model.Actuator):
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
-<<<<<<< HEAD
         try:
             with future._moving_lock:
                 if future._must_stop:
-=======
-        with future._moving_lock:
-            try:
-                self.Move(pos, hold_time=float("inf"))
-                while not future._must_stop.is_set():
-                    ev = self.WaitForEvent(timeout)
-
-                    # check if move is done
-                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
-                        break
-
-                    now = time.time()
-                    if now > timeout:
-                        logging.warning("Stopping move due to timeout after %g s.", max_dur)
-                        self.stop()
-                        raise TimeoutError("Move is not over after %g s, while "
-                                           "expected it takes only %g s" %
-                                           (max_dur, dur))
-
-                    # Update the position from time to time (10 Hz)
-                    if now - last_upd > 0.1:
-                        self._updatePosition()
-                        last_upd = time.time()
-
-                    # Wait half of the time left (maximum 0.1 s)
-                    left = end - time.time()
-                    sleept = max(0.001, min(left / 2, 0.1))
-                    future._must_stop.wait(sleept)
-                else:
-                    self.stop()
-                    future._was_stopped = True
->>>>>>> driver: smaract: added polling update of the position
                     raise CancelledError()
                 self.Move(pos)
 
@@ -2336,6 +2314,9 @@ class SA_CTLError(IOError):
         return self.strerror
 
 
+MCS2_MAXSPEED = 1
+
+
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
@@ -2453,7 +2434,7 @@ class MCS2(model.Actuator):
 
         self._updatePosition()
 
-        self._speed = {}
+        self.speed = MultiSpeedVA({}, range=(0, MCS2_MAXSPEED), unit="m/s", readonly=True)
         self._updateSpeed()
 
         self._accel = {}
@@ -2643,7 +2624,7 @@ class MCS2(model.Actuator):
     def _set_speed(self, channel, value):
         """
         Set the speed of the SA_CTL motion
-        value: (double) indicating speed for all axes
+        value: (double) indicating speed for all axes in m/s
         """
         logging.debug("Setting speed to %f", value)
         # convert value to pm/s for the controller
@@ -2652,7 +2633,7 @@ class MCS2(model.Actuator):
 
     def _get_speed(self, channel):
         """
-        Returns (double) the linear speed of the SA_CTL motion
+        Returns (double) the linear speed of the SA_CTL motion in m/s
         """
         # value is given in pm/s
         speed = self.GetProperty_i64(SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY, channel)
@@ -2735,7 +2716,7 @@ class MCS2(model.Actuator):
             s[axis_name] = self._get_speed(axis_channel)
 
         logging.debug("Updated speed to %s", s)
-        self._speed = s
+        self.speed._set_value(s, force_write=True)
 
     def _updateAccel(self):
         """
@@ -2789,7 +2770,7 @@ class MCS2(model.Actuator):
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
                     # compute expected end
                     dur = driver.estimateMoveDuration(abs(v),
-                                    self._speed[an],
+                                    self.speed.value[an],
                                     self._accel[an])
 
                     end = max(time.time() + dur, end)
@@ -2821,7 +2802,7 @@ class MCS2(model.Actuator):
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
                     d = abs(v - old_pos[an])
                     dur = driver.estimateMoveDuration(d,
-                                                      self._speed[an],
+                                                      self.speed.value[an],
                                                       self._accel[an])
                     end = max(time.time() + dur, end)
                 self._waitEndMove(future, moving_axes, end)
