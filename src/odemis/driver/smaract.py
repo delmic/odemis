@@ -35,7 +35,7 @@ import copy
 import threading
 
 from odemis import model
-from odemis.util import driver
+from odemis.util import driver, RepeatingTimer
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync
 
 
@@ -1590,9 +1590,42 @@ class MC_5DOF(model.Actuator):
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
+<<<<<<< HEAD
         try:
             with future._moving_lock:
                 if future._must_stop:
+=======
+        with future._moving_lock:
+            try:
+                self.Move(pos, hold_time=float("inf"))
+                while not future._must_stop.is_set():
+                    ev = self.WaitForEvent(timeout)
+
+                    # check if move is done
+                    if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
+                        break
+
+                    now = time.time()
+                    if now > timeout:
+                        logging.warning("Stopping move due to timeout after %g s.", max_dur)
+                        self.stop()
+                        raise TimeoutError("Move is not over after %g s, while "
+                                           "expected it takes only %g s" %
+                                           (max_dur, dur))
+
+                    # Update the position from time to time (10 Hz)
+                    if now - last_upd > 0.1:
+                        self._updatePosition()
+                        last_upd = time.time()
+
+                    # Wait half of the time left (maximum 0.1 s)
+                    left = end - time.time()
+                    sleept = max(0.001, min(left / 2, 0.1))
+                    future._must_stop.wait(sleept)
+                else:
+                    self.stop()
+                    future._was_stopped = True
+>>>>>>> driver: smaract: added polling update of the position
                     raise CancelledError()
                 self.Move(pos)
 
@@ -1814,7 +1847,7 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
-        time.sleep(0.25)
+        time.sleep(0.5)
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
         self.pose = copy.copy(self.target)
 

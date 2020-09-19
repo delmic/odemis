@@ -274,7 +274,7 @@ class Test5DOF(unittest.TestCase):
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
         new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.05)
+        time.sleep(0.01)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
