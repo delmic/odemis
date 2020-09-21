@@ -124,7 +124,7 @@ class CollageWeaver(object):
                  (gbbx_phy[1] + gbbx_phy[3]) / 2)
         md = tiles[0].metadata.copy()
         md[model.MD_POS] = c_phy
-
+        md[model.MD_DIMS] = "YX"
         return model.DataArray(im, md)
 
 
@@ -222,7 +222,7 @@ class CollageWeaverReverse(object):
                  (gbbx_phy[1] + gbbx_phy[3]) / 2)
         md = tiles[0].metadata.copy()
         md[model.MD_POS] = c_phy
-
+        md[model.MD_DIMS] = "YX"
         return model.DataArray(im, md)
 
 
@@ -358,5 +358,5 @@ class MeanWeaver(object):
                  (gbbx_phy[1] + gbbx_phy[3]) / 2)
         md = tiles[0].metadata.copy()
         md[model.MD_POS] = c_phy
-
+        md[model.MD_DIMS] = "YX"
         return model.DataArray(im, md)

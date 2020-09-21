@@ -183,6 +183,7 @@ MD_SHIFT_LOOKUP = "Pixel shift compensation table"
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
 MD_FAV_POS_DEACTIVE = "Favourite position deactive"  # dict of str -> float representing a good position for being "deactive" (eg, mirror parked, lens not in use)
 MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used imaging.
+MD_FAV_AREA = "Favourite acquisition area"  # (float, float, float, float) minX, minY, maxX, maxY of the acquisition area
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str
