@@ -70,6 +70,7 @@ class TestMicroscope(unittest.TestCase):
             self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
+        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def test_acquisition(self):
         """Test acquiring an image."""
@@ -275,6 +276,66 @@ class TestMicroscope(unittest.TestCase):
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+
+    def test_pitch(self):
+        """Test setting and getting the pitch between two beams within the multiprobe pattern."""
+        pitch_range = self.microscope.pitch_info()["range"]
+        current_pitch = self.microscope.get_pitch()
+        new_pitch = current_pitch + 1
+        new_pitch = new_pitch if pitch_range[0] < new_pitch < pitch_range[1] else current_pitch - 1
+        self.microscope.set_pitch(new_pitch)
+        self.assertAlmostEqual(new_pitch, self.microscope.get_pitch())
+        self.microscope.set_pitch(current_pitch)
+
+    def test_primary_stigmator(self):
+        """Test getting and setting the primary stigmator."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        stig_range = self.microscope.primary_stigmator_info()["range"]
+        init_stig = self.microscope.get_primary_stigmator()
+        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
+        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
+        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
+        self.microscope.set_primary_stigmator(stig_x, stig_y)
+        self.assertEqual(self.microscope.get_primary_stigmator()[0], stig_x)
+        self.assertEqual(self.microscope.get_primary_stigmator()[1], stig_y)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
+        self.microscope.set_primary_stigmator(*init_stig)
+
+    def test_secondary_stigmator(self):
+        """Test getting and setting the secondary stigmator."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        stig_range = self.microscope.secondary_stigmator_info()["range"]
+        init_stig = self.microscope.get_secondary_stigmator()
+        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
+        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
+        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
+        self.microscope.set_secondary_stigmator(stig_x, stig_y)
+        self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
+        self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
+        self.microscope.set_secondary_stigmator(*init_stig)
+
+    def test_dc_coils(self):
+        """Test getting the four values of the dc coils."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        dc_coils = self.microscope.get_dc_coils()
+        self.assertEqual(len(dc_coils), 4)
+
+    def test_use_case(self):
+        """Test switching the use case between the single and multibeam case."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        init_use_case = self.microscope.get_use_case()
+        self.microscope.set_use_case("MultiBeamTile")
+        use_case = self.microscope.get_use_case()
+        self.assertEqual(use_case, "MultiBeamTile")
+        self.microscope.set_use_case("SingleBeamlet")
+        use_case = self.microscope.get_use_case()
+        self.assertEqual(use_case, "SingleBeamlet")
+        self.microscope.set_use_case(init_use_case)
 
 
 if __name__ == '__main__':

@@ -174,6 +174,18 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_scan_mode(mode)
 
+    def get_scan_mode(self):
+        """
+        Get the scan mode.
+        Returns
+        -------
+        mode: str
+            Name of set scan mode, one of: unknown, external, full_frame, spot, or line.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_scan_mode()
+
     def set_selected_area(self, start_position, size):
         """
         Specify a selected area in the scan field area.
@@ -611,6 +623,165 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.set_autostigmator(channel_name, state)
+
+    def get_pitch(self):
+        """
+        Get the pitch between two neighboring beams within the multiprobe pattern.
+
+        Returns
+        -------
+        pitch: float, [um]
+            The distance between two beams of the multiprobe pattern.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_pitch()
+
+    def set_pitch(self, pitch):
+        """
+        Set the pitch between two beams within the multiprobe pattern.
+
+        Returns
+        -------
+        pitch: float, [um]
+            The distance between two beams of the multiprobe pattern.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_pitch(pitch)
+
+    def pitch_info(self):
+        """"Returns a dict with the 'unit' and 'range' of the pitch."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.pitch_info()
+
+    def get_primary_stigmator(self):
+        """
+        Get the control values of the primary stigmator. Within the MBSEM system
+        there are two stigmators to correct for both beamlet astigmatism as well
+        as multi-probe shape. Each stigmator has two control values; x and y.
+
+        Returns
+        -------
+        tuple, (x, y) control values of primary stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_primary_stigmator()
+
+    def set_primary_stigmator(self, x, y):
+        """
+        Set the control values of the primary stigmator. Within the MBSEM system
+        there are two stigmators to correct for both beamlet astigmatism as well
+        as multi-probe shape. Each stigmator has two control values; x and y.
+
+        Parameters
+        -------
+        (x, y) control values of primary stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_primary_stigmator(x, y)
+
+    def primary_stigmator_info(self):
+        """"
+        Get info about the 'unit' and 'range' of the primary stigmator.
+
+        Returns
+        -------
+        dict, with keys 'unit' and 'range'
+        The key 'unit' gives the physical unit of the stigmator. The key
+        'range' returns a dict with the 'x' and 'y' range of the stigmator.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.primary_stigmator_info()
+
+    def get_secondary_stigmator(self):
+        """
+        Get the control values of the secondary stigmator. Within the MBSEM system
+        there are two stigmators to correct for both beamlet astigmatism as well
+        as multi-probe shape. Each stigmator has two control values; x and y.
+
+        Returns
+        -------
+        tuple, (x, y) control values of primary stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_secondary_stigmator()
+
+    def set_secondary_stigmator(self, x, y):
+        """
+        Get the control values of the secondary stigmator. Within the MBSEM system
+        there are two stigmators to correct for both beamlet astigmatism as well
+        as multi-probe shape. Each stigmator has two control values; x and y.
+
+        Parameters
+        -------
+        (x, y) control values of primary stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_secondary_stigmator(x, y)
+
+    def secondary_stigmator_info(self):
+        """"
+        Get info about the 'unit' and 'range' of the secondary stigmator.
+
+        Returns
+        -------
+        dict, with keys 'unit' and 'range'
+        The key 'unit' gives the physical unit of the stigmator. The key
+        'range' returns a dict with the 'x' and 'y' range of the stigmator.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.secondary_stigmator_info()
+
+    def get_dc_coils(self):
+        """
+        Get the four values of the dc coils.
+
+        Returns
+        -------
+        list of tuples of two floats, len 4
+            A list of 4 tuples containing 2 values (floats) of each of the 4 dc coils, in the order:
+            [x lower, x upper, y lower, y upper].
+            These 4 items describe 4x2 transformation matrix for a required beam shift using DC coils.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_dc_coils()
+
+    def get_use_case(self):
+        """
+        Get the current use case state. The use case reflects whether the system
+        is currently in multi-beam or single beam mode.
+
+        Returns
+        -------
+        state: str, 'MultiBeamTile' or 'SingleBeamlet'
+
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_use_case()
+
+    def set_use_case(self, state):
+        """
+        Set the current use case state. The use case reflects whether the system
+        is currently in multi-beam or single beam mode.
+
+        Parameters
+        ----------
+        state: str, 'MultiBeamTile' or 'SingleBeamlet'
+
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_use_case(state)
 
 
 class Scanner(model.Emitter):
