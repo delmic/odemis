@@ -36,7 +36,7 @@ import threading
 
 from odemis import model
 from odemis.util import driver, RepeatingTimer
-from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, MultiSpeedVA
+from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute
 
 
 def add_coord(pos1, pos2):
@@ -1255,16 +1255,15 @@ class MC_5DOF(model.Actuator):
         self.rotary_speed = rotary_speed
         self.set_rotary_speed(math.degrees(self.rotary_speed))
 
-        self.speed = MultiSpeedVA({'x': self.linear_speed,
+        self.speed = VigilantAttribute({'x': self.linear_speed,
                                    'y': self.linear_speed,
                                    'z': self.linear_speed,
                                    'rx': self.rotary_speed,
                                    'rz': self.rotary_speed},
-                                   range=(0, 100),  # arbitrary range because of mixed units
                                    readonly=True)
 
         # create a timer thread that will be used to update the position while waiting for events
-        self.update_position_timer = RepeatingTimer(0.05, self._updatePosition)
+        self.update_position_timer = RepeatingTimer(0.1, self._updatePosition)
         self.update_position_timer.start()
         self.set_hold_time(hold_time)
 
@@ -1825,7 +1824,19 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
-        time.sleep(0.5)
+        
+        # Simulate the intermediate position of the move
+        n_steps = 5
+        for i in range(n_steps):
+            intermediate = SA_MC_Pose()
+            intermediate.x = self.pose.x + (self.target.x - self.pose.x) * i / n_steps
+            intermediate.y = self.pose.y + (self.target.y - self.pose.y) * i / n_steps
+            intermediate.z = self.pose.z + (self.target.z - self.pose.z) * i / n_steps
+            intermediate.rx = self.pose.rx + (self.target.rx - self.pose.rx) * i / n_steps
+            intermediate.rz = self.pose.rz + (self.target.rz - self.pose.rz) * i / n_steps
+            self.pose = copy.copy(intermediate)
+            time.sleep(0.05)
+        
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
         self.pose = copy.copy(self.target)
 
@@ -2314,8 +2325,6 @@ class SA_CTLError(IOError):
         return self.strerror
 
 
-MCS2_MAXSPEED = 1
-
 
 class MCS2(model.Actuator):
 
@@ -2434,7 +2443,7 @@ class MCS2(model.Actuator):
 
         self._updatePosition()
 
-        self.speed = MultiSpeedVA({}, range=(0, MCS2_MAXSPEED), unit="m/s", readonly=True)
+        self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
         self._accel = {}
