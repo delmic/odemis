@@ -16,19 +16,15 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+from odemis.acq.stitching._constants import REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, REGISTER_IDENTITY, WEAVER_MEAN, \
+    WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stitching._registrar import *
 from odemis.acq.stitching._weaver import *
+from odemis.acq.stitching._tiledacq import acquireTiledArea, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory
+
 
 import copy
 import random
-
-REGISTER_IDENTITY = 0
-REGISTER_SHIFT = 1
-REGISTER_GLOBAL_SHIFT = 2
-WEAVER_MEAN = 0
-WEAVER_COLLAGE = 1
-WEAVER_COLLAGE_REVERSE = 2
-
 
 def register(tiles, method=REGISTER_GLOBAL_SHIFT):
     """

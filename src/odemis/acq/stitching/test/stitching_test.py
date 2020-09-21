@@ -186,6 +186,7 @@ class TestWeave(unittest.TestCase):
             model.MD_POS: (1e-3, -30e-3),  # m
             model.MD_EXP_TIME: 1.2,  # s
             model.MD_IN_WL: (500e-9, 520e-9),  # m
+            model.MD_DIMS: "YX",
         }
         intile = model.DataArray(img12, md)
 
@@ -202,6 +203,7 @@ class TestWeave(unittest.TestCase):
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
             model.MD_DWELL_TIME: 1.2e-6,  # s
+            model.MD_DIMS: "YX",
         }
         intile = model.DataArray(img8, md8)
 

@@ -310,6 +310,30 @@ class TestSimCam(unittest.TestCase):
         f.result()
         self.assertEqual(self.focus.position.value, pos)
 
+    def test_get_center(self):
+        """
+        Test getCenter function
+        """
+        # Test without cropping simulated image
+        shape = self.camera.shape
+        center = self.camera._get_center()
+        self.assertEqual(center, (shape[0] / 2, shape[1] / 2))
+        # Test with cropping image
+        cropped_shape = (int(shape[0]/4), int(shape[1]/4))
+        self.camera = CLASS(dependencies={"focus": self.focus}, max_res=cropped_shape, **KWARGS)
+        center = self.camera._get_center()
+        self.assertEqual(center, (cropped_shape[0] / 2, cropped_shape[1] / 2))
+        # Simulate stage move
+        self.camera._metadata[model.MD_POS] = (1e-3, 1e-3)
+        self.camera._metadata[model.MD_PIXEL_SIZE] = (1e-5, 1e-5)
+        center = self.camera._get_center()
+        self.assertEqual(center, (cropped_shape[0] / 2 + 100, cropped_shape[1] / 2 + 100))
+        # Move far away
+        self.camera._metadata[model.MD_POS] = (1e-2, 1e-2)
+        center = self.camera._get_center()
+        self.assertEqual(center, (shape[0] - cropped_shape[0]/2, shape[1] - cropped_shape[1]/2))
+
+
 
 class TestSimCamWithPolarization(unittest.TestCase):
 

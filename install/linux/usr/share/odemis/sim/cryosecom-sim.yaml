@@ -94,8 +94,9 @@ CryoSECOM: {
 "Camera": {
     class: simcam.Camera,
     role: ccd,
-    init: {image: "andorcam2-fake-clara.tiff",
-           #image: "andorcam2-fake-spots.h5", # 7x7 grid
+    init: {
+      image: "songbird-sim-ccd.h5",
+      max_res: [260, 348], # 4x4 tiles
     },
     dependencies: {focus: "Focus"}
 }
@@ -231,8 +232,9 @@ CryoSECOM: {
     POS_ACTIVE_RANGE: {'x':  [0.00, 0.003], 'y':  [-0.003, -0.001], 'z':  [0.00, 0.003], } , # stage Z – lens Z, when the lens Z is the closest (highest) from the stage
     FAV_POS_ACTIVE: {'rx': 0.00, 'rz': 0.0, 'x':  0.0, 'y':  -0.002, 'z':  0.002},
     FAV_POS_DEACTIVE:  {'rx': 0.00, 'rz': 0.0, 'x':  0.01, 'y':  0.00, 'z':  -0.001},
+    FAV_AREA:  [-0.001, -0.001, 0.001, 0.001]  # left, top, right, bottom
   },
-
+   affects: ["Camera"],
 }
 
 # Note: Z goes up, so the bigger the value, the closer the lens is from the stage.
