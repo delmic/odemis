@@ -353,6 +353,21 @@ class Test5DOF(unittest.TestCase):
             self.dev.updateMetadata({model.MD_PIVOT_POS: old_pivot})
             self.dev.moveRelSync({"x": 0})
 
+    def test_reference_and_deactivate_move(self):
+        # Set a deactive position and check to be sure that the controller moves to this location
+        # after a reference move
+        # TODO: UIse real physical deactiva position
+        de_pos = {'x': 3.5801e-4, 'y': 0, 'z': 1e-3, 'rx':-1.2e-6, 'rz':-1.453e-6}
+        self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
+
+        f = self.dev.reference()
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+
 
 CONFIG_3DOF = {"name": "3DOF",
         "role": "stage",
@@ -507,6 +522,17 @@ class TestMCS2(unittest.TestCase):
         # Check that at least the position changed
         self.assertNotEqual(pos_move["x"], pos_refd["x"])
         # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+    def test_reference_and_deactivate_move(self):
+        # Set a deactive position and check to be sure that the controller moves to this location
+        # after a reference move
+        de_pos = {'x':0, 'y':-1.2e-4, 'z': 0}
+        self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
+
+        f = self.dev.reference()
+        f.result()
+
+        test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
 
 
 CONFIG_Picoscale = {"name": "Stage Metrology",

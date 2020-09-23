@@ -1250,6 +1250,7 @@ class MC_5DOF(model.Actuator):
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
+        self._deactive_pos_after_ref = None
 
         if referenced:
             logging.debug("SA_MC is referenced")
@@ -1294,7 +1295,11 @@ class MC_5DOF(model.Actuator):
             #   or update the current position, based on the new pivot point.
             logging.debug("Updating pivot point to %s.", pivot)
             self.SetPivot(pivot)
-
+        if model.MD_FAV_POS_DEACTIVE in md:
+            deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
+            if not (isinstance(deactive_pos, dict) and set(deactive_pos.keys()).intersection({"x", "y", "z", 'rx', 'rz'})):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
+            self._deactive_pos_after_ref = deactive_pos
         super(MC_5DOF, self).updateMetadata(md)
 
     # API Calls
@@ -1515,6 +1520,7 @@ class MC_5DOF(model.Actuator):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
+        raised = True
         try:
             with future._moving_lock:
                 if future._must_stop:
@@ -1544,6 +1550,8 @@ class MC_5DOF(model.Actuator):
 
                 logging.info("Referencing successful.")
 
+            raised = False
+
         except SA_MCError as ex:
             # This occurs if a stop command interrupts referencing
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
@@ -1564,9 +1572,16 @@ class MC_5DOF(model.Actuator):
         finally:
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
-            if self._is_referenced():
+            # only move if no exception was raised.
+            if self._is_referenced() and not raised:
                 self.referenced._value = {a: True for a in self.axes.keys()}
                 self._updatePosition()
+                if self._deactive_pos_after_ref is not None:
+                    logging.info("Moving axes to deactivated position %s after referencing", self._deactive_pos_after_ref)
+
+                    self._checkMoveAbs(self._deactive_pos_after_ref)
+                    f = self._createMoveFuture()
+                    self._doMoveAbs(f, self._deactive_pos_after_ref)
 
             self.referenced.notify(self.referenced.value)
 
@@ -2438,7 +2453,9 @@ class MCS2(model.Actuator):
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
+        self._axis_safe_pos = {}  # axis_name -> float (position to move after reference)
         self._locator = locator
+        self._deactive_pos_after_ref = None
 
         for axis_name, axis_par in axes.items():
             try:
@@ -2529,6 +2546,14 @@ class MCS2(model.Actuator):
             self.core.SA_CTL_Close(self._id)
 
         super(MCS2, self).terminate()
+
+    def updateMetadata(self, md):
+        if model.MD_FAV_POS_DEACTIVE in md:
+            deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
+            if not (isinstance(deactive_pos, dict) and set(deactive_pos.keys()).intersection(set(self._axis_map.keys()))):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
+            self._deactive_pos_after_ref = deactive_pos
+        super(MCS2, self).updateMetadata(md)
 
     @staticmethod
     def scan():
@@ -3031,6 +3056,15 @@ class MCS2(model.Actuator):
                     if not self.referenced._value[a]:
                         logging.warning("Axis %s not referenced after the end of referencing", a)
                         # TODO: Raise some error here
+
+                    # if referenced, move to the safe posiiton (if defined)
+                    if self._deactive_pos_after_ref is not None and self._deactive_pos_after_ref.get(a) is not None:
+                        deactive_pos = self._deactive_pos_after_ref[a]
+                        logging.info("Moving axis %s to deactivated position %f", a, deactive_pos)
+                        f = self._createMoveFuture()
+                        self._doMoveAbs(f, {a: deactive_pos})
+
+                self._waitEndMove(future, moving_channels, time.time() + 100)
 
             except CancelledError:
                 # FIXME: if the referencing is stopped, the device refuses to
