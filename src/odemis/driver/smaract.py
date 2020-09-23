@@ -1263,7 +1263,7 @@ class MC_5DOF(model.Actuator):
                                    readonly=True)
 
         # create a timer thread that will be used to update the position while waiting for events
-        self.update_position_timer = RepeatingTimer(0.1, self._updatePosition)
+        self.update_position_timer = RepeatingTimer(1.0, self._updatePosition)
         self.update_position_timer.start()
         self.set_hold_time(hold_time)
 
@@ -1601,6 +1601,7 @@ class MC_5DOF(model.Actuator):
         logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
         try:
+            self.update_position_timer.period = 0.05
             with future._moving_lock:
                 if future._must_stop:
                     raise CancelledError()
@@ -1643,6 +1644,7 @@ class MC_5DOF(model.Actuator):
             logging.exception("Move failure")
             raise
         finally:
+            self.update_position_timer.period = 1.0
             self._updatePosition()
 
         logging.debug("Move successfully completed")
