@@ -126,6 +126,7 @@ class Lakeshore(model.HwComponent):
 
     def terminate(self):
         self._poll_timer.cancel()
+        time.sleep(0.1)
 
         if self._serial.isOpen():
             self.LockKeypad(False)
@@ -216,7 +217,7 @@ class Lakeshore(model.HwComponent):
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     def _sendQuery(self, cmd):
         """
@@ -240,15 +241,15 @@ class Lakeshore(model.HwComponent):
 
             logging.debug("Received answer %s", to_str_escape(ans))
 
-            time.sleep(0.1)
+            time.sleep(0.05)
             return ans.strip()
 
     # Low level serial commands.
     # Note: These all convert to internal units of the controller
 
     def GetStatusByte(self):
-        # Checks the device error register
-        return int(self._sendQuery(b"*STB??"))
+        # Checks the device status event register
+        return int(self._sendQuery(b"*ESR?"))
 
     def ClearStatusByte(self):
         # Clear the status register after checking it
@@ -266,7 +267,7 @@ class Lakeshore(model.HwComponent):
                 errors.append(STATUS_BYTE[err])
 
         if errors:
-            logging.error("Lakeshore reported %s, status byte 0x%x", str(errors), status_byte)
+            raise LakeshoreError("Lakeshore %s" % (str(errors)), status_byte)
 
     def GetIdentifier(self):
         """
@@ -276,6 +277,12 @@ class Lakeshore(model.HwComponent):
         identity = self._sendQuery(b'*IDN?')
         manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
         return manufacturer, md, serialn, firmware
+    
+    def GetTemp(self):
+        """
+        Get the temperature at the thermocouple junction
+        """
+        return float(self._sendQuery(b"TEMP?"))
 
     def SetSetpoint(self, temp):
         """
@@ -295,7 +302,7 @@ class Lakeshore(model.HwComponent):
         """
         Get the current temperature of the sensor input. Returns a float in Celsius
         """
-        return float(self._sendQuery(b"SRDG? %s" % (self._sensor_input,)).strip('+')) - KELVIN_CONVERT
+        return float(self._sendQuery(b"KRDG? %s" % (self._sensor_input,)).strip('+')) - KELVIN_CONVERT
 
     def LockKeypad(self, lock):
         """
