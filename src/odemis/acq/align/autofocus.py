@@ -141,7 +141,13 @@ def Measure1d(image):
     # give an initial estimate for the parameters of the gaussian fit: [amplitude, expected position, width, base]
     p_initial = [numpy.median(max_sig) - med_sig, numpy.median(max_ids), width, med_sig]
     # Use curve_fit to fit the gauss function to the data. Use p_initial as our initial guess.
-    popt, pcov = curve_fit(gauss, x, signal, p0=p_initial)
+    try:
+        popt, pcov = curve_fit(gauss, x, signal, p0=p_initial)
+    except RuntimeError as ex:
+        # No fitting can be found => the focus is really bad
+        logging.debug("Failed to estimate focus level, assuming a very bad level: %s", ex)
+        return 0
+
     # The focus metric is the inverse of width of the gaussian fit (a smaller width is a higher focus level).
     return 1 / abs(popt[2])
 
