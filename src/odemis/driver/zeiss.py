@@ -272,7 +272,7 @@ class SEM(model.HwComponent):
         # stage moving is either 0.0 or 1.0
         s = self._SendCmd(b'STG?')
         vals = s.split(b' ')
-        return tuple(float(i) for i in vals[0:3]) + (vals[3] == "1.0",)
+        return tuple(float(i) for i in vals[0:3]) + (vals[3] == b"1.0",)
 
     def GetBlankBeam(self):
         """
