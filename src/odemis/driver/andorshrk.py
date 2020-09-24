@@ -300,8 +300,11 @@ class Shamrock(model.Actuator):
         camera (None or AndorCam2): Needed if the connection is done via the
           I²C connector of the camera.
         inverted (None): it is not allowed to invert the axes
-        slits (None or dict int -> str): names of each slit,
+        slits (None, or dict int -> str, or dict int -> [str]): names of each slit,
           for 1 to 4: in-side, in-direct, out-side, out-direct
+          Append "force_max" for a slit which requires to move to the maximum
+          value before going to the requested position. This is a workaround for
+          proper movement when the slit's reference switch doesn't work.
         accessory (str or None): if "slitleds", then a TTL signal will be set to
           high on line 1 whenever one of the slit leds might be turned on.
         slitleds_settle_time (0 <= float): duration wait before (potentially)
@@ -347,12 +350,20 @@ class Shamrock(model.Actuator):
         dependencies = dependencies or {}
         rng = rng or {}
 
+        self._slit_names = SLIT_NAMES.copy()
+        self._force_slit_max = set()
         slits = slits or {}
-        for i in slits:
+        for i, slitn in slits.items():
             if not SLIT_INDEX_MIN <= i <= SLIT_INDEX_MAX:
                 raise ValueError("Slit number must be between 1 and 4, but got %s" % (i,))
-        self._slit_names = SLIT_NAMES.copy()
-        self._slit_names.update(slits)
+            if isinstance(slitn, basestring):
+                self._slit_names[i] = slitn
+            elif len(slitn) >= 2:  # ["name", "option"]
+                self._slit_names[i] = slitn[0]
+                if "force_max" in slitn[1:]:
+                    self._force_slit_max.add(i)
+            else:
+                raise ValueError("Slit name should be string or a list of strings, but got %s" % (slitn,))
 
         self.Initialize()
         self._reconnecting = False
@@ -1723,8 +1734,7 @@ class Shamrock(model.Actuator):
             raise ValueError(u"Position %f of axis '%s' not within range %f→%f" %
                              (width, n, rng[0], rng[1]))
 
-        self.SetAutoSlitWidth(sid, width)
-        self._updatePosition()
+        self._doSetSlitAbs(sid, width)
 
     def _doSetSlitAbs(self, sid, width):
         """
@@ -1732,6 +1742,10 @@ class Shamrock(model.Actuator):
         sid (int): slit ID
         width (float): new position in m
         """
+        if sid in self._force_slit_max:
+            # Workaround for broken reference sensor by first going to the maximum
+            self.SetAutoSlitWidth(sid, SLITWIDTHMAX * 1e-6)
+
         self.SetAutoSlitWidth(sid, width)
         self._updatePosition()
 
