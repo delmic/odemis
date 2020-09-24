@@ -126,6 +126,11 @@ def guess_hw(config):
             else:
                 logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
 
+        if not eids and all(c.eeprom for c in config):
+            # No IDs found is a sign that something fishy is going on, let's warn
+            # the user in a clear way.
+            raise IOError("Power control unit failed to find any EEPROM ID")
+
     for c in config:
         if not c.eeprom <= eids:
             logging.debug("Skipping config %s due to missing EEPROM ID", c.file)
