@@ -370,6 +370,16 @@ class ToPhysicalSpaceKnownValues(unittest.TestCase):
         self.assertRaises(IndexError, to_physical_space, (0, 5), self._shape)
         self.assertRaises(IndexError, to_physical_space, (8, 5), self._shape)
 
+    def test_to_physical_space_raises_value_error(self):
+        """
+        to_physical_space should raise a ValueError when the provided index is
+        not 2-dimensional.
+
+        """
+        self.assertRaises(ValueError, to_physical_space, (), self._shape)
+        self.assertRaises(ValueError, to_physical_space, (1, ), self._shape)
+        self.assertRaises(ValueError, to_physical_space, (1, 2, 3), self._shape)
+
 
 class RotationMatrixKnownValues(unittest.TestCase):
     known_values = [
