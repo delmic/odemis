@@ -635,7 +635,8 @@ class TMCLController(model.Actuator):
         instr (buffer of 9 bytes)
         """
         target, n, typ, mot, val, chk = struct.unpack('>BBBBiB', instr)
-        s = b"%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
+        s = "%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
+        # FIXME: return a string
         return s
 
     @staticmethod
