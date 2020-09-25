@@ -533,6 +533,10 @@ class PVCam(model.DigitalCamera):
 
         # read the parameter
         self.pvcam.pl_get_param(self._handle, param, value, byref(content))
+
+        if tp.value == pv.TYPE_CHAR_PTR:
+            # Convert to a Python string (aka unicode)
+            return content.value.decode("latin1")
         return content.value
 
     def get_param_access(self, param):
