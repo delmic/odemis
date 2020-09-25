@@ -342,9 +342,19 @@ class ToPhysicalSpaceKnownValues(unittest.TestCase):
         to_physical_space should return known result with known input.
 
         """
+        # tuple
         for ji, xy in zip(self._ji, self._xy):
             res = to_physical_space(ji, self._shape)
             numpy.testing.assert_array_almost_equal(xy, res)
+
+        # list of tuples
+        res = to_physical_space(self._ji, self._shape)
+        numpy.testing.assert_array_almost_equal(self._xy, res)
+
+        # ndarray
+        ji = numpy.array(self._ji)
+        res = to_physical_space(ji, self._shape)
+        numpy.testing.assert_array_almost_equal(self._xy, res)
 
     def test_to_physical_space_multiple(self):
         """

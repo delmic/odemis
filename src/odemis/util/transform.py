@@ -210,8 +210,10 @@ def to_physical_space(ji, shape, pixel_size=None):
     `to_physical_space` converts an image pixel index into a coordinate in
     physical space. The x-axis is aligned with the columns of the image, and
     the y-axis with the rows. The direction of the y-axis is opposite to the
-    row-index, such that is increasing in the upward direction. The origin is
-    placed at the center of the image.
+    row-index, such that it is increasing in the upward direction. The origin
+    is placed at the center of the image. If the image has an even amount of
+    rows and/or columns, the origin will be at the boundary between two pixels
+    and the physical coordinates will be non-integer.
 
 
               Image Pixel Indices                   Physical Coordinates
@@ -235,11 +237,12 @@ def to_physical_space(ji, shape, pixel_size=None):
     Parameters
     ----------
     ji : tuple, list of tuples, ndarray
-        Pixel index, or list of indices, into a 2-dimensional array. For each
-        index the first entry is the row-index `j` and the second entry is the
+        Pixel index, list of indices, or array of indices. For each index the
+        first entry is the row-index `j` and the second entry is the
         column-index `i`.
-    shape : tuple
-        Shape of the image.
+    shape : tuple of ints
+        Shape of the image. The first entry is the number of rows, the second
+        entry is the number of columns in the image.
     pixel_size : tuple of 2 floats, float (optional)
         Pixel size in (x, y). For square pixels, a single float can be
         provided.
@@ -253,7 +256,7 @@ def to_physical_space(ji, shape, pixel_size=None):
     Raises
     ------
     IndexError
-        If either the index is negative or out-of-bounds.
+        If either the index is negative or out-of-range.
     ValueError
         If the index is not 2-dimensional.
 
@@ -271,7 +274,7 @@ def to_physical_space(ji, shape, pixel_size=None):
     if numpy.any(ji < 0):
         raise IndexError("Negative indices (wrap-around) are not supported.")
     if numpy.any(ji >= shape):
-        raise IndexError("Index out of bounds.")
+        raise IndexError("Index out of range.")
     if ji.shape[-1] != 2:
         raise ValueError("Indices must be 2-dimensional.")
 
