@@ -40,7 +40,8 @@ XT_RUN = "run"
 XT_STOP = "stop"
 XT_CANCEL = "cancel"
 
-detector2ChannelName = {
+# Convert from a detector role (following the Odemis convention) to a detector name in xtlib
+DETECTOR2CHANNELNAME = {
     "se-detector": "electron1",
 }
 
@@ -692,7 +693,7 @@ class Scanner(model.Emitter):
     #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
     #     the beam must be turned on and unblanked. This call is non-blocking.
     #
-    #     :param detector (str): Name of the detector.
+    #     :param detector (str): Role of the detector.
     #     :return: Future object
     #     """
     #     # Create ProgressiveFuture and update its state
@@ -702,10 +703,10 @@ class Scanner(model.Emitter):
     #     f._auto_stigmator_lock = threading.Lock()
     #     f._must_stop = threading.Event()  # cancel of the current future requested
     #     f.task_canceller = self._cancelAutoStigmator
-    #     if detector2ChannelName[detector] != "electron1":
+    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
     #         # Auto stigmation is only supported on channel electron1, not on the other channels
     #         raise KeyError("This detector is not supported for auto stigmation")
-    #     f.channel_name = detector2ChannelName[detector]
+    #     f.c = DETECTOR2CHANNELNAME[detector]
     #     return self._executor.submitf(f, self._applyAutoStigmator, f)
     #
     # def _applyAutoStigmator(self, future):
@@ -713,7 +714,7 @@ class Scanner(model.Emitter):
     #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
     #     :param future (Future): the future to start running.
     #     """
-    #     channel_name = future.channel_name
+    #     channel_name = future._channel_name
     #     with future._auto_stigmator_lock:
     #         if future._must_stop.is_set():
     #             raise CancelledError()
@@ -732,11 +733,11 @@ class Scanner(model.Emitter):
     #     :param future (Future): the future to stop.
     #     :return (bool): True if it successfully cancelled (stopped) the move.
     #     """
-    #     logging.debug("Cancelling current move")
     #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
     #
     #     with future._auto_stigmator_lock:
-    #         self.parent.set_autostigmator(future.channel_name, XT_STOP)
+    #         logging.debug("Cancelling auto stigmator")
+    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
     #         return True
 
     @isasync
@@ -747,7 +748,7 @@ class Scanner(model.Emitter):
         contrast brightness functionality works best if there is a feature visible in the image. This call is
         non-blocking.
 
-        :param detector (str): Name of the detector.
+        :param detector (str): Role of the detector.
         :return: Future object
 
         """
@@ -758,7 +759,7 @@ class Scanner(model.Emitter):
         f._auto_contrast_brighness_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
-        f.channel_name = detector2ChannelName[detector]
+        f._channel_name = DETECTOR2CHANNELNAME[detector]
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
     def _applyAutoContrastBrightness(self, future):
@@ -766,7 +767,7 @@ class Scanner(model.Emitter):
         Starts applying auto contrast brightness and checks if the process is finished for the ProgressiveFuture object.
         :param future (Future): the future to start running.
         """
-        channel_name = future.channel_name
+        channel_name = future._channel_name
         with future._auto_contrast_brighness_lock:
             if future._must_stop.is_set():
                 raise CancelledError()
@@ -781,15 +782,15 @@ class Scanner(model.Emitter):
 
     def _cancelAutoContrastBrightness(self, future):
         """
-        Cancels the autofocussing. Non-blocking.
+        Cancels the auto contrast brightness. Non-blocking.
         :param future (Future): the future to stop.
         :return (bool): True if it successfully cancelled (stopped) the move.
         """
-        logging.debug("Cancelling current move")
         future._must_stop.set()  # tell the thread taking care of autofocussing it's over
 
         with future._auto_contrast_brighness_lock:
-            self.parent.set_auto_contrast_brightness(future.channel_name, XT_STOP)
+            logging.debug("Cancelling auto contrast brightness")
+            self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
             return True
 
     def _updateSettings(self):
@@ -1121,7 +1122,7 @@ class Focus(model.Actuator):
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Name of the detector.
+        :param detector (str): Role of the detector.
         :param state (str):  "run", or "stop"
         :return: Future object
         """
@@ -1132,7 +1133,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f.channel_name = detector2ChannelName[detector]
+        f._channel_name = DETECTOR2CHANNELNAME[detector]
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):
@@ -1140,7 +1141,7 @@ class Focus(model.Actuator):
         Starts autofocussing and checks if the autofocussing process is finished for ProgressiveFuture.
         :param future (Future): the future to start running.
         """
-        channel_name = future.channel_name
+        channel_name = future._channel_name
         with future._autofocus_lock:
             if future._must_stop.is_set():
                 raise CancelledError()
@@ -1159,11 +1160,11 @@ class Focus(model.Actuator):
         :param future (Future): the future to stop.
         :return (bool): True if it successfully cancelled (stopped) the move.
         """
-        logging.debug("Cancelling current move")
         future._must_stop.set()  # tell the thread taking care of autofocussing it's over
 
         with future._autofocus_lock:
-            self.parent.set_autofocusing(future.channel_name, XT_STOP)
+            logging.debug("Cancelling autofocussing")
+            self.parent.set_autofocusing(future._channel_name, XT_STOP)
             return True
 
     def _updatePosition(self):
