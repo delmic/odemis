@@ -250,8 +250,8 @@ def to_physical_space(ji, shape, pixel_size=None):
     Returns
     -------
     xy : ndarray
-        Physical coordinates. For each coordinate the first entry is the
-        x-coordinate and the second entry is the y-coordinate.
+        Physical coordinates. Same shape as `ji`. For each coordinate the first
+        entry is the x-coordinate and the second entry is the y-coordinate.
 
     Raises
     ------
@@ -282,7 +282,7 @@ def to_physical_space(ji, shape, pixel_size=None):
     xy[..., 0] = ji[..., 1] - 0.5 * (m - 1)  # map column-index `i` to x-axis
     xy[..., 1] = 0.5 * (n - 1) - ji[..., 0]  # map row-index `j` to y-axis
 
-    if pixel_size:
+    if pixel_size is not None:
         xy *= pixel_size
 
     return xy

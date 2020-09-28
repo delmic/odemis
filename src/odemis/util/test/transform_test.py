@@ -333,8 +333,10 @@ def _angle_diff(x, y):
 class ToPhysicalSpaceKnownValues(unittest.TestCase):
 
     def setUp(self):
-        self._ji = [(0, 0), (0, 4), (7, 0), (7, 4)]
-        self._xy = [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5)]
+        self._ji = [(0, 0), (0, 4), (7, 0), (7, 4), (0.5, 0.5)]
+        self._xy = [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5), (-1.5, 3)]
+        self._xy2 = [(-4, 7), (4, 7), (-4, -7), (4, -7), (-3, 6)]
+        self._xy23 = [(-4, 10.5), (4, 10.5), (-4, -10.5), (4, -10.5), (-3, 9)]
         self._shape = (8, 5)
 
     def test_to_physical_space_known_values(self):
@@ -343,18 +345,40 @@ class ToPhysicalSpaceKnownValues(unittest.TestCase):
 
         """
         # tuple
-        for ji, xy in zip(self._ji, self._xy):
+        for ji, xy, xy2, xy23 in zip(self._ji, self._xy, self._xy2, self._xy23):
             res = to_physical_space(ji, self._shape)
+            res2 = to_physical_space(ji, self._shape, pixel_size=2.)
+            res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
+
             numpy.testing.assert_array_almost_equal(xy, res)
+            numpy.testing.assert_array_almost_equal(xy2, res2)
+            numpy.testing.assert_array_almost_equal(xy23, res23)
 
         # list of tuples
         res = to_physical_space(self._ji, self._shape)
+        res2 = to_physical_space(self._ji, self._shape, pixel_size=2.)
+        res23 = to_physical_space(self._ji, self._shape, pixel_size=(2., 3.))
         numpy.testing.assert_array_almost_equal(self._xy, res)
+        numpy.testing.assert_array_almost_equal(self._xy2, res2)
+        numpy.testing.assert_array_almost_equal(self._xy23, res23)
 
         # ndarray
         ji = numpy.array(self._ji)
         res = to_physical_space(ji, self._shape)
+        res2 = to_physical_space(ji, self._shape, pixel_size=2.)
+        res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
         numpy.testing.assert_array_almost_equal(self._xy, res)
+        numpy.testing.assert_array_almost_equal(self._xy2, res2)
+        numpy.testing.assert_array_almost_equal(self._xy23, res23)
+
+    def test_to_physical_space_zero_pixel_size(self):
+        """
+        to_physical space should return zero when given zero pixel size.
+
+        """
+        for ji in self._ji:
+            res = to_physical_space(ji, self._shape, pixel_size=0.)
+            numpy.testing.assert_array_almost_equal((0., 0.), res)
 
     def test_to_physical_space_multiple(self):
         """
