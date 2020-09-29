@@ -204,8 +204,7 @@ class BeamShiftController(model.HwComponent):
         # Look for serial number if available, otherwise make sure only one port matches the port pattern.
         if serialnum:
             for port in names:
-                if serialnum in port.description or serialnum in port.hwid:
-                    # "RS485" is in port.description, .hwid presumably contains serial number, TODO: check this!
+                if serialnum in port.serial_number:
                     return port.device  # Found it!
             else:
                 raise HwError("Beam controller device with serial number %s not found for port %s. " % (serialnum, names) +

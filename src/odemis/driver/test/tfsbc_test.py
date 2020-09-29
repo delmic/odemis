@@ -48,7 +48,7 @@ class TestBeamShiftController(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "RS485")
+        cls.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "FT2OMDD5")
         # Values found during testing on the hardware
         md = ((-0.00027788219369730165, 0.0013604844623992785),
               (-0.0013604844623992785, -0.00027788219369730165),
