@@ -115,10 +115,7 @@ class Lakeshore(model.HwComponent):
         self.heating = IntEnumerated(value=self.GetHeaterRange(), choices={0: "Off", 1: "Low", 2: "Medium", 3: "High"},
                                      setter=self._set_heating)
 
-
-        self._poll_timer = RepeatingTimer(POLL_INTERVAL, self._poll,
-                                                "Lakeshore Polling update")
-
+        self._poll_timer = RepeatingTimer(POLL_INTERVAL, self._poll, "Lakeshore temperature update")
         self._poll_timer.start()
 
         # lock the keypad
@@ -198,6 +195,7 @@ class Lakeshore(model.HwComponent):
                     continue
 
                 self._serial = self._openSerialPort(n)
+                self.GetIdentifier()  # if value is incorrect, will throw an exception wile unpacking
                 return n
             except (IOError, LakeshoreError) as e:
                 logging.debug(e)
@@ -233,7 +231,7 @@ class Lakeshore(model.HwComponent):
 
             self._serial.timeout = 1
             ans = b''
-            while ans[-1:] != b'\r':
+            while ans[-1:] != b'\n':
                 char = self._serial.read()
                 if not char:
                     raise IOError("Timeout after receiving %s" % to_str_escape(ans))
@@ -241,7 +239,7 @@ class Lakeshore(model.HwComponent):
 
             logging.debug("Received answer %s", to_str_escape(ans))
 
-            time.sleep(0.05)
+            time.sleep(0.05)  # prevent overloading the device with messages
             return ans.strip()
 
     # Low level serial commands.
@@ -272,7 +270,7 @@ class Lakeshore(model.HwComponent):
     def GetIdentifier(self):
         """
         Get the identifier from the controller
-        Returns 3 strings: manufacturer, model number, and serial number
+        Returns 4 strings: manufacturer, model number, serial number, and firmware version
         """
         identity = self._sendQuery(b'*IDN?')
         manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
@@ -333,7 +331,7 @@ class Lakeshore(model.HwComponent):
         current_or_power (int): Specifies whether the heater output displays in current or 
             power (current mode only). Valid entries: 1 = current, 2 = power.
         """
-        self._sendOrder(b"HTRSET %d,%d,%d,%d,%d,%d" % (self._output_channel,
+        self._sendOrder(b"HTRSET %d,%d,%d,%d,%f,%d" % (self._output_channel,
                     output_type,
                     heater_resistance,
                     max_current,
@@ -356,7 +354,7 @@ class Lakeshore(model.HwComponent):
         return (int(output_type),
             int(heater_resistance),
             int(max_current),
-            int(max_user_current),
+            float(max_user_current),
             int(current_or_power))
 
     def SetHeaterRange(self, hrange):
@@ -414,9 +412,9 @@ class Lakeshore(model.HwComponent):
             self.temperature._set_value(temp, force_write=True)
             logging.debug(u"Lakeshore temperature: %f °C", self.temperature.value)
             self.checkError()
-        except Exception as e:
-            # another exception. End running.
-            logging.exception(e)
+        except:
+            # another exception.
+            logging.exception("Failed to read sensor temperature.")
 
 
 class LakeshoreSimulator(object):
@@ -432,13 +430,14 @@ class LakeshoreSimulator(object):
         self._input_buf = b""  # what we receive from the "host computer"
         self._status_byte = POWER_ON
 
-        self._setpoint = 10
-        self._temperature = 50
-        self._heating = 1
+        self._setpoint = 150
+        self._temperature = 100
+        self._stable_temperature = 50
+        self._heating = 0
 
     def write(self, data):
         self._input_buf += data
-        msgs = self._input_buf.split(b"\r")
+        msgs = self._input_buf.split(b"\n")
         for m in msgs[:-1]:
             self._parseMessage(m)  # will update _output_buf
 
@@ -468,7 +467,7 @@ class LakeshoreSimulator(object):
         return hasattr(self, "_output_buf")
 
     def _sendAnswer(self, ans):
-        self._output_buf += b"%s\r" % (ans,)
+        self._output_buf += b"%s\n" % (ans,)
 
     def _parseMessage(self, msg):
         """
@@ -479,17 +478,17 @@ class LakeshoreSimulator(object):
         msg = msg.strip()  # remove leading and trailing whitespace
         msg = b"".join(msg.split())  # remove all space characters
 
-        if msg == b"*STB??":
+        if msg == b"*ESR?":  # error status register
             self._sendAnswer(b"%d" % (self._status_byte,))
         elif msg == b"*CLS":
             self._status_byte = 0
         elif msg == b"*IDN?":
-            self._sendAnswer(b"SIM,335,fake")
+            self._sendAnswer(b"SIM,335,fake,0")
         elif re.match(b'LOCK', msg):
             pass
         # Query setpoint
         elif re.match(b'SETP\?', msg):
-            self._sendAnswer(b"%f" % (self._setpoint,))
+            self._sendAnswer(b"+%.3f" % (self._setpoint,))
         # set setpoint
         elif re.match(b"SETP", msg):
             vals = msg[4:].split(',')
@@ -502,9 +501,18 @@ class LakeshoreSimulator(object):
             vals = msg[5:].split(',')
             self._heating = int(vals[1])
         # Query temperature
-        elif re.match(b'SRDG\?', msg):
-            self._sendAnswer(b"%f" % (self._temperature,))
-            self._temperature += random.randint(-5, 5)
+        elif re.match(b'KRDG\?', msg):
+            # send temperature with some noise
+            self._sendAnswer(b"+%.3f" % (self._temperature + random.random() / 1000,))
+            if self._heating:
+                if self._temperature < self._setpoint:  # heating is enabled
+                    self._temperature += 0.05 * self._heating  # simulate heating
+                else:
+                    self._temperature -= 0.01
+            else:  # no heating so no temperature control
+                # maintain stable temperature
+                if self._temperature > self._stable_temperature:
+                    self._temperature -= 0.1  # cool off with no heating
         else:
             self._status_byte |= COMMAND_ERROR
 
