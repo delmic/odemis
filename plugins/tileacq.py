@@ -37,11 +37,12 @@ from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
     FluoStream, MultipleDetectorStream, MonochromatorSettingsStream, CLStream
+from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import dataio as udataio
 from odemis.util import img, TimeoutError
 import os
@@ -53,7 +54,7 @@ import wx
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.6"
+    __version__ = "1.7"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -75,9 +76,7 @@ class TileAcqPlugin(Plugin):
         ("filename", {
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
-            "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
-                "HDF5 Files (*.h5)|*.h5",
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("stitch", {
             "tooltip": "Use all the tiles to create a large-scale image at the end of the acquisition",

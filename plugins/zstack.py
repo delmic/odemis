@@ -31,9 +31,11 @@ from odemis import model, dataio
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
     SpectrumStream, UNDEFINED_ROI, StaticStream
+from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 from odemis.model import DataArray
 from odemis.util import driver
 import os
@@ -43,7 +45,7 @@ import wx
 
 class ZStackPlugin(Plugin):
     name = "Z Stack"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = u"Anders Muskens"
     __license__ = "GPLv2"
 
@@ -55,9 +57,7 @@ class ZStackPlugin(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
-            "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
-                "HDF5 Files (*.h5)|*.h5",
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("zstep", {
             "control_type": odemis.gui.CONTROL_FLT,
