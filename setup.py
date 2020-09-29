@@ -102,8 +102,11 @@ if sys.platform.startswith('linux'):
                'util/piterminal',
                'util/tmcmconfig',
                'util/shrkconfig',
+               'util/saconfig',
+               'util/pmconfig',
                'util/odemis-park-mirror',
                'util/check-mirror-ref',
+               'util/axes-odometer',
                ]
 else:
     data_files = []
