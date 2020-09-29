@@ -3820,6 +3820,9 @@ class Sparc2AlignTab(Tab):
                 main.spec_sel.position.unsubscribe(self._onSpecSelPos)
             if main.fibaligner:
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
+        elif mode != "lens-align":
+            if main.lens_mover:
+                main.lens_mover.position.unsubscribe(self._onLensPos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -3840,7 +3843,7 @@ class Sparc2AlignTab(Tab):
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
-            self.panel.pnl_lens_mover.Enable(True)
+            self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
             self.panel.gauge_autofocus.Enable(True)
@@ -3852,6 +3855,7 @@ class Sparc2AlignTab(Tab):
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
+            f.add_done_callback(self._on_lens_align_done)
         elif mode == "mirror-align":
             self.tab_data_model.focussedView.value = self.panel.vp_moi.view
             if self._moi_stream:
@@ -3952,6 +3956,19 @@ class Sparc2AlignTab(Tab):
         else:
             logging.debug("Optical path was updated.")
 
+    @call_in_wx_main
+    def _on_lens_align_done(self, f):
+        # Has no effect now, as OPM future are not cancellable (but it makes the
+        # code more future-proof)
+        if f.cancelled():
+            return
+
+        # Updates L1 ACTIVE position when the user moves it
+        if self.tab_data_model.main.lens_mover:
+            self.tab_data_model.main.lens_mover.position.subscribe(self._onLensPos)
+            self.panel.pnl_lens_mover.Enable(True)
+
+    @call_in_wx_main
     def _on_fibalign_done(self, f):
         """
         Called when the optical path mode is fiber-align and ready
@@ -4370,6 +4387,11 @@ class Sparc2AlignTab(Tab):
         """
         Called when the lens is moved (and the tab is shown)
         """
+        if not self.IsShown():
+            # Might happen if changing quickly between tab
+            logging.warning("Received active lens position while outside of alignment tab")
+            return
+
         # Save the lens position as the "calibrated" one
         lm = self.tab_data_model.main.lens_mover
         lm.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
@@ -4445,8 +4467,6 @@ class Sparc2AlignTab(Tab):
 
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
-            if main.lens_mover:
-                main.lens_mover.position.subscribe(self._onLensPos)
             main.mirror.position.subscribe(self._onMirrorPos)
 
             # Reset the focus progress bar (as any focus action has been cancelled)
