@@ -420,6 +420,7 @@ class AcquisitionDialog(xrcfr_plugin):
                 # allowing that).
                 try:
                     self.SetReturnCode(btnid)
+                    logging.info("Button '%s' handled by %s, %s", label, self.plugin.__class__.__name__, callback)
                     t = threading.Thread(target=callback, args=(self,),
                                          name="Callback for button %s" % (label,))
                     t.start()
