@@ -32,7 +32,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = True  # (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 COMP_ARGS = {
     "atol": 1e-7,
@@ -266,7 +266,21 @@ class Test5DOF(unittest.TestCase):
         pos4['y'] = pos3['y']
         pos4['z'] = pos3['z']
         test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
-        logging.debug(self.dev.position.value)
+
+    def test_move_update_position(self):
+        """
+        Test to make sure the system updates the position as it moves
+        """
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
+        pos2 = {'x': 3e-3, 'y': 3e-3, 'z': 3e-3, 'rx': 3e-4, 'rz':-1e-4}
+        self.dev.moveAbs(pos1).result()
+        time.sleep(0.1)
+        f = self.dev.moveAbs(pos2)
+        # wait and see if the position updated midway through the move. Should take 3 s in sim
+        time.sleep(1.0)
+        test.assert_pos_not_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        test.assert_pos_not_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        f.result()
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
