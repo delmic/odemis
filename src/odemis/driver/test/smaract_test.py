@@ -32,7 +32,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = True  # (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 COMP_ARGS = {
     "atol": 1e-7,
@@ -178,6 +178,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "role": "stage",
         "ref_on_init": True,
         "linear_speed": 0.001,  # m/s
+        "rotary_speed": 0.001,  # rad/s
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
@@ -272,7 +273,7 @@ class Test5DOF(unittest.TestCase):
         # note: this test will fail with the simulator because it does not
         # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
+        new_pos = {'x':0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.01)
         f.cancel()

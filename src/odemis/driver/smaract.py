@@ -1721,7 +1721,7 @@ class FakeMC_5DOF_DLL(object):
 
         self._referencing = False
 
-        self._current_move_start = time.time()
+        self._last_time = time.time()
         self._current_move_finish = time.time()
 
     def _pose_in_range(self, pose):
@@ -1759,7 +1759,6 @@ class FakeMC_5DOF_DLL(object):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
-            self._current_move_finish = time.time() + 1.0
             self.target.x = pose.x
             self.target.y = pose.y
             self.target.z = pose.z
@@ -1767,19 +1766,94 @@ class FakeMC_5DOF_DLL(object):
             self.target.ry = pose.ry
             self.target.rz = pose.rz
 
-            logging.debug("sim MC5DOF: moving to target: %s" % (self.target,))
+            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+
+            # estimate move duration
+            dur = max(
+                abs(self.target.x - self.pose.x) / lin_speed,
+                abs(self.target.y - self.pose.y) / lin_speed,
+                abs(self.target.z - self.pose.z) / lin_speed,
+                abs(self.target.rx - self.pose.rx) / rad_speed,
+                abs(self.target.rz - self.pose.rz) / rad_speed,
+                )
+
+            self._current_move_finish = time.time() + dur
+            self._last_time = time.time()
+            logging.debug("sim MC5DOF: moving to target: %s duration %f s" % (self.target, dur))
         else:
             raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
 
     def SA_MC_GetPose(self, id, p_pose):
         pose = _deref(p_pose, SA_MC_Pose)
+
+        cur_time = time.time()
+        if cur_time < self._current_move_finish:
+            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+            dt = cur_time - self._last_time
+
+            # calculate intermediate positions
+            dx = self.target.x - self.pose.x
+            if dx >= 0:
+                self.pose.x = self.pose.x + lin_speed * dt
+                if self.pose.x >= self.target.x:
+                    self.pose.x = self.target.x
+            elif dx < 0:
+                self.pose.x = self.pose.x - lin_speed * dt
+                if self.pose.x < self.target.x:
+                    self.pose.x = self.target.x
+
+            dy = self.target.y - self.pose.y
+            if dy >= 0:
+                self.pose.y = self.pose.y + lin_speed * dt
+                if self.pose.y >= self.target.y:
+                    self.pose.y = self.target.y
+            elif dy < 0:
+                self.pose.y = self.pose.y - lin_speed * dt
+                if self.pose.y < self.target.y:
+                    self.pose.y = self.target.y
+
+            dz = self.target.z - self.pose.z
+            if dz >= 0:
+                self.pose.z = self.pose.z + lin_speed * dt
+                if self.pose.z >= self.target.z:
+                    self.pose.z = self.target.z
+            elif dz < 0:
+                self.pose.z = self.pose.z - lin_speed * dt
+                if self.pose.z < self.target.z:
+                    self.pose.z = self.target.z
+
+            drx = self.target.rx - self.pose.rx
+            if drx >= 0:
+                self.pose.rx = self.pose.rx + rad_speed * dt
+                if self.pose.rx >= self.target.rx:
+                    self.pose.rx = self.target.rx
+            elif drx < 0:
+                self.pose.rx = self.pose.rx - rad_speed * dt
+                if self.pose.rx < self.target.rx:
+                    self.pose.rx = self.target.rx
+
+            drz = self.target.rz - self.pose.rz
+            if drz >= 0:
+                self.pose.rz = self.pose.rz + rad_speed * dt
+                if self.pose.rz >= self.target.rz:
+                    self.pose.rz = self.target.rz
+            elif drz < 0:
+                self.pose.rz = self.pose.rz - rad_speed * dt
+                if self.pose.rz < self.target.rz:
+                    self.pose.rz = self.target.rz
+
         pose.x = self.pose.x
         pose.y = self.pose.y
         pose.z = self.pose.z
         pose.rx = self.pose.rx
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
-        logging.debug("sim MC5DOF: position: %s" % (self.pose,))
+
+        self._last_time = cur_time
+
+        logging.debug("sim MC5DOF: position: %s" % (pose,))
         return MC_5DOF_DLL.SA_MC_OK
 
     def SA_MC_Stop(self, id):
@@ -1826,17 +1900,10 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
+        start_time = time.time()
         
-        # Simulate the intermediate position of the move
-        n_steps = 5
-        for i in range(n_steps):
-            intermediate = SA_MC_Pose()
-            intermediate.x = self.pose.x + (self.target.x - self.pose.x) * i / n_steps
-            intermediate.y = self.pose.y + (self.target.y - self.pose.y) * i / n_steps
-            intermediate.z = self.pose.z + (self.target.z - self.pose.z) * i / n_steps
-            intermediate.rx = self.pose.rx + (self.target.rx - self.pose.rx) * i / n_steps
-            intermediate.rz = self.pose.rz + (self.target.rz - self.pose.rz) * i / n_steps
-            self.pose = copy.copy(intermediate)
+        while time.time() < self._current_move_finish \
+            and time.time() < start_time + timeout.value:
             time.sleep(0.05)
         
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
