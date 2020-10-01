@@ -61,7 +61,7 @@ class CompositedScanner(model.Emitter):
         # Copy VAs directly related to scanning from external
         self._shape = self._external.shape
         for vaname in ("pixelSize", "translation", "resolution", "scale",
-                       "rotation", "dwellTime"):
+                       "dwellTime"):
             if model.hasVA(self._external, vaname):
                 va = getattr(self._external, vaname)
                 setattr(self, vaname, va)
@@ -85,8 +85,8 @@ class CompositedScanner(model.Emitter):
 
         # VAs that could be both on internal or external. If on both, pick internal
         # TODO: add a better way to select if both provide: either via arg, or
-        # select the one which provides a None (=auto)?
-        for vaname in ("power", "blanker", "external"):
+        # select the one which provides a None (=auto), or which is not read-only?
+        for vaname in ("power", "blanker", "external", "rotation"):
             if model.hasVA(self._internal, vaname):
                 va = getattr(self._internal, vaname)
                 setattr(self, vaname, va)
