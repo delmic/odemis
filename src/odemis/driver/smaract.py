@@ -900,6 +900,11 @@ class SA_MC_Event(Structure):
         ("u", SA_MC_EventData),
         ]
 
+    def __str__(self):
+        return "SA_MC_EVenet {type: %s, i32: %s}" % \
+            (MC_5DOF_DLL.event_name.get(self.type),
+             MC_5DOF_DLL.err_code.get(self.i32))
+
 
 class SA_MC_Vec3(Structure):
     """
@@ -1061,6 +1066,10 @@ class MC_5DOF_DLL(CDLL):
 
     # events
     SA_MC_EVENT_MOVEMENT_FINISHED = 0x0001
+
+    event_name = {
+        0x0001: "MOVEMENT_FINISHED"
+        }
 
     # handles
     # handle value that means no object
@@ -1784,6 +1793,25 @@ class FakeMC_5DOF_DLL(object):
         else:
             raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
 
+    def _calc_move_after_dt(self, a, speed, dt):
+        """
+        Calculates the new position for a given axis after a time dt at speed
+        a (str): the axis name attribute ('x', 'y', 'z', 'rx', 'rz')
+        speed (float): the speed of that axis
+        dt (float): time differential
+        """
+        d = getattr(self.target, a) - getattr(self.pose, a)
+        if d >= 0:
+            new_pos = getattr(self.pose, a) + speed * dt
+            if new_pos >= getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+        elif d < 0:
+            new_pos = getattr(self.pose, a) - speed * dt
+            if new_pos < getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+
+        return new_pos
+
     def SA_MC_GetPose(self, id, p_pose):
         pose = _deref(p_pose, SA_MC_Pose)
 
@@ -1792,57 +1820,12 @@ class FakeMC_5DOF_DLL(object):
             lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
             rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
             dt = cur_time - self._last_time
-
             # calculate intermediate positions
-            dx = self.target.x - self.pose.x
-            if dx >= 0:
-                self.pose.x = self.pose.x + lin_speed * dt
-                if self.pose.x >= self.target.x:
-                    self.pose.x = self.target.x
-            elif dx < 0:
-                self.pose.x = self.pose.x - lin_speed * dt
-                if self.pose.x < self.target.x:
-                    self.pose.x = self.target.x
-
-            dy = self.target.y - self.pose.y
-            if dy >= 0:
-                self.pose.y = self.pose.y + lin_speed * dt
-                if self.pose.y >= self.target.y:
-                    self.pose.y = self.target.y
-            elif dy < 0:
-                self.pose.y = self.pose.y - lin_speed * dt
-                if self.pose.y < self.target.y:
-                    self.pose.y = self.target.y
-
-            dz = self.target.z - self.pose.z
-            if dz >= 0:
-                self.pose.z = self.pose.z + lin_speed * dt
-                if self.pose.z >= self.target.z:
-                    self.pose.z = self.target.z
-            elif dz < 0:
-                self.pose.z = self.pose.z - lin_speed * dt
-                if self.pose.z < self.target.z:
-                    self.pose.z = self.target.z
-
-            drx = self.target.rx - self.pose.rx
-            if drx >= 0:
-                self.pose.rx = self.pose.rx + rad_speed * dt
-                if self.pose.rx >= self.target.rx:
-                    self.pose.rx = self.target.rx
-            elif drx < 0:
-                self.pose.rx = self.pose.rx - rad_speed * dt
-                if self.pose.rx < self.target.rx:
-                    self.pose.rx = self.target.rx
-
-            drz = self.target.rz - self.pose.rz
-            if drz >= 0:
-                self.pose.rz = self.pose.rz + rad_speed * dt
-                if self.pose.rz >= self.target.rz:
-                    self.pose.rz = self.target.rz
-            elif drz < 0:
-                self.pose.rz = self.pose.rz - rad_speed * dt
-                if self.pose.rz < self.target.rz:
-                    self.pose.rz = self.target.rz
+            self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
+            self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
+            self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
+            self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
+            self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
 
         pose.x = self.pose.x
         pose.y = self.pose.y
@@ -1901,20 +1884,35 @@ class FakeMC_5DOF_DLL(object):
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
         start_time = time.time()
-        
-        while time.time() < self._current_move_finish \
-            and time.time() < start_time + timeout.value:
+        # flags to indicate possible cancellations or timeouts
+        stopped = False
+        timedout = False
+        while time.time() < self._current_move_finish:
+            if  time.time() > start_time + timeout.value:
+                stopped = True
+                timedout = True
+                break
+            if self.stopping.is_set():
+                stopped = True
+                break
             time.sleep(0.05)
-        
-        ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
-        self.pose = copy.copy(self.target)
 
-        logging.debug("sim MC5DOF: movement complete")
+        ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
+        if not stopped:
+            ev.i32 = MC_5DOF_DLL.SA_MC_OK
+        elif timedout:
+            ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT
+        else:
+            ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_CANCELED
+
+        self.pose = copy.copy(self.target)
         # if a reference move was in process...
-        if self._referencing and not self.stopping.is_set():
+        if self._referencing and not stopped and not timedout:
             self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED] = c_int32(1)
             self._referencing = False  # finished referencing
             logging.debug("sim MC5DOF: Referencing complete")
+
+        logging.debug("sim MC5DOF: issued event %s", ev)
 
 # Classes associated with the SmarAct MCS2 Controller (standard)
 
