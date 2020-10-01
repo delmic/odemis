@@ -24,7 +24,7 @@ import odemis
 from odemis import model
 from odemis import util
 from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS
-from odemis.acq.move import LOADING, IMAGING, TILTED, COATING, IMAGING_PATH, COATING_PATH
+from odemis.acq.move import LOADING, IMAGING, TILTED, COATING, LOADING_PATH
 from odemis.acq.move import cryoTiltSample, cryoLoadSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util import test
 
@@ -61,7 +61,8 @@ class TestCryoMove(unittest.TestCase):
         cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.focus_deactive = cls.focus.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         # Set custom value that works well within the simulator range
-        cls.tilt_angle = 0.3
+        cls.rx_angle = 0.3
+        cls.rz_angle = 0.1
 
     @classmethod
     def tearDownClass(cls):
@@ -92,12 +93,6 @@ class TestCryoMove(unittest.TestCase):
         f.result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS)
 
-        # Switch back to loading position
-        f = cryoLoadSample(LOADING)
-        f.result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
-                                     atol=ATOL_LINEAR_POS)
-
         # Get the stage to coating position
         f = cryoLoadSample(COATING)
         f.result()
@@ -124,10 +119,17 @@ class TestCryoMove(unittest.TestCase):
         f = cryoLoadSample(IMAGING)
         f.result()
 
-        # Tilt the stage
-        f = cryoTiltSample(rx=self.tilt_angle, rz=self.tilt_angle)
+        # Tilt the stage on rx only
+        f = cryoTiltSample(rx=self.rx_angle)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {'rx': self.tilt_angle, 'rz': self.tilt_angle},
+        test.assert_pos_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': 0},
+                                     match_all=False,
+                                     atol=ATOL_ROTATION_POS)
+
+        # Tilt the stage on rx and rz
+        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
+        f.result()
+        test.assert_pos_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': self.rz_angle},
                                      match_all=False,
                                      atol=ATOL_ROTATION_POS)
 
@@ -144,30 +146,7 @@ class TestCryoMove(unittest.TestCase):
         f = cryoLoadSample(LOADING)
         f.result()
         with self.assertRaises(ValueError):
-            f = cryoTiltSample(rx=self.tilt_angle, rz=self.tilt_angle)
-            f.result()
-
-        # Test coating from imaging
-        f = cryoLoadSample(LOADING)
-        f.result()
-        f = cryoLoadSample(IMAGING)
-        f.result()
-        with self.assertRaises(ValueError):
-            f = cryoLoadSample(COATING)
-            f.result()
-
-        # Test imaging from coating
-        f = cryoLoadSample(LOADING)
-        f.result()
-        f = cryoLoadSample(COATING)
-        f.result()
-        with self.assertRaises(ValueError):
-            f = cryoLoadSample(IMAGING)
-            f.result()
-
-        # Test tilting from coating
-        with self.assertRaises(ValueError):
-            f = cryoTiltSample(rx=self.tilt_angle, rz=self.tilt_angle)
+            f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
             f.result()
 
     def test_cancel_loading(self):
@@ -203,11 +182,11 @@ class TestCryoMove(unittest.TestCase):
         f.result()
         f = cryoLoadSample(IMAGING)
         f.result()
-        f = cryoTiltSample(rx=self.tilt_angle, rz=self.tilt_angle)
+        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
         time.sleep(2)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
-        test.assert_pos_not_almost_equal(stage.position.value, {'rx': self.tilt_angle, 'rz': self.tilt_angle},
+        test.assert_pos_not_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': self.rz_angle},
                                          match_all=False,
                                          atol=ATOL_ROTATION_POS)
 
@@ -249,7 +228,7 @@ class TestCryoMove(unittest.TestCase):
         time.sleep(2)
         f.cancel()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
-        self.assertEqual(pos_label, IMAGING_PATH)
+        self.assertEqual(pos_label, LOADING_PATH)
 
         # Move to imaging position
         f = cryoLoadSample(LOADING)
@@ -260,14 +239,12 @@ class TestCryoMove(unittest.TestCase):
         self.assertEqual(pos_label, IMAGING)
 
         # Move to tilting
-        f = cryoTiltSample(rx=self.tilt_angle, rz=self.tilt_angle)
+        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
         f.result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, TILTED)
 
         # Move to coating position
-        f = cryoLoadSample(LOADING)
-        f.result()
         f = cryoLoadSample(COATING)
         f.result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
@@ -275,10 +252,10 @@ class TestCryoMove(unittest.TestCase):
 
         # Return to loading and cancel before reaching
         f = cryoLoadSample(LOADING)
-        time.sleep(2)
+        time.sleep(4)
         f.cancel()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
-        self.assertEqual(pos_label, COATING_PATH)
+        self.assertEqual(pos_label, LOADING_PATH)
 
 
 if __name__ == "__main__":

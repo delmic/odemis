@@ -34,10 +34,10 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
-LOADING, IMAGING, TILTED, COATING, IMAGING_PATH, COATING_PATH, UNKNOWN = 0, 1, 2, 3, 4, 5, 6
+LOADING, IMAGING, TILTED, COATING, LOADING_PATH, UNKNOWN = 0, 1, 2, 3, 4, 5
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
-RTOL_PROGRESS = 0.1
+RTOL_PROGRESS = 0.3
 
 
 def getCurrentPositionLabel(current_pos, stage):
@@ -53,37 +53,27 @@ def getCurrentPositionLabel(current_pos, stage):
     stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
     stage_coating = stage_md[model.MD_FAV_POS_COATING]
     # Check that the stage X,Y,Z are within the active range
-    for axis in {'x', 'y', 'z'}:
-        if not _isInRange(current_pos, stage_active_range, axis):
-            break
-    else:
-        if current_pos['rx'] == 0 and current_pos['rz'] == 0:
+    if _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
+        if _isNearPosition(current_pos, 0, {'rx', 'rz'}):
             return IMAGING
+        # Check the stage is near the coating position
+        elif _isNearPosition(current_pos, stage_coating, stage.axes):
+            return COATING
         else:
             return TILTED
     # Check the stage is near the loading position
-    for axis in stage.axes:
-        if not _isNearPosition(current_pos, stage_deactive, axis):
-            break
-    else:
+    if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
 
     # Check the current position is near the line between DEACTIVE and ACTIVE
     imaging_progress = getMovementProgress(current_pos, stage_deactive, stage_active)
     if imaging_progress is not None:
-        return IMAGING_PATH
-
-    # Check the stage is near the coating position
-    for axis in stage.axes:
-        if not _isNearPosition(current_pos, stage_coating, axis):
-            break
-    else:
-        return COATING
+        return LOADING_PATH
 
     # Check the current position is near the line between DEACTIVE and COATING
     coating_progress = getMovementProgress(current_pos, stage_deactive, stage_coating)
     if coating_progress is not None:
-        return COATING_PATH
+        return LOADING_PATH
 
     # None of the above -> unknown position
     return UNKNOWN
@@ -125,32 +115,51 @@ def getMovementProgress(current_pos, start_pos, end_pos):
         return None
 
 
-def _isInRange(current_pos, active_range, axis):
+def _isInRange(current_pos, active_range, axes):
     """
     Check if current position is within active range
+    :param current_pos: (dict) current position dict (axis -> value)
+    :param active_range: (dict) imaging  active range (axis name → (min,max))
+    :param axes: (set) axes to check values
     :return: True if position in active range, False otherwise
     """
-    pos = current_pos[axis]
-    axis_active_range = [r for r in active_range[axis]]
-    # Add 1% margin for hardware slight errors
-    margin = (axis_active_range[1] - axis_active_range[0]) * 0.01
-    return (axis_active_range[0] - margin) <= pos <= (axis_active_range[1] + margin)
+    if not axes:
+        logging.warning("Empty axes given.")
+        return False
+    for axis in axes:
+        pos = current_pos[axis]
+        axis_active_range = [r for r in active_range[axis]]
+        # Add 1% margin for hardware slight errors
+        margin = (axis_active_range[1] - axis_active_range[0]) * 0.01
+        if not((axis_active_range[0] - margin) <= pos <= (axis_active_range[1] + margin)):
+            return False
+    return True
 
 
-def _isNearPosition(current_pos, target_position, axis):
+def _isNearPosition(current_pos, target_position, axes):
     """
     Check whether given axis is near stage target position
+    :param current_pos: (dict or float) current position dict (axis -> value) or the direct value
+    :param target_position: (dict or float) target position dict (axis -> value) or the direct value
+    :param axes: (set) axes to compare values
     :return: True if the axis is near (within 1 mm or 0.1 rad) position, False otherwise
     :raises ValueError if axis is unknown
     """
-    current_value = current_pos[axis]
-    target_value = target_position[axis]
-    if axis in {'x', 'y', 'z'}:
-        return abs(target_value - current_value) < ATOL_LINEAR_POS
-    elif axis in {'rx', 'rz'}:
-        return util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
-    else:
-        raise ValueError("Unknown axis value %s.", axis)
+    if not axes:
+        logging.warning("Empty axes given.")
+        return False
+    for axis in axes:
+        current_value = current_pos[axis] if type(current_pos) is dict else current_pos
+        target_value = target_position[axis] if type(target_position) is dict else target_position
+        if axis in {'x', 'y', 'z'}:
+            is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
+        elif axis in {'rx', 'rz'}:
+            is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
+        else:
+            raise ValueError("Unknown axis value %s.", axis)
+        if not is_near:
+            return False
+    return True
 
 
 def cryoLoadSample(target):
@@ -197,22 +206,12 @@ def _doCryoLoadSample(future, stage, focus, target):
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
         # Initial submove for all procedures is to park focus if it's not already parked
-        if not util.almost_equal(focus.position.value['z'], focus_deactive['z'], atol=ATOL_LINEAR_POS):
+        if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
             sub_moves.append((focus, focus_deactive))
 
         if target == LOADING:
-            # If the stage is not on the path from coating to loading, warn if it's not in imaging range
-            # or on the path from imaging to loading
-            if getMovementProgress(stage.position.value, stage_coating, stage_deactive) is None:
-                # Check that the stage X,Y,Z are within the limits
-                for axis in {'x', 'y', 'z'}:
-                    if not _isInRange(current_pos, stage_active_range, axis):
-                        logging.warning("Axis %s position is out of active range.", axis)
-                # Check that current position is near the ACTIVE to DEACTIVE line
-                # (ie, in case it was previously stopped half-way through loading/unloading)
-                if getMovementProgress(stage.position.value, stage_active, stage_deactive) is None:
-                    logging.warning("Stage position is not near the ACTIVE to DEACTIVE line.")
-
+            if getCurrentPositionLabel(current_pos, stage) is UNKNOWN:
+                logging.warning("Current stage position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
@@ -223,10 +222,8 @@ def _doCryoLoadSample(future, stage, focus, target):
             sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
 
         elif target in (IMAGING, COATING):
-            for axis in stage.axes:
-                # Check if the current position is near DEACTIVE position (within 1 mm or 0.1 rad)
-                if not _isNearPosition(current_pos, stage_deactive, axis):
-                    raise ValueError("Axis %s position is not near FAV_POS_DEACTIVE position.", axis)
+            if not _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}) and not _isNearPosition(current_pos, stage_deactive, stage.axes):
+                raise ValueError("Current position is out of active range and not near FAV_POS_DEACTIVE position.")
 
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             target_pos = stage_active if target is IMAGING else stage_coating
@@ -296,16 +293,14 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         current_pos = stage.position.value
         # Check that the stage X,Y,Z are within the limits
-        for axis in {'x', 'y', 'z'}:
-            if not _isInRange(current_pos, stage_active_range, axis):
-                raise ValueError("Axis %s position is out of active range.", axis)
+        if not _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
+            raise ValueError("Current position is out of active range.")
         # To hold the ordered sub moves list to perform the tilting/imaging move
         sub_moves = []
         # Park focus only if stage rx and rz are equal to 0
         # Otherwise stop if it's not already parked
-        if not util.almost_equal(focus.position.value['z'], focus_deactive['z'], atol=ATOL_LINEAR_POS):
-            if (util.almost_equal(current_pos['rx'], 0, atol=ATOL_ROTATION_POS) and
-                    util.almost_equal(current_pos['rz'], 0, atol=ATOL_ROTATION_POS)):
+        if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
+            if _isNearPosition(current_pos, 0, {'rx', 'rz'}):
                 sub_moves.append((focus, focus_deactive))
             else:
                 raise ValueError("Cannot proceed with tilting while focus is not near FAV_POS_DEACTIVE position.")
