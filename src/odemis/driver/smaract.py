@@ -902,8 +902,8 @@ class SA_MC_Event(Structure):
 
     def __str__(self):
         return "SA_MC_Event {type: %s, i32: %s}" % \
-            (MC_5DOF_DLL.event_name.get(self.type, str(self.type)),
-             MC_5DOF_DLL.err_code.get(self.i32))
+            (MC_5DOF_DLL.event_name.get(self.type, self.type),
+             MC_5DOF_DLL.err_code.get(self.i32, self.i32))
 
 
 class SA_MC_Vec3(Structure):
@@ -2390,7 +2390,6 @@ class SA_CTLError(IOError):
 
     def __str__(self):
         return self.strerror
-
 
 
 class MCS2(model.Actuator):
