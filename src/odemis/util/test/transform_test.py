@@ -30,6 +30,7 @@ import unittest
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
+                                   to_physical_space,
                                    RigidTransform, SimilarityTransform,
                                    ScalingTransform, AffineTransform,
                                    AnamorphosisTransform)
@@ -327,6 +328,91 @@ def _angle_diff(x, y):
     the branch cut at the negative x-axis.
     """
     return min(y - x, y - x + 2.0 * numpy.pi, y - x - 2.0 * numpy.pi, key=abs)
+
+
+class ToPhysicalSpaceKnownValues(unittest.TestCase):
+
+    def setUp(self):
+        self._ji = [(0, 0), (0, 4), (7, 0), (7, 4), (0.5, 0.5)]
+        self._xy = [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5), (-1.5, 3)]
+        self._xy2 = [(-4, 7), (4, 7), (-4, -7), (4, -7), (-3, 6)]
+        self._xy23 = [(-4, 10.5), (4, 10.5), (-4, -10.5), (4, -10.5), (-3, 9)]
+        self._shape = (8, 5)
+
+    def test_to_physical_space_known_values(self):
+        """
+        to_physical_space should return known result with known input.
+
+        """
+        # tuple
+        for ji, xy, xy2, xy23 in zip(self._ji, self._xy, self._xy2, self._xy23):
+            res = to_physical_space(ji, self._shape)
+            res2 = to_physical_space(ji, self._shape, pixel_size=2.)
+            res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
+
+            numpy.testing.assert_array_almost_equal(xy, res)
+            numpy.testing.assert_array_almost_equal(xy2, res2)
+            numpy.testing.assert_array_almost_equal(xy23, res23)
+
+        # list of tuples
+        res = to_physical_space(self._ji, self._shape)
+        res2 = to_physical_space(self._ji, self._shape, pixel_size=2.)
+        res23 = to_physical_space(self._ji, self._shape, pixel_size=(2., 3.))
+        numpy.testing.assert_array_almost_equal(self._xy, res)
+        numpy.testing.assert_array_almost_equal(self._xy2, res2)
+        numpy.testing.assert_array_almost_equal(self._xy23, res23)
+
+        # ndarray
+        ji = numpy.array(self._ji)
+        res = to_physical_space(ji, self._shape)
+        res2 = to_physical_space(ji, self._shape, pixel_size=2.)
+        res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
+        numpy.testing.assert_array_almost_equal(self._xy, res)
+        numpy.testing.assert_array_almost_equal(self._xy2, res2)
+        numpy.testing.assert_array_almost_equal(self._xy23, res23)
+
+    def test_to_physical_space_zero_pixel_size(self):
+        """
+        to_physical space should return zero when given zero pixel size.
+
+        """
+        for ji in self._ji:
+            res = to_physical_space(ji, self._shape, pixel_size=0.)
+            numpy.testing.assert_array_almost_equal((0., 0.), res)
+
+    def test_to_physical_space_multiple(self):
+        """
+        to_physical_space should return the same result when called on a list
+        of indices, or on individual indices.
+
+        """
+        _xy = to_physical_space(self._ji, self._shape)
+        for ji, xy in zip(self._ji, _xy):
+            res = to_physical_space(ji, self._shape)
+            numpy.testing.assert_array_almost_equal(xy, res)
+
+    def test_to_physical_space_raises_index_error(self):
+        """
+        to_physical_space should raise an IndexError when the provided index is
+        negative or out-of-bounds.
+
+        """
+        self.assertRaises(IndexError, to_physical_space, (-1, 0), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (0, -1), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (-1, -1), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (8, 0), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (0, 5), self._shape)
+        self.assertRaises(IndexError, to_physical_space, (8, 5), self._shape)
+
+    def test_to_physical_space_raises_value_error(self):
+        """
+        to_physical_space should raise a ValueError when the provided index is
+        not 2-dimensional.
+
+        """
+        self.assertRaises(ValueError, to_physical_space, (), self._shape)
+        self.assertRaises(ValueError, to_physical_space, (1, ), self._shape)
+        self.assertRaises(ValueError, to_physical_space, (1, 2, 3), self._shape)
 
 
 class RotationMatrixKnownValues(unittest.TestCase):

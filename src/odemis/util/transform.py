@@ -193,6 +193,101 @@ def _optimal_rotation(x, y):
     return numpy.dot(V.T, U.T)
 
 
+def to_physical_space(ji, shape, pixel_size=None):
+    """
+    Converts an image pixel index into a coordinate in physical space.
+
+    Images are displayed on a computer screen with the origin in the top-left
+    corner. The column-index `i` is used as the primary axis and the row-index
+    `j` is used as the secondary axis. This represents a left-handed coordinate
+    system. Physical coordinates are typically described in a right-handed
+    coordinate system.
+
+    Calculations should be done preferably in the right-handed physical
+    coordinate system. Calculations using mixed left-handed and right-handed
+    coordinates should be avoided.
+
+    `to_physical_space` converts an image pixel index into a coordinate in
+    physical space. The x-axis is aligned with the columns of the image, and
+    the y-axis with the rows. The direction of the y-axis is opposite to the
+    row-index, such that it is increasing in the upward direction. The origin
+    is placed at the center of the image. If the image has an even amount of
+    rows and/or columns, the origin will be at the boundary between two pixels
+    and the physical coordinates will be non-integer.
+
+
+              Image Pixel Indices                   Physical Coordinates
+
+      o--> i
+      | +---------+---------+---------+        +---------+---------+---------+
+    j V |         |         |         |        |         |         |         |
+        |  (0,0)  |  (0,1)  |  (0,2)  |        | (-1, 1) |  (0, 1) |  (1, 1) |
+        |         |         |         |        |         |         |         |
+        +---------+---------+---------+        +---------+---------+---------+
+        |         |         |         |        |         |         |         |
+        |  (1,0)  |  (1,1)  |  (1,2)  |        | (-1, 0) |  (0, 0) |  (1, 0) |
+        |         |         |         |        |         |         |         |
+        +---------+---------+---------+        +---------+---------+---------+
+        |         |         |         |        |         |         |         |
+        |  (2,0)  |  (2,1)  |  (2,2)  |        | (-1,-1) |  (0,-1) |  (1,-1) |
+        |         |         |         |    y ^ |         |         |         |
+        +---------+---------+---------+      | +---------+---------+---------+
+                                             o--> x
+
+    Parameters
+    ----------
+    ji : tuple, list of tuples, ndarray
+        Pixel index, list of indices, or array of indices. For each index the
+        first entry is the row-index `j` and the second entry is the
+        column-index `i`.
+    shape : tuple of ints
+        Shape of the image. The first entry is the number of rows, the second
+        entry is the number of columns in the image.
+    pixel_size : tuple of 2 floats, float (optional)
+        Pixel size in (x, y). For square pixels, a single float can be
+        provided.
+
+    Returns
+    -------
+    xy : ndarray
+        Physical coordinates. Same shape as `ji`. For each coordinate the first
+        entry is the x-coordinate and the second entry is the y-coordinate.
+
+    Raises
+    ------
+    IndexError
+        If either the index is negative or out-of-range.
+    ValueError
+        If the index is not 2-dimensional.
+
+    Examples
+    --------
+    >>> ji = (0, 0)
+    >>> shape = (8, 5)
+    >>> to_physical_space(ji, shape)
+    array([-2. ,  3.5])
+
+    """
+    ji = numpy.asarray(ji)
+    n, m = shape
+
+    if numpy.any(ji < 0):
+        raise IndexError("Negative indices (wrap-around) are not supported.")
+    if numpy.any(ji >= shape):
+        raise IndexError("Index out of range.")
+    if ji.shape[-1] != 2:
+        raise ValueError("Indices must be 2-dimensional.")
+
+    xy = numpy.empty(ji.shape, dtype=float)
+    xy[..., 0] = ji[..., 1] - 0.5 * (m - 1)  # map column-index `i` to x-axis
+    xy[..., 1] = 0.5 * (n - 1) - ji[..., 0]  # map row-index `j` to y-axis
+
+    if pixel_size is not None:
+        xy *= pixel_size
+
+    return xy
+
+
 class GeometricTransform(with_metaclass(ABCMeta, object)):
     """Base class for geometric transformations."""
 
