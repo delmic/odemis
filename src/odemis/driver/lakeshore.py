@@ -209,7 +209,7 @@ class Lakeshore(model.HwComponent):
 
     def _sendOrder(self, cmd):
         """
-        cmd (byte str): command to be sent to device (without the CR)
+        cmd (byte str): command to be sent to device (without the LF)
         """
         cmd = cmd + b"\n"
         with self._ser_access:
@@ -219,7 +219,7 @@ class Lakeshore(model.HwComponent):
 
     def _sendQuery(self, cmd):
         """
-        cmd (byte str): command to be sent to device (without the CR, but with the ?)
+        cmd (byte str): command to be sent to device (without the LF, but with the ?)
         returns (byte str): answer received from the device (without \n or \r)
         raise:
             IOError if no answer is returned in time
@@ -273,7 +273,16 @@ class Lakeshore(model.HwComponent):
         Returns 4 strings: manufacturer, model number, serial number, and firmware version
         """
         identity = self._sendQuery(b'*IDN?')
-        manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
+        try:
+            manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
+        except TypeError:
+            raise IOError("Invalid identifier received")
+
+        if manufacturer != "LSCI":
+            raise IOError("Invalid device manufacturer")
+        if md != "MODEL335":
+            raise IOError("The model is not 335")
+
         return manufacturer, md, serialn, firmware
     
     def GetTemp(self):
@@ -293,14 +302,14 @@ class Lakeshore(model.HwComponent):
         """
         Get the temperature setpoint. Returns a float in Celsius
         """
-        val = self._sendQuery(b"SETP? %d" % (self._output_channel,)).strip('+')
+        val = self._sendQuery(b"SETP? %d" % (self._output_channel,))
         return float(val) - KELVIN_CONVERT
 
     def GetSensorTemperature(self):
         """
         Get the current temperature of the sensor input. Returns a float in Celsius
         """
-        return float(self._sendQuery(b"KRDG? %s" % (self._sensor_input,)).strip('+')) - KELVIN_CONVERT
+        return float(self._sendQuery(b"KRDG? %s" % (self._sensor_input,))) - KELVIN_CONVERT
 
     def LockKeypad(self, lock):
         """
@@ -417,6 +426,9 @@ class Lakeshore(model.HwComponent):
             logging.exception("Failed to read sensor temperature.")
 
 
+STABLE_TEMPERATURE = 50  # K, temperature reached without heating
+
+
 class LakeshoreSimulator(object):
     """
     Simulates a Lakeshore 335
@@ -430,10 +442,9 @@ class LakeshoreSimulator(object):
         self._input_buf = b""  # what we receive from the "host computer"
         self._status_byte = POWER_ON
 
-        self._setpoint = 150
-        self._temperature = 100
-        self._stable_temperature = 50
-        self._heating = 0
+        self._setpoint = 150  # K
+        self._temperature = 100  # K
+        self._heating = 0  # enum int 0,1,2, or 3
 
     def write(self, data):
         self._input_buf += data
@@ -483,7 +494,7 @@ class LakeshoreSimulator(object):
         elif msg == b"*CLS":
             self._status_byte = 0
         elif msg == b"*IDN?":
-            self._sendAnswer(b"SIM,335,fake,0")
+            self._sendAnswer(b"LSCI,MODEL335,fake,0.0")
         elif re.match(b'LOCK', msg):
             pass
         # Query setpoint
@@ -503,7 +514,7 @@ class LakeshoreSimulator(object):
         # Query temperature
         elif re.match(b'KRDG\?', msg):
             # send temperature with some noise
-            self._sendAnswer(b"+%.3f" % (self._temperature + random.random() / 1000,))
+            self._sendAnswer(b"+%.3f" % (self._temperature + random.uniform(-0.1, 0.1),))
             if self._heating:
                 if self._temperature < self._setpoint:  # heating is enabled
                     self._temperature += 0.05 * self._heating  # simulate heating
@@ -511,7 +522,7 @@ class LakeshoreSimulator(object):
                     self._temperature -= 0.01
             else:  # no heating so no temperature control
                 # maintain stable temperature
-                if self._temperature > self._stable_temperature:
+                if self._temperature > STABLE_TEMPERATURE:
                     self._temperature -= 0.1  # cool off with no heating
         else:
             self._status_byte |= COMMAND_ERROR

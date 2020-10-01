@@ -116,7 +116,7 @@ class TestLakeshore(unittest.TestCase):
         self.dev.heating.value = 3  # fast heating
         # wait to heat up and then check if the temperature rose by a degree
         time.sleep(30)
-        self.assertAlmostEqual(self.dev.temperature.value, self.dev.targetTemperature.value, places=0)
+        self.assertAlmostEqual(self.dev.temperature.value, self.dev.targetTemperature.value, delta=0.5)
 
         self.dev.targetTemperature.value = old
         self.dev.heating.value = 0  # stop heating
