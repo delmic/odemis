@@ -901,7 +901,7 @@ class SA_MC_Event(Structure):
         ]
 
     def __str__(self):
-        return "SA_MC_EVenet {type: %s, i32: %s}" % \
+        return "SA_MC_Event {type: %s, i32: %s}" % \
             (MC_5DOF_DLL.event_name.get(self.type),
              MC_5DOF_DLL.err_code.get(self.i32))
 
@@ -1068,7 +1068,7 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_EVENT_MOVEMENT_FINISHED = 0x0001
 
     event_name = {
-        0x0001: "MOVEMENT_FINISHED"
+        SA_MC_EVENT_MOVEMENT_FINISHED: "MOVEMENT_FINISHED"
         }
 
     # handles
