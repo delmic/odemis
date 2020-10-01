@@ -1148,7 +1148,7 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), pos_deactive_after_ref=False, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1182,6 +1182,8 @@ class MC_5DOF(model.Actuator):
                 range: [float, float], default is -1 -> 1
                 unit: (str) default is "m" for x, y, z and "rad" for the r*
             }
+        pos_deactive_after_ref (bool): if True, will move to the deactive position 
+            defined in metadata after referencing
         """
         if locator != "fake":
             self.core = MC_5DOF_DLL()
@@ -1251,6 +1253,7 @@ class MC_5DOF(model.Actuator):
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
         self._deactive_pos_after_ref = None
+        self._pos_deactive_after_ref = pos_deactive_after_ref
 
         if referenced:
             logging.debug("SA_MC is referenced")
@@ -1297,7 +1300,7 @@ class MC_5DOF(model.Actuator):
             self.SetPivot(pivot)
         if model.MD_FAV_POS_DEACTIVE in md:
             deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
-            if not (isinstance(deactive_pos, dict) and set(deactive_pos.keys()).intersection({"x", "y", "z", 'rx', 'rz'})):
+            if not isinstance(deactive_pos, dict) or not set(deactive_pos.keys()) <= set(self.axes.keys()):
                 raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
             self._deactive_pos_after_ref = deactive_pos
         super(MC_5DOF, self).updateMetadata(md)
@@ -1520,7 +1523,6 @@ class MC_5DOF(model.Actuator):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        raised = True
         try:
             with future._moving_lock:
                 if future._must_stop:
@@ -1550,7 +1552,10 @@ class MC_5DOF(model.Actuator):
 
                 logging.info("Referencing successful.")
 
-            raised = False
+            if self._pos_deactive_after_ref and self._deactive_pos_after_ref is not None and self._is_referenced():
+                logging.info("Moving axes to deactivated position %s after referencing", self._deactive_pos_after_ref)
+                self._checkMoveAbs(self._deactive_pos_after_ref)
+                self._doMoveAbs(future, self._deactive_pos_after_ref)
 
         except SA_MCError as ex:
             # This occurs if a stop command interrupts referencing
@@ -1573,15 +1578,9 @@ class MC_5DOF(model.Actuator):
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
             # only move if no exception was raised.
-            if self._is_referenced() and not raised:
+            if self._is_referenced():
                 self.referenced._value = {a: True for a in self.axes.keys()}
                 self._updatePosition()
-                if self._deactive_pos_after_ref is not None:
-                    logging.info("Moving axes to deactivated position %s after referencing", self._deactive_pos_after_ref)
-
-                    self._checkMoveAbs(self._deactive_pos_after_ref)
-                    f = self._createMoveFuture()
-                    self._doMoveAbs(f, self._deactive_pos_after_ref)
 
             self.referenced.notify(self.referenced.value)
 
@@ -2414,7 +2413,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), ** kwargs):
+                 hold_time=float('inf'), pos_deactive_after_ref=False, ** kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2441,6 +2440,8 @@ class MCS2(model.Actuator):
                 unit: (str) default will be set to 'm'
                 channel: (int) the corresponding axis number on the controller
             }
+        pos_deactive_after_ref (bool): if True, will move to the deactive position
+            defined in metadata after referencing
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -2518,6 +2519,7 @@ class MCS2(model.Actuator):
         axes_ref = {a: self._is_channel_referenced(i) for a, i in self._axis_map.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+        self._pos_deactive_after_ref = pos_deactive_after_ref
 
         # If ref_on_init, referenced immediately.
         if all(referenced for _, referenced in axes_ref.items()):
@@ -3058,7 +3060,8 @@ class MCS2(model.Actuator):
                         # TODO: Raise some error here
 
                     # if referenced, move to the safe posiiton (if defined)
-                    if self._deactive_pos_after_ref is not None and self._deactive_pos_after_ref.get(a) is not None:
+                    if self._pos_deactive_after_ref and self._deactive_pos_after_ref is not None \
+                        and a in self._deactive_pos_after_ref:
                         deactive_pos = self._deactive_pos_after_ref[a]
                         logging.info("Moving axis %s to deactivated position %f", a, deactive_pos)
                         f = self._createMoveFuture()
