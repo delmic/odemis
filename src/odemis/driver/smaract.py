@@ -35,8 +35,8 @@ import copy
 import threading
 
 from odemis import model
-from odemis.util import driver
-from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync
+from odemis.util import driver, RepeatingTimer
+from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute
 
 
 def add_coord(pos1, pos2):
@@ -900,6 +900,11 @@ class SA_MC_Event(Structure):
         ("u", SA_MC_EventData),
         ]
 
+    def __str__(self):
+        return "SA_MC_Event {type: %s, i32: %s}" % \
+            (MC_5DOF_DLL.event_name.get(self.type, self.type),
+             MC_5DOF_DLL.err_code.get(self.i32, self.i32))
+
 
 class SA_MC_Vec3(Structure):
     """
@@ -1061,6 +1066,10 @@ class MC_5DOF_DLL(CDLL):
 
     # events
     SA_MC_EVENT_MOVEMENT_FINISHED = 0x0001
+
+    event_name = {
+        SA_MC_EVENT_MOVEMENT_FINISHED: "MOVEMENT_FINISHED"
+        }
 
     # handles
     # handle value that means no object
@@ -1254,8 +1263,18 @@ class MC_5DOF(model.Actuator):
         self.set_linear_speed(self.linear_speed)
         self.rotary_speed = rotary_speed
         self.set_rotary_speed(math.degrees(self.rotary_speed))
+
+        self.speed = VigilantAttribute({'x': self.linear_speed,
+                                   'y': self.linear_speed,
+                                   'z': self.linear_speed,
+                                   'rx': self.rotary_speed,
+                                   'rz': self.rotary_speed},
+                                   readonly=True)
+
+        # create a timer thread that will be used to update the position while waiting for events
+        self.update_position_timer = RepeatingTimer(1.0, self._updatePosition)
+        self.update_position_timer.start()
         self.set_hold_time(hold_time)
-        self._updatePosition()
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -1591,6 +1610,7 @@ class MC_5DOF(model.Actuator):
         logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
         try:
+            self.update_position_timer.period = 0.05
             with future._moving_lock:
                 if future._must_stop:
                     raise CancelledError()
@@ -1633,6 +1653,7 @@ class MC_5DOF(model.Actuator):
             logging.exception("Move failure")
             raise
         finally:
+            self.update_position_timer.period = 1.0
             self._updatePosition()
 
         logging.debug("Move successfully completed")
@@ -1709,7 +1730,7 @@ class FakeMC_5DOF_DLL(object):
 
         self._referencing = False
 
-        self._current_move_start = time.time()
+        self._last_time = time.time()
         self._current_move_finish = time.time()
 
     def _pose_in_range(self, pose):
@@ -1747,7 +1768,6 @@ class FakeMC_5DOF_DLL(object):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
-            self._current_move_finish = time.time() + 1.0
             self.target.x = pose.x
             self.target.y = pose.y
             self.target.z = pose.z
@@ -1755,19 +1775,68 @@ class FakeMC_5DOF_DLL(object):
             self.target.ry = pose.ry
             self.target.rz = pose.rz
 
-            logging.debug("sim MC5DOF: moving to target: %s" % (self.target,))
+            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+
+            # estimate move duration
+            dur = max(
+                abs(self.target.x - self.pose.x) / lin_speed,
+                abs(self.target.y - self.pose.y) / lin_speed,
+                abs(self.target.z - self.pose.z) / lin_speed,
+                abs(self.target.rx - self.pose.rx) / rad_speed,
+                abs(self.target.rz - self.pose.rz) / rad_speed,
+                )
+
+            self._current_move_finish = time.time() + dur
+            self._last_time = time.time()
+            logging.debug("sim MC5DOF: moving to target: %s duration %f s" % (self.target, dur))
         else:
             raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
 
+    def _calc_move_after_dt(self, a, speed, dt):
+        """
+        Calculates the new position for a given axis after a time dt at speed
+        a (str): the axis name attribute ('x', 'y', 'z', 'rx', 'rz')
+        speed (float): the speed of that axis
+        dt (float): time differential
+        """
+        d = getattr(self.target, a) - getattr(self.pose, a)
+        if d >= 0:
+            new_pos = getattr(self.pose, a) + speed * dt
+            if new_pos >= getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+        elif d < 0:
+            new_pos = getattr(self.pose, a) - speed * dt
+            if new_pos < getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+
+        return new_pos
+
     def SA_MC_GetPose(self, id, p_pose):
         pose = _deref(p_pose, SA_MC_Pose)
+
+        cur_time = time.time()
+        if cur_time < self._current_move_finish:
+            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+            dt = cur_time - self._last_time
+            # calculate intermediate positions
+            self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
+            self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
+            self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
+            self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
+            self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
+
         pose.x = self.pose.x
         pose.y = self.pose.y
         pose.z = self.pose.z
         pose.rx = self.pose.rx
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
-        logging.debug("sim MC5DOF: position: %s" % (self.pose,))
+
+        self._last_time = cur_time
+
+        logging.debug("sim MC5DOF: position: %s" % (pose,))
         return MC_5DOF_DLL.SA_MC_OK
 
     def SA_MC_Stop(self, id):
@@ -1814,16 +1883,36 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_WaitForEvent(self, id, p_ev, timeout):
         ev = _deref(p_ev, SA_MC_Event)
-        time.sleep(0.25)
-        ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
-        self.pose = copy.copy(self.target)
+        start_time = time.time()
+        # flags to indicate possible cancellations or timeouts
+        stopped = False
+        timedout = False
+        while time.time() < self._current_move_finish:
+            if  time.time() > start_time + timeout.value:
+                stopped = True
+                timedout = True
+                break
+            if self.stopping.is_set():
+                stopped = True
+                break
+            time.sleep(0.05)
 
-        logging.debug("sim MC5DOF: movement complete")
+        ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
+        if not stopped:
+            ev.i32 = MC_5DOF_DLL.SA_MC_OK
+        elif timedout:
+            ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT
+        else:
+            ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_CANCELED
+
+        self.pose = copy.copy(self.target)
         # if a reference move was in process...
-        if self._referencing and not self.stopping.is_set():
+        if self._referencing and not stopped and not timedout:
             self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED] = c_int32(1)
             self._referencing = False  # finished referencing
             logging.debug("sim MC5DOF: Referencing complete")
+
+        logging.debug("sim MC5DOF: issued event %s", ev)
 
 # Classes associated with the SmarAct MCS2 Controller (standard)
 
@@ -2420,7 +2509,7 @@ class MCS2(model.Actuator):
 
         self._updatePosition()
 
-        self._speed = {}
+        self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
         self._accel = {}
@@ -2610,7 +2699,7 @@ class MCS2(model.Actuator):
     def _set_speed(self, channel, value):
         """
         Set the speed of the SA_CTL motion
-        value: (double) indicating speed for all axes
+        value: (double) indicating speed for all axes in m/s
         """
         logging.debug("Setting speed to %f", value)
         # convert value to pm/s for the controller
@@ -2619,7 +2708,7 @@ class MCS2(model.Actuator):
 
     def _get_speed(self, channel):
         """
-        Returns (double) the linear speed of the SA_CTL motion
+        Returns (double) the linear speed of the SA_CTL motion in m/s
         """
         # value is given in pm/s
         speed = self.GetProperty_i64(SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY, channel)
@@ -2702,7 +2791,7 @@ class MCS2(model.Actuator):
             s[axis_name] = self._get_speed(axis_channel)
 
         logging.debug("Updated speed to %s", s)
-        self._speed = s
+        self.speed._set_value(s, force_write=True)
 
     def _updateAccel(self):
         """
@@ -2756,7 +2845,7 @@ class MCS2(model.Actuator):
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE)
                     # compute expected end
                     dur = driver.estimateMoveDuration(abs(v),
-                                    self._speed[an],
+                                    self.speed.value[an],
                                     self._accel[an])
 
                     end = max(time.time() + dur, end)
@@ -2788,7 +2877,7 @@ class MCS2(model.Actuator):
                     self.Move(v, channel, SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE)
                     d = abs(v - old_pos[an])
                     dur = driver.estimateMoveDuration(d,
-                                                      self._speed[an],
+                                                      self.speed.value[an],
                                                       self._accel[an])
                     end = max(time.time() + dur, end)
                 self._waitEndMove(future, moving_axes, end)

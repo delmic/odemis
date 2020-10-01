@@ -178,6 +178,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "role": "stage",
         "ref_on_init": True,
         "linear_speed": 0.001,  # m/s
+        "rotary_speed": 0.001,  # rad/s
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
@@ -265,16 +266,30 @@ class Test5DOF(unittest.TestCase):
         pos4['y'] = pos3['y']
         pos4['z'] = pos3['z']
         test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
-        logging.debug(self.dev.position.value)
+
+    def test_move_update_position(self):
+        """
+        Test to make sure the system updates the position as it moves
+        """
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
+        pos2 = {'x': 3e-3, 'y': 3e-3, 'z': 3e-3, 'rx': 3e-4, 'rz':-1e-4}
+        self.dev.moveAbs(pos1).result()
+        time.sleep(0.1)
+        f = self.dev.moveAbs(pos2)
+        # wait and see if the position updated midway through the move. Should take 3 s in sim
+        time.sleep(1.0)
+        test.assert_pos_not_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        test.assert_pos_not_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        f.result()
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
         # note: this test will fail with the simulator because it does not
         # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':0.001, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
+        new_pos = {'x':0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.05)
+        time.sleep(0.01)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
