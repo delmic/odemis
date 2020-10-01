@@ -195,8 +195,14 @@ class Lakeshore(model.HwComponent):
                     continue
 
                 self._serial = self._openSerialPort(n)
-                self.GetIdentifier()  # if value is incorrect, will throw an exception wile unpacking
+                manufacturer, md, _, _ = self.GetIdentifier()  # if value is incorrect, will throw an exception wile unpacking
+
+                if manufacturer != "LSCI":
+                    raise IOError("Invalid device manufacturer")
+                if md != "MODEL335":
+                    raise IOError("The model is %s, not MODEL335.", md)
                 return n
+
             except (IOError, LakeshoreError) as e:
                 logging.debug(e)
                 logging.info("Skipping device on port %s, which didn't seem to be compatible", n)
@@ -277,11 +283,6 @@ class Lakeshore(model.HwComponent):
             manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
         except TypeError:
             raise IOError("Invalid identifier received")
-
-        if manufacturer != "LSCI":
-            raise IOError("Invalid device manufacturer")
-        if md != "MODEL335":
-            raise IOError("The model is not 335")
 
         return manufacturer, md, serialn, firmware
     
