@@ -267,7 +267,7 @@ class OdemisBugreporter(object):
                 try:
                     cmd = shlex.split(odemis_config["MODEL_SELECTOR"])
                     logging.debug("Getting the model filename using %s", cmd)
-                    out = subprocess.check_output(cmd).splitlines()
+                    out = subprocess.check_output(cmd).decode("utf-8", "ignore_error").splitlines()
                     if out:
                         models = [out[0].strip()]
                     else:
