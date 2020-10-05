@@ -1666,10 +1666,10 @@ class NavCam(model.DigitalCamera):
                             logging.debug("NavCam acquisition failed.")
 
         except Exception:
-            logging.exception("Failure during acquisition")
+            logging.exception("Failure during navcam acquisition")
         finally:
             self.acquisition_lock.release()
-            logging.debug("Acquisition thread closed")
+            logging.debug("NavCam acquisition thread closed")
             self.acquire_must_stop.clear()
 
     def wait_stopped_flow(self):
