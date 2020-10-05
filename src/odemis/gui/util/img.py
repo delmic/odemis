@@ -2432,10 +2432,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
-    max_res = (MAX_RES_FACTOR * CROP_RES_LIMIT) ** 2
+    max_res_n = (MAX_RES_FACTOR * CROP_RES_LIMIT) ** 2
     # min_mpp = the minimum meters per pixels resulting in the maximum pixels size on based on the requested
     # field-of-view, and the maximum number of pixels we are willing to export (independent of the image ratio)
-    min_mpp = math.sqrt((view_hfw[0]*view_hfw[1]) / max_res)# Area = [meters per pixel]^2 * number_of_pixels
+    min_mpp = math.sqrt((view_hfw[0]*view_hfw[1]) / max_res_n)# Area = [meters per pixel]^2 * number_of_pixels
 
     def _ensure_proj_mpp(projection, min_mpp):
         img_received = threading.Event()
@@ -2518,6 +2518,17 @@ def images_to_export_data(streams, view_hfw, view_pos,
         new_size = crop_shape
         if new_size[0] < min_res[0]:
             new_size = min_res[0], (min_res[0] / new_size[0]) * new_size[1]
+
+        if new_size[0] * new_size[1] > max_res_n:
+            max_res[1] = max_res_n // CROP_RES_LIMIT
+            new_size = CROP_RES_LIMIT, max_res[1]
+            # FIXME: make the crop_shape wider
+            im_ratio = crop_shape[1] / crop_shape[0]
+            im_res[0] = max_res[1] / im_ratio
+
+            im_scale = im_res[0] / crop_shape[0]
+            pass
+        
         new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         # we also need to adjust the hfw displayed on legend
@@ -2530,6 +2541,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
         buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
 
     # TODO: make sure that Y dim of the buffer_size is not crazy high
+    logging.debug("Exporting spatial image of %sx%s px", buffer_size[0], buffer_size[1])
 
     # The list of images to export
     data_to_export = []
@@ -2545,6 +2557,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
         if raw or i == 0:  # when print-ready, share the surface to draw
             # Make surface based on the maximum resolution
             data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
+            logging.debug("Creating cairo surface of shape %s", buffer_size)
             surface = cairo.ImageSurface.create_for_data(
                 data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
