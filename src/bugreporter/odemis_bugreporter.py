@@ -270,7 +270,7 @@ class OdemisBugreporter(object):
                 try:
                     cmd = shlex.split(odemis_config["MODEL_SELECTOR"])
                     logging.debug("Getting the model filename using %s", cmd)
-                    out = subprocess.check_output(cmd).splitlines()
+                    out = subprocess.check_output(cmd).decode("utf-8", "ignore_error").splitlines()
                     if out:
                         models = [out[0].strip()]
                     else:
@@ -389,7 +389,7 @@ class OdemisBugreporter(object):
 class BugreporterFrame(wx.Frame):
 
     def __init__(self, controller):
-        super(BugreporterFrame, self).__init__(None, title="Odemis problem description", size=(800, 800))
+        super(BugreporterFrame, self).__init__(None, title="Odemis problem description", size=(800, 900))
 
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -416,24 +416,26 @@ class BugreporterFrame(wx.Frame):
         summary_sizer.Add(summary_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
         summary_sizer.Add(summary_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 5)
         sizer.Add(summary_sizer)
-        description_sizer1 = wx.BoxSizer(wx.HORIZONTAL)
-        description_sizer2 = wx.BoxSizer(wx.HORIZONTAL)
         description_lbl = wx.StaticText(panel, wx.ID_ANY, "Description:")
         description_ctrl = wx.TextCtrl(panel, wx.ID_ANY, value=DESCRIPTION_DEFAULT_TXT,
-                                       size=(self.GetSize()[0], 400), style=wx.TE_MULTILINE)
-        description_sizer1.Add(description_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
-        description_sizer2.Add(description_ctrl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
-        sizer.Add(description_sizer1)
-        sizer.Add(description_sizer2)
+                                       size=(self.GetSize()[0], -1), style=wx.TE_MULTILINE)
+        sizer.Add(description_lbl, 0, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        sizer.Add(description_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
 
         # GDPR text
         gdpr_sizer = wx.BoxSizer(wx.HORIZONTAL)
         gdpr_lbl = wx.StaticText(panel, -1, GDPR_TEXT)
         gdpr_lbl.Wrap(gdpr_lbl.GetSize().width)
+        gdpr_lbl.SetMinSize((-1, 100))  # High enough to fit all the text
         font = wx.Font(10, wx.NORMAL, wx.ITALIC, wx.NORMAL)
         gdpr_lbl.SetFont(font)
         gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
-        sizer.Add(gdpr_sizer, wx.EXPAND)
+        sizer.Add(gdpr_sizer, 0, wx.EXPAND)
+
+        # Status update label
+        # TODO: replace by an animated throbber
+        wait_lbl = wx.StaticText(panel, wx.ID_ANY, "")
+        sizer.Add(wait_lbl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         # Cancel and send report buttons
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -443,11 +445,6 @@ class BugreporterFrame(wx.Frame):
         report_btn = wx.Button(panel, wx.ID_ANY, "Report")
         report_btn.Bind(wx.EVT_BUTTON, self.on_report_btn)
         button_sizer.Add(report_btn, 0, wx.ALL, 10)
-
-        # Status update label
-        # TODO: replace by an animated throbber
-        wait_lbl = wx.StaticText(panel, wx.ID_ANY, "")
-        sizer.Add(wait_lbl, 10, wx.EXPAND | wx.ALL, 10)
         sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 
         panel.SetSizer(sizer)
