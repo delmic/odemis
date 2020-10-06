@@ -1,5 +1,5 @@
 # Configuration to use just a Nikon C2
-ConfocalFLuo: {
+ConfocalFluo: {
     class: Microscope,
     role: optical,
     children: ["Light", "Optical Objective", "Optical Emission Filter",
