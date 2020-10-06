@@ -49,7 +49,7 @@ if [ -n "$OLD_BE_PIDS" ]; then
     done
     #echo "Left = $LEFT_BE_PIDS"
     if [ -n "$LEFT_BE_PIDS" ]; then
-        echo "Back-end still running ($LEFT_BE_PIDS processes), killing it..."
+        echo "Back-end still running (PIDs $LEFT_BE_PIDS), killing it..."
         # TODO: don't use sudo and fail if the backend is running as root and not this script
         sudo /bin/kill $LEFT_BE_PIDS
 #        sudo /bin/kill $BEP_PID
