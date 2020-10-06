@@ -507,6 +507,8 @@ class SEM(model.HwComponent):
         self._device.Disconnect()
         self._device = None
 
+        super(SEM, self).terminate()
+
 
 class Scanner(model.Emitter):
     """

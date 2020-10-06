@@ -642,6 +642,8 @@ class Controller(model.Detector):
         self._socket.shutdown(socket.SHUT_RDWR)
         self._socket.close()
 
+        super(Controller, self).terminate()
+
     def isMeasuring(self):
         '''
         Returns true if an acquisition is running. False otherwise.

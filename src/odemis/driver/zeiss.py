@@ -119,6 +119,8 @@ class SEM(model.HwComponent):
             self._serial.close()
             self._serial = None
 
+        super(SEM, self).terminate()
+
     @staticmethod
     def _openSerialPort(port, baudrate):
         """

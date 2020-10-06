@@ -1923,6 +1923,8 @@ class SEMComedi(model.HwComponent):
             if hasattr(self, "_actual_writer"):
                 self._actual_writer.close()
 
+        super(SEMComedi, self).terminate()
+
     def selfTest(self):
         # let's see if we can write some data
         try:

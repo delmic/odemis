@@ -564,6 +564,8 @@ class TMCLController(model.Actuator):
                 self._serial.close()
                 self._serial = None
 
+        super(TMCLController, self).terminate()
+
     def _init_axis(self, axis):
         """
         Initialise the given axis with "good" values for our needs (Delphi)

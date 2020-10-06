@@ -464,6 +464,8 @@ class LLE(model.Emitter):
             self._serial.close()
             self._serial = None
 
+        super(LLE, self).terminate()
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor

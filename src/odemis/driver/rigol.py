@@ -82,6 +82,8 @@ class WaveGenerator(model.Emitter):
             self._accesser.terminate()
             self._accesser = None
 
+        super(WaveGenerator, self).terminate()
+
     def _sendOrderCommand(self, cmd, val=""):
         '''
         Sends an order to the device.

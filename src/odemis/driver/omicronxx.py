@@ -684,6 +684,8 @@ class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
         if self._master:
             self._master.terminate()
 
+        super(GenericxX, self).terminate()
+
     def _updateIntensities(self, power):
         # TODO: compare to the previous (known) state, and only send commands for
         # the difference, to save some time (each command takes ~5 ms)

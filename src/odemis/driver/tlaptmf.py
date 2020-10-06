@@ -231,6 +231,8 @@ class MFF(model.Actuator):
                 self._serial.close()
                 self._serial = None
 
+        super(MFF, self).terminate()
+
     def _initHw(self):
         # Ensure we don't receive anything
         self.SendMessage(HW_STOP_UPDATEMSGS)
