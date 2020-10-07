@@ -2835,7 +2835,7 @@ class DualChannelPositionSensor(model.HwComponent):
         dependencies: (dict str --> Component) dict with "sensor" key containing three-channel sensor component.
             The three-channel sensor is required to have a .channels attribute, a .position VA and
             .reference and .stop functions.
-        channels: (dict str --> str, (str), or (str, str)) mapping of output channels to sensor channels, one output
+        channels: (dict str --> str, [str], or [str, str]) mapping of output channels to sensor channels, one output
             channel must be mapped to a single sensor channel and the other one to two sensor channels,
             e.g. {'x': ['x1', 'x2'], 'y': 'y1'}. The order of the elements in the list with two channels matters for
             the calculation of the rotation angle (in general the left or top sensor should come first).
