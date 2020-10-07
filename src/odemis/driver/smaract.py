@@ -3430,7 +3430,7 @@ class SA_SIDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractsi.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractsi.so.2", RTLD_GLOBAL)
 
         self.SA_SI_GetFullVersionString.restype = c_char_p
         self.SA_SI_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
