@@ -7,6 +7,9 @@
 # E-725 (unknown USB-serial chipset, not currently working)
 # SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="1003", GROUP="odemis"
 
+# E-709
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="100e", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+
 # E-861
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="1008", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
