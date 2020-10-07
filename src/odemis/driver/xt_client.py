@@ -790,8 +790,24 @@ class Scanner(model.Emitter):
 
         with future._auto_contrast_brighness_lock:
             logging.debug("Cancelling auto contrast brightness")
-            self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
-            return True
+            try:
+                self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
+                return True
+            except OSError as error_msg:
+                # Catch error when canceling fails because auto contrast brightness has already stopped.
+                if error_msg.find("Set auto contrast brightness state failed Error message: None") == -1:
+                    time.sleep(1.0)  # Give microscope/simulator time to update the state
+                    # Check if auto contrast brightness stopped
+                    if not self.parent.is_running_auto_contrast_brightness(future._channel_name):
+                        return False
+                    else:
+                        # Auto contrast brightness is not stopped correctly, then do so.
+                        time.sleep(2.0)  # Wait a bit so we can properly cancel auto contrast brightness.
+                        # Stop auto contrast brightness properly
+                        self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
+                        return True
+                else:
+                    raise
 
     def _updateSettings(self):
         """

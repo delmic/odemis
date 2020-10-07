@@ -307,10 +307,6 @@ class TestMicroscope(unittest.TestCase):
         autostigmator_state = self.microscope.is_autostigmating(channel)
         self.assertEqual(autostigmator_state, False)
 
-        # Create lists of stigmator values to check if the results are reproducible.
-        stigmator_values_x = []  # List of stigmator values in x direction
-        stigmator_values_y = []  # List of stigmator values in y direction
-
         max_execution_time = 30  # Approximately 3 times the normal expected execution time (s)
         for i in range(0, 5):
             starting_time = time.time()
@@ -320,7 +316,6 @@ class TestMicroscope(unittest.TestCase):
             self.assertEqual(autostigmator_state, True)
             self.assertIsInstance(autostigmator_future, ProgressiveFuture)
 
-            time.sleep(0.5)  # Give microscope/simulator the time to update the state
             autostigmator_future.result(timeout=max_execution_time)
 
             # Check if the time to perform the auto stigmation is not too long
@@ -329,16 +324,6 @@ class TestMicroscope(unittest.TestCase):
                             max_execution_time)
             # Line to inspect the execution time to update the expected time
             print("Execution time was %s seconds " % (time.time() - starting_time))
-
-            stigmator_values_x.append(self.microscope.get_stigmator()[0])
-            stigmator_values_y.append(self.microscope.get_stigmator()[1])
-
-        # Check if all the stigmator values are within the required range each run
-        stigmator_range = self.microscope.stigmator_info()['range']
-        min_x_stig_values, max_x_stig_values = stigmator_range['x']
-        min_y_stig_values, max_y_stig_values = stigmator_range['y']
-        # TODO When auto stigmation works implement a check on the reproducibility of the auto stigmation values and
-        #  define the range with which they may differ from each other. In theory similar values should be returned.
 
         # Test if an error is raised when an invalid detector name is provided
         with self.assertRaises(KeyError):
@@ -358,8 +343,6 @@ class TestMicroscope(unittest.TestCase):
             auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
             self.assertEqual(auto_contrast_brightness_state, True)
             self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
-            # Give microscope/simulator to properly start before canceling, to prevent an error.
-            time.sleep(2.5)
 
             # Stop auto auto contrast brightness and check if it stopped running.
             auto_contrast_brightness_future.cancel()
