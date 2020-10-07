@@ -168,6 +168,8 @@ class BeamShiftController(model.HwComponent):
         model.HwComponent.__init__(self, name, role, **kwargs)
 
         # Find port by RS485 adapter serial number
+        self._portpattern = port
+        self._serialnum = serialnum
         self._port = self._findDevice(port, serialnum)
         self._serial = self._openSerialPort(self._port)
 
@@ -185,7 +187,7 @@ class BeamShiftController(model.HwComponent):
         serialnum (str): serial number
         return (str): the name of the port used
         raises:
-            ValueError: if no device on the ports with the given serial number is found
+            HwError: if no device on the ports with the given serial number is found
         """
         # At least one of the arguments port and serialnum must be specified
         if not port and not serialnum:
@@ -291,9 +293,8 @@ class BeamShiftController(model.HwComponent):
 
     def _reconnect(self):
         """
-        Attempt to reconnect the camera. It will block until this happens.
-        On return, the hardware should be ready to use as before, excepted it
-        still needs the settings to be applied.
+        Attempt to reconnect. It will block until this happens.
+        On return, the hardware should be ready to use as before.
         """
         num_it = 5
         self.state._set_value(model.HwError("Beam deflection controller disconnected"), force_write=True)
@@ -301,7 +302,9 @@ class BeamShiftController(model.HwComponent):
         for i in range(num_it):
             try:
                 self._serial.close()
-                self._serial.connect()
+                self._serial = None
+                self._port = self._findDevice(self._portpattern, self._serialnum)
+                self._serial = self._openSerialPort(self._port)
                 logging.info("Recovered device.")
                 break
             except IOError:
