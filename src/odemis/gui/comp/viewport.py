@@ -233,15 +233,19 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
-    def Disable(self, *args, **kwargs):
-        logging.debug("Disabling %s", self.canvas)
-        wx.Panel.Disable(self, *args, **kwargs)
-        self.canvas.Disable(*args, **kwargs)
+    def Disable(self):
+        return self.Enable(False)
 
-    def Enable(self, *args, **kwargs):
-        logging.debug("Enabling %s", self.canvas)
-        wx.Panel.Enable(self, *args, **kwargs)
-        self.canvas.Enable(*args, **kwargs)
+    def Enable(self, enable):
+        # Don't disable the entire panel, in order to allow the caller to re-enable
+        # the legend if needed (as done by the SPARC acquisition tab)
+
+        if self.bottom_legend:
+            self.bottom_legend.Enable(enable)
+        if self.left_legend:
+            self.left_legend.Enable(enable)
+
+        return self.canvas.Enable(enable)
 
 
 class CameraViewport(ViewPort):

@@ -1158,6 +1158,13 @@ class SparcAcquisitionTab(Tab):
 
         self.tb.enable(not is_acquiring)
         self.panel.vp_sparc_tl.Enable(not is_acquiring)
+        # TODO: Leave the canvas accessible, but only forbid moving the stage and
+        # if the mpp changes, do not update the horizontalFoV of the e-beam.
+        # For now, as a hack, we re-enable the legend to allow changing the merge
+        # ratio between SEM and CL.
+        if is_acquiring:
+            self.panel.vp_sparc_tl.bottom_legend.Enable(True)
+
         self.panel.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
