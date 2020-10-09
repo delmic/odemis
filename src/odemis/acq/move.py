@@ -52,13 +52,13 @@ def getCurrentPositionLabel(current_pos, stage):
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
     stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
     stage_coating = stage_md[model.MD_FAV_POS_COATING]
+    # Check the stage is near the coating position
+    if _isNearPosition(current_pos, stage_coating, stage.axes):
+        return COATING
     # Check that the stage X,Y,Z are within the active range
     if _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
-        if _isNearPosition(current_pos, 0, {'rx', 'rz'}):
+        if _isNearPosition(current_pos, {'rx': 0, 'rz': 0}, {'rx', 'rz'}):
             return IMAGING
-        # Check the stage is near the coating position
-        elif _isNearPosition(current_pos, stage_coating, stage.axes):
-            return COATING
         else:
             return TILTED
     # Check the stage is near the loading position
@@ -139,24 +139,24 @@ def _isInRange(current_pos, active_range, axes):
 def _isNearPosition(current_pos, target_position, axes):
     """
     Check whether given axis is near stage target position
-    :param current_pos: (dict or float) current position dict (axis -> value) or the direct value
-    :param target_position: (dict or float) target position dict (axis -> value) or the direct value
+    :param current_pos: (dict) current position dict (axis -> value)
+    :param target_position: (dict) target position dict (axis -> value)
     :param axes: (set) axes to compare values
-    :return: True if the axis is near (within 1 mm or 0.1 rad) position, False otherwise
+    :return: True if the axis is near position, False otherwise
     :raises ValueError if axis is unknown
     """
     if not axes:
         logging.warning("Empty axes given.")
         return False
     for axis in axes:
-        current_value = current_pos[axis] if type(current_pos) is dict else current_pos
-        target_value = target_position[axis] if type(target_position) is dict else target_position
+        current_value = current_pos[axis]
+        target_value = target_position[axis]
         if axis in {'x', 'y', 'z'}:
             is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
         elif axis in {'rx', 'rz'}:
             is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
         else:
-            raise ValueError("Unknown axis value %s.", axis)
+            raise ValueError("Unknown axis value %s." % axis)
         if not is_near:
             return False
     return True
@@ -211,7 +211,7 @@ def _doCryoLoadSample(future, stage, focus, target):
 
         if target == LOADING:
             if getCurrentPositionLabel(current_pos, stage) is UNKNOWN:
-                logging.warning("Current stage position is unknown.")
+                logging.warning("Moving stage to loading while current position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
@@ -236,7 +236,7 @@ def _doCryoLoadSample(future, stage, focus, target):
             if target == IMAGING:
                 sub_moves.append((focus, focus_active))
         else:
-            raise ValueError("Unknown target value %s.", target)
+            raise ValueError("Unknown target value %s." % target)
 
         for component, sub_move in sub_moves:
             run_sub_move(future, component, sub_move)
@@ -300,7 +300,7 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
         # Park focus only if stage rx and rz are equal to 0
         # Otherwise stop if it's not already parked
         if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
-            if _isNearPosition(current_pos, 0, {'rx', 'rz'}):
+            if _isNearPosition(current_pos,  {'rx': 0, 'rz': 0}, {'rx', 'rz'}):
                 sub_moves.append((focus, focus_deactive))
             else:
                 raise ValueError("Cannot proceed with tilting while focus is not near FAV_POS_DEACTIVE position.")
