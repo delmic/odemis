@@ -341,6 +341,7 @@ class TestMicroscope(unittest.TestCase):
             # Start auto contrast brightness and check if it is running.
             auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(role)
             auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
+            time.sleep(0.01)
             self.assertEqual(auto_contrast_brightness_state, True)
             self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
@@ -391,6 +392,7 @@ class TestMicroscope(unittest.TestCase):
             # Start auto focus and check if it is running.
             autofocus_future = self.efocus.applyAutofocus(role)
             autofocus_state = self.microscope.is_autofocusing(channel)
+            time.sleep(0.01)
             self.assertEqual(autofocus_state, True)
             self.assertIsInstance(autofocus_future, ProgressiveFuture)
 

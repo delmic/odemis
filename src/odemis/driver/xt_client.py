@@ -755,9 +755,9 @@ class Scanner(model.Emitter):
         # Create ProgressiveFuture and update its state
         est_start = time.time() + 0.1
         f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # rough time estimation
+                              end=est_start + 20)  # Rough time estimation
         f._auto_contrast_brighness_lock = threading.Lock()
-        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._must_stop = threading.Event()  # Cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
         f._channel_name = DETECTOR2CHANNELNAME[detector]
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
@@ -772,9 +772,9 @@ class Scanner(model.Emitter):
             if future._must_stop.is_set():
                 raise CancelledError()
             self.parent.set_auto_contrast_brightness(channel_name, XT_RUN)
-            time.sleep(0.5)  # Wait for the autofocussing to start
+            time.sleep(0.5)  # Wait for the auto contrast brightness to start
 
-        # Wait until the microscope is no longer autofocussing
+        # Wait until the microscope is no longer performing auto contrast brightness
         while self.parent.is_running_auto_contrast_brightness(channel_name):
             future._must_stop.wait(0.1)
             if future._must_stop.is_set():
@@ -786,7 +786,7 @@ class Scanner(model.Emitter):
         :param future (Future): the future to stop.
         :return (bool): True if it successfully cancelled (stopped) the move.
         """
-        future._must_stop.set()  # tell the thread taking care of autofocussing it's over
+        future._must_stop.set()  # Tell the thread taking care of auto contrast brightness it's over.
 
         with future._auto_contrast_brighness_lock:
             logging.debug("Cancelling auto contrast brightness")
@@ -794,20 +794,8 @@ class Scanner(model.Emitter):
                 self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
                 return True
             except OSError as error_msg:
-                # Catch error when canceling fails because auto contrast brightness has already stopped.
-                if error_msg.find("Set auto contrast brightness state failed Error message: None") == -1:
-                    time.sleep(1.0)  # Give microscope/simulator time to update the state
-                    # Check if auto contrast brightness stopped
-                    if not self.parent.is_running_auto_contrast_brightness(future._channel_name):
-                        return False
-                    else:
-                        # Auto contrast brightness is not stopped correctly, then do so.
-                        time.sleep(2.0)  # Wait a bit so we can properly cancel auto contrast brightness.
-                        # Stop auto contrast brightness properly
-                        self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
-                        return True
-                else:
-                    raise
+                logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
+                return False
 
     def _updateSettings(self):
         """
@@ -1180,8 +1168,12 @@ class Focus(model.Actuator):
 
         with future._autofocus_lock:
             logging.debug("Cancelling autofocussing")
-            self.parent.set_autofocusing(future._channel_name, XT_STOP)
-            return True
+            try:
+                self.parent.set_autofocusing(future._channel_name, XT_STOP)
+                return True
+            except OSError as error_msg:
+                logging.warning("Failed to cancel autofocus: %s", error_msg)
+                return False
 
     def _updatePosition(self):
         """
