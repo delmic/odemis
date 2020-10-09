@@ -1602,12 +1602,17 @@ class TestLinkedAxesActuator(unittest.TestCase):
                                              rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3]],
                                              refproc="Standard")
 
-        # Create Linked axes stage from the dependant stage
+        # Create Linked axes stage from the dependent stage
         self.linked_axes = LinkedAxesActuator("Linked Axes", "stage", dependencies={"stage": self.dep_stage}, )
-        # update metadata
-        self.linked_axes.updateMetadata({model.MD_POS_COR: [0, 0, 0]})
-        # cls.linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 0.707], [0, 0.707]]})
-        self.linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
+
+    def test_identity(self):
+        """
+        Test position of the X and Y dependent axes are the same as the wrapped X and Y on identity calibration
+        """
+        linked_axes = self.linked_axes
+        linked_axes.updateMetadata({model.MD_POS_COR: [0, 0, 0]})
+        linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
+        test.assert_pos_almost_equal(self.dep_stage.position.value, linked_axes.position.value,  atol=ATOL_STAGE, match_all=False)
 
     def test_move_abs(self):
         """

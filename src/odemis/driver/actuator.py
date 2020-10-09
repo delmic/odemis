@@ -2811,7 +2811,7 @@ class LinkedAxesActuator(model.Actuator):
     """
     The goal of this wrapper is to automatically adjust the underlying stage movement based on the movement of its
     axes. As the sample is tilted by ~45° (along Y), whenever moving the stage in Y, the distance of the sample to
-    the optical objective changes. This wrapper compensate for this change by linearly mapping the dependant axes.
+    the optical objective changes. This wrapper compensate for this change by linearly mapping the dependent axes.
     """
 
     def __init__(self, name, role, dependencies, daemon=None, **kwargs):
@@ -2835,6 +2835,10 @@ class LinkedAxesActuator(model.Actuator):
 
         # will take care of executing axis moves asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # Initialize POS_COR and CALIB to "identity", so that it works out of the box
+        self._metadata.update({model.MD_POS_COR: [0, 0, 0]})
+        self._metadata.update({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
 
         # position will be calculated from the underlying stage
         self.position = model.VigilantAttribute({}, readonly=True)
@@ -2901,9 +2905,10 @@ class LinkedAxesActuator(model.Actuator):
             raise ValueError("MD_POS_COR should have 3 parameters.")
 
         if model.MD_CALIB in md:
-            all_params = [p for sublist in md[model.MD_CALIB] for p in sublist]
-            if len(all_params) != 6:
-                raise ValueError("MD_CALIB should have 6 parameters.")
+            if len(md[model.MD_CALIB]) != 3:
+                raise ValueError("MD_CALIB should have 3 sublists.")
+            if any([len(sublist) != 2 for sublist in md[model.MD_CALIB]]):
+                raise ValueError("Each sublist of MD_CALIB should have 2 parameters.")
 
             # TODO: Do we need more checks?
             a, b = md[model.MD_CALIB][0]
@@ -3003,25 +3008,26 @@ class LinkedAxesActuator(model.Actuator):
 
     def _computeLinkedAxes(self, dep_pos):
         """
-        Compute the axes positions by mapping from the dependant stage position
-        :param dep_pos: The underlying dependant stage position
+        Compute the axes positions by mapping from the dependent stage position
+        :param dep_pos: The underlying dependent stage position
         :return: x,y calculated position values
         """
-        x_ = dep_pos['x']
-        y_ = dep_pos['y']
+        xd = dep_pos['x']
+        yd = dep_pos['y']
 
         M, N, O = self._metadata[model.MD_POS_COR]
         a, b = self._metadata[model.MD_CALIB][0]
         c, d = self._metadata[model.MD_CALIB][1]
-
-        x = ((x_ - M) * d - (y_ - N) * b) / (a * d - b * c)
-        y = ((y_ - N) * a - (x_ - M) * c) / (a * d - b * c)
+        # The formula is derived from the defining one in _computeDepAxes,
+        # and assuming that Z is "at the good place"
+        x = ((xd - M) * d - (yd - N) * b) / (a * d - b * c)
+        y = ((yd - N) * a - (xd - M) * c) / (a * d - b * c)
 
         return x, y
 
     def _computeDepAxes(self, pos, rel=False):
         """
-        Compute the dependant axes positions by mapping to the required target position
+        Compute the dependent axes positions by mapping to the required target position
         :param pos: The target position
         :param rel: whether it's a relative movement or absolute
         :return: x,y,z calculated position values
@@ -3063,7 +3069,7 @@ class LinkedAxesActuator(model.Actuator):
 
     def _adjustDepMovement(self, future, vector_value, rel=False):
         """
-        Adjust the dependant sample stage movement to compensate the required move
+        Adjust the dependent sample stage movement to compensate the required move
         :param future: Cancellable future of the whole task (with sub future to run sub movements)
         :param vector_value: The target vector value (absolute position or shift)
         :param rel: Whether it's relative movement or absolute
@@ -3091,8 +3097,6 @@ class LinkedAxesActuator(model.Actuator):
                 self._doMoveAbsStage(future, sub_move)
             except CancelledError:
                 logging.info("Movement cancelled.")
-                # Re-update the linked axes position
-                self._updatePosition()
                 raise
             except Exception as ex:
                 logging.exception("Failed to move further.")
@@ -3125,10 +3129,8 @@ class LinkedAxesActuator(model.Actuator):
         if unknown_axes:
             logging.error("Attempting to stop unknown axes: %s", ", ".join(unknown_axes))
             axes &= all_axes
-        logging.debug("Stopping axes: %s...", str(axes))
+        logging.debug("Stopping axes: %s..." % axes)
         self._stage.stop(axes)
-        # Re-update the linked axes position
-        self._updatePosition()
 
     @isasync
     def reference(self, axes):
