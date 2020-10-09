@@ -1261,7 +1261,10 @@ class Stream(object):
             ValueError: If the stream has no (spatial) data and stream's image is not defined
         """
         if im is None:
-            im = self.image.value
+            try:
+                im = self.image.value
+            except AttributeError:
+                im = None
         if im is None and self.raw:
             im = self.raw[0]
 
