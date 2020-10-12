@@ -39,6 +39,7 @@ import matplotlib.colors as colors
 from matplotlib import cm
 
 FIT_TO_RGB = "fitrgb"
+RGB_AS_IS = "rgbasis"
 
 # See if the optimised (cython-based) functions are available
 try:
@@ -478,6 +479,8 @@ def tintToColormap(tint, name=""):
         # make a gradient from black to the selected tint
         tint = colors.LinearSegmentedColormap.from_list(name,
             [(0, 0, 0), rgb_to_frgb(tint)])
+    elif tint == RGB_AS_IS:
+        tint = cm.get_cmap('hsv')
     elif tint == FIT_TO_RGB:  # tint Fit to RGB constant
         tint = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
     return tint

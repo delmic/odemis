@@ -42,7 +42,7 @@ from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
-from odemis.acq.stream import FIT_TO_RGB
+from odemis.acq.stream import FIT_TO_RGB, RGB_AS_IS
 from odemis.model import DataArrayShadow
 import matplotlib.colors as colors
 
@@ -1775,13 +1775,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
         if stream is None and hasattr(s, "tint"):
             tint = s.tint.value
             
-            if isinstance(tint, colors.Colormap) or tint == FIT_TO_RGB and tint != (255, 255, 255):
-
-                # convert tint to a color map
-                if isinstance(tint, tuple):
-                    # swap r and b channels
-                    b, g, r = tuple(tint)
-                    tint = r, g, b
+            if isinstance(tint, colors.Colormap) or tint == FIT_TO_RGB or tint != RGB_AS_IS:
 
                 tint = img.tintToColormap(tint)
             
@@ -1805,6 +1799,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 legend_ctx.fill()
 
                 gradient = img.getColorbar(tint, width - 2, height - 2, alpha=True)
+                gradient = format_rgba_darray(gradient)
                 surface = cairo.ImageSurface.create_for_data(
                     gradient, cairo.FORMAT_RGB24, gradient.shape[1], gradient.shape[0])
 

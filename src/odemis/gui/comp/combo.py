@@ -189,15 +189,18 @@ class ColorMapComboBox(ComboBox):
 
     def __init__(self, *args, **kwargs):
         """
-        colormap_dict: dict of str -> matplotlib colormap. Corresponds to a
-        name of the color map to a color map object
+        labels: list of str that are the names of color maps
+        choices: list of matplotlib colormap. List of corresponding color map objects
         """
-        self.colormap_dict = kwargs['colormap_dict']
-        self.choices = self.colormap_dict.keys()
-        kwargs['choices'] = self.choices
+        labels = kwargs['labels']
+        colormaps = kwargs['choices']
+        self.choices = labels
+        kwargs['choices'] = labels
         kwargs['style'] |= wx.CB_READONLY
-        del kwargs['colormap_dict']
         super(ColorMapComboBox, self).__init__(*args, **kwargs)
+        # add color map objects to client data once it is initialized by the super constructor
+        for (n, cm) in enumerate(colormaps):
+            self.SetClientData(n, cm)
 
     def OnMeasureItemWidth(self, item):
         return ITEM_WIDTH
@@ -214,7 +217,7 @@ class ColorMapComboBox(ComboBox):
 
         # Draw a rectangle of the color
         item_name = self.choices[item]
-        color_map = self.colormap_dict[item_name]
+        color_map = self.GetClientData(item)
         
         if not color_map:
             return
@@ -226,7 +229,7 @@ class ColorMapComboBox(ComboBox):
             w = r.width
             h = r.height
 
-            color_map = self.colormap_dict.values()[self.GetSelection()]
+            color_map = self.GetClientData(self.GetSelection())
             color_map = tintToColormap(color_map)
 
             gradient = getColorbar(color_map, w, h)

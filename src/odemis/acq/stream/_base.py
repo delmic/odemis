@@ -49,6 +49,7 @@ UNDEFINED_ROI = (0, 0, 0, 0)
 
 # Constant for TINT
 FIT_TO_RGB = "fitrgb"
+RGB_AS_IS = "rgbasis"
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
@@ -1153,17 +1154,24 @@ class Stream(object):
         # - a list tuple RGB value (for a tint) or
         # - a matplotlib.colors.Colormap object for a custom color map
         # - a string of value FIT_TO_RGB to indicate fit RGB color mapping
+        # - a string ov vlaue RGB_AS_IS that indicates no tint. Will be converted to a black tint
         # Enforce this setting
         if isinstance(tint, tuple):
             # RGB tuple - enforce len of 3
-            return tint[:3]
+            if len(tint) != 3:
+                raise ValueError("RGB Value for tint should be of length 3")
+            return tint
         elif isinstance(tint, list):
             # convert to tuple of len 3
-            return tuple(tint[:3])
+            if len(tint) != 3:
+                raise ValueError("RGB Value for tint should be of length 3")
+            return tuple(tint)
         elif isinstance(tint, matplotlib.colors.Colormap):
             return tint
         elif tint == FIT_TO_RGB:
             return tint
+        elif tint == RGB_AS_IS:
+            return (255, 255, 255)
         else:
             raise ValueError("Invalid value for tint VA")
 

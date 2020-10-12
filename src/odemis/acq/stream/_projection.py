@@ -1045,7 +1045,7 @@ class RGBSpatialProjection(RGBProjection):
                 # Explicitly only use the first 3 values, to leave the alpha channel as-is
                 numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
             else:
-                logging.error("Tuple Tint expected.")
+                logging.warning("Tuple Tint expected.")
 
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there

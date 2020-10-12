@@ -43,7 +43,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.acq.stream import FIT_TO_RGB
+from odemis.acq.stream import FIT_TO_RGB, RGB_AS_IS
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
@@ -185,15 +185,21 @@ class StreamPanelHeader(wx.Control):
 
         if self.Parent.options & OPT_NO_COLORMAPS:
             self.colormap_choices = OrderedDict([
-                            ("Original", cm.get_cmap('hsv')),
+                            ("Original", RGB_AS_IS),
                            ])
         else:
             self.colormap_choices = OrderedDict([
                             ("Grayscale", (255, 255, 255)),
                             ])
 
+        # store the index
+        self._colormap_original_idx = len(self.colormap_choices) - 1
+
         if self.Parent.options & OPT_FIT_RGB:
             self.colormap_choices["Fit to RGB"] = FIT_TO_RGB
+
+        # store the index
+        self._colormap_fitrgb_idx = len(self.colormap_choices) - 1
 
         self.colormap_choices.update(OrderedDict([
                         ("Red tint", (255, 0, 0)),
@@ -201,10 +207,14 @@ class StreamPanelHeader(wx.Control):
                         ("Blue tint", (0, 0, 255)),
                         (TINT_CUSTOM_TEXT, custom_tint),
                        ]))
+        # store the index
+        self._colormap_customtint_idx = len(self.colormap_choices) - 1
+
         if not self.Parent.options & OPT_NO_COLORMAPS:
             self.colormap_choices.update(COLORMAPS)  # add the predefined color maps
 
-        colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), colormap_dict=self.colormap_choices, size=(-1, 16),
+        colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), labels=list(self.colormap_choices.keys()),
+                                          choices=list(self.colormap_choices.values()), size=(-1, 16),
                               style=cbstyle)
 
         # determine which value to select
@@ -409,10 +419,10 @@ class StreamPanelHeader(wx.Control):
                 self.combo_colormap.SetSelection(index)
                 break
             elif self.Parent.stream.tint.value == FIT_TO_RGB:
-                self.combo_colormap.SetSelection(1)  # fit to RGB
+                self.combo_colormap.SetSelection(self._colormap_fitrgb_idx)  # fit to RGB
                 break
         else:
-            self.combo_colormap.SetSelection(4)  # custom tint
+            self.combo_colormap.SetSelection(self._colormap_customtint_idx)  # custom tint
 
     @call_in_wx_main
     def _on_colormap_click(self, evt):
@@ -425,6 +435,7 @@ class StreamPanelHeader(wx.Control):
         if name == TINT_CUSTOM_TEXT:
             # Set default colour to the current value
             cldata = wx.ColourData()
+            cldata.SetColour(wx.Colour(*tint))
     
             dlg = wx.ColourDialog(self, cldata)
     
@@ -434,6 +445,7 @@ class StreamPanelHeader(wx.Control):
                 # Setting the VA will automatically update the button's colour
                 self.colormap_choices[TINT_CUSTOM_TEXT] = colour
                 tint = colour
+                self.combo_colormap.SetClientData(index, tint)
             else:
                 self._on_colormap_value(self.Parent.stream.tint.value)
                 return
