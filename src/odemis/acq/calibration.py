@@ -43,29 +43,35 @@ def get_ar_data(das):
     # TODO: also allow to pass an expected resolution, in order to support
     # a calibration file with multiple calibrations resolution?
 
-    # expect the worse: multiple AR data
-    ar_data = []
+    # expect the worst: multiple AR data (per polarization mode)
+    ar_data = {}  # pol-mode -> list of DAs
     for da in das:
         # AR data is simple to distinguish: it has a AR_POLE metadata
         if model.MD_AR_POLE in da.metadata:
-            ar_data.append(da)
+            polmode = da.metadata.get(model.MD_POL_MODE)
+            ar_data.setdefault(polmode, []).append(da)
 
     if not ar_data:
         raise LookupError("Failed to find any AR data within the %d data acquisitions" %
                           (len(das)))
-    elif len(ar_data) == 1:
-        return ar_data[0]
-    else:
-        if model.MD_POL_MODE in da.metadata:
-            return ar_data  # return the list of bg images
-        else:
-            # look for the first one (in terms of time), hoping that it's the one
-            # the user expects to be representing the background
+    # If there is more than one data for a polarization mode, just pick one.
+    # For now we just pick the first one acquired.
+    # TODO: average all the data?
+    for polmode, ldas in ar_data.items():
+        if len(ldas) > 1:
             logging.warning("AR calibration file contained %d AR data, "
                             "will pick the earliest acquired", len(das))
             earliest = min(ar_data,
                            key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
-            return earliest
+            ar_data[polmode] = [earliest]
+
+    # Merge all the data together as a single
+    ar_data = list(ldas[0] for ldas in ar_data.values())
+
+    if len(ar_data) == 1:
+        ar_data = ar_data[0]
+    return ar_data
+
 
 # Spectrum calibration data is a background image (to subtract from the raw data, C1111)
 # and a list of coefficients (C1111) to compensate for the system response disparities.
