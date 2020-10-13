@@ -165,30 +165,11 @@ CryoSECOM: {
   class: tmcm.TMCLController,
   init: {
     port: "/dev/fake6",
-    ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9],
     refproc: "Standard",
-    axes: {
-      'x': {
-        range: [-6e-3, 6e-3],
-        unit: 'm',
-      },
-      'y': {
-        range: [-6e-3, 6e-3],
-        unit: 'm',
-      },
-      'z': {
-        range: [-6e-3, 6e-3],
-        unit: 'm',
-      },
-      'rx': {
-        range: [-0.4293, 0.4293],
-        unit: 'rad',
-      },
-      'rz': {
-        range: [-0.5236, 0.5236],
-        unit: 'rad',
-      },
-    },
+    axes: ["x", "y", "z", "rx", "rz"],
+    unit: ["m", "m", "m", "rad", "rad"],
+    rng: [[-6.0e-3, 6.0e-3], [-6.0e-3, 6.0e-3], [-6.0e-3, 6.0e-3], [-0.49, 0.49], [-0.5236, 5236]],
+    ustepsize: [5.9e-8, 5.9e-8, 5.9e-8, 5.9e-6, 5.9e-6],
   }
 }
 
@@ -197,22 +178,11 @@ CryoSECOM: {
   class: tmcm.TMCLController,
   init: {
     port: "/dev/fake3",
-    ustepsize: [5.9e-9, 5.9e-9, 5.9e-9],
+    axes: ["x", "y", "z"],
+    unit: ["m", "m", "m"],
+    rng: [[-6.0e-3, 6.0e-3], [-6.0e-3, 6.0e-3], [-6.0e-3, 6.0e-3]],
+    ustepsize: [5.9e-8, 5.9e-8, 5.9e-8],
     refproc: "Standard",
-    axes: {
-      'x': {
-        range: [6e-3, 6e-3],
-        unit: 'm',
-      },
-      'y': {
-        range: [6e-3, 6e-3],
-        unit: 'm',
-      },
-      'z': {
-        range: [-6.e-3, 6.e-3],
-        unit: 'm',
-      },
-    },
   },
   metadata: {
     FAV_POS_DEACTIVE: {'z': -6.e-3},
@@ -231,8 +201,9 @@ CryoSECOM: {
   metadata: {
     POS_ACTIVE_RANGE: {'x':  [0.00, 0.003], 'y':  [-0.003, -0.001], 'z':  [0.00, 0.003], } , # stage Z – lens Z, when the lens Z is the closest (highest) from the stage
     FAV_POS_ACTIVE: {'rx': 0.00, 'rz': 0.0, 'x':  0.0, 'y':  -0.002, 'z':  0.002},
-    FAV_POS_DEACTIVE:  {'rx': 0.00, 'rz': 0.0, 'x':  0.01, 'y':  0.00, 'z':  -0.001},
-    FAV_AREA:  [-0.001, -0.001, 0.001, 0.001]  # left, top, right, bottom
+    FAV_POS_DEACTIVE:  {'rx': 0.00, 'rz': 0.0, 'x':  0.002, 'y':  0.00, 'z':  -0.001},
+    FAV_AREA:  [-0.001, -0.001, 0.001, 0.001],  # left, top, right, bottom
+    FAV_POS_COATING: {'rx': 0.4363, 'rz': 0.0, 'x':  0.0, 'y':  -0.003, 'z':  0.001},
   },
    affects: ["Camera"],
 }
