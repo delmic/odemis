@@ -30,8 +30,10 @@ import numpy
 from odemis import model
 import scipy.ndimage
 import cv2
-from odemis.util.conversion import get_img_transformation_matrix
 
+from odemis.model import MD_DWELL_TIME, MD_EXP_TIME
+from odemis.util.conversion import get_img_transformation_matrix
+from odemis.util import get_best_dtype_for_acc
 
 # See if the optimised (cython-based) functions are available
 try:
@@ -811,3 +813,114 @@ def getBoundingBox(content):
 
     return rect
 
+
+class ImageIntegrator(object):
+    """
+    Integrate the images one after another. Once the first image is acquired, calculate the best type for fitting
+    the image to avoid saturation and overflow. At the end of acquisition, take the average of integrated data if
+    the detector is DT_NORMAL and subtract the baseline from the final integrated image.
+    """
+    def __init__(self, steps):
+        """
+        steps: (int) the total number of images that need to be integrated
+        """
+        self.steps = steps  # can be changed by the caller, on the fly
+        self._step = 0
+        self._img = None
+        self._best_dtype = None
+
+    def append(self, img):
+        """
+        Integrate two images (the new acquired image with the previous integrated one if exists) and return the
+        new integrated image. It will reset the ._img after reaching the number of integration counts, notifying
+        that the integration of the acquired images is completed.
+        Args:
+            img(model.DataArray): the image that should be integrated with the previous (integrated) one, if exists
+        Returns:
+            img(model.DataArray): the integrated image with the updated metadata
+        """
+        self._step += 1
+        if self._img is None:
+            orig_dtype = img.dtype
+            self._best_dtype = get_best_dtype_for_acc(orig_dtype, self.steps)
+            integ_img = img
+            self._img = integ_img
+
+        else:
+            mda = img.metadata  # metadata of the new acquired image
+            mdb = self._img.metadata  # metadata of the previous acquired image or the previous integrated one
+            data = numpy.add(self._img, img, dtype=self._best_dtype)
+            # update the metadata of the integrated image in every integration step
+            md = self.add_integration_metadata(mda, mdb)
+
+            # At the end of the acquisition, check if the detector type is DT_NORMAL and then take the average by
+            # dividing with the number of acquired images (integration count) for every pixel position and restoring
+            # the original dtype.
+            if self._step == self.steps:
+                det_type = md.get(model.MD_DET_TYPE, model.MD_DT_INTEGRATING)
+                if det_type == model.MD_DT_NORMAL:  # SEM
+                    orig_dtype = img.dtype
+                    if orig_dtype.kind in "biu":
+                        data = numpy.floor_divide(data, self._step, dtype=orig_dtype, casting='unsafe')
+                    else:
+                        data = numpy.true_divide(data, self._step, dtype=orig_dtype, casting='unsafe')
+                elif det_type != model.MD_DT_INTEGRATING:  # optical
+                    logging.warning("Unknown detector type %s for image integration.", det_type)
+                # The baseline, if exists, should also be subtracted from the integrated image.
+                if model.MD_BASELINE in md:
+                    data, md = self.subtract_baseline(data, md)
+                logging.debug("Image integration is completed.")
+
+            integ_img = model.DataArray(data, md)
+            self._img = integ_img
+
+        # reset the ._img and ._step once you reach the integration count
+        if self._step >= self.steps:
+            self._step = 0
+            self._img = None
+
+        return integ_img
+
+    def add_integration_metadata(self, mda, mdb):
+        """
+        add mdb to mda, and update mda with the result
+        returns dict: mda, which has been updated
+        """
+        if MD_DWELL_TIME in mda:
+            mda[model.MD_DWELL_TIME] += mdb.get(model.MD_DWELL_TIME, 0)
+        if MD_EXP_TIME in mda:
+            mda[model.MD_EXP_TIME] += mdb.get(model.MD_EXP_TIME, 0)
+        mda[model.MD_INTEGRATION_COUNT] = mda.get(model.MD_INTEGRATION_COUNT, 1) + mdb.get(model.MD_INTEGRATION_COUNT, 1)
+
+        return mda
+
+    def subtract_baseline(self, data, md):
+        """
+        Subtract accumulated baselines from the data so that the data only has one.
+        Args:
+            data: the data after the integration of all images
+            md: metadata of the integrated image
+        Returns:
+            data, md: the updated data and metadata after the subtraction of the baseline
+        """
+        baseline = md[model.MD_BASELINE]
+        # Subtract the baseline (aka black level) from the final integrated image.
+        # Remove the baseline from n-1 images, keep one baseline as bg level.
+        minv = float(data.min())
+
+        # If the baseline is too high compared to the actual black, we could end up subtracting too much,
+        # and values would underflow => be extra careful and never subtract more than the min value.
+        baseline_sum = self._step * baseline  # sum of baselines for n images.
+        extra_bl = (self._step - 1) * baseline  # sum of baselines for n-1 images, keep one baseline as bg level.
+        # check if we underflow the data values
+        if extra_bl > minv:
+            extra_bl = minv
+            logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
+                         baseline, self.steps, extra_bl)
+
+        # Same as "data -= extra_bl", but also works if extra_bl < 0
+        numpy.subtract(data, extra_bl, out=data, casting="unsafe")
+        # replace the metadata of the image
+        md[model.MD_BASELINE] = baseline_sum - extra_bl
+
+        return data, md

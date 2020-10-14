@@ -24,7 +24,7 @@ from __future__ import division, print_function
 import logging
 import numpy
 from odemis import model
-from odemis.util import img
+from odemis.util import img, get_best_dtype_for_acc
 import time
 import unittest
 from unittest.case import skip
@@ -835,6 +835,115 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(100, out[128, 256, 1])
         self.assertEqual(150, out[128, 256, 2])
         self.assertEqual(255, out[128, 256, 3])
+
+
+class TestImageIntegrator(unittest.TestCase):
+
+    def setUp(self):
+        dtype = numpy.uint16
+        im = numpy.ones((5, 5), dtype=dtype)
+        metadata = {model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_DET_TYPE: model.MD_DT_INTEGRATING,
+                    model.MD_DWELL_TIME: 1e-06,  # s
+                    }
+        self.data = model.DataArray(im, metadata)
+        self.integrated_data = None
+        self.img_intor = None
+        self.integrationCounts = 3
+
+    def test_simple(self):
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+        self.assertEqual(self.img_intor.steps, self.integrationCounts)
+
+        for i in range(self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data[i])
+
+        numpy.testing.assert_equal(self.integrated_data, (numpy.array([3, 3, 3, 3, 3], dtype='uint32')))
+        self.assertEqual(self.img_intor._best_dtype, get_best_dtype_for_acc(self.data[0].dtype, self.integrationCounts))
+
+        # check that the parameters ._img, ._step are reset after all images are integrated
+        self.assertEqual(self.img_intor._step, 0)
+        self.assertEqual(self.img_intor._img, None)
+
+    def test_2Ddata(self):
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+        self.assertEqual(self.img_intor.steps, self.integrationCounts)
+
+        for i in range(self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data)
+
+        data_2d = self.integrationCounts * numpy.ones((5, 5), 'uint32')
+        numpy.testing.assert_equal(self.integrated_data, data_2d)
+
+    def test_metadata(self):
+        """
+        Test that the metadata is updated after image integration
+        """
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+        dw_time, exp_time = 0, 0
+
+        for i in range(self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data[i])
+            dw_time += self.data[i].metadata[model.MD_DWELL_TIME]
+            exp_time += self.data[i].metadata[model.MD_EXP_TIME]
+
+        md_intor = self.integrated_data.metadata  # metadata of the integrated image
+        self.assertEqual(md_intor[model.MD_DWELL_TIME], dw_time)
+        self.assertEqual(md_intor[model.MD_EXP_TIME], exp_time)
+        self.assertIn(model.MD_INTEGRATION_COUNT, md_intor)
+        self.assertEqual(md_intor[model.MD_INTEGRATION_COUNT], self.integrationCounts)
+
+    def test_baseline_metadata(self):
+        """
+        Test in case baseline exists
+        """
+        self.data.metadata[model.MD_BASELINE] = 2
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+
+        for i in range(1, self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data[i])
+
+        md_intor = self.integrated_data.metadata
+        self.assertEqual(md_intor[model.MD_BASELINE], 2)
+
+    def test_one_integration(self):
+        """
+        Test in case of one integration step
+        """
+        self.integrationCounts = 1
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+        self.integrated_data = self.img_intor.append(self.data[0])
+
+        numpy.testing.assert_equal(self.integrated_data, self.data[0])
+
+    def test_steps_change(self):
+        """
+        Test in case the steps change while the images are integrated one after another
+        """
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+
+        for i in range(self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data[i])
+            self.img_intor.steps = 1
+
+        numpy.testing.assert_equal(self.integrated_data, (numpy.array([1, 1, 1, 1, 1], dtype='uint16')))
+
+    def test_normal_detector(self):
+        """
+        Test in case of a normal detector (SEM)
+        """
+        self.data.metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+        self.img_intor = img.ImageIntegrator(self.integrationCounts)
+
+        for i in range(self.integrationCounts):
+            self.integrated_data = self.img_intor.append(self.data[i])
+
+        numpy.testing.assert_equal(self.integrated_data, (numpy.array([1, 1, 1, 1, 1])))
 
 
 class TestMergeTiles(unittest.TestCase):

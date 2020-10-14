@@ -854,12 +854,14 @@ class Detector(model.Detector):
 
     def start_acquire(self, callback):
         logging.debug("New SEM acquisition requested")
-        # Check if Phenom is in the proper mode
-        area = self._acq_device.GetProgressAreaSelection().target
-        if area != "LOADING-WORK-AREA-SEM":
-            raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
+
+            # Check if Phenom is in the proper mode
+            area = self._acq_device.GetProgressAreaSelection().target
+            if area != "LOADING-WORK-AREA-SEM":
+                raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
+
             logging.debug("Starting acquisition thread")
             if self.parent._scanner.blanker.value is None:
                 try:
@@ -1664,10 +1666,10 @@ class NavCam(model.DigitalCamera):
                             logging.debug("NavCam acquisition failed.")
 
         except Exception:
-            logging.exception("Failure during acquisition")
+            logging.exception("Failure during navcam acquisition")
         finally:
             self.acquisition_lock.release()
-            logging.debug("Acquisition thread closed")
+            logging.debug("NavCam acquisition thread closed")
             self.acquire_must_stop.clear()
 
     def wait_stopped_flow(self):

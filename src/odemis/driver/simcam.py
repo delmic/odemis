@@ -42,14 +42,15 @@ class Camera(model.DigitalCamera):
     given at initialisation.
     '''
 
-    def __init__(self, name, role, image, dependencies=None, daemon=None, blur_factor=1e4, **kwargs):
-        '''
+    def __init__(self, name, role, image, dependencies=None, daemon=None, blur_factor=1e4, max_res=None, **kwargs):
+        """
         dependencies (dict string->Component): If "focus" is passed, and it's an
             actuator with a z axis, the image will be blurred based on the
             position, to simulate a focus axis.
-        image (str or None): path to a file to use as fake image (relative to
-         the directory of this class)
-        '''
+        image (str or None): path to a file to use as fake image (relative to the directory of this class)
+        max_res (tuple of (int, int) or None): maximum resolution to clip simulated image, if None whole image shape
+            will be used. The simulated image will be a part of the original image based on the MD_POS metadata.
+        """
         # TODO: support transpose? If not, warn that it's not accepted
         # fake image setup
         image = str(image)
@@ -71,17 +72,28 @@ class Camera(model.DigitalCamera):
             self._img = numpy.rollaxis(self._img, 2) # YXC
             imshp = self._img.shape
 
+        def clip_max_res(img_res):
+            if len(max_res) != 2:
+                raise ValueError("Shape of max_res should be = 2.")
+            return tuple(min(x, y) for x, y in zip(img_res, max_res))  # in case max_res > image shape
+
         # For RGB, the colour is last dim, but we still indicate it as higher
         # dimension to ensure shape always starts with X, Y
         if len(imshp) == 3 and imshp[-1] in {3, 4}:
             # resolution doesn't affect RGB dim
             res = imshp[-2::-1]
-            self._shape = res + imshp[-1::] # X, Y, C
+            self._img_res = res  # Original image shape in case it's clipped
+            if max_res:
+                res = clip_max_res(res)
+            self._shape = res + imshp[-1::]  # X, Y, C
             # indicate it's RGB pixel-per-pixel ordered
             self._img.metadata[model.MD_DIMS] = "YXC"
         else:
-            res = imshp[::-1]
-            self._shape = res # X, Y,...
+            self._img_res = imshp[::-1]  # Original image shape in case it's clipped
+            res = imshp[::-1] if max_res is None else tuple(max_res)
+            if max_res:
+                res = clip_max_res(res)
+            self._shape = res  # X, Y,...
         # TODO: handle non integer dtypes
         depth = 2 ** (self._img.dtype.itemsize * 8)
         self._shape += (depth,)
@@ -295,6 +307,21 @@ class Camera(model.DigitalCamera):
         """
         self._img = new_img
 
+    def _get_center(self):
+        """
+        Get the center in pixels to crop the image from
+        """
+        res = self.resolution.value
+        # MD_POS would be the starting point to crop from otherwise (0, 0)
+        pos = self._metadata.get(model.MD_POS, (0, 0))
+        pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
+        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+        pos_pxs = abs(pos[0] / pxs[0]), abs(pos[1] / pxs[1])
+        # Get largest center point to clip calculated center to it (to always fit within the image.)
+        largest_center = self._img_res[0] - (res[0] / 2), self._img_res[1] - (res[1]/2)
+        # Center would top-left + bottom-right / 2  where bottom-right = top-left + res
+        center = (pos_pxs[0] + pos_pxs[0] + res[0]) / 2, (pos_pxs[1] + pos_pxs[1] + res[1]) / 2
+        return min(center[0], largest_center[0]), min(center[1], largest_center[1])
 
     def _simulate(self):
         """
@@ -304,8 +331,7 @@ class Camera(model.DigitalCamera):
         binning = self.binning.value
         res = self.resolution.value
         pxs_pos = self.translation.value
-        shape = self._img.shape
-        center = (shape[1] / 2, shape[0] / 2)
+        center = self._get_center()
         lt = (center[0] + pxs_pos[0] - (res[0] / 2) * binning[0],
               center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
         assert(lt[0] >= 0 and lt[1] >= 0)

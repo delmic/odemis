@@ -235,7 +235,7 @@ def _CreateSEDisk(r=3):
 
 def MaximaFind(image, qty, len_object=18):
     """
-    Find the centers coordinates of maximum spots in an image.
+    Find the center coordinates of maximum spots in an image.
 
     Parameters
     ----------
@@ -244,7 +244,7 @@ def MaximaFind(image, qty, len_object=18):
     qty : int
         The amount of maxima you want to find.
     len_object : int
-        A length in pixels somewhat larger than a typical object.
+        A length in pixels somewhat larger than a typical spot.
 
     Returns
     -------
@@ -252,33 +252,34 @@ def MaximaFind(image, qty, len_object=18):
         A 2D array of shape (N, 2) containing the coordinates of the maxima.
 
     """
+    # Reduce the noise in the image.
     filtered = BandPassFilter(image, 1, len_object)
 
-    # dilation
+    # Dilate the filtered image to make the size of each spot larger.
     structure = _CreateSEDisk(len_object // 2)
     dilated = cv2.dilate(filtered, structure)
 
-    # find local maxima
+    # Find local maxima.
     binary = (filtered == dilated).astype(numpy.uint8)
 
-    # thresholding
+    # Threshold to filter out small spots.
     qradius = max(len_object // 4, 1)
     structure = _CreateSEDisk(qradius)
     binary_dilated = cv2.dilate(binary, structure)
 
-    # Identify all features and then select qty of features with highest mean
-    # value in the filtered image
+    # Identify all spots (features) and then select the amount of spots equal to
+    # qty with highest mean value in the filtered image.
     labels, num_features = ndimage.label(binary_dilated)
     index = numpy.arange(1, num_features + 1)
     mean = ndimage.mean(filtered, labels=labels, index=index)
     si = numpy.argsort(mean)[::-1][:qty]
-    # estimate spot center position
+    # Estimate spot center positions.
     pos = numpy.array(ndimage.center_of_mass(filtered, labels=labels, index=index[si]))[:, ::-1]
 
     if numpy.any(numpy.isnan(pos)):
         pos = pos[numpy.any(~numpy.isnan(pos), axis=1)]
         logging.debug("Only %d maxima found, while expected %d", len(pos), qty)
-    # improve center estimate using radial symmetry method
+    # Improve center estimate using radial symmetry method.
     w = len_object // 2
     refined_center = numpy.zeros_like(pos)
     pos = numpy.rint(pos).astype(numpy.int16)
@@ -310,22 +311,29 @@ def MaximaFind(image, qty, len_object=18):
 def EstimateLatticeConstant(pos):
     """
     Estimate the lattice constant of a point set that represent a square grid.
+    The lattice constant refers to the physical dimension of unit cells in a
+    crystal lattice. It is the physical dimension of the smallest repeating
+    unit that possesses all the symmetry of the crystal structure.
+
+    It is used here to estimate the physical dimension in i and j of the
+    smallest repeating unit of a point set in a square grid.
 
     Parameters
     ----------
     pos : array like
-        A 2D array of shape (N, 2) containing the coordinates of the points.
+        A 2D array of shape (N, 2) containing the (x, y) coordinates of the points.
 
     Returns
     -------
-    kxy : array like [2x2]
-        lattice constants
+    lattice_constants : array like [2x2]
+        The lattice constants. The first row corresponds to the (x, y) direction of the fist lattice constant,
+        the second row corresponds to the (x, y) direction of the second lattice constant.
 
     """
     # Find the closest 4 neighbours (excluding itself) for each point.
     tree = KDTree(pos)
     dd, ii = tree.query(pos, k=5)
-    dr = dd[:, 1:]
+    dr = dd[:, 1:]  # exclude the point itself
 
     # Determine the median radial distance and filter all points beyond
     # 2*sigma.
@@ -333,28 +341,36 @@ def EstimateLatticeConstant(pos):
     std = numpy.std(dr)
     outliers = numpy.abs(dr - med) > (2 * std)  # doesn't work well if std is very high
 
-    # Determine horizontal and vertical distance (only radial distance is
-    # returned by tree.query).
+    # Determine horizontal and vertical distance from the point itself to its 4
+    # closest neighbours (only radial distance is returned by tree.query).
     dpos = pos[ii[:, 0, numpy.newaxis]] - pos[ii[:, 1:]]
     dx, dy = dpos[:, :, 0], dpos[:, :, 1]
     assert numpy.all(numpy.abs(dr - numpy.hypot(dx, dy)) < 1.0e-12)
-    # Use k-means to group the points into two directions.
+    # Stack the x and y directions from a point to its 4 nearest neighbours.
     X = numpy.column_stack((dx[~outliers], dy[~outliers]))
+    # Make sure the x and y directions are positive.
     X[X[:, 0] < -0.5 * med] *= -1
     X[X[:, 1] < -0.5 * med] *= -1
 
+    # Use k-means to group the points into the two most common directions.
     centroids, _ = kmeans(X, 2)
+    # For each point add a label of which of the two most common directions it belongs to.
     labels = numpy.argmin(cdist(X, centroids), axis=1)
-    kxy = numpy.array([numpy.median(X[labels.ravel() == 0], axis=0),
-                       numpy.median(X[labels.ravel() == 1], axis=0)])
+    # Find the median of each of the two most common directions.
+    lattice_constants = numpy.array([numpy.median(X[labels.ravel() == 0], axis=0),
+                                     numpy.median(X[labels.ravel() == 1], axis=0)])
 
     # The angle between the two directions should be close to 90 degrees.
-    alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*kxy)), numpy.dot(*kxy))
+    alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*lattice_constants)), numpy.dot(*lattice_constants))
     if abs(alpha - math.pi / 2) > math.radians(2.5):
         logging.warning('Estimated lattice angle differs from 90 degrees by '
                         'more than 2.5 degrees. Input data could be wrong')
+    if numpy.linalg.det(lattice_constants) < 0.:
+        # A negative determinant means the first axis is rotated 90 degrees CCW compared to the second.
+        # Flip to make the lattice constants consistent with the pos input.
+        lattice_constants = numpy.flipud(lattice_constants)
 
-    return kxy
+    return lattice_constants
 
 
 def GridPoints(grid_size_x, grid_size_y):

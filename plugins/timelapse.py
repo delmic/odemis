@@ -39,9 +39,11 @@ from odemis import model, dataio
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
     SpectrumStream, UNDEFINED_ROI, StaticStream, LiveStream, Stream
+from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 from odemis.util.dataio import splitext
 import os
 import queue
@@ -52,7 +54,7 @@ import wx
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "2.0"
+    __version__ = "2.1"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -73,9 +75,7 @@ class TimelapsePlugin(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
-            "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
-                "HDF5 Files (*.h5)|*.h5",
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("expectedDuration", {
         }),

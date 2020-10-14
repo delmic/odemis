@@ -24,6 +24,7 @@ from concurrent.futures import CancelledError
 import fcntl
 import glob
 import logging
+import math
 import numpy
 from odemis import model
 from odemis import util
@@ -272,7 +273,7 @@ class SEM(model.HwComponent):
         # stage moving is either 0.0 or 1.0
         s = self._SendCmd(b'STG?')
         vals = s.split(b' ')
-        return tuple(float(i) for i in vals[0:3]) + (vals[3] == "1.0",)
+        return tuple(float(i) for i in vals[0:3]) + (vals[3] == b"1.0",)
 
     def GetBlankBeam(self):
         """
@@ -322,6 +323,25 @@ class SEM(model.HwComponent):
         """
         ans = self._SendCmd(b'EHT?')
         return float(ans) * 1e3
+
+    def GetScanRotation(self):
+        """
+        returns (float): scan rotation in rad
+        """
+        ans = self._SendCmd(b'SRO?')
+        return math.radians(float(ans))
+
+    def SetScanRotation(self, rot):
+        """
+        rot (0 <= float <= 2*pi): rotation in rad
+        """
+        self._SendCmd(b'SRO %G' % math.degrees(rot))
+
+    def EnableScanRotation(self, active):
+        """
+        active (bool): True to activate scan rotation
+        """
+        self._SendCmd(b'SRON %d' % (1 if active else 0))
 
     def SetMagnification(self, mag):
         """
@@ -637,6 +657,11 @@ class Scanner(model.Emitter):
                                                    setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
+        self.rotation = model.FloatContinuous(self.parent.GetScanRotation(),
+                                              range=(0, 2 * math.pi),
+                                              unit="rad",
+                                              setter=self._setRotation)
+
         self.blanker = model.VAEnumerated(self.parent.GetBlankBeam(), choices={True, False},
                                           setter=self._setBlanker)
 
@@ -682,6 +707,11 @@ class Scanner(model.Emitter):
                 else:
                     logging.warning("Hardware reports magnification = %g, outside of expected range", mag)
 
+            rot = self.parent.GetScanRotation() % (2 * math.pi)
+            if rot != self.rotation.value:
+                self.rotation._value = rot
+                self.blanker.notify(rot)
+
             blanked = self.parent.GetBlankBeam()
             if blanked != self.blanker.value:
                 self.blanker._value = blanked
@@ -710,6 +740,12 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / fov
         self.parent.SetMagnification(mag)
         return fov
+
+    def _setRotation(self, rot):
+        self.parent.SetScanRotation(rot)
+        # Automatically activates the rotation if the angle != 0
+        self.parent.EnableScanRotation(rot != 0)
+        return rot
 
     def _setBlanker(self, blankctrl):
         self.parent.SetBlankBeam(blankctrl)
@@ -780,7 +816,7 @@ class Focus(model.Actuator):
         """
         # We don't use the VA setters, to avoid sending back to the hardware a
         # set request
-        logging.debug("Updating SEM stage position")
+        logging.debug("Updating SEM focus position")
         try:
             self._updatePosition()
         except Exception:
@@ -867,6 +903,7 @@ class RemconSimulator(object):
         # Initialize parameters
         self.magnification = 10
         self.horizontalFoV = 5
+        self.rotation = 0
         self.pixelSize = 5
         self.blanker = 0
         self.external = 0
@@ -961,22 +998,25 @@ class RemconSimulator(object):
             self._sendAnswer(RS_SUCCESS, b"%d" % self.blanker)
         elif com == b"MAG?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, b"%f" % self.magnification)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.magnification)
         elif com == b"EXS?":
             self._sendAck(RS_VALID)
             self._sendAnswer(RS_SUCCESS, b"%d" % self.external)
         elif com == b"PIX?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, b"%f" % self.pixelSize)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.pixelSize)
+        elif com == b"SRO?":
+            self._sendAck(RS_VALID)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.rotation)
         elif com == b"FOC?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, b"%f" % self.focus)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.focus)
         elif com == b"EHT?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, b"%f" % self.eht)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.eht)
         elif com == b"PRB?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, b"%f" % self.pc)
+            self._sendAnswer(RS_SUCCESS, b"%G" % self.pc)
         elif com == b"STG":
             self._sendAck(RS_VALID)
             self._sendAck(RS_SUCCESS)
@@ -1005,6 +1045,14 @@ class RemconSimulator(object):
         elif com == b"MAG":
             self._sendAck(RS_VALID)
             self.magnification = float(args[0])
+            self._sendAck(RS_SUCCESS)
+        elif com == b"SRO":
+            self._sendAck(RS_VALID)
+            self.rotation = float(args[0])
+            self._sendAck(RS_SUCCESS)
+        elif com == b"SRON":
+            self._sendAck(RS_VALID)
+            # Don't do anything special, as there is no way to read it back
             self._sendAck(RS_SUCCESS)
         elif com == b"PROB":
             self._sendAck(RS_VALID)

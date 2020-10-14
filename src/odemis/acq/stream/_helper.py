@@ -108,6 +108,7 @@ class RepetitionStream(LiveStream):
             self.integrationTime = model.FloatContinuous(detector.exposureTime.value,
                                                          integrationTimeRange, unit="s",
                                                          setter=self._setIntegrationTime)
+            self._img_intor = None
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
@@ -168,13 +169,27 @@ class RepetitionStream(LiveStream):
     # Overrides method of LiveStream
     def _onNewData(self, dataflow, data):
         """
-        Called when a new image has arrived from the detector.
-        Usually the dataflow subscribes to onNewData.
+        Called when a new image has arrived from the detector. Usually the dataflow subscribes to onNewData.
+        If there is integrationTime integrate one image after another for live display while running a stream.
         :param dataflow: (model.Dataflow) The dataflow.
         :param data: (model.DataArray). The new image that has arrived from the detector.
         """
         if hasattr(self, "integrationTime"):
-            self.raw = ([data] + self.raw)[:self.integrationCounts.value]
+            if self._img_intor is None:
+                self._img_intor = img.ImageIntegrator(self.integrationCounts.value)
+
+            # Reset in case the integrationCounts change while playing the stream
+            if self._img_intor.steps != self.integrationCounts.value:
+                self._img_intor.steps = self.integrationCounts.value
+
+            # Catch the exception when the user changes some of the hardware settings (eg, resolution), while playing
+            # the stream. To do so, restart everything and keep the last image received.
+            try:
+                self.raw = [self._img_intor.append(data)]
+            except Exception:
+                logging.warning("Failed to integrate image: %s", data)
+                self._img_intor = img.ImageIntegrator(self.integrationCounts.value)
+                self.raw = [self._img_intor.append(data)]
         else:
             self.raw = [data]
 
@@ -192,12 +207,8 @@ class RepetitionStream(LiveStream):
         try:
             if not isinstance(self.raw, list):
                 raise AttributeError(".raw must be a list of DA/DAS")
-
-            # integrate images for display
-            if hasattr(self, "integrationTime"):
-                data = self._integrateImages()
-            else:
-                data = self.raw[0]
+            # update and show the integrated image
+            data = self.raw[0]
 
             if data.ndim != 2:
                 data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
@@ -205,35 +216,6 @@ class RepetitionStream(LiveStream):
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
-
-    def _integrateImages(self):
-        """
-        Integrate/sum the acquired images in self.raw for live display while running a stream.
-        Values cannot overflow (are never clipped).
-        """
-        if len(self.raw) == 1:
-            return self.raw[0]
-
-        logging.debug("Integrating %s images", len(self.raw))
-        # Note: In beginning number of images in .raw can be smaller than self.integrationCounts.value
-        md = self.raw[-1].metadata.copy()
-
-        # Sum all the images, using a dtype big enough to avoid saturation/
-        # overflow and excluding the ones which are not compatible (eg, because
-        # the binning/shape changed).
-        orig_dtype = self.raw[-1].dtype
-        best_dtype = get_best_dtype_for_acc(orig_dtype, len(self.raw))
-        data = self.raw[0].astype(best_dtype)
-        n = 1
-        for i, d in enumerate(self.raw[1:]):
-            try:
-                data += d
-                n += 1
-            except Exception as ex:
-                logging.info("Failed to integrated image %d: %s", i + 1, ex)
-        md[model.MD_INTEGRATION_COUNT] = n
-
-        return model.DataArray(data, md)
 
     # Overrides method of Stream
     def _updateHistogram(self, data=None):
@@ -247,11 +229,7 @@ class RepetitionStream(LiveStream):
             if not self.raw:
                 logging.debug("Not computing histogram as .raw is empty")
                 return
-
-            if hasattr(self, "integrationTime"):
-                data = self._integrateImages()
-            else:
-                data = self.raw[0]
+            data = self.raw[0]
 
         # Depth can change at each image (depends on hardware settings)
         self._updateDRange(data)

@@ -53,7 +53,7 @@ SI_PREFIXES = {
 }
 
 # The following units should ignore SI formatting
-IGNORE_UNITS = (None, "", "px", "C", u"°C", u"°", "%", "od", "nm")
+IGNORE_UNITS = (None, "", "px", "C", u"°C", u"°", "%", "od")
 
 
 def round_significant(x, n):

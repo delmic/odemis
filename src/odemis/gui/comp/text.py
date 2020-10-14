@@ -895,8 +895,10 @@ class UnitNumberCtrl(_NumberTextCtrl):
             str_val = "0 %s%s" % (prefix, self.unit)
         else:
             str_val = units.readable_str(self._number_value, self.unit, self.accuracy)
-        # Get the length of the number (string length, minus the unit length)
-        number_length = len(str_val.rstrip(string.ascii_letters + u" µ"))
+        # Get the length of the number, without the unit (number and unit are separated by a space)
+        number_length = str_val.find(" ")
+        if number_length < 0:  # No space found -> only numbers
+            number_length = len(str_val)
         wx.TextCtrl.ChangeValue(self, str_val)
         # Select the number value
         wx.CallAfter(self.SetSelection, number_length, number_length)

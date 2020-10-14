@@ -20,14 +20,16 @@ You should have received a copy of the GNU General Public License along with Ode
 # to provide input for high-resolution reconstruction algorithm.
 from __future__ import division
 
-import queue
 from collections import OrderedDict
 import logging
 from odemis import dataio, model, gui
 from odemis.acq import stream
+from odemis.dataio import get_available_formats
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 import os
+import queue
 import threading
 import time
 
@@ -36,7 +38,7 @@ LIVE_UPDATE_PERIOD = 10  # s, time between two images in the GUI (during acquisi
 
 class SRAcqPlugin(Plugin):
     name = "Super-resolution acquisition"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -89,9 +91,7 @@ class SRAcqPlugin(Plugin):
         ("filename", {
             "tooltip": "Each acquisition will be saved with the name and the number appended.",
             "control_type": gui.CONTROL_SAVE_FILE,
-            "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
-                "HDF5 Files (*.h5)|*.h5",
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("expectedDuration", {
         }),

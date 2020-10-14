@@ -20,7 +20,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from concurrent.futures import CancelledError
 import logging
+import math
 from odemis.driver import zeiss
 from odemis.util import test
 import os
@@ -28,7 +30,6 @@ import time
 import unittest
 from unittest.case import skip
 
-from concurrent.futures import CancelledError
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
@@ -138,6 +139,25 @@ class TestSEM(unittest.TestCase):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_vol, ebeam.accelVoltage.value)
 
+    def test_scan_rotation(self):
+        ebeam = self.scanner
+
+        orig_rot = ebeam.rotation.value
+        # 90°
+        ebeam.rotation.value = math.pi / 2
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(math.pi / 2, ebeam.rotation.value)
+
+        # Tiny value
+        ebeam.rotation.value = 0.01
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(0.01, ebeam.rotation.value)
+
+        # Reset
+        ebeam.rotation.value = orig_rot
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(orig_rot, ebeam.rotation.value)
+
     # @skip("skip")
     def test_move(self):
         """
@@ -204,6 +224,19 @@ class TestSEM(unittest.TestCase):
         test.assert_pos_almost_equal(self.stage.position.value, p)
         time.sleep(6)
         test.assert_pos_almost_equal(self.stage.position.value, p)
+
+        # Check that a long move takes time (ie, that it waits until the end of the move)
+        # It's tricky, because it always waits at least 1s.
+        prev_pos = self.stage.position.value.copy()
+        tstart = time.time()
+        self.stage.moveRelSync({"x": 1e-3})
+        dur = time.time() - tstart
+        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
+
+        tstart = time.time()
+        self.stage.moveAbsSync(prev_pos)
+        dur = time.time() - tstart
+        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
 
     def test_stop(self):
         """
