@@ -533,6 +533,9 @@ class TestPicoscale(unittest.TestCase):
             self.pos_update = True
 
         self.dev.position.subscribe(pos_listener)
+        if CONFIG_Picoscale['locator'] == 'fake':
+            # New sensor position in simulator
+            self.dev.core.positions[0] = 2.5e-6
         time.sleep(1.1)  # position should be updated every second
         self.assertTrue(self.pos_update)
 
@@ -544,29 +547,35 @@ class TestPicoscale(unittest.TestCase):
         """
         f = self.dev.reference()
         time.sleep(0.1)
-        self.dev.stop()
+        f.cancel()
+        time.sleep(0.1)  # it takes a little while until ._was_stopped is updated
         self.assertTrue(f._was_stopped)
 
         f = self.dev.reference()
         time.sleep(1)
-        self.dev.stop()
+        f.cancel()
+        time.sleep(0.1)
         self.assertTrue(f._was_stopped)
 
         f = self.dev.reference()
         time.sleep(5)
-        self.dev.stop()
+        f.cancel()
+        time.sleep(0.1)
         self.assertTrue(f._was_stopped)
 
         # Test queued futures
         f1 = self.dev.reference()
         f2 = self.dev.reference()
-        self.dev.stop()
+        f1.cancel()
+        f2.cancel()
+        time.sleep(0.1)
         self.assertEqual(self.dev._executor._queue, deque([]))
 
         # Test f.cancel()
         f = self.dev.reference()
         time.sleep(1)
         f.cancel()
+        time.sleep(0.1)
         self.assertTrue(f._was_stopped)
         for a, i in self.dev.referenced.value.items():
             self.assertFalse(i)

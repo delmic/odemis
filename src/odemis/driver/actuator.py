@@ -2822,12 +2822,10 @@ class DualChannelPositionSensor(model.HwComponent):
         axis with two channels. It describes the angle of the line between these two positions with
         respect to the horizontal line (in case of two x sensors) or vertical line (in case of two y sensors)
         going through the first position.
-    .channels (dict str --> tuple (str) or (str, str)): maps output channel name to sensor channel name(s)
 
     Functions
     =========
     .reference: call to sensor adjustment routine
-    .stop: call to sensor stop function
     """
 
     def __init__(self, name, role, dependencies, channels, distance, **kwargs):
@@ -2839,10 +2837,19 @@ class DualChannelPositionSensor(model.HwComponent):
             channel must be mapped to a single sensor channel and the other one to two sensor channels,
             e.g. {'x': ['x1', 'x2'], 'y': 'y1'}. The order of the elements in the list with two channels matters for
             the calculation of the rotation angle (in general the left or top sensor should come first).
-        distance: distance in m between the sensor heads on the axis with two channels (for calculating the rotation).
+        distance: (float > 0) distance in m between the sensor heads on the axis with two channels
+            (for calculating the rotation).
         """
         model.HwComponent.__init__(self, name, role, **kwargs)
-        self._distance = distance
+
+        # Check distance argument
+        try:
+            if distance > 0:
+                self._distance = distance
+            else:
+                raise ValueError("Illegal distance '%s', needs to be > 0.")
+        except TypeError:
+            raise ValueError("Illegal distance '%s', needs to be of type 'float'.")
 
         # Check sensor dependency
         try:
@@ -2874,18 +2881,11 @@ class DualChannelPositionSensor(model.HwComponent):
         """
         self.sensor.reference()
 
-    def stop(self):
-        """
-        Calls .stop function of sensor.
-        """
-        self.sensor.stop()
-
     def terminate(self):
         """
-        Calls .terminate function of sensor and unsubscribes from .sensor.position VA.
+        Unsubscribes from .sensor.position VA.
         """
         self.sensor.position.unsubscribe(self._on_sensor_position)
-        self.sensor.terminate()
 
     def _calculate_position_rotation(self, sensor_pos):
         """
