@@ -640,7 +640,7 @@ class PMD401Bus(Actuator):
     def _sendCommand(self, cmd):
         """
         :param cmd: (bytes) command to be sent to the hardware
-        :returns: (bytes) response
+        :returns: (str) response
         """
         cmd += EOL
         with self._ser_access:
@@ -669,14 +669,14 @@ class PMD401Bus(Actuator):
 
             # Check response (command should be echoed back)
             if not resp.startswith(cmd[:-len(EOL)-1]):
-                raise IOError("Response starts with %s != %s", resp[:len(cmd)], cmd)
+                raise IOError("Response starts with %s != %s" % (resp[:len(cmd)], cmd))
             if b"_??_" in resp:
                 raise ValueError("Received response %s, command %s not understood." % (resp, cmd))
             if b"!" in resp:
                 raise PMDError(0, resp)
             # Format:
             #    * for query with response: <cmd>:<ret><EOL> (will return <ret>)
-            #    * for set command without response: <cmd><EOL> (will return b"")
+            #    * for set command without response: <cmd><EOL> (will return "")
             return resp[len(cmd) + 1 - len(EOL):-len(EOL)].decode("latin1")
 
     def _tryRecover(self):

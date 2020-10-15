@@ -1956,8 +1956,8 @@ class SEMMDStream(MultipleDetectorStream):
                                     em_res, (n_x, n_y))
                     # TODO: is there a nice way to adjust based on the hardware's resolution?
                     #   Just go with the flow, and return this acquisition instead?
-                    raise ValueError("Failed to configure emitter resolution to %s, got %s",
-                                     (n_x, n_y), em_res)
+                    raise ValueError("Failed to configure emitter resolution to %s, got %s" %
+                                     ((n_x, n_y), em_res))
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels2scan)].mean(axis=0))

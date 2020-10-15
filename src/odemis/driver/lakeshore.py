@@ -200,7 +200,7 @@ class Lakeshore(model.HwComponent):
                 if manufacturer != "LSCI":
                     raise IOError("Invalid device manufacturer")
                 if md != "MODEL335":
-                    raise IOError("The model is %s, not MODEL335.", md)
+                    raise IOError("The model is %s, not MODEL335." % (md,))
                 return n
 
             except (IOError, LakeshoreError) as e:
