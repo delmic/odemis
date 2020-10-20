@@ -284,7 +284,9 @@ class MergeChannelsPlugin(Plugin):
     def _cropBottom(self, _=None):
         """Crop the data bar at the bottom of the image"""
         for st, r in self._raw_orig.items():
-            st.raw[0] = r[:r.shape[0] - self.cropBottom.value, :]
+            prev_md = st.raw[0].metadata
+            st.raw[0] = r[:max(1, r.shape[0] - self.cropBottom.value), :]
+            st.raw[0].metadata = prev_md
             self._forceUpdate(st)
 
     def _forceUpdate(self, st):
