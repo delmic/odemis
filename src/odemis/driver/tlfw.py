@@ -117,6 +117,8 @@ class FW102c(model.Actuator):
                 self._serial.close()
                 self._serial = None
 
+        super(FW102c, self).terminate()
+
     def _findDevice(self, ports):
         """
         Look for a compatible device

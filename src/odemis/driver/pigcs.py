@@ -3341,6 +3341,8 @@ class Bus(model.Actuator):
         for controller in ctlrs:
             controller.terminate()
 
+        super(Bus, self).terminate()
+
     def selfTest(self):
         """
         No move should be going one while doing a self-test

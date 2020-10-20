@@ -153,6 +153,8 @@ class Light(model.Emitter):
             comedi.close(self._device)
             self._device = None
 
+        super(Light, self).terminate()
+
     def _power_to_volt(self, power, curve):
         """
         power (0<float)

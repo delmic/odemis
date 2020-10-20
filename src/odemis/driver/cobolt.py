@@ -143,6 +143,8 @@ class DPSS(model.PowerSupplier):
                 self._serial = None
                 self._file.close()
 
+        super(DPSS, self).terminate()
+
     def _sendCommand(self, cmd):
         """
         cmd (str): command to be sent to device (without the CR)

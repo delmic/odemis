@@ -102,6 +102,8 @@ class WhiteLed(model.Emitter):
             self._bstick.turn_off()
             self._bstick = None
 
+        super(WhiteLed, self).terminate()
+
     @staticmethod
     def scan():
         """

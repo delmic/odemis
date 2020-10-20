@@ -554,6 +554,8 @@ class Spectrometer(model.Detector):
             self._dev_hdl = None
         self.Done()
 
+        super(Spectrometer, self).terminate()
+
     def Init(self, port):
         """
         port (int): 0 for USB-only, 256 for ethernet, -1 for all

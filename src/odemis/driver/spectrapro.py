@@ -780,6 +780,8 @@ class SpectraPro(model.Actuator):
             self._serial.close()
             self._serial = None
 
+        super(SpectraPro, self).terminate()
+
     def getPixelToWavelength(self, npixels, pxs):
         """
         Return the lookup table pixel number of the CCD -> wavelength observed.

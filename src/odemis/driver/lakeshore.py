@@ -131,6 +131,8 @@ class Lakeshore(model.HwComponent):
         with self._ser_access:
             self._serial.close()
 
+        super(Lakeshore, self).terminate()
+
     @staticmethod
     def _openSerialPort(port, baudrate=57600):
         """

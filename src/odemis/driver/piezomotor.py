@@ -247,6 +247,8 @@ class PMD401Bus(Actuator):
         for axis in self._axis_map.values():
             self.setWaveform(axis, WAVEFORM_PARK)  # power off
 
+        super(PMD401Bus, self).terminate()
+
     def stop(self, axes=None):
         self._executor.cancel()
         axes = axes or self._axis_map.keys()

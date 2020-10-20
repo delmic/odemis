@@ -1226,6 +1226,8 @@ class Camera(model.DigitalCamera):
             self.ExitCamera()
             self._hcam = None
 
+        super(Camera, self).terminate()
+
     def _openDevice(self, sn=None):
         """
         Opens the device with the given serial number

@@ -151,6 +151,8 @@ class PMT(model.Detector):
             # Turn off the PMT
             self.powerSupply.value = False
 
+        super(PMT, self).terminate()
+
     def updateMetadata(self, md):
         self._pmt.updateMetadata(md)
 

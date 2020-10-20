@@ -1876,6 +1876,8 @@ class AndorCam3(model.DigitalCamera):
             self.atcore.AT_FinaliseLibrary()
             self.atcore = None
 
+        super(AndorCam3, self).terminate()
+
     def selfTest(self):
         """
         Check whether the connection to the camera works.

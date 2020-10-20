@@ -273,6 +273,11 @@ class VigilantAttribute(VigilantAttributeBase):
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(self)
+
+        if self._remote_listeners:
+            logging.info("Unregistering %s while still %d remote listeners", self, len(self._remote_listeners))
+            self._remote_listeners.clear()
+
         try:
             if self.pipe:
                 self.pipe.close()
@@ -317,7 +322,7 @@ class VigilantAttribute(VigilantAttributeBase):
                           len(self._listeners), len(self._remote_listeners), v)
 
         # publish the data remotely
-        if len(self._remote_listeners) > 0:
+        if self._remote_listeners:
             self.pipe.send_pyobj(v)
 
         # publish locally
