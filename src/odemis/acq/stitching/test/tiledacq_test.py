@@ -263,3 +263,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
+
+
+if __name__ == '__main__':
+    unittest.main()
