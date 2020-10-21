@@ -1254,7 +1254,10 @@ class MC_5DOF(model.Actuator):
             logging.debug("SA_MC is referenced")
         else:
             if ref_on_init:
-                self.reference().result()
+                try:
+                    self.reference().result()
+                except Exception as e:
+                    self.state._set_value(e, force_write=True)
             else:
                 logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
 
@@ -1278,6 +1281,7 @@ class MC_5DOF(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
+        self.stop()
         self.core.SA_MC_Close(self._id)
         super(MC_5DOF, self).terminate()
 
@@ -1464,6 +1468,7 @@ class MC_5DOF(model.Actuator):
         Stop the SA_MC controller and update position
         """
         self.Stop()
+        self._executor.cancel()
         self._updatePosition()
 
     def _updatePosition(self):
@@ -2517,6 +2522,7 @@ class MCS2(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
+        self.stop()
         self.core.SA_CTL_Close(self._id)
         super(MCS2, self).terminate()
 
@@ -2754,8 +2760,10 @@ class MCS2(model.Actuator):
         Stop the SA_CTL controller and update position
         if axes = None, stop all axes
         """
+
         if axes is None:
             axes = self._axis_map.keys()
+            self._executor.cancel()
 
         for axis_name in axes:
             self.Stop(self._axis_map.get(axis_name))
