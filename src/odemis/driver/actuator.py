@@ -2893,7 +2893,7 @@ class LinkedAxesActuator(model.Actuator):
         self._validateMetadata(md)
         super(LinkedAxesActuator, self).updateMetadata(md)
         # Re-update position whenever MD_POS_COR and MD_CALIB values change
-        if len({model.MD_POS_COR, model.MD_CALIB}.intersection(md.keys())):
+        if {model.MD_POS_COR, model.MD_CALIB}.intersection(md.keys()):
             self._updatePosition()
 
     def _validateMetadata(self, md):
@@ -3044,11 +3044,11 @@ class LinkedAxesActuator(model.Actuator):
         c, d = self._metadata[model.MD_CALIB][1]
         e, f = self._metadata[model.MD_CALIB][2]
 
-        x_ = M + a * x + b * y
-        y_ = N + c * x + d * y
-        z_ = O + e * x + f * y
+        xd = M + a * x + b * y
+        yd = N + c * x + d * y
+        zd = O + e * x + f * y
 
-        return x_, y_, z_
+        return xd, yd, zd
 
     def _computeZDirection(self, target_z):
         """
@@ -3129,7 +3129,7 @@ class LinkedAxesActuator(model.Actuator):
         if unknown_axes:
             logging.error("Attempting to stop unknown axes: %s", ", ".join(unknown_axes))
             axes &= all_axes
-        logging.debug("Stopping axes: %s..." % axes)
+        logging.debug("Stopping axes: %s...", axes)
         self._stage.stop(axes)
 
     @isasync

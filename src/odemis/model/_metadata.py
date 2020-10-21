@@ -163,7 +163,6 @@ MD_HW_NOTE = "Hardware note"  # (string) "Free" description of the hardware stat
 MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
-MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration parameters for the correct axes mapping
 MD_SHEAR_COR = "Shear cor"  # float, vertical shear to be subtracted from MD_SHEAR
 MD_BASELINE_COR = "Baseline cor"  # value, to be added to MD_BASELINE
 
@@ -178,6 +177,7 @@ MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping 
 # The following metadata is for correction on the Nikon Confocal
 # dict (int (resolution X) -> dict (float (dwell time) -> tuple of 4 floats (correction factors)))
 MD_SHIFT_LOOKUP = "Pixel shift compensation table"
+MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration parameters for the correct axes mapping
 
 # The following metadata is used to store specific known positions for the
 # actuators.
