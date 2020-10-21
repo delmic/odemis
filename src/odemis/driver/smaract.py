@@ -3367,10 +3367,11 @@ class Picoscale(model.HwComponent):
         # The precision mode is a special feature that needs to be purchased separately, so it is not available
         # by default.
         # TODO: this functionality has not yet been tested
-        if precision_mode != 0:
-            if not self.IsFeatureEnabled(FEATURE_PRECISION_MODE):
+        if self.IsFeatureEnabled(FEATURE_PRECISION_MODE):
+            self.SetPrecisionMode(precision_mode)
+        else:
+            if precision_mode != 0:
                 raise ValueError("Device does not have precision mode. This feature needs to be purchased separately.")
-        self.SetPrecisionMode(precision_mode)
 
         # State: starting until first referencing/validation procedure is done
         # Position requests can be made during startup, however, the values are not going to be accurate until the
@@ -3433,7 +3434,7 @@ class Picoscale(model.HwComponent):
                 continue
 
             # Add device
-            devices.append((dev.name, {"locator": locator, "channels": dev.channels}))
+            devices.append((dev.devname, {"locator": locator, "channels": dev.channels}))
 
         return devices
 
@@ -3964,10 +3965,14 @@ class _PicoscaleScanned(Picoscale):
         # Connection
         logging.debug("Connecting to locator %s.", locator)
         self._locator = locator
-        self.core, self._id = self._openConnection(locator)
+        if locator == "fake":
+            self.core = FakePicoscale_DLL()
+        else:
+            self.core = SA_SIDLL()
+        self._id = self._openConnection(locator)
 
         # Get device name
-        self.name = self.GetProperty_s(SA_SI_DEVICE_NAME_PROP)
+        self.devname = self.GetProperty_s(SA_SI_DEVICE_NAME_PROP)
 
         # Get channels
         num_ch = self.GetNumberOfChannels()
