@@ -30,7 +30,8 @@ import math
 import gc
 import numpy
 
-from odemis.acq.stream import POL_POSITIONS, FIT_TO_RGB
+from odemis.acq.stream import POL_POSITIONS
+from odemis.model import TINT_FIT_TO_RGB
 
 try:
     import arpolarimetry
@@ -1045,7 +1046,7 @@ class RGBSpatialProjection(RGBProjection):
                 # Explicitly only use the first 3 values, to leave the alpha channel as-is
                 numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
             else:
-                logging.warning("Tuple Tint expected.")
+                logging.warning("Tuple Tint expected: got %s", tint)
 
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
@@ -1294,7 +1295,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
             irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
 
-            if self.stream.tint.value != FIT_TO_RGB:
+            if self.stream.tint.value != TINT_FIT_TO_RGB:
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data)

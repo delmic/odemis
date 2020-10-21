@@ -31,15 +31,12 @@ from odemis import model
 import scipy.ndimage
 import cv2
 
-from odemis.model import MD_DWELL_TIME, MD_EXP_TIME
+from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util.conversion import get_img_transformation_matrix
 from odemis.util import get_best_dtype_for_acc
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
 import matplotlib.colors as colors
 from matplotlib import cm
-
-FIT_TO_RGB = "fitrgb"
-RGB_AS_IS = "rgbasis"
 
 # See if the optimised (cython-based) functions are available
 try:
@@ -112,10 +109,10 @@ def md_format_to_tint(user_tint):
     if isinstance(user_tint, tuple) or isinstance(user_tint, list):
         return user_tint
     elif isinstance(user_tint, str):
-        if user_tint != FIT_TO_RGB:
+        if user_tint != TINT_FIT_TO_RGB:
             return cm.get_cmap(user_tint)
         else:
-            return FIT_TO_RGB
+            return TINT_FIT_TO_RGB
 
 
 def findOptimalRange(hist, edges, outliers=0):
@@ -473,15 +470,15 @@ def getColorbar(color_map, width, height, alpha=False):
 
 def tintToColormap(tint, name=""):
     """
-    If a tint is an RGB tuple, or FIT_TO_RGB string convert it to a matplotlib.colors.Colormap object
+    If a tint is an RGB tuple, or TINT_FIT_TO_RGB string convert it to a matplotlib.colors.Colormap object
     """
     if isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
         # make a gradient from black to the selected tint
         tint = colors.LinearSegmentedColormap.from_list(name,
             [(0, 0, 0), rgb_to_frgb(tint)])
-    elif tint == RGB_AS_IS:
+    elif tint == TINT_RGB_AS_IS:
         tint = cm.get_cmap('hsv')
-    elif tint == FIT_TO_RGB:  # tint Fit to RGB constant
+    elif tint == TINT_FIT_TO_RGB:  # tint Fit to RGB constant
         tint = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
     return tint
 

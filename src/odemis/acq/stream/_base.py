@@ -32,7 +32,7 @@ from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
                           MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX,
                           MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
-                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N)
+                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS)
 from odemis.util import img
 import threading
 import time
@@ -46,10 +46,6 @@ from odemis.util.img import mergeMetadata
 from odemis.util.transform import AffineTransform
 
 UNDEFINED_ROI = (0, 0, 0, 0)
-
-# Constant for TINT
-FIT_TO_RGB = "fitrgb"
-RGB_AS_IS = "rgbasis"
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
@@ -238,7 +234,7 @@ class Stream(object):
         # The tint VA could be either:
         # - a list tuple RGB value (for a tint) or
         # - a matplotlib.colors.Colormap object for a custom color map
-        # - a string of value FIT_TO_RGB to indicate fit RGB color mapping
+        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
         self.tint = model.VigilantAttribute((255, 255, 255), setter=self._setTint)
 
         # Used if auto_bc is False
@@ -1153,8 +1149,8 @@ class Stream(object):
         # The tint VA could be either:
         # - a list tuple RGB value (for a tint) or
         # - a matplotlib.colors.Colormap object for a custom color map
-        # - a string of value FIT_TO_RGB to indicate fit RGB color mapping
-        # - a string ov vlaue RGB_AS_IS that indicates no tint. Will be converted to a black tint
+        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+        # - a string ov vlaue TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
         # Enforce this setting
         if isinstance(tint, tuple):
             # RGB tuple - enforce len of 3
@@ -1168,9 +1164,9 @@ class Stream(object):
             return tuple(tint)
         elif isinstance(tint, matplotlib.colors.Colormap):
             return tint
-        elif tint == FIT_TO_RGB:
+        elif tint == TINT_FIT_TO_RGB:
             return tint
-        elif tint == RGB_AS_IS:
+        elif tint == TINT_RGB_AS_IS:
             return (255, 255, 255)
         else:
             raise ValueError("Invalid value for tint VA")

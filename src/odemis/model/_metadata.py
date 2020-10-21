@@ -199,3 +199,7 @@ MD_GAIN_D = "Derivative gain"  # float
 # The following is a string containing a dict encoded in JSON, which represents all the known states
 # of all the hardware used during an acquisition.
 MD_EXTRA_SETTINGS = "Extra settings"
+
+# Constant for TINT
+TINT_FIT_TO_RGB = "fitrgb"
+TINT_RGB_AS_IS = "rgbasis"

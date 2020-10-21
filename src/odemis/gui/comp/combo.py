@@ -37,10 +37,7 @@ import wx
 import wx.adv
 from matplotlib import cm
 import matplotlib.colors as colors
-import numpy
 from odemis.util.img import getColorbar, tintToColormap
-import odemis.gui.util.img
-from PIL.ImageColor import getcolor
 
 
 class ComboBox(wx.adv.OwnerDrawnComboBox):
@@ -192,15 +189,8 @@ class ColorMapComboBox(ComboBox):
         labels: list of str that are the names of color maps
         choices: list of matplotlib colormap. List of corresponding color map objects
         """
-        labels = kwargs['labels']
-        colormaps = kwargs['choices']
-        self.choices = labels
-        kwargs['choices'] = labels
         kwargs['style'] |= wx.CB_READONLY
         super(ColorMapComboBox, self).__init__(*args, **kwargs)
-        # add color map objects to client data once it is initialized by the super constructor
-        for (n, cm) in enumerate(colormaps):
-            self.SetClientData(n, cm)
 
     def OnMeasureItemWidth(self, item):
         return ITEM_WIDTH
@@ -216,9 +206,9 @@ class ColorMapComboBox(ComboBox):
         r = wx.Rect(*rect)  # make a copy
 
         # Draw a rectangle of the color
-        item_name = self.choices[item]
+        item_name = self.Strings[item]
         color_map = self.GetClientData(item)
-        
+
         if not color_map:
             return
 

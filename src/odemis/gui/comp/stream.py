@@ -43,7 +43,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.acq.stream import FIT_TO_RGB, RGB_AS_IS
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
@@ -185,7 +185,7 @@ class StreamPanelHeader(wx.Control):
 
         if self.Parent.options & OPT_NO_COLORMAPS:
             self.colormap_choices = OrderedDict([
-                            ("Original", RGB_AS_IS),
+                            ("Original", TINT_RGB_AS_IS),
                            ])
         else:
             self.colormap_choices = OrderedDict([
@@ -196,7 +196,7 @@ class StreamPanelHeader(wx.Control):
         self._colormap_original_idx = len(self.colormap_choices) - 1
 
         if self.Parent.options & OPT_FIT_RGB:
-            self.colormap_choices["Fit to RGB"] = FIT_TO_RGB
+            self.colormap_choices["Fit to RGB"] = TINT_FIT_TO_RGB
 
         # store the index
         self._colormap_fitrgb_idx = len(self.colormap_choices) - 1
@@ -418,7 +418,7 @@ class StreamPanelHeader(wx.Control):
             if self.Parent.stream.tint.value == value:
                 self.combo_colormap.SetSelection(index)
                 break
-            elif self.Parent.stream.tint.value == FIT_TO_RGB:
+            elif self.Parent.stream.tint.value == TINT_FIT_TO_RGB:
                 self.combo_colormap.SetSelection(self._colormap_fitrgb_idx)  # fit to RGB
                 break
         else:

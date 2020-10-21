@@ -42,7 +42,7 @@ from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
-from odemis.acq.stream import FIT_TO_RGB, RGB_AS_IS
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
 import matplotlib.colors as colors
 
@@ -1775,7 +1775,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
         if stream is None and hasattr(s, "tint"):
             tint = s.tint.value
             
-            if isinstance(tint, colors.Colormap) or tint == FIT_TO_RGB or tint != RGB_AS_IS:
+            if tint != TINT_RGB_AS_IS:
 
                 tint = img.tintToColormap(tint)
             
@@ -1787,7 +1787,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 colorbar_start_y = legend_y_pos + 3
 
                 # draw colorbar scale
-                if s.tint.value != FIT_TO_RGB:
+                if s.tint.value != TINT_FIT_TO_RGB:
                     legend_ctx.move_to(legend_x_pos, legend_y_pos + SUB_UPPER * buffer_size[0])
                     legend_ctx.show_text(str(numpy.min(s.raw)))
                     legend_ctx.move_to(legend_x_pos + colorbar_start_x + width - 10, legend_y_pos + SUB_UPPER * buffer_size[0])
