@@ -751,6 +751,15 @@ STREAM_SETTINGS_CONFIG = {
                 "choices": util.format_band_choices,
             }),
         )),
+    stream.ScannedTemporalSettingsStream:
+        OrderedDict((
+            ("density", {  # from tc-od-filter
+                "tooltip": u"Optical density",
+            }),
+            ("filter", {  # from tc-filter
+                "choices": util.format_band_choices,
+            }),
+        )),
     stream.MonochromatorSettingsStream:
         OrderedDict((
             ("wavelength", {
@@ -796,7 +805,10 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.CLSettingsStream:
         OrderedDict((
-            ("filter", {  # from filter or cl-filter
+            ("density", {  # from tc-od-filter
+                "tooltip": u"Optical density",
+            }),
+            ("filter", {  # from filter, cl-filter, or tc-filter
                 "choices": util.format_band_choices,
             }),
         )),
