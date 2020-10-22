@@ -25,6 +25,7 @@ import numpy
 import odemis
 import odemis.util.dataio as udataio
 import os
+import wx
 from collections import OrderedDict
 from odemis import model, gui
 from odemis.acq import stream
@@ -195,8 +196,13 @@ class MergeChannelsPlugin(Plugin):
         if filename == " ":
             return None
 
-        data = udataio.open_acquisition(filename)[0]
-        data = self._ensureRGB(data, tint)
+        try:
+            data = udataio.open_acquisition(filename)[0]
+            data = self._ensureRGB(data, tint)
+        except Exception as ex:
+            logging.exception("Failed to open %s", filename)
+            self._showErrorMessage("Failed to open image", "Failed to open image:\n%s" % (ex,))
+            return None
 
         basename, ext = os.path.splitext(os.path.split(filename)[1])
         stream_ch = stream.StaticFluoStream(basename, data)
@@ -209,6 +215,17 @@ class MergeChannelsPlugin(Plugin):
         self._connectShift(stream_ch, 1, shiftY)
 
         return stream_ch
+
+    @call_in_wx_main
+    def _showErrorMessage(self, title, msg):
+        """
+        Shows an error message in a message box
+        title (str)
+        msg (str)
+        """
+        box = wx.MessageDialog(self._dlg, msg, title, wx.OK | wx.ICON_STOP)
+        box.ShowModal()
+        box.Destroy()
 
     def _ensureRGB(self, data, tint):
         """
@@ -284,7 +301,9 @@ class MergeChannelsPlugin(Plugin):
     def _cropBottom(self, _=None):
         """Crop the data bar at the bottom of the image"""
         for st, r in self._raw_orig.items():
-            st.raw[0] = r[:r.shape[0] - self.cropBottom.value, :]
+            prev_md = st.raw[0].metadata
+            st.raw[0] = r[:max(1, r.shape[0] - self.cropBottom.value), :]
+            st.raw[0].metadata = prev_md
             self._forceUpdate(st)
 
     def _forceUpdate(self, st):
