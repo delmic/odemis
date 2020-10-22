@@ -202,7 +202,6 @@ class ColorMapComboBox(ComboBox):
         self.Refresh(eraseBackground=True)
 
     def OnDrawItem(self, dc, rect, item, flags):
-
         r = wx.Rect(*rect)  # make a copy
 
         # Draw a rectangle of the color
@@ -223,7 +222,7 @@ class ColorMapComboBox(ComboBox):
             color_map = tintToColormap(color_map)
 
             gradient = getColorbar(color_map, w, h)
-            bmp = wx.EmptyBitmap(*gradient.shape[1::-1])
+            bmp = wx.Bitmap(*gradient.shape[1::-1])
             bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
             dc.DrawBitmap(bmp, 0, 0)
             return

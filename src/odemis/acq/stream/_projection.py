@@ -1041,10 +1041,11 @@ class RGBSpatialProjection(RGBProjection):
         if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
             # Take the RGB data as-is, just needs to make sure it's in the right order
             tile = img.ensureYXC(tile)
-            if tint != (255, 255, 255) and isinstance(tint, tuple):  # Tint not white => adjust the RGB channels
-                tile = tile.copy()
-                # Explicitly only use the first 3 values, to leave the alpha channel as-is
-                numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
+            if isinstance(tint, tuple):  # Tint not white => adjust the RGB channels
+                if tint != (255, 255, 255):
+                    tile = tile.copy()
+                    # Explicitly only use the first 3 values, to leave the alpha channel as-is
+                    numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
             else:
                 logging.warning("Tuple Tint expected: got %s", tint)
 

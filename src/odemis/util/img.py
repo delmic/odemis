@@ -479,7 +479,7 @@ def tintToColormap(tint, name=""):
     elif tint == TINT_RGB_AS_IS:
         tint = cm.get_cmap('hsv')
     elif tint == TINT_FIT_TO_RGB:  # tint Fit to RGB constant
-        tint = colors.ListedColormap([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'Fit to RGB')
+        tint = colors.ListedColormap([(0, 0, 1), (0, 1, 0), (1, 0, 0)], 'Fit to RGB')
     return tint
 
 

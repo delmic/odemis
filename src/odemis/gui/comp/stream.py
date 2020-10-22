@@ -214,7 +214,7 @@ class StreamPanelHeader(wx.Control):
             self.colormap_choices.update(COLORMAPS)  # add the predefined color maps
 
         colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), labels=list(self.colormap_choices.keys()),
-                                          choices=list(self.colormap_choices.values()), size=(-1, 16),
+                                          choices=list(self.colormap_choices.values()), size=(88, 16),
                               style=cbstyle)
 
         # determine which value to select
@@ -430,7 +430,7 @@ class StreamPanelHeader(wx.Control):
 
         # check the value of the colormap
         index = self.combo_colormap.GetSelection()
-        name, tint = self.colormap_choices.items()[index]
+        name, tint = list(self.colormap_choices.items())[index]
 
         if name == TINT_CUSTOM_TEXT:
             # Set default colour to the current value
