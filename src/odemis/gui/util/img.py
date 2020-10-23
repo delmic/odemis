@@ -546,14 +546,12 @@ def set_images(im_args):
 def calc_img_buffer_rect(im_data, im_scale, p_im_center, buffer_center, buffer_scale, buffer_size):
     """ Compute the rectangle containing the image in buffer coordinates
 
-    The (top, left) value are relative to the 0,0 top left of the buffer.
-
     im_data (DataArray): image data
     im_scale (float, float): The x and y scales of the image
     p_im_center (float, float): The center of the image in phys coordinates
     buffer_center (float, float): The buffer center (in phys coordinates)
     buffer_scale (float, float): The buffer scale
-    buffer_size (float, float): The buffer size
+    buffer_size (int, int): The buffer shape in pixels (X, Y)
 
     returns (float, float, float, float) top, left, width, height
 
@@ -571,10 +569,10 @@ def calc_img_buffer_rect(im_data, im_scale, p_im_center, buffer_center, buffer_s
     p_topleft = (p_im_center[0] - (scaled_im_size[0] / 2),
                  p_im_center[1] + (scaled_im_size[1] / 2))
 
-    b_topleft = (round(((p_topleft[0] - buffer_center[0]) // buffer_scale[0]) + (buffer_size[0] // 2)),
-                 round((-(p_topleft[1] - buffer_center[1]) // buffer_scale[1]) + (buffer_size[1] // 2)))
+    b_topleft = (((p_topleft[0] - buffer_center[0]) / buffer_scale[0]) + (buffer_size[0] / 2),
+                 -((p_topleft[1] - buffer_center[1]) / buffer_scale[1]) + (buffer_size[1] / 2))
 
-    final_size = (scaled_im_size[0] // buffer_scale[0], scaled_im_size[1] // buffer_scale[1])
+    final_size = (scaled_im_size[0] / buffer_scale[0], scaled_im_size[1] / buffer_scale[1])
     return b_topleft + final_size
 
 
@@ -582,8 +580,6 @@ def draw_image(ctx, im_data, p_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
                shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False):
     """ Draw the given image to the Cairo context
-
-    The buffer is considered to have it's 0,0 origin at the top left
 
     ctx (cairo.Context): Cario context to draw on
     im_data (DataArray): Image to draw
