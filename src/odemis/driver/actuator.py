@@ -2806,3 +2806,335 @@ class LinkedHeightFocus(model.Actuator):
                 raise CancelledError()
             future._running_subf = self._lensz.reference(axes)
         future._running_subf.result()
+
+class LinkedAxesActuator(model.Actuator):
+    """
+    The goal of this wrapper is to automatically adjust the underlying stage movement based on the movement of its
+    axes. As the sample is tilted by ~45° (along Y), whenever moving the stage in Y, the distance of the sample to
+    the optical objective changes, resulting in losing the focus. This wrapper compensate for this change by linearly
+    mapping the dependent Y and Z axes returning the focus back to its position.
+    """
+
+    def __init__(self, name, role, dependencies, daemon=None, **kwargs):
+        """
+        :param name: (string)
+        :param role: (string)
+        :param dependencies (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis (Presumably only the sample stage).
+        """
+        self._stage = None
+        self._validateDepStage(dependencies)
+        if self._stage is None:
+            raise ValueError("LinkedAxesActuator needs a stage dependency.")
+
+        # Get the same properties (ie range) of the underlying axes
+        axes_def = {}
+        for an in ("x", "y"):
+            axes_def[an] = copy.deepcopy(self._stage.axes[an])
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, dependencies=dependencies, daemon=daemon,
+                                **kwargs)
+
+        # will take care of executing axis moves asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # Initialize POS_COR and CALIB to "identity", so that it works out of the box
+        self._metadata.update({model.MD_POS_COR: [0, 0, 0]})
+        self._metadata.update({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
+
+        # position will be calculated from the underlying stage
+        self.position = model.VigilantAttribute({}, readonly=True)
+        self._stage.position.subscribe(self._updatePosition, init=True)
+
+        # Add speed if it's in stage
+        if model.hasVA(self._stage, "speed"):
+            self.speed = self._stage.speed
+
+    def _validateDepStage(self, dependencies):
+        """
+        Make sure there is only one actuator dependency with the right axes
+        """
+        if len(dependencies) != 1:
+            raise ValueError("LinkedAxesActuator needs precisely one dependency")
+        crole, dep = dict(dependencies).popitem()
+        # Check if dependency is indeed actuator
+        if not isinstance(dep, model.ComponentBase):
+            raise ValueError("Dependency %s is not a component." % dep)
+        if not hasattr(dep, "axes") or not isinstance(dep.axes, dict):
+            raise ValueError("Dependency %s is not an actuator." % dep.name)
+        # Check if dependency has the right axes
+        elif crole == "stage":
+            if not {'x', 'y', 'z'}.issubset(dep.axes.keys()):
+                raise ValueError("Dependency %s doesn't have x, y and z axes" % dep.name)
+            self._stage = dep
+        else:
+            raise ValueError(
+                "Dependency given to LinkedAxesActuator must be 'stage', but got %s." % crole)
+
+    def _updatePosition(self, value=None):
+        """
+        update the position VA by mapping from the underlying stage
+        """
+        # Only update position when MD_POS_COR and MD_CALIB are already configured
+        if not {model.MD_POS_COR, model.MD_CALIB}.issubset(self._metadata.keys()):
+            logging.error("POS_COR and CALIB should be in metadata.")
+            return
+
+        value = self._stage.position.value if value is None else value
+        # Map x, y from the underlying stage
+        x, y = self._computeLinkedAxes(value)
+        current_value = {'x': x, 'y': y}
+        logging.debug("Updating linked axes position %s", current_value)
+        self.position._set_value(current_value, force_write=True)
+
+    def updateMetadata(self, md):
+        """
+        Validate and update the metadata associated with the axes mapping
+        md (dict string -> value): the metadata
+        """
+        self._validateMetadata(md)
+        super(LinkedAxesActuator, self).updateMetadata(md)
+        # Re-update position whenever MD_POS_COR and MD_CALIB values change
+        if {model.MD_POS_COR, model.MD_CALIB}.intersection(md.keys()):
+            self._updatePosition()
+
+    def _validateMetadata(self, md):
+        """
+        Ensure MD_POS_COR and MD_CALIB have the right parameters for axes mapping
+        :raises ValueError: if parameters are incorrect
+        """
+        if model.MD_POS_COR in md and len(md[model.MD_POS_COR]) != 3:
+            raise ValueError("MD_POS_COR should have 3 parameters.")
+
+        if model.MD_CALIB in md:
+            if len(md[model.MD_CALIB]) != 3:
+                raise ValueError("MD_CALIB should have 3 sublists.")
+            if any([len(sublist) != 2 for sublist in md[model.MD_CALIB]]):
+                raise ValueError("Each sublist of MD_CALIB should have 2 parameters.")
+
+            # TODO: Do we need more checks?
+            a, b = md[model.MD_CALIB][0]
+            c, d = md[model.MD_CALIB][1]
+            if (a * d - b * c) == 0:
+                raise ValueError("MD_CALIB parameters will result to division by zero.")
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the mapped stage to the defined position for each axis given.
+        This is an asynchronous method.
+        pos dict(string-> float): name of the axis and new position
+        returns (Future): object to control the move request
+        """
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
+        return f
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the mapped stage by a defined shift. This is an asynchronous method.
+        shift dict(string-> float): name of the axis and shift
+        """
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveRel, f, shift)
+        return f
+
+    def _createFuture(self):
+        """
+        Create a cancellable future with the following parameters:
+         - sub running future: to carry out the underlying movements
+         - must stop event: to signal the movement should be stopped
+         - moving lock: to protect the sub movement during running
+        Return (CancellableFuture): a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._running_subf = None
+        f.task_canceller = self._cancelCurrentMove
+        return f
+
+    def _cancelCurrentMove(self, future):
+        """
+        Cancels the current move (both absolute or relative) or current reference
+        future (Future): the future to stop.
+        return (bool): True if it successfully cancelled (stopped) the move.
+        """
+        logging.debug("Cancelling current move...")
+        future._must_stop.set()  # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if future._state == FINISHED:
+                return False
+            # If future has and underlying move it should be cancelled
+            if future._running_subf:
+                future._running_subf.cancel()
+        return True
+
+    def _doMoveAbs(self, future, pos):
+        """
+        Move to the requested absolute position
+        """
+        self._adjustDepMovement(future, pos, rel=False)
+
+    def _doMoveRel(self, future, shift):
+        """
+        Move to the requested relative position
+        """
+        # Check resultant rel move still in range
+        for key in shift.keys():
+            if not self._isInRange(key, self.position.value[key] + shift[key]):
+                raise ValueError("Relative movement would go outside of range.")
+
+        self._adjustDepMovement(future, shift, rel=True)
+
+    def _isInRange(self, axis, pos=None):
+        """
+        A helper function to check if current position is in axis range
+        :param axis: (string) the axis to check range for
+        :param pos: (float) if None current position is taken
+        :return: (bool) True if position in range, False otherwise
+        """
+        pos = self.position.value[axis] if pos is None else pos
+        rng = self._axes[axis].range
+        # Add 1% margin for hardware slight errors
+        margin = (rng[1] - rng[0]) * 0.01
+        return (rng[0] - margin) <= pos <= (rng[1] + margin)
+
+    def _computeLinkedAxes(self, dep_pos):
+        """
+        Compute the axes positions by mapping from the dependent stage position
+        :param dep_pos: The underlying dependent stage position
+        :return: x,y calculated position values
+        """
+        xd = dep_pos['x']
+        yd = dep_pos['y']
+
+        M, N, O = self._metadata[model.MD_POS_COR]
+        a, b = self._metadata[model.MD_CALIB][0]
+        c, d = self._metadata[model.MD_CALIB][1]
+        # The formula is derived from the defining one in _computeDepAxes,
+        # and assuming that Z is "at the good place"
+        x = ((xd - M) * d - (yd - N) * b) / (a * d - b * c)
+        y = ((yd - N) * a - (xd - M) * c) / (a * d - b * c)
+
+        return x, y
+
+    def _computeDepAxes(self, pos, rel=False):
+        """
+        Compute the dependent axes positions by mapping to the required target position
+        :param pos: The target position
+        :param rel: whether it's a relative movement or absolute
+        :return: x,y,z calculated position values
+        """
+        x = self.position.value['x']
+        y = self.position.value['y']
+        if 'x' in pos:
+            x = x + pos['x'] if rel else pos['x']
+        if 'y' in pos:
+            y = y + pos['y'] if rel else pos['y']
+
+        M, N, O = self._metadata[model.MD_POS_COR]
+        a, b = self._metadata[model.MD_CALIB][0]
+        c, d = self._metadata[model.MD_CALIB][1]
+        e, f = self._metadata[model.MD_CALIB][2]
+
+        xd = M + a * x + b * y
+        yd = N + c * x + d * y
+        zd = O + e * x + f * y
+
+        return xd, yd, zd
+
+    def _computeZDirection(self, target_z):
+        """
+        Check if target position contains a movement in Z axis and determine its direction in respect to the
+        current Z axis value
+        :param pos: The target position
+        :return: Direction of movement in Z value
+        """
+        current_z = self._stage.position.value['z']
+        # TODO: do we need error tolerance? to compensate for slight jitters or just consider it a move?
+        # Compare current and target Z values and return the direction
+        if target_z > current_z:
+            return MOVE_UP
+        elif target_z < current_z:
+            return MOVE_DOWN
+        else:
+            return NO_ZMOVE
+
+    def _adjustDepMovement(self, future, vector_value, rel=False):
+        """
+        Adjust the dependent sample stage movement to compensate the required move
+        :param future: Cancellable future of the whole task (with sub future to run sub movements)
+        :param vector_value: The target vector value (absolute position or shift)
+        :param rel: Whether it's relative movement or absolute
+        """
+        ordered_submoves = []
+        # Get the mapped position values (absolute position is used for both absolute and relative moves)
+        target_x, target_y, target_z = self._computeDepAxes(vector_value, rel)
+        # Determine movement and direction of the Z axis (up, down, none)
+        z_move_direction = self._computeZDirection(target_z)
+
+        # Order the stage movements to ensure no collision (Z safety)
+        if z_move_direction == MOVE_UP:
+            ordered_submoves.append({'x': target_x, 'y': target_y})
+            ordered_submoves.append({'z': target_z})
+        elif z_move_direction == MOVE_DOWN:
+            ordered_submoves.append({'z': target_z})
+            ordered_submoves.append({'x': target_x, 'y': target_y})
+        else:
+            # No Z move
+            ordered_submoves.append({'x': target_x, 'y': target_y})
+
+        # Execute the ordered submoves
+        for sub_move in ordered_submoves:
+            try:
+                self._doMoveAbsStage(future, sub_move)
+            except CancelledError:
+                logging.info("Movement cancelled.")
+                raise
+            except Exception as ex:
+                logging.exception("Failed to move further.")
+                raise
+
+    def _doMoveAbsStage(self, future, pos):
+        """
+        Carry out the absolute movement of the underlying stage dependency
+        :param future: Cancellable future of the task
+        :param pos: The target absolute position
+        """
+        with future._moving_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            future._running_subf = self._stage.moveAbs(pos)
+        future._running_subf.result()
+
+    def stop(self, axes=None):
+        """
+        Stops the motion of the underlying stage
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        # Empty the queue (and already stop the stage if a future is running)
+        self._executor.cancel()
+        # Stop the underlying stage axes
+        # TODO: Should Z axis be stopped as well?
+        all_axes = set(self.axes.keys())
+        axes = axes or all_axes
+        unknown_axes = axes - all_axes
+        if unknown_axes:
+            logging.error("Attempting to stop unknown axes: %s", ", ".join(unknown_axes))
+            axes &= all_axes
+        logging.debug("Stopping axes: %s...", axes)
+        self._stage.stop(axes)
+
+    @isasync
+    def reference(self, axes):
+        """Reference the linked axes stage"""
+        raise NotImplementedError("Referencing is currently not implemented.")

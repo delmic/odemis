@@ -32,7 +32,7 @@ print(odemis.__file__)
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
-    LinkedHeightFocus
+    LinkedHeightFocus, LinkedAxesActuator
 from odemis.util import test
 import os
 import time
@@ -1590,6 +1590,114 @@ class TestLinkedHeightActuator(unittest.TestCase):
         self.assertTrue(cancelled)
         # Some axes could be referenced during this time but not all
         self.assertFalse(all(stage.referenced.value.values()))
+
+class TestLinkedAxesActuator(unittest.TestCase):
+
+    def setUp(self):
+        # Construct the underlying sem stage
+        # Using TMCLController to correctly simulate movement
+        self.dep_stage = tmcm.TMCLController(name="dep_stage", role="sem_stage",
+                                             port="/dev/fake3", axes=["x", "y", "z"],
+                                             ustepsize=[STEP_SIZE, STEP_SIZE, STEP_SIZE],
+                                             rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3]],
+                                             refproc="Standard")
+
+        # Create Linked axes stage from the dependent stage
+        self.linked_axes = LinkedAxesActuator("Linked Axes", "stage", dependencies={"stage": self.dep_stage}, )
+
+    def test_identity(self):
+        """
+        Test position of the X and Y dependent axes are the same as the wrapped X and Y on identity calibration
+        """
+        linked_axes = self.linked_axes
+        linked_axes.updateMetadata({model.MD_POS_COR: [0, 0, 0]})
+        linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
+        test.assert_pos_almost_equal(self.dep_stage.position.value, linked_axes.position.value,  atol=ATOL_STAGE, match_all=False)
+
+    def test_move_abs(self):
+        """
+        Test absolute movement of the linked axes actuator
+        """
+        linked_axes = self.linked_axes
+        p = linked_axes.position.value.copy()
+        subpos = linked_axes.position.value.copy()
+        subpos["x"] += 50e-6
+        subpos["y"] += 50e-6
+        f = linked_axes.moveAbs(subpos)
+        f.result()
+        test.assert_pos_almost_equal(linked_axes.position.value, subpos, atol=ATOL_STAGE)
+        # Return to original position
+        f = linked_axes.moveAbs(p)
+        f.result()
+        test.assert_pos_almost_equal(linked_axes.position.value, p, atol=ATOL_STAGE)
+
+    def test_move_rel(self):
+        """
+        Test relative movement of the linked axes actuator
+        """
+        linked_axes = self.linked_axes
+        pos = linked_axes.position.value.copy()
+        f = linked_axes.moveRel({"x": 2e-6, "y": 3e-6})
+        f.result()
+        self.assertNotEqual(linked_axes.position.value, pos)
+        f = linked_axes.moveRel({"x": -2e-6, "y": -3e-6})
+        f.result()
+        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        # Test if relative movement would go out of range
+        f = linked_axes.moveRel({"x": -2e-3})
+        f.result()
+        with self.assertRaises(ValueError):
+            f = linked_axes.moveRel({"x": -5e-3, "y": -3e-3})
+            f.result()
+
+    def test_changing_metadata(self):
+        """
+        Test changing MD_CALIB and MD_POS_COR metadata
+        """
+        linked_axes = self.linked_axes
+        # Change metadata with a tilted angle parameters cos(45), sin(45)
+        linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 0.707], [0, 0.707]], model.MD_POS_COR: [0, 0, 0.01]})
+
+        # Rerun all the tests with the new parameters
+        self.test_move_abs()
+        self.test_move_rel()
+        self.test_stop()
+
+    def test_stop(self):
+        """
+        Check it's possible to move the stage
+        """
+        linked_axes = self.linked_axes
+        pos = linked_axes.position.value.copy()
+        logging.info("Initial pos = %s", pos)
+        f = linked_axes.moveRel({"x": 50e-4})
+        exppos = pos.copy()
+        exppos["x"] += 50e-4
+
+        time.sleep(0.5)  # abort after 0.5 s
+        f.cancel()
+
+        self.assertNotEqual(linked_axes.position.value, pos)
+        test.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+
+        f = linked_axes.moveAbs(pos)  # Back to orig pos
+        f.result()
+        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+
+        # Same thing, but using stop() method
+        pos = linked_axes.position.value.copy()
+        f = linked_axes.moveRel({"x": 50e-4})
+        time.sleep(0.5)
+        linked_axes.stop()
+
+        exppos = pos.copy()
+        exppos["x"] += 50e-4
+        self.assertNotEqual(linked_axes.position.value, pos)
+        self.assertNotEqual(linked_axes.position.value, exppos)
+
+        f = linked_axes.moveAbs(pos)  # Back to orig pos
+        f.result()
+        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
 
 
 if __name__ == "__main__":
