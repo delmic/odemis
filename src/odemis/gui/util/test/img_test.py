@@ -1310,10 +1310,15 @@ class TestOverviewFunctions(unittest.TestCase):
         # Insert tile into image
         ovv_im = model.DataArray(numpy.zeros((11, 11, 3), dtype=numpy.uint8))
         ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
-        tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
-        tile.metadata[model.MD_POS] = (-3, 3)
-        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        ovv_im.metadata[model.MD_POS] = (0, 0)
+#         tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
+        tile = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
+        tile[1:4, 1:4, :] = 255
+        tile.metadata[model.MD_POS] = (-3.5, 3.5)
+        # tile.metadata[model.MD_POS] = (0, 0)
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)  # 1,1
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        print(ovv_im_new[:, :, 0])  # DEBUG
         # rectangle with edges (-4,4), (-2,4), (-4,2), (-4,2) should be white now
         # (6,6) is the center, so this corresponds to a rectangle with top left at (2,2) (=(1,1) when counting from 0)
         numpy.testing.assert_array_equal(ovv_im_new[1:4, 1:4, :], tile)
@@ -1322,10 +1327,12 @@ class TestOverviewFunctions(unittest.TestCase):
         # Test tile that goes beyond the borders of the image top left
         ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
         ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
-        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_POS] = (0, 0)
+        tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
         tile.metadata[model.MD_POS] = (-3, 3)  # top-left corner, one pixel diagonal to start of ovv
         tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        print(ovv_im_new[:, :, 0])  # DEBUG
         self.assertEqual(ovv_im_new[0][0][0], 255)  # first pixel white (all three dims), rest black
         numpy.testing.assert_array_equal(ovv_im.flatten()[3:],
                                          numpy.zeros(len(ovv_im.flatten()[3:])))
@@ -1333,7 +1340,8 @@ class TestOverviewFunctions(unittest.TestCase):
         # Test tile that goes beyond the borders of the image bottom right
         ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
         ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
-        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_POS] = (0, 0)
+        tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
         tile.metadata[model.MD_POS] = (3, -3)  # bottom-right corner, one pixel diagonal to end of ovv
         tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
@@ -1342,13 +1350,15 @@ class TestOverviewFunctions(unittest.TestCase):
                                          numpy.zeros(len(ovv_im.flatten()[3:])))
 
         # Test tile that lies completely outside the overview image
-        ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
-        ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
-        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        ovv_im = model.DataArray(numpy.zeros((500, 600, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_PIXEL_SIZE] = (0.01, 0.01)
+        ovv_im.metadata[model.MD_POS] = (0, 0)
+        tile = model.DataArray(255 * numpy.ones((40, 40, 3), dtype=numpy.uint8))
         tile.metadata[model.MD_POS] = (10, -10)
-        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        tile.metadata[model.MD_PIXEL_SIZE] = (0.1, 0.1)
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
-        numpy.testing.assert_array_equal(ovv_im_new, numpy.zeros((5, 5, 3)))
+        self.assertTrue(numpy.all(ovv_im_new == 0))
+        # numpy.testing.assert_array_equal(ovv_im_new, numpy.zeros((5, 5, 3)))
 
     def test_merge(self):
         """ Tests merge_screen function """

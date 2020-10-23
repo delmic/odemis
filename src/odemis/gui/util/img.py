@@ -2468,65 +2468,43 @@ def insert_tile_to_image(tile, ovv):
     deleted. If the tile reaches beyond the borders of the ovv, it is cropped.
     tile: 3D DataArray (RGB or RGBA) with MD_PIXEL_SIZE and MD_POS metadata
     ovv: 3D DataArray (RGB or RGBA) with MD_PIXEL_SIZE metadata
-    Returns 3D DataArray with the same shape as tile (updated ovv)
+    Returns 3D DataArray with the same shape as ovv (updated ovv)
     """
-    # TODO: use cairo to insert images. Not required for current specification, but
-    # 'blend_screen' mode insertion might be necessary to overlay multiple optical images
-    # in future implementations.
+    # TODO: allow a 'blend_screen' mode, for multiple fluo images?
 
     # Tile parameters
-    tile_pos_m = tile.metadata[model.MD_POS]
+    tile_pos = tile.metadata[model.MD_POS]
     tile_mpp = tile.metadata[model.MD_PIXEL_SIZE]
-    x, y, c = tile.shape
-    tile_size_m = (x * tile_mpp[0], y * tile_mpp[1])
 
     # Ovv parameters
     ovv_mpp = ovv.metadata[model.MD_PIXEL_SIZE]
     ovv_sz = ovv.shape[1], ovv.shape[0]
+    ovv_pos = ovv.metadata[model.MD_POS]
 
-    # Tile size, pos in ovv image (px)
-    tile_sz_px = (int(round(tile_size_m[0] / ovv_mpp[0])),
-                  int(round(tile_size_m[1] / ovv_mpp[1])),
-                  c)
-    if 0 in tile_sz_px:
-        logging.debug("Not drawing tile which would be too small %s", tile_sz_px)
-        return ovv
-    tile_pos_px = (int(tile_pos_m[0] / ovv_mpp[0]), int(tile_pos_m[1] / ovv_mpp[1]))
-    # Change origin of coordinates from center of the image to top left of ovv image,
-    # the position indicates the top left part of the tile, not its center.
-    pos_top_left = (int(tile_pos_px[0] + ovv_sz[0] / 2 - tile_sz_px[0] / 2),
-                    int(ovv_sz[1] / 2 - tile_pos_px[1] - tile_sz_px[1] / 2))
+    # Convert to Cairo format (BGRA)
+    ovv_bgra = format_rgba_darray(ovv, 255)
+    tile_bgra = format_rgba_darray(tile, 255)
 
-    # Crop tile on edges of overview image
-    if pos_top_left[0] + tile_sz_px[0] > ovv_sz[0]:
-        diff_x2 = pos_top_left[0] + tile_sz_px[0] - ovv_sz[0]
-        x_right = tile_sz_px[0] - diff_x2
-    else:
-        diff_x2 = 0
-        x_right = tile_sz_px[0]
+    surface = cairo.ImageSurface.create_for_data(ovv_bgra, cairo.FORMAT_ARGB32,
+                                                 ovv_bgra.shape[1], ovv_bgra.shape[0])
+    ctx = cairo.Context(surface)
 
-    if pos_top_left[0] < 0:
-        diff_x = -pos_top_left[0]
-        pos_top_left = (0, pos_top_left[1])
-    else:
-        diff_x = 0
+    draw_image(
+        ctx,
+        tile_bgra,
+        tile_pos,
+        ovv_pos,
+        ovv_mpp,
+        ovv_sz,
+        opacity=1.0,
+        im_scale=tile_mpp,
+        blend_mode=BLEND_DEFAULT,
+        interpolate_data=True
+    )
 
-    if pos_top_left[1] + tile_sz_px[1] > ovv_sz[1]:
-        diff_y2 = pos_top_left[1] + tile_sz_px[1] - ovv_sz[1]
-        y_right = tile_sz_px[1] - diff_y2
-    else:
-        diff_y2 = 0
-        y_right = tile_sz_px[1]
-
-    if pos_top_left[1] < 0:
-        diff_y = -pos_top_left[1]
-        pos_top_left = (pos_top_left[0], 0)
-    else:
-        diff_y = 0
-
-    ovv[pos_top_left[1]: pos_top_left[1] + tile_sz_px[1] - diff_y - diff_y2,
-        pos_top_left[0]: pos_top_left[0] + tile_sz_px[0] - diff_x - diff_x2] = \
-        img.rescale_hq(tile, (tile_sz_px[1], tile_sz_px[0], c))[diff_y:y_right, diff_x:x_right]
+    ovv[:, :, 0] = ovv_bgra[:, :, 2]
+    ovv[:, :, 1] = ovv_bgra[:, :, 1]
+    ovv[:, :, 2] = ovv_bgra[:, :, 0]
     return ovv
 
 
