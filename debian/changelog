@@ -1,3 +1,17 @@
+odemis (3.0.6-1) xenial; urgency=medium
+
+  * New version 3.0.6
+  * Main bug fixes:
+    - Fix bug reporter not picking YAML on Python 3
+    - Add odemis-model-selector.log to bug report
+    - Fix Zeiss SEM connection on Python 3
+    - Fix failure of autofocus on single line CCD with noise image
+    - Fix random crash at the end of acquisition in some plugins
+    - Fix incorrect SPARC lens position after restarting with an engaged mirror
+    - Fix loading polarized AR background acquired with extra data
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 23 Oct 2020 23:43:09 +0200
+
 odemis (3.0.5-1) xenial; urgency=medium
 
   * New version 3.0.5
