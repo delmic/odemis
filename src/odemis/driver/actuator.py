@@ -2811,7 +2811,8 @@ class LinkedAxesActuator(model.Actuator):
     """
     The goal of this wrapper is to automatically adjust the underlying stage movement based on the movement of its
     axes. As the sample is tilted by ~45° (along Y), whenever moving the stage in Y, the distance of the sample to
-    the optical objective changes. This wrapper compensate for this change by linearly mapping the dependent axes.
+    the optical objective changes, resulting in losing the focus. This wrapper compensate for this change by linearly
+    mapping the dependent Y and Z axes returning the focus back to its position.
     """
 
     def __init__(self, name, role, dependencies, daemon=None, **kwargs):
@@ -2997,8 +2998,9 @@ class LinkedAxesActuator(model.Actuator):
     def _isInRange(self, axis, pos=None):
         """
         A helper function to check if current position is in axis range
-        :param pos: if None current position is taken
-        :return: True if position in range, False otherwise
+        :param axis: (string) the axis to check range for
+        :param pos: (float) if None current position is taken
+        :return: (bool) True if position in range, False otherwise
         """
         pos = self.position.value[axis] if pos is None else pos
         rng = self._axes[axis].range
@@ -3135,5 +3137,4 @@ class LinkedAxesActuator(model.Actuator):
     @isasync
     def reference(self, axes):
         """Reference the linked axes stage"""
-        logging.error("Referencing is currently not implemented.")
-        # TODO: Should an exception be raised as well?
+        raise NotImplementedError("Referencing is currently not implemented.")

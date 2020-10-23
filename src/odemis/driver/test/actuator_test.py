@@ -1643,6 +1643,12 @@ class TestLinkedAxesActuator(unittest.TestCase):
         f = linked_axes.moveRel({"x": -2e-6, "y": -3e-6})
         f.result()
         test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        # Test if relative movement would go out of range
+        f = linked_axes.moveRel({"x": -2e-3})
+        f.result()
+        with self.assertRaises(ValueError):
+            f = linked_axes.moveRel({"x": -5e-3, "y": -3e-3})
+            f.result()
 
     def test_changing_metadata(self):
         """
