@@ -524,7 +524,7 @@ class TestPicoscale(unittest.TestCase):
     def setUpClass(cls):
         cls.dev = smaract.Picoscale(**CONFIG_Picoscale)
         # Wait until initialization is done
-        while cls.dev.state == model.ST_STARTING:
+        while cls.dev.state.value == model.ST_STARTING:
             time.sleep(0.1)
 
     @classmethod
@@ -542,6 +542,8 @@ class TestPicoscale(unittest.TestCase):
         """
         Tests whether the position is updated every second.
         """
+        while self.dev.state == model.ST_STARTING:
+            time.sleep(0.1)
         self.pos_update = False
 
         def pos_listener(_):
@@ -561,7 +563,7 @@ class TestPicoscale(unittest.TestCase):
         Test cancelling at various stages of the referencing procedure.
         """
         f = self.dev.reference()
-        time.sleep(0.1)
+        time.sleep(0.2)
         f.cancel()
         time.sleep(0.1)  # it takes a little while until ._was_stopped is updated
         self.assertTrue(f._was_stopped)

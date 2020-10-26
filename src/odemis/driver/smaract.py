@@ -2137,6 +2137,219 @@ class SA_CTLDLL(CDLL):
         0xf01c: "NO_APPLICATION",
     }
 
+    SA_CTL_STRING_MAX_LENGTH = 63
+
+    # device states
+    SA_CTL_DEV_STATE_BIT_HM_PRESENT = 0x00000001
+    SA_CTL_DEV_STATE_BIT_MOVEMENT_LOCKED = 0x00000002
+    SA_CTL_DEV_STATE_BIT_INTERNAL_COMM_FAILURE = 0x00000100
+    SA_CTL_DEV_STATE_BIT_IS_STREAMING = 0x00001000
+
+    # module states
+    SA_CTL_MOD_STATE_BIT_SM_PRESENT = 0x00000001
+    SA_CTL_MOD_STATE_BIT_BOOSTER_PRESENT = 0x00000002
+    SA_CTL_MOD_STATE_BIT_ADJUSTMENT_ACTIVE = 0x00000004
+    SA_CTL_MOD_STATE_BIT_IOM_PRESENT = 0x00000008
+    SA_CTL_MOD_STATE_BIT_INTERNAL_COMM_FAILURE = 0x00000100
+    SA_CTL_MOD_STATE_BIT_FAN_FAILURE = 0x00000800
+    SA_CTL_MOD_STATE_BIT_POWER_SUPPLY_FAILURE = 0x00001000
+    SA_CTL_MOD_STATE_BIT_HIGH_VOLTAGE_FAILURE = 0x00001000  # deprecated
+    SA_CTL_MOD_STATE_BIT_POWER_SUPPLY_OVERLOAD = 0x00002000
+    SA_CTL_MOD_STATE_BIT_HIGH_VOLTAGE_OVERLOAD = 0x00002000  # deprecated
+    SA_CTL_MOD_STATE_BIT_OVER_TEMPERATURE = 0x00004000
+
+    # channel states
+    SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING = 0x00000001
+    SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE = 0x00000002
+    SA_CTL_CH_STATE_BIT_CALIBRATING = 0x00000004
+    SA_CTL_CH_STATE_BIT_REFERENCING = 0x00000008
+    SA_CTL_CH_STATE_BIT_MOVE_DELAYED = 0x00000010
+    SA_CTL_CH_STATE_BIT_SENSOR_PRESENT = 0x00000020
+    SA_CTL_CH_STATE_BIT_IS_CALIBRATED = 0x00000040
+    SA_CTL_CH_STATE_BIT_IS_REFERENCED = 0x00000080
+    SA_CTL_CH_STATE_BIT_END_STOP_REACHED = 0x00000100
+    SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED = 0x00000200
+    SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED = 0x00000400
+    SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED = 0x00000800
+    SA_CTL_CH_STATE_BIT_IS_STREAMING = 0x00001000
+    SA_CTL_CH_STATE_BIT_POSITIONER_OVERLOAD = 0x00002000
+    SA_CTL_CH_STATE_BIT_OVER_TEMPERATURE = 0x00004000
+    SA_CTL_CH_STATE_BIT_REFERENCE_MARK = 0x00008000
+    SA_CTL_CH_STATE_BIT_IS_PHASED = 0x00010000
+    SA_CTL_CH_STATE_BIT_POSITIONER_FAULT = 0x00020000
+    SA_CTL_CH_STATE_BIT_AMPLIFIER_ENABLED = 0x00040000
+
+    # hand control module states
+    SA_CTL_HM_STATE_BIT_INTERNAL_COMM_FAILURE = 0x0100
+    SA_CTL_HM_STATE_BIT_IS_INTERNAL = 0x0200
+
+    # property keys
+    SA_CTL_PKEY_NUMBER_OF_CHANNELS = 0x020F0017
+    SA_CTL_PKEY_NUMBER_OF_BUS_MODULES = 0x020F0016
+    SA_CTL_PKEY_INTERFACE_TYPE = 0x020F0066
+    SA_CTL_PKEY_DEVICE_STATE = 0x020F000F
+    SA_CTL_PKEY_DEVICE_SERIAL_NUMBER = 0x020F005E
+    SA_CTL_PKEY_DEVICE_NAME = 0x020F003D
+    SA_CTL_PKEY_EMERGENCY_STOP_MODE = 0x020F0088
+    SA_CTL_PKEY_NETWORK_DISCOVER_MODE = 0x020F0159
+    SA_CTL_PKEY_NETWORK_DHCP_TIMEOUT = 0x020F015C
+    # module
+    SA_CTL_PKEY_POWER_SUPPLY_ENABLED = 0x02030010
+    SA_CTL_PKEY_NUMBER_OF_BUS_MODULE_CHANNELS = 0x02030017
+    SA_CTL_PKEY_MODULE_TYPE = 0x02030066
+    SA_CTL_PKEY_MODULE_STATE = 0x0203000F
+    # positioner
+    SA_CTL_PKEY_STARTUP_OPTIONS = 0x0A02005D
+    SA_CTL_PKEY_AMPLIFIER_ENABLED = 0x0302000D
+    SA_CTL_PKEY_AMPLIFIER_MODE = 0x030200BF
+    SA_CTL_PKEY_POSITIONER_CONTROL_OPTIONS = 0x0302005D
+    SA_CTL_PKEY_ACTUATOR_MODE = 0x03020019
+    SA_CTL_PKEY_CONTROL_LOOP_INPUT = 0x03020018
+    SA_CTL_PKEY_SENSOR_INPUT_SELECT = 0x0302009D
+    SA_CTL_PKEY_POSITIONER_TYPE = 0x0302003C
+    SA_CTL_PKEY_POSITIONER_TYPE_NAME = 0x0302003D
+    SA_CTL_PKEY_MOVE_MODE = 0x03050087
+    SA_CTL_PKEY_CHANNEL_TYPE = 0x02020066
+    SA_CTL_PKEY_CHANNEL_STATE = 0x0305000F
+    SA_CTL_PKEY_POSITION = 0x0305001D
+    SA_CTL_PKEY_TARGET_POSITION = 0x0305001E
+    SA_CTL_PKEY_SCAN_POSITION = 0x0305001F
+    SA_CTL_PKEY_SCAN_VELOCITY = 0x0305002A
+    SA_CTL_PKEY_HOLD_TIME = 0x03050028
+    SA_CTL_PKEY_MOVE_VELOCITY = 0x03050029
+    SA_CTL_PKEY_MOVE_ACCELERATION = 0x0305002B
+    SA_CTL_PKEY_MAX_CL_FREQUENCY = 0x0305002F
+    SA_CTL_PKEY_DEFAULT_MAX_CL_FREQUENCY = 0x03050057
+    SA_CTL_PKEY_STEP_FREQUENCY = 0x0305002E
+    SA_CTL_PKEY_STEP_AMPLITUDE = 0x03050030
+    SA_CTL_PKEY_FOLLOWING_ERROR_LIMIT = 0x03050055
+    SA_CTL_PKEY_FOLLOWING_ERROR = 0x03020055
+    SA_CTL_PKEY_BROADCAST_STOP_OPTIONS = 0x0305005D
+    SA_CTL_PKEY_SENSOR_POWER_MODE = 0x03080019
+    SA_CTL_PKEY_SENSOR_POWER_SAVE_DELAY = 0x03080054
+    SA_CTL_PKEY_POSITION_MEAN_SHIFT = 0x03090022
+    SA_CTL_PKEY_SAFE_DIRECTION = 0x03090027
+    SA_CTL_PKEY_CL_INPUT_SENSOR_VALUE = 0x0302001D
+    SA_CTL_PKEY_CL_INPUT_AUX_VALUE = 0x030200B2
+    SA_CTL_PKEY_TARGET_TO_ZERO_VOLTAGE_HOLD_TH = 0x030200B9
+    # scale
+    SA_CTL_PKEY_LOGICAL_SCALE_OFFSET = 0x02040024
+    SA_CTL_PKEY_LOGICAL_SCALE_INVERSION = 0x02040025
+    SA_CTL_PKEY_RANGE_LIMIT_MIN = 0x02040020
+    SA_CTL_PKEY_RANGE_LIMIT_MAX = 0x02040021
+    SA_CTL_PKEY_DEFAULT_RANGE_LIMIT_MIN = 0x020400C0
+    SA_CTL_PKEY_DEFAULT_RANGE_LIMIT_MAX = 0x020400C1
+    # calibration
+    SA_CTL_PKEY_CALIBRATION_OPTIONS = 0x0306005D
+    SA_CTL_PKEY_SIGNAL_CORRECTION_OPTIONS = 0x0306001C
+    # referencing
+    SA_CTL_PKEY_REFERENCING_OPTIONS = 0x0307005D
+    SA_CTL_PKEY_DIST_CODE_INVERTED = 0x0307000E
+    SA_CTL_PKEY_DISTANCE_TO_REF_MARK = 0x030700A2
+    # tuning and customizing
+    SA_CTL_PKEY_POS_MOVEMENT_TYPE = 0x0309003F
+    SA_CTL_PKEY_POS_IS_CUSTOM_TYPE = 0x03090041
+    SA_CTL_PKEY_POS_BASE_UNIT = 0x03090042
+    SA_CTL_PKEY_POS_BASE_RESOLUTION = 0x03090043
+    SA_CTL_PKEY_POS_HEAD_TYPE = 0x0309008E
+    SA_CTL_PKEY_POS_REF_TYPE = 0x03090048
+    SA_CTL_PKEY_POS_P_GAIN = 0x0309004B
+    SA_CTL_PKEY_POS_I_GAIN = 0x0309004C
+    SA_CTL_PKEY_POS_D_GAIN = 0x0309004D
+    SA_CTL_PKEY_POS_PID_SHIFT = 0x0309004E
+    SA_CTL_PKEY_POS_ANTI_WINDUP = 0x0309004F
+    SA_CTL_PKEY_POS_ESD_DIST_TH = 0x03090050
+    SA_CTL_PKEY_POS_ESD_COUNTER_TH = 0x03090051
+    SA_CTL_PKEY_POS_TARGET_REACHED_TH = 0x03090052
+    SA_CTL_PKEY_POS_TARGET_HOLD_TH = 0x03090053
+    SA_CTL_PKEY_POS_SAVE = 0x0309000A
+    SA_CTL_PKEY_POS_WRITE_PROTECTION = 0x0309000D
+    # streaming
+    SA_CTL_PKEY_STREAM_BASE_RATE = 0x040F002C
+    SA_CTL_PKEY_STREAM_EXT_SYNC_RATE = 0x040F002D
+    SA_CTL_PKEY_STREAM_OPTIONS = 0x040F005D
+    SA_CTL_PKEY_STREAM_LOAD_MAX = 0x040F0301
+    # diagnostic
+    SA_CTL_PKEY_CHANNEL_ERROR = 0x0502007A
+    SA_CTL_PKEY_CHANNEL_TEMPERATURE = 0x05020034
+    SA_CTL_PKEY_BUS_MODULE_TEMPERATURE = 0x05030034
+    SA_CTL_PKEY_POSITIONER_FAULT_REASON = 0x05020113
+    SA_CTL_PKEY_MOTOR_LOAD = 0x05020115
+    # io module
+    SA_CTL_PKEY_IO_MODULE_OPTIONS = 0x0603005D
+    SA_CTL_PKEY_IO_MODULE_VOLTAGE = 0x06030031
+    SA_CTL_PKEY_IO_MODULE_ANALOG_INPUT_RANGE = 0x060300A0
+    # auxiliary
+    SA_CTL_PKEY_AUX_POSITIONER_TYPE = 0x0802003C
+    SA_CTL_PKEY_AUX_POSITIONER_TYPE_NAME = 0x0802003D
+    SA_CTL_PKEY_AUX_INPUT_SELECT = 0x08020018
+    SA_CTL_PKEY_AUX_IO_MODULE_INPUT_INDEX = 0x081100AA
+    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT_INDEX = 0x080B00AA
+    SA_CTL_PKEY_AUX_IO_MODULE_INPUT0_VALUE = 0x08110000
+    SA_CTL_PKEY_AUX_IO_MODULE_INPUT1_VALUE = 0x08110001
+    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT0_VALUE = 0x080B0000
+    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT1_VALUE = 0x080B0001
+    SA_CTL_PKEY_AUX_DIRECTION_INVERSION = 0x0809000E
+    SA_CTL_PKEY_AUX_DIGITAL_INPUT_VALUE = 0x080300AD
+    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_VALUE = 0x080300AE
+    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_SET = 0x080300B0
+    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_CLEAR = 0x080300B1
+    SA_CTL_PKEY_AUX_ANALOG_OUTPUT_VALUE0 = 0x08030000
+    SA_CTL_PKEY_AUX_ANALOG_OUTPUT_VALUE1 = 0x08030001
+    # threshold detector
+    SA_CTL_PKEY_THD_INPUT_SELECT = 0x09020018
+    SA_CTL_PKEY_THD_IO_MODULE_INPUT_INDEX = 0x091100AA
+    SA_CTL_PKEY_THD_SENSOR_MODULE_INPUT_INDEX = 0x090B00AA
+    SA_CTL_PKEY_THD_THRESHOLD_HIGH = 0x090200B4
+    SA_CTL_PKEY_THD_THRESHOLD_LOW = 0x090200B5
+    SA_CTL_PKEY_THD_INVERSION = 0x0902000E
+    # input trigger
+    SA_CTL_PKEY_DEV_INPUT_TRIG_MODE = 0x060D0087
+    SA_CTL_PKEY_DEV_INPUT_TRIG_CONDITION = 0x060D005A
+    # output trigger
+    SA_CTL_PKEY_CH_OUTPUT_TRIG_MODE = 0x060E0087
+    SA_CTL_PKEY_CH_OUTPUT_TRIG_POLARITY = 0x060E005B
+    SA_CTL_PKEY_CH_OUTPUT_TRIG_PULSE_WIDTH = 0x060E005C
+    SA_CTL_PKEY_CH_POS_COMP_START_THRESHOLD = 0x060E0058
+    SA_CTL_PKEY_CH_POS_COMP_INCREMENT = 0x060E0059
+    SA_CTL_PKEY_CH_POS_COMP_DIRECTION = 0x060E0026
+    SA_CTL_PKEY_CH_POS_COMP_LIMIT_MIN = 0x060E0020
+    SA_CTL_PKEY_CH_POS_COMP_LIMIT_MAX = 0x060E0021
+    # hand control module
+    SA_CTL_PKEY_HM_STATE = 0x020C000F
+    SA_CTL_PKEY_HM_LOCK_OPTIONS = 0x020C0083
+    SA_CTL_PKEY_HM_DEFAULT_LOCK_OPTIONS = 0x020C0084
+    # api
+    SA_CTL_PKEY_API_EVENT_NOTIFICATION_OPTIONS = 0xF010005D
+    SA_CTL_PKEY_EVENT_NOTIFICATION_OPTIONS = 0xF010005D  # deprecated
+    SA_CTL_PKEY_API_AUTO_RECONNECT = 0xF01000A1
+    SA_CTL_PKEY_AUTO_RECONNECT = 0xF01000A1  # deprecated
+
+    # move modes
+    SA_CTL_MOVE_MODE_CL_ABSOLUTE = 0
+    SA_CTL_MOVE_MODE_CL_RELATIVE = 1
+    SA_CTL_MOVE_MODE_SCAN_ABSOLUTE = 2
+    SA_CTL_MOVE_MODE_SCAN_RELATIVE = 3
+    SA_CTL_MOVE_MODE_STEP = 4
+
+    # referencing options
+    SA_CTL_REF_OPT_BIT_NORMAL = 0x00000000
+    SA_CTL_REF_OPT_BIT_START_DIR = 0x00000001
+    SA_CTL_REF_OPT_BIT_REVERSE_DIR = 0x00000002
+    SA_CTL_REF_OPT_BIT_AUTO_ZERO = 0x00000004
+    SA_CTL_REF_OPT_BIT_ABORT_ON_ENDSTOP = 0x00000008
+    SA_CTL_REF_OPT_BIT_CONTINUE_ON_REF_FOUND = 0x00000010
+    SA_CTL_REF_OPT_BIT_STOP_ON_REF_FOUND = 0x00000020
+
+    # calibration options
+    SA_CTL_CALIB_OPT_BIT_DIRECTION = 0x00000001
+    SA_CTL_CALIB_OPT_BIT_DIST_CODE_INV_DETECT = 0x00000002
+    SA_CTL_CALIB_OPT_BIT_ASC_CALIBRATION = 0x00000004
+    SA_CTL_CALIB_OPT_BIT_REF_MARK_TEST = 0x00000008
+    SA_CTL_CALIB_OPT_BIT_LIMITED_TRAVEL_RANGE = 0x00000100
+
+    SA_CTL_INFINITE = 0xffffffff
+
     def __init__(self):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
@@ -3297,7 +3510,7 @@ class Picoscale(model.HwComponent):
     (+ wrapper functions for Picoscale API)
     """
 
-    def __init__(self, name, role, locator, channels, ref_on_init=True, precision_mode=0, *args, **kwargs):
+    def __init__(self, name, role, locator, channels, ref_on_init=False, precision_mode=0, *args, **kwargs):
         """
         name: (str)
         role: (str)
@@ -3313,7 +3526,16 @@ class Picoscale(model.HwComponent):
                 usb:sn:<serial_number>
                 network:sn:<serial_number>
         channels: (str --> int) dictionary mapping channel names to channel numbers
-        ref_on_init: (bool) if True, will run full referencing just after initialization.
+        ref_on_init: (True, False, "always", "if necessary", "never")
+            * "always": Run referencing procedure every time the driver is initialized, no matter the state it was in.
+            * True / "if necessary": If the channels are already in a valid state (i.e. the device was not turned off
+                since the last referencing), don't reference again. Only reference if the channels are not valid (i.e.
+                the device was turned off after the last referencing). In any case, the device can be used after
+                the referencing procedure is complete. It is recommended to reference the system frequently though.
+                In case the system has not been power cycled in a long time, the referencing parameters might become
+                outdated and the reported position values might not be accurate.
+            * False / "never": Never reference. This means that the device might not be able to produce position data,
+                if it was not previously referenced.
         precision_mode: (0 <= int <= 5) strength of digital lowpass filter, a higher level corresponds to higher
             precision, but lower velocity. Not available on all systems.
         """
@@ -3367,11 +3589,11 @@ class Picoscale(model.HwComponent):
         # The precision mode is a special feature that needs to be purchased separately, so it is not available
         # by default.
         # TODO: this functionality has not yet been tested
-        if self.IsFeatureEnabled(FEATURE_PRECISION_MODE):
+        try:
             self.SetPrecisionMode(precision_mode)
-        else:
-            if precision_mode != 0:
-                raise ValueError("Device does not have precision mode. This feature needs to be purchased separately.")
+        except SA_SIError:
+            # TODO
+            pass
 
         # State: starting until first referencing/validation procedure is done
         # Position requests can be made during startup, however, the values are not going to be accurate until the
@@ -3383,26 +3605,34 @@ class Picoscale(model.HwComponent):
         self.state._set_value(model.ST_STARTING, force_write=True)
 
         # Referencing
-        # There are two options for referencing: the full referencing procedure and the shorter validation
-        # procedure. The validation procedure reuses the referencing parameters stored in memory. Afterwards,
-        # the system is ready to use and might produce reasonable position values. However,
-        # it is recommended to reference (i.e. adjust) the system frequently (at least during startup)
-        # since even small changes in the experimental setup or environment might cause the old
-        # adjustment parameters to become non-ideal. Therefore, the values for all channels in .referenced
-        # will be False, until the full referencing routine has been performed.
+        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+        channel_ref = {ch: self.IsValid(num) for ch, num in self._channels.items()}
+        self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
+
+        all_channels_enabled = all(channel_ref.values())
+        f = None
+        if ref_on_init == "always":
+            f = self.reference()
+        elif ref_on_init in (True, "if necessary"):
+            if not all_channels_enabled:
+                f = self.reference()
+            else:
+                logging.debug("System already referenced, not referencing again.")
+        elif ref_on_init in (False, "never"):
+            if not all_channels_enabled:
+                logging.warning("Picoscale is not referenced. The device cannot be used until the referencing "
+                                "procedure is called.")
+            else:
+                logging.debug("System already referenced, not referencing again.")
+        else:
+            raise ValueError("Invalid parameter %s for ref_on_init." % ref_on_init)
         # These procedure can take a while (up to 10 minutes), especially after the power of the system
         # has just been turned on. Therefore, we don't wait until the procedure is complete.
         # Starting from standby is generally much faster.
-        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
-        channel_ref = {ch: False for ch in self._channels}
-        self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
-        if ref_on_init:
-            f = self.reference()
+        if f:
+            f.add_done_callback(self._on_referenced)
         else:
-            f = self._validate()
-            logging.warning("Picoscale is not referenced. The reported positions might not be accurate "
-                            "until referencing occurs.")
-        f.add_done_callback(self._on_referenced)
+            self.state._set_value(model.ST_RUNNING, force_write=True)
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -3454,9 +3684,6 @@ class Picoscale(model.HwComponent):
                 network:sn:<serial_number>
         returns: (int) device handle for API functions
         """
-        if locator == "fake":
-            return 0
-
         logging.debug("Connecting to locator %s.", locator)
         id = c_uint32(0)
         try:
@@ -3699,26 +3926,38 @@ class Picoscale(model.HwComponent):
         timeout (float): maximum time to wait in s. If inf, it will wait forever.
         """
         if timeout == float("inf"):
-            tend = None
-        else:
-            tend = time.time() + timeout
+            timeout = 600  # 10 minutes
+
+        tend = time.time() + timeout
         ev = SA_SI_Event()
 
         state = None
         while state != end_state:
-            if tend:
-                t = int((tend - time.time()) * 1000)  # SA_SI_WaitForEvent accepts timeout in ms
-                if t < 0 or ev.error == SA_SI_ERROR_TIMEOUT:
-                    raise TimeoutError()
-                t = c_uint(t)
-            else:
-                t = SA_SI_TIMEOUT_INFINITE
+            if state is not None:
+                logging.debug("Skipped event 0x%x" % ev.type)
+
+            t = int((tend - time.time()) * 1000)  # SA_SI_WaitForEvent accepts timeout in ms
+            if t < 0:
+                raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
+            t = c_uint(t)
 
             # Don't check event type, it's not always accurate.
             # Instead, only one event is active and all other events are disabled, so it is clear
             # which event we are waiting for.
             self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
             state = ev.devEventParameter & 0xffff
+            if ev.error != SA_SI_ERROR_NONE:
+                if ev.error == SA_SI_ERROR_TIMEOUT:
+                    raise TimeoutError("Picoscale reported timeout error.")
+                elif ev.error == SA_SI_ERROR_CANCELLED:
+                    raise CancelledError("WaitForEvent was cancelled.")
+                else:
+                    if ev.error in self.core.err_code:
+                        # Don't raise HwError, most of the time, the error is not meaningful
+                        logging.error("Exception %s during WaitForEvent: %s."
+                                      % (ev.error, self.core.err_code[ev.error]))
+                    else:
+                        logging.error("Unknown error code '%s'." % ev.error)
 
     @isasync
     def reference(self, _=None):
@@ -3742,7 +3981,7 @@ class Picoscale(model.HwComponent):
         try:
             with future._moving_lock:
                 if future._must_stop:
-                    future._was_stopped = True
+                    raise CancelledError()
                 # Reset reference so that if it fails, it states the axes are not referenced (anymore)
                 self.referenced._value = {a: False for a in self._channels.keys()}
                 logging.debug("Starting referencing.")
@@ -3751,9 +3990,10 @@ class Picoscale(model.HwComponent):
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
             self._wait_for_event(SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
+
             with future._moving_lock:
                 if future._must_stop:
-                    future._was_stopped = True
+                    raise CancelledError()
                 # Activate working distance
                 self.SetProperty_i32(SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP,
                                      SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT)
@@ -3762,23 +4002,21 @@ class Picoscale(model.HwComponent):
             startt = time.time()
             while time.time() - startt < 1:
                 if future._must_stop:
-                    future._was_stopped = True
+                    raise CancelledError()
                 time.sleep(0.01)
 
             with future._moving_lock:
                 if future._must_stop:
-                    future._was_stopped = True
+                    raise CancelledError()
                 # Switch to automatic adjustment
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
             self._wait_for_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
             logging.debug("Finished referencing.")
 
-            # We could save the referencing parameters to memory here. However, it is only possible
-            # to save these parameters together with the configuration parameters (fiber length etc.).
-            # In case something goes wrong, there is a chance that the device needs to be reconfigured.
-            # Since referencing should be done on startup anyway, there is no real need to save the
-            # parameters.
+            # We could save the referencing parameters to memory here. This could be useful for the validation,
+            # because it initializes the system by loading the stored referencing parameters. However, we don't
+            # currently use validation, so there is no need to store the values every time we reference.
         except SA_SIError as ex:
             # This occurs if a stop command interrupts referencing
             if ex.errno == SA_SI_ERROR_CANCELLED:
@@ -3819,6 +4057,7 @@ class Picoscale(model.HwComponent):
                 self._wait_for_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
             self.DisableEventNotification(SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
 
+    # The validation procedure is currently not used, we either use full referencing or nothing at all
     @isasync
     def _validate(self):
         """
@@ -3843,7 +4082,7 @@ class Picoscale(model.HwComponent):
         try:
             with future._moving_lock:
                 if future._must_stop:
-                    future._was_stopped = True
+                    raise CancelledError()
                 # There is also a channel validation progress event, but it's triggered too early. We need
                 # to wait until the state becomes stable again before continuing.
                 self.EnableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
@@ -3855,22 +4094,20 @@ class Picoscale(model.HwComponent):
             for ch in self._channels.values():
                 with future._moving_lock:
                     if future._must_stop:
-                        future._was_stopped = True
+                        raise CancelledError()
                     self.SetProperty_i32(SA_PS_CH_ENABLED_PROP, SA_SI_ENABLED, idx0=ch)
                 # Channel enabled event not triggered if it was already enabled
                 # --> poll SA_PS_CH_ENABLED_PROP attribute instead
                 while self.GetProperty_i32(SA_PS_CH_ENABLED_PROP, idx0=ch) != SA_SI_ENABLED:
                     if future._must_stop:
-                        future._was_stopped = True
-                    time.sleep(0.1)
+                        raise CancelledError()
+                    time.sleep(0.01)
         except SA_SIError as ex:
             # This occurs if a stop command interrupts referencing
             if ex.errno == SA_SI_ERROR_CANCELLED:
-                future._was_stopped = True
                 logging.info("Validation stopped: %s", ex)
                 raise CancelledError()
             elif future._must_stop:
-                future._was_stopped = True
                 raise CancelledError()
             else:
                 logging.error("Validation failed: %s", ex)
@@ -3978,7 +4215,7 @@ class _PicoscaleScanned(Picoscale):
         num_ch = self.GetNumberOfChannels()
         self.channels = {}
         for ch in range(num_ch):
-            self.channels["ch%s" % ch]: ch
+            self.channels["ch%s" % ch] = ch
 
 
 class FakePicoscale_DLL(object):
@@ -4018,6 +4255,8 @@ class FakePicoscale_DLL(object):
             SA_PS_STABLE_STATE_CHANGED_EVENT: SA_PS_SYS_IS_STABLE_PROP,
                                   }
 
+        self.err_code = {}
+
         self.executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
     def SA_SI_Open(self, id, locator, options):
@@ -4043,8 +4282,11 @@ class FakePicoscale_DLL(object):
         ev = _deref(event, SA_SI_Event)
         if self.cancel_event:
             self.cancel_event = False
-            ev.error = SA_SI_ERROR_CANCELLED
             raise SA_SIError(SA_SI_ERROR_CANCELLED, "CANCELLED")
+
+        # It's not possible to add ev.error here. Somehow, changing one anonymous parameter of
+        # SA_SI_Event (such as ev.devEventParameter) causes all other anonymous parameters
+        # (ev.error) to store the same value.
         ev.devEventParameter = self.properties[self.active_property]
 
     def SA_SI_SetProperty_f64(self, handle, property_key, value):
