@@ -1124,6 +1124,9 @@ class Stream(object):
             self._recomputeIntensityRange()
 
     def _recomputeIntensityRange(self):
+        if len(self.histogram._full_hist) == 0:  # No histogram yet
+            return
+
         irange = img.findOptimalRange(self.histogram._full_hist,
                                       self.histogram._edges,
                                       self.auto_bc_outliers.value / 100)
