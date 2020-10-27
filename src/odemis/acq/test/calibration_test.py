@@ -157,7 +157,7 @@ class TestAR(unittest.TestCase):
         # Check the expected and return lists contain the same DataArrays
         self.assertEqual(len(bg_data), len(out))
         for da in out:
-            self.assertIn(da, bg_data)
+            self.assertTrue(any(numpy.array_equal(da, bg) for bg in bg_data))
 
         # More DataArrays, just to make it slightly harder to find the data
         data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
@@ -170,7 +170,7 @@ class TestAR(unittest.TestCase):
         # Check the expected and return lists contain the same DataArrays
         self.assertEqual(len(bg_data), len(out))
         for da in out:
-            self.assertIn(da, bg_data)
+            self.assertTrue(any(numpy.array_equal(da, bg) for bg in bg_data))
 
 
 class TestSpectrum(unittest.TestCase):
