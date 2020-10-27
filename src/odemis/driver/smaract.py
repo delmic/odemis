@@ -3591,9 +3591,14 @@ class Picoscale(model.HwComponent):
         # TODO: this functionality has not yet been tested
         try:
             self.SetPrecisionMode(precision_mode)
-        except SA_SIError:
-            # TODO
-            pass
+        except SA_SIError as ex:
+            if ex.errno == SA_SI_ERROR_INVALID_PROPERTY:
+                if precision_mode > 0:
+                    raise model.HwError("Precision mode not available.")
+                else:
+                    logging.debug("Precision mode not available.")
+            else:
+                raise
 
         # State: starting until first referencing/validation procedure is done
         # Position requests can be made during startup, however, the values are not going to be accurate until the
