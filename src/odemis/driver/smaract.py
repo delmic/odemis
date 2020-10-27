@@ -3580,10 +3580,11 @@ class Picoscale(model.HwComponent):
         logging.debug("Picoscale configuration: fiber length %s, extension fiber length %s, "
                       "working distance [%s, %s].", flen, ext_flen, wdist_min, wdist_max)
 
-        # Position polling
+        # Position polling thread
+        # Will be started later, either after referencing, or in __init__ if we're not referencing on startup
+        # During referencing, ._polling_thread will be stopped and set back to None.
         self.position = model.VigilantAttribute({}, getter=self._getPosition, readonly=True)
-        self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
-        self._polling_thread.start()
+        self._polling_thread = None
 
         # Precision mode
         # The precision mode is a special feature that needs to be purchased separately, so it is not available
@@ -3601,12 +3602,6 @@ class Picoscale(model.HwComponent):
                 raise
 
         # State: starting until first referencing/validation procedure is done
-        # Position requests can be made during startup, however, the values are not going to be accurate until the
-        # initialization process is complete. The position thread is polling from the start.
-        # If during startup a call to .reference is made, the referencing future will be added to the
-        # executor and be carried out right after the initialization referencing is done.
-        # In conclusion, no special handling is required during startup, although it does not make much sense
-        # to use the driver until the startup is complete. The position getter will log a warning in this case.
         self.state._set_value(model.ST_STARTING, force_write=True)
 
         # Referencing
@@ -3638,10 +3633,13 @@ class Picoscale(model.HwComponent):
             f.add_done_callback(self._on_referenced)
         else:
             self.state._set_value(model.ST_RUNNING, force_write=True)
+            self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+            self._polling_thread.start()
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self._polling_thread.cancel()
+        if self._polling_thread:
+            self._polling_thread.cancel()
         if self._executor:
             self._executor.cancel()
             self.core.SA_SI_Close(self._id)
@@ -3984,6 +3982,10 @@ class Picoscale(model.HwComponent):
         """
         # The position polling thread can continue, it does not seem to interfere with the referencing procedure.
         try:
+            if self._polling_thread:
+                self._polling_thread.cancel()
+                self._polling_thread = None
+
             with future._moving_lock:
                 if future._must_stop:
                     raise CancelledError()
@@ -4048,7 +4050,10 @@ class Picoscale(model.HwComponent):
             if self.IsStable():
                 for ch, num in self._channels.items():
                     self.referenced._value[ch] = self.IsValid(num)
-            self._updatePosition()
+                # Start polling thread
+                self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+                self._polling_thread.start()
+                self._updatePosition()
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
             self.referenced.notify(self.referenced.value)
@@ -4085,6 +4090,9 @@ class Picoscale(model.HwComponent):
             CancelledError if was cancelled
         """
         try:
+            if self._polling_thread:
+                self._polling_thread.cancel()
+                self._polling_thread = None
             with future._moving_lock:
                 if future._must_stop:
                     raise CancelledError()
@@ -4130,7 +4138,11 @@ class Picoscale(model.HwComponent):
             for ch, num in self._channels.items():
                 if not self.IsValid(num):
                     raise IOError("Failed to validate channel %s" % num)
-            self._updatePosition()
+                else:
+                    # Start polling thread
+                    self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+                    self._polling_thread.start()
+                    self._updatePosition()
 
     def _on_referenced(self, future):
         """
@@ -4156,8 +4168,8 @@ class Picoscale(model.HwComponent):
         Getter for .position VA. Requests position from device.
         returns: dict (str --> float)
         """
-        if self.state == model.ST_STARTING:
-            logging.warning("Device has not finished initializing, position request will be inaccurate.")
+        if self._polling_thread is None:
+            raise ValueError("Cannot report position, device needs to be referenced first.")
         pos = {}
         for name, num in self._channels.items():
             pos[name] = self.GetValue_f64(num, 0)  # position value is at index 0

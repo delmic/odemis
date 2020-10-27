@@ -542,8 +542,6 @@ class TestPicoscale(unittest.TestCase):
         """
         Tests whether the position is updated every second.
         """
-        while self.dev.state == model.ST_STARTING:
-            time.sleep(0.1)
         self.pos_update = False
 
         def pos_listener(_):
