@@ -43,7 +43,7 @@ from odemis.util import almost_equal
 from openapi_server.models import CalibrationLoopParameters
 from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
 
-from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, DATA_CONTENT_TO_ASM, INT16
+from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, INT16
 
 # Set logger level to debug to observe all the output (useful when a test fails)
 logging.getLogger().setLevel(logging.DEBUG)
@@ -63,7 +63,7 @@ CHILDREN_ASM = {"EBeamScanner"   : CONFIG_SCANNER,
 EXTRNAL_STORAGE = {"host"     : "localhost",
                    "username" : "username",
                    "password" : "password",
-                   "directory": "directory"}
+                   "directory": "image_dir"}
 
 
 class TestAuxilaryFunc(unittest.TestCase):
@@ -413,31 +413,46 @@ class TestEBeamScanner(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_resolutionVA(self):
+    def test_resolution_VA(self):
+        """
+        The setter allows only to enter resolutions with an effective cell size which are a whole multiple of 4.
+        """
         min_res = self.EBeamScanner.resolution.range[0][0]
         max_res = self.EBeamScanner.resolution.range[1][0]
 
         # Check if small resolution values are allowed
-        self.EBeamScanner.resolution.value = (min_res + 5, min_res + 5)
-        self.assertEqual(self.EBeamScanner.resolution.value, (min_res + 5, min_res + 5))
+        self.EBeamScanner.resolution.value = (min_res, min_res)
+        self.assertEqual(self.EBeamScanner.resolution.value, (min_res, min_res))
 
-        # Check if big resolutions values are allowed
-        self.EBeamScanner.resolution.value = (max_res - 200, max_res - 200)
-        self.assertEqual(self.EBeamScanner.resolution.value, (max_res - 200, max_res - 200))
+        # Check if max resolutions can be set
+        self.EBeamScanner.resolution.value = (max_res, max_res)
+        self.assertEqual(self.EBeamScanner.resolution.value, (max_res, max_res))
 
         # Check if VA refuses to set limits outside allowed range
         with self.assertRaises(IndexError):
             self.EBeamScanner.resolution.value = (max_res + 10, max_res + 10)
-
-        self.assertEqual(self.EBeamScanner.resolution.value, (max_res - 200, max_res - 200))
+        # Check if value remains unchanged
+        self.assertEqual(self.EBeamScanner.resolution.value, (max_res, max_res))
 
         with self.assertRaises(IndexError):
             self.EBeamScanner.resolution.value = (min_res - 1, min_res - 1)
-        self.assertEqual(self.EBeamScanner.resolution.value, (max_res - 200, max_res - 200))
+        # Check if value remains unchanged
+        self.assertEqual(self.EBeamScanner.resolution.value, (max_res, max_res))
 
         # Check if it is allowed to have non-square resolutions
-        self.EBeamScanner.resolution.value = (6000, 6500)
-        self.assertEqual(self.EBeamScanner.resolution.value, (6000, 6500))
+        self.EBeamScanner.resolution.value = (7 * min_res, 3 * min_res)
+        self.assertEqual(self.EBeamScanner.resolution.value, (7 * min_res, 3 * min_res))
+
+        # Check if for requested resolution values, where the effective cell size is not a multiple of 4, the closest
+        # correct resolution is returned
+        self.EBeamScanner.resolution.value = (3207, 3207)
+        self.assertEqual(self.EBeamScanner.resolution.value, (3200, 3200))
+
+        self.EBeamScanner.resolution.value = (6403, 6403)
+        self.assertEqual(self.EBeamScanner.resolution.value, (6400, 6400))
+
+        self.EBeamScanner.resolution.value = (6385, 6385)
+        self.assertEqual(self.EBeamScanner.resolution.value, (6400, 6400))
 
     def test_dwellTimeVA(self):
         min_dwellTime = self.EBeamScanner.dwellTime.range[0]
@@ -903,6 +918,28 @@ class TestMPPC(unittest.TestCase):
         # Check if the scanner delay remains unchanged.
         self.assertEqual(self.EBeamScanner.scanDelay.value, self.EBeamScanner.scanDelay.range[1])
 
+    def test_overVoltageVA(self):
+        max_overVoltage = self.MPPC.overVoltage.range[1]
+
+        # Check if small sensor over voltage values are allowed
+        self.MPPC.overVoltage.value = 0.1 * max_overVoltage
+        self.assertEqual(self.MPPC.overVoltage.value, 0.1 * max_overVoltage)
+
+        # Check if big sensor over voltage values are allowed
+        self.MPPC.overVoltage.value = 0.9 * max_overVoltage
+        self.assertEqual(self.MPPC.overVoltage.value, 0.9 * max_overVoltage)
+
+        # Check if VA refuses to set limits outside allowed range
+        with self.assertRaises(IndexError):
+            self.MPPC.overVoltage.value = 1.1 * max_overVoltage
+        # Check that previous value is still set
+        self.assertEqual(self.MPPC.overVoltage.value, 0.9 * max_overVoltage)
+
+        with self.assertRaises(IndexError):
+            self.MPPC.overVoltage.value = (-0.1 * max_overVoltage)
+        # Check that previous value is still set
+        self.assertEqual(self.MPPC.overVoltage.value, 0.9 * max_overVoltage)
+
     def test_dataContentVA(self):
         for key in DATA_CONTENT_TO_ASM:
             self.MPPC.dataContent.value = key
@@ -1150,6 +1187,7 @@ class TestMPPC(unittest.TestCase):
         self.assertIsInstance(megafield_metadata.x_scan_delay, int)
         self.assertIsInstance(megafield_metadata.scan_rotation, float)
         self.assertIsInstance(megafield_metadata.descan_rotation, float)
+        self.assertIsInstance(megafield_metadata.sensor_over_voltage, float)
 
         # Check descan setpoints types
         self.assertIsInstance(megafield_metadata.x_descan_setpoints, list)
@@ -1485,6 +1523,41 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.assertEqual(field_images[0] * field_images[1], self.counter)
         self.assertEqual(field_images[0] * field_images[1], self.counter2)
 
+class Test_AsmApiException(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            raise unittest.SkipTest('No HW or simulator for the ASM and HwComponents present. Skipping tests.')
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
+    def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
+
+        # Ensure that only empty images will be received
+        self.MPPC.dataContent.value = "empty"
+
+        resp = self.ASM_manager._session.get(self.ASM_manager._host + "/scan/clock_frequency",
+                                             json=None, timeout=600)
+
+        self.error_object = AsmApiException("test_url", resp, 404)
+
+    def tearDown(self):
+        self.ASM_manager.terminate()
+        time.sleep(0.2)
+
+    def test_AsmApiException(self):
+        with self.assertRaises(Exception):
+            raise self.error_object
 
 if __name__ == '__main__':
     unittest.main()

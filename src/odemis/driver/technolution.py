@@ -52,7 +52,9 @@ from openapi_server.models.calibration_loop_parameters import CalibrationLoopPar
 INT16 = numpy.iinfo(numpy.int16)
 VOLT_RANGE = (-10, 10)
 DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
-
+RUNNING = "installation in progress"
+FINISHED = "last installation successful"
+FAILED = "last installation failed"
 
 def convertRange(value, value_range, output_range):
     """
@@ -120,14 +122,25 @@ class AcquisitionServer(model.HwComponent):
 
         # Test the connection with the host and stop any acquisition if already one was in progress
         try:
-            self.asmApiPostCall("/scan/finish_mega_field", 204)
+            self.asmApiPostCall("/scan/finish_mega_field", 204) # Stop acquisition
+            self.asmApiGetCall("/scan/clock_frequency", 200) # Test connection from ASM to SAM
+
         except Exception as error:
-            logging.error("Could not connect with the ASM host.\n"
-                          "Check if the connection with the host is available and if the host URL is entered "
-                          "correctly. Received error:\n %s" % error)
-            raise HwError("Could not connect with the ASM host.\n"
-                          "Check if the connection with the host is available and if the host URL is entered "
-                          "correctly.")
+            logging.warning("First try to connect with the ASM host was not successful.\n"
+                          "This is possible because of an incorrect starting sequence, first the SAM should be "
+                          "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
+                          "Received error:\n %s" % error)
+            try:
+                self.asmApiPostCall("/scan/finish_mega_field", 204)  # Stop acquisition
+                self.asmApiGetCall("/scan/clock_frequency", 200)  # Test connection from ASM to SAM
+
+            except Exception as error:
+                logging.error("Could not connect with the ASM host.\n"
+                              "Check if the connection with the host is available and if the host URL is entered "
+                              "correctly. Received error:\n %s" % error)
+                raise HwError("Could not connect with the ASM host.\n"
+                              "Check if the connection with the host is available and if the host URL is entered "
+                              "correctly.")
 
         clockFrequencyData = self.asmApiGetCall("/scan/clock_frequency", 200)
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
@@ -146,11 +159,12 @@ class AcquisitionServer(model.HwComponent):
         # CalibrationParameters contains the current calibration parameters
         self._calibrationParameters = None
 
-        self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
-                            (urlparse(self.externalStorageURL.value).hostname,
-                             urlparse(self.externalStorageURL.value).username,
-                             urlparse(self.externalStorageURL.value).password), 204)
-        self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
+        # TODO: Commented out because not present on EA
+        # self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
+        #                     (urlparse(self.externalStorageURL.value).hostname,
+        #                      urlparse(self.externalStorageURL.value).username,
+        #                      urlparse(self.externalStorageURL.value).password), 204)
+        # self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
 
         # Setup hw and sw version
         # TODO make call set_system_sw_name too new simulator (if implemented)
@@ -333,6 +347,100 @@ class AcquisitionServer(model.HwComponent):
                                        (mega_field_id, storage_dir), 200, raw_response=True)
         return json.loads(response.content)["exists"]
 
+    def getSamServiceVersion(self):
+        """
+        Get the SAM (Scanning and Acquisition Module) service software version via the ASM API.
+        :return (str): Version string of the SAM service software.
+        """
+        item_name = "sam_service_version"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200, raw_response=True)
+        return response.text
+
+    # TODO Not yet implemented on simulator side, uncomment when implemented.
+    # def getSamRootfsVersion(self):
+    #     """
+    #     Makes monitor call to the ASM to retrieve the SAM root file system version.
+    #     :return (str):  Version string of the root file system of the SAM
+    #     """
+    #     item_name = "sam_rootfs_version"
+    #     response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200, raw_response=True)
+    #     return response.text
+
+    def getSamFirmwareVersion(self):
+        """
+        Makes monitor call to the ASM to retrieve the SAM firmware version (Scanning and Acquisition Module).
+        :return (str):  Version string of the SAM firmware.
+        """
+        item_name = "sam_firmware_version"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200, raw_response=True)
+        return response.text
+
+    def getAsmServiceVersion(self):
+        """
+        Makes monitor call to the ASM to retrieve the ASM service software version.
+        :return (str): Version string of the SAM service software.
+        """
+        item_name = "asm_service_version"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200, raw_response=True)
+        return response.text
+
+    def getStateInstallation(self):
+        """
+        Checks the current installation status and returns the status of the last installation or if an installation is
+        in progress.
+        :return (str): one of the following values:
+                                "RUNNING": "installation in progress",
+                                "FINISHED": "last installation successful",
+                                "FAILED": "last installation failed"
+        """
+        #  TODO is this for the ASM or the SAM or... change name an docstring accordingly
+        install_in_progress = self.asmApiGetCall("/monitor/item?item_name=install_in_progress", 200, raw_response=True)
+        last_install_success = self.asmApiGetCall("/monitor/item?item_name=last_install_success", 200)
+
+        if install_in_progress:
+            logging.info("An software installation on the ASM is in progress.")
+            return RUNNING
+        elif last_install_success:
+            return FINISHED
+        else:
+            logging.error("Last software installation on the ASM failed")
+            return FAILED
+
+    def isSamConnected(self):
+        """
+        Check if the SAM connection is operational: true/false. When the
+        connection to the SAM is not operational, no scanning is possible.
+
+        :return (bool): True for connected with the ASM, False for when not connected.
+        """
+        item_name = "sam_connection_operational"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200)
+        return response
+
+    def isExtStorageConnected(self):
+        """
+        Check if the external storage is connected via the FTP protocol: true/false. When the connection with the
+        external storage is lost, scanning is still possible. There is a large offload queue. Connection loss is only
+        detected during scanning. During connection loss the service retries to offload data. As soon as the
+        offloading succeeds, the state is set to true again. As long as there is space left on the queue, field
+        scanning can continue.
+
+        :return (bool): True for connected with the external storage, False for when not connected.
+        """
+        item_name = "ext_store_connection_operational"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200)
+        return response
+
+    def getFillLevelOffloadingQueue(self):
+        """
+        When the connection with the external storage is lost, images will be stored in the offload queue.
+        When the queue fill level is nearly 100%, field scanning is not possible anymore.
+        :return (int): Fill rate of the queue in percent: 0 .. 100.
+        """
+        item_name = "offload_queue_fill_level"
+        response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200)
+        return response
+
     def _assembleCalibrationMetadata(self):
         """
         Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
@@ -343,7 +451,7 @@ class AcquisitionServer(model.HwComponent):
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
         acq_dwell_time = scanner.dwellTime.value
-        
+
         resolution = self._mppc.cellCompleteResolution.value[0]
         line_scan_time = acq_dwell_time * resolution
         flyback_time = descanner.physicalFlybackTime
@@ -485,8 +593,23 @@ class EBeamScanner(model.Emitter):
         """
         super(EBeamScanner, self).__init__(name, role, parent=parent, **kwargs)
 
-        self._shape = (8000, 8000)
-        self.resolution = model.ResolutionVA((6400, 6400), ((10, 10), (1000 * 8, 1000 * 8)))
+        clockFrequencyData = self.parent.asmApiGetCall("/scan/clock_frequency", 200)
+        self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
+
+        # Minimum resolution is determined by:
+        #  - The shape of the MPPC detector, 8 cell images per field image
+        #  - The minimal cell size (at least 10 pixels width/height)
+        #  - The cell size shape needs to be a whole multiple of 4 (as checked in the setter)
+        # This means that the minimum resolution needs to fulfill the conditions:
+        #          min_res / 8 > 10    and    (min_res/8)/4 is an integer
+        # Making the minimum resolution (12*8) , because 12/4 is an integer (3.0)
+        # Since the maximum cell size is 1000 (dividable by 4) the maximum resolution is (1000*8)
+        mppcDetectorShape = MPPC.SHAPE
+        self.resolution = model.ResolutionVA((6400, 6400),
+                                             ((12*mppcDetectorShape[0], 12*mppcDetectorShape[1]),
+                                              (1000*mppcDetectorShape[0], 1000*mppcDetectorShape[1])),
+                                             setter=self._setResolution)
+        self._shape = self.resolution.range[1]
         # TODO: Dwell time is currently set at a maximum of 40 micro seconds because we cannot calibrate as long as
         #  1e-4 seconds. This is because we are limited to 4000 calibration setpoints.
         self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s')
@@ -680,6 +803,26 @@ class EBeamScanner(model.Emitter):
                          "%s" % (scanDelay[0], self.parent._mppc.acqDelay.value))
             return self.scanDelay.value
 
+    def _setResolution(self, resolution):
+        """
+        Sets the resolution of a single field image. The resolution of a single field image is the product of the
+        number of cell images (detector shape) multiplied with the size of a cell image (effective cell size). Method
+        sets the resolution of a single field image, so that the effective cell size is a multiple of 4 (in both x
+        and y direction).
+
+        :param resolution (int, int): requested resolution for a single field image. It is the product of the number of
+        cell images multiplied by the effective cell size.
+        :return resolution  (int, int): resolution closest possible to the requested resolution for the single field image.
+        """
+        COMMON_DIVISOR = 4
+
+        req_eff_cell_size = numpy.array(resolution) / self.parent._mppc.shape[0:2]  # Requested effective cell size
+        # Round to closest multiple of COMMON_DIVISOR (x.5 is rounded down)
+        eff_cell_size = numpy.round(req_eff_cell_size / COMMON_DIVISOR) * COMMON_DIVISOR
+        resolution = eff_cell_size * self.parent._mppc.shape[0:2]
+
+        return tuple(resolution.astype(int))
+
 
 class MirrorDescanner(model.Emitter):
     """
@@ -826,6 +969,7 @@ class MPPC(model.Detector):
     """
     Represents the camera (mppc sensor) for acquiring the image data.
     """
+    SHAPE = (8, 8, 65536)
 
     def __init__(self, name, role, parent, **kwargs):
         """
@@ -841,10 +985,11 @@ class MPPC(model.Detector):
         self._scanner = self.parent._ebeam_scanner
         self._descanner = self.parent._mirror_descanner
 
-        self._shape = (8, 8, 65536)
-        self.filename = model.StringVA("project_name_default_file_name", setter=self._setFilename)
+        self._shape = MPPC.SHAPE
+        self.filename = model.StringVA(time.strftime("project_name_default_file_name"), setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
+        self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
 
         # Cell acquisition parameters
         self.cellTranslation = model.TupleVA(
@@ -946,9 +1091,8 @@ class MPPC(model.Detector):
                     cell_parameters=[CellParameters(translation[0], translation[1], darkOffset, digitalGain)
                                      for translation, darkOffset, digitalGain in
                                      zip(cellTranslation, cellDarkOffset, cellDigitalGain)],
-                    sensor_over_voltage=1.5  # Hacky way to also work on the simulator 3, will be updated
+                    sensor_over_voltage=self.overVoltage.value
             )
-
         return megafield_metadata
 
     def _acquire(self):
@@ -1249,7 +1393,7 @@ class MPPC(model.Detector):
 
     def _setCellDigitalGain(self, cellDigitalGain):
         """
-        Setter for the digital gain of the cells, each cell has a digital gain stored as a float(compensating for
+        Setter for the digital gain of the cells, each cell has a digital gain stored as a float (compensating for
         the differences in gain for the grey values in each detector cell). The digital gain values for a full row
         are nested in a tuple. And finally, all the digital gain values per row are nested in a another tuple
         representing the full cell image. This setter checks the correct shape of the nested tuples, the type and
