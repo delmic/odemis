@@ -2864,7 +2864,7 @@ class DualChannelPositionSensor(model.HwComponent):
                 in_chs = [in_chs]
 
             for in_ch in in_chs:
-                if in_ch not in self.sensor.channels:
+                if in_ch not in self.sensor._channels:
                     raise ValueError("Sensor component '%s' does not have channel '%s'" % (self.sensor.name, in_ch,))
             self.channels[out_ch] = in_chs
 

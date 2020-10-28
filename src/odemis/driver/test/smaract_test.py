@@ -548,7 +548,7 @@ class TestPicoscale(unittest.TestCase):
             self.pos_update = True
 
         self.dev.position.subscribe(pos_listener)
-        if CONFIG_Picoscale['locator'] == 'fake':
+        if TEST_NOHW:
             # New sensor position in simulator
             self.dev.core.positions[0] = 2.5e-6
         time.sleep(1.1)  # position should be updated every second
@@ -584,7 +584,7 @@ class TestPicoscale(unittest.TestCase):
         f1.cancel()
         f2.cancel()
         time.sleep(0.1)
-        self.assertEqual(self.dev._executor._queue, deque([]))
+        self.assertEqual(len(self.dev._executor._queue), 0)
 
         # Test f.cancel()
         f = self.dev.reference()

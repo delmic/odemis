@@ -3622,8 +3622,6 @@ class Picoscale(model.HwComponent):
             if not all_channels_enabled:
                 logging.warning("Picoscale is not referenced. The device cannot be used until the referencing "
                                 "procedure is called.")
-            else:
-                logging.debug("System already referenced, not referencing again.")
         else:
             raise ValueError("Invalid parameter %s for ref_on_init." % ref_on_init)
         # These procedure can take a while (up to 10 minutes), especially after the power of the system
@@ -3892,6 +3890,36 @@ class Picoscale(model.HwComponent):
         self.core.SA_SI_GetValue_f64(self._id, channel, data_source_idx, byref(ret_val))
         return ret_val.value
 
+    def WaitForEvent(self, timeout=600):
+        """
+        Blocks until device reports an event.
+        timeout (int > 0): timeout in seconds
+        returns (SA_SI_Event): event
+        raises
+            TimeoutError: timeout exceeded
+            CancelledError: function was cancelled by SA_SI_Cancel
+            SA_SI_Error: something went wrong
+        """
+        if timeout == float("inf"):
+            t = SA_SI_TIMEOUT_INFINITE
+        else:
+            t = c_uint(int(timeout * 1000))  # SA_SI_WaitForEvent accepts timeout in ms
+
+        ev = SA_SI_Event()
+        ret = self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
+
+        if ret != SA_SI_ERROR_NONE:
+            if ret == SA_SI_ERROR_TIMEOUT:
+                raise TimeoutError("Picoscale reported timeout error.")
+            elif ret == SA_SI_ERROR_CANCELLED:
+                raise CancelledError("WaitForEvent was cancelled.")
+            else:
+                if ret in self.core.err_code:
+                    raise SA_SIError(ret, self.core.err_code[ret])
+                else:
+                    raise SA_SIError(ret, "Unknown error code %s" % ret)
+        return ev
+
     def _load_configuration(self):
         """
         Load the configuration of the device. The loaded parameters are
@@ -3908,7 +3936,7 @@ class Picoscale(model.HwComponent):
         # finished, the state will be stable again.
         self.EnableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
         self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP, SA_SI_ENABLED)
-        self._wait_for_event(SA_SI_ENABLED, timeout=600)  # this can take a long time
+        self._wait_for_progress_event(SA_SI_ENABLED, timeout=600)  # this can take a long time
         self.DisableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
 
     def _save_configuration(self):
@@ -3922,16 +3950,18 @@ class Picoscale(model.HwComponent):
         # parameters takes. It can be assumed that it's fast --> wait 1 s.
         time.sleep(1)
 
-    def _wait_for_event(self, end_state, timeout=float("inf")):
+    def _wait_for_progress_event(self, end_state, timeout=600):
         """
-        Blocks until event is triggered or timeout.
+        Blocks until progress event is triggered or timeout.
+        It is assumed that only one event type is enabled. The function will wait until the
+        .devEventParameter contains the end_state. This can mean different things depending on the event.
         end_state (int): state of event variable to wait for
         timeout (float): maximum time to wait in s. If inf, it will wait forever.
         """
         if timeout == float("inf"):
-            timeout = 600  # 10 minutes
-
-        tend = time.time() + timeout
+            tend = None
+        else:
+            tend = time.time() + timeout
         ev = SA_SI_Event()
 
         state = None
@@ -3939,28 +3969,17 @@ class Picoscale(model.HwComponent):
             if state is not None:
                 logging.debug("Skipped event 0x%x" % ev.type)
 
-            t = int((tend - time.time()) * 1000)  # SA_SI_WaitForEvent accepts timeout in ms
-            if t < 0:
-                raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
-            t = c_uint(t)
-
+            if tend is not None:
+                t = tend - time.time()
+                if t < 0:
+                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
+            else:
+                t = float("inf")
+            ev = self.WaitForEvent(t)
             # Don't check event type, it's not always accurate.
             # Instead, only one event is active and all other events are disabled, so it is clear
             # which event we are waiting for.
-            self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
             state = ev.devEventParameter & 0xffff
-            if ev.error != SA_SI_ERROR_NONE:
-                if ev.error == SA_SI_ERROR_TIMEOUT:
-                    raise TimeoutError("Picoscale reported timeout error.")
-                elif ev.error == SA_SI_ERROR_CANCELLED:
-                    raise CancelledError("WaitForEvent was cancelled.")
-                else:
-                    if ev.error in self.core.err_code:
-                        # Don't raise HwError, most of the time, the error is not meaningful
-                        logging.error("Exception %s during WaitForEvent: %s."
-                                      % (ev.error, self.core.err_code[ev.error]))
-                    else:
-                        logging.error("Unknown error code '%s'." % ev.error)
 
     @isasync
     def reference(self, _=None):
@@ -3987,7 +4006,7 @@ class Picoscale(model.HwComponent):
                 self._polling_thread = None
 
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 # Reset reference so that if it fails, it states the axes are not referenced (anymore)
                 self.referenced._value = {a: False for a in self._channels.keys()}
@@ -3996,29 +4015,26 @@ class Picoscale(model.HwComponent):
                 self.EnableEventNotification(SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
-            self._wait_for_event(SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
+            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
 
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 # Activate working distance
                 self.SetProperty_i32(SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP,
                                      SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT)
             # attribute is write-only and there is no corresponding event type (yet some waiting time is necessary)
             # --> wait 1 s for command to be processed
-            startt = time.time()
-            while time.time() - startt < 1:
-                if future._must_stop:
-                    raise CancelledError()
-                time.sleep(0.01)
+            if future._must_stop.wait(1):
+                raise CancelledError()
 
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 # Switch to automatic adjustment
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
-            self._wait_for_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
             logging.debug("Finished referencing.")
 
             # We could save the referencing parameters to memory here. This could be useful for the validation,
@@ -4030,7 +4046,7 @@ class Picoscale(model.HwComponent):
                 future._was_stopped = True
                 logging.info("Referencing stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 future._was_stopped = True
                 raise CancelledError()
             else:
@@ -4064,7 +4080,7 @@ class Picoscale(model.HwComponent):
             if self.GetAdjustmentState() != SA_PS_ADJUSTMENT_STATE_DISABLED:
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_DISABLED)
-                self._wait_for_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+                self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
             self.DisableEventNotification(SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
 
     # The validation procedure is currently not used, we either use full referencing or nothing at all
@@ -4094,25 +4110,25 @@ class Picoscale(model.HwComponent):
                 self._polling_thread.cancel()
                 self._polling_thread = None
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 # There is also a channel validation progress event, but it's triggered too early. We need
                 # to wait until the state becomes stable again before continuing.
                 self.EnableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
                 self.SetProperty_i32(SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP, SA_SI_ENABLED)
-            self._wait_for_event(SA_SI_ENABLED)
+            self._wait_for_progress_event(SA_SI_ENABLED)
             self.DisableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
 
             # Enable channels
             for ch in self._channels.values():
                 with future._moving_lock:
-                    if future._must_stop:
+                    if future._must_stop.is_set():
                         raise CancelledError()
                     self.SetProperty_i32(SA_PS_CH_ENABLED_PROP, SA_SI_ENABLED, idx0=ch)
                 # Channel enabled event not triggered if it was already enabled
                 # --> poll SA_PS_CH_ENABLED_PROP attribute instead
                 while self.GetProperty_i32(SA_PS_CH_ENABLED_PROP, idx0=ch) != SA_SI_ENABLED:
-                    if future._must_stop:
+                    if future._must_stop.is_set():
                         raise CancelledError()
                     time.sleep(0.01)
         except SA_SIError as ex:
@@ -4120,7 +4136,7 @@ class Picoscale(model.HwComponent):
             if ex.errno == SA_SI_ERROR_CANCELLED:
                 logging.info("Validation stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 raise CancelledError()
             else:
                 logging.error("Validation failed: %s", ex)
@@ -4180,7 +4196,7 @@ class Picoscale(model.HwComponent):
         returns: (CancellableFuture)
         """
         f = CancellableFuture()
-        f._must_stop = False  # cancel of the current future requested
+        f._must_stop = threading.Event()  # cancel of the current future requested
         f._was_stopped = False  # future was actually stopped
         f._moving_lock = threading.Lock()  # taken while moving
         f.task_canceller = self._cancelReference
@@ -4192,7 +4208,7 @@ class Picoscale(model.HwComponent):
         future (Future): the future to stop
         """
         logging.debug("Cancelling referencing...")
-        future._must_stop = True  # tell the thread taking care of the referencing it's over
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
 
         # Synchronise with the ending of the future
         with future._moving_lock:
@@ -4263,16 +4279,14 @@ class FakePicoscale_DLL(object):
 
         self.positions = [10e-6, 20e-6, 30e-6]
 
-        self.active_property = None  # property which is requested in _wait_for_event function
+        self.active_property = None  # property which is requested in _wait_for_progress_event function
         self.cancel_referencing = False  # let referencing thread know about cancellation
-        self.cancel_event = False  # let _wait_for_event function know about cancellation
+        self.cancel_event = False  # let _wait_for_progress_event function know about cancellation
 
         self.event_to_property = {
             SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT: SA_PS_AF_ADJUSTMENT_STATE_PROP,
             SA_PS_STABLE_STATE_CHANGED_EVENT: SA_PS_SYS_IS_STABLE_PROP,
                                   }
-
-        self.err_code = {}
 
         self.executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
@@ -4297,14 +4311,13 @@ class FakePicoscale_DLL(object):
 
     def SA_SI_WaitForEvent(self, handle, event, timeout):
         ev = _deref(event, SA_SI_Event)
+        time.sleep(0.01)  # make sure we don't use the CPU at full throttle during simulated calibration
         if self.cancel_event:
             self.cancel_event = False
-            raise SA_SIError(SA_SI_ERROR_CANCELLED, "CANCELLED")
+            return SA_SI_ERROR_CANCELLED
 
-        # It's not possible to add ev.error here. Somehow, changing one anonymous parameter of
-        # SA_SI_Event (such as ev.devEventParameter) causes all other anonymous parameters
-        # (ev.error) to store the same value.
         ev.devEventParameter = self.properties[self.active_property]
+        return SA_SI_ERROR_NONE
 
     def SA_SI_SetProperty_f64(self, handle, property_key, value):
         shifted_key = property_key.value >> 16
