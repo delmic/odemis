@@ -200,7 +200,7 @@ a = Analysis(
     [script],
     pathex=['.'],
     binaries=None,
-    datas=None,
+    datas=[('../../plugins/spike_remove.py', './plugins'), ('../../plugins/merge_RGB.py', './plugins')],
     hiddenimports=[
         'cairo',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
