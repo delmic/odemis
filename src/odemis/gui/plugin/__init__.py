@@ -29,9 +29,9 @@ import glob
 import imp
 import inspect
 import logging
+from odemis import util, gui
 from wx.lib.agw.infobar import AutoWrapStaticText
 
-from odemis import util
 import odemis
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_MAIN
 from odemis.gui.comp.buttons import ImageTextButton
@@ -327,6 +327,7 @@ class AcquisitionDialog(xrcfr_plugin):
         if text is not None:
             self.lbl_description = AutoWrapStaticText(self.pnl_desc, "")
             self.lbl_description.SetBackgroundColour(self.pnl_desc.GetBackgroundColour())
+            self.lbl_description.SetForegroundColour(gui.FG_COLOUR_MAIN)
             self.pnl_desc.GetSizer().Add(self.lbl_description, flag=wx.EXPAND | wx.ALL, border=10)
             self.lbl_description.SetLabel(text)
 
