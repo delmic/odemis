@@ -1148,9 +1148,9 @@ class Stream(object):
     def _setTint(self, tint):
         # The tint VA could be either:
         # - a list tuple RGB value (for a tint) or
-        # - a matplotlib.colors.Colormap object for a custom color map
-        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
-        # - a string ov vlaue TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
+        # - a matplotlib.colors.Colormap object for a custom color map or
+        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping or
+        # - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
         # Enforce this setting
         if isinstance(tint, tuple):
             # RGB tuple - enforce len of 3

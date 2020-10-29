@@ -94,8 +94,14 @@ except ImportError:
 
 def tint_to_md_format(tint):
     """
-    Given a tint of a stream, which coudl be an RGB tup,le or colormap object,
+    Given a tint of a stream, which could be an RGB tuple or colormap object,
     put it into the format for metadata storage
+    tint argument can be:
+    - a list tuple RGB value (for a tint) or
+    - a matplotlib.colors.Colormap object for a custom color map or
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
+    returns (string or tuple) the tint name for metadata
     """
     if isinstance(tint, tuple) or isinstance(tint, list):
         return tint
@@ -106,6 +112,13 @@ def tint_to_md_format(tint):
 
 
 def md_format_to_tint(user_tint):
+    """
+    Given a string or tuple value of user_tint in saved metadata, convert to a tint object
+    Returns tint as:
+    - a list tuple RGB value (for a tint) or
+    - a matplotlib.colors.Colormap object for a custom color map or
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    """
     if isinstance(user_tint, tuple) or isinstance(user_tint, list):
         return user_tint
     elif isinstance(user_tint, str):
@@ -113,6 +126,8 @@ def md_format_to_tint(user_tint):
             return cm.get_cmap(user_tint)
         else:
             return TINT_FIT_TO_RGB
+    else:
+        raise TypeError("Invalid tint metadata type %s" % (user_tint,))
 
 
 def findOptimalRange(hist, edges, outliers=0):
@@ -470,9 +485,18 @@ def getColorbar(color_map, width, height, alpha=False):
 
 def tintToColormap(tint, name=""):
     """
-    If a tint is an RGB tuple, or TINT_FIT_TO_RGB string convert it to a matplotlib.colors.Colormap object
+    Convert a tint to a matplotlib.colors.Colormap object
+    tint argument can be:
+    - a list tuple RGB value (for a tint) or
+    - a matplotlib.colors.Colormap object for a custom color map (then it is just returned as is) or
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a rainbow colormap
+    name (string): the name argument of the new colormap object
+    returns matplotlib.colors.Colormap object
     """
-    if isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
+    if isinstance(tint, colors.Colormap):
+        return tint
+    elif isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
         # make a gradient from black to the selected tint
         tint = colors.LinearSegmentedColormap.from_list(name,
             [(0, 0, 0), rgb_to_frgb(tint)])
@@ -480,6 +504,8 @@ def tintToColormap(tint, name=""):
         tint = cm.get_cmap('hsv')
     elif tint == TINT_FIT_TO_RGB:  # tint Fit to RGB constant
         tint = colors.ListedColormap([(0, 0, 1), (0, 1, 0), (1, 0, 0)], 'Fit to RGB')
+    else:
+        raise TypeError("Invalid tint type: %s" % (tint,))
     return tint
 
 

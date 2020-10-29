@@ -30,10 +30,6 @@ import numpy
 from odemis import model
 import re
 import yaml
-from odemis import model
-import numpy
-import cv2
-import math
 
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
