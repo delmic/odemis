@@ -1236,6 +1236,7 @@ class MC_5DOF(model.Actuator):
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
+        self._shutdown_flag = False
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # Reference tilted positioners towards the negative position
@@ -1281,8 +1282,11 @@ class MC_5DOF(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.stop()
-        self.core.SA_MC_Close(self._id)
+        if not self._shutdown_flag:
+            self.stop()
+            self._executor.shutdown(cancel_futures=True)
+            self.core.SA_MC_Close(self._id)
+            self._shutdown_flag = True
         super(MC_5DOF, self).terminate()
 
     def updateMetadata(self, md):
@@ -2496,6 +2500,7 @@ class MCS2(model.Actuator):
         self.position = model.VigilantAttribute({}, readonly=True)
 
         # will take care of executing axis move asynchronously
+        self._shutdown_flag = False
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # define the referenced VA from the query
@@ -2522,8 +2527,13 @@ class MCS2(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.stop()
-        self.core.SA_CTL_Close(self._id)
+        # should be safe to close the device multiple times if terminate is called more than once.
+        if not self._shutdown_flag:
+            self.stop()
+            self._executor.shutdown(cancel_futures=True)
+            self.core.SA_CTL_Close(self._id)
+            self._shutdown_flag = True
+
         super(MCS2, self).terminate()
 
     @staticmethod
