@@ -2728,14 +2728,15 @@ class SparcStreamsController(StreamBarController):
 
         main_data = self._main_data_model
 
+        axes = {"density": ("density", main_data.tc_od_filter)}
         # Need to pick the right filter wheel (if there is one)
-        axes = {}
-        for fw in (main_data.cl_filter, main_data.light_filter, main_data.tc_od_filter, main_data.tc_filter):
+        for fw in (main_data.cl_filter, main_data.light_filter, main_data.tc_filter):
             if fw is None:
                 continue
             if main_data.cld.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
                 break
+        axes = self._filter_axes(axes)
 
         cli_stream = acqstream.CLSettingsStream(
             "CL intensity",
