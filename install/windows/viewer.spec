@@ -200,6 +200,7 @@ a = Analysis(
     [script],
     pathex=['.'],
     binaries=None,
+    # Add some plugins by default
     datas=[('../../plugins/spike_remove.py', './plugins'), ('../../plugins/merge_RGB.py', './plugins')],
     hiddenimports=[
         'cairo',
