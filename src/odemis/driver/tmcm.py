@@ -638,7 +638,6 @@ class TMCLController(model.Actuator):
         """
         target, n, typ, mot, val, chk = struct.unpack('>BBBBiB', instr)
         s = "%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
-        # FIXME: return a string
         return s
 
     @staticmethod
@@ -788,7 +787,7 @@ class TMCLController(model.Actuator):
             raise TypeError("Impossible length of %d" % l)
 
         # Read the rest of the data
-        s = ""
+        s = b""
         for i in range(l):
             d = self.GetGlobalParam(2, i + 1)
             s += struct.pack(">i", d)
@@ -2301,7 +2300,11 @@ class TMCMSimulator(object):
 
         # internal global param values
         # 4 * dict(int -> int: param number -> value)
-        self._gstate = [{}, {}, {}, {}]
+        self._gstate = [{}, {},
+                        # Bank 2: example user config v1
+                        {0: 353304838, 1: 50462723, 2: 17104896, 3: 33555201,
+                         4: 83886082, 5: 196869, 6: 0},
+                        {}]
 
         # internal axis param values
         # int -> int: param number -> value
@@ -2488,7 +2491,8 @@ class TMCMSimulator(object):
             if not 0 <= typ <= 255:
                 self._sendReply(inst, status=3)  # wrong type
                 return
-            self._sendReply(inst, val=0)  # Simple simulation: say it's stored
+            self._gstate[mot][typ] = val
+            self._sendReply(inst, val=val)
         elif inst == 10:  # Get global param
             if not 0 <= mot < len(self._gstate):
                 self._sendReply(inst, status=4)  # invalid value
@@ -2496,7 +2500,17 @@ class TMCMSimulator(object):
             if not 0 <= typ <= 255:
                 self._sendReply(inst, status=3)  # wrong type
                 return
-            self._sendReply(inst, val=0)  # very simple simulation for now: all param == 0
+            val = self._gstate[mot].get(typ, 0)  # 0 value by default
+            self._sendReply(inst, val=val)
+        elif inst == 11:  # Store global param
+            if not 0 <= mot < len(self._gstate):
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 255:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            # Nothing to really do
+            self._sendReply(inst, val=0)
         elif inst == 13: # ref search-related instructions
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
