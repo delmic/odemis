@@ -125,10 +125,12 @@ class ZStackPlugin(Plugin):
         return (float > 0): estimated time (in s) that it takes to move the focus
           by one step.
         """
+        speed = None
         if model.hasVA(self.focus, "speed"):
-            speed = self.focus.speed.value['z']
-        else:
+            speed = self.focus.speed.value.get('z', None)
+        if speed is None:
             speed = 10e-6  # m/s, pessimistic
+
         return driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
 
     def _update_exp_dur(self, _=None):
