@@ -25,6 +25,7 @@ import copy
 import logging
 from odemis import model
 from odemis.driver import simsem
+from odemis.util import test
 import os
 import pickle
 import threading
@@ -212,7 +213,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.translation.value = (-1, 1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
-        # shift
+        # translate
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
@@ -244,7 +245,7 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], center)
 
-        # shift a bit
+        # translate a bit
         # reduce the size of the image so that we can have translation
         self.scanner.resolution.value = (max_res[0] // 32, max_res[1] // 32)
         self.scanner.translation.value = (-1.26, 10) # px
@@ -261,6 +262,31 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
+
+    def test_shift(self):
+        """
+        check that .shift works
+        """
+        # First, test simple behaviour on the VA
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = self.scanner.resolution.range[1]
+        self.scanner.horizontalFoV.value = self.scanner.horizontalFoV.range[0]
+        self.scanner.shift.value = (0, 0)
+        self.assertEqual(self.scanner.shift.value, (0, 0))
+
+        # normal acquisition
+        im_no_shift = self.sed.data.get()
+        self.assertEqual(im_no_shift.shape, self.scanner.resolution.value[-1::-1])
+
+        # shift a bit
+        self.scanner.shift.value = (-1.26e-6, 3e-6)  # m
+        im_small_shift = self.sed.data.get()
+        test.assert_array_not_equal(im_no_shift, im_small_shift)
+
+        # shift min/max
+        self.scanner.shift.value = self.scanner.shift.range[0][1], self.scanner.shift.range[1][0]
+        im_big_shift = self.sed.data.get()
+        test.assert_array_not_equal(im_no_shift, im_big_shift)
 
     @skip("faster")
     def test_acquire_high_osr(self):
