@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from concurrent.futures import CancelledError, TimeoutError
 import logging
 import fcntl
 import glob
@@ -33,8 +32,7 @@ import re
 import serial
 import threading
 import random
-import math
-from odemis.util import RepeatingTimer, driver
+from odemis.util import RepeatingTimer
 import time
 from odemis.model import IntEnumerated, FloatContinuous, FloatVA
 
@@ -61,9 +59,11 @@ class LakeshoreError(IOError):
     Exception used to indicate a problem reported by the device.
     """
 
-    def __init__(self, msg, byte=None):
-        self.byte = byte
-        IOError.__init__(self, msg + " Status byte: 0x%x" % (self.byte,))
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(LakeshoreError, self).__init__(errno, strerror, *args, **kwargs)
+
+    def __str__(self):
+        return self.strerror
 
 
 class Lakeshore(model.HwComponent):
@@ -89,7 +89,7 @@ class Lakeshore(model.HwComponent):
         # Check input and output channels
         self._sensor_input = sensor_input.upper()
         if not self._sensor_input in ('A', 'B'):
-            raise ValueError("Sensor input must be a string of 'A' or 'B'")
+            raise ValueError("Sensor input must be either 'A' or 'B'")
         
         self._output_channel = output_channel
         if not self._output_channel in (1, 2):
@@ -106,8 +106,8 @@ class Lakeshore(model.HwComponent):
         # Clear errors at start
         try:
             self.checkError()
-        except LakeshoreError as e:
-            logging.exception(e)
+        except LakeshoreError as ex:
+            logging.warning("Discarding initial error status: %s", ex)
 
         # Vigilant attributes of the controller.
         self.temperature = FloatVA(unit=u"°C", value=self.GetSensorTemperature(), readonly=True)
@@ -273,7 +273,7 @@ class Lakeshore(model.HwComponent):
                 errors.append(STATUS_BYTE[err])
 
         if errors:
-            raise LakeshoreError("Lakeshore %s" % (str(errors)), status_byte)
+            raise LakeshoreError(status_byte, "Error %s (Status byte: 0x%X)" % (", ".join(errors), status_byte))
 
     def GetIdentifier(self):
         """
@@ -312,7 +312,8 @@ class Lakeshore(model.HwComponent):
         """
         Get the current temperature of the sensor input. Returns a float in Celsius
         """
-        return float(self._sendQuery(b"KRDG? %s" % (self._sensor_input,))) - KELVIN_CONVERT
+        val = self._sendQuery(b"KRDG? %s" % (self._sensor_input.encode("latin1"),))
+        return float(val) - KELVIN_CONVERT
 
     def LockKeypad(self, lock):
         """
@@ -443,8 +444,9 @@ class LakeshoreSimulator(object):
         self.timeout = timeout
         self._output_buf = b""  # what the commands sends back to the "host computer"
         self._input_buf = b""  # what we receive from the "host computer"
-        self._status_byte = POWER_ON
 
+        # Start with a command error, to check it's properly reset by the driver
+        self._status_byte = POWER_ON | COMMAND_ERROR
         self._setpoint = 150  # K
         self._temperature = 100  # K
         self._heating = 0  # enum int 0,1,2, or 3
@@ -489,33 +491,33 @@ class LakeshoreSimulator(object):
         return None: self._output_buf is updated if necessary
         """
         logging.debug("SIM: parsing %s", to_str_escape(msg))
-        msg = msg.strip()  # remove leading and trailing whitespace
-        msg = b"".join(msg.split())  # remove all space characters
+        msg = msg.decode("latin1").strip()  # remove leading and trailing whitespace
+        msg = "".join(msg.split())  # remove all space characters
 
-        if msg == b"*ESR?":  # error status register
+        if msg == "*ESR?":  # error status register
             self._sendAnswer(b"%d" % (self._status_byte,))
-        elif msg == b"*CLS":
-            self._status_byte = 0
-        elif msg == b"*IDN?":
+        elif msg == "*CLS":
+            self._status_byte = POWER_ON
+        elif msg == "*IDN?":
             self._sendAnswer(b"LSCI,MODEL335,fake,0.0")
-        elif re.match(b'LOCK', msg):
+        elif re.match('LOCK', msg):
             pass
         # Query setpoint
-        elif re.match(b'SETP\?', msg):
+        elif re.match('SETP\?', msg):
             self._sendAnswer(b"+%.3f" % (self._setpoint,))
         # set setpoint
-        elif re.match(b"SETP", msg):
+        elif re.match("SETP", msg):
             vals = msg[4:].split(',')
             self._setpoint = float(vals[1])
         # Query heating range
-        elif re.match(b'RANGE\?', msg):
+        elif re.match('RANGE\?', msg):
             self._sendAnswer(b"%d" % (self._heating,))
         # set heating range
-        elif re.match(b"RANGE", msg):
+        elif re.match("RANGE", msg):
             vals = msg[5:].split(',')
             self._heating = int(vals[1])
         # Query temperature
-        elif re.match(b'KRDG\?', msg):
+        elif re.match('KRDG\?', msg):
             # send temperature with some noise
             self._sendAnswer(b"+%.3f" % (self._temperature + random.uniform(-0.1, 0.1),))
             if self._heating:
