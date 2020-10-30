@@ -102,7 +102,7 @@ class MergeChannelsPlugin(Plugin):
         self.cropBottom = model.IntContinuous(0, range=(0, 200), unit="px")
 
         analysis_tab = self.main_app.main_data.getTabByName('analysis')
-        analysis_tab.stream_bar_controller.add_action("Add RBG channels...", self.start)
+        analysis_tab.stream_bar_controller.add_action("Add RGB channels...", self.start)
 
         self.filenameR.subscribe(self._filenameR)
         self.filenameG.subscribe(self._filenameG)
