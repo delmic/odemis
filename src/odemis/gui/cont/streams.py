@@ -104,7 +104,7 @@ class StreamController(object):
         if isinstance(stream, (acqstream.RGBStream,)):
             options |= OPT_NO_COLORMAPS
         if isinstance(stream, (acqstream.SpectrumStream,)):
-            # if there is only temporal data, do not add the fit RGB o0tion
+            # if there is only temporal data, do not add the fit RGB option
             if stream.raw[0].shape[0] > 1 and stream.raw[0].shape[1] == 1:
                 options |= OPT_FIT_RGB
 
