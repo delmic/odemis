@@ -2807,6 +2807,126 @@ class LinkedHeightFocus(model.Actuator):
             future._running_subf = self._lensz.reference(axes)
         future._running_subf.result()
 
+
+class DualChannelPositionSensor(model.HwComponent):
+    """
+    This is a wrapper for a sensor with three position channels. The position outputs of the sensor are
+    converted to a two-channel output (typically x and y). The additional information provided by the third
+    sensor channel is used to calculate a rotation.
+
+    Attributes
+    ==========
+    .position (VA: str --> float): position in m for each output channel. If the output channels has multiple
+        input channels, the positions of the input channels will be averaged.
+    .rotation (FloatVA): rotation in rad. This rotation is calculated from the channel positions on the
+        axis with two channels. It describes the angle of the line between these two positions with
+        respect to the horizontal line (in case of two x sensors) or vertical line (in case of two y sensors)
+        going through the first position.
+
+    Functions
+    =========
+    .reference: call to sensor adjustment routine
+    """
+
+    def __init__(self, name, role, dependencies, channels, distance, **kwargs):
+        """
+        dependencies: (dict str --> Component) dict with "sensor" key containing three-channel sensor component.
+            The three-channel sensor is required to have a .channels attribute, a .position VA and
+            .reference and .stop functions.
+        channels: (dict str --> str, [str], or [str, str]) mapping of output channels to sensor channels, one output
+            channel must be mapped to a single sensor channel and the other one to two sensor channels,
+            e.g. {'x': ['x1', 'x2'], 'y': 'y1'}. The order of the elements in the list with two channels matters for
+            the calculation of the rotation angle (in general the left or top sensor should come first).
+        distance: (float > 0) distance in m between the sensor heads on the axis with two channels
+            (for calculating the rotation).
+        """
+        model.HwComponent.__init__(self, name, role, **kwargs)
+
+        # Check distance argument
+        try:
+            if distance > 0:
+                self._distance = distance
+            else:
+                raise ValueError("Illegal distance '%s', needs to be > 0.")
+        except TypeError:
+            raise ValueError("Illegal distance '%s', needs to be of type 'float'.")
+
+        # Check sensor dependency
+        try:
+            self.sensor = dependencies["sensor"]
+        except KeyError:
+            raise ValueError("DualChannelPositionSensor requires a 'sensor' dependency.")
+
+        self.channels = {}
+        for out_ch, in_chs in channels.items():
+            # Convert to list (of 1 or 2 str), this makes looping through the channels easier
+            if not isinstance(in_chs, list):
+                in_chs = [in_chs]
+
+            for in_ch in in_chs:
+                if in_ch not in self.sensor._channels:
+                    raise ValueError("Sensor component '%s' does not have channel '%s'" % (self.sensor.name, in_ch,))
+            self.channels[out_ch] = in_chs
+
+        # Position and rotation VA
+        self.position = model.VigilantAttribute({}, getter=self._get_sensor_position, readonly=True)
+        self.rotation = model.FloatVA(getter=self._get_rotation, readonly=True)
+
+        # Subscribe to sensor position updates
+        self.sensor.position.subscribe(self._on_sensor_position)
+
+    def reference(self):
+        """
+        Calls .reference function of sensor.
+        """
+        self.sensor.reference()
+
+    def terminate(self):
+        """
+        Unsubscribes from .sensor.position VA.
+        """
+        self.sensor.position.unsubscribe(self._on_sensor_position)
+
+    def _calculate_position_rotation(self, sensor_pos):
+        """
+        Transform three-channel sensor position to two-channel position and rotation.
+        sensor_pos: (dict str --> float) position of sensor
+        returns: (dict str --> float, float) dual-channel position in m and rotation in rad
+        """
+        out_pos = {}
+        rotation = 0
+        for out_ch, in_chs in self.channels.items():
+            if not set(in_chs).issubset(sensor_pos.keys()):
+                logging.warning("Channel position not available %s" % (in_chs,))
+                continue
+            if len(in_chs) == 2:
+                # average position of two channels on two-channel axis
+                pos1 = sensor_pos[in_chs[0]]
+                pos2 = sensor_pos[in_chs[1]]
+                out_pos[out_ch] = (pos1 + pos2) / 2
+                rotation = math.atan2(pos2 - pos1, self._distance)  # y, x
+            else:
+                # same position as reported by sensor channel on single-channel axis
+                out_pos[out_ch] = sensor_pos[in_chs[0]]
+        return out_pos, rotation
+
+    def _on_sensor_position(self, pos):
+        """
+        Listener to sensor position updates. Updates the .position and .rotation VAs.
+        """
+        pos, rotation = self._calculate_position_rotation(pos)
+        self.position._set_value(pos, force_write=True)
+        self.rotation._set_value(rotation, force_write=True)
+
+    def _get_sensor_position(self):
+        pos, _ = self._calculate_position_rotation(self.sensor.position.value)
+        return pos
+
+    def _get_rotation(self):
+        _, rotation = self._calculate_position_rotation(self.sensor.position.value)
+        return rotation
+
+
 class LinkedAxesActuator(model.Actuator):
     """
     The goal of this wrapper is to automatically adjust the underlying stage movement based on the movement of its

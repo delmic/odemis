@@ -23,6 +23,7 @@ from __future__ import division
 
 import logging
 import os
+
 import time
 import unittest
 from odemis.driver import smaract
@@ -500,6 +501,100 @@ class TestMCS2(unittest.TestCase):
         # Check that at least the position changed
         self.assertNotEqual(pos_move["x"], pos_refd["x"])
         # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+
+CONFIG_Picoscale = {"name": "Stage Metrology",
+                    "role": "metrology",
+                    "ref_on_init": True,
+                    "locator": "network:sn:PSC-00000178",
+                    "channels": {'x1': 0, 'x2': 1},
+                    "precision_mode": 0,
+                    }
+
+
+if TEST_NOHW:
+    CONFIG_Picoscale['locator'] = 'fake'
+
+
+class TestPicoscale(unittest.TestCase):
+    """
+    Test cases for the SmarAct Picoscale interferometer.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dev = smaract.Picoscale(**CONFIG_Picoscale)
+        # Wait until initialization is done
+        while cls.dev.state.value == model.ST_STARTING:
+            time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_reference(self):
+        f = self.dev.reference()
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+    def test_position(self):
+        """
+        Tests whether the position is updated every second.
+        """
+        self.pos_update = False
+
+        def pos_listener(_):
+            self.pos_update = True
+
+        self.dev.position.subscribe(pos_listener)
+        if TEST_NOHW:
+            # New sensor position in simulator
+            self.dev.core.positions[0] = 2.5e-6
+        time.sleep(1.1)  # position should be updated every second
+        self.assertTrue(self.pos_update)
+
+        self.dev.position.unsubscribe(pos_listener)
+
+    def test_reference_cancel(self):
+        """
+        Test cancelling at various stages of the referencing procedure.
+        """
+        f = self.dev.reference()
+        time.sleep(0.2)
+        f.cancel()
+        time.sleep(0.1)  # it takes a little while until ._was_stopped is updated
+        self.assertTrue(f._was_stopped)
+
+        f = self.dev.reference()
+        time.sleep(1)
+        f.cancel()
+        time.sleep(0.1)
+        self.assertTrue(f._was_stopped)
+
+        f = self.dev.reference()
+        time.sleep(5)
+        f.cancel()
+        time.sleep(0.1)
+        self.assertTrue(f._was_stopped)
+
+        # Test queued futures
+        f1 = self.dev.reference()
+        f2 = self.dev.reference()
+        f1.cancel()
+        f2.cancel()
+        time.sleep(0.1)
+        self.assertEqual(len(self.dev._executor._queue), 0)
+
+        # Test f.cancel()
+        f = self.dev.reference()
+        time.sleep(1)
+        f.cancel()
+        time.sleep(0.1)
+        self.assertTrue(f._was_stopped)
+        for a, i in self.dev.referenced.value.items():
+            self.assertFalse(i)
 
 
 if __name__ == '__main__':

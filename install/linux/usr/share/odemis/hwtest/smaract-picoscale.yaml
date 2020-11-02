@@ -1,0 +1,25 @@
+SimOptical: {
+    class: Microscope,
+    role: brightfield,
+    children: [Metrology, Picoscale],
+}
+
+Metrology: {
+    class: actuator.DualChannelPositionSensor,
+    role: stage-metrology,
+    dependencies: {"sensor": Picoscale},
+    init: {
+        channels: {"x": ["x1", "x2"], "y": "y"},
+        distance: 0.1,
+    },
+}
+
+Picoscale: {
+    class: smaract.Picoscale,
+    role: position-sensor,
+    init: {
+        locator: "network:sn:PSC-00000178",
+        channels: {"x1": 0, "x2": 1, "y": 2},
+        ref_on_init: "if necessary",  # use "always" to force referencing at init
+    },
+}

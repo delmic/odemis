@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 __all__ = ["andorcam3", "andorcam2", "andorshrk", "pi", "pigcs", "lle",
            "semcomedi", "spectrapro", "pvcam", "omicronxx", "tlfw", "tlaptmf",
            "tmcm", "phenom", "nfpm", "tescan", "pmtctrl", "powerctrl",
-           "blinkstick", "picoquant", "ueye", "pwrcomedi",
+           "blinkstick", "picoquant", "ueye", "pwrcomedi", "smaract",
            # Modules that do not support scanning because that wouldn't make sense:
            "actuator", "scanner", "spectrometer", "simcam", "simsem", "emitter",
            "simulated", "static"]
