@@ -3596,7 +3596,7 @@ class Picoscale(model.HwComponent):
         except SA_SIError as ex:
             if ex.errno == SA_SI_ERROR_INVALID_PROPERTY:
                 if precision_mode > 0:
-                    raise model.HwError("Precision mode not available.")
+                    raise ValueError("Precision mode not available.")
                 else:
                     logging.debug("Precision mode not available.")
             else:
@@ -3982,7 +3982,10 @@ class Picoscale(model.HwComponent):
                 # new state, 0 means unstable, 1 means stable
                 state = ev.devEventParameter
             elif ev.type == SA_SI_STREAM_ABORTED_EVENT:
-                raise SA_SIError(ev.error, self.core.err_code[ev.error])
+                if ev.error == SA_SI_ERROR_CANCELLED:
+                    raise CancelledError()
+                else:
+                    raise SA_SIError(ev.error, self.core.err_code[ev.error])
             else:
                 logging.debug("Skipped event 0x%x" % ev.type)
 

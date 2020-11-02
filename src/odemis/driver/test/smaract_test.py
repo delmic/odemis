@@ -505,7 +505,7 @@ class TestMCS2(unittest.TestCase):
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
                     "role": "metrology",
-                    "ref_on_init": False,
+                    "ref_on_init": True,
                     "locator": "network:sn:PSC-00000178",
                     "channels": {'x1': 0, 'x2': 1},
                     "precision_mode": 0,
