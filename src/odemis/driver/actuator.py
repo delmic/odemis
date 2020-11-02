@@ -2894,7 +2894,11 @@ class DualChannelPositionSensor(model.HwComponent):
         returns: (dict str --> float, float) dual-channel position in m and rotation in rad
         """
         out_pos = {}
+        rotation = 0
         for out_ch, in_chs in self.channels.items():
+            if not set(in_chs).issubset(sensor_pos.keys()):
+                logging.warning("Channel position not available %s" % (in_chs,))
+                continue
             if len(in_chs) == 2:
                 # average position of two channels on two-channel axis
                 pos1 = sensor_pos[in_chs[0]]

@@ -3568,6 +3568,9 @@ class Picoscale(model.HwComponent):
 
         # Device setup
         self.EnableFullAccess()
+        self.core.SA_SI_Cancel(self._id)  # if referencing is still running, cancel it
+        self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
+                             SA_PS_ADJUSTMENT_STATE_DISABLED)
         try:
             self._load_configuration()
         except SA_SIError as ex:
@@ -4192,8 +4195,10 @@ class Picoscale(model.HwComponent):
         Getter for .position VA. Requests position from device.
         returns: dict (str --> float)
         """
+        # Polling thread is running all the time except during referencing
         if self._polling_thread is None:
-            raise ValueError("Cannot report position, device needs to be referenced first.")
+            logging.warning("Cannot report position, device needs to be referenced first.")
+            return {}
         pos = {}
         for name, num in self._channels.items():
             pos[name] = self.GetValue_f64(num, 0)  # position value is at index 0
