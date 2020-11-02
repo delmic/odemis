@@ -33,7 +33,10 @@ from odemis.model import HwError
 
 # Parameters for connection
 BAUDRATE = 230400
-TIMEOUT = 1
+# TODO: there seems to be a bug in the pymodbus library. Whenever write_registers is called, the library waits
+# until the timeout or 1024 values were sent, see https://github.com/riptideio/pymodbus/issues/237.
+# For now, we put a short timeout to make sure we don't have to wait for too long.
+TIMEOUT = 0.2
 BYTESIZE = 8
 PARITY = serial.PARITY_NONE
 STOPBITS = 1
