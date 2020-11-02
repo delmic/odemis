@@ -2501,7 +2501,6 @@ def __init_resources():
                           <font>
                             <size>11</size>
                             <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                            <encoding>UTF-8</encoding>
                           </font>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -5552,7 +5551,6 @@ def __init_resources():
                         <font>
                           <size>10</size>
                           <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          <encoding>UTF-8</encoding>
                         </font>
                         <XRCED>
                           <assign_var>1</assign_var>
