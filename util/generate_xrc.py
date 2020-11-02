@@ -59,6 +59,14 @@ class xrc%(windowName)s(wx.%(windowClass)s):
         # Define variables for the controls, bind event handlers
 """
 
+PythonTemplates.INIT_RESOURE_HEADER = """\
+# ------------------------ Resource data ----------------------
+
+def __init_resources():
+    global __res
+    __res = xrc.XmlResource()
+"""
+
 PythonTemplates.FILE_AS_STRING = """\
     %(filename)s = b'''\\
 %(fileData)s'''
