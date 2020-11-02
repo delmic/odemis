@@ -3568,9 +3568,12 @@ class Picoscale(model.HwComponent):
 
         # Device setup
         self.EnableFullAccess()
-        self.core.SA_SI_Cancel(self._id)  # if referencing is still running, cancel it
-        self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
-                             SA_PS_ADJUSTMENT_STATE_DISABLED)
+        # If referencing is still running, cancel it
+        self.core.SA_SI_Cancel(self._id)
+        # Reset referencing state if necessary (in case referencing has been stopped improperly)
+        state = self.GetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP)
+        if state != SA_PS_ADJUSTMENT_STATE_DISABLED:
+            self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP, SA_PS_ADJUSTMENT_STATE_DISABLED)
         try:
             self._load_configuration()
         except SA_SIError as ex:
