@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import os
-from collections import deque
 
 import time
 import unittest

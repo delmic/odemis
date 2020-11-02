@@ -3345,6 +3345,7 @@ SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT = 0x01
 SA_PS_WORKING_DISTANCE_SHRINK_MODE_RIGHT = 0x02
 
 # Events
+SA_SI_STREAM_ABORTED_EVENT = 0x0001
 SA_PS_FULL_ACCESS_CONNECTION_LOST_EVENT = 0x8000
 SA_PS_BEAM_INTERRUPT_EVENT = 0x8010
 SA_PS_OVERRANGE_EVENT = 0x8011
@@ -3890,7 +3891,7 @@ class Picoscale(model.HwComponent):
         self.core.SA_SI_GetValue_f64(self._id, channel, data_source_idx, byref(ret_val))
         return ret_val.value
 
-    def WaitForEvent(self, timeout=600):
+    def WaitForEvent(self, timeout=float("inf")):
         """
         Blocks until device reports an event.
         timeout (int > 0): timeout in seconds
@@ -3906,18 +3907,15 @@ class Picoscale(model.HwComponent):
             t = c_uint(int(timeout * 1000))  # SA_SI_WaitForEvent accepts timeout in ms
 
         ev = SA_SI_Event()
-        ret = self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
-
-        if ret != SA_SI_ERROR_NONE:
-            if ret == SA_SI_ERROR_TIMEOUT:
+        try:
+            self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
+        except SA_SIError as ex:
+            if ex.errno == SA_SI_ERROR_TIMEOUT:
                 raise TimeoutError("Picoscale reported timeout error.")
-            elif ret == SA_SI_ERROR_CANCELLED:
+            elif ex.errno == SA_SI_ERROR_CANCELLED:
                 raise CancelledError("WaitForEvent was cancelled.")
-            else:
-                if ret in self.core.err_code:
-                    raise SA_SIError(ret, self.core.err_code[ret])
-                else:
-                    raise SA_SIError(ret, "Unknown error code %s" % ret)
+            raise
+
         return ev
 
     def _load_configuration(self):
@@ -3950,36 +3948,43 @@ class Picoscale(model.HwComponent):
         # parameters takes. It can be assumed that it's fast --> wait 1 s.
         time.sleep(1)
 
-    def _wait_for_progress_event(self, end_state, timeout=600):
+    def _wait_for_progress_event(self, end_state, timeout=float("inf")):
         """
         Blocks until progress event is triggered or timeout.
         It is assumed that only one event type is enabled. The function will wait until the
         .devEventParameter contains the end_state. This can mean different things depending on the event.
         end_state (int): state of event variable to wait for
         timeout (float): maximum time to wait in s. If inf, it will wait forever.
+        raises
+            TimeoutError: timeout exceeded
+            CancelledError: function was cancelled by SA_SI_Cancel
+            SA_SI_Error: other problem reported by device
         """
         if timeout == float("inf"):
             tend = None
         else:
             tend = time.time() + timeout
-        ev = SA_SI_Event()
 
         state = None
         while state != end_state:
-            if state is not None:
-                logging.debug("Skipped event 0x%x" % ev.type)
-
             if tend is not None:
                 t = tend - time.time()
                 if t < 0:
                     raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
             else:
                 t = float("inf")
-            ev = self.WaitForEvent(t)
-            # Don't check event type, it's not always accurate.
-            # Instead, only one event is active and all other events are disabled, so it is clear
-            # which event we are waiting for.
-            state = ev.devEventParameter & 0xffff
+
+            ev = self.WaitForEvent(t)  # raise TimeOut/CancelledError by itself
+            if ev.type == SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT:
+                # lowest 16-bits is the adjustment state
+                state = ev.devEventParameter & 0xffff
+            elif ev.type == SA_PS_STABLE_STATE_CHANGED_EVENT:
+                # new state, 0 means unstable, 1 means stable
+                state = ev.devEventParameter
+            elif ev.type == SA_SI_STREAM_ABORTED_EVENT:
+                raise SA_SIError(ev.error, self.core.err_code[ev.error])
+            else:
+                logging.debug("Skipped event 0x%x" % ev.type)
 
     @isasync
     def reference(self, _=None):
@@ -4015,7 +4020,7 @@ class Picoscale(model.HwComponent):
                 self.EnableEventNotification(SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
-            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
+            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST, timeout=600)
 
             with future._moving_lock:
                 if future._must_stop.is_set():
@@ -4034,7 +4039,7 @@ class Picoscale(model.HwComponent):
                 # Switch to automatic adjustment
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
-            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+            self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED, timeout=600)  # state will be DISABLED when done
             logging.debug("Finished referencing.")
 
             # We could save the referencing parameters to memory here. This could be useful for the validation,
@@ -4080,7 +4085,7 @@ class Picoscale(model.HwComponent):
             if self.GetAdjustmentState() != SA_PS_ADJUSTMENT_STATE_DISABLED:
                 self.SetProperty_i32(SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_PS_ADJUSTMENT_STATE_DISABLED)
-                self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+                self._wait_for_progress_event(SA_PS_ADJUSTMENT_STATE_DISABLED, timeout=600)  # state will be DISABLED when done
             self.DisableEventNotification(SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
 
     # The validation procedure is currently not used, we either use full referencing or nothing at all
@@ -4116,7 +4121,7 @@ class Picoscale(model.HwComponent):
                 # to wait until the state becomes stable again before continuing.
                 self.EnableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
                 self.SetProperty_i32(SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP, SA_SI_ENABLED)
-            self._wait_for_progress_event(SA_SI_ENABLED)
+            self._wait_for_progress_event(SA_SI_ENABLED, timeout=600)
             self.DisableEventNotification(SA_PS_STABLE_STATE_CHANGED_EVENT)
 
             # Enable channels
