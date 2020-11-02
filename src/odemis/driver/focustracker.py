@@ -92,6 +92,8 @@ class FocusTrackerCO(model.HwComponent):
             self.network.disconnect()
             self.network = None
 
+        super(FocusTrackerCO, self).terminate()
+
     def updateMetadata(self, md):
         if model.MD_GAIN_P in md:
             md[model.MD_GAIN_P] = self._set_proportional(md[model.MD_GAIN_P])

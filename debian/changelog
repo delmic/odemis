@@ -1,3 +1,86 @@
+odemis (3.1.0-1) xenial; urgency=medium
+
+  * New version: 3.1
+  * Main new features:
+    - Live update of the SEM acquisition on the SPARC
+    - New label tool in the analysis tab
+    - Each SPARC stream has independent settings for the axes (such as filter,
+      center wavelength)
+    - During SPARC lens alignment it is now possible to just check the focus
+      without running the auto-focus
+    - During SPARC auto-focus the image of every detectors is shown
+    - All settings/positions of all components are stored in the acquisition metadata
+    - Option to show the raw value of the pixel under the mouse
+    - New plugin for e-beam induced super resolution (eSRM) on the SECOM
+    - New plugin to import 3 greyscale images as RGB channels
+    - Python 3 is now the default interpreter
+    - This is the last version with Python 2.7 support
+  * Main improvements and bug fixes:
+    - Refreshed icons for Odemis and Odemis viewer
+    - Odemis viewer doesn't have tab anymore
+    - Light spectrum peak fitting now computed in the energy-domain
+    - Export of large acquisitions are no more limited to the screen resolution
+    - SEM streams can have their tint changed
+    - Maximum power of fluorescence streams is different per wavelength (SECOM/DELPHI)
+    - Excitation light is started after changing the filter wheel (SECOM)
+    - Improved error messages if not SPARC modules are detected at start-up
+    - Adjusted plot axes, so that ticks are at rounded values
+    - Faster DELPHI twin stage calibration
+    - Extra long exposure time (>10h) without memory limitation
+    - Support for filename pattern with the date as YYMMDD and YY-MM-DD.
+    - Support for Smaract actuators
+    - Support for piezomotors actuators
+    - Support for TMCM actuators over CANopen
+    - Support for Avantes spectrographs
+    - Support for Lakeshore 335 temperature controller
+  * Improvements and bug fixes already present in the v3.0 branch:
+    - Fix the model selector when using Python 3
+    - Fix odemis-start never using the development version, even if selected
+    - Fix andorcam3 not checking that the camera is over USB3
+    - Fix some old PI controllers with Python 3 when sending weird multi-lines
+    - Fix andorcam2 failing to load a firmware at init when using Python 3
+    - Fix find IDS uEye camera via a serial number when using Python 3
+    - Fix connecting to the Phenom when using Python 3
+    - Fix starting the manual calibration on Delphi when using Python 3
+    - Fix nfpm scan when (guess...) using Python 3
+    - Fix CL intensity stream sometimes failing due to SEM resolution off by 1.
+    - Fix regression on calibration of old Andor SR-193.
+    - After a Andor Shamrock to a mirror grating, the wavelength is always reset to 0
+    - Spectrum plot wavelength axis was sometimes playing hide-and-seek.
+    - Fix regression preventing the back-end from displaying the cause of an error.
+    - In some rare cases some text in alignment tab would play hide-and-seek.
+    - The tile plugin will now acquire all the SPARC streams, not just the first one.
+    - For IDS uEye cameras, don't fail to start if there is no shutter control.
+    - Fix error during automatic stage calibration (DELPHI)
+    - Sometimes the GUI would stop after the "Auto adjust" procedure (DELPHI)
+    - Confirmation message that export succeeded didn't appear on Windows
+    - Export of large (pyramidal) data is now done at finest resolution
+    - Line spectrum data exported as CSV was inverted on distance axis
+    - Line spectrum exported as CSV had the wrong metadata on distance axis
+    - After opening a new file, one previous image could still be displayed (very rarely)
+    - Any tmcm.tsv file can be loaded using the param_file argument
+    - Use Python 2 by default for the utils
+    - Don't show the ruler tool in the SECOM alignment tab
+    - Show the fine alignment checkbox in Ubuntu 18.04 (SECOM/DELPHI)
+    - Only enable the Export button when there is something to export
+    - Spectrum average should not be aliased to an round number (SPARC)
+    - The calibration light could stay on if leaving the alignment tab of the
+      streak camera while doing manual focus.
+    - Fix connection to some hardware blocking with Python 3
+    - Fix rounding of floats with Python 3
+    - Fix drivers complaining of integers on Python 3
+    - Fix histogram limit bars not shown in Windows
+    - Fix bug reporter not picking YAML on Python 3
+    - Add odemis-model-selector.log to bug report
+    - Fix Zeiss SEM connection on Python 3
+    - Fix failure of autofocus on single line CCD with noise image
+    - Fix random crash at the end of acquisition in some plugins
+    - Fix incorrect SPARC lens position after restarting with an engaged mirror
+    - Fix loading polarized AR background acquired with extra d
+    - Fix TMCM config not properly set on Python 3
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 30 Oct 2020 17:09:46 +0100
+
 odemis (3.0.0-1) xenial; urgency=medium
 
   * New version: 3.0

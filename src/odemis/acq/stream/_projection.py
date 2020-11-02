@@ -920,7 +920,7 @@ class RGBSpatialProjection(RGBProjection):
 
         raw = self.stream.raw
         if not raw:
-            raise LookupError("Failed to find raw data for %s stream", self.stream)
+            raise LookupError("Failed to find raw data for %s stream" % (self.stream,))
         # if raw is a DataArrayShadow, the image is pyramidal
         if isinstance(raw[0], model.DataArrayShadow):
             tx, px = divmod(pixel_pos[0], raw[0].tile_shape[0])

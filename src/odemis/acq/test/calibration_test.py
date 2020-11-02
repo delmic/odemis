@@ -153,7 +153,11 @@ class TestAR(unittest.TestCase):
 
         # Give one DA, the correct one, so expect to get it back
         out = calibration.get_ar_data(bg_data)
-        numpy.testing.assert_equal(out, bg_data)  # all bg images should have same shape
+
+        # Check the expected and return lists contain the same DataArrays
+        self.assertEqual(len(bg_data), len(out))
+        for da in out:
+            self.assertTrue(any(numpy.array_equal(da, bg) for bg in bg_data))
 
         # More DataArrays, just to make it slightly harder to find the data
         data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
@@ -162,7 +166,11 @@ class TestAR(unittest.TestCase):
                                 metadata={model.MD_POS: (1.2e-3, -30e-3)})
         bg_data_new = [data1, data2] + bg_data
         out = calibration.get_ar_data(bg_data_new)
-        numpy.testing.assert_equal(out, bg_data)
+
+        # Check the expected and return lists contain the same DataArrays
+        self.assertEqual(len(bg_data), len(out))
+        for da in out:
+            self.assertTrue(any(numpy.array_equal(da, bg) for bg in bg_data))
 
 
 class TestSpectrum(unittest.TestCase):

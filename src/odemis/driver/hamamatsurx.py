@@ -1042,6 +1042,8 @@ class StreakCamera(model.HwComponent):
             self.t_receiver.join(5)
         self._closeConnection()
 
+        super(StreakCamera, self).terminate()
+
     def sendCommand(self, func, *args, **kwargs):
         """
         Sends a command to RemoteEx.

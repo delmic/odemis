@@ -221,6 +221,8 @@ class Camera(model.DigitalCamera):
         self._is_running = False #Stop error creation thread
         self._stop_generate()
 
+        super(Camera, self).terminate()
+
     def _start_generate(self):
         if self._generator is not None:
             logging.warning("Generator already running")

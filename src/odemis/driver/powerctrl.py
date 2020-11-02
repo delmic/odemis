@@ -219,6 +219,8 @@ class PowerControlUnit(model.PowerSupplier):
             self._file.close()
             self._file = None
 
+        super(PowerControlUnit, self).terminate()
+
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
 

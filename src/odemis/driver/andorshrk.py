@@ -1802,6 +1802,8 @@ class Shamrock(model.Actuator):
             self.Close()
             self._device = None
 
+        super(Shamrock, self).terminate()
+
 #     def __del__(self):
 #         self.terminate()
 

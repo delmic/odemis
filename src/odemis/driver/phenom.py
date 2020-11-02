@@ -277,6 +277,8 @@ class SEM(model.HwComponent):
         self._navcam_focus.terminate()
         self._pressure.terminate()
 
+        super(SEM, self).terminate()
+
 
 class Scanner(model.Emitter):
     """

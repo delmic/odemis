@@ -402,13 +402,16 @@ class BackendContainer(model.Container):
             logging.warning("Failed to terminate component %s", comp.name, exc_info=True)
 
     def _terminate_component(self, c):
+        cname = c.name
+        logging.debug("Stopping comp %s", cname)
+        try:
+            c.terminate()
+        except Exception:
+            logging.warning("Failed to terminate component %s", cname, exc_info=True)
+
         # remove from the graph
         for p in self._dependents.values():
             p.discard(c)
-
-        cname = c.name
-        logging.debug("Stopping comp %s", cname)
-        c.terminate()
 
         # Terminate the container if that was the component for which it
         # was created.

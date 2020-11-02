@@ -372,7 +372,7 @@ class BackendStarter(object):
         # signal.signal(signal.SIGINT, self._on_sigint)
 
         # Check in background if the back-end is ready
-        check_thread = threading.Thread(target=self._watch_backend_status, args=(backend,))
+        check_thread = threading.Thread(target=self._watch_backend_status, args=(backend, self._mic))
         check_thread.start()
 
         # Show status window until the backend is ready (or failed to start)
@@ -423,9 +423,8 @@ class BackendStarter(object):
         else:
             logging.warning("Unexpected return code %d", ret)
 
-    def _watch_backend_status(self, backend):
+    def _watch_backend_status(self, backend, mic):
         """ Close the component frame when the backend is fully up or down (because of errors) """
-
         ret = wx.ID_OK
 
         while True:
@@ -433,6 +432,12 @@ class BackendStarter(object):
             self._backend_done.wait(1)
             try:
                 backend.ping()
+
+                # Hack, to work-around issue in _on_ghosts() sometimes blocking:
+                # Check ourselves if all the components are started, so that even
+                # in case _on_ghosts() is blocked, we at least move on eventually.
+                if not mic.ghosts.value:
+                    self._backend_done.set()
             except (IOError, CommunicationError):
                 logging.info("Back-end failure detected")
                 ret = wx.ID_EXIT
@@ -481,10 +486,13 @@ class BackendStarter(object):
         """ Called when the .ghosts changes """
         # The components running fine
         for c in self._mic.alive.value:
+            # FIXME: reading .state sometimes blocks, somewhere in the Python server,
+            # usually when the "SEM scan interface" starts.
             state = c.state.value
             if self._comp_state.get(c.name) != state:
                 self._comp_state[c.name] = state
                 self._show_component(c.name, state)
+
         # Now the defective ones
         for cname, state in ghosts.items():
             if isinstance(state, Exception):

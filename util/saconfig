@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
 Created on June 18 2020
@@ -112,7 +112,7 @@ def set_zero(dev, channels):
 
 def main(args):
 
-    parser = argparse.ArgumentParser(prog="smaractconfig",
+    parser = argparse.ArgumentParser(prog="saconfig",
                                      description='Run a one time config for the SmarAct ')
 
     parser.add_argument('--locator', required=True, type=str,

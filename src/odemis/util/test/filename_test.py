@@ -36,7 +36,11 @@ timelng = time.strftime("%H%M%S")
 # date_sl = time.strftime("%Y/%m/%d")
 # timelng_sl = time.strftime("%H/%M/%S")
 current_year = time.strftime("%Y")
-dateshrt = time.strftime("%y%m%d")
+dshrtrev = time.strftime("%d%m%y")
+# Note: dateshrt cannot be used in tests, as on days similar to the year, such as 20-10-20,
+# it's not clear what is the day and what is the year, but the code convention is to
+# guess DDMMYY (aka dshrtrev).
+# dateshrt = time.strftime("%y%m%d")
 dshrtrev_hyphen = time.strftime("%d-%m-%y")
 
 EXTS = ('.tiff', '.ome.tiff', '.0.ome.tiff', '.h5', '.hdf5')
@@ -57,7 +61,7 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
                    '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
                    'test-0070': ('test-{cnt}', '0070'),  # test-0000 gives the wrong result at midnight
-                   '4580-test-%s' % dateshrt: ('{cnt}-test-{dateshrt}', '4580'),
+                   '4580-test-%s' % dshrtrev: ('{cnt}-test-{dshrtrev}', '4580'),
                    '4580-test:%s' % dshrtrev_hyphen: ('{cnt}-test:{dshrtrev_hyphen}', '4580'),
                    '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
                    'test2-45': ('test2-{cnt}', '45'),

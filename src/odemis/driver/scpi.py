@@ -116,6 +116,8 @@ class Ammeter(model.Detector):
                 if self._file:
                     self._file.close()
 
+        super(Ammeter, self).terminate()
+
     @staticmethod
     def _openSerialPort(port, baudrate):
         """

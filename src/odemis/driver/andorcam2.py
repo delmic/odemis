@@ -2319,6 +2319,8 @@ class AndorCam2(model.DigitalCamera):
 
             self.handle = None
 
+        super(AndorCam2, self).terminate()
+
     def __del__(self):
         self.terminate()
 

@@ -384,13 +384,14 @@ class PH300(model.Detector):
             raise HwError("No PicoHarp300 found, check the device is turned on and connected to the computer")
 
     def terminate(self):
-        model.Detector.terminate(self)
         self.stop_generate()
         if self._generator:
             self._genmsg.put(GEN_TERM)
             self._generator.join(5)
             self._generator = None
         self.CloseDevice()
+
+        super(PH300, self).terminate()
 
     def CloseDevice(self):
         self._dll.PH_CloseDevice(self._idx)
