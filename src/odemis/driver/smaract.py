@@ -4288,6 +4288,7 @@ class FakePicoscale_DLL(object):
         self.positions = [10e-6, 20e-6, 30e-6]
 
         self.active_property = None  # property which is requested in _wait_for_progress_event function
+        self.active_event = None  # event to wait for
         self.cancel_referencing = False  # let referencing thread know about cancellation
         self.cancel_event = False  # let _wait_for_progress_event function know about cancellation
 
@@ -4320,11 +4321,11 @@ class FakePicoscale_DLL(object):
     def SA_SI_WaitForEvent(self, handle, event, timeout):
         ev = _deref(event, SA_SI_Event)
         time.sleep(0.01)  # make sure we don't use the CPU at full throttle during simulated calibration
+        ev.type = self.active_event
+        ev.devEventParameter = self.properties[self.active_property]
         if self.cancel_event:
             self.cancel_event = False
-            return SA_SI_ERROR_CANCELLED
-
-        ev.devEventParameter = self.properties[self.active_property]
+            raise SA_SIError(SA_SI_ERROR_CANCELLED, "CANCELLED")
         return SA_SI_ERROR_NONE
 
     def SA_SI_SetProperty_f64(self, handle, property_key, value):
@@ -4342,6 +4343,7 @@ class FakePicoscale_DLL(object):
         # Change active property (for SA_SI_WaitForEvent function)
         if shifted_key == SA_SI_EVENT_NOTIFICATION_ENABLED_PROP:
             event = property_key.value & 0xffff
+            self.active_event = event
             self.active_property = self.event_to_property[event]
 
         # Create thread for adjustment
