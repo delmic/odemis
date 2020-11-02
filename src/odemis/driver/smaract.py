@@ -4299,6 +4299,7 @@ class FakePicoscale_DLL(object):
         self.active_event = None  # event to wait for
         self.cancel_referencing = False  # let referencing thread know about cancellation
         self.cancel_event = False  # let _wait_for_progress_event function know about cancellation
+        self.waiting = None  # set to True after waiting for first event (otherwise cancel function in init of Picoscale causes problems)
 
         self.event_to_property = {
             SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT: SA_PS_AF_ADJUSTMENT_STATE_PROP,
@@ -4317,8 +4318,9 @@ class FakePicoscale_DLL(object):
 
     def SA_SI_Cancel(self, id):
         logging.debug("Cancelling.")
-        self.cancel_referencing = True
-        self.cancel_event = True
+        if self.waiting:
+            self.cancel_referencing = True
+            self.cancel_event = True
 
     def SA_SI_EPK(self, key, idx0=0, idx1=0):
         return key << 16 | idx0 << 8 | idx1
@@ -4351,6 +4353,7 @@ class FakePicoscale_DLL(object):
         # Change active property (for SA_SI_WaitForEvent function)
         if shifted_key == SA_SI_EVENT_NOTIFICATION_ENABLED_PROP:
             event = property_key.value & 0xffff
+            self.waiting = True
             self.active_event = event
             self.active_property = self.event_to_property[event]
 
