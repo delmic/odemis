@@ -51,7 +51,7 @@ def download(url, filename):
     if url.startswith("/"): # absolute path
         url = URL_DB + url
     ufile = urlopen(url)
-    lfile = open(filename, 'w') # will delete if exists
+    lfile = open(filename, 'wb')  # will delete if exists
     shutil.copyfileobj(ufile, lfile)
 
 def open_json_or_remove(filename):
