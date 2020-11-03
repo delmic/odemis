@@ -274,15 +274,16 @@ class VigilantAttribute(VigilantAttributeBase):
         if daemon:
             daemon.unregister(self)
 
-        if self._remote_listeners:
-            logging.info("Unregistering %s while still %d remote listeners", self, len(self._remote_listeners))
-            self._remote_listeners.clear()
+        try:  # AttributeError can happen if exception during init
+            if self._remote_listeners:
+                logging.info("Unregistering %s while still %d remote listeners", self, len(self._remote_listeners))
+                self._remote_listeners.clear()
 
-        try:
             if self.pipe:
                 self.pipe.close()
                 self.pipe = None
-            if self._ctx: # no ._ctx if exception during init
+
+            if self._ctx:
                 self._ctx.term()
                 self._ctx = None
         except Exception:
