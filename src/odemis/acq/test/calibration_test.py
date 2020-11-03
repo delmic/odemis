@@ -16,15 +16,16 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import csv
 import logging
 import numpy
 from odemis import model, dataio
 from odemis.acq import calibration
+from odemis.acq.stream import POL_POSITIONS
 from odemis.util import img
 import os
 import time
 import unittest
-from odemis.acq.stream import POL_POSITIONS
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -350,6 +351,60 @@ class TestSpectrum(unittest.TestCase):
         for vo, vc, wl in zip(spec[..., 3, 3], compensated[..., 3, 3], wld):
             if wl <= wl_calib[0]:
                 self.assertEqual(vo * dcalib[0], vc)
+
+
+TIME_RANGE_TO_DELAY_EX = {1e-09: 7.99e-09,
+                          2e-09: 9.63e-09,
+                          5e-09: 3.32e-08,
+                          1e-08: 4.59e-08,
+                          2e-08: 6.64e-08,
+                          5e-08: 1.02e-07,
+                          1e-07: 1.69e-07,
+                          2e-07: 3.02e-07,
+                          5e-07: 7.31e-07,
+                          0.0001: 0.000161,
+                          0.0002: 0.00032,
+                          0.0005: 0.000798,
+                          0.01: 0.0154}
+
+
+class TriggerDelayTest(unittest.TestCase):
+    """
+    test the functions related to writing & reading MD_TIME_RANGE_TO_DELAY
+    """
+
+    def test_write_read_trigger_delays(self):
+        TRIG_DELAY_FILE = "test-trig-delays.csv"
+
+        # Make sure the file is not present
+        try:
+            os.remove(TRIG_DELAY_FILE)
+        except Exception:
+            pass # no such file
+
+        # Write the file
+        calibration.write_trigger_delay_csv(TRIG_DELAY_FILE, TIME_RANGE_TO_DELAY_EX)
+
+        # Read back
+        tr2d = calibration.read_trigger_delay_csv(TRIG_DELAY_FILE,
+                                                  set(TIME_RANGE_TO_DELAY_EX.keys()),
+                                                  [0, 0.1])
+        self.assertEqual(TIME_RANGE_TO_DELAY_EX, tr2d)
+
+        # Read with wrong hardware
+        with self.assertRaises(ValueError):
+            tr2d = calibration.read_trigger_delay_csv(TRIG_DELAY_FILE,
+                                                      {1e-09, 7e-9},  # Wrong time ranges
+                                                      [0, 0.1])
+        with self.assertRaises(ValueError):
+            tr2d = calibration.read_trigger_delay_csv(TRIG_DELAY_FILE,
+                                                      set(TIME_RANGE_TO_DELAY_EX.keys()),
+                                                      [0, 1e-6])  # Out of delay range
+
+        # Try overwriting
+        calibration.write_trigger_delay_csv(TRIG_DELAY_FILE, TIME_RANGE_TO_DELAY_EX)
+
+        os.remove(TRIG_DELAY_FILE)
 
 
 if __name__ == "__main__":
