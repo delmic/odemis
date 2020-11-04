@@ -54,7 +54,7 @@ class TestBeamShiftController(unittest.TestCase):
               (-0.0013604844623992785, -0.00027788219369730165),
               (0.00012699407486043473, -0.0006217507619527259),
               (0.0006217507619527259, 0.00012699407486043473))
-        cls.bc.updateMetadata({model.MD_CALIB_BEAMSHIFT: md})
+        cls.bc.updateMetadata({model.MD_CALIB: md})
 
     @classmethod
     def tearDownClass(cls):
@@ -132,17 +132,17 @@ class TestBeamShiftController(unittest.TestCase):
 
     def test_update_incorrect_md(self):
         bs = (-0.00027788219369730165, 0.0013604844623992785)
-        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = None
-        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = ((-0.00027788219369730165, 0.0013604844623992785))
-        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = ((-0.00027788219369730165), (-0.00027788219369730165, 0.0013604844623992785),
               (-0.00027788219369730165, 0.0013604844623992785), (-0.00027788219369730165, 0.0013604844623992785))
-        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = (("-0.00027788219369730165", "0.0013604844623992785"), (-0.00027788219369730165, 0.0013604844623992785),
               (-0.00027788219369730165, 0.0013604844623992785), (-0.00027788219369730165, 0.0013604844623992785))
-        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB_BEAMSHIFT: bs})
+        self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
 
 
 if __name__ == "__main__":

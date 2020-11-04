@@ -158,7 +158,7 @@ class BeamShiftController(model.HwComponent):
     the x and y beam offset in m in the stage coordinate system.
 
     The conversion to internal ampere values (including scaling and rotation) is specified
-    through the MD_CALIB_BEAMSHIFT metadata (a 4x2 tuple, 4x (float, float)).
+    through the MD_CALIB metadata (a 4x2 tuple, 4x (float, float), xlower, ylower, xupper, yupper).
     """
 
     def __init__(self, name, role, port=None, serialnum=None, **kwargs):
@@ -166,6 +166,7 @@ class BeamShiftController(model.HwComponent):
         :param port (str): (e.g. "/dev/ttyUSB0") or pattern for port ("/dev/ttyUSB*"),
             "/dev/fake" will start the simulator
         :param serialnum (str): serial number of RS485 adapter
+        The connection can be specified by either port or serialnum, it's not needed to provide both.
         """
         # .hwVersion, .swVersion not available
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -237,12 +238,12 @@ class BeamShiftController(model.HwComponent):
         :param value (float, float): x, y shift from the center (in m)
         """
         try:
-            xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB_BEAMSHIFT]
+            xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB]
         except KeyError:
-            raise ValueError("Cannot set shift, MD_CALIB_BEAMSHIFT metadata not specified.")
+            raise ValueError("Cannot set shift, MD_CALIB metadata not specified.")
         except ValueError as ex:
             # Wrong format data, e.g. missing value or None
-            raise ValueError("Failed to parse MD_CALIB_BEAMSHIFT metadata, ex: %s" % ex)
+            raise ValueError("Failed to parse MD_CALIB metadata, ex: %s" % ex)
 
         # Transform to register values (including scaling and rotation)
         register_values = transform_coordinates(value, xlower, ylower, xupper, yupper)
@@ -317,31 +318,29 @@ class BeamShiftController(model.HwComponent):
         self.state._set_value(model.ST_RUNNING, force_write=True)
 
     def updateMetadata(self, md):
-        if model.MD_CALIB_BEAMSHIFT in md:
+        if model.MD_CALIB in md:
             # Check format
-            bs = md[model.MD_CALIB_BEAMSHIFT]
+            bs = md[model.MD_CALIB]
             try:
                 if not len(bs) == 4:  # 4 tuples required
-                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: 4 tuples required." % (bs,))
+                    raise ValueError("Invalid MD_CALIB metadata %s: 4 tuples required." % (bs,))
                 if not all(len(val) == 2 for val in bs):  # each of the 4 values is a tuple of 2
-                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: Two values per tuple required." % (bs,))
-                if not all(all([type(val) in (int, float) for val in tup]) for tup in bs):  # each element is a number
-                    raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s: Values must be numbers." % (bs,))
+                    raise ValueError("Invalid MD_CALIB metadata %s: Two values per tuple required." % (bs,))
+                if not all(all(isinstance(val, (int, float)) for val in tup) for tup in bs):  # each element is a number
+                    raise ValueError("Invalid MD_CALIB metadata %s: Values must be numbers." % (bs,))
             except Exception as ex:
-                raise ValueError("Invalid MD_CALIB_BEAMSHIFT metadata %s, ex: %s" % (bs, ex,))
+                raise ValueError("Invalid MD_CALIB metadata %s, ex: %s" % (bs, ex,))
 
-            # If MD_CALIB_BEAMSHIFT was already available, transform current shift to fit new metadata value.
-            if self._metadata.get(model.MD_CALIB_BEAMSHIFT):
-                # Read register values from hardware
-                vals = self._read_registers()
+            # Read register values from hardware
+            vals = self._read_registers()
 
-                # Transform back with new metadata
-                xlower, ylower, xupper, yupper = md[model.MD_CALIB_BEAMSHIFT]
-                new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
-                # Update .shift (but don't set value in hardware)
-                logging.debug("Shift after metadata update: %s" % (new_shift,))
-                self.shift._value = new_shift
-                self.shift.notify(new_shift)
+            # Transform back with new metadata
+            xlower, ylower, xupper, yupper = md[model.MD_CALIB]
+            new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
+            # Update .shift (but don't set value in hardware)
+            logging.debug("Shift after metadata update: %s" % (new_shift,))
+            self.shift._value = new_shift
+            self.shift.notify(new_shift)
         model.HwComponent.updateMetadata(self, md)
 
 

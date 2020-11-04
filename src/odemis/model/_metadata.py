@@ -179,9 +179,6 @@ MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping 
 MD_SHIFT_LOOKUP = "Pixel shift compensation table"
 MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration parameters for the correct axes mapping
 
-# The following metadata is used for the calibration of the tfsbc.BeamShiftController
-MD_CALIB_BEAMSHIFT = "Beamshift calibration"  # 4x2 tuple, 4x (float, float), xlower, ylower, xupper, yupper
-
 # The following metadata is used to store specific known positions for the
 # actuators.
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
