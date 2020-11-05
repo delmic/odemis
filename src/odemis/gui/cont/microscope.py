@@ -648,6 +648,8 @@ class DelphiStateController(SecomStateController):
         self._in_overview = threading.Event()
         self._phenom_load_done = True
 
+        self._first_calib_dlg = None
+
         super(DelphiStateController, self).__init__(tab_data, tab_panel, *args, **kwargs)
 
         # Display the panel with the loading progress indicators
@@ -886,6 +888,9 @@ class DelphiStateController(SecomStateController):
                 logging.info("Door closed (again?) while the chamber was not vented")
         else:
             self._tab_panel.btn_press.SetToolTip(u"Please insert a sample first")
+            # In case we asked to eject/calibrate the sample, stop asking
+            if self._first_calib_dlg:
+                self._first_calib_dlg.Close()
 
     def _start_chamber_pumping(self):
         """
@@ -1174,6 +1179,7 @@ class DelphiStateController(SecomStateController):
             need_register = False
 
         dlg = windelphi.FirstCalibrationDialog(self._main_frame, shid, need_register)
+        self._first_calib_dlg = dlg  # To close it when the sample is ejected by other means
         val = dlg.ShowModal()  # blocks
         regcode = dlg.registrationCode
         dlg.Destroy()
