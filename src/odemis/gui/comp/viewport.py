@@ -1846,8 +1846,8 @@ class TemporalSpectrumViewport(TwoDViewPort):
 
             self.bottom_legend.unit = unit_x
             self.left_legend.unit = unit_y
-            self.bottom_legend.range = spectrum_range
-            self.left_legend.range = time_range
+            self.bottom_legend.range = wl  # the list of wavelengths
+            self.left_legend.range = times
         else:
             self.clear()
         self.Refresh()
@@ -1891,7 +1891,7 @@ class LineSpectrumViewport(TwoDViewPort):
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            self.bottom_legend.range = spectrum_range
             unit_y = "m"
             self.left_legend.unit = unit_y
             self.left_legend.range = (0, line_length)
