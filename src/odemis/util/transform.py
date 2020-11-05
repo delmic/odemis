@@ -370,6 +370,30 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
         return self.apply(x)
     __call__.__doc__ = apply.__doc__
 
+    def fre(self, x, y):
+        """
+        Returns the RMS value of the fiducial error registration (FRE).
+
+        Parameters
+        ----------
+        x : (n, 2) array
+            Coordinates in the source reference frame.
+        y : (n, 2) array
+            Coordinates in the destination reference frame. Must be of same
+            dimensions as `x`.
+
+        Returns
+        -------
+        fre : float
+            The root mean squared fiducial registration error.
+
+        """
+        x = numpy.asarray(x)
+        y = numpy.asarray(y)
+        delta = self.apply(x) - y
+        fre = numpy.sqrt(numpy.mean(delta * delta))
+        return fre
+
     @abstractmethod
     def inverse(self):
         """
@@ -461,10 +485,7 @@ class RigidTransform(GeometricTransform):
         dy = y - y0
         R = _optimal_rotation(dx, dy)
         t = y0 - numpy.dot(R, x0)
-        tform = cls(matrix=R, translation=t)
-        delta = tform.apply(x) - y
-        tform.fre = numpy.sqrt(numpy.mean(delta * delta))
-        return tform
+        return cls(matrix=R, translation=t)
 
     def inverse(self):
         """
