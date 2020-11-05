@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import csv
 import logging
 import numpy
 from odemis import model
@@ -356,48 +357,60 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
     return data
 
 
-def get_time_range_to_trigger_delay(data, timeRange_choices, triggerDelay_range):
+def write_trigger_delay_csv(filename, trig_delays):
     """
-    Reads the time range and trigger delay values from a csv object.
-    Checks values for validity.
-    :parameter data: (csv.reader object) calibration file
-    :parameter timeRange_choices: (frozenset) choices possible for timeRange VA
-    :parameter triggerDelay_range: (tuple) range possible for trigger delay values
-    :return: (dict) new dictionary containing the loaded time range to trigger delay info
+    Store the MD_TIME_RANGE_TO_DELAY into a CSV file
+    filename (str): the path to file (if it already exists, it will be overwritten)
+    trig_delays (dict float -> float): time range to trigger delay info
     """
-    new_dict = {}
 
-    for timeRange, delay in data:
+    with open(filename, 'w') as csvfile:
+        calibFile = csv.writer(csvfile, delimiter=':')
+        for time_range, trig_delay in trig_delays.items():
+            calibFile.writerow([time_range, trig_delay])
 
-        try:
-            timeRange = float(timeRange)
-            delay = float(delay)
-        except ValueError:
-            raise ValueError("Trigger delay %s and/or time range %s is not of type float. "
-                             "Please check calibration file for trigger delay." % (delay, timeRange))
 
-        # check delay in range allowed
-        if not triggerDelay_range[0] <= delay <= triggerDelay_range[1]:
-            raise ValueError("Trigger delay %s corresponding to time range %s is not in range %s. "
-                             "Please check the calibration file for the trigger delay." %
-                             (delay, timeRange, triggerDelay_range))
+def read_trigger_delay_csv(filename, time_choices, trigger_delay_range):
+    """
+    Read the MD_TIME_RANGE_TO_DELAY from a CSV file, and check its validity based on the hardware
+    filename (str): the path to file
+    time_choices (set): choices possible for timeRange VA
+    trigger_delay_range (float, float): min/max value of the trigger delay
+    return (dict float -> float): new dictionary containing the loaded time range to trigger delay info
+    raise ValueError: if the data of the CSV file cannot be parsed or doesn't fit the hardware
+    raise IOError: if the file doesn't exist
+    """
+    tr2d = {}
+    with open(filename, 'r') as csvfile:
+        calibFile = csv.reader(csvfile, delimiter=':')
+        for time_range, delay in calibFile:
+            try:
+                time_range = float(time_range)
+                delay = float(delay)
+            except ValueError:
+                raise ValueError("Trigger delay %s and/or time range %s is not of type float. "
+                                 "Please check calibration file for trigger delay." % (delay, time_range))
 
-        # check timeRange is in possible choices for timeRange on HW
-        choice = find_closest(timeRange, timeRange_choices)
-        if not almost_equal(timeRange, choice):
-            raise ValueError("Time range % s found in calibration file is not a possible choice "
-                             "for the time range of the streak unit. "
-                             "Please modify csv file so it fits the possible choices for the "
-                             "time range of the streak unit. "
-                             "Values in file must be of format timeRange:triggerDelay (per line)."
-                             % timeRange)
+            # check delay in range allowed
+            if not trigger_delay_range[0] <= delay <= trigger_delay_range[1]:
+                raise ValueError("Trigger delay %s corresponding to time range %s is not in range %s. "
+                                 "Please check the calibration file for the trigger delay." %
+                                 (delay, time_range, trigger_delay_range))
 
-        new_dict[timeRange] = delay
+            # check timeRange is in possible choices for timeRange on HW
+            time_range_hw = find_closest(time_range, time_choices)
+            if not almost_equal(time_range, time_range_hw):
+                raise ValueError("Time range % s found in calibration file is not a possible choice "
+                                 "for the time range of the streak unit. "
+                                 "Please modify CSV file so it fits the possible choices for the "
+                                 "time range of the streak unit. "
+                                 "Values in file must be of format timeRange:triggerDelay (per line)."
+                                 % time_range)
+            tr2d[time_range_hw] = delay
 
     # check all time ranges are there
-    if len(new_dict) == len(timeRange_choices):
-        return new_dict
-    else:
+    if len(tr2d) != len(time_choices):
         raise ValueError("The total number of %s time ranges in the loaded calibration file does not "
                          "match the requested number of %s time ranges."
-                         % (len(new_dict), len(timeRange_choices)))
+                         % (len(tr2d), len(time_choices)))
+    return tr2d
