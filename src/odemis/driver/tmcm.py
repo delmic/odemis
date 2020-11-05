@@ -2302,8 +2302,7 @@ class TMCMSimulator(object):
         # 4 * dict(int -> int: param number -> value)
         self._gstate = [{}, {},
                         # Bank 2: example user config v1
-                        {0: 353304838, 1: 50462723, 2: 17104896, 3: 33555201,
-                         4: 83886082, 5: 196869, 6: 0},
+                        {0: 168034562, 1: 50462723, 2: 17104896},
                         {}]
 
         # internal axis param values
