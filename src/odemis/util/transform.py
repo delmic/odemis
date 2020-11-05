@@ -309,13 +309,15 @@ def to_pixel_index(xy, shape, pixel_size=None):
         entry is the number of columns in the image.
     pixel_size : tuple of 2 floats, float (optional)
         Pixel size in (x, y). For square pixels, a single float can be
-        provided.
+        provided. If not specified, a pixel size of 1 is used.
 
     Returns
     -------
     ji : ndarray
         Pixel indices. Same shape as `xy`. For each index the first entry is
-        the row-index `j` and the second entry is the column-index `i`.
+        the row-index `j` and the second entry is the column-index `i`. Note
+        that the pixel indices are returned as floats in order to support
+        sub-pixel resolution.
 
     Raises
     ------

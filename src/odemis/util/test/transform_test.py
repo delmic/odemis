@@ -350,8 +350,8 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
         # tuple
         for ji, xy, xy2, xy23 in zip(self._ji, self._xy, self._xy2, self._xy23):
             res = to_physical_space(ji, self._shape)
-            res2 = to_physical_space(ji, self._shape, pixel_size=2.)
-            res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
+            res2 = to_physical_space(ji, self._shape, pixel_size=2)
+            res23 = to_physical_space(ji, self._shape, pixel_size=(2, 3))
 
             numpy.testing.assert_array_almost_equal(xy, res)
             numpy.testing.assert_array_almost_equal(xy2, res2)
@@ -359,8 +359,8 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
 
         # list of tuples
         res = to_physical_space(self._ji, self._shape)
-        res2 = to_physical_space(self._ji, self._shape, pixel_size=2.)
-        res23 = to_physical_space(self._ji, self._shape, pixel_size=(2., 3.))
+        res2 = to_physical_space(self._ji, self._shape, pixel_size=2)
+        res23 = to_physical_space(self._ji, self._shape, pixel_size=(2, 3))
         numpy.testing.assert_array_almost_equal(self._xy, res)
         numpy.testing.assert_array_almost_equal(self._xy2, res2)
         numpy.testing.assert_array_almost_equal(self._xy23, res23)
@@ -368,8 +368,8 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
         # ndarray
         ji = numpy.array(self._ji)
         res = to_physical_space(ji, self._shape)
-        res2 = to_physical_space(ji, self._shape, pixel_size=2.)
-        res23 = to_physical_space(ji, self._shape, pixel_size=(2., 3.))
+        res2 = to_physical_space(ji, self._shape, pixel_size=2)
+        res23 = to_physical_space(ji, self._shape, pixel_size=(2, 3))
         numpy.testing.assert_array_almost_equal(self._xy, res)
         numpy.testing.assert_array_almost_equal(self._xy2, res2)
         numpy.testing.assert_array_almost_equal(self._xy23, res23)
@@ -380,8 +380,8 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
 
         """
         for ji in self._ji:
-            res = to_physical_space(ji, self._shape, pixel_size=0.)
-            numpy.testing.assert_array_almost_equal((0., 0.), res)
+            res = to_physical_space(ji, self._shape, pixel_size=0)
+            numpy.testing.assert_array_almost_equal((0, 0), res)
 
     def test_to_physical_space_multiple(self):
         """
@@ -428,8 +428,8 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
         # tuple
         for ji, xy, xy2, xy23 in zip(self._ji, self._xy, self._xy2, self._xy23):
             res = to_pixel_index(xy, self._shape)
-            res2 = to_pixel_index(xy2, self._shape, pixel_size=2.)
-            res23 = to_pixel_index(xy23, self._shape, pixel_size=(2., 3.))
+            res2 = to_pixel_index(xy2, self._shape, pixel_size=2)
+            res23 = to_pixel_index(xy23, self._shape, pixel_size=(2, 3))
 
             numpy.testing.assert_array_almost_equal(ji, res)
             numpy.testing.assert_array_almost_equal(ji, res2)
@@ -437,8 +437,8 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
 
         # list of tuples
         res = to_pixel_index(self._xy, self._shape)
-        res2 = to_pixel_index(self._xy2, self._shape, pixel_size=2.)
-        res23 = to_pixel_index(self._xy23, self._shape, pixel_size=(2., 3.))
+        res2 = to_pixel_index(self._xy2, self._shape, pixel_size=2)
+        res23 = to_pixel_index(self._xy23, self._shape, pixel_size=(2, 3))
         numpy.testing.assert_array_almost_equal(self._ji, res)
         numpy.testing.assert_array_almost_equal(self._ji, res2)
         numpy.testing.assert_array_almost_equal(self._ji, res23)
@@ -448,8 +448,8 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
         xy2 = numpy.array(self._xy2)
         xy23 = numpy.array(self._xy23)
         res = to_pixel_index(xy, self._shape)
-        res2 = to_pixel_index(xy2, self._shape, pixel_size=2.)
-        res23 = to_pixel_index(xy23, self._shape, pixel_size=(2., 3.))
+        res2 = to_pixel_index(xy2, self._shape, pixel_size=2)
+        res23 = to_pixel_index(xy23, self._shape, pixel_size=(2, 3))
         numpy.testing.assert_array_almost_equal(self._ji, res)
         numpy.testing.assert_array_almost_equal(self._ji, res2)
         numpy.testing.assert_array_almost_equal(self._ji, res23)
