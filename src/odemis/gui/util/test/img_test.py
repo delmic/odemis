@@ -170,8 +170,8 @@ class TestCalculateTicks(unittest.TestCase):
             pixels.append(pos_px)
 
         for i in range(0, 2):
-            self.assertFalse(abs(pixels[i + 1] - pixels[i]) == abs(pixels[i + 2] - pixels[i + 1]),
-                             "Non-linearity is observed in the pixel values")
+            self.assertNotEqual(abs(pixels[i + 1] - pixels[i]), abs(pixels[i + 2] - pixels[i + 1]),
+                               "Non-linear pixel spacing")
 
 
 class TestARExport(unittest.TestCase):
