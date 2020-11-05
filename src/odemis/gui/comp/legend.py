@@ -295,7 +295,6 @@ class AxisLegend(wx.Panel):
         # The following properties are volatile, meaning that they can change often
         self._value_range = None  # 2-tuple with the minimum and maximum value
         self._tick_list = None  # List of 2-tuples, containing the pixel position and value
-        self._vtp_ratio = None  # Ratio to convert value to pixel
         self._pixel_space = None  # Number of available pixels
 
         # Axis lock button
@@ -422,7 +421,7 @@ class AxisLegend(wx.Panel):
 
         # shared function with the export method
         csize = self.ClientSize
-        self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, csize, self._orientation, self._tick_spacing)
+        self._tick_list = calculate_ticks(self._value_range, csize, self._orientation, self._tick_spacing)
 
         if self.lock_va is not None:
             if self._orientation == wx.HORIZONTAL:

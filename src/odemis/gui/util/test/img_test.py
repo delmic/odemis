@@ -125,27 +125,53 @@ class TestCalculateTicks(unittest.TestCase):
         csize = (500, 600)
         for rng in ranges:
 
-            ticks, vtp = calculate_ticks(rng, csize, wx.HORIZONTAL, csize[0] / 10)
+            ticks = calculate_ticks(rng, csize, wx.HORIZONTAL, csize[0] / 10)
             # we expect 10 ticks or a bit less
             self.assertGreaterEqual(len(ticks), 4)
             self.assertLessEqual(len(ticks), 20)
             # ticks are made of 2 values
             self.assertEqual(len(ticks[0]), 2)
-            self.assertGreater(vtp, 0)
 
-            ticks, vtp = calculate_ticks(rng, csize, wx.VERTICAL, csize[1] / 30)
+            ticks = calculate_ticks(rng, csize, wx.VERTICAL, csize[1] / 30)
             # we expect 30 ticks or a bit less
             self.assertGreaterEqual(len(ticks), 10)
             self.assertLessEqual(len(ticks), 30)
             # ticks are made of 2 values
             self.assertEqual(len(ticks[0]), 2)
-            self.assertGreater(vtp, 0)
 
     def test_empty_range(self):
         # Should display just one tick: the value of the range
-        ticks, vtp = calculate_ticks((900, 900), (50, 600), wx.HORIZONTAL, 20)
+        ticks = calculate_ticks((900, 900), (50, 600), wx.HORIZONTAL, 20)
         self.assertEqual(len(ticks), 1)
         self.assertEqual(len(ticks[0]), 2)
+
+    def test_nonlinearity(self):
+        # Given a totally non-linear value_range for a specific tick_spacing,
+        # none of the pixel values is equally spaced.
+        value_range = [0, 1, 3, 4, 8, 20]
+        csize = (500, 600)
+        pixel = []
+        ticks = calculate_ticks(value_range, csize, wx.HORIZONTAL, csize[0] / 10)
+        for tick in ticks:
+            pos_px, tick_value = tick
+            pixel.append(pos_px)
+        for i in range(0, len(pixel) - 2):
+            self.assertNotEqual(abs(pixel[i + 1] - pixel[i]), abs(pixel[i + 2] - pixel[i + 1]),
+                                "Non-linear pixel spacing")
+
+        # Given a partial non-linear value_range, some non-linearity is observed in the computed pixel values
+        value_range = [0, 1, 2, 4, 8, 16]
+        csize = (500, 600)
+
+        pixels = []
+        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[0] / 10)
+        for tick in ticks:
+            pos_px, tick_value = tick
+            pixels.append(pos_px)
+
+        for i in range(0, 2):
+            self.assertNotEqual(abs(pixels[i + 1] - pixels[i]), abs(pixels[i + 2] - pixels[i + 1]),
+                               "Non-linear pixel spacing")
 
 
 class TestARExport(unittest.TestCase):
