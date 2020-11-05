@@ -288,6 +288,65 @@ def to_physical_space(ji, shape, pixel_size=None):
     return xy
 
 
+def to_pixel_index(xy, shape, pixel_size=None):
+    """
+    Converts a coordinate in physical space into an image pixel index.
+
+    Inverse of `to_physical_space`. The function `to_pixel_index` converts a
+    coordinate in physical space into an image pixel index. The columns of the
+    image are aligned with the x-axis, and the rows with the y-axis. The
+    direction of the y-axis is opposite to the row-index. The origin of the
+    image pixel index is placed at the center of the top-left pixel.
+
+    Parameters
+    ----------
+    xy : tuple, list of tuples, ndarray
+        Physical coordinates, list of coordinates, or array of coordinates. For
+        each coordinate the first entry is the `x`-coordinate and the second
+        entry is the `y`-coordinate.
+    shape : tuple of ints
+        Shape of the image. The first entry is the number of rows, the second
+        entry is the number of columns in the image.
+    pixel_size : tuple of 2 floats, float (optional)
+        Pixel size in (x, y). For square pixels, a single float can be
+        provided.
+
+    Returns
+    -------
+    ji : ndarray
+        Pixel indices. Same shape as `xy`. For each index the first entry is
+        the row-index `j` and the second entry is the column-index `i`.
+
+    Raises
+    ------
+    ValueError
+        If the coordinates are not 2-dimensional.
+
+    Examples
+    --------
+    >>> xy = (-2., 3.5)
+    >>> shape = (8, 5)
+    >>> to_pixel_index(xy, shape)
+    array([ 0. ,  0.])
+
+    """
+    if pixel_size is not None:
+        xy = numpy.array(xy, copy=True, dtype=float)
+        xy /= pixel_size
+    else:
+        xy = numpy.asarray(xy, dtype=float)
+
+    if xy.shape[-1] != 2:
+        raise ValueError("Coordinates must be 2-dimensional.")
+
+    n, m = shape
+    ji = numpy.empty(xy.shape, dtype=float)
+    ji[..., 0] = 0.5 * (n - 1) - xy[..., 1]  # map y-axis to row-index `j`
+    ji[..., 1] = xy[..., 0] + 0.5 * (m - 1)  # map x-axis to column-index `i`
+
+    return ji
+
+
 class GeometricTransform(with_metaclass(ABCMeta, object)):
     """Base class for geometric transformations."""
 

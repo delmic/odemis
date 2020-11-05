@@ -30,7 +30,7 @@ import unittest
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (_rotation_matrix_from_angle,
                                    _rotation_matrix_to_angle,
-                                   to_physical_space,
+                                   to_physical_space, to_pixel_index,
                                    RigidTransform, SimilarityTransform,
                                    ScalingTransform, AffineTransform,
                                    AnamorphosisTransform)
@@ -330,7 +330,7 @@ def _angle_diff(x, y):
     return min(y - x, y - x + 2.0 * numpy.pi, y - x - 2.0 * numpy.pi, key=abs)
 
 
-class ToPhysicalSpaceKnownValues(unittest.TestCase):
+class PixelIndexCoordinateTransformBase(unittest.TestCase):
 
     def setUp(self):
         self._ji = [(0, 0), (0, 4), (7, 0), (7, 4), (0.5, 0.5)]
@@ -338,6 +338,9 @@ class ToPhysicalSpaceKnownValues(unittest.TestCase):
         self._xy2 = [(-4, 7), (4, 7), (-4, -7), (4, -7), (-3, 6)]
         self._xy23 = [(-4, 10.5), (4, 10.5), (-4, -10.5), (4, -10.5), (-3, 9)]
         self._shape = (8, 5)
+
+
+class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
 
     def test_to_physical_space_known_values(self):
         """
@@ -413,6 +416,64 @@ class ToPhysicalSpaceKnownValues(unittest.TestCase):
         self.assertRaises(ValueError, to_physical_space, (), self._shape)
         self.assertRaises(ValueError, to_physical_space, (1, ), self._shape)
         self.assertRaises(ValueError, to_physical_space, (1, 2, 3), self._shape)
+
+
+class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
+
+    def test_to_pixel_index_known_values(self):
+        """
+        to_pixel_index should return known result with known input.
+
+        """
+        # tuple
+        for ji, xy, xy2, xy23 in zip(self._ji, self._xy, self._xy2, self._xy23):
+            res = to_pixel_index(xy, self._shape)
+            res2 = to_pixel_index(xy2, self._shape, pixel_size=2.)
+            res23 = to_pixel_index(xy23, self._shape, pixel_size=(2., 3.))
+
+            numpy.testing.assert_array_almost_equal(ji, res)
+            numpy.testing.assert_array_almost_equal(ji, res2)
+            numpy.testing.assert_array_almost_equal(ji, res23)
+
+        # list of tuples
+        res = to_pixel_index(self._xy, self._shape)
+        res2 = to_pixel_index(self._xy2, self._shape, pixel_size=2.)
+        res23 = to_pixel_index(self._xy23, self._shape, pixel_size=(2., 3.))
+        numpy.testing.assert_array_almost_equal(self._ji, res)
+        numpy.testing.assert_array_almost_equal(self._ji, res2)
+        numpy.testing.assert_array_almost_equal(self._ji, res23)
+
+        # ndarray
+        xy = numpy.array(self._xy)
+        xy2 = numpy.array(self._xy2)
+        xy23 = numpy.array(self._xy23)
+        res = to_pixel_index(xy, self._shape)
+        res2 = to_pixel_index(xy2, self._shape, pixel_size=2.)
+        res23 = to_pixel_index(xy23, self._shape, pixel_size=(2., 3.))
+        numpy.testing.assert_array_almost_equal(self._ji, res)
+        numpy.testing.assert_array_almost_equal(self._ji, res2)
+        numpy.testing.assert_array_almost_equal(self._ji, res23)
+
+    def test_to_pixel_index_multiple(self):
+        """
+        to_pixel_index should return the same result when called on a list of
+        indices, or on individual indices.
+
+        """
+        _ji = to_pixel_index(self._xy, self._shape)
+        for xy, ji in zip(self._xy, _ji):
+            res = to_pixel_index(xy, self._shape)
+            numpy.testing.assert_array_almost_equal(ji, res)
+
+    def test_to_pixel_index_raises_value_error(self):
+        """
+        to_pixel_index should raise a ValueError when the provided coordinate
+        is not 2-dimensional.
+
+        """
+        self.assertRaises(ValueError, to_pixel_index, (), self._shape)
+        self.assertRaises(ValueError, to_pixel_index, (1, ), self._shape)
+        self.assertRaises(ValueError, to_pixel_index, (1, 2, 3), self._shape)
 
 
 class RotationMatrixKnownValues(unittest.TestCase):
