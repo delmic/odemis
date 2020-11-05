@@ -60,6 +60,7 @@ from future.utils import with_metaclass
 import numbers
 import numpy
 import scipy.optimize
+import warnings
 from numpy.linalg import LinAlgError
 from odemis.util.linalg import qrp, tri_inv
 
@@ -345,7 +346,7 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
             if len(self.translation) != 2 or not all(isinstance(a, numbers.Real) for a in self.translation):
                 raise ValueError("Translation should be 2 floats, but got %s" % (self.translation,))
 
-    def __call__(self, x):
+    def apply(self, x):
         """
         Apply the forward transformation to a (set of) input coordinates.
 
@@ -362,6 +363,12 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
         """
         x = numpy.asarray(x)
         return numpy.einsum('ik,...k->...i', self.transformation_matrix, x) + self.translation
+
+    def __call__(self, x):
+        warnings.warn("__call__ is deprecated, use apply instead",
+                      DeprecationWarning)
+        return self.apply(x)
+    __call__.__doc__ = apply.__doc__
 
     @abstractmethod
     def inverse(self):
@@ -1023,7 +1030,7 @@ class AnamorphosisTransform(AffineTransform):
                                 w3wcc2, w2wcc3))  # fifth order
         return M
 
-    def __call__(self, x):
+    def apply(self, x):
         x = numpy.asarray(x)
         w = x[..., 0] + 1.0j * x[..., 1]
 
@@ -1033,6 +1040,12 @@ class AnamorphosisTransform(AffineTransform):
         if x.ndim == 1:
             return numpy.array((v.real, v.imag))
         return numpy.column_stack((v.real, v.imag))
+
+    def __call__(self, x):
+        warnings.warn("__call__ is deprecated, use apply instead",
+                      DeprecationWarning)
+        return self.apply(x)
+    __call__.__doc__ = apply.__doc__
 
     @classmethod
     def from_pointset(cls, x, y):
