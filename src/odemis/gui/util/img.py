@@ -868,7 +868,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         tick_list = [(pixel, min_val)]
         return tick_list
 
-    epsilon = (1 / (pixel_space/value_space)) / 10  # "tiny" value: a 10th of a pixel
+    epsilon = (value_space / pixel_space) / 10  # "tiny" value: a 10th of a pixel
 
     # Find the ticks to show so that it looks good for the user. It must have a
     # constant spacing between the ticks, and this spacing should be a "easy
