@@ -540,6 +540,7 @@ class RigidTransformKnownValues(unittest.TestCase):
             tform = RigidTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            self.assertAlmostEqual(tform.fre, 0.)
 
     def test_rigid_transform_apply_known_values(self):
         """

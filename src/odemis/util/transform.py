@@ -461,7 +461,10 @@ class RigidTransform(GeometricTransform):
         dy = y - y0
         R = _optimal_rotation(dx, dy)
         t = y0 - numpy.dot(R, x0)
-        return cls(matrix=R, translation=t)
+        tform = cls(matrix=R, translation=t)
+        delta = tform.apply(x) - y
+        tform.fre = numpy.sqrt(numpy.mean(delta * delta))
+        return tform
 
     def inverse(self):
         """
