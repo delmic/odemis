@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 13 Jan 2015
 
 @author: Éric Piel
@@ -13,21 +13,20 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 # Helper functions for unit tests
 from __future__ import division, print_function
 
 import logging
 import numpy
-from odemis import model, util
 import odemis
+from odemis import model, util
 from odemis.util import driver
 import os
 import resource
 import subprocess
 import sys
 import time
-
 
 # ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
 # -m doesn't work when run from PyDev... not entirely sure why
@@ -90,8 +89,8 @@ def stop_backend():
         raise IOError("Failed stopping backend with '%s' (returned %d)" % (cmd, ret))
 
     # wait for the backend to be fully stopped
-    time.sleep(1) # time to stop
-    end = time.time() + 15 # s timeout
+    time.sleep(1)  # time to stop
+    end = time.time() + 15  # s timeout
     while time.time() < end:
         status = driver.get_backend_status()
         if status in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
@@ -102,7 +101,7 @@ def stop_backend():
     else:
         raise IOError("Backend still stopping after 15 s")
 
-    model._core._microscope = None # force reset of the microscope for next connection
+    model._core._microscope = None  # force reset of the microscope for next connection
 
     if status != driver.BACKEND_STOPPED:
         raise IOError("Backend failed to stop, now %s" % status)
@@ -155,3 +154,21 @@ def assert_array_not_equal(a, b, msg="Arrays are equal"):
         return
 
     raise AssertionError(msg)
+
+
+def assert_tuple_almost_equal(first, second, places=None, msg=None, delta=None):
+    """
+    Check two tuples are almost equal (value by value)
+    """
+    if places is not None and delta is not None:
+        raise TypeError("Specify delta or places not both.")
+
+    assert len(first) == len(second), "Tuples are not of equal length. " + msg
+
+    if places:
+        atol = 10 ** -places
+    elif delta:
+        atol = delta
+    else:
+        atol = 1e-7  # if both places and delta are None set atol to 1e-7
+    numpy.testing.assert_allclose(first, second, rtol=0, atol=atol, err_msg=msg)
