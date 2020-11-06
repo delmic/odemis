@@ -549,7 +549,7 @@ class RigidTransformKnownValues(unittest.TestCase):
         src = RIGID_KNOWN_VALUES[0][-1]
         for rotation, _, _, translation, dst in RIGID_KNOWN_VALUES:
             tform = RigidTransform(rotation=rotation, translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform(src))
+            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
 
     def test_rigid_transform_inverse_known_values(self):
         """
@@ -560,7 +560,7 @@ class RigidTransformKnownValues(unittest.TestCase):
         for rotation, _, _, translation, dst in RIGID_KNOWN_VALUES:
             tform = RigidTransform(rotation=rotation,
                                    translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform(dst))
+            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
 
 
 class SimilarityTransformKnownValues(unittest.TestCase):
@@ -609,9 +609,9 @@ class SimilarityTransformKnownValues(unittest.TestCase):
         for rotation, (scale, _), _, translation, dst in SIMILARITY_KNOWN_VALUES:
             tform = SimilarityTransform(rotation=rotation, scale=scale,
                                         translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform(src))
+            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
             ti = tform.inverse()
-            numpy.testing.assert_array_almost_equal(ti(tform(src)), src)
+            numpy.testing.assert_array_almost_equal(ti.apply(tform.apply(src)), src)
 
     def test_similarity_transform_inverse_known_values(self):
         """
@@ -622,7 +622,7 @@ class SimilarityTransformKnownValues(unittest.TestCase):
         for rotation, (scale, _), _, translation, dst in SIMILARITY_KNOWN_VALUES:
             tform = SimilarityTransform(rotation=rotation, scale=scale,
                                         translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform(dst))
+            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
 
 
 class ScalingTransformKnownValues(unittest.TestCase):
@@ -667,7 +667,7 @@ class ScalingTransformKnownValues(unittest.TestCase):
         for rotation, scale, _, translation, dst in SCALING_KNOWN_VALUES:
             tform = ScalingTransform(rotation=rotation, scale=scale,
                                      translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform(src))
+            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
 
     def test_scaling_transform_inverse_known_values(self):
         """
@@ -678,7 +678,7 @@ class ScalingTransformKnownValues(unittest.TestCase):
         for rotation, scale, _, translation, dst in SCALING_KNOWN_VALUES:
             tform = ScalingTransform(rotation=rotation, scale=scale,
                                      translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform(dst))
+            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
 
 
 class AffineTransformKnownValues(unittest.TestCase):
@@ -726,7 +726,7 @@ class AffineTransformKnownValues(unittest.TestCase):
         for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
             tform = AffineTransform(rotation=rotation, scale=scale,
                                     shear=shear, translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform(src))
+            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
 
     def test_affine_transform_inverse_known_values(self):
         """
@@ -738,7 +738,7 @@ class AffineTransformKnownValues(unittest.TestCase):
             tform = AffineTransform(rotation=rotation, scale=scale,
                                     shear=shear,
                                     translation=translation).inverse()
-            numpy.testing.assert_array_almost_equal(src, tform(dst))
+            numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
 
 
 class AnamorphosisTransformKnownValues(unittest.TestCase):
@@ -762,7 +762,7 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
         for rotation, scale, shear, translation, dst in AFFINE_KNOWN_VALUES:
             tform = AnamorphosisTransform(rotation=rotation, scale=scale,
                                           shear=shear, translation=translation)
-            numpy.testing.assert_array_almost_equal(dst, tform(src))
+            numpy.testing.assert_array_almost_equal(dst, tform.apply(src))
 
     def test_anamorphosis_transform_comparison_known_values(self):
         """
@@ -779,7 +779,7 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
         for rotation, scale, shear, translation in iterator:
             affine = AffineTransform(rotation=rotation, scale=scale,
                                      shear=shear, translation=translation)
-            dst = affine(src)
+            dst = affine.apply(src)
             tform = AnamorphosisTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
             numpy.testing.assert_array_almost_equal(scale, tform.scale)
