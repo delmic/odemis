@@ -1065,8 +1065,8 @@ class FineAlignController(object):
                                     measured_mag, lens_mag)
                 else:  # Generic warning
                     logging.warning(u"The fine alignment values are very large, try on a different place on the sample. "
-                                    u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f",
-                                    opt_scale, rot_deg, shear, scaling_xy)
+                                    u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f/%f",
+                                    opt_scale, rot_deg, shear, scaling_xy[0], scaling_xy[1])
 
                 title = "Fine alignment probably incorrect"
                 lvl = logging.WARNING
@@ -1084,7 +1084,7 @@ class FineAlignController(object):
             popup.show_message(
                 self._tab_panel,
                 title,
-                u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
+                u"Rotation: %s\nShear: %s\nX/Y Scaling: %s"
                 % (units.readable_str(rot_deg, unit=u"°", sig=3),
                    units.readable_str(shear, sig=3),
                    units.readable_str(scaling_xy, sig=3)),
@@ -1092,8 +1092,8 @@ class FineAlignController(object):
                 level=lvl
             )
             logging.info(u"Fine alignment computed mag correction of %f, rotation of %f°, "
-                         u"shear needed of %s, and X/Y scaling needed of %s.",
-                         opt_scale, rot, shear, scaling_xy)
+                         u"shear needed of %s, and X/Y scaling needed of %f/%f.",
+                         opt_scale, rot, shear, scaling_xy[0], scaling_xy[1])
 
         # As the CCD image might have different pixel size, force to fit
         self._tab_panel.vp_align_ccd.canvas.fit_view_to_next_image = True
