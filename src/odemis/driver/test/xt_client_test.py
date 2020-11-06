@@ -189,10 +189,13 @@ class TestMicroscope(unittest.TestCase):
 
     def test_blank_beam(self):
         """Test that the beam is unblanked after unblank beam is called, and blanked after blank is called."""
+        self.microscope.set_scan_mode("full_frame")
+        self.microscope.set_channel_state('electron1', True)
         self.scanner.blanker.value = False
         self.assertFalse(self.scanner.blanker.value)
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
+        self.microscope.set_channel_state('electron1', False)
 
     def test_rotation(self):
         """Test setting the rotation."""
@@ -340,12 +343,16 @@ class TestMicroscopeInternal(unittest.TestCase):
         new_beam_shift_x = beam_shift_range[1][0] - 1e-6
         new_beam_shift_y = beam_shift_range[0][1] + 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
-        self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        current_shift = self.scanner.beamShift.value
+        self.assertAlmostEqual(new_beam_shift_x, current_shift[0])
+        self.assertAlmostEqual(new_beam_shift_y, current_shift[1])
         # Test it still works for different values.
         new_beam_shift_x = beam_shift_range[0][0] + 1e-6
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
-        self.assertAlmostEqual((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        current_shift = self.scanner.beamShift.value
+        self.assertAlmostEqual(new_beam_shift_x, current_shift[0])
+        self.assertAlmostEqual(new_beam_shift_y, current_shift[1])
         # set beamShift back to initial value
         self.scanner.beamShift.value = init_beam_shift
 
