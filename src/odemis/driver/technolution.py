@@ -49,7 +49,6 @@ from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
 from openapi_server.models.cell_parameters import CellParameters
 from openapi_server.models.calibration_loop_parameters import CalibrationLoopParameters
 
-INT16 = numpy.iinfo(numpy.int16)
 VOLT_RANGE = (-10, 10)
 DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
 RUNNING = "installation in progress"
@@ -83,13 +82,14 @@ def convertRange(value, value_range, output_range):
 
 def convert2Bits(value, value_range):
     """
-    Converts an input value with corresponding range to a int16 bit range.
-    Uses the convertRange function with as default output_range the int16 bit range
-    :param value (tuple/array): input values to be converted
-    :param value_range (tuple): min, max values of the range that is provided for the input value.
-    :return(tuple/array): Converted to INT16 range with same shape as the input value.
+    Converts an input value with corresponding range to a float with an int16 bit range.
+    Uses the convertRange function with as default output_range the int16 bit range. Does not round or apply floor.
+    :param value (tuple/array/list): input values to be converted
+    :param value_range (tuple/array/list): min, max values of the range that is provided for the input value.
+    :return(numpy.array of floats): Converted to INT16 range with same shape as the input value. Has type 'float' and
+    is not rounded nor is floor applied.
     """
-    return convertRange(value, value_range, (INT16.min, INT16.max))
+    return convertRange(value, value_range, (-2**15, 2**15 - 1))
 
 
 class AcquisitionServer(model.HwComponent):
@@ -101,14 +101,14 @@ class AcquisitionServer(model.HwComponent):
     detector.
     """
 
-    def __init__(self, name, role, host, children={}, externalStorage={}, **kwargs):
+    def __init__(self, name, role, host, children, externalStorage, **kwargs):
         """
         Initialize the Acquisition server and the connection with the ASM API.
 
         :param name (str): Name of the component
         :param role (str): Role of the component
         :param host (str): URL of the host (ASM)
-        :param children (dict): dictionary containing HW components and there respective configuration
+        :param children (dict): dictionary containing HW components and their respective configuration
         :param externalStorage (dict): keys with the username, password, host and directory of the external storage
         :param kwargs:
         """
@@ -153,6 +153,8 @@ class AcquisitionServer(model.HwComponent):
                                                   externalStorage["host"],
                                                   externalStorage["directory"]),
                                                  setter=self._setURL)
+        self._setURL(self.externalStorageURL.value)  # Check and set the external storage URL to the ASM.
+
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
 
@@ -160,16 +162,13 @@ class AcquisitionServer(model.HwComponent):
         self._calibrationParameters = None
 
         # TODO: Commented out because not present on EA
-        # self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
-        #                     (urlparse(self.externalStorageURL.value).hostname,
-        #                      urlparse(self.externalStorageURL.value).username,
-        #                      urlparse(self.externalStorageURL.value).password), 204)
         # self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
 
         # Setup hw and sw version
         # TODO make call set_system_sw_name too new simulator (if implemented)
-        self._swVersion = "PUT NEW SIMULATOR DATA HERE"
-        self._hwVersion = "PUT NEW SIMULATOR DATA HERE"
+        self._swVersion = "ASM service version '%s' " % (self.getAsmServiceVersion())
+        self._hwVersion = "SAM firmware version '%s', SAM service version '%s'" % (self.getSamFirmwareVersion(),
+                                                                                   self.getSamServiceVersion())
 
         # Order of initialisation matters due to dependency of VA's and variables in between children.
         try:
@@ -222,8 +221,9 @@ class AcquisitionServer(model.HwComponent):
         if resp.status_code != expected_status:
             if isinstance(data, dict):
                 for key, value in data.items():
-                    if isinstance(value, list):
-                        # Convert data elements of type list to string so they can be returned in a logging message
+                    if isinstance(value, list) and len(value) > 10:
+                        # Convert data elements of type list (which have a length bigger than 10) to string so they can
+                        # be returned in a logging message.
                         try:
                             # Limit to first 10 values to not overload error output message
                             data[key] = "First 10 values of the list:" + str(value[0:10])
@@ -254,14 +254,15 @@ class AcquisitionServer(model.HwComponent):
         if resp.status_code != expected_status:
             if isinstance(data, dict):
                 for key, value in data.items():
-                    if isinstance(value, list):
-                        # Convert data elements of type list to string so they can be returned in a logging message
+                    if isinstance(value, list) and len(value) > 10:
+                        # Convert data elements of type list (which have a length bigger than 10) to string so they can
+                        # be returned in a logging message.
                         try:
                             # Limit to first 10 values to not overload error output message
                             data[key] = "First 10 values of the list:" + str(value[0:10])
                         except:
                             data[key] = "Empty - because data cannot be converted to a string"
-            logging.error("Data dictionary used to make call %s contains:\n %s" % (url, str(data)))
+                logging.error("Data dictionary used to make call %s contains:\n %s" % (url, str(data)))
             raise AsmApiException(url, resp, expected_status)
 
         logging.debug("Call to %s was successful.\n" % url)
@@ -321,8 +322,8 @@ class AcquisitionServer(model.HwComponent):
                 self.state._set_value(HwError("Last installation was unsuccessful."), force_write=True)
                 logging.error(response)
 
-        except:
-            logging.error("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
+        except Exception:
+            logging.exception("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
 
     def checkMegaFieldExists(self, mega_field_id, storage_dir):
         """
@@ -556,26 +557,31 @@ class AcquisitionServer(model.HwComponent):
                              "'ftp://username:password@host_example.com/path/to/Pictures'\n"
                              "(Only use the @ to separate the password and the host.")
 
-        elif re.search(ASM_USER_ILLEGAL_CHARS, url_parser.username):
+        if re.search(ASM_USER_ILLEGAL_CHARS, url_parser.username):
             raise ValueError(
                     "Username contains invalid characters, username remains unchanged "
                     "(only the characters '%s' are allowed)." % ASM_USER_ILLEGAL_CHARS[2:-1])
 
-        elif re.search(ASM_PASSWORD_ILLEGAL_CHARS, url_parser.password):
+        if re.search(ASM_PASSWORD_ILLEGAL_CHARS, url_parser.password):
             raise ValueError(
                     "Password contains invalid characters, password remains unchanged "
                     "(only the characters '%s' are allowed)." % ASM_PASSWORD_ILLEGAL_CHARS[2:-1])
 
-        elif re.search(ASM_HOST_ILLEGAL_CHARS, url_parser.hostname):
+        if re.search(ASM_HOST_ILLEGAL_CHARS, url_parser.hostname):
             raise ValueError(
                     "Host contains invalid characters, host remains unchanged "
                     "(only the characters '%s' are allowed)." % ASM_HOST_ILLEGAL_CHARS[2:-1])
 
-        elif re.search(ASM_PATH_ILLEGAL_CHARS, url_parser.path):
+        if re.search(ASM_PATH_ILLEGAL_CHARS, url_parser.path):
             raise ValueError("Path on ftp server contains invalid characters, path remains unchanged "
                              "(only the characters '%s' are allowed)." % ASM_PATH_ILLEGAL_CHARS[2:-1])
-        else:
-            return url
+
+        # TODO: Commented out because not present on EA
+        # self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
+        #                     (urlparse(self.externalStorageURL.value).hostname,
+        #                      urlparse(self.externalStorageURL.value).username,
+        #                      urlparse(self.externalStorageURL.value).password), 204)
+        return url
 
 
 class EBeamScanner(model.Emitter):
@@ -986,7 +992,7 @@ class MPPC(model.Detector):
         self._descanner = self.parent._mirror_descanner
 
         self._shape = MPPC.SHAPE
-        self.filename = model.StringVA(time.strftime("project_name_default_file_name"), setter=self._setFilename)
+        self.filename = model.StringVA("unnamed_acquisition", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
@@ -1005,9 +1011,8 @@ class MPPC(model.Detector):
         self.cellCompleteResolution = model.ResolutionVA((900, 900), ((10, 10), (1000, 1000))) # Includes overlap pixels
 
         # Setup hw and sw version
-        # TODO make call set_system_sw_name to new simulator (if implemented in simulator)
-        self._swVersion = "PUT NEW SIMULATOR DATA HERE"
-        self._hwVersion = "PUT NEW SIMULATOR DATA HERE"
+        self._swVersion = self.parent.swVersion
+        self._hwVersion = self.parent.hwVersion
 
         self._metadata[model.MD_HW_NAME] = "MPPC"
         self._metadata[model.MD_SW_VERSION] = self._swVersion
@@ -1015,7 +1020,9 @@ class MPPC(model.Detector):
         self._metadata[model.MD_POS] = (0, 0)  # m
 
         # Initialize acquisition processes
-        self.acq_queue = queue.Queue()  # acquisition queue with commands of actions that need to be executed.
+        # Acquisition queue with commands of actions that need to be executed. The queue should hold "(str,
+        # *)" containing "(command, data corresponding to the call)".
+        self.acq_queue = queue.Queue()
         self._acq_thread = threading.Thread(target=self._acquire, name="acquisition thread")
         self._acq_thread.deamon = True
         self._acq_thread.start()
@@ -1035,7 +1042,7 @@ class MPPC(model.Detector):
             except queue.Empty:
                 break
 
-        self.acq_queue.put(("terminate", None))
+        self.acq_queue.put(("terminate", ))
         self._acq_thread.join(5)
 
     def _assembleMegafieldMetadata(self):
@@ -1236,7 +1243,7 @@ class MPPC(model.Detector):
             except queue.Empty:
                 break
 
-        self.acq_queue.put(("stop", None))
+        self.acq_queue.put(("stop", ))
 
         if execution_wait > 30:
             logging.error("Failed to cancel the acquisition. mppc is terminated.")
@@ -1551,16 +1558,20 @@ class AsmApiException(Exception):
             self._errorMessageResponse(url, status_code, reason, expected_status,
                                        content_translated['status_code'],
                                        content_translated['message'])
+
         except Exception:
+            # Create an alternative error message when creating the intended error message fails. This may happen when
+            # the response does not hold content of the type json, or the content does not hold the proper keys in
+            # the dict. This may happen if the call is not found by the ASM API.
             if hasattr(response, "text"):
                 self._errorMessageResponse(url, status_code, reason, expected_status, status_code, response.text)
             elif hasattr(response, "content"):
                 self._errorMessageResponse(url, status_code, reason, expected_status, status_code, response.content)
             else:
                 self._emptyResponse(url, status_code, reason, expected_status,)
-        finally:
-            # Also log the error so it is easier to find it back when the error was received in the log
-            logging.error(self._error)
+
+        # Also log the error so it is easier to find it back when the error was received in the log
+        logging.error(self._error)
 
     def __str__(self):
         # For displaying the error

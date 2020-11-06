@@ -43,7 +43,7 @@ from odemis.util import almost_equal
 from openapi_server.models import CalibrationLoopParameters
 from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
 
-from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, INT16
+from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, DATA_CONTENT_TO_ASM
 
 # Set logger level to debug to observe all the output (useful when a test fails)
 logging.getLogger().setLevel(logging.DEBUG)
@@ -94,27 +94,6 @@ class TestAuxilaryFunc(unittest.TestCase):
         out = convertRange(7, (5, 10), (-10, -20))
         self.assertEqual(out, -14)
 
-        # Test for different input and output ranges
-        for i in range(-10, 10):
-            if i == 0:
-                # Input range of 0 has no meaning
-                continue
-            test_value = numpy.random.random(2)
-            random_value_range = numpy.random.random(1)
-            test_out_range = (- random_value_range, random_value_range)
-            out = convertRange((test_value[0] * i, test_value[1] * i), (-i, i), test_out_range)
-            tolerance = 1e-10 # Tolerance for possible floating point errors
-            expected_value = test_value * test_out_range[1]
-            if not almost_equal(expected_value[0], out[0], atol=tolerance):
-                raise ValueError("x values are not converted correctly.\n"
-                                 "Expected value was %s but received %s" %
-                                 (expected_value[0], out[0]))
-
-            if not almost_equal(expected_value[1], out[1], atol=tolerance):
-                raise ValueError("y values are not converted correctly.\n"
-                                 "Expected value was %s but received %s" %
-                                 (expected_value[1], out[1]))
-
     def test_convertBits(self):
         # Test input value of zero
         out = tuple(convert2Bits((0, 0), (-1, 1)))
@@ -122,27 +101,13 @@ class TestAuxilaryFunc(unittest.TestCase):
         # (uneven scaling means that 0.0 is not mapped to zero but to 0.5 due to the uneven range of INT16)
         self.assertEqual((-0.5, -0.5), out)
 
-        # Test for different input ranges
-        for i in range(-10, 10):
-            if i == 0:
-                # Input range of 0 has no meaning
-                continue
-            test_value = numpy.random.random(2)
-            out = convert2Bits((test_value[0] * i, test_value[1] * i), (-i, i))
-            # Due to uneven scaling an absolute tolerance of 0.5 is allowed.
-            # (uneven scaling means that 0.0 is not mapped to zero but to 0.5 due to the uneven range of INT16)
-            tolerance = 0.5
-            expeceted_value = test_value * INT16.max
-            if not almost_equal(expeceted_value[0], out[0], atol=tolerance):
-                raise ValueError("x values are not converted correctly.\n"
-                                 "Expected value was %s but received %s" %
-                                 (expeceted_value[0], out[0]))
+        # Use floor for rounding because the convert2Bits method returns floats and does not round.
+        out = numpy.floor(convert2Bits((-10, 0, 10), (-10, 10)))
+        self.assertEqual(tuple(out), (-2 ** 15, -1, 2 ** 15 - 1))
 
-            if not almost_equal(expeceted_value[1], out[1], atol=tolerance):
-                raise ValueError("y values are not converted correctly.\n"
-                                 "Expected value was %s but received %s" %
-                                 (expeceted_value[1], out[1]))
-
+        # Use floor for rounding because the convert2Bits method returns floats and does not round.
+        out = numpy.floor(convert2Bits((0, 0.5, 1), (0, 1)))
+        self.assertEqual(tuple(out), (-2 ** 15, -1, 2 ** 15 - 1))
 
 class TestAcquisitionServer(unittest.TestCase):
     @classmethod
@@ -150,7 +115,7 @@ class TestAcquisitionServer(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -165,6 +130,8 @@ class TestAcquisitionServer(unittest.TestCase):
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def setUp(self):
+        numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
+
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
@@ -386,13 +353,22 @@ class TestAcquisitionServer(unittest.TestCase):
         image_received = ASM.checkMegaFieldExists(mega_field_id, "wrong_storage_dir_@#$")
         self.assertFalse(image_received)
 
+    def test_AsmApiException(self):
+        # Test if get call raises exceptions properly
+        with self.assertRaises(AsmApiException):
+            self.ASM_manager.asmApiGetCall("/fake/function/error", 200, raw_response=True)
+
+        # Test if post call raises exceptions properly
+        with self.assertRaises(AsmApiException):
+            self.ASM_manager.asmApiPostCall("/fake/function/error", 200, raw_response=True)
+
 class TestEBeamScanner(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -606,7 +582,7 @@ class TestMirrorDescanner(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -621,6 +597,8 @@ class TestMirrorDescanner(unittest.TestCase):
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def setUp(self):
+        numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
+
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
@@ -870,7 +848,7 @@ class TestMPPC(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -1243,7 +1221,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -1522,42 +1500,6 @@ class Test_ASMDataFlow(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(field_images[0] * field_images[1], self.counter)
         self.assertEqual(field_images[0] * field_images[1], self.counter2)
-
-class Test_AsmApiException(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if TEST_NOHW:
-            raise unittest.SkipTest('No HW or simulator for the ASM and HwComponents present. Skipping tests.')
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
-    def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "main", URL, children=CHILDREN_ASM, externalStorage=EXTRNAL_STORAGE)
-        for child in self.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                self.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                self.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                self.MirrorDescanner = child
-
-        # Ensure that only empty images will be received
-        self.MPPC.dataContent.value = "empty"
-
-        resp = self.ASM_manager._session.get(self.ASM_manager._host + "/scan/clock_frequency",
-                                             json=None, timeout=600)
-
-        self.error_object = AsmApiException("test_url", resp, 404)
-
-    def tearDown(self):
-        self.ASM_manager.terminate()
-        time.sleep(0.2)
-
-    def test_AsmApiException(self):
-        with self.assertRaises(Exception):
-            raise self.error_object
 
 if __name__ == '__main__':
     unittest.main()
