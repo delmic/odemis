@@ -788,50 +788,67 @@ def ar_to_export_data(projections, raw=False):
             return next(iter(data_dict.values()))
 
 
-def value_to_pixel(value, pixel_space, vtp_ratio, value_range, orientation):
+def value_to_pixel(value, pixel_space, value_range, orientation):
     """
     Map range value to legend pixel position
 
     value (float): value to map
-    pixel_space (int): pixel space
-    vtp_ratio (float):  value to pixel ratio
-    value_range (tuple of floats): value range
+    pixel_space (int): length of space available to draw, in pixels
+    value_range (list of floats of len>=2): values at linearly spread intervals
     orientation (int): legend orientation
 
-    returns (float): pixel position
+    returns (int): pixel position
     """
     if pixel_space is None:
         return None
-    elif None not in (vtp_ratio, value_range):
-        if value_range[0] < value_range[1]:
-            pixel = (value - value_range[0]) * vtp_ratio
-            pixel = int(round(pixel))
-        else:
-            pixel = (value_range[0] - value) * vtp_ratio
-            pixel = int(round(pixel))
-    else:
-        pixel = 0
-    return pixel if orientation == wx.HORIZONTAL else pixel_space - pixel
+
+    if None in value_range:
+        return None
+
+    assert value_range[0] <= value <= value_range[-1]
+
+    # if going from big to small, reverse temporarily from small to big and we'll
+    # reverse the result at the end
+    reverse = value_range[0] > value_range[-1]
+    if reverse:
+        value_range = value_range[::-1]
+
+    # Find the two points in the range which are the closest value, then linearly interpolate
+    # Example       |----------------|-----------------|
+    # value range:  1                10                100
+    # value:                                 ^50
+    # pixel space:  0                                  1000
+    # pixel pos:                             722
+    pos_px = numpy.interp(value, value_range, numpy.linspace(0, pixel_space, len(value_range)))
+
+    # For historical reasons, vertically, we report 0 at the end / bottom, unless
+    # of course, it's reversed
+    if orientation == wx.VERTICAL:
+        reverse = not reverse
+
+    if reverse:
+        pos_px = (pixel_space - 1) - pos_px
+
+    return int(round(pos_px))
 
 
 def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     """
     Calculate which values in the range to represent as ticks on the axis
 
-    value_range (float, float): values at the bottom and top (can be in any order)
+    value_range (list of floats of len>=2): values at linearly spread intervals
     client_size (int > 0, int > 0): number of pixels in X,Y
     orientation (wx.HORIZONTAL or wx.VERTICAL): legend orientation
     tick_spacing (float > 0): approximate space between ticks (number of pixels)
 
     returns (list of tuples of floats): list of pixel position and value pairs
-            (float): value to pixel ratio
     """
 
     if value_range is None:
         logging.info("Trying to compute legend tick without range")
-        return None, None
+        return None
 
-    min_val, max_val = value_range
+    min_val, max_val = value_range[0], value_range[-1]
 
     # Get the horizontal/vertical space in pixels
     if orientation == wx.HORIZONTAL:
@@ -846,15 +863,12 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     value_space = abs(max_val - min_val)
     if value_space == 0:
         logging.info("Trying to compute legend tick with empty range %s", value_range)
-        vtp_ratio = None
         # Just one tick, at the origin
-        pixel = max(min_pixel, value_to_pixel(min_val, pixel_space, vtp_ratio,
-                                              value_range, orientation))
+        pixel = max(min_pixel, value_to_pixel(min_val, pixel_space, value_range, orientation))
         tick_list = [(pixel, min_val)]
-        return tick_list, vtp_ratio
+        return tick_list
 
-    vtp_ratio = abs(pixel_space / value_space)  # px/unit
-    epsilon = (1 / vtp_ratio) / 10  # "tiny" value: a 10th of a pixel
+    epsilon = (value_space / pixel_space) / 10  # "tiny" value: a 10th of a pixel
 
     # Find the ticks to show so that it looks good for the user. It must have a
     # constant spacing between the ticks, and this spacing should be a "easy
@@ -896,8 +910,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     min_margin = (tick_spacing / 4)
     prev_pixel = 0
     for tick_value in tick_values:
-        pixel = value_to_pixel(tick_value, pixel_space, vtp_ratio, value_range,
-                               orientation)
+        pixel = value_to_pixel(tick_value, pixel_space, value_range, orientation)
         # Round "almost 0" (due to floating point errors) to 0
         if abs(tick_value) < epsilon:
             tick_value = 0
@@ -914,7 +927,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
     tick_list = ticks
 
-    return tick_list, vtp_ratio
+    return tick_list
 
 
 def draw_scale(value_range, client_size, orientation, tick_spacing,
@@ -948,7 +961,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
                                                  client_size[0], client_size[1])
     ctx = cairo.Context(surface)
 
-    tick_list, _ = calculate_ticks(value_range, client_size, orientation, tick_spacing)
+    tick_list = calculate_ticks(value_range, client_size, orientation, tick_spacing)
 
     # Set Font
     font_name = "Sans"

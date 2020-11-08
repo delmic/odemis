@@ -28,6 +28,7 @@ from concurrent.futures import CancelledError
 
 import Pyro5.api
 import msgpack_numpy
+import numpy
 
 from odemis import model
 from odemis import util
@@ -812,8 +813,9 @@ class Scanner(model.Emitter):
             setter=self._setDwellTime)
 
         voltage_info = self.parent.ht_voltage_info()
+        init_voltage = numpy.clip(self.parent.get_ht_voltage(), voltage_info['range'][0], voltage_info['range'][1])
         self.accelVoltage = model.FloatContinuous(
-            self.parent.get_ht_voltage(),
+            init_voltage,
             voltage_info["range"],
             unit=voltage_info["unit"],
             setter=self._setVoltage
@@ -996,6 +998,10 @@ class Scanner(model.Emitter):
                 self.dwellTime._value = dwell_time
                 self.dwellTime.notify(dwell_time)
             voltage = self.parent.get_ht_voltage()
+            v_range = self.accelVoltage.range
+            if not v_range[0] <= voltage <= v_range[1]:
+                logging.info("Voltage {} V is outside of range {}, clipping to nearest value.".format(voltage, v_range))
+                voltage = self.accelVoltage.clip(voltage)
             if voltage != self.accelVoltage.value:
                 self.accelVoltage._value = voltage
                 self.accelVoltage.notify(voltage)

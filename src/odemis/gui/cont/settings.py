@@ -31,7 +31,6 @@ from past.builtins import long
 from future.utils import with_metaclass
 from abc import ABCMeta
 import collections
-import csv
 import locale
 import logging
 from odemis import model, util
@@ -47,8 +46,7 @@ from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry
     create_axis_entry
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
-from odemis.gui.util import call_in_wx_main, formats_to_wildcards
-from odemis.gui.util import get_picture_folder
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards, get_picture_folder
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import os
@@ -948,27 +946,24 @@ class StreakCamAlignSettingsController(SettingsBarController):
         filename = dialog.GetFilename()
 
         # read file
-        with open(path, 'rb') as csvfile:
-            calibFile = csv.reader(csvfile, delimiter=':')
-
-            try:
-                tr2d_dict = calibration.get_time_range_to_trigger_delay(calibFile,
-                                                                        self.streak_unit.timeRange.choices,
-                                                                        self.streak_delay.triggerDelay.range)
-            except ValueError as error:
-                self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
-                logging.error("Failed loading %s: %s", filename, error)
-                return
+        try:
+            tr2d = calibration.read_trigger_delay_csv(path,
+                                                      self.streak_unit.timeRange.choices,
+                                                      self.streak_delay.triggerDelay.range)
+        except ValueError as error:
+            self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
+            logging.error("Failed loading %s: %s", filename, error)
+            return
 
         # update the MD: overwrite the complete dict
-        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d_dict})
+        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d})
 
         # update triggerDelay shown in GUI
         cur_timeRange = self.streak_unit.timeRange.value
         # find the corresponding trigger delay
-        key = odemis.util.find_closest(cur_timeRange, tr2d_dict.keys())
+        key = util.find_closest(cur_timeRange, tr2d.keys())
         # Note: no need to check almost_equal again as we do that already when loading the file
-        self.streak_delay.triggerDelay.value = tr2d_dict[key]  # set the new value
+        self.streak_delay.triggerDelay.value = tr2d[key]  # set the new value
 
         self._onUpdateTriggerDelayGUI(filename)  # update txt displayed in GUI
 
@@ -1002,12 +997,8 @@ class StreakCamAlignSettingsController(SettingsBarController):
             path += ".csv"
 
         # get a copy of the triggerDelay dict from MD
-        triggerDelay_dict = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
-
-        with open(path, 'wb') as csvfile:
-            calibFile = csv.writer(csvfile, delimiter=':')
-            for key in triggerDelay_dict.keys():
-                calibFile.writerow([key, triggerDelay_dict[key]])
+        tr2d = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        calibration.write_trigger_delay_csv(path, tr2d)
 
         # update txt displayed in GUI
         self._onUpdateTriggerDelayGUI(filename)
