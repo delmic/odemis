@@ -35,9 +35,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+MULTIPLE_AXES = (os.environ.get("MULTIPLE_AXES", 0) != 0)  # if available, test 2 axes
 
 TEST_SPEED = 0.001  # m / s
 AXIS_NUM = 1
+AXIS_NUM2 = 2
 
 
 class TestPMD401OpenLoop(unittest.TestCase):
@@ -51,7 +53,11 @@ class TestPMD401OpenLoop(unittest.TestCase):
         else:
             port = "/dev/ttyUSB*"
 
-        axes = {'x': {'axis_number': AXIS_NUM, 'speed': TEST_SPEED, 'closed_loop': True}}
+        if TEST_NOHW or MULTIPLE_AXES:
+            axes = {'x': {'axis_number': AXIS_NUM, 'speed': TEST_SPEED, 'closed_loop': True},
+                    'y': {'axis_number': AXIS_NUM2, 'speed': TEST_SPEED, 'closed_loop': True}}
+        else:
+            axes = {'x': {'axis_number': AXIS_NUM, 'speed': TEST_SPEED, 'closed_loop': True}}
         self.stage = PMD401Bus('test', 'test', port, axes)
 
     def test_simple(self):
