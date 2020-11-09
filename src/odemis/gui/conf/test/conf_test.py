@@ -26,6 +26,7 @@ from past.builtins import basestring
 import logging
 import odemis.gui.conf.file as conffile
 import odemis.gui as gui
+from odemis.util import test
 import os
 import shutil
 import unittest
@@ -68,13 +69,6 @@ class ConfigTest(object):
         gui.conf.CONF_GENERAL = None
         gui.conf.CONF_ACQUI = None
         gui.conf.CONF_CALIB = None
-
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
 
 class GeneralConfigTest(ConfigTest, unittest.TestCase):
@@ -202,7 +196,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         back_calib = conf.get_sh_calib(shid)
         for o, b in zip(orig_calib, back_calib):
             if isinstance(o, tuple):
-                self.assertTupleAlmostEqual(o, b)
+                test.assert_tuple_almost_equal(o, b)
             else:
                 self.assertAlmostEqual(o, b)
 
@@ -214,7 +208,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         back_calib = conf.get_sh_calib(shid)
         for o, b in zip(orig_calib, back_calib):
             if isinstance(o, tuple):
-                self.assertTupleAlmostEqual(o, b)
+                test.assert_tuple_almost_equal(o, b)
             else:
                 self.assertAlmostEqual(o, b)
 

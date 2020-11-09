@@ -23,11 +23,11 @@ from __future__ import division
 
 from odemis.driver import tfsbc
 from odemis import model
+from odemis.util import test
 import unittest
 import logging
 import os
 import time
-import numpy
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
@@ -60,18 +60,11 @@ class TestBeamShiftController(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
     def test_read_write(self):
         vals = [27000, 37000, 20000, 44000]
         self.bc._write_registers(vals)
         ret = self.bc._read_registers()
-        self.assertTupleAlmostEqual(vals, list(ret), places=1)
+        test.assert_tuple_almost_equal(vals, list(ret), places=1)
 
     def test_shifts(self):
         """
@@ -80,26 +73,26 @@ class TestBeamShiftController(unittest.TestCase):
         """
         shift = (0, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (-5e-6, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (-5e-6, -5e-6)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
         time.sleep(1)
 
         shift = (0, -5e-6)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
 
         shift = (0, 0)
         self.bc.shift.value = shift
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
 
         # Large shift
         shift = (500e-6, 0)
@@ -116,7 +109,7 @@ class TestBeamShiftController(unittest.TestCase):
         self.bc.shift.value = shift
         self.assertLess(time.time() - startt, 0.03, "Reading/writing took more than 30 ms.")
         logging.debug("Shift value set to %s", self.bc.shift.value)
-        self.assertTupleAlmostEqual(self.bc.shift.value, shift, places=7)
+        test.assert_tuple_almost_equal(self.bc.shift.value, shift, places=7)
 
     def test_transform_coordinates(self):
         val = (0, 4e-6)
@@ -128,7 +121,7 @@ class TestBeamShiftController(unittest.TestCase):
         ret = tfsbc.transform_coordinates(val, *md)
         self.assertEqual(ret, expected)
         rev = tfsbc.transform_coordinates_reverse(ret, *md)
-        self.assertTupleAlmostEqual(val, rev, places=5)
+        test.assert_tuple_almost_equal(val, rev, places=5)
 
     def test_update_incorrect_md(self):
         bs = (-0.00027788219369730165, 0.0013604844623992785)

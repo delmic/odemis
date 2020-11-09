@@ -94,13 +94,6 @@ class FakeDetector(model.Detector):
 # @skip("simple")
 class StreamTestCase(unittest.TestCase):
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
     def _check_square_pixel(self, st):
         rep = st.repetition.value
         roi = st.roi.value
@@ -145,7 +138,7 @@ class StreamTestCase(unittest.TestCase):
             exp_roi_size = [rep[0] * pxs / phy_size[0],
                             rep[1] * pxs / phy_size[1]]
             roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
-            self.assertTupleAlmostEqual(roi_size, exp_roi_size,
+            test.assert_tuple_almost_equal(roi_size, exp_roi_size,
                              msg="with roi = %s => %s" % (roi, new_roi))
             self.assertTrue(new_roi[0] >= 0 and new_roi[1] >= 0 and
                             new_roi[2] <= 1 and new_roi[3] <= 1,
@@ -692,13 +685,6 @@ class SECOMConfocalTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
     def _on_image(self, im):
         self._image = im
 
@@ -831,7 +817,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
         for d in data:
             self.assertEqual(d.shape, exp_shape)
             self.assertIn(model.MD_OUT_WL, d.metadata)
-            self.assertTupleAlmostEqual(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+            test.assert_tuple_almost_equal(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
         self.assertLessEqual(self.end, time.time())
