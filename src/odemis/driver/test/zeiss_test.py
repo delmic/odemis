@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 13 Dec 2017
 
 Copyright © 2017-2018 Philip Winkler, Éric Piel, Delmic
@@ -17,7 +17,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 from concurrent.futures import CancelledError
@@ -78,13 +78,6 @@ class TestSEM(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.sem.terminate()
-
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
     def test_hfv(self):
         ebeam = self.scanner

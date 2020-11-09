@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 7 Feb 2014
 
 Copyright © 2014 Kimon Tsitsikas, Delmic
@@ -17,7 +17,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import Pyro4
@@ -170,13 +170,6 @@ class TestSEM(unittest.TestCase):
 #        gc.collect()
         pass
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
     def compute_expected_duration(self):
         dwell = self.scanner.dwellTime.value
         settle = 5.e-4
@@ -213,7 +206,7 @@ class TestSEM(unittest.TestCase):
         exp_res = (max_res[0] // 2, max_res[1] // 2)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
-        self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
+        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (-1, 1))
         self.scanner.translation.value = (0, 0)
 

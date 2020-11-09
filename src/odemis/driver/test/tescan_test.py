@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 12 May 2014
 
 Copyright © 2014 Kimon Tsitsikas, Delmic
@@ -17,7 +17,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import Pyro4
@@ -25,6 +25,7 @@ import copy
 import logging
 from odemis import model
 from odemis.driver import tescan
+from odemis.util import test
 import os
 import pickle
 import threading
@@ -174,13 +175,6 @@ class TestSEMBase(object):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
-
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
     def test_probe_current(self):
         ebeam = self.scanner
@@ -335,7 +329,7 @@ class TestSEM(TestSEMBase, unittest.TestCase):
         # scale up
         self.scanner.scale.value = (16, 16)
         exp_res = (max_res[0] // 16, max_res[1] // 16)
-        self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
+        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.scanner.translation.value = (-1, 1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
@@ -343,18 +337,18 @@ class TestSEM(TestSEMBase, unittest.TestCase):
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
-        self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
+        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (-1, 1))
 
         # change scale to some float
         self.scanner.resolution.value = (max_res[0] // 16, max_res[1] // 16)
         self.scanner.scale.value = (1.5, 2.3)
         exp_res = (max_res[0] // 1.5, max_res[1] // 2.3)
-        self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
+        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
         self.scanner.scale.value = (1, 1)
-        self.assertTupleAlmostEqual(self.scanner.resolution.value, max_res, delta=1.1)
+        test.assert_tuple_almost_equal(self.scanner.resolution.value, max_res, delta=1.1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
         # Then, check metadata fits with the expectations
@@ -369,7 +363,7 @@ class TestSEM(TestSEMBase, unittest.TestCase):
         # normal acquisition
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        self.assertTupleAlmostEqual(im.metadata[model.MD_POS], center)
+        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], center)
 
         # shift a bit
         # reduce the size of the image so that we can have translation
@@ -380,13 +374,13 @@ class TestSEM(TestSEMBase, unittest.TestCase):
                    center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
+        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
         self.scanner.resolution.value = (1, 1)
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
+        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
     def test_acquire_high_osr(self):
         """

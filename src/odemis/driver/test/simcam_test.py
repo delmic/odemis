@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 20 Jun 2014
 
 @author: Éric Piel
@@ -14,15 +14,14 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 from __future__ import division
 
 import logging
-import numpy
 from odemis import model
 from odemis.driver import simcam, simulated
-from odemis.util.test import assert_array_not_equal
+from odemis.util.test import assert_array_not_equal, assert_tuple_almost_equal
 import time
 import unittest
 from unittest.case import skip
@@ -71,13 +70,6 @@ class TestSimCam(unittest.TestCase):
         self.camera.exposureTime.value = exp
         time.sleep(old_exp) # wait for the last frame (worst case)
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
 #     @unittest.skip("simple")
     def test_roi(self):
         """
@@ -95,7 +87,7 @@ class TestSimCam(unittest.TestCase):
         # binning
         self.camera.binning.value = (16, 16)
         exp_res = (max_res[0] // 16, max_res[1] // 16)
-        self.assertTupleAlmostEqual(self.camera.resolution.value, exp_res)
+        assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
         self.camera.translation.value = (-1, 1)
         self.assertEqual(self.camera.translation.value, (0, 0))
 
@@ -103,7 +95,7 @@ class TestSimCam(unittest.TestCase):
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.camera.resolution.value = exp_res
         self.camera.translation.value = (-1, 1)
-        self.assertTupleAlmostEqual(self.camera.resolution.value, exp_res)
+        assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
         self.assertEqual(self.camera.translation.value, (-1, 1))
         self.camera.binning.value = (1, 1)
         self.camera.resolution.value = self.camera.resolution.range[1]
