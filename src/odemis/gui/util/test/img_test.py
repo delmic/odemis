@@ -996,7 +996,7 @@ class TestSpatialExport(test.GuiTestCase):
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
         exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
-        self.assertEqual(exp_data[0].shape, (2340, 2560, 4))  # RGB
+        self.assertEqual(exp_data[0].shape, (2339, 2560, 4))  # RGB
 
     def test_crop_and_interpolation_need(self):
         """
@@ -1008,7 +1008,7 @@ class TestSpatialExport(test.GuiTestCase):
         view_pos = [-0.0015823014004405739, -0.0008081984265806109]
         draw_merge_ratio = 0.3
         exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
-        self.assertEqual(exp_data[0].shape, (182, 1673, 4))  # RGB
+        self.assertEqual(exp_data[0].shape, (183, 1672, 4))  # RGB
 
     def test_multiple_streams(self):
         orig_md = [s.raw[0].metadata.copy() for s in self.streams]
@@ -1337,17 +1337,14 @@ class TestOverviewFunctions(unittest.TestCase):
         ovv_im = model.DataArray(numpy.zeros((11, 11, 3), dtype=numpy.uint8))
         ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
         ovv_im.metadata[model.MD_POS] = (0, 0)
-#         tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
-        tile = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
-        tile[1:4, 1:4, :] = 255
-        tile.metadata[model.MD_POS] = (-3.5, 3.5)
-        # tile.metadata[model.MD_POS] = (0, 0)
-        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)  # 1,1
+        tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
+        tile.metadata[model.MD_POS] = (-3, 3)
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
-        print(ovv_im_new[:, :, 0])  # DEBUG
+        # print(ovv_im_new[:, :, 0])  # DEBUG
         # rectangle with edges (-4,4), (-2,4), (-4,2), (-4,2) should be white now
         # (6,6) is the center, so this corresponds to a rectangle with top left at (2,2) (=(1,1) when counting from 0)
-        numpy.testing.assert_array_equal(ovv_im_new[1:4, 1:4, :], tile)
+        numpy.testing.assert_array_equal(ovv_im_new[1:4, 1:4, :], 255)
         numpy.testing.assert_array_equal(ovv_im_new[5:, 5:, :], numpy.zeros((6, 6, 3)))
 
         # Test tile that goes beyond the borders of the image top left
@@ -1358,7 +1355,6 @@ class TestOverviewFunctions(unittest.TestCase):
         tile.metadata[model.MD_POS] = (-3, 3)  # top-left corner, one pixel diagonal to start of ovv
         tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
         ovv_im_new = insert_tile_to_image(tile, ovv_im)
-        print(ovv_im_new[:, :, 0])  # DEBUG
         self.assertEqual(ovv_im_new[0][0][0], 255)  # first pixel white (all three dims), rest black
         numpy.testing.assert_array_equal(ovv_im.flatten()[3:],
                                          numpy.zeros(len(ovv_im.flatten()[3:])))
