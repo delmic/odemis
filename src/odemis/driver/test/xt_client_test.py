@@ -630,8 +630,8 @@ class TestMicroscopeInternal(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.scanner.applyAutoContrastBrightness("error_expected")
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autofocus_state = self.microscope.is_autofocusing(channel)
-        self.assertEqual(autofocus_state, False)
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
+        self.assertEqual(auto_contrast_brightness_state, False)
 
     def test_apply_autofocus(self):
         """
