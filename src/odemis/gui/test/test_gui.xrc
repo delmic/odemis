@@ -239,11 +239,7 @@
                   <bg>#666666</bg>
                   <font>
                     <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                   </font>
                   <XRCED>
                     <assign_var>1</assign_var>
@@ -286,11 +282,7 @@
                   <bg>#666666</bg>
                   <font>
                     <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                   </font>
                   <XRCED>
                     <assign_var>1</assign_var>
@@ -320,11 +312,7 @@
                   <bg>#666666</bg>
                   <font>
                     <size>13</size>
-                    <style>normal</style>
-                    <weight>normal</weight>
-                    <underlined>0</underlined>
-                    <face>Ubuntu</face>
-                    <encoding>UTF-8</encoding>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                   </font>
                   <XRCED>
                     <assign_var>1</assign_var>
