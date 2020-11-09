@@ -948,7 +948,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
         filename = dialog.GetFilename()
 
         # read file
-        with open(path, 'rb') as csvfile:
+        with open(path, 'r') as csvfile:
             calibFile = csv.reader(csvfile, delimiter=':')
 
             try:
@@ -1004,7 +1004,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
         # get a copy of the triggerDelay dict from MD
         triggerDelay_dict = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
 
-        with open(path, 'wb') as csvfile:
+        with open(path, 'w') as csvfile:
             calibFile = csv.writer(csvfile, delimiter=':')
             for key in triggerDelay_dict.keys():
                 calibFile.writerow([key, triggerDelay_dict[key]])
