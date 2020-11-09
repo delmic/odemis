@@ -1,3 +1,17 @@
+odemis (3.0.7-1) xenial; urgency=medium
+
+  * New version 3.0.7
+  * Main bug fixes:
+   - Fix reading TMCM user config on Python 3
+   - Fix DELPHI calibration window on Python 3
+   - Fix reading/writing streakcam calibration on Python 3
+   - Fix logging of fine alignment scaling_xy (SECOM)
+   - Fix description text colour of plugins on Windows
+  * Enhancement:
+   - Automatically close DELPHI first calibration dialog when sample is ejected
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 09 Nov 2020 17:14:23 +0100
+
 odemis (3.0.6-1) xenial; urgency=medium
 
   * New version 3.0.6
