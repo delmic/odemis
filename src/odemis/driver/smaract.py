@@ -1255,10 +1255,7 @@ class MC_5DOF(model.Actuator):
             logging.debug("SA_MC is referenced")
         else:
             if ref_on_init:
-                try:
-                    self.reference().result()
-                except Exception as e:
-                    self.state._set_value(e, force_write=True)
+                self.reference().result()
             else:
                 logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
 
@@ -1492,9 +1489,8 @@ class MC_5DOF(model.Actuator):
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
 
-    def _createMoveFuture(self, ref=False):
+    def _createMoveFuture(self):
         """
-        ref: if true, will use a different canceller
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
@@ -1559,6 +1555,7 @@ class MC_5DOF(model.Actuator):
                 raise CancelledError()
             else:
                 logging.error("Referencing failed: %s", ex)
+                self.state._set_value(ex, force_write=True)
                 raise
         except CancelledError:
             logging.debug("Movement canceled")
@@ -2513,7 +2510,7 @@ class MCS2(model.Actuator):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
-                self.reference().result()
+                self.reference()
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
@@ -3046,7 +3043,8 @@ class MCS2(model.Actuator):
                 logging.warning("Referencing cancelled, device will not move until another referencing")
                 future._was_stopped = True
                 raise
-            except Exception:
+            except Exception as ex:
+                self.state._set_value(ex, force_write=True)
                 logging.exception("Referencing failure")
                 raise
             finally:

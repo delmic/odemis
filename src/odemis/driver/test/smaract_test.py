@@ -32,7 +32,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = True  # (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 COMP_ARGS = {
     "atol": 1e-7,
@@ -219,6 +219,9 @@ class Test5DOF(unittest.TestCase):
     def setUpClass(cls):
         cls.dev = smaract.MC_5DOF(**CONFIG_5DOF)
 
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
+
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
@@ -387,6 +390,9 @@ class TestMCS2(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dev = smaract.MCS2(**CONFIG_3DOF)
+
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
 
     @classmethod
     def tearDownClass(cls):
