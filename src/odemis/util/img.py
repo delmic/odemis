@@ -107,23 +107,28 @@ def tint_to_md_format(tint):
         return tint
     elif isinstance(tint, colors.Colormap):
         return tint.name
-    else:
+    elif tint in (TINT_FIT_TO_RGB, TINT_RGB_AS_IS):
         return tint
+    else:
+        raise ValueError("Unexpected tint %s" % (tint,))
 
 
 def md_format_to_tint(user_tint):
     """
     Given a string or tuple value of user_tint in saved metadata, convert to a tint object
     Returns tint as:
-    - a list tuple RGB value (for a tint) or
-    - a matplotlib.colors.Colormap object for a custom color map or
+    - a list tuple RGB value (for a tint)
+    - a matplotlib.colors.Colormap object for a custom color map
     - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
     """
     if isinstance(user_tint, tuple) or isinstance(user_tint, list):
         return user_tint
     elif isinstance(user_tint, str):
         if user_tint != TINT_FIT_TO_RGB:
-            return cm.get_cmap(user_tint)
+            try:
+                return cm.get_cmap(user_tint)
+            except NameError:
+                raise ValueError("Invalid tint metadata colormap value %s" % (user_tint,))
         else:
             return TINT_FIT_TO_RGB
     else:
@@ -483,7 +488,7 @@ def getColorbar(color_map, width, height, alpha=False):
     return gradient.astype(numpy.uint8)
 
 
-def tintToColormap(tint, name=""):
+def tintToColormap(tint):
     """
     Convert a tint to a matplotlib.colors.Colormap object
     tint argument can be:
@@ -498,7 +503,7 @@ def tintToColormap(tint, name=""):
         return tint
     elif isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
         # make a gradient from black to the selected tint
-        tint = colors.LinearSegmentedColormap.from_list(name,
+        tint = colors.LinearSegmentedColormap.from_list("",
             [(0, 0, 0), rgb_to_frgb(tint)])
     elif tint == TINT_RGB_AS_IS:
         tint = cm.get_cmap('hsv')

@@ -211,7 +211,7 @@ class ColorMapComboBox(ComboBox):
         if not color_map:
             return
 
-        color_map = tintToColormap(color_map, item_name)
+        color_map = tintToColormap(color_map)
 
         if flags & wx.adv.ODCB_PAINTING_CONTROL:
             # for painting the control itself
