@@ -649,6 +649,7 @@ class SimilarityTransformKnownValues(unittest.TestCase):
         self.assertAlmostEqual(tform.scale, 0.721, places=3)
         numpy.testing.assert_array_almost_equal(tform.translation,
                                       numpy.array([-0.800, 0.400]))
+        self.assertAlmostEqual(tform.fre(src, dst), 0.516, places=3)
 
     def test_similarity_transform_from_pointset_known_values(self):
         """
