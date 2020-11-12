@@ -175,21 +175,21 @@ class AcquisitionServer(model.HwComponent):
             ckwargs = children["EBeamScanner"]
         except Exception:
             raise ValueError("Required child EBeamScanner not provided")
-        self._ebeam_scanner = EBeamScanner(parent=self, **ckwargs)
+        self._ebeam_scanner = EBeamScanner(parent=self, daemon=kwargs.get("daemon"), **ckwargs)
         self.children.value.add(self._ebeam_scanner)
 
         try:
             ckwargs = children["MirrorDescanner"]
         except Exception:
             raise ValueError("Required child MirrorDescanner not provided")
-        self._mirror_descanner = MirrorDescanner(parent=self, **ckwargs)
+        self._mirror_descanner = MirrorDescanner(parent=self, daemon=kwargs.get("daemon"), **ckwargs)
         self.children.value.add(self._mirror_descanner)
 
         try:
             ckwargs = children["MPPC"]
         except Exception:
             raise ValueError("Required child mppc not provided")
-        self._mppc = MPPC(parent=self, **ckwargs)
+        self._mppc = MPPC(parent=self, daemon=kwargs.get("daemon"), **ckwargs)
         self.children.value.add(self._mppc)
 
     def terminate(self):
