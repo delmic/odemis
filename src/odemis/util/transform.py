@@ -431,6 +431,38 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
         return self.apply(x)
     __call__.__doc__ = apply.__doc__
 
+    def fre(self, x, y):
+        """
+        Returns the RMS value of the fiducial error registration (FRE).
+
+        When estimating a coordinate transformation given a set of matching
+        source and destination coordinates, due to fiducial localization error
+        (FLE) it will typically not be possible to achieve perfect alignment.
+        This resulting misalignment can be used to assess whether or not the
+        registration was successful. Note that the FRE is not a good indicator
+        of the accuracy of a registration.
+
+        Parameters
+        ----------
+        x : (n, 2) array
+            Coordinates in the source reference frame.
+        y : (n, 2) array
+            Coordinates in the destination reference frame. Must be of same
+            dimensions as `x`.
+
+        Returns
+        -------
+        fre : float, non-negative
+            The root mean squared fiducial registration error. A smaller number
+            indicates a better fit.
+
+        """
+        x = numpy.asarray(x)
+        y = numpy.asarray(y)
+        delta = self.apply(x) - y
+        fre = numpy.sqrt(numpy.mean(delta * delta))
+        return fre
+
     @abstractmethod
     def inverse(self):
         """

@@ -601,6 +601,7 @@ class RigidTransformKnownValues(unittest.TestCase):
             tform = RigidTransform.from_pointset(src, dst)
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            self.assertAlmostEqual(tform.fre(src, dst), 0)
 
     def test_rigid_transform_apply_known_values(self):
         """
@@ -648,6 +649,7 @@ class SimilarityTransformKnownValues(unittest.TestCase):
         self.assertAlmostEqual(tform.scale, 0.721, places=3)
         numpy.testing.assert_array_almost_equal(tform.translation,
                                       numpy.array([-0.800, 0.400]))
+        self.assertAlmostEqual(tform.fre(src, dst), 0.516, places=3)
 
     def test_similarity_transform_from_pointset_known_values(self):
         """
@@ -660,6 +662,7 @@ class SimilarityTransformKnownValues(unittest.TestCase):
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
             self.assertAlmostEqual(scale, tform.scale)
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            self.assertAlmostEqual(tform.fre(src, dst), 0)
 
     def test_similarity_transform_apply_known_values(self):
         """
@@ -707,6 +710,7 @@ class ScalingTransformKnownValues(unittest.TestCase):
             self.assertAlmostEqual(0., _angle_diff(rotation, tform.rotation))
             numpy.testing.assert_array_almost_equal(scale, tform.scale)
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            self.assertAlmostEqual(tform.fre(src, dst), 0)
 
     def test_scaling_transform_from_pointset_non_negative_scaling(self):
         """
@@ -766,6 +770,7 @@ class AffineTransformKnownValues(unittest.TestCase):
             numpy.testing.assert_array_almost_equal(scale, tform.scale)
             self.assertAlmostEqual(shear, tform.shear)
             numpy.testing.assert_array_almost_equal(translation, tform.translation)
+            self.assertAlmostEqual(tform.fre(src, dst), 0)
 
     def test_affine_transform_from_pointset_non_negative_scaling(self):
         """
