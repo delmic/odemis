@@ -326,7 +326,7 @@ class ESP(model.Actuator):
     def _sendQuery(self, cmd):
         """
         cmd (byte str): command to be sent to device (without the CR, but with the ?)
-        returns (byte str): answer received from the device (without \n or \r)
+        returns (str): answer received from the device (without \n or \r)
         raise:
             IOError if no answer is returned in time
         """
@@ -345,7 +345,7 @@ class ESP(model.Actuator):
 
             logging.debug("Received answer %s", to_str_escape(ans))
 
-            return ans.strip()
+            return ans.strip().decode("latin1")
 
     # Low level serial commands.
     # Note: These all convert to internal units of the controller
