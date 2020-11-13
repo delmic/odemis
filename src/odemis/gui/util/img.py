@@ -805,7 +805,7 @@ def value_to_pixel(value, pixel_space, value_range, orientation):
     if None in value_range:
         return None
 
-    assert value_range[0] <= value <= value_range[-1]
+    assert value_range[0] <= value <= value_range[-1] or value_range[-1] <= value <= value_range[0]
 
     # if going from big to small, reverse temporarily from small to big and we'll
     # reverse the result at the end
@@ -848,7 +848,8 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         logging.info("Trying to compute legend tick without range")
         return None
 
-    min_val, max_val = value_range[0], value_range[-1]
+    min_val = min(value_range[0], value_range[-1])
+    max_val = max(value_range[0], value_range[-1])
 
     # Get the horizontal/vertical space in pixels
     if orientation == wx.HORIZONTAL:
@@ -856,8 +857,9 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         # Don't display ticks too close from the left border
         min_pixel = 10
     else:
+        # Don't display ticks too close from the border
         pixel_space = client_size[1]
-        min_pixel = 0
+        min_pixel = 10
 
     # Range width
     value_space = abs(max_val - min_val)

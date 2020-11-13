@@ -450,7 +450,10 @@ class AxisLegend(wx.Panel):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
         max_width = 0
-        prev_lpos = 0 if self._orientation == wx.HORIZONTAL else csize.y
+        if rng[0] < rng[-1] and self._orientation == wx.VERTICAL:
+            prev_lpos = csize.y  # Vertically, start at the bottom. The case where X is reversed is not supported.
+        else:
+            prev_lpos = 0
 
         for i, (pos, val) in enumerate(self._tick_list):
             label = units.readable_str(val, self.unit, sig)
@@ -478,7 +481,7 @@ class AxisLegend(wx.Panel):
                 lpos = pos + (lbl_height // 2)
                 lpos = max(min(lpos, csize.y), 2)
 
-                if prev_lpos >= lpos + 20 or i == 0:
+                if i == 0 or abs(prev_lpos - lpos) >= 20:
                     ctx.move_to(csize.x - lbl_width - 9, lpos)
                     ctx.show_text(label)
                     ctx.move_to(csize.x - 5, pos)

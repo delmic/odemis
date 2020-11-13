@@ -1847,7 +1847,7 @@ class TemporalSpectrumViewport(TwoDViewPort):
             self.bottom_legend.unit = unit_x
             self.left_legend.unit = unit_y
             self.bottom_legend.range = wl  # the list of wavelengths
-            self.left_legend.range = times
+            self.left_legend.range = times[::-1]   # inverted, to show 0 at the top
         else:
             self.clear()
         self.Refresh()
