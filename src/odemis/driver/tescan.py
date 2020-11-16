@@ -421,6 +421,28 @@ class SEM(model.HwComponent):
             dt = self._scanner.dwellTime.value * 1e9
             # with self._acquisition_init_lock:
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
+
+            # make sure socket settings are always set
+            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            # Check if spot mode is required
+            if res == (1, 1):
+                if ((self._scaled_shape != scaled_shape) or
+                        (self._roi != (l, t, r, b)) or
+                        (self._dt != dt) or
+                        (self.pre_res != res)):
+                    self._device.ScStopScan()
+                    # flush remaining data in data buffer
+                    self.flush()
+                    # need to reset
+                    self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            else:
+                if self.pre_res == (1, 1) or True:  # debug
+                    self._device.ScStopScan()
+                    # flush remaining data in data buffer
+                    self.flush()
+
         with self._acq_progress_lock:
             try:
                 # make sure socket settings are always set
@@ -432,45 +454,39 @@ class SEM(model.HwComponent):
                         (self._roi != (l, t, r, b)) or
                         (self._dt != dt) or
                         (self.pre_res != res)):
-                        self._device.ScStopScan()
-                        # flush remaining data in data buffer
-                        self.flush()
-                        # need to reset
-                        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
                                              l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
                         self._scaled_shape = scaled_shape
                         self._roi = (l, t, r, b)
                         self._dt = dt
                 else:
-                    if self.pre_res == (1, 1):
-                        self._device.ScStopScan()
-                        # flush remaining data in data buffer
-                        self.flush()
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
                 # fetch the image (blocking operation), ndarray is returned
                 if res == (1, 1):
-                    sem_pxs = self._device.FetchArray(channel, TESCAN_PXL_LIMIT)
+                    sem_pxs = self._device.FetchImage(channel, TESCAN_PXL_LIMIT)
                     # Since we acquired TESCAN_PXL_LIMIT integrations of
                     # dt/TESCAN_PXL_LIMIT we now get the mean signal and return
                     # it as the result
+                    sem_pxs = numpy.frombuffer(sem_pxs, dtype=">u2")
                     sem_img = numpy.array([sem_pxs.mean()])
+                    logging.debug("Acquiring chamber image %s", sem_img)
                 else:
-                    sem_img = self._device.FetchArray(channel, res[0] * res[1])
+                    sem_img = self._device.FetchImage(channel, res[0] * res[1])
+                    sem_img = numpy.frombuffer(sem_img, dtype=">u2")
+                    logging.debug("Received SEM image of size %s", res[0] * res[1])
             except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
 
             if res != (1, 1):
                 # we must stop the scanning even after single scan
                 self._device.ScStopScan()
-
             self.pre_res = res
-            sem_img.shape = res[::-1]
-            # Change endianess
-            sem_img.byteswap(True)
+            try:
+                sem_img.shape = res[::-1]
+            except Exception:
+                logging.exception("Failed to update the image shape")
 
             return model.DataArray(sem_img, metadata)
 
