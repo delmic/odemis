@@ -44,18 +44,8 @@ done
 
 
 # For Windows
-# Add "-delete 0" option if you do not want to have the 256x256 icon
-convert $ORIG_GUI -bordercolor white -border 0 \
-          \( -clone 0 -resize 16x16 \) \
-          \( -clone 0 -resize 32x32 \) \
-          \( -clone 0 -resize 64x64 \) \
-          -alpha off -colors 256 $WIN_ICON_PATH/odemis.ico
+convert -background transparent $ORIG_GUI -define icon:auto-resize=16,32,48,64,256 $WIN_ICON_PATH/odemis.ico
+convert -background transparent $ORIG_VIEWER -define icon:auto-resize=16,32,48,64,256 $WIN_ICON_PATH/odemis-viewer.ico
 
-convert $ORIG_VIEWER -bordercolor white -border 0 \
-          \( -clone 0 -resize 16x16 \) \
-          \( -clone 0 -resize 32x32 \) \
-          \( -clone 0 -resize 64x64 \) \
-          -alpha off -colors 256 $WIN_ICON_PATH/odemis-viewer.ico
-
-# For the doc/home/piel/.wine/drive_c/Program Files (x86)/Odemis Viewer/odemis/
+# For the doc
 convert $ORIG_GUI -bordercolor white -border 0 -resize 16x16 $DOC_ICON_PATH/odemis.ico
