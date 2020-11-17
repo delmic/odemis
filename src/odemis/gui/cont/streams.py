@@ -100,7 +100,7 @@ class StreamController(object):
             if isinstance(stream, acqstream.RGBStream):
                 options |= OPT_NO_COLORMAPS
             # (Temporal)SpectrumStreams *with spectrum data* accept the FIT_TO_RGB option
-            if isinstance(stream, acqstream.SpectrumStream) and stream.raw[0].shape[1] > 1:
+            if isinstance(stream, acqstream.SpectrumStream) and stream.raw[0].shape[0] > 1:
                 options |= OPT_FIT_RGB
 
         # Allow changing the name of dyes (aka FluoStreams)
