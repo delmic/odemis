@@ -185,7 +185,6 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
-        "pos_deactive_after_ref": True,  # move to deactivate position after reference
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -357,8 +356,7 @@ class Test5DOF(unittest.TestCase):
     def test_reference_and_deactivate_move(self):
         # Set a deactive position and check to be sure that the controller moves to this location
         # after a reference move
-        # TODO: UIse real physical deactiva position
-        de_pos = {'x': 3.5801e-4, 'y': 0, 'z': 1e-3, 'rx':-1.2e-6, 'rz':-1.453e-6}
+        de_pos = {'x': 3.5801e-4, 'y': 0, 'z': 1e-3, 'rx':-1.2e-6, 'rz': 0.0}
         self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
 
         f = self.dev.reference()
@@ -378,7 +376,6 @@ CONFIG_3DOF = {"name": "3DOF",
         "speed": 0.1,
         "accel": 0.001,
         "hold_time": 1.0,
-        "pos_deactive_after_ref": True,  # move to deactivate position after reference
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],

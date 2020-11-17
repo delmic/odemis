@@ -1148,7 +1148,7 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), pos_deactive_after_ref=False, **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1182,8 +1182,6 @@ class MC_5DOF(model.Actuator):
                 range: [float, float], default is -1 -> 1
                 unit: (str) default is "m" for x, y, z and "rad" for the r*
             }
-        pos_deactive_after_ref (bool): if True, will move to the deactive position 
-            defined in metadata after referencing
         """
         if locator != "fake":
             self.core = MC_5DOF_DLL()
@@ -1227,6 +1225,7 @@ class MC_5DOF(model.Actuator):
                 raise model.HwError("Failed to find device, check it is connected and turned on")
             raise
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
+        self._deactive_pos_after_ref = None
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
@@ -1252,8 +1251,6 @@ class MC_5DOF(model.Actuator):
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
-        self._deactive_pos_after_ref = None
-        self._pos_deactive_after_ref = pos_deactive_after_ref
 
         if referenced:
             logging.debug("SA_MC is referenced")
@@ -1278,6 +1275,7 @@ class MC_5DOF(model.Actuator):
         self.update_position_timer = RepeatingTimer(1.0, self._updatePosition)
         self.update_position_timer.start()
         self.set_hold_time(hold_time)
+        self._updatePosition()
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -1500,7 +1498,7 @@ class MC_5DOF(model.Actuator):
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
-        f._moving_lock = threading.Lock()  # taken while moving
+        f._moving_lock = threading.RLock()  # taken while moving
         f._must_stop = False  # cancel of the current future requested
         f.task_canceller = self._cancelCurrentMove
         return f
@@ -1552,7 +1550,7 @@ class MC_5DOF(model.Actuator):
 
                 logging.info("Referencing successful.")
 
-            if self._pos_deactive_after_ref and self._deactive_pos_after_ref is not None and self._is_referenced():
+            if self._deactive_pos_after_ref is not None and self._is_referenced():
                 logging.info("Moving axes to deactivated position %s after referencing", self._deactive_pos_after_ref)
                 self._checkMoveAbs(self._deactive_pos_after_ref)
                 self._doMoveAbs(future, self._deactive_pos_after_ref)
@@ -1577,7 +1575,6 @@ class MC_5DOF(model.Actuator):
         finally:
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
-            # only move if no exception was raised.
             if self._is_referenced():
                 self.referenced._value = {a: True for a in self.axes.keys()}
                 self._updatePosition()
@@ -2413,7 +2410,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), pos_deactive_after_ref=False, ** kwargs):
+                 hold_time=float('inf'), ** kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2440,8 +2437,6 @@ class MCS2(model.Actuator):
                 unit: (str) default will be set to 'm'
                 channel: (int) the corresponding axis number on the controller
             }
-        pos_deactive_after_ref (bool): if True, will move to the deactive position
-            defined in metadata after referencing
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -2454,7 +2449,6 @@ class MCS2(model.Actuator):
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
-        self._axis_safe_pos = {}  # axis_name -> float (position to move after reference)
         self._locator = locator
         self._deactive_pos_after_ref = None
 
@@ -2519,7 +2513,6 @@ class MCS2(model.Actuator):
         axes_ref = {a: self._is_channel_referenced(i) for a, i in self._axis_map.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
-        self._pos_deactive_after_ref = pos_deactive_after_ref
 
         # If ref_on_init, referenced immediately.
         if all(referenced for _, referenced in axes_ref.items()):
@@ -3010,7 +3003,7 @@ class MCS2(model.Actuator):
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
-        f._moving_lock = threading.Lock()  # taken while moving
+        f._moving_lock = threading.RLock()  # taken while moving
         f._must_stop = threading.Event()  # cancel of the current future requested
         f._was_stopped = False  # if cancel was successful
         f.task_canceller = self._cancelCurrentMove
@@ -3059,13 +3052,11 @@ class MCS2(model.Actuator):
                         logging.warning("Axis %s not referenced after the end of referencing", a)
                         # TODO: Raise some error here
 
-                    # if referenced, move to the safe posiiton (if defined)
-                    if self._pos_deactive_after_ref and self._deactive_pos_after_ref is not None \
-                        and a in self._deactive_pos_after_ref:
-                        deactive_pos = self._deactive_pos_after_ref[a]
-                        logging.info("Moving axis %s to deactivated position %f", a, deactive_pos)
-                        f = self._createMoveFuture()
-                        self._doMoveAbs(f, {a: deactive_pos})
+                # if referenced, move to the safe position (if defined)
+                if self._deactive_pos_after_ref is not None:
+                    logging.info("Moving to deactivated position %f", a, self._deactive_pos_after_ref)
+                    self._checkMoveAbs(self._deactive_pos_after_ref)
+                    self._doMoveAbs(future, self._deactive_pos_after_ref)
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)
 
