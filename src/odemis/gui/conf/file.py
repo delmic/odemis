@@ -228,6 +228,48 @@ class GeneralConfig(Config):
         return None
 
 
+class ChamberConfig(Config):
+    file_name = "chamber.config"
+
+    def __init__(self):
+        super(ChamberConfig, self).__init__()
+
+        # Define the default settings
+        self.default.add_section("chamber")
+        self.default.set("chamber", "last_path", ACQUI_PATH)
+        self.default.set("chamber", "fn_ptn", u"{datelng}-{timelng}")
+        self.default.set("chamber", "fn_count", "0")
+
+    @property
+    def last_path(self):
+        lp = self.get("chamber", "last_path")
+        # Check that it (still) exists, and if not, fallback to the default
+        if not os.path.isdir(lp):
+            lp = ACQUI_PATH
+        return lp
+
+    @last_path.setter
+    def last_path(self, last_path):
+        # Note that paths (or filenames) which end with a space have their name
+        # trimmed when read back, so they will not be recorded properly.
+        self.set("chamber", "last_path", last_path)
+
+    @property
+    def fn_ptn(self):
+        return self.get("chamber", "fn_ptn")
+
+    @fn_ptn.setter
+    def fn_ptn(self, ptn):
+        self.set("chamber", "fn_ptn", ptn)
+
+    @property
+    def fn_count(self):
+        return self.get("chamber", "fn_count")
+
+    @fn_count.setter
+    def fn_count(self, cnt):
+        self.set("chamber", "fn_count", cnt)
+
 class AcquisitionConfig(Config):
     file_name = "acquisition.config"
 
