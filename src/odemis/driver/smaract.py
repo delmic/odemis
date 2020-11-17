@@ -1236,7 +1236,6 @@ class MC_5DOF(model.Actuator):
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
-        self._shutdown_flag = False
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # Reference tilted positioners towards the negative position
@@ -1256,8 +1255,6 @@ class MC_5DOF(model.Actuator):
         else:
             if ref_on_init:
                 self.reference().result()
-            else:
-                logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
 
         # Use a default actuator speed
         self.linear_speed = linear_speed
@@ -1279,11 +1276,11 @@ class MC_5DOF(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        if not self._shutdown_flag:
+        if self._executor:
             self.stop()
-            self._executor.shutdown(cancel_futures=True)
+            self._executor.shutdown()
+            self._executor = None
             self.core.SA_MC_Close(self._id)
-            self._shutdown_flag = True
         super(MC_5DOF, self).terminate()
 
     def updateMetadata(self, md):
@@ -1481,7 +1478,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
+                p = {}
             else:
                 raise
 
@@ -1505,7 +1502,7 @@ class MC_5DOF(model.Actuator):
         reference usually takes axes as an argument. However, the SA_MC references all
         axes together so this argument is extraneous.
         """
-        f = self._createMoveFuture(ref=True)
+        f = self._createMoveFuture()
         self._executor.submitf(f, self._doReference, f)
         return f
 
@@ -2497,7 +2494,6 @@ class MCS2(model.Actuator):
         self.position = model.VigilantAttribute({}, readonly=True)
 
         # will take care of executing axis move asynchronously
-        self._shutdown_flag = False
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # define the referenced VA from the query
@@ -2525,11 +2521,11 @@ class MCS2(model.Actuator):
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
         # should be safe to close the device multiple times if terminate is called more than once.
-        if not self._shutdown_flag:
+        if self._executor:
             self.stop()
-            self._executor.shutdown(cancel_futures=True)
+            self._executor.shutdown()
+            self._executor = None
             self.core.SA_CTL_Close(self._id)
-            self._shutdown_flag = True
 
         super(MCS2, self).terminate()
 
