@@ -460,7 +460,7 @@ class GlobalShiftRegistrar(object):
         self.shifts_hor = [[None]]
         self.shifts_ver = [[None]]
 
-        # Calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array
+        # Calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array of floats
         self.registered_positions = None
 
         # List of 2D indices for grid positions in order of acquisition
@@ -605,7 +605,7 @@ class GlobalShiftRegistrar(object):
 
         :param prev_tile: (DataArray) static tile to which other tile is compared
         :param tile: (DataArray) shifted tile
-        :returns: ((int, int), float) x shift, y shift, normalized cross correlation (-1 <= ncc <= 1, higher
+        :returns: ((float, float), float) x shift, y shift, normalized cross correlation (-1 <= ncc <= 1, higher
         is better)
         """
         px_size = tile.metadata[model.MD_PIXEL_SIZE]
