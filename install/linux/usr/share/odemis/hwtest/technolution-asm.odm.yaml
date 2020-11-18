@@ -1,0 +1,38 @@
+MultiBeamSEM: {
+    class: Microscope,
+    role: mbsem,
+    children: ["ASM", "EBeamScanner", "MirrorDescanner", "MPPC",],
+}
+
+"ASM": {
+  class: technolution.AcquisitionServer,
+  role: "asm",
+  init: {
+    # Use following host url for simulator instead of connecting to the real system: "http://localhost:8080/v2"
+    host: "http://192.168.10.10:8080/v2",
+    # DO NOT ENTER REAL USER NAME/PASSWORD HERE BECAUSE THIS IS PUBLISHED IN PLAIN TEXT ON GITHUB
+    externalStorage: { "host": "localhost",
+                        "username": "username",
+                        "password": "password",
+                        "directory": "image_dir" }
+  },
+  children: { "EBeamScanner" : "EBeamScanner" ,
+              "MirrorDescanner"  : "MirrorDescanner" ,
+              "MPPC" : "MPPC"
+  },
+}
+
+"EBeamScanner": {
+  # Internal child of ASM, so no class
+  role: "multibeam",
+}
+
+"MirrorDescanner": {
+  # Internal child of ASM, so no class
+  role: "descanner",
+}
+
+"MPPC": {
+  # Internal child of ASM, so no class
+  role: "mppc",
+}
