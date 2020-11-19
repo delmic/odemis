@@ -1254,7 +1254,7 @@ class MC_5DOF(model.Actuator):
             logging.debug("SA_MC is referenced")
         else:
             if ref_on_init:
-                self.reference().result()
+                self.reference()  # will reference now in background.
 
         # Use a default actuator speed
         self.linear_speed = linear_speed
@@ -2506,7 +2506,7 @@ class MCS2(model.Actuator):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
-                self.reference()
+                self.reference()  # will reference in background
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
