@@ -339,8 +339,8 @@ class StaticFluoStream(Static2DStream):
         tint = raw.metadata.get(model.MD_USER_TINT, default_tint)
         try:
             self.tint.value = img.md_format_to_tint(tint)
-        except ValueError as ex:
-            logging.warning("Could not find colormap %s in matplotlib.", ex)
+        except (ValueError, TypeError) as ex:
+            logging.warning("Failed to use tint '%s': %s.", tint, ex)
             self.tint.value = default_tint
 
 
