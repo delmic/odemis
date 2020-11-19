@@ -185,6 +185,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
+        "pos_deactive_after_ref": True,
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -376,6 +377,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "speed": 0.1,
         "accel": 0.001,
         "hold_time": 1.0,
+        "pos_deactive_after_ref": True,
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],

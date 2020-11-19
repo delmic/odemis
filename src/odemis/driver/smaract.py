@@ -3065,7 +3065,8 @@ class MCS2(model.Actuator):
                         # TODO: Raise some error here
 
                 # if referenced, move to the safe position (if requested)
-                if self._pos_deactive_after_ref and self._is_referenced():
+                all_axes_referenced = all([self.referenced._value[a] for a in self._axis_map.keys()])
+                if self._pos_deactive_after_ref and all_axes_referenced:
                     try:
                         deactive_pos = self._metadata[model.MD_FAV_POS_DEACTIVE]
                     except KeyError:
