@@ -1255,9 +1255,7 @@ class MC_5DOF(model.Actuator):
             logging.debug("SA_MC is referenced")
         else:
             if ref_on_init:
-                self.reference().result()
-            else:
-                logging.warning("SA_MC is not referenced. The device will not function until referencing occurs.")
+                self.reference()  # will reference now in background.
 
         # Use a default actuator speed
         self.linear_speed = linear_speed
@@ -1279,7 +1277,11 @@ class MC_5DOF(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.core.SA_MC_Close(self._id)
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+            self.core.SA_MC_Close(self._id)
         super(MC_5DOF, self).terminate()
 
     def updateMetadata(self, md):
@@ -1465,6 +1467,7 @@ class MC_5DOF(model.Actuator):
         Stop the SA_MC controller and update position
         """
         self.Stop()
+        self._executor.cancel()
         self._updatePosition()
 
     def _updatePosition(self):
@@ -1476,7 +1479,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
+                p = {}
             else:
                 raise
 
@@ -1484,9 +1487,8 @@ class MC_5DOF(model.Actuator):
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
 
-    def _createMoveFuture(self, ref=False):
+    def _createMoveFuture(self):
         """
-        ref: if true, will use a different canceller
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
@@ -1501,7 +1503,7 @@ class MC_5DOF(model.Actuator):
         reference usually takes axes as an argument. However, the SA_MC references all
         axes together so this argument is extraneous.
         """
-        f = self._createMoveFuture(ref=True)
+        f = self._createMoveFuture()
         self._executor.submitf(f, self._doReference, f)
         return f
 
@@ -1551,6 +1553,7 @@ class MC_5DOF(model.Actuator):
                 raise CancelledError()
             else:
                 logging.error("Referencing failed: %s", ex)
+                self.state._set_value(ex, force_write=True)
                 raise
         except CancelledError:
             logging.debug("Movement canceled")
@@ -2504,7 +2507,7 @@ class MCS2(model.Actuator):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
-                self.reference().result()
+                self.reference()  # will reference in background
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
@@ -2518,7 +2521,13 @@ class MCS2(model.Actuator):
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.core.SA_CTL_Close(self._id)
+        # should be safe to close the device multiple times if terminate is called more than once.
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+            self.core.SA_CTL_Close(self._id)
+
         super(MCS2, self).terminate()
 
     @staticmethod
@@ -2755,8 +2764,10 @@ class MCS2(model.Actuator):
         Stop the SA_CTL controller and update position
         if axes = None, stop all axes
         """
+
         if axes is None:
             axes = self._axis_map.keys()
+            self._executor.cancel()
 
         for axis_name in axes:
             self.Stop(self._axis_map.get(axis_name))
@@ -3029,7 +3040,8 @@ class MCS2(model.Actuator):
                 logging.warning("Referencing cancelled, device will not move until another referencing")
                 future._was_stopped = True
                 raise
-            except Exception:
+            except Exception as ex:
+                self.state._set_value(ex, force_write=True)
                 logging.exception("Referencing failure")
                 raise
             finally:

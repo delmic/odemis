@@ -222,6 +222,9 @@ class Test5DOF(unittest.TestCase):
     def setUpClass(cls):
         cls.dev = smaract.MC_5DOF(**CONFIG_5DOF)
 
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
+
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
@@ -390,6 +393,9 @@ class TestMCS2(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dev = smaract.MCS2(**CONFIG_3DOF)
+
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
 
     @classmethod
     def tearDownClass(cls):
