@@ -1148,7 +1148,7 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), pos_deactive_after_ref=False, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1182,6 +1182,8 @@ class MC_5DOF(model.Actuator):
                 range: [float, float], default is -1 -> 1
                 unit: (str) default is "m" for x, y, z and "rad" for the r*
             }
+        pos_deactive_after_ref (bool): if True, will move to the deactive position
+            defined in metadata after referencing
         """
         if locator != "fake":
             self.core = MC_5DOF_DLL()
@@ -1225,7 +1227,6 @@ class MC_5DOF(model.Actuator):
                 raise model.HwError("Failed to find device, check it is connected and turned on")
             raise
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
-        self._deactive_pos_after_ref = None
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
@@ -1244,6 +1245,9 @@ class MC_5DOF(model.Actuator):
         # FIXME: temporary hack while the controller can take care of it itself
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
+
+        # Indicates moving to a deactive position after referencing.
+        self._pos_deactive_after_ref = pos_deactive_after_ref
 
         referenced = self._is_referenced()
         # define the referenced VA from the query
@@ -1300,7 +1304,6 @@ class MC_5DOF(model.Actuator):
             deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
             if not isinstance(deactive_pos, dict) or not set(deactive_pos.keys()) <= set(self.axes.keys()):
                 raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
-            self._deactive_pos_after_ref = deactive_pos
         super(MC_5DOF, self).updateMetadata(md)
 
     # API Calls
@@ -1550,10 +1553,16 @@ class MC_5DOF(model.Actuator):
 
                 logging.info("Referencing successful.")
 
-            if self._deactive_pos_after_ref is not None and self._is_referenced():
-                logging.info("Moving axes to deactivated position %s after referencing", self._deactive_pos_after_ref)
-                self._checkMoveAbs(self._deactive_pos_after_ref)
-                self._doMoveAbs(future, self._deactive_pos_after_ref)
+            # if referenced, move to the safe position if requested
+            if self._pos_deactive_after_ref and self._is_referenced():
+                try:
+                    deactive_pos = self._metadata[model.MD_FAV_POS_DEACTIVE]
+                except KeyError:
+                    logging.warning("Cannot move to deactive position. Missing MD_FAV_POS_DEACTIVE")
+                else:
+                    logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
+                    self._checkMoveAbs(deactive_pos)
+                    self._doMoveAbs(future, deactive_pos)
 
         except SA_MCError as ex:
             # This occurs if a stop command interrupts referencing
@@ -2410,7 +2419,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), ** kwargs):
+                 hold_time=float('inf'), pos_deactive_after_ref=False, **kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2437,6 +2446,8 @@ class MCS2(model.Actuator):
                 unit: (str) default will be set to 'm'
                 channel: (int) the corresponding axis number on the controller
             }
+        pos_deactive_after_ref (bool): if True, will move to the deactive position
+            defined in metadata after referencing
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -2450,7 +2461,6 @@ class MCS2(model.Actuator):
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
-        self._deactive_pos_after_ref = None
 
         for axis_name, axis_par in axes.items():
             try:
@@ -2506,6 +2516,9 @@ class MCS2(model.Actuator):
 
         self.position = model.VigilantAttribute({}, readonly=True)
 
+        # Indicates moving to a deactive position after referencing.
+        self._pos_deactive_after_ref = pos_deactive_after_ref
+
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
@@ -2547,7 +2560,6 @@ class MCS2(model.Actuator):
             deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
             if not (isinstance(deactive_pos, dict) and set(deactive_pos.keys()).intersection(set(self._axis_map.keys()))):
                 raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
-            self._deactive_pos_after_ref = deactive_pos
         super(MCS2, self).updateMetadata(md)
 
     @staticmethod
@@ -3052,11 +3064,16 @@ class MCS2(model.Actuator):
                         logging.warning("Axis %s not referenced after the end of referencing", a)
                         # TODO: Raise some error here
 
-                # if referenced, move to the safe position (if defined)
-                if self._deactive_pos_after_ref is not None:
-                    logging.info("Moving to deactivated position %f", a, self._deactive_pos_after_ref)
-                    self._checkMoveAbs(self._deactive_pos_after_ref)
-                    self._doMoveAbs(future, self._deactive_pos_after_ref)
+                # if referenced, move to the safe position (if requested)
+                if self._pos_deactive_after_ref and self._is_referenced():
+                    try:
+                        deactive_pos = self._metadata[model.MD_FAV_POS_DEACTIVE]
+                    except KeyError:
+                        logging.warning("Cannot move to deactive position. Missing MD_FAV_POS_DEACTIVE")
+                    else:
+                        logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
+                        self._checkMoveAbs(deactive_pos)
+                        self._doMoveAbs(future, deactive_pos)
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)
 
