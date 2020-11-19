@@ -353,6 +353,10 @@ class LocalizationTab(Tab):
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
 
+        # remove the play overlay from the top view with static streams
+        panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
+        panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
+
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
             panel,
@@ -377,6 +381,7 @@ class LocalizationTab(Tab):
             tab_data,
             panel.pnl_overview_streams,
             view_ctrl=self.view_controller,
+            static=True,
         )
 
         self._overview_stream_controller.add_overview_action(self._on_acquire)
@@ -442,7 +447,6 @@ class LocalizationTab(Tab):
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {"name": "Overview",
-              "stage": main_data.stage,
               "stream_classes": StaticStream,
               }),
             (viewports[1],
