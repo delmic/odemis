@@ -32,7 +32,12 @@ import logging
 from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
+from odemis.gui.conf.data import COLORMAPS
+import wx
 import wx.adv
+from matplotlib import cm
+import matplotlib.colors as colors
+from odemis.util.img import getColorbar, tintToColormap
 
 
 class ComboBox(wx.adv.OwnerDrawnComboBox):
@@ -167,3 +172,68 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         back_brush = wx.Brush(back_colour, wx.BRUSHSTYLE_SOLID)
         dc.SetBackground(back_brush)
         dc.Clear()
+
+        
+ITEM_WIDTH = 200
+ITEM_HEIGHT = 28
+COLOBAR_WITH_RATIO = 0.5
+
+
+class ColorMapComboBox(ComboBox):
+    """
+    A special combo box that is designed for allowing the user to select a color map
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        labels: list of str that are the names of color maps
+        choices: list of matplotlib colormap. List of corresponding color map objects
+        """
+        kwargs['style'] |= wx.CB_READONLY
+        super(ColorMapComboBox, self).__init__(*args, **kwargs)
+
+    def OnMeasureItemWidth(self, item):
+        return ITEM_WIDTH
+
+    def OnMeasureItem(self, item):
+        return ITEM_HEIGHT
+
+    def SetCustomTintValue(self, value):
+        self.Refresh(eraseBackground=True)
+
+    def OnDrawItem(self, dc, rect, item, flags):
+        r = wx.Rect(*rect)  # make a copy
+
+        # Draw a rectangle of the color
+        item_name = self.Strings[item]
+        color_map = self.GetClientData(item)
+
+        if not color_map:
+            return
+
+        color_map = tintToColormap(color_map)
+
+        if flags & wx.adv.ODCB_PAINTING_CONTROL:
+            # for painting the control itself
+            w = r.width
+            h = r.height
+
+            color_map = self.GetClientData(self.GetSelection())
+            color_map = tintToColormap(color_map)
+
+            gradient = getColorbar(color_map, w, h)
+            bmp = wx.Bitmap(*gradient.shape[1::-1])
+            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+            dc.DrawBitmap(bmp, 0, 0)
+            return
+        else:
+            # for painting the items in the popup
+            # Draw color map
+            colorbar_width = r.width * COLOBAR_WITH_RATIO
+            gradient = getColorbar(color_map, colorbar_width, r.height)
+            bmp = wx.Bitmap(*gradient.shape[1::-1])
+            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+            # image = wx.ImageFromBuffer(*gradient.shape[1::-1], gradient)
+            dc.DrawBitmap(bmp, 0, item * r.height)
+            dc.DrawText(item_name.title(), colorbar_width + 5, item * r.height + 5)
+

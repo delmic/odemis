@@ -31,7 +31,6 @@ from odemis import model
 import re
 import yaml
 
-
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
 # based on:
@@ -169,7 +168,6 @@ def hex_to_frgba(hex_str, af=1.0):
     :rtype : (float, float, float, float)
     """
     return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
-
 
 # String -> VA conversion helper
 def convert_to_object(s):
@@ -459,7 +457,6 @@ def get_img_transformation_md(mat, timage, src_img):
     }
 
     return metadata
-
 
 class JsonExtraEncoder(json.JSONEncoder):
     """Support for data types that JSON default encoder

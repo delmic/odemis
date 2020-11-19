@@ -31,6 +31,7 @@ import gc
 import numpy
 
 from odemis.acq.stream import POL_POSITIONS
+from odemis.model import TINT_FIT_TO_RGB
 
 try:
     import arpolarimetry
@@ -179,7 +180,7 @@ class RGBProjection(DataProjection):
             # And the metadata from raw will be used to generate the metadata of the merged
             # image from the tiles. So, in the end, the exported image metadata will be based
             # on the raw metadata
-            raw.metadata[model.MD_USER_TINT] = value
+            raw.metadata[model.MD_USER_TINT] = img.tint_to_md_format(value)
 
         self._shouldUpdateImage()
 
@@ -1034,14 +1035,19 @@ class RGBSpatialProjection(RGBProjection):
         """
         dims = tile.metadata.get(model.MD_DIMS, "CTZYX"[-tile.ndim::])
         ci = dims.find("C")  # -1 if not found
-        tint = tuple(self.stream.tint.value)
+        # handle the tint
+        tint = self.stream.tint.value
+
         if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
             # Take the RGB data as-is, just needs to make sure it's in the right order
             tile = img.ensureYXC(tile)
-            if tint != (255, 255, 255):  # Tint not white => adjust the RGB channels
-                tile = tile.copy()
-                # Explicitly only use the first 3 values, to leave the alpha channel as-is
-                numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
+            if isinstance(tint, tuple):  # Tint not white => adjust the RGB channels
+                if tint != (255, 255, 255):
+                    tile = tile.copy()
+                    # Explicitly only use the first 3 values, to leave the alpha channel as-is
+                    numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
+            else:
+                logging.warning("Tuple Tint expected: got %s", tint)
 
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
@@ -1174,11 +1180,11 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         stream.calibrated.subscribe(self._on_new_spec_data)
         if hasattr(stream, "spectrumBandwidth"):
             stream.spectrumBandwidth.subscribe(self._on_spectrumBandwidth)
-        if hasattr(stream, "fitToRGB"):
-            stream.fitToRGB.subscribe(self._on_fitToRGB)
+        if hasattr(stream, "tint"):
+            stream.tint.subscribe(self._on_tint)
         self._updateImage()
 
-    def _on_fitToRGB(self, _):
+    def _on_tint(self, _):
         self._shouldUpdateImage()
 
     def _on_new_spec_data(self, _):
@@ -1290,11 +1296,11 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
             irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
 
-            if not hasattr(self.stream, "fitToRGB") or not self.stream.fitToRGB.value:
+            if self.stream.tint.value != TINT_FIT_TO_RGB:
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data)
-                rgbim = img.DataArray2RGB(av_data, irange)
+                rgbim = img.DataArray2RGB(av_data, irange, self.stream.tint.value)
 
             else:
                 # Note: For now this method uses three independent bands. To give

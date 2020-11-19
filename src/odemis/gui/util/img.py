@@ -42,7 +42,9 @@ from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
+import matplotlib.colors as colors
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -74,6 +76,7 @@ ARC_RADIUS = 0.002
 ARC_LEFT_MARGIN = 0.01
 ARC_TOP_MARGIN = 0.0104
 TINT_SIZE = 0.0155
+COLORBAR_WIDTH_RATIO = 0.6  # the fraction of the two cells to make the colorbar
 
 
 # TODO: rename to *_bgra_*
@@ -1779,17 +1782,44 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
         if s:
             legend_ctx.show_text(s.name.value)
 
-        # If stream has tint, draw the colour in a little square next to the name
-        if (stream is None and
-            (isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)) or
-             hasattr(s, "tint") and tuple(s.tint.value) != (255, 255, 255)
-           )):
+        # Handle the stream colormap
+        if stream is None and hasattr(s, "tint"):
             tint = s.tint.value
-            legend_ctx.set_source_rgb(*conversion.rgb_to_frgb(tint))
-            legend_ctx.rectangle(legend_x_pos + cell_x_step - tint_box_size - small_font,
-                                 legend_y_pos - small_font,
-                                 tint_box_size, tint_box_size)
-            legend_ctx.fill()
+            
+            if tint != TINT_RGB_AS_IS:
+
+                tint = img.tintToColormap(tint)
+            
+                # Draw a gradient of the colormap
+                width = int(cell_x_step * 2 * COLORBAR_WIDTH_RATIO)
+                height = int(tint_box_size)
+
+                colorbar_start_x = legend_x_pos + cell_x_step * 2 * 0.12
+                colorbar_start_y = legend_y_pos + 3
+
+                # draw colorbar scale
+                if s.tint.value != TINT_FIT_TO_RGB:
+                    legend_ctx.move_to(legend_x_pos, legend_y_pos + SUB_UPPER * buffer_size[0])
+                    legend_ctx.show_text(str(numpy.min(s.raw)))
+                    legend_ctx.move_to(legend_x_pos + colorbar_start_x + width - 10, legend_y_pos + SUB_UPPER * buffer_size[0])
+                    legend_ctx.show_text(str(numpy.max(s.raw)))
+
+                legend_ctx.rectangle(colorbar_start_x,
+                                 colorbar_start_y,
+                                 width, height)
+                legend_ctx.fill()
+
+                gradient = img.getColorbar(tint, width - 2, height - 2, alpha=True)
+                gradient = format_rgba_darray(gradient)
+                surface = cairo.ImageSurface.create_for_data(
+                    gradient, cairo.FORMAT_RGB24, gradient.shape[1], gradient.shape[0])
+
+                legend_ctx.set_source_surface(surface, colorbar_start_x + 1,
+                                 colorbar_start_y + 1)
+                legend_ctx.paint()
+
+                legend_x_pos += cell_x_step
+                
             legend_ctx.set_source_rgb(*text_color)
 
         legend_x_pos += cell_x_step

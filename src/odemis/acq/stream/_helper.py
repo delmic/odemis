@@ -710,6 +710,7 @@ class SpectrumSettingsStream(CCDSettingsStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
@@ -766,6 +767,8 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         super(TemporalSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
 
         self._active = False  # variable keep track if stream is active/inactive
+
+        del self.tint  # projection is a chronomgram so tint is unnecessary
 
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
@@ -882,6 +885,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
@@ -1358,6 +1362,7 @@ class ScannedTCSettingsStream(RepetitionStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # Child devices
         self.time_correlator = time_correlator
@@ -1498,6 +1503,7 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
         del self.auto_bc
         del self.auto_bc_outliers
         del self.histogram
+        del self.tint
 
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])

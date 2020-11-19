@@ -31,9 +31,12 @@ from odemis import model
 import scipy.ndimage
 import cv2
 
-from odemis.model import MD_DWELL_TIME, MD_EXP_TIME
+from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util.conversion import get_img_transformation_matrix
 from odemis.util import get_best_dtype_for_acc
+from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
+import matplotlib.colors as colors
+from matplotlib import cm
 
 # See if the optimised (cython-based) functions are available
 try:
@@ -87,6 +90,49 @@ except ImportError:
 #    """
 #    weave.inline(code, ["data", "ret", "irange", "tintr"])
 #    return ret
+
+
+def tint_to_md_format(tint):
+    """
+    Given a tint of a stream, which could be an RGB tuple or colormap object,
+    put it into the format for metadata storage
+    tint argument can be:
+    - a list tuple RGB value (for a tint) or
+    - a matplotlib.colors.Colormap object for a custom color map or
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
+    returns (string or tuple) the tint name for metadata
+    """
+    if isinstance(tint, tuple) or isinstance(tint, list):
+        return tint
+    elif isinstance(tint, colors.Colormap):
+        return tint.name
+    elif tint in (TINT_FIT_TO_RGB, TINT_RGB_AS_IS):
+        return tint
+    else:
+        raise ValueError("Unexpected tint %s" % (tint,))
+
+
+def md_format_to_tint(user_tint):
+    """
+    Given a string or tuple value of user_tint in saved metadata, convert to a tint object
+    Returns tint as:
+    - a list tuple RGB value (for a tint)
+    - a matplotlib.colors.Colormap object for a custom color map
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    """
+    if isinstance(user_tint, tuple) or isinstance(user_tint, list):
+        return user_tint
+    elif isinstance(user_tint, str):
+        if user_tint != TINT_FIT_TO_RGB:
+            try:
+                return cm.get_cmap(user_tint)
+            except NameError:
+                raise ValueError("Invalid tint metadata colormap value %s" % (user_tint,))
+        else:
+            return TINT_FIT_TO_RGB
+    else:
+        raise TypeError("Invalid tint metadata type %s" % (user_tint,))
 
 
 def findOptimalRange(hist, edges, outliers=0):
@@ -304,8 +350,10 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         None => auto (min, max are from the data);
         0, max val of data => whole range is mapped.
         min must be < max, and must be of the same type as data.dtype.
-    :param tint: (3-tuple of 0 < int <256) RGB colour of the final image (each
+    :param tint: Could be:
+        - (3-tuple of 0 < int <256) RGB colour of the final image (each
         pixel is multiplied by the value. Default is white.
+        - colors.Colormap Object
     :return: (numpy.ndarray of 3*shape of uint8) converted image in RGB with the
         same dimension
     """
@@ -331,6 +379,20 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         # TODO: warn if irange looks too different from original value?
         if irange[0] == irange[1]:
             logging.info("Requested RGB conversion with null-range %s", irange)
+
+    # Determine if it is necessary to deal with the color map
+    # Otherwise, continue with the old method
+
+    if isinstance(tint, colors.Colormap):
+        # Normalize the data to the interval [0, 1.0]
+        # TODO: Add logarithmic normalization with LogNorm
+        # norm = colors.LogNorm(vmin=data.min(), vmax=data.max())
+        norm = colors.Normalize(vmin=irange[0], vmax=irange[1], clip=True)
+        rgb = tint(norm(data))  # returns an rgba array
+        rgb = rgb[:, :, :3]  # discard alpha channel
+        out = numpy.empty(rgb.shape, dtype=numpy.uint8)
+        numpy.multiply(rgb, 255, casting='unsafe', out=out)
+        return out
 
     if data.dtype == numpy.uint8 and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
@@ -405,6 +467,51 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2], casting="unsafe")
 
     return rgb
+
+
+def getColorbar(color_map, width, height, alpha=False):
+    """
+    Returns an RGB gradient rectangle or colorbar (as numpy array with 2 dim of RGB tuples)
+    based on the color map inputed
+    color_map: (matplotlib colormap object)
+    width (int): pixel width of output rectangle
+    height (int): pixel height of output rectangle
+    alpha: (bool): set to true if you want alpha channel
+    return: numpy Array of uint8 RGB tuples
+    """
+    gradient = numpy.linspace(0.0, 1.0, width)
+    gradient = numpy.tile(gradient, (height, 1))
+    gradient = color_map(gradient)
+    if not alpha:
+        gradient = gradient[:, :, :3]  # discard alpha channel  # convert to rgb
+    gradient = numpy.multiply(gradient, 255)  # convert to rgb
+    return gradient.astype(numpy.uint8)
+
+
+def tintToColormap(tint):
+    """
+    Convert a tint to a matplotlib.colors.Colormap object
+    tint argument can be:
+    - a list tuple RGB value (for a tint) or
+    - a matplotlib.colors.Colormap object for a custom color map (then it is just returned as is) or
+    - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+    - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a rainbow colormap
+    name (string): the name argument of the new colormap object
+    returns matplotlib.colors.Colormap object
+    """
+    if isinstance(tint, colors.Colormap):
+        return tint
+    elif isinstance(tint, tuple) or isinstance(tint, list):  # a tint RGB value
+        # make a gradient from black to the selected tint
+        tint = colors.LinearSegmentedColormap.from_list("",
+            [(0, 0, 0), rgb_to_frgb(tint)])
+    elif tint == TINT_RGB_AS_IS:
+        tint = cm.get_cmap('hsv')
+    elif tint == TINT_FIT_TO_RGB:  # tint Fit to RGB constant
+        tint = colors.ListedColormap([(0, 0, 1), (0, 1, 0), (1, 0, 0)], 'Fit to RGB')
+    else:
+        raise TypeError("Invalid tint type: %s" % (tint,))
+    return tint
 
 
 def getYXFromZYX(data, zIndex=0):

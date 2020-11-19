@@ -154,7 +154,7 @@ MD_DT_INTEGRATING = "Detector integrating"  # The detector level is proportional
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
 MD_USER_NOTE = "User note" # (string) Whatever comment the user has added to the image
-MD_USER_TINT = "Display tint" # RGB (3-tuple of 0<int<255): colour to display the (greyscale) image
+MD_USER_TINT = "Display tint"  # Either RGB (3-tuple of 0<int<255): colour to display the (greyscale) image or a matplotlib.colors.Colormap name
 
 MD_HW_NOTE = "Hardware note"  # (string) "Free" description of the hardware status and settings.
 
@@ -201,3 +201,7 @@ MD_GAIN_D = "Derivative gain"  # float
 # The following is a string containing a dict encoded in JSON, which represents all the known states
 # of all the hardware used during an acquisition.
 MD_EXTRA_SETTINGS = "Extra settings"
+
+# Constant for TINT
+TINT_FIT_TO_RGB = "fitrgb"
+TINT_RGB_AS_IS = "rgbasis"

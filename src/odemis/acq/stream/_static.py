@@ -337,7 +337,11 @@ class StaticFluoStream(Static2DStream):
 
         # colouration of the image
         tint = raw.metadata.get(model.MD_USER_TINT, default_tint)
-        self.tint.value = tint
+        try:
+            self.tint.value = img.md_format_to_tint(tint)
+        except (ValueError, TypeError) as ex:
+            logging.warning("Failed to use tint '%s': %s.", tint, ex)
+            self.tint.value = default_tint
 
 
 class StaticARStream(StaticStream):
@@ -638,11 +642,6 @@ class StaticSpectrumStream(StaticStream):
                                         cls=(int, long, float))
             self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
 
-            # Whether the (per bandwidth) display should be split intro 3 sub-bands
-            # which are applied to RGB
-            self.fitToRGB = model.BooleanVA(False)
-            self.fitToRGB.subscribe(self.onFitToRGB)
-
         # the raw data after calibration
         self.calibrated = model.VigilantAttribute(image)
 
@@ -658,6 +657,8 @@ class StaticSpectrumStream(StaticStream):
                                 image.shape)
 
         super(StaticSpectrumStream, self).__init__(name, [image], *args, **kwargs)
+
+        self.tint.subscribe(self.onTint)
 
         # Automatically select point/line if data is small (can only be done
         # after .raw is set)
@@ -845,12 +846,6 @@ class StaticSpectrumStream(StaticStream):
     def _onIntensityRange(self, irange):
         super(StaticSpectrumStream, self)._onIntensityRange(irange)
         self._force_selected_spectrum_update()
-
-    def onFitToRGB(self, value):
-        """
-        called when fitToRGB is changed
-        """
-        self._shouldUpdateImage()
 
     def onSpectrumBandwidth(self, value):
         """

@@ -32,11 +32,12 @@ from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
                           MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX,
                           MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
-                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N)
+                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS)
 from odemis.util import img
 import threading
 import time
 import weakref
+import matplotlib
 
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
@@ -230,7 +231,11 @@ class Stream(object):
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
         self.auto_bc_outliers.subscribe(self._onOutliers)
 
-        self.tint = model.ListVA((255, 255, 255), unit="RGB")  # 3-int R,G,B
+        # The tint VA could be either:
+        # - a list tuple RGB value (for a tint) or
+        # - a matplotlib.colors.Colormap object for a custom color map
+        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping
+        self.tint = model.VigilantAttribute((255, 255, 255), setter=self._setTint)
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
@@ -787,7 +792,7 @@ class Stream(object):
             raw = None
 
         if raw is not None:
-            raw.metadata[model.MD_USER_TINT] = value
+            raw.metadata[model.MD_USER_TINT] = img.tint_to_md_format(value)
 
         self._shouldUpdateImage()
 
@@ -1142,6 +1147,32 @@ class Stream(object):
                 irange = int(irange[0]), int(math.ceil(irange[1]))
 
         return irange
+
+    def _setTint(self, tint):
+        # The tint VA could be either:
+        # - a list tuple RGB value (for a tint) or
+        # - a matplotlib.colors.Colormap object for a custom color map or
+        # - a string of value TINT_FIT_TO_RGB to indicate fit RGB color mapping or
+        # - a string of value TINT_RGB_AS_IS that indicates no tint. Will be converted to a black tint
+        # Enforce this setting
+        if isinstance(tint, tuple):
+            # RGB tuple - enforce len of 3
+            if len(tint) != 3:
+                raise ValueError("RGB Value for tint should be of length 3")
+            return tint
+        elif isinstance(tint, list):
+            # convert to tuple of len 3
+            if len(tint) != 3:
+                raise ValueError("RGB Value for tint should be of length 3")
+            return tuple(tint)
+        elif isinstance(tint, matplotlib.colors.Colormap):
+            return tint
+        elif tint == TINT_FIT_TO_RGB:
+            return tint
+        elif tint == TINT_RGB_AS_IS:
+            return (255, 255, 255)
+        else:
+            raise ValueError("Invalid value for tint VA")
 
     def _onIntensityRange(self, irange):
         self._shouldUpdateImage()

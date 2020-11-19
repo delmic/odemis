@@ -37,7 +37,7 @@ from odemis.acq.stream import RGBSpatialSpectrumProjection, \
 from odemis.dataio import tiff, hdf5
 from odemis.driver import simcam
 from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
-    MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow
+    MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow, TINT_FIT_TO_RGB
 from odemis.util import test, conversion, img, spectrum, find_closest
 from odemis.util.test import assert_array_not_equal
 import os
@@ -4454,7 +4454,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # Check RGB spatial projection
         time.sleep(0.2)
-        specs.fitToRGB.value = True
+        specs.tint.value = TINT_FIT_TO_RGB
         time.sleep(0.5)  # wait a bit for the image to update
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
@@ -4666,7 +4666,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
 
         # Check RGB spatial projection
-        tss.fitToRGB.value = True
+        tss.tint.value = TINT_FIT_TO_RGB
         time.sleep(0.2)
         im2d = proj_spatial.image.value
         self.assertEqual(im2d.shape, temporalspectrum.shape[-2:] + (3,))
