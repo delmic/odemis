@@ -22,6 +22,7 @@ http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 import logging
+import math
 import threading
 import time
 from concurrent.futures import CancelledError
@@ -1122,7 +1123,8 @@ class Stage(model.Actuator):
     def _updatePosition(self, raw_pos=None):
         """
         update the position VA
-        raw_pos (dict str -> float): the position (as received from the SEM)
+        raw_pos (dict str -> float): the position (as received from the SEM). If None is passed the current position is
+            requested from the SEM.
         """
         pos = self.parent.get_stage_position() if not raw_pos else raw_pos
         self.position._set_value(self._applyInversion(pos), force_write=True)
@@ -1191,6 +1193,8 @@ class Stage(model.Actuator):
         # Check range (for the axes we are moving)
         for an in shift.keys():
             rng = self.axes[an].range
+            if rng == (0, 2 * math.pi):
+                pos[an] = pos[an] % (2 * math.pi)
             p = target_pos[an]
             if not rng[0] <= p <= rng[1]:
                 raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
