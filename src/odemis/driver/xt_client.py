@@ -45,6 +45,7 @@ DETECTOR2CHANNELNAME = {
     "se-detector": "electron1",
 }
 
+
 class SEM(model.HwComponent):
     """
     Driver to communicate with XT software on TFS microscopes. XT is the software TFS uses to control their microscopes.
@@ -1092,12 +1093,17 @@ class Stage(model.Actuator):
             rng["y"] = stage_info["range"]["y"]
         if "z" not in rng:
             rng["z"] = stage_info["range"]["z"]
+        if "t" not in rng:
+            rng["t"] = stage_info["range"]["t"]
+        if "r" not in rng:
+            rng["r"] = stage_info["range"]["r"]
 
         axes_def = {
-            # Ranges are from the documentation
-            "x": model.Axis(unit="m", range=rng["x"]),
-            "y": model.Axis(unit="m", range=rng["y"]),
-            "z": model.Axis(unit="m", range=rng["z"]),
+            "x": model.Axis(unit=stage_info["unit"]["x"], range=rng["x"]),
+            "y": model.Axis(unit=stage_info["unit"]["y"], range=rng["y"]),
+            "z": model.Axis(unit=stage_info["unit"]["z"], range=rng["z"]),
+            "t": model.Axis(unit=stage_info["unit"]["t"], range=rng["t"]),
+            "r": model.Axis(unit=stage_info["unit"]["r"], range=rng["r"]),
         }
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
@@ -1116,18 +1122,9 @@ class Stage(model.Actuator):
     def _updatePosition(self, raw_pos=None):
         """
         update the position VA
-        raw_pos (dict str -> float): the position in mm (as received from the SEM)
+        raw_pos (dict str -> float): the position (as received from the SEM)
         """
-        if raw_pos is None:
-            position = self.parent.get_stage_position()
-            x, y, z = position["x"], position["y"], position["z"]
-        else:
-            x, y, z = raw_pos["x"], raw_pos["y"], raw_pos["z"]
-
-        pos = {"x": x,
-               "y": y,
-               "z": z,
-               }
+        pos = self.parent.get_stage_position() if not raw_pos else raw_pos
         self.position._set_value(self._applyInversion(pos), force_write=True)
 
     def _refreshPosition(self):
@@ -1209,7 +1206,8 @@ class Stage(model.Actuator):
         Parameters
         ----------
         shift: dict(string->float)
-            Relative shift to move the stage to per axes in m. Axes are 'x' and 'y'.
+            Relative shift to move the stage to per axes in m for 'x', 'y', 'z' in rad for 't', 'r'.
+            Axes are 'x', 'y', 'z', 't' and 'r'.
         """
         if not shift:
             return model.InstantaneousFuture()
@@ -1232,7 +1230,8 @@ class Stage(model.Actuator):
         Parameters
         ----------
         pos: dict(string->float)
-            Absolute position to move the stage to per axes in m. Axes are 'x' and 'y'.
+            Absolute position to move the stage to per axes in m for 'x', 'y', 'z' in rad for 't', 'r'.
+            Axes are 'x', 'y', 'z', 't' and 'r'.
         """
         if not pos:
             return model.InstantaneousFuture()
