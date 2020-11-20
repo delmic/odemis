@@ -314,7 +314,8 @@ def to_pixel_index(xy, shape=None, pixel_size=None):
         entry is the `y`-coordinate.
     shape : tuple of ints (optional)
         Shape of the image. The first entry is the number of rows, the second
-        entry is the number of columns in the image.
+        entry is the number of columns in the image. If not provided the origin
+        is not altered.
     pixel_size : tuple of 2 floats, float (optional)
         Pixel size in (x, y). For square pixels, a single float can be
         provided. If not specified, a pixel size of 1 is used.

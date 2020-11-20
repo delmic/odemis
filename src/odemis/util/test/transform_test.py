@@ -335,14 +335,21 @@ class PixelIndexCoordinateTransformBase(unittest.TestCase):
     def setUp(self):
         self._ji = [(0, 0), (0, 4), (7, 0), (7, 4), (0.5, 0.5)]
 
-        # (shape, pixel_size, xy)
+        # List of known values [(kwargs0, xy0), (kwargs1, xy1), ...] for which
+        # `xy == to_physical_space(self._ji, **kwargs)` is True.
         self._known_values = [
-            ((8, 5), None, [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5), (-1.5, 3)]),
-            ((8, 5), 2, [(-4, 7), (4, 7), (-4, -7), (4, -7), (-3, 6)]),
-            ((8, 5), (2, 3), [(-4, 10.5), (4, 10.5), (-4, -10.5), (4, -10.5), (-3, 9)]),
-            (None, None, [(0, 0), (4, 0), (0, -7), (4, -7), (0.5, -0.5)]),
-            (None, 2, [(0, 0), (8, 0), (0, -14), (8, -14), (1, -1)]),
-            (None, (2, 3), [(0, 0), (8, 0), (0, -21), (8, -21), (1, -1.5)]),
+            ({'shape': (8, 5)},
+             [(-2, 3.5), (2, 3.5), (-2, -3.5), (2, -3.5), (-1.5, 3)]),
+            ({'shape': (8, 5), 'pixel_size': 2},
+             [(-4, 7), (4, 7), (-4, -7), (4, -7), (-3, 6)]),
+            ({'shape': (8, 5), 'pixel_size': (2, 3)},
+             [(-4, 10.5), (4, 10.5), (-4, -10.5), (4, -10.5), (-3, 9)]),
+            ({},
+             [(0, 0), (4, 0), (0, -7), (4, -7), (0.5, -0.5)]),
+            ({'pixel_size': 2},
+             [(0, 0), (8, 0), (0, -14), (8, -14), (1, -1)]),
+            ({'pixel_size': (2, 3)},
+             [(0, 0), (8, 0), (0, -21), (8, -21), (1, -1.5)]),
         ]
 
 
@@ -354,20 +361,20 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
 
         """
         # tuple
-        for shape, pixel_size, _xy in self._known_values:
+        for kwargs, _xy in self._known_values:
             for ji, xy in zip(self._ji, _xy):
-                res = to_physical_space(ji, shape, pixel_size)
+                res = to_physical_space(ji, **kwargs)
                 numpy.testing.assert_array_almost_equal(xy, res)
 
         # list of tuples
-        for shape, pixel_size, xy in self._known_values:
-            res = to_physical_space(self._ji, shape, pixel_size)
+        for kwargs, xy in self._known_values:
+            res = to_physical_space(self._ji, **kwargs)
             numpy.testing.assert_array_almost_equal(xy, res)
 
         # ndarray
-        for shape, pixel_size, xy in self._known_values:
+        for kwargs, xy in self._known_values:
             ji = numpy.array(self._ji)
-            res = to_physical_space(ji, shape, pixel_size)
+            res = to_physical_space(ji, **kwargs)
             numpy.testing.assert_array_almost_equal(xy, res)
 
     def test_to_physical_space_zero_pixel_size(self):
@@ -385,10 +392,10 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
         of indices, or on individual indices.
 
         """
-        for shape, pixel_size, _xy in self._known_values:
-            _xy = to_physical_space(self._ji, shape, pixel_size)
+        for kwargs, _xy in self._known_values:
+            _xy = to_physical_space(self._ji, **kwargs)
             for ji, xy in zip(self._ji, _xy):
-                res = to_physical_space(ji, shape, pixel_size)
+                res = to_physical_space(ji, **kwargs)
                 numpy.testing.assert_array_almost_equal(xy, res)
 
     def test_to_physical_space_raises_value_error(self):
@@ -410,20 +417,20 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
 
         """
         # tuple
-        for shape, pixel_size, _xy in self._known_values:
+        for kwargs, _xy in self._known_values:
             for ji, xy in zip(self._ji, _xy):
-                res = to_pixel_index(xy, shape, pixel_size)
+                res = to_pixel_index(xy, **kwargs)
                 numpy.testing.assert_array_almost_equal(ji, res)
 
         # list of tuples
-        for shape, pixel_size, xy in self._known_values:
-            res = to_pixel_index(xy, shape, pixel_size)
+        for kwargs, xy in self._known_values:
+            res = to_pixel_index(xy, **kwargs)
             numpy.testing.assert_array_almost_equal(self._ji, res)
 
         # ndarray
-        for shape, pixel_size, _xy in self._known_values:
+        for kwargs, _xy in self._known_values:
             xy = numpy.array(_xy)
-            res = to_pixel_index(xy, shape, pixel_size)
+            res = to_pixel_index(xy, **kwargs)
             numpy.testing.assert_array_almost_equal(self._ji, res)
 
     def test_to_pixel_index_multiple(self):
@@ -432,10 +439,10 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
         indices, or on individual indices.
 
         """
-        for shape, pixel_size, _xy in self._known_values:
-            _ji = to_pixel_index(_xy, shape, pixel_size)
+        for kwargs, _xy in self._known_values:
+            _ji = to_pixel_index(_xy, **kwargs)
             for ji, xy in zip(_ji, _xy):
-                res = to_pixel_index(xy, shape, pixel_size)
+                res = to_pixel_index(xy, **kwargs)
                 numpy.testing.assert_array_almost_equal(ji, res)
 
     def test_to_pixel_index_raises_value_error(self):
