@@ -1126,7 +1126,7 @@ class Stage(model.Actuator):
         raw_pos (dict str -> float): the position (as received from the SEM). If None is passed the current position is
             requested from the SEM.
         """
-        pos = self.parent.get_stage_position() if not raw_pos else raw_pos
+        pos = raw_pos if raw_pos else self.parent.get_stage_position()
         self.position._set_value(self._applyInversion(pos), force_write=True)
 
     def _refreshPosition(self):
@@ -1195,6 +1195,7 @@ class Stage(model.Actuator):
             rng = self.axes[an].range
             if rng == (0, 2 * math.pi):
                 pos[an] = pos[an] % (2 * math.pi)
+                target_pos[an] = target_pos[an] % (2 * math.pi)
             p = target_pos[an]
             if not rng[0] <= p <= rng[1]:
                 raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
