@@ -1041,12 +1041,10 @@ class Scanner(model.Emitter):
 
     def _setBlanker(self, blank):
         """True if the the electron beam should blank, False if it should be unblanked."""
-        self.parent.set_channel_state(DETECTOR2CHANNELNAME["se-detector"], True)
         if blank:
             self.parent.blank_beam()
         else:
             self.parent.unblank_beam()
-        self.parent.set_channel_state(DETECTOR2CHANNELNAME["se-detector"], False)
         return self.parent.beam_is_blanked()
 
     def _setSpotSize(self, spotsize):

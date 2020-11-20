@@ -42,7 +42,7 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 "inverted": ["x"],
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@localhost:4242",
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.130:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
@@ -191,7 +191,7 @@ class TestMicroscope(unittest.TestCase):
     def test_blank_beam(self):
         """Test that the beam is unblanked after unblank beam is called, and blanked after blank is called."""
         self.scanner.blanker.value = False
-        self.assertFalse(self.scanner.blanker.value)
+        self.assertIsInstance(self.scanner.blanker.value, bool)
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
