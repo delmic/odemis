@@ -191,6 +191,8 @@ class TestMicroscope(unittest.TestCase):
     def test_blank_beam(self):
         """Test that the beam is unblanked after unblank beam is called, and blanked after blank is called."""
         self.scanner.blanker.value = False
+        # NOTE: it is only possible to check if the beam is unblanked when the stream in XT is running. If the stream is
+        # not running it will always return True. Therefore this test only uses a weak check for unblanking the beam.
         self.assertIsInstance(self.scanner.blanker.value, bool)
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
