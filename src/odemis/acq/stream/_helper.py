@@ -768,8 +768,6 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
 
         self._active = False  # variable keep track if stream is active/inactive
 
-        del self.tint  # projection is a chronomgram so tint is unnecessary
-
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
 
