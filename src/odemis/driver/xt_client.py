@@ -1040,7 +1040,22 @@ class Scanner(model.Emitter):
         return self.parent.get_ht_voltage()
 
     def _setBlanker(self, blank):
-        """True if the the electron beam should blank, False if it should be unblanked."""
+        """
+        Parameters
+        ----------
+        blank (bool): True if the the electron beam should blank, False if it should be unblanked.
+
+        Returns
+        -------
+        (bool): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case.
+
+        Notes
+        -----
+        When pausing the stream in XT it will blank the beam and return True for the beam_is_blanked check. It is
+        possible to unblank the beam when the stream is paused. The physical unblanking will then occur when the stream
+        is started, and at that moment beam_is_blanked will return False. It is impossible to check if the beam will
+        be unblanked or blanked when starting the stream.
+        """
         if blank:
             self.parent.blank_beam()
         else:
