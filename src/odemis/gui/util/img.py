@@ -1364,8 +1364,7 @@ def chronogram_to_export_data(proj, raw, vp=None):
         # Draw spectrum bar plot
         fill_colour = BAR_PLOT_COLOUR
         client_size = (SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
-        data_to_draw = numpy.empty((client_size[1], client_size[0], 4), dtype=numpy.uint8)
-        data_to_draw.fill(255)
+        data_to_draw = numpy.full((client_size[1], client_size[0], 4), 255, dtype=numpy.uint8)
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, client_size[0], client_size[1])
         ctx = cairo.Context(surface)
@@ -1560,9 +1559,10 @@ def _draw_image_graph(im, size, xrange, xunit, xtitle, yrange, yunit, ytitle, fl
     scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
     data_with_legend = numpy.append(data_with_legend, scale_y_draw, axis=1)
 
-    plot_im = model.DataArray(data_with_legend)
-    plot_im.metadata[model.MD_DIMS] = 'YXC'
-    return plot_im
+    data_with_legend = model.DataArray(data_with_legend)
+    data_with_legend.metadata[model.MD_DIMS] = 'YXC'
+    format_bgra_to_rgb(data_with_legend, inplace=True)
+    return data_with_legend
 
 
 def _draw_file(file, legend_ctx, buffer_size, margin_x, legend_height, cell_x_step, cell_factor=1):
