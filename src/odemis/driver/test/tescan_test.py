@@ -265,7 +265,7 @@ class TestSEMNoDet(TestSEMBase, unittest.TestCase):
         else:
             new_pwr = light.power.range[0]
         light.power.value = new_pwr
-        self.assertEqual(light.power.value, new_pwr)
+        self.assertEqual(light.power.value, list(new_pwr))
 
         time.sleep(1)
         # Reset
