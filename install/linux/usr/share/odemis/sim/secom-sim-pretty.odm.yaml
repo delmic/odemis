@@ -21,9 +21,6 @@ Spectra: {
                   "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
                  }
     },
-    properties: {
-        power: 0.001, # 1 mW, to not start too strong
-    },
     affects: ["Andor SimCam"],
 }
 
