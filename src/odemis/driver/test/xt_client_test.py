@@ -106,7 +106,7 @@ class TestMicroscope(unittest.TestCase):
 
         stage_position = self.stage.position.value.copy()
         # test move_stage method actually moves HW by the requested value
-        self.assertAlmostEqual(stage_position['x'], relative_position['x'] + new_pos['x'])
+        self.assertAlmostEqual(stage_position['x'], relative_position['x'] - new_pos['x'])
         self.assertAlmostEqual(stage_position['y'], relative_position['y'] + new_pos['y'])
 
         # move to a position out of range -> should be impossible
@@ -125,21 +125,21 @@ class TestMicroscope(unittest.TestCase):
             self.skipTest("Microscope stage not tested, too dangerous.")
         init_pos = self.stage.position.value.copy()
         # Test absolute movement
-        abs_pos = {"x": 2e-6, "r": 0.5, "t": 0.2}
+        abs_pos = {"y": 2e-6, "rz": 0.5, "rx": 0.2}
         f = self.stage.moveAbs(abs_pos)
         f.result()
-        self.assertAlmostEqual(self.stage.position.value["x"], abs_pos["x"], places=8)
-        self.assertAlmostEqual(self.stage.position.value["r"], abs_pos["r"], places=4)
-        self.assertAlmostEqual(self.stage.position.value["t"], abs_pos["t"], places=4)
+        self.assertAlmostEqual(self.stage.position.value["y"], abs_pos["y"])
+        self.assertAlmostEqual(self.stage.position.value["rz"], abs_pos["rz"], places=4)
+        self.assertAlmostEqual(self.stage.position.value["rx"], abs_pos["rx"], places=4)
         # Test relative movement
-        rel_pos = {"x": 2e-6, "r": 6, "t": 0.2}
+        rel_pos = {"y": 2e-6, "rz": 6, "rx": 0.2}
         f = self.stage.moveRel(rel_pos)
         f.result()
-        self.assertAlmostEqual(self.stage.position.value["x"], abs_pos["x"] + rel_pos["x"], places=8)
-        self.assertAlmostEqual(self.stage.position.value["r"] % (2 * math.pi),
-                               (abs_pos["r"] + rel_pos["r"]) % (2 * math.pi), places=4)
-        self.assertAlmostEqual(self.stage.position.value["t"],
-                               (abs_pos["t"] + rel_pos["t"]), places=4)
+        self.assertAlmostEqual(self.stage.position.value["y"], abs_pos["y"] + rel_pos["y"])
+        self.assertAlmostEqual(self.stage.position.value["rz"] % (2 * math.pi),
+                               (abs_pos["rz"] + rel_pos["rz"]) % (2 * math.pi), places=4)
+        self.assertAlmostEqual(self.stage.position.value["rx"],
+                               (abs_pos["rx"] + rel_pos["rx"]), places=4)
         self.stage.moveAbs(init_pos)
 
     def test_hfov(self):
