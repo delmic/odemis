@@ -82,10 +82,10 @@ COLORBAR_WIDTH_RATIO = 0.6  # the fraction of the two cells to make the colorbar
 # TODO: rename to *_bgra_*
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
-    im_darray (DataArray or tuple of tuple of DataArray): input image
+    im_darray (DataArray of shape Y,X,{3,4}): input image
     alpha (0 <= int <= 255 or None): If an alpha value is provided it will be
       set in the '4th' byte and used to scale the other RGB values within the array.
-    return (DataArray or tuple of tuple of DataArray): The return type is the same of im_darray
+    return (DataArray of shape Y,X,4): The return type is the same of im_darray
     """
     if im_darray.shape[-1] == 3:
         h, w, _ = im_darray.shape
@@ -96,11 +96,7 @@ def format_rgba_darray(im_darray, alpha=None):
         if alpha is not None:
             rgba[:, :, 3] = alpha
             if alpha != 255:
-                rgba = scale_to_alpha(rgba)
-        new_darray = model.DataArray(rgba)
-
-        return new_darray
-
+                scale_to_alpha(rgba)
     elif im_darray.shape[-1] == 4:
         if hasattr(im_darray, 'metadata'):
             if im_darray.metadata.get('byteswapped', False):
@@ -112,11 +108,60 @@ def format_rgba_darray(im_darray, alpha=None):
         rgba[:, :, 1] = im_darray[:, :, 1]
         rgba[:, :, 2] = im_darray[:, :, 0]
         rgba[:, :, 3] = im_darray[:, :, 3]
-        new_darray = model.DataArray(rgba)
-        new_darray.metadata['byteswapped'] = True
-        return new_darray
     else:
         raise ValueError("Unsupported colour depth!")
+
+    new_darray = model.DataArray(rgba)
+    new_darray.metadata['byteswapped'] = True
+    return new_darray
+
+
+def format_bgra_to_rgb(im_darray, keepalpha=True, inplace=False):
+    """ Reshape the given numpy.ndarray from BGR(A) to RGB(A) format
+    im_darray (DataArray of shape Y,X,{3,4}): input image
+    keepalpha (bool): If an alpha is present, keep it. IOW, if there are 4 channels,
+      the 4th channel will be kept as is.
+    inplace (bool): directly modify im_darray. If True, keepalpha must also be
+       True (as the array cannot change shape).
+    return (DataArray of shape Y,X,{3,4}): The return type is the same of im_darray
+    """
+    assert im_darray.ndim == 3
+
+    if hasattr(im_darray, 'metadata'):
+        if not im_darray.metadata.get('byteswapped', True):
+            logging.warning("Trying to convert to RGB an array already in RGB")
+            return im_darray
+
+    if im_darray.shape[-1] == 3:
+        shape = im_darray.shape
+    elif im_darray.shape[-1] == 4:
+        if keepalpha:
+            shape = im_darray.shape
+        else:
+            shape = im_darray.shape[:2] + (3,)
+            if inplace:
+                raise ValueError("Cannot drop alpha channel in-place")
+    else:
+        raise ValueError("Unsupported colour depth!")
+
+    if inplace:
+        rgba = im_darray
+        rgba[:,:, [2, 0]] = rgba[:,:, [0, 2]]  # Just switch R <> B
+    else:
+        rgba = numpy.empty(im_darray.shape, dtype=numpy.uint8)
+        # Copy the data over with bytes 0 and 2 being swapped (RGB becomes BGR through the -1)
+        rgba[:,:, 0] = im_darray[:,:, 2]
+        rgba[:,:, 1] = im_darray[:,:, 1]
+        rgba[:,:, 2] = im_darray[:,:, 0]
+        if shape[-1] == 4:
+            rgba[:,:, 3] = im_darray[:,:, 3]
+
+    # Add metadata to detect if the function is called twice on the same array
+    if not hasattr(rgba, 'metadata'):
+        rgba = model.DataArray(rgba)
+    rgba.metadata['byteswapped'] = False
+
+    return rgba
 
 
 def min_type(data):
@@ -779,7 +824,7 @@ def ar_to_export_data(projections, raw=False):
             legend_rgb = draw_legend_simple(stream_im, buffer_size, date,
                                             img_file=logo, bg_color=(1, 1, 1), text_color=(0, 0, 0))
             data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
-            data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]  # BGRA -> RGBA for exporter
+            format_bgra_to_rgb(data_with_legend, inplace=True)
             ar_plot_final = model.DataArray(data_with_legend, metadata={model.MD_DIMS: "YXC"})
             data_dict[pol_mode] = ar_plot_final
 
@@ -2297,7 +2342,9 @@ def images_to_export_data(streams, view_hfw, view_pos,
 
 def _adapt_rgb_to_raw(imrgb, data_raw):
     """
-    imrgb (ndarray Y,X,4): RGB image to convert to a greyscale
+    Converts a RGB(A) image to greyscale.
+    Note: for now the implementation is very crude and just takes the first channel.
+    imrgb (ndarray Y,X,{3,4}): RGB image to convert to a greyscale.
     data_raw (DataArray): Raw image (to know the dtype and min/max)
     return (ndarray Y,X)
     """
@@ -2391,7 +2438,7 @@ def add_alpha_byte(im_darray, alpha=255):
         new_im[:, :, :-1] = im_darray
 
         if alpha != 255:
-            new_im = scale_to_alpha(new_im)
+            scale_to_alpha(new_im)
 
         if isinstance(im_darray, model.DataArray):
             return model.DataArray(new_im, im_darray.metadata)
@@ -2407,6 +2454,7 @@ def scale_to_alpha(im_darray):
 
     im_darray (numpy.array of shape Y, X, 4, and dtype uint8). Alpha channel
     is the fourth element of the last dimension. It is modified in place.
+    return im_darray (numpy.array): the input
     """
 
     if im_darray.shape[2] != 4:
@@ -2547,6 +2595,7 @@ def insert_tile_to_image(tile, ovv):
         interpolate_data=True
     )
 
+    # Copy back to original image and convert back to RGB, at once
     ovv[:, :, 0] = ovv_bgra[:, :, 2]
     ovv[:, :, 1] = ovv_bgra[:, :, 1]
     ovv[:, :, 2] = ovv_bgra[:, :, 0]
@@ -2584,11 +2633,6 @@ def merge_screen(im, background):
                buffer_size, 1, blend_mode=BLEND_SCREEN)
 
     # Convert back to RGB
-    rgb = numpy.empty((im.shape[0], im.shape[1], 3), dtype=numpy.uint8)
-    rgb[:, :, 0] = background[:, :, 2]
-    rgb[:, :, 1] = background[:, :, 1]
-    rgb[:, :, 2] = background[:, :, 0]
-    rgb = model.DataArray(rgb, md)
-
-    return rgb
+    format_bgra_to_rgb(im, inplace=True)
+    return im
 
