@@ -438,10 +438,12 @@ class SEM(model.HwComponent):
                     self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             else:
-                if self.pre_res == (1, 1) or True:  # debug
-                    self._device.ScStopScan()
-                    # flush remaining data in data buffer
-                    self.flush()
+                # TODO: it shouldn't be necessary to stop *and* flush every time.
+                # Need to find out in which conditions this is required and only doing then.
+                # It seems that at least if self.pre_res == (1, 1), then it's needed.
+                self._device.ScStopScan()
+                # flush remaining data in data buffer
+                self.flush()
 
         with self._acq_progress_lock:
             try:
@@ -471,11 +473,11 @@ class SEM(model.HwComponent):
                     # it as the result
                     sem_pxs = numpy.frombuffer(sem_pxs, dtype=">u2")
                     sem_img = numpy.array([sem_pxs.mean()])
-                    logging.debug("Acquiring chamber image %s", sem_img)
+                    logging.debug("Received e-beam spot value %g", sem_img[0])
                 else:
                     sem_img = self._device.FetchImage(channel, res[0] * res[1])
                     sem_img = numpy.frombuffer(sem_img, dtype=">u2")
-                    logging.debug("Received SEM image of size %s", res[0] * res[1])
+                    logging.debug("Received SEM image of length %s", len(sem_img))
             except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
 
