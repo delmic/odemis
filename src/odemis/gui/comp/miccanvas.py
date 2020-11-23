@@ -1547,7 +1547,8 @@ class TwoDPlotCanvas(BitmapCanvas):
         """ Set the data to be displayed
         flip (int): 0 for no flip, wx.HORZ and wx.VERT otherwise
         """
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, flip, None, "")])
+        im_bgra = format_rgba_darray(im_data)
+        self.set_images([(im_bgra, (0.0, 0.0), 1.0, True, None, None, flip, None, "")])
         self.unit_x = unit_x
         self.unit_y = unit_y
         self.range_x = range_x
