@@ -1800,9 +1800,9 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 # draw colorbar scale
                 if s.tint.value != TINT_FIT_TO_RGB:
                     legend_ctx.move_to(legend_x_pos, legend_y_pos + SUB_UPPER * buffer_size[0])
-                    legend_ctx.show_text(str(numpy.min(s.raw)))
+                    legend_ctx.show_text(str(s.intensityRange.value[0]))
                     legend_ctx.move_to(legend_x_pos + colorbar_start_x + width - 10, legend_y_pos + SUB_UPPER * buffer_size[0])
-                    legend_ctx.show_text(str(numpy.max(s.raw)))
+                    legend_ctx.show_text(str(s.intensityRange.value[1]))
 
                 legend_ctx.rectangle(colorbar_start_x,
                                  colorbar_start_y,
