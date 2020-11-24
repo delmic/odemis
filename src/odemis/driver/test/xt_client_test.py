@@ -106,7 +106,7 @@ class TestMicroscope(unittest.TestCase):
 
         stage_position = self.stage.position.value.copy()
         # test move_stage method actually moves HW by the requested value
-        self.assertAlmostEqual(stage_position['x'], relative_position['x'] - new_pos['x'])
+        self.assertAlmostEqual(stage_position['x'], relative_position['x'] + new_pos['x'])
         self.assertAlmostEqual(stage_position['y'], relative_position['y'] + new_pos['y'])
 
         # move to a position out of range -> should be impossible

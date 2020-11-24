@@ -1113,7 +1113,7 @@ class Stage(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
-                                                readonly=True, getter=self._getPosition)
+                                                readonly=True)
         self._updatePosition()
 
         # Refresh regularly the position
@@ -1146,7 +1146,7 @@ class Stage(model.Actuator):
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
         pos["rz"] = pos.pop("r")
-        return self._applyInversion(pos)
+        return pos
 
     def _moveTo(self, future, pos, timeout=60):
         with future._moving_lock:
