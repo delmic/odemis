@@ -22,6 +22,7 @@ http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 import logging
+import math
 import threading
 import time
 from concurrent.futures import CancelledError
@@ -44,6 +45,7 @@ XT_STOP = "stop"
 DETECTOR2CHANNELNAME = {
     "se-detector": "electron1",
 }
+
 
 class SEM(model.HwComponent):
     """
@@ -1092,12 +1094,17 @@ class Stage(model.Actuator):
             rng["y"] = stage_info["range"]["y"]
         if "z" not in rng:
             rng["z"] = stage_info["range"]["z"]
+        if "rx" not in rng:
+            rng["rx"] = stage_info["range"]["t"]
+        if "rz" not in rng:
+            rng["rz"] = stage_info["range"]["r"]
 
         axes_def = {
-            # Ranges are from the documentation
-            "x": model.Axis(unit="m", range=rng["x"]),
-            "y": model.Axis(unit="m", range=rng["y"]),
-            "z": model.Axis(unit="m", range=rng["z"]),
+            "x": model.Axis(unit=stage_info["unit"]["x"], range=rng["x"]),
+            "y": model.Axis(unit=stage_info["unit"]["y"], range=rng["y"]),
+            "z": model.Axis(unit=stage_info["unit"]["z"], range=rng["z"]),
+            "rx": model.Axis(unit=stage_info["unit"]["t"], range=rng["rx"]),
+            "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
@@ -1116,18 +1123,10 @@ class Stage(model.Actuator):
     def _updatePosition(self, raw_pos=None):
         """
         update the position VA
-        raw_pos (dict str -> float): the position in mm (as received from the SEM)
+        raw_pos (dict str -> float): the position (as received from the SEM). If None is passed the current position is
+            requested from the SEM.
         """
-        if raw_pos is None:
-            position = self.parent.get_stage_position()
-            x, y, z = position["x"], position["y"], position["z"]
-        else:
-            x, y, z = raw_pos["x"], raw_pos["y"], raw_pos["z"]
-
-        pos = {"x": x,
-               "y": y,
-               "z": z,
-               }
+        pos = raw_pos if raw_pos else self._getPosition()
         self.position._set_value(self._applyInversion(pos), force_write=True)
 
     def _refreshPosition(self):
@@ -1142,12 +1141,23 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
+    def _getPosition(self):
+        """Get position and translate the axes names to be Odemis compatible."""
+        pos = self.parent.get_stage_position()
+        pos["rx"] = pos.pop("t")
+        pos["rz"] = pos.pop("r")
+        return pos
+
     def _moveTo(self, future, pos, timeout=60):
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
                     raise CancelledError()
                 logging.debug("Moving to position {}".format(pos))
+                if "rx" in pos.keys():
+                    pos["t"] = pos.pop("rx")
+                if "rz" in pos.keys():
+                    pos["r"] = pos.pop("rz")
                 self.parent.move_stage(pos, rel=False)
                 time.sleep(0.5)
 
@@ -1158,7 +1168,7 @@ class Stage(model.Actuator):
                 moving = True
                 tstart = time.time()
                 while moving:
-                    pos = self.parent.get_stage_position()
+                    pos = self._getPosition()
                     moving = self.parent.stage_is_moving()
                     # Take the opportunity to update .position
                     self._updatePosition(pos)
@@ -1186,7 +1196,7 @@ class Stage(model.Actuator):
                 self._updatePosition()
 
     def _doMoveRel(self, future, shift):
-        pos = self.parent.get_stage_position()
+        pos = self._getPosition()
         for k, v in shift.items():
             pos[k] += v
 
@@ -1194,6 +1204,9 @@ class Stage(model.Actuator):
         # Check range (for the axes we are moving)
         for an in shift.keys():
             rng = self.axes[an].range
+            if rng == (0, 2 * math.pi) and an in ("rx", "rz"):
+                pos[an] = pos[an] % (2 * math.pi)
+                target_pos[an] = target_pos[an] % (2 * math.pi)
             p = target_pos[an]
             if not rng[0] <= p <= rng[1]:
                 raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
@@ -1209,7 +1222,8 @@ class Stage(model.Actuator):
         Parameters
         ----------
         shift: dict(string->float)
-            Relative shift to move the stage to per axes in m. Axes are 'x' and 'y'.
+            Relative shift to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
+            Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
         if not shift:
             return model.InstantaneousFuture()
@@ -1232,7 +1246,8 @@ class Stage(model.Actuator):
         Parameters
         ----------
         pos: dict(string->float)
-            Absolute position to move the stage to per axes in m. Axes are 'x' and 'y'.
+            Absolute position to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
+            Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
         if not pos:
             return model.InstantaneousFuture()

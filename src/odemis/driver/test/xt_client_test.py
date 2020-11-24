@@ -23,6 +23,7 @@ http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 import logging
+import math
 import os
 import time
 import unittest
@@ -114,6 +115,31 @@ class TestMicroscope(unittest.TestCase):
             f = self.stage.moveAbs(position)
             f.result()
         # Move stage back to initial position
+        self.stage.moveAbs(init_pos)
+
+    def test_move_stage_rot_tilt(self):
+        """
+        Test that moving the microscope stage to a certain t, r position moves it to that position.
+        """
+        if self.xt_type == 'xttoolkit':
+            self.skipTest("Microscope stage not tested, too dangerous.")
+        init_pos = self.stage.position.value.copy()
+        # Test absolute movement
+        abs_pos = {"y": 2e-6, "rz": 0.5, "rx": 0.2}
+        f = self.stage.moveAbs(abs_pos)
+        f.result()
+        self.assertAlmostEqual(self.stage.position.value["y"], abs_pos["y"])
+        self.assertAlmostEqual(self.stage.position.value["rz"], abs_pos["rz"], places=4)
+        self.assertAlmostEqual(self.stage.position.value["rx"], abs_pos["rx"], places=4)
+        # Test relative movement
+        rel_pos = {"y": 2e-6, "rz": 6, "rx": 0.2}
+        f = self.stage.moveRel(rel_pos)
+        f.result()
+        self.assertAlmostEqual(self.stage.position.value["y"], abs_pos["y"] + rel_pos["y"])
+        self.assertAlmostEqual(self.stage.position.value["rz"] % (2 * math.pi),
+                               (abs_pos["rz"] + rel_pos["rz"]) % (2 * math.pi), places=4)
+        self.assertAlmostEqual(self.stage.position.value["rx"],
+                               (abs_pos["rx"] + rel_pos["rx"]), places=4)
         self.stage.moveAbs(init_pos)
 
     def test_hfov(self):
