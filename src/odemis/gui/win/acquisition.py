@@ -659,8 +659,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # The list of streams ready for acquisition (just used as a cache)
         self._acq_streams = {}
 
-        # FIXME: pass the fold_panels
-
         # Compute the preset values for each preset
         self._orig_entries = get_global_settings_entries(self._settings_controller)
         self._orig_settings = preset_as_is(self._orig_entries)
@@ -698,10 +696,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
 
         # set parameters for tiled acq
-        # TODO: avoid hardcoding, use stage metadata
+        # FIXME: avoid hardcoding, use stage metadata
         fm_fov = compute_camera_fov(self._main_data_model.ccd)
         # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
-        # self.area = MD_FAV_AREA from stage
+        # self.area = self._main_data_model.stage.getMetadata(model.MD_FAV_AREA)
         self.area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
         self.overlap = 0.2
 
@@ -910,10 +908,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
-        if self.data:  # This means the button is actually "View"
-            self._view_data()()
-            return
-
         logging.info("Acquire button clicked, starting acquisition")
         self.acquiring = True
 
@@ -996,24 +990,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # leave the gauge, to give a hint on what went wrong.
             return
 
-        # save result to file
-        self.lbl_acqestimate.Parent.Layout()
-        self.lbl_acqestimate.SetLabel("Acquisition completed.")
-        # As the action is complete, rename "Cancel" to "Close"
-        self._view_data()
-        self.lbl_acqestimate.Parent.Layout()
-
-        # Make sure the file is not overridden
-        self.btn_secom_acquire.Enable()
-
-    def _view_data(self):
-        """
-        Called to open the data
-        """
         self.terminate_listeners()
-
         self.EndModal(wx.ID_OPEN)
-        logging.debug("My return code is %d", self.GetReturnCode())
 
 
 def ShowAcquisitionFileDialog(parent, filename):
