@@ -635,9 +635,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # duplicate the interface, but with only one view
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
 
-        self.filename = model.StringVA(create_filename(self.conf.last_path, self.conf.fn_ptn,
-                                                       self.conf.last_extension, self.conf.fn_count))
-        self.filename.subscribe(self._onFilename, init=True)
+        self.filename = model.StringVA(create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
+                                                       ".ome.tiff", self.conf.fn_count))
 
         # Create a new settings controller for the acquisition dialog
         self._settings_controller = LocalizationSettingsController(
@@ -705,11 +704,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
-        v_streams = self._view.getStreams()  # visible streams
         for s in streams:
-            # Add extra viewable streams to view. However, do not add incompatible streams.
-            if s not in v_streams and not isinstance(s, NON_SPATIAL_STREAMS):
-                self._view.addStream(s)
+            self._view.addStream(s)
 
         self.update_acquisition_time()
 
@@ -830,33 +826,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.lbl_acqestimate.SetLabel(txt)
 
-    @call_in_wx_main
-    def _onFilename(self, name):
-        """ updates the GUI when the filename is updated """
-        # decompose into path/file
-        path, base = os.path.split(name)
-        # self.txt_destination.SetValue(str(path))
-        # show the end of the path (usually more important)
-        # self.txt_destination.SetInsertionPointEnd()
-        # self.txt_filename.SetValue(str(base))
-
-    def on_change_file(self, evt):
-        """
-        Shows a dialog to change the path, name, and format of the acquisition
-        file.
-        returns nothing, but updates .filename and .conf
-        """
-        fn = create_filename(self.conf.last_path, self.conf.fn_ptn,
-                             self.conf.last_extension, self.conf.fn_count)
-        new_name = ShowAcquisitionFileDialog(self, fn)
-        if new_name is not None:
-            self.filename.value = new_name
-            self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
-            logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
-            # It means the user wants to do a new acquisition
-            self.btn_secom_acquire.SetLabel("START")
-            self.last_saved_file = None
-
     def on_key(self, evt):
         """ Dialog key press handler. """
         if evt.GetKeyCode() == wx.WXK_ESCAPE:
@@ -927,6 +896,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
+        logging.info("Acquisition logged at %s", self.filename.value)
         self.acq_future = stitching.acquireTiledArea(self.get_acq_streams(), self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
