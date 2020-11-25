@@ -2590,14 +2590,17 @@ class SecomAlignTab(Tab):
             # as we expect no acquisition active when changing tab, it will always
             # lead to subscriptions to VA
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
-            # Reset _aligner_activated and call _onAlignPos to initially move aligner to FAV_POS_ACTIVE position
-            self._aligner_activated = False
-            self._onAlignPos(None)
-            # Subscribe to lens aligner movement to update its FAV_POS_ACTIVE metadata
-            self._aligner_xy.position.subscribe(self._onAlignPos)
+            # Move aligner on tab showing to FAV_POS_ACTIVE position
+            # (if all axes are referenced and there are indeed active and deactive positions metadata)
+            md = self._aligner_xy.getMetadata()
+            if {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()) \
+                    and all(self._aligner_xy.referenced.value.values()):
+                f = self._aligner_xy.moveAbs(md[model.MD_FAV_POS_ACTIVE])
+                self._actuator_controller._enable_buttons(False)
+                f.add_done_callback(self._on_align_move_done)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
-            self._aligner_xy.position.unsubscribe(self._onAlignPos)
+            self._aligner_xy.position.unsubscribe(self._on_align_pos)
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -2833,34 +2836,41 @@ class SecomAlignTab(Tab):
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
-    def _onAlignPos(self, pos):
+    def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
         :param pos: (dict str->float or None) updated position of the aligner
         """
-        # Return if aligner doesn't have both MD_FAV_POS_ACTIVE and MD_FAV_POS_DEACTIVE metadata
-        md = self._aligner_xy.getMetadata()
-        if (model.MD_FAV_POS_ACTIVE and model.MD_FAV_POS_DEACTIVE) not in md:
+        if not self.IsShown():
+            # Shouldn't happen, but for safety, double check
+            logging.warning("Alignment mode changed while alignment tab not shown")
             return
-        # Move aligner on tab showing to FAV_POS_ACTIVE position (if all axes are referenced)
-        if not self._aligner_activated:
-            if all(self._aligner_xy.referenced.value.values()):
-                self._aligner_xy.moveAbs(md[model.MD_FAV_POS_ACTIVE]).result()  # Wait till movement done
-                self._aligner_activated = True
-            return
-
         # Check if updated position is close to FAV_POS_DEACTIVE
+        md = self._aligner_xy.getMetadata()
         dist_deactive = math.hypot(pos["x"] - md[model.MD_FAV_POS_DEACTIVE]["x"],
                                    pos["y"] - md[model.MD_FAV_POS_DEACTIVE]["y"])
-        if dist_deactive <= 0.1e-3:  # within 0.1mm of deactive is considered deactivated.
+        if dist_deactive <= 0.1e-3:  # (within 0.1mm of deactive is considered deactivated.)
             logging.warning("Aligner seems parked, not updating FAV_POS_ACTIVE")
             return
         # Save aligner position as the "calibrated" one
         self._aligner_xy.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
+    def _on_align_move_done(self, f=None):
+        """
+        Wait for the movement of the aligner to it default active position,
+        then subscribe to its position to update the active position.
+        f (future): future of the movement
+        """
+        if f:
+            f.result()  # to fail & log if the movement failed
+        # re-enable the axes buttons
+        self._actuator_controller._enable_buttons(True)
+        # Subscribe to lens aligner movement to update its FAV_POS_ACTIVE metadata
+        self._aligner_xy.position.subscribe(self._on_align_pos)
+
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("secom", 'cryo-secom'):
+        if main_data.role in ("secom", "cryo-secom"):
             return 1
         else:
             return None
