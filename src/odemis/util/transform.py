@@ -194,27 +194,29 @@ def _optimal_rotation(x, y):
     return numpy.dot(V.T, U.T)
 
 
-def to_physical_space(ji, shape, pixel_size=None):
+def to_physical_space(ji, shape=None, pixel_size=None):
     """
     Converts an image pixel index into a coordinate in physical space.
 
     Images are displayed on a computer screen with the origin in the top-left
-    corner. The column-index `i` is used as the primary axis and the row-index
-    `j` is used as the secondary axis. This represents a left-handed coordinate
-    system. Physical coordinates are typically described in a right-handed
-    coordinate system.
+    corner. The position of a pixel is described by a pixel index `(j, i)`,
+    where `j` is the row-index and `i` is the column-index. The index `(0, 0)`
+    is located at the center of the top-left pixel. Note that the index does
+    not need to be integer, i.e. the pixel index `(-0.5, -0.5)` is at the
+    top-left corner of the image.
 
-    Calculations should be done preferably in the right-handed physical
-    coordinate system. Calculations using mixed left-handed and right-handed
-    coordinates should be avoided.
+    A position in physical space is typically given in coordinates `(x, y)`.
+    The x-axis is aligned with the columns of the image, and the y-axis with
+    the rows. The direction of the y-axis is opposite to the row-index, such
+    that it is increasing in the upward direction.
 
     `to_physical_space` converts an image pixel index into a coordinate in
-    physical space. The x-axis is aligned with the columns of the image, and
-    the y-axis with the rows. The direction of the y-axis is opposite to the
-    row-index, such that it is increasing in the upward direction. The origin
-    is placed at the center of the image. If the image has an even amount of
-    rows and/or columns, the origin will be at the boundary between two pixels
-    and the physical coordinates will be non-integer.
+    physical space. The origin is moved to the center of the image when
+    provided with the shape of the image. Note that if the image has an even
+    amount of rows and/or columns, the origin will be at the boundary between
+    two pixels and the physical coordinates will be non-integer. If the shape
+    of the image is not provided the origin is not altered. This is useful when
+    converting a relative displacement (shift) in pixels.
 
 
               Image Pixel Indices                   Physical Coordinates
@@ -241,9 +243,10 @@ def to_physical_space(ji, shape, pixel_size=None):
         Pixel index, list of indices, or array of indices. For each index the
         first entry is the row-index `j` and the second entry is the
         column-index `i`.
-    shape : tuple of ints
+    shape : tuple of ints (optional)
         Shape of the image. The first entry is the number of rows, the second
-        entry is the number of columns in the image.
+        entry is the number of columns in the image. Used to move the origin to
+        the center of the image. If not provided the origin is not altered.
     pixel_size : tuple of 2 floats, float (optional)
         Pixel size in (x, y). For square pixels, a single float can be
         provided.
@@ -270,18 +273,19 @@ def to_physical_space(ji, shape, pixel_size=None):
 
     """
     ji = numpy.asarray(ji)
-    n, m = shape
 
-    if numpy.any(ji < 0):
-        raise IndexError("Negative indices (wrap-around) are not supported.")
-    if numpy.any(ji >= shape):
-        raise IndexError("Index out of range.")
     if ji.shape[-1] != 2:
         raise ValueError("Indices must be 2-dimensional.")
 
     xy = numpy.empty(ji.shape, dtype=float)
-    xy[..., 0] = ji[..., 1] - 0.5 * (m - 1)  # map column-index `i` to x-axis
-    xy[..., 1] = 0.5 * (n - 1) - ji[..., 0]  # map row-index `j` to y-axis
+    xy[..., 0] = ji[..., 1]   # map column-index `i` to x-axis
+    xy[..., 1] = -ji[..., 0]  # map row-index `j` to y-axis
+
+    if shape:
+        # Move the origin to the center of the image.
+        n, m = shape
+        xy[..., 0] -= 0.5 * (m - 1)
+        xy[..., 1] += 0.5 * (n - 1)
 
     if pixel_size is not None:
         xy *= pixel_size
@@ -289,7 +293,7 @@ def to_physical_space(ji, shape, pixel_size=None):
     return xy
 
 
-def to_pixel_index(xy, shape, pixel_size=None):
+def to_pixel_index(xy, shape=None, pixel_size=None):
     """
     Converts a coordinate in physical space into an image pixel index.
 
@@ -297,7 +301,10 @@ def to_pixel_index(xy, shape, pixel_size=None):
     coordinate in physical space into an image pixel index. The columns of the
     image are aligned with the x-axis, and the rows with the y-axis. The
     direction of the y-axis is opposite to the row-index. The origin of the
-    image pixel index is placed at the center of the top-left pixel.
+    image pixel index is moved to the center of the top-left pixel when
+    provided with the shape of the image. If the shape of the image is not
+    provided the origin is not altered. This is useful when converting a
+    relative displacement (shift).
 
     Parameters
     ----------
@@ -305,9 +312,10 @@ def to_pixel_index(xy, shape, pixel_size=None):
         Physical coordinates, list of coordinates, or array of coordinates. For
         each coordinate the first entry is the `x`-coordinate and the second
         entry is the `y`-coordinate.
-    shape : tuple of ints
+    shape : tuple of ints (optional)
         Shape of the image. The first entry is the number of rows, the second
-        entry is the number of columns in the image.
+        entry is the number of columns in the image. If not provided the origin
+        is not altered.
     pixel_size : tuple of 2 floats, float (optional)
         Pixel size in (x, y). For square pixels, a single float can be
         provided. If not specified, a pixel size of 1 is used.
@@ -342,10 +350,14 @@ def to_pixel_index(xy, shape, pixel_size=None):
     if xy.shape[-1] != 2:
         raise ValueError("Coordinates must be 2-dimensional.")
 
-    n, m = shape
     ji = numpy.empty(xy.shape, dtype=float)
-    ji[..., 0] = 0.5 * (n - 1) - xy[..., 1]  # map y-axis to row-index `j`
-    ji[..., 1] = xy[..., 0] + 0.5 * (m - 1)  # map x-axis to column-index `i`
+    ji[..., 0] = -xy[..., 1]  # map y-axis to row-index `j`
+    ji[..., 1] = xy[..., 0]   # map x-axis to column-index `i`
+
+    if shape:
+        n, m = shape
+        ji[..., 0] += 0.5 * (n - 1)
+        ji[..., 1] += 0.5 * (m - 1)
 
     return ji
 
