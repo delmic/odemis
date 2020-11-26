@@ -182,6 +182,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_secom_streams
                 },
                 {
+                    "name": "cryosecom-localization",
+                    "controller": tabs.LocalizationTab,
+                    "button": self.main_frame.btn_tab_localization,
+                    "panel": main_xrc.xrcpnl_tab_localization
+                },
+                {
                     "name": "secom_align",
                     "controller": tabs.SecomAlignTab,
                     "button": self.main_frame.btn_tab_align,

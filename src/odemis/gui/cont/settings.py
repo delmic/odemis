@@ -516,6 +516,24 @@ class SecomSettingsController(SettingsBarController):
                 self._sem_panel.add_bc_control(det)
 
 
+class LocalizationSettingsController(SettingsBarController):
+
+    def __init__(self, tab_panel, tab_data, highlight_change=False):
+        super(LocalizationSettingsController, self).__init__(tab_data)
+        main_data = tab_data.main
+
+        self._optical_panel = OpticalSettingsController(tab_panel.fp_settings_secom_optical,
+                                                        "No optical microscope found",
+                                                        highlight_change,
+                                                        tab_data)
+
+        # Add the components based on what is available
+        # TODO: move it to a separate thread to save time at init?
+        if main_data.ccd:
+            # Hide exposureTime as it's in local settings of the stream
+            self.add_hw_component(main_data.ccd, self._optical_panel, hidden={"exposureTime"})
+
+
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
 

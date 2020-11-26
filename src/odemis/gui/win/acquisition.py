@@ -29,15 +29,16 @@ import gc
 import logging
 import math
 from odemis import model, dataio
-from odemis.acq import stream, path, acqmng
-from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream
+from odemis.acq import stream, path, acqmng, stitching
+from odemis.util.comp import compute_camera_fov
+from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, StaticStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.cont.settings import SecomSettingsController
+from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
 from odemis.gui.cont.streams import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, StreamView
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
@@ -610,6 +611,357 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
+
+
+class OverviewAcquisitionDialog(xrcfr_overview_acq):
+    """
+    Class used to control the cryo-secom overview dialog
+    """
+    def __init__(self, parent, orig_tab_data):
+        xrcfr_overview_acq.__init__(self, parent)
+
+        self.conf = get_acqui_conf()
+
+        # True when acquisition occurs
+        self.acquiring = False
+        self.data = None
+
+        # a ProgressiveFuture if the acquisition is going on
+        self.acq_future = None
+        self._acq_future_connector = None
+
+        self._main_data_model = orig_tab_data.main
+
+        # duplicate the interface, but with only one view
+        self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
+
+        self.filename = model.StringVA(create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
+                                                       ".ome.tiff", self.conf.fn_count))
+
+        # Create a new settings controller for the acquisition dialog
+        self._settings_controller = LocalizationSettingsController(
+            self,
+            self._tab_data_model,
+            highlight_change=True  # also adds a "Reset" context menu
+        )
+
+        orig_view = orig_tab_data.focussedView.value
+        self._view = self._tab_data_model.focussedView.value
+
+        self.streambar_controller = StreamBarController(self._tab_data_model,
+                                                        self.pnl_secom_streams,
+                                                        static=True,
+                                                        ignore_view=True)
+        # The streams currently displayed are the one visible
+        self.add_streams()
+
+        # The list of streams ready for acquisition (just used as a cache)
+        self._acq_streams = {}
+
+        # Compute the preset values for each preset
+        self._orig_entries = get_global_settings_entries(self._settings_controller)
+        self._orig_settings = preset_as_is(self._orig_entries)
+        for sc in self.streambar_controller.stream_controllers:
+            self._orig_entries += get_local_settings_entries(sc)
+
+        self.start_listening_to_va()
+
+        # make sure the view displays the same thing as the one we are
+        # duplicating
+        self._view.view_pos.value = orig_view.view_pos.value
+        self._view.mpp.value = orig_view.mpp.value
+        self._view.merge_ratio.value = orig_view.merge_ratio.value
+
+        # attach the view to the viewport
+        self.pnl_view_acq.canvas.fit_view_to_next_image = False
+        self.pnl_view_acq.setView(self._view, self._tab_data_model)
+
+        # The TOOL_ROA is not present because we don't allow the user to change
+        # the ROA), so we need to explicitly request the canvas to show the ROA.
+        if hasattr(self._tab_data_model, "roa") and self._tab_data_model.roa is not None:
+            cnvs = self.pnl_view_acq.canvas
+            self.roa_overlay = RepetitionSelectOverlay(cnvs, self._tab_data_model.roa,
+                                                             self._tab_data_model.fovComp)
+            cnvs.add_world_overlay(self.roa_overlay)
+
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
+
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+        self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        # on_streams_changed is compatible because it doesn't use the args
+
+        # To update the estimated time when streams are removed/added
+        self._view.stream_tree.flat.subscribe(self.on_streams_changed)
+
+        # set parameters for tiled acq
+        # FIXME: avoid hardcoding, use stage metadata
+        fm_fov = compute_camera_fov(self._main_data_model.ccd)
+        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
+        # self.area = self._main_data_model.stage.getMetadata(model.MD_FAV_AREA)
+        self.area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
+        self.overlap = 0.2
+
+        # Note: It should never be possible to reach here with no streams
+        streams = self.get_acq_streams()
+        for s in streams:
+            self._view.addStream(s)
+
+        self.update_acquisition_time()
+
+    def start_listening_to_va(self):
+        # Get all the VA's from the stream and subscribe to them for changes.
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.subscribe(self.on_setting_change)
+
+    def stop_listening_to_va(self):
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.unsubscribe(self.on_setting_change)
+
+    def duplicate_tab_data_model(self, orig):
+        """
+        Duplicate a MicroscopyGUIData and adapt it for the acquisition window
+        The streams will be shared, but not the views
+        orig (MicroscopyGUIData)
+        return (MicroscopyGUIData)
+        """
+        # TODO: we'd better create a new view and copy the streams
+        new = copy.copy(orig)  # shallow copy
+
+        new.streams = model.ListVA(orig.streams.value)  # duplicate
+
+        # create view (which cannot move or focus)
+        view = guimodel.MicroscopeView("All")
+
+        # differentiate it (only one view)
+        new.views = model.ListVA()
+        new.views.value.append(view)
+        new.focussedView = model.VigilantAttribute(view)
+        new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
+                                             choices={guimodel.VIEW_LAYOUT_ONE})
+        new.tool = model.IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        return new
+
+    def add_streams(self):
+        """
+        Add live streams
+        """
+        # go through all the streams available in the interface model
+        for s in self._tab_data_model.streams.value:
+
+            if not isinstance(s, LiveStream):
+                continue
+
+            self.streambar_controller.addStream(s, add_to_view=self._view)
+
+    def remove_all_streams(self):
+        """
+        Remove the streams we added to the view on creation
+        Must be called in the main GUI thread
+        """
+        # Ensure we don't update the view after the window is destroyed
+        self.streambar_controller.clear()
+
+        # TODO: need to have a .clear() on the settings_controller to clean up?
+        self._settings_controller = None
+        self._acq_streams = {}  # also empty the cache
+
+        gc.collect()  # To help reclaiming some memory
+
+    def get_acq_streams(self):
+        """
+        return (list of Streams): the streams to be acquired
+        """
+        # Only acquire the streams which are displayed
+        streams = self._view.getStreams()
+        return streams
+
+    @wxlimit_invocation(0.1)
+    def update_setting_display(self):
+        if not self:
+            return
+
+        # if gauge was left over from an error => now hide it
+        if self.acquiring:
+            self.gauge_acq.Show()
+            return
+        elif self.gauge_acq.IsShown():
+            self.gauge_acq.Hide()
+            self.Layout()
+
+        # Enable/disable Fine alignment check box
+        streams = self._view.getStreams()
+        self.update_acquisition_time()
+
+        # update highlight
+        for se, value in self._orig_settings.items():
+            se.highlight(se.vigilattr.value != value)
+
+    def on_streams_changed(self, val):
+        """
+        When the list of streams to acquire has changed
+        """
+        self.update_setting_display()
+
+    def on_setting_change(self, _=None):
+        self.update_setting_display()
+
+    def update_acquisition_time(self, acq_time=999):
+        """
+        Must be called in the main GUI thread.
+        """
+        if not self.acquiring:
+            streams = self.get_acq_streams()
+            if not streams:
+                acq_time = 0
+            else:
+                acq_time = stitching.estimateTiledAcquisitionTime(streams,
+                                                              self._main_data_model.stage,
+                                                              self.area, self.overlap)
+
+        txt = "The estimated acquisition time is {}."
+        txt = txt.format(units.readable_time(acq_time))
+
+        self.lbl_acqestimate.SetLabel(txt)
+
+    def on_key(self, evt):
+        """ Dialog key press handler. """
+        if evt.GetKeyCode() == wx.WXK_ESCAPE:
+            self.Close()
+        else:
+            evt.Skip()
+
+    def terminate_listeners(self):
+        """
+        Disconnect all the connections to the streams.
+        Must be called in the main GUI thread.
+        """
+        # stop listening to events
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self.stop_listening_to_va()
+
+        self.remove_all_streams()
+
+    def on_close(self, evt):
+        """ Close event handler that executes various cleanup actions
+        """
+        if self.acq_future:
+            # TODO: ask for confirmation before cancelling?
+            # What to do if the acquisition is done while asking for
+            # confirmation?
+            msg = "Cancelling acquisition due to closing the acquisition window"
+            logging.info(msg)
+            self.acq_future.cancel()
+
+        self.terminate_listeners()
+
+        self.EndModal(wx.ID_CANCEL)
+
+    def _pause_settings(self):
+        """ Pause the settings of the GUI and save the values for restoring them later """
+        self._settings_controller.pause()
+        self._settings_controller.enable(False)
+
+        self.streambar_controller.pause()
+        self.streambar_controller.enable(False)
+
+    def _resume_settings(self):
+        """ Resume the settings of the GUI and save the values for restoring them later """
+        self._settings_controller.enable(True)
+        self._settings_controller.resume()
+
+        self.streambar_controller.enable(True)
+        self.streambar_controller.resume()
+
+    def on_acquire(self, evt):
+        """ Start the actual acquisition """
+        logging.info("Acquire button clicked, starting acquisition")
+        self.acquiring = True
+
+        self.btn_secom_acquire.Disable()
+
+        # disable estimation time updates during acquisition
+        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
+
+        # Freeze all the settings so that it's not possible to change anything
+        self._pause_settings()
+
+        self.gauge_acq.Show()
+        self.Layout()  # to put the gauge at the right place
+
+        # For now, always indicate the best quality (even if the preset is set
+        # to "live")
+        if self._main_data_model.opm:
+            self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
+
+        logging.info("Acquisition logged at %s", self.filename.value)
+        self.acq_future = stitching.acquireTiledArea(self.get_acq_streams(), self._main_data_model.stage, area=self.area,
+                                                     overlap=self.overlap,
+                                                     settings_obs=self._main_data_model.settings_obs,
+                                                     log_path=self.filename.value)
+        # self.update_acquisition_time(est_time)
+        # self.acq_future = acqmng.acquire(streams, self._main_data_model.settings_obs)
+        self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
+                                                                self.gauge_acq,
+                                                                self.lbl_acqestimate)
+        self.acq_future.add_done_callback(self.on_acquisition_done)
+
+        self.btn_cancel.SetLabel("Cancel")
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+    def on_cancel(self, evt):
+        """ Handle acquisition cancel button click """
+        logging.info("Cancel button clicked, stopping acquisition")
+        self.acq_future.cancel()
+        self.acquiring = False
+        self.btn_cancel.SetLabel("Close")
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_in_wx_main
+    def on_acquisition_done(self, future):
+        """ Callback called when the acquisition is finished (either successfully or cancelled) """
+        if self._main_data_model.opm:
+            self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_FAST)
+
+        # bind button back to direct closure
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+        self._resume_settings()
+
+        self.acquiring = False
+
+        # re-enable estimation time updates
+        self._view.lastUpdate.subscribe(self.on_streams_changed)
+
+        self.acq_future = None  # To avoid holding the ref in memory
+        self._acq_future_connector = None
+
+        try:
+            # TODO: Add code for getting the data from the acquisition future
+            self.data = future.result(1)  # timeout is just for safety
+            self.conf.fn_count = update_counter(self.conf.fn_count)
+        except CancelledError:
+            # put back to original state:
+            # re-enable the acquire button
+            self.btn_secom_acquire.Enable()
+
+            # hide progress bar (+ put pack estimated time)
+            self.update_acquisition_time()
+            self.gauge_acq.Hide()
+            self.Layout()
+            return
+        except Exception:
+            # We cannot do much: just warn the user and pretend it was cancelled
+            logging.exception("Acquisition failed")
+            self.btn_secom_acquire.Enable()
+            self.lbl_acqestimate.SetLabel("Acquisition failed.")
+            self.lbl_acqestimate.Parent.Layout()
+            # leave the gauge, to give a hint on what went wrong.
+            return
+
+        self.terminate_listeners()
+        self.EndModal(wx.ID_OPEN)
 
 
 def ShowAcquisitionFileDialog(parent, filename):

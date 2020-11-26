@@ -372,7 +372,7 @@ class TiledAcquisitionTask(object):
 
         return mem_sufficient, mem_est
 
-    STITCH_SPEED = 1e-8  # px/s
+    STITCH_SPEED = 1e8  # px/s
     MOVE_SPEED = 100e-6  # m/s
 
     def estimateTime(self, remaining=None):

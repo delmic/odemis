@@ -63,7 +63,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection
+    ARRawProjection, ARPolarimetryProjection, StaticStream
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -314,6 +314,304 @@ class Tab(object):
 # Preferable autofocus values to be set when triggering autofocus in delphi
 AUTOFOCUS_BINNING = (8, 8)
 AUTOFOCUS_HFW = 300e-06  # m
+
+
+class LocalizationTab(Tab):
+
+    def __init__(self, name, button, panel, main_frame, main_data):
+        """
+        :type name: str
+        :type button: odemis.gui.comp.buttons.TabButton
+        :type panel: wx._windows.Panel
+        :type main_frame: odemis.gui.main_xrc.xrcfr_main
+        :type main_data: odemis.gui.model.MainGUIData
+        """
+
+        tab_data = guimod.LiveViewGUIData(main_data)
+        super(LocalizationTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("LOCALIZATION")
+
+        self.main_data = main_data
+
+        # First we create the views, then the streams
+        vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
+
+        # Order matters!
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Connect the view selection buttons
+        buttons = collections.OrderedDict([
+            (panel.btn_secom_view_all,
+                (None, panel.lbl_secom_view_all)),
+            (panel.btn_secom_view_tl,
+                (panel.vp_secom_tl, panel.lbl_secom_view_tl)),
+            (panel.btn_secom_view_tr,
+                (panel.vp_secom_tr, panel.lbl_secom_view_tr)),
+            (panel.btn_secom_view_bl,
+                (panel.vp_secom_bl, panel.lbl_secom_view_bl)),
+            (panel.btn_secom_view_br,
+                (panel.vp_secom_br, panel.lbl_secom_view_br)),
+        ])
+
+        # remove the play overlay from the top view with static streams
+        panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
+        panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
+
+        self._view_selector = viewcont.ViewButtonController(
+            tab_data,
+            panel,
+            buttons,
+            panel.pnl_secom_grid.viewports
+        )
+
+        self._settingbar_controller = settings.LocalizationSettingsController(
+            panel,
+            tab_data
+        )
+
+        self._streambar_controller = streamcont.SecomStreamsController(
+            tab_data,
+            panel.pnl_secom_streams,
+            view_ctrl=self.view_controller
+        )
+
+        self._acquisition_controller = acqcont.OverviewStreamAcquiController(tab_data, panel)
+
+        self._overview_stream_controller = streamcont.StreamBarController(
+            tab_data,
+            panel.pnl_overview_streams,
+            view_ctrl=self.view_controller,
+            static=True,
+        )
+
+        self._overview_stream_controller.add_overview_action(self._on_acquire)
+
+        # Toolbar
+        self.tb = panel.secom_toolbar
+        for t in TOOL_ORDER:
+            if t in tab_data.tool.choices:
+                self.tb.add_tool(t, tab_data.tool)
+        # Add fit view to content to toolbar
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # auto focus
+        self._autofocus_f = model.InstantaneousFuture()
+        self.tb.add_tool(TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
+        self.tb.enable_button(TOOL_AUTO_FOCUS, False)
+        self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
+        tab_data.streams.subscribe(self._on_current_stream)
+
+        self._streambar_controller.addFluo(add_to_view=True, play=False)
+
+        # Will create SEM stream with all settings local
+        emtvas = set()
+        hwemtvas = set()
+        for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
+            if vaname in ("resolution", "dwellTime", "scale"):
+                emtvas.add(vaname)
+            else:
+                hwemtvas.add(vaname)
+
+        # This stream is used both for rendering and acquisition
+        sem_stream = acqstream.SEMStream(
+            "Secondary electrons",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=hwemtvas,
+            hwdetvas=None,
+            emtvas=emtvas,
+            detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
+        )
+
+        # The sem stream is always visible, so add it by default
+        sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+
+    @property
+    def settingsbar_controller(self):
+        return self._settingbar_controller
+
+    @property
+    def streambar_controller(self):
+        return self._streambar_controller
+
+    def _create_views(self, main_data, viewports):
+        """
+        Create views depending on the actual hardware present
+        return OrderedDict: as needed for the ViewPortController
+        """
+
+        # both SEM and optical are present on the cryosecom
+        logging.info("Creating combined SEM/Optical viewport layout")
+        vpv = collections.OrderedDict([
+            (viewports[0],  # focused view
+             {"name": "Overview",
+              "stream_classes": StaticStream,
+              }),
+            (viewports[1],
+             {"name": "Acquired",
+              "stream_classes": StaticStream,
+              }),
+            (viewports[2],
+             {"name": "Live 1",
+              "stage": main_data.stage,
+              "stream_classes": (EMStream, OpticalStream),
+              }),
+            (viewports[3],
+             {"name": "Live 2",
+              "stage": main_data.stage,
+              "stream_classes": (EMStream, OpticalStream)
+              }),
+        ])
+
+        # Add connection to SEM hFoV if possible (on SEM-only views)
+        if main_data.ebeamControlsMag:
+            for vp, v in vpv.items():
+                if v.get("stream_classes") == EMStream:
+                    v["fov_hw"] = main_data.ebeam
+                    vp.canvas.fit_view_to_next_image = False
+
+        return vpv
+
+    def _on_acquire(self, _):
+        """
+        Called when the user requests to extend
+        (second unused argument is an event object)
+        """
+        # If no acquisition file, behave as just opening a file normally
+        self._acquisition_controller.open_acquisition_dialog()
+
+    def load_data(self, data):
+        # Create streams from data
+        streams = data_to_static_streams(data)
+
+        # TODO: Clear previous overview streams
+        # self._overview_stream_controller.clear()
+
+        for s in streams:
+            scont = self._overview_stream_controller.addStream(s, add_to_view=True)
+            scont.stream_panel.show_remove_btn(True)
+
+
+    def _onAutofocus(self, active):
+        # Determine which stream is active
+        if active:
+            try:
+                self.curr_s = self.tab_data_model.streams.value[0]
+            except IndexError:
+                # Should not happen as the menu/icon should be disabled
+                logging.info("No stream to run the autofocus")
+                self.tab_data_model.autofocus_active.value = False
+                return
+
+            # run only if focuser is available
+            if self.curr_s.focuser:
+                # TODO: maybe this can be done in a less hard-coded way
+                self.orig_hfw = None
+                self.orig_binning = None
+                self.orig_exposureTime = None
+                init_focus = None
+                emt = self.curr_s.emitter
+                det = self.curr_s.detector
+                # Set binning to 8 in case of optical focus to avoid high SNR
+                # and limit HFW in case of ebeam focus to avoid extreme brightness.
+                # Also apply ACB before focusing in case of ebeam focus.
+                if self.curr_s.focuser.role == "ebeam-focus" and self.main_data.role == "delphi":
+                    self.orig_hfw = emt.horizontalFoV.value
+                    emt.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
+                    f = det.applyAutoContrast()
+                    f.result()
+                    # Use the good initial focus value if known
+                    init_focus = self._state_controller.good_focus
+
+                    # TODO: for the DELPHI, it should also be possible to use the
+                    # opt_focus value from calibration as a "good value"
+                else:
+                    if model.hasVA(det, "binning"):
+                        self.orig_binning = det.binning.value
+                        det.binning.value = max(self.orig_binning, AUTOFOCUS_BINNING)
+                        if model.hasVA(det, "exposureTime"):
+                            self.orig_exposureTime = det.exposureTime.value
+                            bin_ratio = numpy.prod(self.orig_binning) / numpy.prod(det.binning.value)
+                            expt = self.orig_exposureTime * bin_ratio
+                            det.exposureTime.value = det.exposureTime.clip(expt)
+
+                self._autofocus_f = AutoFocus(det, emt, self.curr_s.focuser, good_focus=init_focus)
+                self._autofocus_f.add_done_callback(self._on_autofocus_done)
+            else:
+                # Should never happen as normally the menu/icon are disabled
+                logging.info("Autofocus cannot run as no hardware is available")
+                self.tab_data_model.autofocus_active.value = False
+        else:
+            self._autofocus_f.cancel()
+
+    def _on_autofocus_done(self, future):
+        self.tab_data_model.autofocus_active.value = False
+        if self.orig_hfw is not None:
+            self.curr_s.emitter.horizontalFoV.value = self.orig_hfw
+        if self.orig_binning is not None:
+            self.curr_s.detector.binning.value = self.orig_binning
+        if self.orig_exposureTime is not None:
+            self.curr_s.detector.exposureTime.value = self.orig_exposureTime
+
+    def _on_current_stream(self, streams):
+        """
+        Called when some VAs affecting the current stream change
+        """
+        # Try to get the current stream
+        try:
+            self.curr_s = streams[0]
+        except IndexError:
+            self.curr_s = None
+
+        if self.curr_s:
+            self.curr_s.should_update.subscribe(self._on_stream_update, init=True)
+        else:
+            wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
+
+    def _on_stream_update(self, updated):
+        """
+        Called when the current stream changes play/pause
+        Used to update the autofocus button
+        """
+        # TODO: just let the menu controller also update toolbar (as it also
+        # does the same check for the menu entry)
+        try:
+            self.curr_s = self.tab_data_model.streams.value[0]
+        except IndexError:
+            f = None
+        else:
+            f = self.curr_s.focuser
+
+        f_enable = all((updated, f))
+        if not f_enable:
+            self.tab_data_model.autofocus_active.value = False
+        wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
+
+    def terminate(self):
+        super(LocalizationTab, self).terminate()
+        # make sure the streams are stopped
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
+
+    def Show(self, show=True):
+        assert (show != self.IsShown())  # we assume it's only called when changed
+        super(LocalizationTab, self).Show(show)
+
+        # pause streams when not displayed
+        if not show:
+            self._streambar_controller.pauseStreams()
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SECOM/DELPHI and all simple microscopes
+        # TODO: FIX YAML FILE and make sure role is cryo-secom. After remove this line
+        return 2
+        if main_data.role in ("cryo-secom"):
+            return 2
+        else:
+            return None
 
 
 class SecomStreamsTab(Tab):
@@ -801,7 +1099,9 @@ class SecomStreamsTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         # For SECOM/DELPHI and all simple microscopes
-        if main_data.role in ("secom", "delphi", "sem", "optical"):
+        if main_data.role in ("cryo-secom"):
+            return None
+        elif main_data.role in ("secom", "delphi", "sem", "optical"):
             return 2
         else:
             return None
@@ -2316,7 +2616,6 @@ class AnalysisTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         return 0
-
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform

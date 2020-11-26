@@ -1475,6 +1475,20 @@ class StreamBarController(object):
             self.menu_actions[title] = callback
             self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
 
+    def add_overview_action(self, callback):
+        """ Add an overview action to the button
+        :param callback: (callable) function to call when the action is selected
+        """
+
+        if self._stream_bar.btn_add_stream is None:
+            logging.error("No add button present!")
+        else:
+            logging.debug("Enabling add overview")
+
+            self._stream_bar.hide_add_button()
+            self._stream_bar.show_overview_button()
+            self._stream_bar.btn_add_overview.Bind(wx.EVT_BUTTON, callback)
+
     def remove_action(self, title):
         """
         Remove the given action, if it exists. Otherwise does nothing

@@ -881,8 +881,28 @@ class ViewButton(GraphicRadioButton):
                           False)
 
 
+class PlusImageButton(ImageTextButton):
+    """ This class describes a graphical button that has a plus icon to the left """
+
+    labelDelta = 0
+
+    def __init__(self, *args, **kwargs):
+
+        kwargs['bitmap'] = img.getBitmap("overview_add.png")
+
+        super(PlusImageButton, self).__init__(*args, **kwargs)
+
+        self.SetForegroundColour(wx.WHITE)
+
+        self.bmpSelected = img.getBitmap("overview_add_a.png")
+        self.bmpHover = img.getBitmap("overview_add_h.png")
+        btn_img = img.getImage("overview_add.png")
+        darken_image(btn_img, 0.8)
+        self.bmpDisabled = wx.Bitmap(btn_img)
+
+
 class PopupImageButton(ImageTextButton):
-    """ This class describes a grahical button with an associated popup menu """
+    """ This class describes a graphical button with an associated popup menu """
 
     labelDelta = 0
 
