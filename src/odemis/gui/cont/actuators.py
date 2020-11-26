@@ -163,8 +163,11 @@ class ActuatorController(object):
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
 
     def _on_acquisition(self, acquiring):
+        self._enable_buttons(not acquiring)
+
+    def _enable_buttons(self, enable=True):
         for b in self._btns:
-            b.Enable(not acquiring)
+            b.Enable(enable)
 
     def bind_keyboard(self, tab_frame):
         """
