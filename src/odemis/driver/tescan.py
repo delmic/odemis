@@ -327,17 +327,20 @@ class SEM(model.HwComponent):
             self._acquisition_thread = None
 
     def flush(self):
-        self._device.Disconnect()
-        self._device = sem.Sem()
-        result = self._device.Connect(self._host, 8300)
-        if result < 0:
-            raise HwError("Failed to connect to TESCAN server '%s'. "
-                          "Check that the ip address is correct and TESCAN server "
-                          "connected to the network." % (self._host,))
-        self._device.ScStopScan()
-        for name, det in self._detectors.items():
-            self._device.DtSelect(det._channel, det._detector)
-            self._device.DtEnable(det._channel, 1, 16)
+        pass
+        # Disabled for now, as it doesn't seem to help, and causes extra issues
+        # as for a while the device is disconnected.
+#         self._device.Disconnect()
+#         self._device = sem.Sem()
+#         result = self._device.Connect(self._host, 8300)
+#         if result < 0:
+#             raise HwError("Failed to connect to TESCAN server '%s'. "
+#                           "Check that the ip address is correct and TESCAN server "
+#                           "connected to the network." % (self._host,))
+#         self._device.ScStopScan()
+#         for name, det in self._detectors.items():
+#             self._device.DtSelect(det._channel, det._detector)
+#             self._device.DtEnable(det._channel, 1, 16)
 
     def _req_stop_acquisition(self):
         """
@@ -387,7 +390,6 @@ class SEM(model.HwComponent):
         return rdas
 
     def _single_acquisition(self, channel):
-        # with self._acq_progress_lock:
         with self._acquisition_init_lock:
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
@@ -419,7 +421,6 @@ class SEM(model.HwComponent):
             b = t + res[1] - 1
 
             dt = self._scanner.dwellTime.value * 1e9
-            # with self._acquisition_init_lock:
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
 
             # make sure socket settings are always set
@@ -447,9 +448,6 @@ class SEM(model.HwComponent):
 
         with self._acq_progress_lock:
             try:
-                # make sure socket settings are always set
-                self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 # Check if spot mode is required
                 if res == (1, 1):
                     if ((self._scaled_shape != scaled_shape) or
@@ -873,11 +871,13 @@ class Scanner(model.Emitter):
                         self.probeCurrent._value = new_pc
                         self.probeCurrent.notify(new_pc)
 
-                    bmode = self.parent._device.ScGetBlanker(1)
-                    blanked = (bmode != 0)
-                    if blanked != self.blanker._value:
-                        self.blanker._value = blanked
-                        self.blanker.notify(blanked)
+                    # if blanker is in auto, don't change its value
+                    if self.blanker.value is not None:
+                        bmode = self.parent._device.ScGetBlanker(1)
+                        blanked = (bmode != 0)
+                        if blanked != self.blanker._value:
+                            self.blanker._value = blanked
+                            self.blanker.notify(blanked)
 
                     new_ext = bool(self.parent._device.ScGetExternal())
                     if new_ext != self.external._value:
@@ -891,6 +891,8 @@ class Scanner(model.Emitter):
         self._va_poll.join(5)
 
 
+# FIXME: for now the image acquisition is not stable. When changing/stopping the
+# acquisition it sometimes dead-locks or the connection drops.
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality 
