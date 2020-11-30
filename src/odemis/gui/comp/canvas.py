@@ -149,7 +149,6 @@ from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
 import os
-import sys
 import wx
 from wx.lib import wxcairo
 

@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from past.builtins import basestring
-from odemis.gui.util import wx_adapter
 import threading
 import cairo
 import logging
@@ -34,7 +33,7 @@ import numpy
 from odemis import model
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion, img, units
+from odemis.util import intersect, fluo, img, units
 import time
 import wx
 import odemis.acq.stream as acqstream
@@ -44,7 +43,6 @@ from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
-import matplotlib.colors as colors
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024

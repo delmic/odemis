@@ -31,7 +31,6 @@ from builtins import str, chr # For Python 2 & 3
 import locale
 import logging
 import math
-import numpy
 import os
 import re
 import string

@@ -24,7 +24,6 @@ from __future__ import division
 import logging
 
 import numpy
-import serial
 import serial.tools.list_ports
 from pymodbus.client.sync import ModbusSerialClient
 

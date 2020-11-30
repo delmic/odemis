@@ -37,7 +37,6 @@ import odemis
 from odemis.model import roattribute, oneway
 from odemis.util import driver, get_best_dtype_for_acc
 import os
-import re
 import threading
 import time
 import weakref

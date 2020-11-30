@@ -23,7 +23,6 @@ from concurrent.futures._base import CancelledError, FINISHED, CANCELLED, \
 import logging
 from odemis import model
 from odemis.util import executeAsyncTask
-import sys
 import threading
 import time
 

@@ -32,11 +32,8 @@ import logging
 from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
-from odemis.gui.conf.data import COLORMAPS
 import wx
 import wx.adv
-from matplotlib import cm
-import matplotlib.colors as colors
 from odemis.util.img import getColorbar, tintToColormap
 
 
