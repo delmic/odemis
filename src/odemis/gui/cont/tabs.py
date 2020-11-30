@@ -605,9 +605,6 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        # For SECOM/DELPHI and all simple microscopes
-        # TODO: FIX YAML FILE and make sure role is cryo-secom. After remove this line
-        return 2
         if main_data.role in ("cryo-secom"):
             return 2
         else:
