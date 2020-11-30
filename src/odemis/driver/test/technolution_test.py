@@ -115,7 +115,7 @@ class TestAcquisitionServer(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -368,7 +368,7 @@ class TestEBeamScanner(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -582,7 +582,7 @@ class TestMirrorDescanner(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in cls.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 cls.MPPC = child
@@ -848,7 +848,7 @@ class TestMPPC(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -1221,7 +1221,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "main", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
