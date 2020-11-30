@@ -1494,7 +1494,7 @@ class LineSpectrumProjection(RGBProjection):
                 irange = sorted(self.stream.intensityRange.value)
 
             # Scale and convert to RGB image
-            rgbim = img.DataArray2RGB(spec1d, irange)
+            rgbim = img.DataArray2RGB(spec1d, irange, self.stream.tint.value)
             rgbim.flags.writeable = False
             md = self._find_metadata(spec1d.metadata)
             md[model.MD_DIMS] = "YXC"  # RGB format
@@ -1595,7 +1595,7 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         try:
             data = self._computeSpec()
             if data is not None:
-                self.image.value = self._project2RGB(data)
+                self.image.value = self._project2RGB(data, self.stream.tint.value)
             else:
                 self.image.value = None
 
