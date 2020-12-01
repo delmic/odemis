@@ -1,6 +1,6 @@
 MultiBeamSEM: {
   class: Microscope,
-  role: mbsem,
+  role: brightfield,
   children: ["Piezomotor"],
 }
 
