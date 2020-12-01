@@ -30,35 +30,40 @@ other dealings in the software.
 """
 
 from __future__ import division
+
 from collections import OrderedDict
 from concurrent.futures import CancelledError
 import logging
 from odemis import dataio, model
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.gui.conf import util
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.plugin import Plugin, AcquisitionDialog
 import os.path
 import time
 import wx
-from odemis.gui.plugin import Plugin, AcquisitionDialog
 
 
 class RGBCLIntensity(Plugin):
     name = "RGB CL-intensity"
-    __version__ = "1.1"
-    __author__ = "Toon Coenen"
+    __version__ = "1.2"
+    __author__ = u"Toon Coenen & Éric Piel"
     __license__ = "GNU General Public License 2"
 
     vaconf = OrderedDict((
         ("filter1", {
             "label": "Blue",
+            "choices": util.format_band_choices,
         }),
         ("filter2", {
             "label": "Green",
+            "choices": util.format_band_choices,
         }),
         ("filter3", {
             "label": "Red",
+            "choices": util.format_band_choices,
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
@@ -223,6 +228,10 @@ class RGBCLIntensity(Plugin):
             dlg.Destroy()
             return
 
+        # Normally, since Odemis v3.1, all CLSettingsStreams on systems with a cl-filter
+        # have a "local axis" as a VA "axisFilter".
+        assert any(hasattr(s, "axisFilter") for s in cls.streams)
+
         self._pause_streams()
 
         # immediately switch optical path, to save time
@@ -267,7 +276,7 @@ class RGBCLIntensity(Plugin):
         self._pause_streams()
 
         # We use the acquisition CL intensity stream, so there is a concurrent
-        # SEM acquisition (just the survey). The drift correction is run both
+        # SEM acquisition (in addition to the survey). The drift correction is run both
         # during the acquisition, and in-between each acquisition. The drift
         # between each acquisition is corrected by updating the metadata. So
         # it's some kind of post-processing compensation. The advantage is that
@@ -282,6 +291,7 @@ class RGBCLIntensity(Plugin):
         # use SEM concurrent stream and measure drift afterwards but that
         # doubles the dwell time).
         dt_survey, dt_clint, dt_drift = self._calc_acq_times()
+        cl_set_s = next(s for s in self._cl_int_s.streams if hasattr(s, "axisFilter"))
 
         das = []
         fn = self.filename.value
@@ -340,11 +350,8 @@ class RGBCLIntensity(Plugin):
 
             # Loop over the filters, for now it's fixed to 3 but this could be flexible
             for fb, co in zip(self._filters, self._colours):
-                logging.info("Moving to band %s with component %s", fb.value, self.filterwheel.name)
-                ft._subf = self.filterwheel.moveAbs({"band": fb.value})
-                ft._subf.result()
-                if ft.cancelled():
-                    raise CancelledError()
+                cl_set_s.axisFilter.value = fb.value
+                logging.debug("Using band %s", fb.value)
                 ft.set_progress(end=time.time() + dur)
 
                 # acquire CL stream
