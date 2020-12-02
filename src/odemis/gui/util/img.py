@@ -1087,24 +1087,26 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
                     ctx.show_text(label)
                     ctx.move_to(pos, 5)
                     ctx.line_to(pos, 0)
-            prev_lpos = lpos + lbl_width
+
+                prev_lpos = lpos + lbl_width
         else:
             max_width = max(max_width, lbl_width)
             lpos = pos + (lbl_height // 2)
             lpos = max(min(lpos, client_size[1]), 2)
 
-            if prev_lpos >= lpos + 20 or i == 0 or i == len(tick_list):
+            if abs(prev_lpos - lpos) > 20 or i == 0 or i == len(tick_list):
                 if mirror:
 #                     ctx.move_to(client_size[0] - lbl_width - 9, client_size[1] - lpos)
 #                     ctx.show_text(label)
-                    ctx.move_to(client_size[0] - 8, client_size[1] - pos)
-                    ctx.line_to(client_size[0] - 4, client_size[1] - pos)
+                    ctx.move_to(client_size[0] - 8, pos)
+                    ctx.line_to(client_size[0] - 4, pos)
                 else:
                     ctx.move_to(client_size[0] - lbl_width - 17, lpos)
                     ctx.show_text(label)
                     ctx.move_to(client_size[0] - 5, pos)
                     ctx.line_to(client_size[0], pos)
-            prev_lpos = lpos + lbl_height
+
+                prev_lpos = lpos + lbl_height
 
         ctx.stroke()
 
@@ -1452,7 +1454,7 @@ def line_to_export_data(proj, raw):
 
         return _draw_image_graph(spec,
                                  size=(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE),
-                                 xrange=(spectrum_range[0], spectrum_range[-1]),
+                                 xrange=spectrum_range,
                                  xunit=unit,
                                  xtitle="Wavelength",
                                  yrange=(0, line_length),
@@ -1485,10 +1487,10 @@ def temporal_spectrum_to_export_data(proj, raw):
 
         return _draw_image_graph(spec,
                                  size=(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE),
-                                 xrange=(spectrum_range[0], spectrum_range[-1]),
+                                 xrange=spectrum_range,
                                  xunit=wl_unit,
                                  xtitle="Wavelength",
-                                 yrange=(time_range[-1], time_range[0]),  # 0 at the top
+                                 yrange=time_range[::-1],  # 0 at the top
                                  yunit=t_unit,
                                  ytitle="Time",
                                  )

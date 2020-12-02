@@ -475,7 +475,7 @@ class AxisLegend(wx.Panel):
                     ctx.show_text(label)
                     ctx.move_to(pos, 5)
                     ctx.line_to(pos, 0)
-                prev_lpos = lpos + lbl_width
+                    prev_lpos = lpos + lbl_width
             else:
                 max_width = max(max_width, lbl_width)
                 lpos = pos + (lbl_height // 2)
@@ -486,7 +486,7 @@ class AxisLegend(wx.Panel):
                     ctx.show_text(label)
                     ctx.move_to(csize.x - 5, pos)
                     ctx.line_to(csize.x, pos)
-                prev_lpos = lpos + lbl_height
+                    prev_lpos = lpos + lbl_height
 
             ctx.stroke()
 
