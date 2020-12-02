@@ -237,6 +237,7 @@ class BeamShiftController(model.HwComponent):
         """
         :param value (float, float): x, y shift from the center (in m)
         """
+        logging.debug("Requesting shift of %s m." % value)
         try:
             xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB]
         except KeyError:
