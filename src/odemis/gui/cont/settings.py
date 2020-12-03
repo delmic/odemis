@@ -109,7 +109,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
             if entry.value_ctrl:
                 entry.value_ctrl.Enable(enabled)
 
-    def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
+    def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard=None):
         config = guiconf.get_acqui_conf()
         lbl_ctrl, value_ctrl = self.panel.add_file_button(label,
                                                           value or config.last_path,

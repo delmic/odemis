@@ -53,11 +53,15 @@ class FileBrowser(wx.Panel):
                  clear_btn=False,
                  clear_label="",
                  dialog_title="Browse for file",
-                 wildcard="*.*",
+                 wildcard=None,
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
         ):
+        """
+        wildcard (None or str): the list of wildcard to pass to file dialog.
+          If it's None, it will use the default, which is to show all files (*.*).
+        """
 
         style |= wx.TAB_TRAVERSAL
 
@@ -69,7 +73,10 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.dialog_style = dialog_style
-        self.wildcard = wildcard
+        if wildcard is None:
+            self.wildcard = "Any file (*.*)|*.*"
+        else:
+            self.wildcard = wildcard
         self.label = clear_label  # Text to show when the control is cleared
 
         self.text_ctrl = None
