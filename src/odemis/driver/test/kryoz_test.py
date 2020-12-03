@@ -39,7 +39,7 @@ class TestKryozCooler(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = kryoz.CoolerBasic("Test", "cooler", "localhost")
+        cls.dev = kryoz.Cryolab("Test", "cooler", "localhost")
 
     @classmethod
     def tearDownClass(cls):

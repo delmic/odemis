@@ -25,15 +25,13 @@ from odemis.util import to_str_escape
 import threading
 import socket
 
-DEFAULT_PORT = 5041
 
-
-class CoolerBasic():
+class Cryolab(model.HwComponent):
     '''
     Basic cooler driver
     '''
 
-    def __init__(self, name, role, host, port=DEFAULT_PORT, daemon=None, **kwargs):
+    def __init__(self, name, role, host, port=5041, daemon=None, **kwargs):
         """
         host: (string) the TCP/IP hostname of the server
         port: (int) the TCP/IP port of the server.
@@ -41,7 +39,7 @@ class CoolerBasic():
         Raises:
             ValueError if no scanner child is present
         """
-        #super(Cooler, self).__init__(name, role, daemon=daemon, **kwargs)
+        super(Cryolab, self).__init__(name, role, daemon=daemon, **kwargs)
 
         self._host = host
         self._port = port
@@ -63,32 +61,32 @@ class CoolerBasic():
         self._socket.shutdown(socket.SHUT_RDWR)
         self._socket.close()
 
-        super(CoolerBasic, self).terminate()
+        super(Cryolab, self).terminate()
 
     def _sendQuery(self, cmd):
         """
         cmd (byte str): command to be sent to device
-        returns (byte str): answer received from the device
+        returns (str): answer received from the device
         raise:
             IOError if no answer is returned in time
         """
-        cmd = bytes(cmd, 'utf-8') + b"\r"
+        cmd = cmd + b"\r"
         with self._net_access:
-            #logging.debug("Sending: %s", to_str_escape(cmd))
+            logging.debug("Sending: %s", to_str_escape(cmd))
             self._socket.sendall(cmd + b'\r\n')
 
             ans = b''
-            while ans[-2:] != b'\r' and ans[-1:] != b'\n':
+            while ans[-2:] != b"\r\n":
                 try:
                     ans += self._socket.recv(4096)
                 except socket.timeout:
                     # this is ok. Just means the server didn't send anything.
                     # Keep listening
-                    pass
+                    logging.warning("Socket timeout on message %s", to_str_escape(cmd))
 
             logging.debug("Received: %s", to_str_escape(ans))
 
-            return ans.strip()
+            return ans.strip().decode("latin1")
 
     def getSensorValues(self):
         """
@@ -104,12 +102,12 @@ class CoolerBasic():
         #      | Vacuum pressure
 
         response_type, values = ans.split(":")
-        if response_type != b"SENSORS":
+        if response_type != "SENSORS":
             raise IOError("Invalid response received. %s", ans)
-        values = values.split(b"|")
+        values = values.split("|")
         if len(values) != 6:
             raise IOError("Invalid number of sensor values. %s", values)
-        values = [float(x.replace(b",", b".")) for x in values]
+        values = [float(x.replace(",", ".")) for x in values]
         return values
 
     def getStatus(self):
@@ -120,15 +118,15 @@ class CoolerBasic():
             Connection , Cooling , Executing program , Executing service function,
             Reporting errors
         """
-        ans = self._sendQuery("STATUS")
-        # The output is in the format: "SENSORS:100,000|293,554|-2|119,873|0,000|1,237E3"
+        ans = self._sendQuery(b"STATUS")
+        # The output is in the format: "STATUS:" then | separated values
         # the order: Connection | Cooling | Executing program | Executing service function
         #  | Reporting errors
 
         response_type, values = ans.split(":")
-        if response_type != b"STATUS":
+        if response_type != "STATUS":
             raise IOError("Invalid response received. %s", ans)
-        values = values.split(b"|")
+        values = values.split("|")
         if len(values) != 5:
             raise IOError("Invalid number of status values. %s", values)
         values = [bool(x) for x in values]
@@ -141,12 +139,12 @@ class CoolerBasic():
         Returns (bool): true if successful, false if not
             Raises ValueError if there is an error with the setpoint value
         """
-        ans = self._sendQuery("SETPOINT: %f" % setpoint)
-        if ans == b'OK':
+        ans = self._sendQuery(b"SETPOINT: %f" % setpoint)
+        if ans == 'OK':
             return True
-        elif ans == b'NA':  # not allowed
+        elif ans == 'NA':  # not allowed
             return False
-        elif ans == b"ER":
+        elif ans == "ER":
             raise ValueError("Error with temperature value in request")
         else:
             raise IOError("Invalid response received: %s", ans)
@@ -155,5 +153,5 @@ class CoolerBasic():
         """
         Disconnect from the device
         """
-        _ = self._sendQuery("DISCONNECT")
+        _ = self._sendQuery(b"DISCONNECT")
 
