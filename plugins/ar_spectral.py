@@ -50,9 +50,11 @@ import numpy
 from odemis import dataio, model
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.dataio import hdf5
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
 import os.path
 import threading
@@ -778,6 +780,7 @@ class ARspectral(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
+            "wildcard": formats_to_wildcards({hdf5.FORMAT: hdf5.EXTENSIONS})[0],
         }),
         ("expectedDuration", {
         }),
