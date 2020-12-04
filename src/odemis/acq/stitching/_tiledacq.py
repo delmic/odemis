@@ -19,26 +19,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
 import logging
 import math
-import os
-import threading
-import time
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
-
 import numpy
-import psutil
-
 from odemis import model, dataio
 from odemis.acq import acqmng
-from odemis.acq import stitching
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
+from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE
 from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
 from odemis.util import dataio as udataio
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov
+import os
+import psutil
+import threading
+import time
 
 # TODO: Find a value that works fine with cryo-secom
 # Percentage of the allowed difference of tile focus from good focus
@@ -508,7 +506,7 @@ class TiledAcquisitionTask(object):
         st_data = []
         logging.info("Computing big image out of %d images", len(da_list))
         # TODO: Do this registration step in a separate thread while acquiring
-        das_registered = stitching.register(da_list)
+        das_registered = register(da_list)
 
         weaving_method = WEAVER_COLLAGE_REVERSE  # Method used for SECOM
         logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
@@ -518,10 +516,10 @@ class TiledAcquisitionTask(object):
                 streams = []
                 for da in das_registered:
                     streams.append(da[s])
-                da = stitching.weave(streams, weaving_method)
+                da = weave(streams, weaving_method)
                 st_data.append(da)
         else:
-            da = stitching.weave(das_registered, weaving_method)
+            da = weave(das_registered, weaving_method)
             st_data.append(da)
         return st_data
 
