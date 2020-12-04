@@ -531,19 +531,19 @@ class SEM(model.HwComponent):
             return self.server.is_running_auto_contrast_brightness(channel_name)
 
     def get_beam_shift(self):
-        """Returns: (float) the current beam shift x and y values in meters."""
+        """Returns: (float) the current beam shift (DC coils position) x and y values in meters."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_beam_shift())
 
     def set_beam_shift(self, x_shift, y_shift):
-        """Set the current beam shift values in meters."""
+        """Set the current beam shift (DC coils position) values in meters."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beam_shift(x_shift, y_shift)
 
     def beam_shift_info(self):
-        """Returns: (dict) the unit and xy-range of the beam shift."""
+        """Returns: (dict) the unit and xy-range of the beam shift (DC coils position)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_shift_info()
