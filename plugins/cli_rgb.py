@@ -35,6 +35,7 @@ from collections import OrderedDict
 from concurrent.futures import CancelledError
 import logging
 from odemis import dataio, model
+import odemis.util
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
@@ -42,10 +43,17 @@ import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf import util
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.gui.util import formats_to_wildcards
+from odemis.gui.util import formats_to_wildcards, get_home_folder
 import os.path
 import time
 import wx
+
+try:
+    import configparser
+except ImportError:  # Python 2
+    import ConfigParser as configparser
+
+CONF_FILE = os.path.join(get_home_folder(), ".config", "odemis", "cli_rgb.ini")
 
 
 class RGBCLIntensity(Plugin):
@@ -122,6 +130,42 @@ class RGBCLIntensity(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         self.addMenu("Acquisition/RGB CL intensity...", self.start)
+
+    def _read_config(self):
+        """
+        Updates the filter values based on the content of the config file
+        It will not fail (if there is no config file, or the config file is incorrect).
+        In the worst case, it will not update the filter values.
+        """
+        try:
+            config = configparser.SafeConfigParser()  # Note: in Python 3, this is now also just called "ConfigParser"
+            config.read(CONF_FILE)  # Returns empty config if no file
+            for fname, va in zip(("blue", "green", "red"), self._filters):
+                fval = config.getfloat("filters", fname)
+                # Pick the same/closest value if it's available in the choices, always returns something valid
+                va.value = odemis.util.find_closest(fval, va.choices)
+                logging.debug("Updated %s to %s (from config %s)", fname, va.value, fval)
+
+        except (configparser.NoOptionError, configparser.NoSectionError) as ex:
+            logging.info("Config file is not existing or complete, no restoring filter values: %s", ex)
+        except Exception:
+            logging.exception("Failed to open the config file")
+
+    def _write_config(self):
+        """
+        Store the filter values into the config file
+        """
+        try:
+            config = configparser.SafeConfigParser()
+            config.add_section("filters")
+            config.set("filters", "blue", "%f" % self.filter1.value)
+            config.set("filters", "green", "%f" % self.filter2.value)
+            config.set("filters", "red", "%f" % self.filter3.value)
+
+            with open(CONF_FILE, "w") as configfile:
+                config.write(configfile)
+        except Exception:
+            logging.exception("Failed to save the config file")
 
     def _update_exp_dur(self, _=None):
         """
@@ -218,8 +262,11 @@ class RGBCLIntensity(Plugin):
     def start(self):
         # Check the acquisition tab is open, and a CL-intensity stream is available
         ct = self.main_app.main_data.tab.value
-        cls = self._get_cl_intensity()
-        if ct.name != "sparc_acqui" or not cls:
+        if ct.name == "sparc_acqui":
+            cls = self._get_cl_intensity()
+        else:
+            cls = None
+        if not cls:
             logging.info("Failed to start RGB CL intensity stream")
             dlg = wx.MessageDialog(self.main_app.main_frame,
                                    "No CL-intensity stream is currently open.\n"
@@ -236,6 +283,8 @@ class RGBCLIntensity(Plugin):
         assert any(hasattr(s, "axisFilter") for s in cls.streams)
 
         self._pause_streams()
+
+        self._read_config()  # Restore filter values from the config file
 
         # immediately switch optical path, to save time
         self.main_app.main_data.opm.setPath(cls)  # non-blocking
@@ -267,6 +316,8 @@ class RGBCLIntensity(Plugin):
             logging.debug("RGB CL intensity acquisition completed")
         else:
             logging.warning("Unknown return code %d", ans)
+
+        self._write_config()  # Store the filter values to restore them on next time
 
         # Make sure we don't hold reference to the streams forever
         self._survey_s = None
