@@ -35,9 +35,22 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+MULTIPLE_AXES = (os.environ.get("MULTIPLE_AXES", 0) != 0)  # if available, test 2 axes
 
-TEST_SPEED = 0.001  # m / s
-AXIS_NUM = 1
+if TEST_NOHW:
+    PORT = "/dev/fake"
+else:
+    PORT = "/dev/ttyUSB*"
+
+KWARGS_OPEN = dict(name="test", role="test", port=PORT,
+              axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': False},
+                    'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': False}}
+              )
+
+KWARGS_CLOSED = dict(name="test", role="test", port=PORT,
+              axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': True},
+                    'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': True}}
+              )
 
 
 class TestPMD401OpenLoop(unittest.TestCase):
@@ -46,13 +59,7 @@ class TestPMD401OpenLoop(unittest.TestCase):
     """
 
     def setUp(self):
-        if TEST_NOHW:
-            port = "/dev/fake"
-        else:
-            port = "/dev/ttyUSB*"
-
-        axes = {'x': {'axis_number': AXIS_NUM, 'speed': TEST_SPEED, 'closed_loop': True}}
-        self.stage = PMD401Bus('test', 'test', port, axes)
+        self.stage = PMD401Bus(**KWARGS_OPEN)
 
     def test_simple(self):
         """
@@ -115,19 +122,13 @@ class TestPMD401OpenLoop(unittest.TestCase):
         self.assertEqual(self.stage._executor._queue, deque([]))
 
 
-class TestPMD401ClosedLoop(unittest.TestCase):
+class TestPMD401ClosedLoop(TestPMD401OpenLoop):
     """
     Test the PMD401 class with closed loop functionality.
     """
 
     def setUp(self):
-        if TEST_NOHW:
-            port = "/dev/fake"
-        else:
-            port = "/dev/ttyUSB*"
-
-        axes = {'x': {'axis_number': AXIS_NUM, 'speed': TEST_SPEED, 'closed_loop': True}}
-        self.stage = PMD401Bus('test', 'test', port, axes)
+        self.stage = PMD401Bus(**KWARGS_CLOSED)
 
 
 if __name__ == '__main__':

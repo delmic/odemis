@@ -1,0 +1,30 @@
+MultiBeamSEM: {
+  class: Microscope,
+  role: brightfield,
+  children: ["Piezomotor"],
+}
+
+Piezomotor: {
+    class: piezomotor.PMD401Bus,
+    role: stage,
+    init: {
+        port: "/dev/ttyUSB*", #"/dev/fake",
+        axes: {
+            'x': {
+                axis_number: 1,
+                speed: 0.001, # m/s
+                closed_loop: True,
+                },
+            'y': {
+                axis_number: 2,
+                speed: 0.001, # m/s
+                closed_loop: True,
+                },
+            'z': {
+                axis_number: 3,
+                speed: 0.001, # m/s
+                closed_loop: True,
+                },
+        },
+    },
+}

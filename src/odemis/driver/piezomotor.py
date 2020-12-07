@@ -232,7 +232,7 @@ class PMD401Bus(Actuator):
                     logging.info("Axis %s is using spc value from flash: %s" % (axis, val))
                 self._steps_per_count[axname] = val
             self._steps_per_meter[axname] = self._steps_per_count[axname] * self._counts_per_meter[axname]
-            self._speed_steps[axis_name] = round(self._speed * self._steps_per_meter[axis_name])
+            self._speed_steps[axname] = round(self._speed * self._steps_per_meter[axname])
 
         # Limit switch
         for axis in self._axis_map.values():
