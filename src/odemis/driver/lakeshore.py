@@ -77,9 +77,10 @@ class Lakeshore(model.HwComponent):
         port: (str) port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
           Use /dev/fake for a simulator
-        sensor_input (str): The sensor input to use, typically 'a' or 'b'
+        sensor_input (str): The sensor input to use, typically 'A' or 'B'
         output_channel: (int): The channel output to control, typically 1 or 2
         """
+        super(Lakeshore, self).__init__(name, role, **kwargs)
 
         # Connect to serial port
         self._ser_access = threading.Lock()

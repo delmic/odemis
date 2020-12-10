@@ -25,8 +25,6 @@ from __future__ import division
 
 import logging
 from odemis.driver import lakeshore
-import odemis.model as model
-from odemis.util import test
 import os
 import time
 import unittest
@@ -42,7 +40,7 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CONFIG = {"name": "Lakeshore Test",
           "role": "temperature-controller",
           "port": "/dev/ttyUSB0",
-          "sensor_input": 'b',
+          "sensor_input": "B",
           "output_channel": 2,
 }
 
