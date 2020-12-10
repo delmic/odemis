@@ -70,12 +70,13 @@ class Cryolab(model.HwComponent):
         raise:
             IOError if no answer is returned in time
         """
-        cmd = cmd + b"\r"
         with self._net_access:
             logging.debug("Sending: %s", to_str_escape(cmd))
             self._socket.sendall(cmd + b'\r\n')
 
             ans = b''
+            # TODO: Possibility that multiple replies will be contained within one packet
+            # Might have to add this functionality
             while ans[-2:] != b"\r\n":
                 try:
                     ans += self._socket.recv(4096)
