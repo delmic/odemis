@@ -3074,7 +3074,7 @@ class MCS2(model.Actuator):
                     else:
                         logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
                         self._checkMoveAbs(deactive_pos)
-                        self._doMoveAbs(future, deactive_pos)
+                        self._doMoveAbs(future, self._applyInversion(deactive_pos))
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)
 
