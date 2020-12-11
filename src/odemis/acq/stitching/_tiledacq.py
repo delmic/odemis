@@ -33,7 +33,7 @@ from odemis import model, dataio
 from odemis.acq import acqmng
 from odemis.acq import stitching
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
-from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE
+from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
@@ -44,7 +44,7 @@ from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 # Percentage of the allowed difference of tile focus from good focus
 FOCUS_FIDELITY = 0.3
 # Limit focus range, half the margin will be used on each side of initial focus
-FOCUS_RANGE_MARGIN = 10e-5
+FOCUS_RANGE_MARGIN = 100e-6
 # Indicate the number of tiles to skip during focus adjustment
 SKIP_TILES = 3
 
@@ -67,11 +67,15 @@ class TiledAcquisitionTask(object):
         """
         self._future = future
         self._streams = streams
-
+        self._stage = stage
+        self._starting_pos = {'x': area[0], 'y': area[1]}  # left, top
         # Get total area as a tuple of width, height from ltrb area points
-        area = util.normalize_rect(area)
-        height = area[3] - area[1]
-        width = area[2] - area[0]
+        normalized_area = util.normalize_rect(area)
+        if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
+            logging.warning("Acquisition area {} rearranged into {}".format(area, normalized_area))
+
+        height = normalized_area[3] - normalized_area[1]
+        width = normalized_area[2] - normalized_area[0]
         self._total_area = (width, height)
 
         if future:
@@ -100,8 +104,6 @@ class TiledAcquisitionTask(object):
             self._focus_rng = (max(focus_rng[0], focuser_range[0]), min((focus_rng[1], focuser_range[1])))
             logging.debug("Calculated focus range ={}".format(self._focus_rng))
 
-        self._stage = stage
-        self._starting_pos = {'x': area[0], 'y': area[1]}  # left, top
         # TODO: allow to change the stage movement pattern
         self._settings_obs = settings_obs
 
@@ -222,13 +224,15 @@ class TiledAcquisitionTask(object):
             m["y"] = self._starting_pos["y"] - idx[1] * tile_size[1] * overlap
 
         logging.debug("Moving to tile %s at %s m", idx, m)
-        f = self._stage.moveAbs(m)
+        self._future.running_subf = self._stage.moveAbs(m)
         try:
             speed = min(self._stage.speed.value.values()) if model.hasVA(self._stage, "speed") else 10e-6
             # add 1 to make sure it doesn't time out in case of a very small move
             t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
                            abs(idx_change[1]) * tile_size[1] * overlap) / speed + 1
-            f.result(t)
+            self._future.running_subf.result(t)
+            # TODO: instead of sleeping, handle vibration effects
+            time.sleep(1)
         except TimeoutError:
             logging.warning("Failed to move to tile %s", idx)
             self._future.running_subf.cancel()
@@ -441,6 +445,9 @@ class TiledAcquisitionTask(object):
         da_list = []  # for each position, a list of DataArrays
         prev_idx = [0, 0]
         i = 0
+        # Make sure to begin from starting position
+        self._stage.moveAbs(self._starting_pos)
+
         for ix, iy in self._generateScanningIndices((self._nx, self._ny)):
             logging.debug("Acquiring tile %dx%d", ix, iy)
             self._moveToTile((ix, iy), prev_idx, self._sfov)
@@ -508,7 +515,11 @@ class TiledAcquisitionTask(object):
         st_data = []
         logging.info("Computing big image out of %d images", len(da_list))
         # TODO: Do this registration step in a separate thread while acquiring
-        das_registered = stitching.register(da_list)
+        try:
+            das_registered = stitching.register(da_list, method=REGISTER_GLOBAL_SHIFT)
+        except ValueError:
+            logging.warning("Registration with global_shift failed, retrying with identity registrar..")
+            das_registered = stitching.register(da_list, method=REGISTER_IDENTITY)
 
         weaving_method = WEAVER_COLLAGE_REVERSE  # Method used for SECOM
         logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
