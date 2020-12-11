@@ -464,12 +464,12 @@ class Detector(model.Detector):
             # If the shift caused the image to go out of bounds, limit it
             if ltrb[0] < 0:
                 ltrb[0] = 0
-            elif ltrb[2] > shape[1] - 1:
-                ltrb[0] -= ltrb[2] - (shape[1] - 1)
+            elif ltrb[2] > shape[1]:
+                ltrb[0] -= ltrb[2] - shape[1]
             if ltrb[1] < 0:
                 ltrb[1] = 0
-            elif ltrb[3] >= shape[0] - 1:
-                ltrb[1] -= ltrb[3] - (shape[0] - 1)
+            elif ltrb[3] >= shape[0]:
+                ltrb[1] -= ltrb[3] - shape[0]
             assert(ltrb[0] >= 0 and ltrb[1] >= 0)
 
             # compute each row and column that will be included
