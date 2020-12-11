@@ -1277,41 +1277,43 @@ class TestRotationActuator(unittest.TestCase):
         self.dev_cycle.terminate()
         super(TestRotationActuator, self).tearDown()
 
-ATOL_STAGE = 1e-7
-ATOL_LENS = 1e-7
+ATOL_STAGE = 100e-6  # m
+ATOL_LENS = 100e-6  # m
 STEP_SIZE = 5.9e-9
 
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/cryosecom-sim.yaml"
+
 class TestLinkedHeightActuator(unittest.TestCase):
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(CRYO_SECOM_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        cls.sample_stage = model.getComponent(name="5DOF Stage")
+        cls.lens_stage = model.getComponent(name="3DOF Stage")
+        cls.stage = model.getComponent(role="stage")
+        cls.focus = model.getComponent(role="focus")
+        cls.target_value = 200e-6
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
 
     def setUp(self):
-        """
-        Construct LinkedHeightActuator object with its dependants and child focus
-        """
-        # Construct the underlying sample and lens stages
-        # Using TMCLController to correctly simulate movement
-        self.sample_stage = tmcm.TMCLController(name="sample_stage", role="test_sample",
-                                               port="/dev/fake6",
-                                               axes=["x", "y", "z", "rx", "rz"],
-                                               ustepsize=[STEP_SIZE, STEP_SIZE, STEP_SIZE, STEP_SIZE, STEP_SIZE],
-                                               rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3], [-0.4293, 0.4293],
-                                                    [-0.4293, 0.4293]],
-                                               refproc="Standard")
-        self.lens_stage = tmcm.TMCLController(name="lens_stage", role="test_lens",
-                                             port="/dev/fake3",
-                                             axes=["x", "y", "z"],
-                                             ustepsize=[STEP_SIZE, STEP_SIZE, STEP_SIZE],
-                                             rng=[[-6e-3, 6e-3], [-6e-3, 6e-3], [-6e-3, 6e-3]],
-                                             refproc="Standard")
-        self.lens_stage.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -6.e-3}})
-        # Create Linked height stage from the dependant stages
-        self.stage = LinkedHeightActuator("Linked Stage Z", "stage",
-                                     children={"focus": {"name": "LinkedHeightFocus", "role": "focus",
-                                                         "rng": [0, 4.2e-3]}},
-                                     dependencies={"stage": self.sample_stage, "lensz": self.lens_stage}, )
-        self.focus = next((c for c in self.stage.children.value if c.role == 'focus'), None)
-        if not isinstance(self.focus, LinkedHeightFocus):
-            raise Exception("Focus should be an instance of LinkedHeightFocus")
-        self.focus.updateMetadata({model.MD_POS_COR: {'z': -0.0045}})
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
 
     def test_move_abs(self):
         """
@@ -1320,7 +1322,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         stage = self.stage
         focus = self.focus
         # Only the z axis upward
-        target_pos = {'z': 0.002}
+        target_pos = {'z': self.target_value}
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
         f.result()
         initial_foc = focus.position.value
@@ -1330,7 +1332,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
         # return
         # Only the z axis downward
-        target_pos = {'z': -0.002}
+        target_pos = {'z': -1 * self.target_value}
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
@@ -1338,7 +1340,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Move all axes (focus won't be moved)
-        target_pos = {'x': -0.002, 'y': -0.002, 'z': 0.002, 'rx': .002, 'rz': .002}
+        target_pos = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value, 'rx': self.target_value, 'rz': self.target_value}
         # Put focus in deactive, so no exception would be thrown
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_DEACTIVE])
         f.result()
@@ -1349,7 +1351,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # move all axes (focus won't change)
-        target_pos = {'x': -0.002, 'y': -0.002, 'z': 0, 'rx': 0, 'rz': 0}
+        target_pos = {'x': -1 * self.target_value, 'y': -1 * self.target_value, 'z': -1 * self.target_value, 'rx': -1 * self.target_value, 'rz': -1 * self.target_value}
         initial_foc = focus.position.value
         # Put focus back in active, so it can be adjusted if needed
         f = stage.moveAbs(target_pos)
@@ -1360,7 +1362,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
         f.result()
         # move z axis downward again (focus would be adjusted)
-        target_pos = {'z': -0.001}
+        target_pos = {'z': -1 * self.target_value}
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
@@ -1374,9 +1376,13 @@ class TestLinkedHeightActuator(unittest.TestCase):
         stage = self.stage
         focus = self.focus
 
-        target_pos = {'z': 0.002}
+        # First move to 0
+        target_pos = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
+        f = stage.moveAbs(target_pos)
+        f.result()
+        target_pos = {'z': self.target_value}
         # Move focus to mid range (so up and down relative movement would still be in range)
-        f = focus.moveAbs({'z': focus._range[1] / 2})
+        f = focus.moveAbs({'z': focus.axes['z'].range[1] / 2})
         f.result()
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
@@ -1384,7 +1390,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        target_pos = {'z': -0.002}
+        target_pos = {'z': -1 * self.target_value}
         expected_pos = {'z': 0}  # Moving up then down returning to 0
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
@@ -1392,7 +1398,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        target_pos = {'x': -0.002, 'y': -0.002, 'z': 0.002, 'rx': .002, 'rz': .002}
+        target_pos = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value, 'rx': self.target_value, 'rz': self.target_value}
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_DEACTIVE])
         f.result()
         initial_foc = focus.position.value
@@ -1401,7 +1407,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        target_pos = {'x': 0.002, 'y': 0.002, 'z': -0.002, 'rx': -.002, 'rz': -.002}
+        target_pos = {'x': -1 * self.target_value, 'y': -1 * self.target_value, 'z': -1 * self.target_value,
+                      'rx': -1 * self.target_value, 'rz': -1 * self.target_value}
         expected_pos = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
@@ -1409,10 +1416,10 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        f = focus.moveAbs({'z': focus._range[1] / 2})
+        f = focus.moveAbs({'z': focus.axes['z'].range[1] / 2})
         f.result()
 
-        target_pos = {'z': -0.001}
+        target_pos = {'z': -1 * self.target_value}
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
@@ -1442,6 +1449,10 @@ class TestLinkedHeightActuator(unittest.TestCase):
         # And now trying to move the focus to active range won't be allowed
         with self.assertRaises(ValueError):
             focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE]).result()
+        # Return rx to 0
+        target_pos = {'rx': 0}
+        f = stage.moveAbs(target_pos)
+        f.result()
 
     def test_range_values(self):
         """
@@ -1449,19 +1460,19 @@ class TestLinkedHeightActuator(unittest.TestCase):
         """
         # # Move focus to range min
         focus = self.focus
-        min_range = {'z': focus._range[0]}
+        min_range = {'z': focus.axes['z'].range[0]}
         f = focus.moveAbs(min_range)
         f.result()
         test.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], min_range, atol=ATOL_LENS)
 
         # Move focus to range max
-        max_range = {'z': focus._range[1]}
+        max_range = {'z': focus.axes['z'].range[1]}
         f = focus.moveAbs(max_range)
         f.result()
         test.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], max_range, atol=ATOL_LENS)
 
         # Move focus on the range edge by a tiny bit, assert it's not allowed
-        max_range_extra_margin = {'z': focus._range[1] + focus._range[1] * 0.02}
+        max_range_extra_margin = {'z': focus.axes['z'].range[1] + focus.axes['z'].range[1] * 0.02}
         with self.assertRaises(ValueError):
             f = focus.moveAbs(max_range_extra_margin)
             f.result()
@@ -1489,11 +1500,13 @@ class TestLinkedHeightActuator(unittest.TestCase):
         """
         focus = self.focus
         with self.assertRaises(ValueError):
-            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': 0.003}})
+            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': self.target_value}})
 
         with self.assertRaises(ValueError):
-            focus.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -0.003}})
+            focus.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -1 * self.target_value}})
 
+        f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
+        f.result()
         focus_pos = focus.position.value
         focus_pos_cor = focus.getMetadata()[model.MD_POS_COR]['z']
         focus.updateMetadata({model.MD_POS_COR: {'z': focus_pos_cor * 2}})
@@ -1529,7 +1542,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         """
         stage = self.stage
         focus = self.focus
-        target_pos = {'z': -0.002}  # To move focus first
+        target_pos = {'z': -1 * self.target_value}  # To move focus first
 
         # 1. Cancel immediately after the movement starts
         f = stage.moveAbs(target_pos)
@@ -1571,9 +1584,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         focus = self.focus
 
         # Try to reference the focus and check if it's not referenced when cancelled
-        self.assertFalse(focus.referenced.value['z'])
         f = focus.reference({"z"})
-        time.sleep(2)
+        time.sleep(0.2)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
         self.assertFalse(focus.referenced.value['z'])
@@ -1583,7 +1595,6 @@ class TestLinkedHeightActuator(unittest.TestCase):
         focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_DEACTIVE]).result()
 
         # Try to reference the stage and check if it's not referenced when cancelled
-        self.assertFalse(any(stage.referenced.value.values()))
         axes = set(stage.referenced.value.keys())
         f = stage.reference(axes)
         time.sleep(2)

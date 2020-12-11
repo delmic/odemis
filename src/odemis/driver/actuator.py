@@ -2309,6 +2309,11 @@ class LinkedHeightActuator(model.Actuator):
         """
         Move to the requested relative position and adjust focus if necessary
         """
+        # Check resultant rel move still in range
+        for key in shift.keys():
+            if not self._isInRange(key, self.position.value[key] + shift[key]):
+                raise ValueError("Relative movement would go outside of range.")
+
         ordered_moves = self._getOrderedMoves(future, shift, rel=True)
         self._executeMoves(ordered_moves)
 
@@ -2451,6 +2456,19 @@ class LinkedHeightActuator(model.Actuator):
                 raise CancelledError()
             future._running_subf = self._stage.reference(axes)
         future._running_subf.result()
+
+    def _isInRange(self, axis, pos=None):
+        """
+        A helper function to check if current position is in axis range
+        :param axis: (string) the axis to check range for
+        :param pos: (float) if None current position is taken
+        :return: (bool) True if position in range, False otherwise
+        """
+        pos = self.position.value[axis] if pos is None else pos
+        rng = self._axes[axis].range
+        # Add 1% margin for hardware slight errors
+        margin = (rng[1] - rng[0]) * 0.01
+        return (rng[0] - margin) <= pos <= (rng[1] + margin)
 
     @isasync
     def reference(self, axes=None):
@@ -2695,7 +2713,7 @@ class LinkedHeightFocus(model.Actuator):
         """
         # Check resultant rel move still in range
         if not self._isInRange(self.position.value['z'] + shift['z']):
-            raise ValueError("Relative movement would go outside of range")
+            raise ValueError("Relative focus movement would go outside of range")
         # Prevent movement when current parent rx != 0
         self._checkParentRxRotation()
         # Move the underlying lens with the relative shift value
