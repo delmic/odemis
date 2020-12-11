@@ -2847,8 +2847,6 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
-        # To check that aligner move to FAV_POS_ACTIVE position is initiated
-        self._aligner_activated = False
 
     def _on_ccd_should_update(self, update):
         """
