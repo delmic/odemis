@@ -211,12 +211,22 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
         if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
             sub_moves.append((focus, focus_deactive))
 
+        current_label = getCurrentPositionLabel(current_pos, stage)
         if target == LOADING:
-            if getCurrentPositionLabel(current_pos, stage) is UNKNOWN:
+            if current_label is UNKNOWN:
                 logging.warning("Moving stage to loading while current position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
+            # Check if stage is not referenced:
+            # 1. reference focus if not already referenced
+            # 2. Move focus to deactive position
+            # 3. reference stage
+            if not all(stage.referenced.value.values()):
+                if not all(focus.referenced.value.values()):
+                    run_reference(future, focus)
+                run_sub_move(future, focus, focus_deactive)
+                run_reference(future, stage)
 
             # Add the sub moves to perform the loading move
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, stage_deactive)))
@@ -224,8 +234,11 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
             sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
 
         elif target in (IMAGING, COATING):
-            current_label = getCurrentPositionLabel(current_pos, stage)
-            if current_label is UNKNOWN:
+            if current_label is LOADING:
+                # Automatically run the referencing procedure as part of the
+                # first step of the movement loading → imaging/coating position
+                run_reference(future, stage)
+            elif current_label is UNKNOWN:
                 raise ValueError("Unable to move to {} while current position is unknown.".format(
                     target_pos_str.get(target, lambda: "unknown")))
             elif current_label is MILLING and target is COATING:
@@ -258,7 +271,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
             future._task_state = FINISHED
 
 
-def cryoTiltSample(rx, rz=None):
+def cryoTiltSample(rx, rz=0):
     """
     Provide the ability to switch between imaging and tilted position, withing bumping into anything.
     Imaging position is considered when rx and rz are equal 0, otherwise it's considered tilting
@@ -311,16 +324,14 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
             else:
                 raise ValueError("Cannot proceed with tilting while focus is not near FAV_POS_DEACTIVE position.")
 
-        if rx == 0:  # Imaging
-            if rz is not None:
-                sub_moves.append((stage, {'rz': rz}))
+        if rx == 0 and rz == 0:  # Imaging
             # Get the actual Imaging position (which should be ~ 0 as well)
             rx = stage_active['rx']
+            sub_moves.append((stage, {'rz': rz}))
             sub_moves.append((stage, {'rx': rx}))
         else:
             sub_moves.append((stage, {'rx': rx}))
-            if rz is not None:
-                sub_moves.append((stage, {'rz': rz}))
+            sub_moves.append((stage, {'rz': rz}))
 
         for component, sub_move in sub_moves:
             run_sub_move(future, component, sub_move)
@@ -351,12 +362,33 @@ def _cancelCryoMoveSample(future):
 
     return True
 
+def run_reference(future, component):
+    """
+    Perform the stage reference procedure
+    :param future: cancellable future of the reference procedure
+    :param component: Either the stage or the focus component
+    :raises CancelledError: if the reference is cancelled
+    """
+    try:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
+                logging.info("Reference procedure is cancelled.")
+                raise CancelledError()
+            logging.debug("Performing stage referencing.")
+            future._running_subf = component.reference(set(component.axes.keys()))
+        future._running_subf.result()
+    except Exception as error:
+        logging.error(error)
+    if future._task_state == CANCELLED:
+        logging.info("Reference procedure is cancelled.")
+        raise CancelledError()
+
 
 def run_sub_move(future, component, sub_move):
     """
     Perform the sub moveAbs using the given component and axis->pos dict
     :param future: cancellable future of the whole move
-    :param component: Either the stage of the focus component
+    :param component: Either the stage or the focus component
     :param sub_move: the sub_move axis->pos dict
     :raises TimeoutError: if the sub move timed out
     :raises CancelledError: if the sub move is cancelled

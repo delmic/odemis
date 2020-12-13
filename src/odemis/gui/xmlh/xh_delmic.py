@@ -401,7 +401,9 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
                               style=self.GetStyle(),
                               unit=self.GetText('unit'),
                               min_val=self.GetLong('min'),
-                              max_val=self.GetLong('max'))
+                              max_val=self.GetLong('max'),
+                              key_step=round(self.GetFloat('key_step'), 6),
+                              accuracy=self.GetFloat('accuracy'))
         self.SetupWindow(w)
         return w
 HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)

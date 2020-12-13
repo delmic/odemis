@@ -141,49 +141,10 @@ def guess_pattern(fn):
 
 def create_projectname(path, ptn, count="001"):
     """
-    Creates a new unique project name from filename pattern. If the default project name from the
-    filename pattern is already in the directory, the count is increased, or, in case no
-    counter is present in the pattern, a counter is added.
-    input
-        path (String): path to project name (as in conf.last_path)
-        ptn (String): filename pattern (without path and extension) as in conf.fn_ptn
-        count (String): counter (as String, so new counter can be returned with same number
-            of leading zeros as in conf.fn_count
-    returns
-        fn (String): unique project name (including path)
+    Create new project directory name from pattern. Calls create_filename with no extension
+    :return: pn (String): unique project name (including path)
     """
-
-    def generate_fn(ptn, count):
-        return ptn.format(datelng=time.strftime("%Y%m%d"),
-                          daterev=time.strftime("%d%m%Y"),
-                          datelng_hyphen=time.strftime("%Y-%m-%d"),
-                          daterev_hyphen=time.strftime("%d-%m-%Y"),
-                          year="%Y",
-                          timelng=time.strftime("%H%M%S"),
-                          timelng_colon=time.strftime("%H:%M:%S"),
-                          timelng_hyphen=time.strftime("%H-%M-%S"),
-                          timeshrt=time.strftime("%H%M"),
-                          timeshrt_colon=time.strftime("%H:%M"),
-                          timeshrt_hyphen=time.strftime("%H-%M"),
-                          cnt='%s' % count)
-
-    fn = generate_fn(ptn, count)
-    # Ensure project name is unique
-    try:
-        while fn in os.listdir(path):
-            count = update_counter(count)
-            new_fn = generate_fn(ptn, count)
-            if new_fn == fn:
-                # No counter in the pattern => add one
-                ptn += "-{cnt}"
-                count = "001"
-            else:
-                fn = new_fn
-    except OSError as ex:
-        # Mostly in case "path" doesn't exists
-        logging.warning("%s, will not check project name is unique", ex)
-
-    return os.path.join(path, fn)
+    return create_filename(path, ptn, ext="", count=count)
 
 def create_filename(path, ptn, ext, count="001"):
     """

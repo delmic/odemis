@@ -90,7 +90,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
-    ScannerFoVAdapter
+    ScannerFoVAdapter, VigilantAttributeConnector
 from odemis.util import units, spot, limit_invocation, fsdecode, normalize_rect
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
@@ -1912,7 +1912,7 @@ class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """ CryoSECOM chamber view tab """
 
-        tab_data = guimod.ChamberGUIData(main_data)
+        tab_data = guimod.CryoChamberGUIData(main_data)
         super(CryoChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("CHAMBER")
 
@@ -1921,12 +1921,12 @@ class CryoChamberTab(Tab):
 
         self._tab_panel = panel
         # For project selection
-        self.conf = conf.get_chamber_conf()
+        self.conf = conf.get_acqui_conf()
         self.btn_change_folder = self._tab_panel.btn_change_folder
         self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
         # Set project folder path from config file
         self.txt_projectpath = self._tab_panel.txt_projectpath
-        self.txt_projectpath.Value = os.path.join(self.conf.last_path, self.conf.fn_count)
+        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
         self.txt_projectpath.Enabled = False
 
         stage = self.tab_data_model.main.stage
@@ -1936,36 +1936,46 @@ class CryoChamberTab(Tab):
         self.end_pos = self.start_pos
         # Show position of the stage via the progress bar
         main_data.stage.position.subscribe(self._update_progress_bar, init=False)
-        if model.MD_ION_BEAM_TO_SAMPLE_ANGLE not in stage_metadata:
+        try:
+            self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
+        except KeyError:
             raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
-        self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
-        # Default value for milling angle, will be used to store the angle value out of milling position
-        self._prev_milling_angle = math.radians(10)
         # Define axis connector to link milling angle to UI float ctrl
         self.milling_connector = AxisConnector('rx', stage, panel.ctrl_milling, pos_2_ctrl=self._milling_angle_changed,
-                                                  ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
-        panel.ctrl_milling.SetValueRange(5, 25)
-        panel.ctrl_milling.key_step = 0.1
+                                               ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
+        # Set the milling angle range according to rx axis range
+        try:
+            rx_range = stage.axes['rx'].range
+            milling_range = math.degrees(self.ion_to_sample - rx_range[0]), math.degrees(
+                self.ion_to_sample - rx_range[1])
+            # sort milling range in case ion_to_sample made range values flip
+            panel.ctrl_milling.SetValueRange(*sorted(milling_range))
+            # Default value for milling angle, will be used to store the angle value out of milling position
+            self._prev_milling_angle = math.radians(10)
+        except KeyError:
+            raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
-        panel.ctrl_milling.accuracy = 4
+
+        # Create new project directory on starting the GUI
+        self._create_new_dir()
 
         self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
                               MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
         if not {model.MD_FAV_AREA, model.MD_FAV_Z_RANGE}.issubset(stage_metadata):
             raise ValueError('The stage is missing FAV_AREA and MD_FAV_Z_RANGE metadata.')
-        self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: "+x",
-                                 self.panel.stage_align_btn_m_aligner_x: "-x",
-                                 self.panel.stage_align_btn_p_aligner_y: "+y",
-                                 self.panel.stage_align_btn_m_aligner_y: "-y",
-                                 self.panel.stage_align_btn_p_aligner_z: "+z",
-                                 self.panel.stage_align_btn_m_aligner_z: "-z"}
+        self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
+                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
+                                 self.panel.stage_align_btn_p_aligner_y: ("y", 1),
+                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
+                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
+                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
         self.btn_toggle_icons = {
             self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
             self.panel.btn_switch_imaging: ["icon/ico_optical_orange.png", "icon/ico_optical_green.png"],
             self.panel.btn_switch_milling: ["icon/ico_ang_orange.png", "icon/ico_ang_green.png"],
             self.panel.btn_switch_coating: ["icon/ico_fib_orange.png", "icon/ico_fib_green.png"]}
         # Check stage FAV positions in its metadata, and store them in respect to their movement
-        if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE,  model.MD_FAV_POS_COATING}.issubset(stage_metadata):
+        if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
             raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
         self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
                                          IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
@@ -1979,6 +1989,16 @@ class CryoChamberTab(Tab):
             self._toggle_switch_buttons(pos_button)
         self._show_cancel_warning_msg(None)
 
+        # Vigilant attribute connectors for the align slider and show advanced button
+        self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
+                                                                       self.panel.stage_align_slider_aligner,
+                                                                       events=wx.EVT_SCROLL_CHANGED)
+        self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
+                                                                      self.panel.btn_switch_advanced,
+                                                                      events=wx.EVT_BUTTON,
+                                                                      ctrl_2_va=self._btn_show_advaned_toggled,
+                                                                      va_2_ctrl=self._on_show_advanced)
+
         # Event binding for tab controls
         panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
         panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
@@ -1990,7 +2010,6 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.btn_switch_advanced.Bind(wx.EVT_BUTTON, self._on_show_advanced)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
     def _on_change_project_folder(self, evt):
@@ -1999,27 +2018,82 @@ class CryoChamberTab(Tab):
         returns nothing, but updates .conf and project path text control
         """
         # Generate suggestion for the new project name to show it on the file dialog
-        np = create_projectname(self.conf.last_path, self.conf.fn_ptn, self.conf.fn_count)
-        new_name = ShowChamberFileDialog(self._tab_panel, np)
-        if new_name is not None:
-            # Create project directory and if it exists warn for existing files
-            if not os.path.isdir(new_name):
-                os.mkdir(new_name)
-            elif os.listdir(new_name):
-                logging.warning("Selected directory {} already contains files.".format(new_name))
-            # If the sample is already loaded, move files that exist in previous folder
-            prev_dir = os.path.join(self.conf.last_path, self.conf.fn_count)
-            if self.current_position != LOADING and os.path.isdir(prev_dir):
-                file_names = os.listdir(prev_dir)
-                for file_name in file_names:
-                    shutil.move(os.path.join(prev_dir, file_name), new_name)
-                # delete the 'now empty' old folder
-                os.rmdir(prev_dir)
-            # Update new project info in config file and show it on the text control
-            self.conf.last_path, _ = os.path.split(new_name)
-            self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
-            self.txt_projectpath.Value = os.path.join(self.conf.last_path, self.conf.fn_count)
-            logging.debug("Generated project folder name pattern '%s'", self.conf.fn_ptn)
+        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        if new_dir is None:
+            return
+        # Get previous project dir from configuration
+        prev_dir = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+
+        def check_same_partition(source, destination):
+            """
+            Check if source and destination dirs in the same partition
+            """
+            return os.stat(source).st_dev == os.stat(destination).st_dev
+
+        def move_files(source, destination):
+            """
+            Move all files found in source directory to destination
+            """
+            file_names = os.listdir(source)
+            for file_name in file_names:
+                shutil.move(os.path.join(source, file_name), destination)
+
+        def is_subdir(check_dir, parent_dir):
+            """
+           Check if directory is sub directory of another one
+            """
+            return os.path.realpath(check_dir).startswith(os.path.realpath(parent_dir) + os.sep)
+
+        if not os.path.isdir(prev_dir):
+            os.mkdir(new_dir)
+            self._change_project_conf(new_dir)
+        else:
+            try:
+                os.rename(prev_dir, new_dir)
+                self._change_project_conf(new_dir)
+            # For permission related errors
+            except PermissionError:
+                logging.error("Operation not permitted.")
+            # For other errors
+            except OSError as error:
+                # Do a complete move if not on the same partition
+                if not check_same_partition(prev_dir, new_dir):
+                    move_files(prev_dir, new_dir)
+                    # delete the 'now empty' old folder
+                    os.rmdir(prev_dir)
+                    self._change_project_conf(new_dir)
+                elif is_subdir(new_dir, prev_dir):
+                    # It's inside a the current directory => If there are already files in it, tell the user it's not
+                    # possible. If the prev_dir is empty, create a directory inside it.
+                    if os.listdir(prev_dir):
+                        dlg = wx.MessageDialog(self.main_frame,
+                                               "Selected directory {} already contains files.".format(prev_dir),
+                                               style=wx.OK | wx.ICON_WARNING)
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                    else:
+                        os.mkdir(new_dir)
+                        self._change_project_conf(new_dir)
+                else:
+                    logging.error(error)
+
+    def _change_project_conf(self, new_dir):
+        """
+        Update new project info in config file and show it on the text control
+        """
+        self.conf.pj_last_path, _ = os.path.split(new_dir)
+        self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
+        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+        logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
+
+    def _create_new_dir(self):
+        """
+        Create a new project directory from config pattern and update project config with new name
+        """
+        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        os.mkdir(np)
+        self._change_project_conf(np)
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):
@@ -2048,11 +2122,16 @@ class CryoChamberTab(Tab):
         :param cancelled: (bool) if the move is cancelled
         """
         stage = self.tab_data_model.main.stage
-        # Get current movement (including unknown and on the path)
-        self.current_position = getCurrentPositionLabel(stage.position.value, stage)
+        # If stage is not referenced, set position as unknown (to only allow loading position)
+        if not all(stage.referenced.value.values()):
+            self.current_position = UNKNOWN
+        else:
+            # Get current movement (including unknown and on the path)
+            self.current_position = getCurrentPositionLabel(stage.position.value, stage)
         self._enable_position_controls(self.current_position, cancelled)
         # Enable stage advanced controls on milling
-        self._enable_advanced_controls(True) if self.current_position == MILLING else self._enable_advanced_controls(False)
+        self._enable_advanced_controls(True) if self.current_position is MILLING else self._enable_advanced_controls(
+            False)
 
     def _enable_position_controls(self, current_position=None, cancelled=False):
         """
@@ -2092,11 +2171,17 @@ class CryoChamberTab(Tab):
         """
         self.milling_connector.pause() if pause else self.milling_connector.resume()
 
+    def _btn_show_advaned_toggled(self):
+        """
+        Get the value of advanced button for _show_advanced_va_connector ctrl_2_va
+        """
+        return self.panel.btn_switch_advanced.GetValue()
+
     def _on_show_advanced(self, evt):
         """
         Event handler for the Advanced button to show/hide stage advanced panel
         """
-        self.panel.pnl_advanced_align.Show(evt.isDown)
+        self.panel.pnl_advanced_align.Show(self.tab_data_model.show_advaned.value)
 
     def _show_cancel_warning_msg(self, txt_warning):
         """
@@ -2105,9 +2190,6 @@ class CryoChamberTab(Tab):
         self.panel.pnl_ref_msg.Show(txt_warning is not None)
         if txt_warning:
             self.panel.txt_warning.SetLabel(txt_warning)
-
-    # Define angle type enumeration
-    MILL, ROTATE = 0, 1
 
     def _milling_angle_changed(self, pos):
         """
@@ -2126,43 +2208,28 @@ class CryoChamberTab(Tab):
         Used to return the correct rx angle value.
         :return: (float or None) The calculated rx angle from the milling ctrl
         """
-        milling_angle = self._get_tilt_angle_from_ctrl(self.MILL)
+        milling_angle = self._get_milling_angle_value()
         if milling_angle is None:
             return
         # Store current milling angle (in case the stage moved out of milling)
         # TODO: Check if milling angle to be stored is not the same as imaging rx
         self._prev_milling_angle = milling_angle
         rx_angle = self.ion_to_sample - milling_angle
-        # Set end pos rx value (for progress indication)
-        stage = self.tab_data_model.main.stage
-        self.start_pos = stage.position.value
-        self.end_pos = copy.copy(self.start_pos)
-        self.end_pos['rx'] = rx_angle
         return rx_angle
 
-    def _get_tilt_angle_from_ctrl(self, angle_type):
+    def _get_milling_angle_value(self):
         """
         Get the corresponding angle value from its designated UI control
-        :param angle_type: (int) either MILL, ROTATE
         :returns (float or None) the tilt angle value in radians
         """
-        def get_angle_value(angle_ctrl):
+        try:
             # Read the angle value from the ctrl and convert its value to radians
-            angle_value, _, _ = decompose_si_prefix(angle_ctrl.Value, unit="°")
+            angle_value, _, _ = decompose_si_prefix(self.panel.ctrl_milling.Value, unit="°")
             angle_value = math.radians(float(angle_value))
             return angle_value
-
-        if angle_type == self.MILL:
-            try:
-                milling_angle = get_angle_value(self.panel.ctrl_milling)
-            except ValueError as error:
-                logging.error(error)
-                return
-            return milling_angle
-        elif angle_type == self.ROTATE:
-            raise NotImplementedError("Rotation angle control is not implemented.")
-        else:
-            logging.error("Unknown angle_type specified.")
+        except ValueError as error:
+            logging.error(error)
+            return
 
     def _on_aligner_btn(self, evt):
         """
@@ -2210,6 +2277,9 @@ class CryoChamberTab(Tab):
             return
 
         self.panel.btn_cancel.Disable()
+        # Check if unloading position is reached, reset project directory
+        if self.target_position is LOADING and self.current_position in {MILLING, IMAGING, COATING}:
+            self._create_new_dir()
         # Get currently pressed button (if any) then re-enable the tab controls
         self._enable_movement_controls()
         self.target_position = None
@@ -2223,7 +2293,8 @@ class CryoChamberTab(Tab):
         self.panel.btn_cancel.Disable()
         # Show warning message if target position is indicated
         if self.target_position is not None:
-            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self.current_position], target_pos_str[self.target_position])
+            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self.current_position],
+                                                                             target_pos_str[self.target_position])
             self._show_cancel_warning_msg(txt_warning)
             self.target_position = None
         self._enable_movement_controls(cancelled=True)
@@ -2242,23 +2313,23 @@ class CryoChamberTab(Tab):
         stage = self.tab_data_model.main.stage
         self.start_pos = stage.position.value
         # Get the required target_position from the pressed button
-        self.target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]), None)
+        self.target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
+                                    None)
         if self.target_position is None:
             return
         # target_position metadata has the end positions for all movements except milling
         if self.target_position in self.target_position_metadata.keys():
-            # Save the milling angle control current value (to return to it when switch back to milling)
-            if self.current_position == MILLING:
-                milling_angle = self._get_tilt_angle_from_ctrl(self.MILL)
+           # Save the milling angle control current value (to return to it when switch back to milling)
+            if self.current_position is MILLING:
+                milling_angle = self._get_milling_angle_value()
                 if milling_angle is not None:
                     self._prev_milling_angle = milling_angle
             self.end_pos = self.target_position_metadata[self.target_position]
             return cryoSwitchSamplePosition(self.target_position)
         else:
             # Target position is milling, get rx value from saved milling angle
-            self.end_pos = copy.copy(self.start_pos)
-            self.end_pos['rx'] = self.ion_to_sample - self._prev_milling_angle
-            return cryoTiltSample(rx=self.end_pos['rx'])
+            rx_angle_value = self.ion_to_sample - self._prev_milling_angle
+            return cryoTiltSample(rx=rx_angle_value)
 
     def _perform_axis_relative_movement(self, target_button):
         """
@@ -2271,22 +2342,16 @@ class CryoChamberTab(Tab):
             target_button.SetValue(0)
             return
         # Get the movement text symbol like +X, -X, +Y..etc from the currently pressed button
-        target_align = self.btn_aligner_axes[target_button]
-        # Decompose the text to get the sign and axis
-        sign, axis = list(target_align)
-        assert len(sign) == 1 and len(axis) == 1
+        axis, sign = self.btn_aligner_axes[target_button]
         stage = self.tab_data_model.main.stage
         md = stage.getMetadata()
         fav_area = md[model.MD_FAV_AREA]
         fav_area = normalize_rect(fav_area)
         fav_z_range = md[model.MD_FAV_Z_RANGE]
-        self.start_pos = stage.position.value
-        self.end_pos = copy.copy(self.start_pos)
         # The amount of relative move shift is taken from the panel slider
-        shift = self.panel.stage_align_slider_aligner.GetValue()
-        if sign == '-':
-            shift *= -1
-        self.end_pos[axis] += shift
+        shift = self.tab_data_model.stage_align_slider_va.value
+        shift *= sign
+        target_position = stage.position.value[axis] + shift
         allowed_rng = None
         if axis == 'x':
             allowed_rng = (fav_area[0], fav_area[2])  # left, right
@@ -2295,7 +2360,7 @@ class CryoChamberTab(Tab):
         elif axis == 'z':
             allowed_rng = tuple(fav_z_range)
 
-        if allowed_rng is not None and not self._is_in_range(self.end_pos[axis], allowed_rng):
+        if allowed_rng is not None and not self._is_in_range(target_position, allowed_rng):
             warning_text = "Requested movement would go out of stage imaging range."
             self._show_cancel_warning_msg(warning_text)
             return

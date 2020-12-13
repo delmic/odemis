@@ -3245,8 +3245,9 @@
       												name="ctrl_milling">
 												<size>-1,20</size>
 												<value>12</value>
-												<min_val>5</min_val>
-												<max_val>25</max_val>
+											
+												<accuracy>4</accuracy>
+												<key_step>0.1</key_step>
 												<unit>°</unit>
 												<scale>linear</scale>
 												<accuracy>2</accuracy>
