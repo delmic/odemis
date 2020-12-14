@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from concurrent import futures
 from ctypes import *
 import ctypes
 from decorator import decorator

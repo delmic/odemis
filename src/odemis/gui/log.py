@@ -21,7 +21,6 @@ from __future__ import division, print_function
 
 import collections
 import logging
-import time
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
 from odemis.gui.util import wxlimit_invocation, get_home_folder

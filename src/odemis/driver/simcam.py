@@ -28,7 +28,7 @@ import queue
 import logging
 import numpy
 from odemis import model, util, dataio
-from odemis.model import BASE_DIRECTORY, oneway
+from odemis.model import oneway
 import os
 from scipy import ndimage
 import time

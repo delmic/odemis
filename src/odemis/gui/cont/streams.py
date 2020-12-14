@@ -35,7 +35,7 @@ import numpy
 from odemis import model, util
 from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
-    CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_MAIN, BG_COLOUR_MAIN
+    CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \

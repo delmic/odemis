@@ -48,9 +48,7 @@ import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 from odemis.gui.conf.data import COLORMAPS
-from matplotlib import cm
 import matplotlib.colors as colors
-import numpy
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 stream_visible_event, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()

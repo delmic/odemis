@@ -30,7 +30,6 @@ import math
 from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
-from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE

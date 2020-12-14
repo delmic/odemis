@@ -38,7 +38,6 @@ from tescan import sem, CancelledError
 import threading
 import time
 import weakref
-from past.builtins import long
 
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2

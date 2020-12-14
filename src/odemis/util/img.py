@@ -32,7 +32,6 @@ import scipy.ndimage
 import cv2
 
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
-from odemis.util.conversion import get_img_transformation_matrix
 from odemis.util import get_best_dtype_for_acc
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
 import matplotlib.colors as colors

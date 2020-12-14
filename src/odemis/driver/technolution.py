@@ -30,7 +30,6 @@ import json
 import logging
 import queue
 import re
-import signal
 import threading
 import time
 from PIL import Image

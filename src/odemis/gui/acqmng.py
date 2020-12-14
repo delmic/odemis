@@ -26,7 +26,6 @@ from __future__ import division
 from collections import OrderedDict
 import collections
 import logging
-from odemis import model
 
 EXTRA_STREAM_VAS = ("dwellTime", "pixelSize", "repetition")
 

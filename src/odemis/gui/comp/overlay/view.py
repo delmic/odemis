@@ -24,7 +24,6 @@ This file is part of Odemis.
 from __future__ import division
 
 import cairo
-import itertools
 import logging
 import math
 import numbers

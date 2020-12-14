@@ -31,7 +31,7 @@ import math
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
 from odemis.util.comp import compute_camera_fov
-from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, StaticStream, OpticalStream, ScannedFluoStream, LiveStream
+from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -46,7 +46,6 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
-import time
 import wx
 
 import odemis.gui.model as guimodel
