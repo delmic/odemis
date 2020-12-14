@@ -1007,7 +1007,8 @@ class MPPC(model.Detector):
                 tuple(tuple(1.2 for i in range(0, self.shape[0])) for i in range(0, self.shape[1])),
                 setter=self._setCellDigitalGain)
 
-        self.cellCompleteResolution = model.ResolutionVA((900, 900), ((10, 10), (1000, 1000))) # Includes overlap pixels
+        # The minimum of the cell resolution cannot be lower than the minimum effective cell size.
+        self.cellCompleteResolution = model.ResolutionVA((900, 900), ((12, 12), (1000, 1000)))
 
         # Setup hw and sw version
         self._swVersion = self.parent.swVersion
