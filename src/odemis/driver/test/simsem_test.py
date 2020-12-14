@@ -42,7 +42,6 @@ CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
 CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
-              "drift_period": 0.1,
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS}
               }
@@ -138,6 +137,19 @@ class TestSEM(unittest.TestCase):
         settle = 5.e-6
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_acquire_full(self):
+        self.scanner.resolution.value = self.scanner.resolution.range[1]
+        self.size = self.scanner.resolution.value
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
@@ -241,45 +253,20 @@ class TestSEM(unittest.TestCase):
         # translate a bit
         # reduce the size of the image so that we can have translation
         self.scanner.resolution.value = (max_res[0] // 32, max_res[1] // 32)
-        self.scanner.translation.value = (-1.26, 10) # px
+        self.scanner.translation.value = (-1.26, 10)  # px
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
-                   center[1] - (10 * pxs[1])) # because translation Y is opposite from physical one
+                   center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
 
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
-        self.scanner.resolution.value = (1,1)
+        self.scanner.resolution.value = (1, 1)
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
-
-    def test_shift(self):
-        """
-        check that .shift works
-        """
-        # First, test simple behaviour on the VA
-        self.scanner.scale.value = (1, 1)
-        self.scanner.resolution.value = self.scanner.resolution.range[1]
-        self.scanner.horizontalFoV.value = self.scanner.horizontalFoV.range[0]
-        self.scanner.shift.value = (0, 0)
-        self.assertEqual(self.scanner.shift.value, (0, 0))
-
-        # normal acquisition
-        im_no_shift = self.sed.data.get()
-        self.assertEqual(im_no_shift.shape, self.scanner.resolution.value[-1::-1])
-
-        # shift a bit
-        self.scanner.shift.value = (-1.26e-6, 3e-6)  # m
-        im_small_shift = self.sed.data.get()
-        test.assert_array_not_equal(im_no_shift, im_small_shift)
-
-        # shift min/max
-        self.scanner.shift.value = self.scanner.shift.range[0][1], self.scanner.shift.range[1][0]
-        im_big_shift = self.sed.data.get()
-        test.assert_array_not_equal(im_no_shift, im_big_shift)
 
     @skip("faster")
     def test_acquire_high_osr(self):
@@ -455,6 +442,52 @@ class TestSEM(unittest.TestCase):
         f = self.focus.moveAbs(pos)
         f.result()
         self.assertEqual(self.focus.position.value, pos)
+
+
+class TestSEMDrift(TestSEM):
+    """
+    Tests with the drift period (and smaller resolution)
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = simsem.SimSEM(drift_period=0.1, **CONFIG_SEM)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+
+    def test_shift(self):
+        """
+        check that .shift works
+        This only works o nthe "drifting" version because on this version the
+        max resolution is limited compared to the full image, so a shift is possible.
+        """
+        # First, test simple behaviour on the VA
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = self.scanner.resolution.range[1]
+        self.scanner.horizontalFoV.value = self.scanner.horizontalFoV.range[0]
+        self.scanner.shift.value = (0, 0)
+        self.assertEqual(self.scanner.shift.value, (0, 0))
+
+        # normal acquisition
+        im_no_shift = self.sed.data.get()
+        self.assertEqual(im_no_shift.shape, self.scanner.resolution.value[-1::-1])
+
+        # shift a bit
+        self.scanner.shift.value = (-1.26e-6, 3e-6)  # m
+        im_small_shift = self.sed.data.get()
+        test.assert_array_not_equal(im_no_shift, im_small_shift)
+
+        # shift min/max
+        self.scanner.shift.value = self.scanner.shift.range[0][1], self.scanner.shift.range[1][0]
+        im_big_shift = self.sed.data.get()
+        test.assert_array_not_equal(im_no_shift, im_big_shift)
+
 
 if __name__ == "__main__":
     unittest.main()
