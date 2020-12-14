@@ -14,7 +14,8 @@ Rotator: {
         axes: {"x"},
         refproc: "Standard",
         param_file: "test/tmcm-pd1240.tmcc.tsv",
-        ustepsize: [0.0001227184630308513],  # 2 * math.pi / (200 * 2 ** 8)
+        ustepsize: [3.272492347489e-6], # 2 PI / (200 steps/turn * 256 µsteps/step * 75 gear-ratio * 0.5 image rotation per physical rotation)
         unit: ["rad"],
+        rng: [[-6.3, 6.3]],  # allow full turn (2 * PI) in either direction
     }
 }
