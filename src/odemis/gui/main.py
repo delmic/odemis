@@ -31,6 +31,7 @@ import odemis
 from odemis.gui import main_xrc, log, img, plugin
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
+from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 import sys
@@ -68,6 +69,7 @@ class OdemisGUIApp(wx.App):
         self.tab_controller = None
         self._is_standalone = standalone
         self._snapshot_controller = None
+        self._temperature_controller = None
         self._menu_controller = None
         self.plugins = []  # List of instances of plugin.Plugins
 
@@ -263,6 +265,10 @@ class OdemisGUIApp(wx.App):
             for p in pfns:
                 pis = plugin.load_plugin(p, self.main_data.microscope, self)
                 self.plugins.extend(pis)
+
+            # add temperature controller
+            if self.main_data.sample_thermostat:
+                self._temperature_controller = TemperatureController(self.main_frame, self.main_data.sample_thermostat)
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
