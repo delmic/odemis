@@ -1403,19 +1403,20 @@ class TestOverviewFunctions(unittest.TestCase):
         opt = model.DataArray(200 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
         sem = model.DataArray(10 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
         merged = merge_screen(opt, sem)
+        self.assertEqual(merged.shape, (10, 10, 4))
         # Test if at least one element of ovv image is different from original images
-        # self.assertEqual(merged.shape, (10, 10, 3))
-        self.assertTrue(numpy.all(merged >= opt))
-        self.assertTrue(numpy.any(merged != opt))
-        self.assertTrue(numpy.all(merged >= sem))
-        self.assertTrue(numpy.any(merged != sem))
+        merged_rgb = merged[:,:,:3]
+        self.assertTrue(numpy.all(merged_rgb >= opt))
+        self.assertTrue(numpy.any(merged_rgb != opt))
+        self.assertTrue(numpy.all(merged_rgb >= sem))
+        self.assertTrue(numpy.any(merged_rgb != sem))
 
         # Two very bright images should give a complete white
-        opt = model.DataArray(250 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
-        sem = model.DataArray(250 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
+        opt = model.DataArray(250 * numpy.ones((10, 12, 3), dtype=numpy.uint8), md)
+        sem = model.DataArray(250 * numpy.ones((10, 12, 3), dtype=numpy.uint8), md)
         merged = merge_screen(opt, sem)
-        # Test if at least one element of ovv image is different from original images
-        # self.assertEqual(merged.shape, (10, 10, 3))
+        self.assertEqual(merged.shape, (10, 12, 4))
+        # all pixels are white, without any transparency
         self.assertTrue(numpy.all(merged == 255))
 
 
