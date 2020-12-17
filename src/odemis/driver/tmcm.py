@@ -3232,7 +3232,7 @@ class CANController(model.Actuator):
                 logging.debug("Cancelling failed")
             return future._was_stopped
 
-    def _doReference(self, future, axes, timeout=30):
+    def _doReference(self, future, axes, timeout=300):
         """
         Actually runs the referencing code
         future (Future): the future it handles
