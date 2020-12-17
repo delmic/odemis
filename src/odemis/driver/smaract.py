@@ -1194,7 +1194,6 @@ class MC_5DOF(model.Actuator):
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
-        inverted = set()  # set of the axes names (str) which are inverted
 
         # Require the user to define all 5 axes: x, y, z, rx, rz
         if set(axes.keys()) != {'x', 'y', 'z', 'rx', 'rz'}:
