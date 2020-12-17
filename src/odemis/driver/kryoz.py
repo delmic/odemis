@@ -104,10 +104,10 @@ class Cryolab(model.HwComponent):
 
         response_type, values = ans.split(":")
         if response_type != "SENSORS":
-            raise IOError("Invalid response received: ", ans)
+            raise IOError("Invalid response received: %s" % (ans,))
         values = values.split("|")
         if len(values) != 6:
-            raise IOError("Invalid number of sensor values: ", values)
+            raise IOError("Invalid number of sensor values: %s" % (values,))
         values = [float(x.replace(",", ".")) for x in values]
         return values
 
@@ -126,10 +126,10 @@ class Cryolab(model.HwComponent):
 
         response_type, values = ans.split(":")
         if response_type != "STATUS":
-            raise IOError("Invalid response received: ", ans)
+            raise IOError("Invalid response received: %s" % (ans,))
         values = values.split("|")
         if len(values) != 5:
-            raise IOError("Invalid number of status values: ", values)
+            raise IOError("Invalid number of status values: %s " % (values,))
         values = [bool(x) for x in values]
         return values
     
@@ -148,7 +148,7 @@ class Cryolab(model.HwComponent):
         elif ans == "ER":
             raise ValueError("Error with temperature value in request")
         else:
-            raise IOError("Invalid response received: ", ans)
+            raise IOError("Invalid response received: %s" % (ans,))
 
     def disconnect(self):
         """
