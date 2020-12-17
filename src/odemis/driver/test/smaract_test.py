@@ -186,6 +186,7 @@ CONFIG_5DOF = {"name": "5DOF",
         # "locator": "fake",
         "hold_time": 5,  # s
         "pos_deactive_after_ref": True,
+        "inverted": ['z'],
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -246,6 +247,17 @@ class Test5DOF(unittest.TestCase):
 
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
+
+    def test_inverted(self):
+        """
+        The z axis is set to inverted.
+        Determine if it is handled correctly.
+        """
+        pos1 = {'x': 0, 'y': 0, 'z':-1e-3, 'rx': 0, 'rz': 0}
+        self.dev.moveAbs(pos1).result()
+
+        pos_internal = self.dev.GetPose().asdict()
+        self.assertAlmostEqual(pos_internal['z'], -pos1['z'])
 
     def test_out_of_range(self):
         """

@@ -1194,6 +1194,7 @@ class MC_5DOF(model.Actuator):
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
+        inverted = set()  # set of the axes names (str) which are inverted
 
         # Require the user to define all 5 axes: x, y, z, rx, rz
         if set(axes.keys()) != {'x', 'y', 'z', 'rx', 'rz'}:
@@ -1562,6 +1563,7 @@ class MC_5DOF(model.Actuator):
                 else:
                     logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
                     self._checkMoveAbs(deactive_pos)
+                    deactive_pos = self._applyInversion(deactive_pos)
                     self._doMoveAbs(future, deactive_pos)
 
         except SA_MCError as ex:
@@ -1599,6 +1601,7 @@ class MC_5DOF(model.Actuator):
             return model.InstantaneousFuture()
 
         self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
 
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
@@ -1709,7 +1712,6 @@ class MC_5DOF(model.Actuator):
             return model.InstantaneousFuture()
 
         self._checkMoveRel(shift)
-
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
@@ -1718,7 +1720,7 @@ class MC_5DOF(model.Actuator):
         """
         Do a relative move by converting it into an absolute move
         """
-        pos = add_coord(self.position.value, shift)
+        pos = self._applyInversion(add_coord(self.position.value, shift))
         self._doMoveAbs(future, pos)
 
 
@@ -1866,6 +1868,7 @@ class FakeMC_5DOF_DLL(object):
     def SA_MC_Stop(self, id):
         logging.debug("sim MC5DOF: Stopping")
         self.stopping.set()
+        self._current_move_finish = time.time()
 
     def SA_MC_Reference(self, id):
         logging.debug("sim MC5DOF: Starting referencing...")
