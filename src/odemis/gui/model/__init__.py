@@ -181,7 +181,8 @@ class MainGUIData(object):
         "streak-lens": "streak_lens",
         "tc-od-filter": "tc_od_filter",
         "tc-filter": "tc_filter",
-        "slit-in-big": "slit_in_big"
+        "slit-in-big": "slit_in_big",
+        "sample-thermostat": "sample_thermostat"
     }
 
     def __init__(self, microscope):
@@ -247,6 +248,7 @@ class MainGUIData(object):
         self.tc_od_filter = None
         self.tc_filter = None
         self.slit_in_big = None
+        self.sample_thermostat = None  # thermostat for temperature control of cryosecom
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
@@ -582,7 +584,6 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
-
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
