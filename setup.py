@@ -116,8 +116,8 @@ else:
 dist = setup(name='Odemis',
              version=VERSION,
              description='Open Delmic Microscope Software',
-             author=u'Éric Piel, Rinze de Laat, Kimon Tsitsikas, Philip Winkler, Anders Muskens, Sabrina Rossberger, Thera Pals, Victoria Mavrikopoulou',
-             author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com, winkler@delmic.com, muskens@delmic.com, rossberger@delmic.com, pals@delmic.com, mavrikopoulou@delmic.com',
+             author=u'Éric Piel, Rinze de Laat, Kimon Tsitsikas, Philip Winkler, Anders Muskens, Sabrina Rossberger, Thera Pals, Victoria Mavrikopoulou, Kornee Kleijwegt, Bassim Lazem',
+             author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com, winkler@delmic.com, muskens@delmic.com, rossberger@delmic.com, pals@delmic.com, mavrikopoulou@delmic.com, kleijwegt@delmic.com, lazem@delmic.com',
              url='https://github.com/delmic/odemis',
              classifiers=["License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
                           "Operating System :: POSIX :: Linux",
@@ -135,7 +135,7 @@ dist = setup(name='Odemis',
                           },
              ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
              scripts=scripts,
-             data_files=data_files, # not officially in setuptools, but works as for distutils
+             data_files=data_files,  # not officially in setuptools, but works as for distutils
              include_dirs=[numpy.get_include()],
             )
 
