@@ -456,9 +456,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             ostream = s.stream if isinstance(s, DataProjection) else s
-            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream)):
+            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream, stream.CLStream)):
                 images_opt.append((image, BLEND_SCREEN, s.name.value, s))
-            elif isinstance(ostream, (stream.SpectrumStream, stream.CLStream)):
+            elif isinstance(ostream, stream.SpectrumStream):
                 images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
             else:
                 images_std.append((image, BLEND_DEFAULT, s.name.value, s))
