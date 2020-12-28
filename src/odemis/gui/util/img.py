@@ -2009,11 +2009,6 @@ def get_ordered_images(streams, raw=False):
     images_spc.sort(key=get_area, reverse=True)
     images_std.sort(key=get_area, reverse=True)
 
-    # Reset the first image to be drawn to the default blend operator to be
-    # drawn full opacity (only useful if the background is not full black)
-    if images_opt:
-        images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
-
     return images_opt + images_std + images_spc, im_min_type
 
 
@@ -2268,6 +2263,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
     data_to_export = []
     fake_canvas = None
     n = len(images)
+    bm_last = images[-1].metadata["blend_mode"]
     for i, im in enumerate(images):
         if raw and not (im.ndim == 3 and im.shape[-1] == 4):
             # Non BGRA data type => we'll pass it completely as-is
@@ -2283,16 +2279,39 @@ def images_to_export_data(streams, view_hfw, view_pos,
             # The ruler overlay needs a canvas to draw itself, so use a fake canvas
             fake_canvas = FakeCanvas(ctx, buffer_size, buffer_center, (1 / buffer_scale[0], 1 / buffer_scale[1]))
 
-        if im.metadata['blend_mode'] == BLEND_SCREEN or raw:
-            # No transparency in case of "raw" export
+        blend_mode = im.metadata['blend_mode']
+        if n == 1 or raw:
+            # For single image, don't use merge ratio
+            # For raw, each image is a "single image"
             merge_ratio = 1.0
-        elif i == n - 1: # last image
-            if n == 1:
-                merge_ratio = 1.0
-            else:
-                merge_ratio = draw_merge_ratio
         else:
-            merge_ratio = 1 - i / n
+            # If there are all "screen" (= last one is screen):
+            # merge ratio   im0   im1
+            #     0         1      0
+            #    0.25       1      0.5
+            #    0.5        1      1
+            #    0.75       0.5    1
+            #     1         0      1
+            if bm_last == BLEND_SCREEN:
+                if ((draw_merge_ratio < 0.5 and i < n - 1) or
+                    (draw_merge_ratio >= 0.5 and i == n - 1)):
+                    merge_ratio = 1
+                else:
+                    merge_ratio = (0.5 - abs(draw_merge_ratio - 0.5)) * 2
+            else:  # bm_last == BLEND_DEFAULT
+                # Average all the first images
+                if i < n - 1:
+                    if blend_mode == BLEND_SCREEN:
+                        merge_ratio = 1.0
+                    else:
+                        merge_ratio = 1 - i / n
+                else:  # last image
+                    merge_ratio = draw_merge_ratio
+
+        # Reset the first image to be drawn to the default blend operator to be
+        # drawn full opacity (only useful if the background is not full black)
+        if i == 0:
+            blend_mode = BLEND_DEFAULT
 
         draw_image(
             ctx,
@@ -2306,7 +2325,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
             rotation=im.metadata['dc_rotation'],
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
-            blend_mode=im.metadata['blend_mode'],
+            blend_mode=blend_mode,
             interpolate_data=interpolate_data
         )
 

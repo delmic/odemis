@@ -482,11 +482,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         images_spc.sort(key=get_area, reverse=True)
         images_std.sort(key=get_area, reverse=True)
 
-        # Reset the first image to be drawn to the default blend operator to be
-        # drawn full opacity (only useful if the background is not full black)
-        if images_opt:
-            images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
-
         return images_opt + images_std + images_spc
 
     def _format_rgba_darray_cached(self, da):
