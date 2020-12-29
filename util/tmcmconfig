@@ -57,7 +57,7 @@ AXIS_PARAMS = {
     193: "Reference search mode",
     194: "Reference search speed",
     195: "Reference switch speed",
-    204: "Free wheeling delay (in ms)",  # Free wheeling mode on 3214
+    204: "Free wheeling delay (in 10ms)",  # Free wheeling mode on 3214
     214: "Power down delay (in 10ms)",
 
     # These ones are not saved in EEPROM (but save in user config)
