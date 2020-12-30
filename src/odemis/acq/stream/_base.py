@@ -41,7 +41,6 @@ import weakref
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
-from odemis.util.img import mergeMetadata
 from odemis.util.transform import AffineTransform
 
 UNDEFINED_ROI = (0, 0, 0, 0)
@@ -967,19 +966,16 @@ class Stream(object):
         rot = md.get(MD_ROTATION, 0)
         she = md.get(MD_SHEAR, 0)
 
+        new_md = {MD_PIXEL_SIZE: pxs,
+                 MD_POS: pos,
+                 MD_ROTATION: rot,
+                 MD_SHEAR: she}
+
         # Not necessary, but handy to debug latency problems
-        try:
-            date = md[MD_ACQ_DATE]
-        except KeyError:
-            date = time.time()
+        if MD_ACQ_DATE in md:
+            new_md[MD_ACQ_DATE] = md[MD_ACQ_DATE]
 
-        md = {MD_PIXEL_SIZE: pxs,
-              MD_POS: pos,
-              MD_ROTATION: rot,
-              MD_SHEAR: she,
-              MD_ACQ_DATE: date}
-
-        return md
+        return new_md
 
     def _projectXY2RGB(self, data, tint=(255, 255, 255)):
         """
