@@ -2607,16 +2607,15 @@ def merge_screen(im, background):
     Merges two images (im and background) into one using the "screen" operator:
     f(xA,xB) = xA + xB − xA·xB (with values between 0 and 1, with each channel independent)
     im, background: DataArray with im.shape = background.shape (either RGB or RGBA)
-    returns RGB DataArray (of the same shape as im)
+    returns RGBA DataArray (of the same YX as im, but with always depth=4)
     """
     assert im.shape == background.shape, "Images have different shapes."
     if im.shape[-1] != 3 and im.shape[-1] != 4:
         raise ValueError("Ovv images have an invalid number of channels: %d" % (im.shape[-1]))
 
-    md = im.metadata.copy()
-    md["dc_keepalpha"] = True
+    md = background.metadata.copy()
     im = format_rgba_darray(im, 255)  # convert to BGRA
-    im = model.DataArray(im, md)
+    im.metadata["dc_keepalpha"] = True
     background = format_rgba_darray(background, 255)
 
     height, width, _ = im.shape
@@ -2633,6 +2632,7 @@ def merge_screen(im, background):
                buffer_size, 1, blend_mode=BLEND_SCREEN)
 
     # Convert back to RGB
-    format_bgra_to_rgb(im, inplace=True)
-    return im
+    format_bgra_to_rgb(background, inplace=True)
+    background.metadata = md
+    return background
 
