@@ -1,0 +1,5 @@
+{
+    settle_time: !include yaml-merger-include-init-val-CL-Detector-test.odm.yaml,
+    test_input: "a",
+    settle_time: !include yaml-merger-include-init-overwrite-val-CL-Detector-test.odm.yaml,
+}

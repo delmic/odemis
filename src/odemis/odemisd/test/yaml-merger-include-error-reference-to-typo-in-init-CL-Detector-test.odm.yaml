@@ -1,0 +1,4 @@
+init: {
+    settle_time: !include yaml-merger-include-error-typo-in-init-val-CL-Detector-test.odm.yaml,
+    test_input: "a",
+}

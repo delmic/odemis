@@ -1,0 +1,4 @@
+{
+  "SEM Scan Interface": !include yaml-merger-combination-SEM-Scan-Interface.yaml,
+  !extend yaml-merger-include-full-CL-Detector-component-test.odm.yaml
+}

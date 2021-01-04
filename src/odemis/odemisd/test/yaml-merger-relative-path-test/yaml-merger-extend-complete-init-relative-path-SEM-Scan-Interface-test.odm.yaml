@@ -1,0 +1,5 @@
+init: {
+       image: "simsem-fake-output.h5", # any large 16 bit image is fine
+       drift_period: 5, # seconds
+       !extend ../yaml-merger-extend-init-user-password-SEM-Scan-Interface-test.odm.yaml,
+}

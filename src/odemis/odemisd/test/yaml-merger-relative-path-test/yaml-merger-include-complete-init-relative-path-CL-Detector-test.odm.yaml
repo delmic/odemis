@@ -1,0 +1,4 @@
+{
+    settle_time: !include /home/kleijwegt/development/odemis/src/odemis/odemisd/test/yaml-merger-include-init-val-CL-Detector-test.odm.yaml,
+    test_input: "a",
+}

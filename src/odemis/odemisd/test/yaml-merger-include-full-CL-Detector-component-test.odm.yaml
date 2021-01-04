@@ -1,0 +1,9 @@
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: !include yaml-merger-include-complete-init-CL-Detector-test.odm.yaml,
+    dependencies: {
+       "detector": "CL PMT",
+       "pmt-control": "CL PMT control unit",
+    },
+}
