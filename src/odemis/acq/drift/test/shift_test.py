@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import logging
 import math
 from numpy import fft
 from numpy import random
@@ -35,8 +34,7 @@ import unittest
 DATA_DIR = os.path.dirname(__file__)
 
 
-# @unittest.skip("skip")
-class TestShiftCalculation(unittest.TestCase):
+class TestMeasureShift(unittest.TestCase):
     """
     Test MeasureShift
     """
