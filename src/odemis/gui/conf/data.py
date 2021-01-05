@@ -915,6 +915,7 @@ COLORMAPS = OrderedDict([
     ("Inferno", cm.get_cmap("inferno")),
     ("Plasma", cm.get_cmap("plasma")),
     ('Magma', cm.get_cmap('magma')),
+    ('Seismic', cm.get_cmap('seismic')),
     ('Spring', cm.get_cmap('spring')),
     ('Summer', cm.get_cmap('summer')),
     ('Autumn', cm.get_cmap('autumn')),

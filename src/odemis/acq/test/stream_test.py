@@ -30,11 +30,11 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
-from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
+from odemis.acq.stream import POL_POSITIONS
 from odemis.acq.stream import RGBSpatialSpectrumProjection, \
     SinglePointSpectrumProjection, SinglePointTemporalProjection, \
     LineSpectrumProjection, MeanSpectrumProjection
-from odemis.dataio import tiff, hdf5
+from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
     MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow, TINT_FIT_TO_RGB
@@ -1620,6 +1620,7 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Now same thing but with more pixels and drift correction
         mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
+        mcs.tint.value = (255, 0, 0)  # Red colour
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
@@ -1655,6 +1656,7 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(cl_md[model.MD_USER_TINT], (255, 0, 0))  # from .tint
 
     def test_acq_cl_cancel(self):
         """
