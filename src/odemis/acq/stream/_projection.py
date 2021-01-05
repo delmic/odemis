@@ -444,7 +444,7 @@ class ARRawProjection(ARProjection):
                 self.stream._drange = None
                 self.stream._updateHistogram(polar_data)
 
-                self.image.value = self._project2RGB(polar_data)
+                self.image.value = self._project2RGB(polar_data, self.stream.tint.value)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
