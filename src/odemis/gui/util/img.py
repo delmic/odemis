@@ -1994,9 +1994,9 @@ def get_ordered_images(streams, raw=False):
 
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
-        if isinstance(ostream, acqstream.OpticalStream):
+        if isinstance(ostream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.CLStream)):
             images_opt.append((data, BLEND_SCREEN, ostream, md))
-        elif isinstance(ostream, (acqstream.SpectrumStream, acqstream.CLStream)):
+        elif isinstance(ostream, acqstream.SpectrumStream):
             images_spc.append((data, BLEND_DEFAULT, ostream, md))
         else:
             images_std.append((data, BLEND_DEFAULT, ostream, md))
