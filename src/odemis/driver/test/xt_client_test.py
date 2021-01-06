@@ -3,7 +3,7 @@
 """
 Created on 16 Aug 2019
 
-@author: Thera Pals
+@author: Thera Pals, Kornee Kleijwegt
 
 Copyright © 2019 Thera Pals, Delmic
 
@@ -798,6 +798,122 @@ class TestMicroscopeInternal(unittest.TestCase):
         test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
         # set resolution back to initial value
         self.scanner.resolution.value = init_resolution
+
+    def test_get_mpp_orientation(self):
+        """
+        Test getting the multiprobe pattern orientation.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        mpp_orientation = self.microscope.get_mpp_orientation()
+        self.assertIsInstance(mpp_orientation, float)
+        self.assertTrue(-90 < mpp_orientation < 90)
+
+    def test_mpp_orientation_info(self):
+        """
+        Test getting the multiprobe pattern orientation info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        mpp_orientation_info = self.microscope.mpp_orientation_info()
+        self.assertIsInstance(mpp_orientation_info, dict)
+        self.assertTrue("unit" in mpp_orientation_info)
+        self.assertIsInstance(mpp_orientation_info["range"], tuple)
+        self.assertEqual(len(mpp_orientation_info["range"]), 2)
+
+    def test_get_aperture_index(self):
+        """
+        Test getting the aperture index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertIsInstance(aperture_index, int)
+        self.assertTrue(0 <= aperture_index <= 14)
+
+    def test_set_aperture_index(self):
+        """
+        Test setting the aperture index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        current_aperture_index = self.microscope.get_aperture_index()
+        aperture_range = tuple(self.microscope.aperture_index_info()["range"])
+        new_aperture_index = current_aperture_index + 1 if current_aperture_index < aperture_range[1] else \
+                                                                                             current_aperture_index - 1
+
+        self.microscope.set_aperture_index(new_aperture_index)
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertEqual(aperture_index, new_aperture_index)
+
+        self.microscope.set_aperture_index(current_aperture_index)
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertEqual(aperture_index, current_aperture_index)
+
+    def test_aperture_index_info(self):
+        """
+        Test getting the aperture index info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        aperture_index_info = self.microscope.aperture_index_info()
+        self.assertIsInstance(aperture_index_info, dict)
+        self.assertIsInstance(aperture_index_info["range"], tuple)
+        self.assertEqual(len(aperture_index_info["range"]), 2)
+
+    def test_get_beamlet_index(self):
+        """
+        Test getting the beamlet index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertIsInstance(beamlet_index, tuple)
+        self.assertEqual(len(beamlet_index), 2)
+        self.assertTrue(1 <= beamlet_index[0] <= 8)
+        self.assertTrue(1 <= beamlet_index[1] <= 8)
+
+    def test_set_beamlet_index(self):
+        """
+        Test setting the beamlet index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        current_index = self.microscope.get_beamlet_index()
+        # Make sure both the x and the y value are changed.
+        new_x_beamlet_index = 3 if current_index[0] != 3 else 6
+        new_y_beamlet_index = 5 if current_index[1] != 5 else 7
+        new_beamlet_index = (new_x_beamlet_index, new_y_beamlet_index)
+
+        self.microscope.set_beamlet_index(new_beamlet_index)
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertEqual(beamlet_index, new_beamlet_index)
+
+        self.microscope.set_beamlet_index(current_index)
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertEqual(beamlet_index, current_index)
+
+    def test_beamlet_index_info(self):
+        """
+        Test getting the beamlet index info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        beamlet_index_info = self.microscope.beamlet_index_info()
+        self.assertIsInstance(beamlet_index_info, dict)
+        self.assertIsInstance(beamlet_index_info["range"], dict)
+        self.assertIsInstance(beamlet_index_info["range"]["x"], list)
+        self.assertIsInstance(beamlet_index_info["range"]["y"], list)
+        self.assertEqual(len(beamlet_index_info["range"]["x"]), 2)
+        self.assertEqual(len(beamlet_index_info["range"]["y"]), 2)
 
 
 if __name__ == '__main__':
