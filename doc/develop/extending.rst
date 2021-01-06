@@ -99,7 +99,7 @@ and type the following::
     comedi_config /dev/comedi1 comedi_test 100000,100000
 
 Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
-it immediately by typing ``/etc/rc.local``.
+it immediately by typing ``sudo /etc/rc.local``.
 
 Install PyCharm
 """""""""""""""
