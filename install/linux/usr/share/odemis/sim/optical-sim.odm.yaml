@@ -6,15 +6,6 @@ SimOptical: {
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
-#Light: {
-#    class: simulated.Light,
-#    role: brightlight,
-#    affects: ["Andor SimCam"],
-#    properties: {
-#        power: 100 # W
-#    }
-#}
-
 Spectra: {
     class: lle.FakeLLE,
     role: light,

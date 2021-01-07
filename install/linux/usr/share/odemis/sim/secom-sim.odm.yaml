@@ -6,15 +6,6 @@ SimSECOM: {
     actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "EBeam Focus"],
 }
 
-#Light: {
-#    class: simulated.Light,
-#    role: light,
-#    affects: ["Camera"],
-#    properties: {
-#        power: 100 # W
-#    }
-#}
-
 "Light Engine": {
     class: lle.FakeLLE,
     role: light,
