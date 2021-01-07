@@ -456,10 +456,11 @@ class Detector(model.Detector):
             center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
                       shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
 
+            # First and last index (eg, 0 -> 255)
             ltrb = [center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
                     center[1] + pxs_pos[1] - (res[1] / 2) * scale[1],
-                    center[0] + pxs_pos[0] + (res[0] / 2) * scale[0],
-                    center[1] + pxs_pos[1] + (res[1] / 2) * scale[1]
+                    center[0] + pxs_pos[0] + ((res[0] / 2) - 1) * scale[0],
+                    center[1] + pxs_pos[1] + ((res[1] / 2) - 1) * scale[1]
                     ]
             # If the shift caused the image to go out of bounds, limit it
             if ltrb[0] < 0:
@@ -468,7 +469,7 @@ class Detector(model.Detector):
                 ltrb[0] -= ltrb[2] - (shape[1] - 1)
             if ltrb[1] < 0:
                 ltrb[1] = 0
-            elif ltrb[3] >= shape[0] - 1:
+            elif ltrb[3] > shape[0] - 1:
                 ltrb[1] -= ltrb[3] - (shape[0] - 1)
             assert(ltrb[0] >= 0 and ltrb[1] >= 0)
 
