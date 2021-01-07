@@ -464,7 +464,7 @@ class TestSEMDrift(TestSEM):
     def test_shift(self):
         """
         check that .shift works
-        This only works o nthe "drifting" version because on this version the
+        This only works on the "drifting" version because on this version the
         max resolution is limited compared to the full image, so a shift is possible.
         """
         # First, test simple behaviour on the VA
