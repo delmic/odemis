@@ -549,7 +549,7 @@ class StaticSpectrumStream(StaticStream):
     A stream which displays only one static image/data. The data can be of type
     spectrum (C11YX), temporal spectrum (CT1YX) or time correlator (1T1YX).
     The main difference from the normal streams is that the data is 3D or 4D.
-    The metadata should can have a MD_WL_POLYNOMIAL or MD_WL_LIST or MD_TIME_LIST.
+    The metadata should can have a MD_WL_LIST or MD_TIME_LIST.
     When saving, the data will be converted to CTZYX.
 
     The histogram corresponds to the data after calibration, and selected via
@@ -562,8 +562,7 @@ class StaticSpectrumStream(StaticStream):
         """
         name (string)
         image (model.DataArray(Shadow) of shape (CYX), (C11YX), (CTYX), (CT1YX), (1T1YX)).
-        The metadata MD_WL_POLYNOMIAL or MD_WL_LIST can be included in order to
-        associate the C to a wavelength.
+        The metadata MD_WL_LIST can be included in order to associate the C to a wavelength.
         The metadata MD_TIME_LIST can be included to associate the T to a timestamp.
 
         .background is a DataArray of shape (CT111), where C & T have the same length as in the data.

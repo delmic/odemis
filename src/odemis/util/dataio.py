@@ -27,7 +27,7 @@ import numpy
 from odemis import dataio
 from odemis import model
 from odemis.acq import stream
-from odemis.model import MD_WL_LIST, MD_WL_POLYNOMIAL, MD_TIME_LIST
+from odemis.model import MD_WL_LIST, MD_TIME_LIST
 import os
 
 
@@ -61,11 +61,10 @@ def data_to_static_streams(data):
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
-        if (((MD_WL_LIST in d.metadata or MD_WL_POLYNOMIAL in d.metadata) and
-             (ci >= 0 and d.shape[ci] > 1)) or
+        if ((MD_WL_LIST in d.metadata and (ci >= 0 and d.shape[ci] > 1)) or
             (ci >= 0 and d.shape[ci] >= 5)  # No metadata, but looks like a spectrum
            ):
-            if (MD_TIME_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1)):
+            if MD_TIME_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
                 klass = stream.StaticSpectrumStream

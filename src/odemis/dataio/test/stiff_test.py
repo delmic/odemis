@@ -25,7 +25,6 @@ from __future__ import division
 from PIL import Image
 import logging
 import numpy
-from numpy.polynomial import polynomial
 from odemis import model, dataio
 from odemis.dataio import stiff, tiff
 from odemis.util import img
@@ -255,6 +254,7 @@ class TestTiffIO(unittest.TestCase):
         dtype = numpy.dtype("uint16")
         size3d = (512, 256, 220) # X, Y, C
         size = (512, 256)
+        sizes = [(512, 256), (100, 110, 1, 1, 200)]
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
                     model.MD_HW_VERSION: "1.23",
@@ -263,7 +263,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 1), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                    model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
@@ -339,7 +339,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 1), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_WL_POLYNOMIAL: [0], # m, m/px: missing polynomial
+                    model.MD_WL_LIST: [],
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
                     },
@@ -394,14 +394,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
-                if model.MD_WL_POLYNOMIAL in md:
-                    pn = md[model.MD_WL_POLYNOMIAL]
-                    # either identical, or nothing at all
-                    if model.MD_WL_POLYNOMIAL in im.metadata:
-                        numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
-                    else:
-                        self.assertNotIn(model.MD_WL_LIST, im.metadata)
-
     # @skip("simple")
     def testExportRead(self):
         """
@@ -455,6 +447,7 @@ class TestTiffIO(unittest.TestCase):
         """
         Checks that we can read back the metadata of a spectrum image
         """
+        sizes = [(512, 256), (500, 400, 1, 1, 220)]  # different sizes to ensure different acquisitions
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -474,13 +467,12 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                     },
                     ]
         # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint8")
         ldata = []
         for i, s in enumerate(sizes):
@@ -517,19 +509,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
-
-                if model.MD_WL_POLYNOMIAL in md:
-                    pn = md[model.MD_WL_POLYNOMIAL]
-                    # 2 formats possible
-                    if model.MD_WL_LIST in im.metadata:
-                        l = ldata[i].shape[0]
-                        npn = polynomial.Polynomial(pn,
-                                        domain=[0, l - 1],
-                                        window=[0, l - 1])
-                        wl = npn.linspace(l)[1]
-                        numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
-                    else:
-                        numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
 
     # @skip("simple")
     def testReadMDAR(self):
