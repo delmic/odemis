@@ -1244,6 +1244,10 @@ class Camera(model.DigitalCamera):
                         state = "E"
                 elif state == "E":
                     self.StopLiveVideo()
+                    # TODO: only on USB cameras
+                    # To try avoiding system freeze issues on USB camera
+                    logging.debug("Waiting a bit after stoppping video")
+                    time.sleep(1)
                 else:
                     logging.error("Received invalid state %s", state)
         except Exception:
