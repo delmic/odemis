@@ -101,19 +101,18 @@ def get_spectrum_data(das):
     # expect the worse: multiple spectrum data
     specs = []
     for da in das:
-        # What we are looking for is very specific: has MD_WL_* and has C > 1.
+        # What we are looking for is very specific: has MD_WL_LIST and has C > 1.
         # Actually, we even check for C > 3 (as a spectrum with less than 4
         # points would be very weird).
-        if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-                and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
+        if (model.MD_WL_LIST in da.metadata and len(da.shape) == 5
+                and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
             specs.append(da)
 
     if not specs:
         # be more flexible, and allow X/Y shape > 1, which permits to directly
         # use multiple acquisitions and average them to remove the noise
         for da in das:
-            if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-                    and len(da.shape) == 5 and da.shape[-5] > 4):
+            if model.MD_WL_LIST in da.metadata and len(da.shape) == 5 and da.shape[-5] > 4:
                 # take the average for each wavelength (accumulated with a float64)
                 dam = da.reshape((da.shape[0], -1)).mean(axis=1)  # TODO replace with da.mean(axis=(1, 2, 3, 4))?
                 dam = dam.astype(da.dtype)  # put back into original dtype
@@ -210,11 +209,11 @@ def get_spectrum_efficiency(das):
     # expect the worse: multiple DAs available
     specs = []
     for da in das:
-        # What we are looking for is very specific: has MD_WL_* and has C > 1.
+        # What we are looking for is very specific: has MD_WL_LIST and has C > 1.
         # Actually, we even check for C > 3 (as a spectrum with less than 4
         # points would be very weird).
-        if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
-                and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
+        if (model.MD_WL_LIST in da.metadata and len(da.shape) == 5
+                and da.shape[-5] > 4 and da.shape[-4:] == (1, 1, 1, 1)):
             specs.append(da)
 
     if not specs:
@@ -295,13 +294,13 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
                                  (bckg.metadata[model.MD_STREAK_TIMERANGE], data.metadata[model.MD_STREAK_TIMERANGE]))
 
         # Check if we have any wavelength information.
-        if not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+        if model.MD_WL_LIST not in data.metadata:
             # temporal spectrum data, but acquired in mirror mode (with/without time info)
             # spectrum data, but acquired in mirror mode
 
             # check that bg data also doesn't contain wl info
-            if set(bckg.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
-                raise ValueError("Found MD_WL_* metadata in background image, but "
+            if model.MD_WL_LIST in bckg.metadata:
+                raise ValueError("Found MD_WL_LIST metadata in background image, but "
                                  "data does not provide any wavelength information")
             data = img.Subtract(data, bckg)
 
@@ -316,7 +315,7 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
             try:
                 wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
             except KeyError:
-                raise ValueError("Found no MD_WL_* metadata in background image.")
+                raise ValueError("Found no spectrum metadata (MD_WL_LIST) in the background image.")
 
             # Warn if not the same wavelength
             if not numpy.allclose(wl_bckg, wl_data):
@@ -327,11 +326,9 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
             data = img.Subtract(data, bckg)
 
-    # We could be more clever if calib has a MD_WL_POLYNOMIAL, but it's very
-    # unlikely the calibration is in this form anyway.
     if coef is not None:
         # Check if we have any wavelength information in data.
-        if not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+        if model.MD_WL_LIST not in data.metadata:
             raise ValueError("Cannot apply spectrum correction as "
                              "data does not provide any wavelength information.")
         if coef.shape[1:] != (1, 1, 1, 1):

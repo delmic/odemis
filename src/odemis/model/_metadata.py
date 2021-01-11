@@ -79,9 +79,6 @@ MD_TRIGGER_RATE = "Streak Repetition Rate"  # (Hz) Repetition Rate of the trigge
 # The entries should be ordered by time (the earliest the first)
 MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 
-# The following two express the same thing (in different ways), so they should
-# not be used simultaneously.
-MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 

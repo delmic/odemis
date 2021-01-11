@@ -51,27 +51,6 @@ class TestGetWavelength(unittest.TestCase):
         wl = spectrum.get_wavelength_per_pixel(da)
         self.assertEqual(len(wl), shape[0])
         self.assertEqual(wl, wl_orig)
-
-        
-    def test_wl_polynomial(self):
-        shape = (220, 1, 1, 500, 400)
-        dtype = numpy.dtype("uint16")
-        metadata = {model.MD_SW_VERSION: "1.0-test",
-                 model.MD_HW_NAME: "fake spec",
-                 model.MD_DESCRIPTION: "test3d",
-                 model.MD_ACQ_DATE: time.time(),
-                 model.MD_BPP: 12,
-                 model.MD_BINNING: (1, 1), # px, px
-                 model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                 model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
-                 model.MD_POS: (1e-3, -30e-3), # m
-                 model.MD_EXP_TIME: 1.2, # s
-                }
-        da = model.DataArray(numpy.zeros(shape, dtype), metadata)
-        
-        wl = spectrum.get_wavelength_per_pixel(da)
-        self.assertEqual(len(wl), shape[0])
-        self.assertEqual(wl[0], metadata[model.MD_WL_POLYNOMIAL][0])
         
 
 class TestCoefToDA(unittest.TestCase):

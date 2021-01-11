@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 from past.builtins import basestring, unicode
+from numpy.polynomial import polynomial
 
 import collections
 import h5py
@@ -375,22 +376,13 @@ def _add_image_info(group, dataset, image):
                                 "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
-        if ("C" in dims and
-            set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+        if "C" in dims and model.MD_WL_LIST in image.metadata:
             try:
-                # polynomial of degree = 2 => linear, so use compact notation
-                if (model.MD_WL_POLYNOMIAL in image.metadata and
-                        len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
-                    pn = image.metadata[model.MD_WL_POLYNOMIAL]
-                    group["COffset"] = pn[0]
-                    _h5svi_set_state(group["COffset"], ST_REPORTED)
-                    group["DimensionScaleC"] = pn[1]  # m
-                else:
-                    wll = spectrum.get_wavelength_per_pixel(image)
-                    # list or polynomial of degree > 2 => store the values of each
-                    # pixel index explicitly. We follow another way to express
-                    # scaling in HDF5.
-                    group["DimensionScaleC"] = wll  # m
+                wll = spectrum.get_wavelength_per_pixel(image)
+                # list or polynomial of degree > 2 => store the values of each
+                # pixel index explicitly. We follow another way to express
+                # scaling in HDF5.
+                group["DimensionScaleC"] = wll  # m
 
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 dataset.dims.create_scale(group["DimensionScaleC"], "C")
@@ -541,11 +533,10 @@ def _read_image_info(group):
     # the pixel size (bandwidth) of the single px detector. The metadata includes MD_OUT_WL
     # (bandwidth of the monochromator), which is a tuple of (wl offset, wl offset + bandwidth).
 
-    # Spectrograph: The metadata includes MD_WL_POLYNOMIAL (conversion from px to wl), where
-    # the first entry corresponds to the wl offset "a" and the second to the coefficient "b" for the
-    # polynomial of first order (wl = a + bx).
-    # Based on polynomial the wavelength values for all px can be calculated elsewhere
-    # (see odemis.util.spectrum.get_wavelength_per_pixel).
+    # Spectrograph: The metadata is normally stored in list form (of the same length as the C dimension).
+    # For old files, it sometimes had metadata in polynomial form, where the first entry corresponds to
+    # the wl offset "a" and the second to the coefficient "b" for the polynomial of first order (wl = a + bx).
+    # In such case, based on the polynomial, the wavelength values for all px are calculated, and saved in MD_WL_LIST.
 
     # Note that not all data has information, for example RGB images, or
     # fluorescence images have no dimension scale (dim = None)
@@ -585,9 +576,21 @@ def _read_image_info(group):
                                          "only supported in backward compatible mode")
                             # monochromator bandwidth: (wl offset, wl offset + wl range covered by px)
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
-                        # spectrograph etc. (wl offset, linear coefficient polynomial)
                         else:
-                            md[model.MD_WL_POLYNOMIAL] = pn
+                            # To support spectrum acquisition files, acquired before 2016, that had metadata
+                            # in polynomial form. The polynomial is converted from a pixel number of a spectrum
+                            # to a wavelength list.
+                            pn = polynomial.polytrim(pn)
+                            if len(pn) >= 2:
+                                npn = polynomial.Polynomial(pn,  # pylint: disable=E1101
+                                                            domain=[0, dataset.shape[i] - 1],
+                                                            window=[0, dataset.shape[i] - 1])
+                                ret = npn.linspace(dataset.shape[i])[1]
+                                md[model.MD_WL_LIST] = ret.tolist()
+                            else:
+                                # a polynomial of 0 or 1 value is useless
+                                raise ValueError("Wavelength polynomial has only %d degree" % len(pn))
+
 
     except Exception:
         logging.warning("Failed to parse C dimension.", exc_info=True)
