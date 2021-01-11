@@ -444,14 +444,19 @@ class BufferedCanvas(wx.Panel):
         Note: the bitmap buffer is selected into the DC buffer in the buffer resize method
 
         """
+        csize = self.ClientSize
+        if 0 in csize:
+            # Cairo doesn't like 0 px contexts
+            logging.debug("Skipping draw on canvas of size %s", csize)
+            return
 
         dc_view = wx.PaintDC(self)
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.Blit(
             0, 0,  # destination point
-            self.ClientSize[0],  # size of area to copy
-            self.ClientSize[1],  # size of area to copy
+            csize[0],  # size of area to copy
+            csize[1],  # size of area to copy
             self._dc_buffer,  # source
             0, 0  # source point
         )
@@ -1613,6 +1618,11 @@ class DraggableCanvas(BitmapCanvas):
             dc_view = wx.PaintDC(self)
 
         csize = self.ClientSize
+        if 0 in csize:
+            # Cairo doesn't like 0 px contexts
+            logging.debug("Skipping draw on canvas of size %s", csize)
+            return
+
         self.margins = ((self._bmp_buffer_size[0] - csize.x) // 2,
                         (self._bmp_buffer_size[1] - csize.y) // 2)
 
