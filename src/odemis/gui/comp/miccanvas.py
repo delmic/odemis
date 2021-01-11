@@ -1020,15 +1020,14 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
 
-        if not self or not self.IsEnabled() or 0 in self.ClientSize:
+        if not self or 0 in self.ClientSize:
             return  # nothing to update
 
         # We need to scale the thumbnail ourselves, instead of letting the
         # button handle it, because we need to be able to draw the history
         # overlay without it being rescaled afterwards
 
-        # Create an image from the bitmap buffer
-        image = self._bmp_buffer.ConvertToImage()
+        image = self._get_img_from_buffer()
         scaled_img = img.wxImageScaleKeepRatio(image, gui.VIEW_BTN_SIZE, wx.IMAGE_QUALITY_HIGH)
         ratio = min(gui.VIEW_BTN_SIZE[0] / image.Width,
                     gui.VIEW_BTN_SIZE[1] / image.Height)
