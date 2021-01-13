@@ -28,6 +28,8 @@ import os
 import time
 import unittest
 
+from odemis import model
+
 from odemis.driver import xt_client
 from odemis.driver.xt_client import DETECTOR2CHANNELNAME
 from odemis.model import ProgressiveFuture
@@ -43,10 +45,12 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 "inverted": ["x"],
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
+CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.130:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
+                           "detector": CONFIG_DETECTOR,
                            }
               }
 
@@ -68,6 +72,8 @@ class TestMicroscope(unittest.TestCase):
                 cls.efocus = child
             elif child.name == CONFIG_STAGE["name"]:
                 cls.stage = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
 
     def setUp(self):
         if TEST_NOHW:
@@ -229,6 +235,26 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.rotation.value += 0.01
         self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
         self.scanner.rotation.value = init_rotation
+
+    def _compute_expected_duration(self):
+        """Computes the expected duration of a single image acquisition."""
+        dwell = self.scanner.dwellTime.value
+        settle = 5.e-6
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_acquire(self):
+        """Test acquiring an image using the Detector."""
+        self.scanner.dwellTime.value = 25e-9  # s
+        expected_duration = self._compute_expected_duration()
+
+        start = time.time()
+        im = self.detector.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
 
 class TestMicroscopeInternal(unittest.TestCase):
@@ -711,6 +737,19 @@ class TestMicroscopeInternal(unittest.TestCase):
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
         autofocus_state = self.microscope.is_autofocusing(channel)
         self.assertEqual(autofocus_state, False)
+
+    def test_set_resolution(self):
+        """Setting the beam shift."""
+        init_resolution = self.scanner.resolution.value
+        res = (768, 512)
+        self.scanner.resolution.value = res
+        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
+        # Test it still works for different values.
+        res = (1536, 1024)
+        self.scanner.resolution.value = res
+        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
+        # set resolution back to initial value
+        self.scanner.resolution.value = init_resolution
 
 
 if __name__ == '__main__':
