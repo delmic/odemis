@@ -11,7 +11,7 @@ Rotator: {
         channel: "can0",
         node_id: 1,
         datasheet: "TMCM-1240_CANopen_V322.dcf",
-        axes: {"x"},
+        axes: ["rz"],
         refproc: "Standard",
         param_file: "test/tmcm-pd1240.tmcc.tsv",
         ustepsize: [3.272492347489e-6], # 2 PI / (200 steps/turn * 256 µsteps/step * 75 gear-ratio * 0.5 image rotation per physical rotation)
