@@ -441,31 +441,23 @@ class MicroscopeViewport(ViewPort):
                 "merge" in self._view.stream_tree.kwargs and
                 len(self._view.stream_tree) >= 2
         ):
-            streams = self._view.getStreams()
-            all_opt = all(isinstance(s, (FluoStream, StaticFluoStream, CLStream)) for s in streams)
+            # TODO: For now the order is set in the MicroscopeCanvas, but it
+            # should be done in the MicroscopeView when adding a stream.
+            # The order is: (left) CL/Fluo < EM/anything else < Spectrum (right)
+            # Note: in practice, there is no AR spatial stream, so it's
+            # never mixed with any other stream.
+            def get_stream_prio(s):
+                if isinstance(s, (FluoStream, StaticFluoStream, CLStream)):
+                    return 0
+                elif isinstance(s, SpectrumStream):
+                    return 2
+                else:
+                    return 1
 
-            # If all images are optical, assume they are merged using screen blending and no
-            # merge ratio is required
-            if all_opt:
-                self.ShowMergeSlider(False)
-            else:
-                # TODO: For now the order is set in the MicroscopeCanvas, but it
-                # should be done in the MicroscopeView when adding a stream.
-                # The order is: (left) CL/Fluo < EM/anything else < Spectrum (right)
-                # Note: in practice, there is no AR spatial stream, so it's
-                # never mixed with any other stream.
-                def get_stream_prio(s):
-                    if isinstance(s, (FluoStream, StaticFluoStream, CLStream)):
-                        return 0
-                    elif isinstance(s, SpectrumStream):
-                        return 2
-                    else:
-                        return 1
-
-                streams_ordered = sorted(streams, key=get_stream_prio)
-                self.bottom_legend.set_stream_type(wx.LEFT, streams_ordered[0].acquisitionType.value)
-                self.bottom_legend.set_stream_type(wx.RIGHT, streams_ordered[-1].acquisitionType.value)
-                self.ShowMergeSlider(True)
+            streams_ordered = sorted(self._view.getStreams(), key=get_stream_prio)
+            self.bottom_legend.set_stream_type(wx.LEFT, streams_ordered[0].acquisitionType.value)
+            self.bottom_legend.set_stream_type(wx.RIGHT, streams_ordered[-1].acquisitionType.value)
+            self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
 

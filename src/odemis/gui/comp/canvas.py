@@ -940,6 +940,12 @@ class BitmapCanvas(BufferedCanvas):
 
         if images:
             n = len(images)
+
+            im_last = images[-1]
+            if isinstance(im_last, tuple):
+                im_last = im_last[0][0]  # first tile
+            bm_last = im_last.metadata["blend_mode"]
+
             for i, im in enumerate(images):
                 if isinstance(im, tuple):
                     first_tile = im[0][0]
@@ -950,15 +956,39 @@ class BitmapCanvas(BufferedCanvas):
                 else:
                     md = im.metadata
 
-                if md['blend_mode'] == BLEND_SCREEN:
+                blend_mode = md['blend_mode']
+                if n == 1: # For single image, don't use merge ratio
                     merge_ratio = 1.0
-                elif i == n - 1: # last image
-                    if n == 1:
-                        merge_ratio = 1.0
-                    else:
-                        merge_ratio = self.merge_ratio
                 else:
-                    merge_ratio = 1 - i / n
+                    # If there are all "screen" (= last one is screen):
+                    # merge ratio   im0   im1
+                    #     0         1      0
+                    #    0.25       1      0.5
+                    #    0.5        1      1
+                    #    0.75       0.5    1
+                    #     1         0      1
+                    # TODO: for now, this only works correctly if the background
+                    # is black (otherwise, the background is also mixed in)
+                    if bm_last == BLEND_SCREEN:
+                        if ((self.merge_ratio < 0.5 and i < n - 1) or
+                            (self.merge_ratio >= 0.5 and i == n - 1)):
+                            merge_ratio = 1
+                        else:
+                            merge_ratio = (0.5 - abs(self.merge_ratio - 0.5)) * 2
+                    else:  # bm_last == BLEND_DEFAULT
+                        # Average all the first images
+                        if i < n - 1:
+                            if blend_mode == BLEND_SCREEN:
+                                merge_ratio = 1.0
+                            else:
+                                merge_ratio = 1 - i / n
+                        else:  # last image
+                            merge_ratio = self.merge_ratio
+
+                # Reset the first image to be drawn to the default blend operator to be
+                # drawn full opacity (only useful if the background is not full black)
+                if i == 0:
+                    blend_mode = BLEND_DEFAULT
 
                 if isinstance(im, tuple):
                     self._draw_tiles(
@@ -970,7 +1000,7 @@ class BitmapCanvas(BufferedCanvas):
                         rotation=md['dc_rotation'],
                         shear=md['dc_shear'],
                         flip=md['dc_flip'],
-                        blend_mode=md['blend_mode'],
+                        blend_mode=blend_mode,
                         interpolate_data=interpolate_data
                     )
                 else:
@@ -983,7 +1013,7 @@ class BitmapCanvas(BufferedCanvas):
                         rotation=im.metadata['dc_rotation'],
                         shear=im.metadata['dc_shear'],
                         flip=im.metadata['dc_flip'],
-                        blend_mode=im.metadata['blend_mode'],
+                        blend_mode=blend_mode,
                         interpolate_data=interpolate_data
                     )
 
