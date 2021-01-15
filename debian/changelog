@@ -1,3 +1,24 @@
+odemis (3.1.1-1) xenial; urgency=medium
+
+  * New version: 3.1.1
+  * Main bug fixes:
+    - Fix icon background in the Windows Viewer
+    - Fix DELPHI calibration window on Python 3
+    - Fix cli_rgb plugin not using the correct filter
+    - Fix file selection in plugin with no specific file pattern
+    - Fix overview thumbnail not always updated (DELPHI)
+    - Fix logging of fine alignment scaling_xy (SECOM)
+    - Fix reading/writing streakcam calibration on Python 3
+    - Fix npmc driver not starting on Python 3
+    - The default python interpreter is Python 3
+    - Fix cyclic dependency on Python 2
+    - Update tescan driver to use the latest library, compatible with Python 3
+  * Enhancement:
+   - Automatically close DELPHI first calibration dialog when sample is ejected
+   - CL intensity streams are shown using the same blending mode as for FM
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 21 Jan 2021 14:49:35 +0100
+
 odemis (3.1.0-1) xenial; urgency=medium
 
   * New version: 3.1
