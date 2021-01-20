@@ -3012,11 +3012,12 @@
 										<object class="sizeritem">
 											<object class="ImageTextButton"
       												name="btn_change_folder">
-												<height>16</height>
-												<label>change…</label>
+												<height>24</height>
+												 <face_colour>blue</face_colour>
+												<label>New Project</label>
 												<fg>#1A1A1A</fg>
 												<font>
-													<size>12</size>
+													<size>14</size>
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<XRCED>

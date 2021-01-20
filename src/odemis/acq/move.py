@@ -54,6 +54,10 @@ def getCurrentPositionLabel(current_pos, stage):
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
     stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
     stage_coating = stage_md[model.MD_FAV_POS_COATING]
+    # If stage is not referenced, set position as unknown (to only allow loading position)
+    if not all(stage.referenced.value.values()):
+        return UNKNOWN
+
     # Check the stage is near the coating position
     if _isNearPosition(current_pos, stage_coating, stage.axes):
         return COATING
@@ -102,6 +106,8 @@ def getMovementProgress(current_pos, start_pos, end_pos):
     from_start = get_distance(start_pos, current_pos)
     to_end = get_distance(current_pos, end_pos)
     total_length = get_distance(start_pos, end_pos)
+    if total_length == 0: # same value
+        return None
     # Check if current position is on the line from start to end position
     # That would happen if start_to_current +  current_to_start = total_distance from start to end
     if util.almost_equal((from_start + to_end), total_length, rtol=RTOL_PROGRESS):
@@ -378,7 +384,7 @@ def run_reference(future, component):
             future._running_subf = component.reference(set(component.axes.keys()))
         future._running_subf.result()
     except Exception as error:
-        logging.error(error)
+        logging.exception(error)
     if future._task_state == CANCELLED:
         logging.info("Reference procedure is cancelled.")
         raise CancelledError()

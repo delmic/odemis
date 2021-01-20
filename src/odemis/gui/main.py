@@ -332,6 +332,11 @@ class OdemisGUIApp(wx.App):
             dlg.Destroy()  # frame
             return
 
+        # Check if there's any action to do before tab termination
+        # Do not terminate if returned False
+        if not self.tab_controller.query_terminate():
+            return
+
         for p in self.plugins:
             try:
                 p.terminate()

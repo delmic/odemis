@@ -289,6 +289,12 @@ class Tab(object):
     def IsShown(self):
         return self.panel.IsShown()
 
+    def query_terminate(self):
+        """
+        Called to perform action prior to terminating the tab
+        """
+        return True
+
     def terminate(self):
         """
         Called when the tab is not used any more
@@ -496,12 +502,19 @@ class LocalizationTab(Tab):
         streams = data_to_static_streams(data)
 
         # TODO: Clear previous overview streams
-        # self._overview_stream_controller.clear()
+        self.clear_data()
 
         for s in streams:
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
+    def clear_data(self):
+        """
+        Clear the tab data upon resetting the project:
+        - Clear overview map streams
+        - Clear live streams data
+        """
+        self._overview_stream_controller.clear()
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -1908,6 +1921,10 @@ class ChamberTab(Tab):
 
         return None
 
+DEFAULT_MILLING_ANGLE = 10
+MIN_MILLING_ANGLE = 5
+MAX_MILLING_ANGLE = 25
+
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """ CryoSECOM chamber view tab """
@@ -1949,14 +1966,17 @@ class CryoChamberTab(Tab):
             milling_range = math.degrees(self.ion_to_sample - rx_range[0]), math.degrees(
                 self.ion_to_sample - rx_range[1])
             # sort milling range in case ion_to_sample made range values flip
-            panel.ctrl_milling.SetValueRange(*sorted(milling_range))
+            actual_rng = sorted(milling_range)
+            ctrl_rng = max(actual_rng[0], MIN_MILLING_ANGLE), min(actual_rng[1], MAX_MILLING_ANGLE)
+            panel.ctrl_milling.SetValueRange(*ctrl_rng)
             # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = math.radians(10)
+            self._prev_milling_angle = math.radians(DEFAULT_MILLING_ANGLE)
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
 
         # Create new project directory on starting the GUI
+        # FIXME: Load existing project data
         self._create_new_dir()
 
         self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
@@ -2022,6 +2042,8 @@ class CryoChamberTab(Tab):
         new_dir = ShowChamberFileDialog(self._tab_panel, np)
         if new_dir is None:
             return
+        # Reset project, clear the data
+        self._reset_project_data()
         # Get previous project dir from configuration
         prev_dir = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
 
@@ -2095,6 +2117,13 @@ class CryoChamberTab(Tab):
         os.mkdir(np)
         self._change_project_conf(np)
 
+    def _reset_project_data(self):
+        try:
+            localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+            localization_tab.clear_data()
+        except LookupError:
+            logging.warning("Unable to find localization tab.")
+
     @call_in_wx_main
     def _update_progress_bar(self, pos):
         """
@@ -2102,6 +2131,8 @@ class CryoChamberTab(Tab):
         Called when the position of the stage changes.
         pos (dict str->float): current position of the sample stage
         """
+        if not self.IsShown():
+            return
         # Get the ratio of the current position in respect to the start/end position
         val = getMovementProgress(pos, self.start_pos, self.end_pos)
         if val is None:
@@ -2122,12 +2153,8 @@ class CryoChamberTab(Tab):
         :param cancelled: (bool) if the move is cancelled
         """
         stage = self.tab_data_model.main.stage
-        # If stage is not referenced, set position as unknown (to only allow loading position)
-        if not all(stage.referenced.value.values()):
-            self.current_position = UNKNOWN
-        else:
-            # Get current movement (including unknown and on the path)
-            self.current_position = getCurrentPositionLabel(stage.position.value, stage)
+        # Get current movement (including unknown and on the path)
+        self.current_position = getCurrentPositionLabel(stage.position.value, stage)
         self._enable_position_controls(self.current_position, cancelled)
         # Enable stage advanced controls on milling
         self._enable_advanced_controls(True) if self.current_position is MILLING else self._enable_advanced_controls(
@@ -2140,6 +2167,7 @@ class CryoChamberTab(Tab):
         # The move button should turn green only if current move is known and not cancelled
         if current_position in self.position_btns.keys() and not cancelled:
             currently_pressed = self.position_btns[current_position]
+            self._toggle_switch_buttons(currently_pressed)
             currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
             currently_pressed.Refresh()
         else:
@@ -2250,8 +2278,10 @@ class CryoChamberTab(Tab):
         Event handling for the position panel buttons
         """
         target_button = evt.theButton
+        target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
         move_future = self._perform_switch_position_movement(target_button)
         if move_future is None:
+            target_button.SetValue(0)
             return
         # Set the tab's move_future and attach its callback
         self._move_future = move_future
@@ -2259,7 +2289,6 @@ class CryoChamberTab(Tab):
         # Toggle the current button (yellow) and enable cancel
         self._toggle_switch_buttons(target_button)
         self._show_cancel_warning_msg(None)
-        target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
         self.panel.btn_cancel.Enable()
 
     @call_in_wx_main
@@ -2274,12 +2303,8 @@ class CryoChamberTab(Tab):
             # Something went wrong, don't go any further
             if not isinstance(ex, CancelledError):
                 logging.warning("Failed to move stage: %s", ex)
-            return
 
         self.panel.btn_cancel.Disable()
-        # Check if unloading position is reached, reset project directory
-        if self.target_position is LOADING and self.current_position in {MILLING, IMAGING, COATING}:
-            self._create_new_dir()
         # Get currently pressed button (if any) then re-enable the tab controls
         self._enable_movement_controls()
         self.target_position = None
@@ -2308,7 +2333,6 @@ class CryoChamberTab(Tab):
         """
         # Only proceed if there is no currently running target_position
         if self._move_future._state == RUNNING:
-            target_button.SetValue(0)
             return
         stage = self.tab_data_model.main.stage
         self.start_pos = stage.position.value
@@ -2319,7 +2343,15 @@ class CryoChamberTab(Tab):
             return
         # target_position metadata has the end positions for all movements except milling
         if self.target_position in self.target_position_metadata.keys():
-           # Save the milling angle control current value (to return to it when switch back to milling)
+            if self.current_position is LOADING:
+                box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
+                                       style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
+
+                box.SetYesNoLabels("&Load", "&Cancel")
+                ans = box.ShowModal()  # Waits for the window to be closed
+                if ans == wx.ID_NO:
+                    return
+            # Save the milling angle control current value (to return to it when switch back to milling)
             if self.current_position is MILLING:
                 milling_angle = self._get_milling_angle_value()
                 if milling_angle is not None:
@@ -2379,6 +2411,35 @@ class CryoChamberTab(Tab):
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
+
+    def query_terminate(self):
+        """
+        Called to perform action prior to terminating the tab
+        """
+        if self.current_position is not LOADING:
+            if self._move_future._state == RUNNING and self.target_position is LOADING:
+                box = wx.MessageDialog(self.main_frame,
+                                       "The sample is still moving to the loading position, are you sure you want to close Odemis?",
+                                       style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+                box.SetYesNoLabels("&Close Window", "&Cancel")
+                ans = box.ShowModal()  # Waits for the window to be closed
+                if ans == wx.ID_YES:
+                    return True
+                else:
+                    return False
+
+            box = wx.MessageDialog(self.main_frame,
+                                   "The sample is still loaded, are you sure you want to close Odemis?",
+                                   style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+            box.SetYesNoLabels("&Close Window", "&Cancel")
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans == wx.ID_YES:
+                return True
+            else:
+                return False
+        return True
 
     @classmethod
     def get_display_priority(cls, main_data):
@@ -5476,6 +5537,16 @@ class TabBarController(object):
             wx.CallLater(100, self._update_layout_big_text, tab.panel)  # Quickly
             wx.CallLater(500, self._update_layout_big_text, tab.panel)  # Later, in case the first time was too early
             self._tabs_fixed_big_text.add(tab.name)
+
+    def query_terminate(self):
+        """
+        Call each tab query_terminate to perform any action prior to termination
+        :return: (bool) False for canceling termination, True to proceed
+        """
+        for t in self._tabs.choices:
+            if not t.query_terminate():
+                return False
+        return True
 
     def terminate(self):
         """ Terminate each tab (i.e., indicate they are not used anymore) """
