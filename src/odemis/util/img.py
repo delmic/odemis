@@ -847,11 +847,17 @@ class ImageIntegrator(object):
             self._img = integ_img
 
         else:
-            mda = img.metadata  # metadata of the new acquired image
-            mdb = self._img.metadata  # metadata of the previous acquired image or the previous integrated one
-            data = numpy.add(self._img, img, dtype=self._best_dtype)
+            integ_img = self._img
+            # The sum starts as a duplicate of the first image, on the second image received
+            if self._step == 2:
+                data = integ_img.astype(self._best_dtype, copy=True)
+                integ_img = model.DataArray(data, integ_img.metadata.copy())
+
+            numpy.add(integ_img, img, out=integ_img)
+
             # update the metadata of the integrated image in every integration step
-            md = self.add_integration_metadata(mda, mdb)
+            md = integ_img.metadata
+            self.add_integration_metadata(md, img.metadata)
 
             # At the end of the acquisition, check if the detector type is DT_NORMAL and then take the average by
             # dividing with the number of acquired images (integration count) for every pixel position and restoring
@@ -861,17 +867,17 @@ class ImageIntegrator(object):
                 if det_type == model.MD_DT_NORMAL:  # SEM
                     orig_dtype = img.dtype
                     if orig_dtype.kind in "biu":
-                        data = numpy.floor_divide(data, self._step, dtype=orig_dtype, casting='unsafe')
+                        integ_img = numpy.floor_divide(integ_img, self._step, dtype=orig_dtype, casting='unsafe')
                     else:
-                        data = numpy.true_divide(data, self._step, dtype=orig_dtype, casting='unsafe')
-                elif det_type != model.MD_DT_INTEGRATING:  # optical
+                        integ_img = numpy.true_divide(integ_img, self._step, dtype=orig_dtype, casting='unsafe')
+                elif det_type != model.MD_DT_INTEGRATING:  # not optical either
                     logging.warning("Unknown detector type %s for image integration.", det_type)
                 # The baseline, if exists, should also be subtracted from the integrated image.
                 if model.MD_BASELINE in md:
-                    data, md = self.subtract_baseline(data, md)
-                logging.debug("Image integration is completed.")
+                    integ_img, md = self.subtract_baseline(integ_img, md)
 
-            integ_img = model.DataArray(data, md)
+                integ_img = model.DataArray(integ_img, md)
+
             self._img = integ_img
 
         # reset the ._img and ._step once you reach the integration count
