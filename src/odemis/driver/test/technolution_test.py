@@ -166,33 +166,33 @@ class TestAcquisitionServer(unittest.TestCase):
 
     def test_externalStorageURL_VA(self):
         # Set default URL
-        test_url = 'ftp://testname:testword@testable.com/Test_images'
+        test_url = 'ftp://username:password@127.0.0.1:5000/directory/sub-directory'
         self.ASM_manager.externalStorageURL.value = test_url
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal scheme
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'wrong://testname:testword@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'wrong://username:password@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal character in user
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:testword@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:password@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal characters in password
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testwrong%$word@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:testwrong%$word@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal character in host
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testword@non-test-%-able.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@non-test-%-able/Test_images'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal characters in path
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testable.com/Inval!d~Path'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000/Inval!d~Path'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
     def test_assembleCalibrationMetadata(self):
