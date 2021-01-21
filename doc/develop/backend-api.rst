@@ -169,7 +169,12 @@ light...
         *(1024, 1024)*, while a simple light might have an empty shape of
         *()*.
 
-    .. TODO: see if the shape should also indicate the “depth” (number of emission source/power).
+    .. py:attribute:: depthOfField
+
+        *(RO VA, 0 < float, unit=m, optional)* Indicates roughly the
+        thickness of the part in focus. That is mostly used during focusing, to
+        guess the minimum movement needed to affect the image.
+
 
 Light
 =====
@@ -177,14 +182,6 @@ Light
 Lights are a type of emitters which generates an electromagnetic radiation at one or
 several frequencies. Typically (but it's not compulsory), they generate
 light with a shape of (1) (i.e., no scanning).
-
-.. TODO: That interface is not handy, because in reality hardware doesn't have
-   a power * intensity for each source. For now there is also no way to know
-   what's the maximum power for each sources, excepted by setting it to 1 and
-   looking at the actual value.
-   => we should provide a .source (read-only) info, like .axes which contains
-   the spectra, type of source (eg, light, electron) and max power. And .power
-   should be a tuple or ListVA indicating the power for each source.
 
 .. py:class:: Light()
 
@@ -316,8 +313,8 @@ DigitialCamera is a subtype of Detector which detects light with an array.
 
 .. py:class:: DigitalCamera()
 
-    :param transpose: Allows to rotate/mirror the CCD image. For each axis (indexed from 1) of the output data is the corresponding axis of the detector indicated. Each detector axis must be indicated precisely once. If an axis is mentioned as a negative number, it is mirrored. For example, the default (None) is equivalent to *[1, 2]* for a 2D detector. Mirroring on the Y axis is done with *[1, -2]*, and if a 90° clockwise rotation is needed, this is done with *[-2, 1]*.
-    :type transpose: list of ints
+    :param transp: Allows to rotate/mirror the CCD image. For each axis (indexed from 1) of the output data is the corresponding axis of the detector indicated. Each detector axis must be indicated precisely once. If an axis is mentioned as a negative number, it is mirrored. For example, the default (None) is equivalent to *[1, 2]* for a 2D detector. Mirroring on the Y axis is done with *[1, -2]*, and if a 90° clockwise rotation is needed, this is done with *[-2, 1]*.
+    :type transp: list of ints
 
     .. py:attribute:: binning
 
@@ -330,6 +327,13 @@ DigitialCamera is a subtype of Detector which detects light with an array.
     .. py:attribute:: exposureTime
 
         *(VA, float, unit=s)* time in second for the exposure for one image.
+
+     .. py:attribute:: depthOfField
+
+        *(RO VA, 0 < float, unit=m)* Optional FloatVA which indicates roughly the
+        thickness of the part in focus. That is mostly used during focusing, to
+        guess the minimum movement needed to affect the image.
+
 
 Actuator
 ========
@@ -386,35 +390,38 @@ whether the stage passed by position *x=1* is unknown (to the client).
         If an axis cannot be referenced at all (e.g., not sensor), it is not
         listed.
 
-    .. py:method:: moveRel(shift)
+    .. py:method:: moveRel(shift, [update=false])
 
         Request a move by a relative amount. If the hardware supports it, the
         driver should move all axes simultaneously, otherwise, axes will be moved
         sequentially in a non-specified order.
-        Note that if the axis has  :py:attr:`Axis.canUpdate` ``True``, that
-        method will accept the argument ``update``.
-        See the documentation of that attribute for more information.
 
         :param shift: distance (or angle) that should be moved for each axis.
             If an axis is not mentioned it should not be moved.
         :type shift: dict str → float
+        :param update: To indicate it's fine to "merge" the move with the previous
+            move. Only if some of the axes have :py:attr:`Axis.canUpdate` ``True``, then
+            method will accept the argument ``update``.
+            See the documentation of that attribute for more information.
+        :type update: bool
         :rtype: Future
 
-    .. py:method:: moveAbs(pos)
+    .. py:method:: moveAbs(pos, [update=false])
 
         Requests a move to a specific position.
-        Note that if the axis has  :py:attr:`Axis.canUpdate` ``True``, that
-        method will accept the argument ``update``.
-        See the documentation of that attribute for more information.
 
         :param pos: Position to reach for each axis. If an axis is not mentioned it should not be moved.
         :type pos: dict str → float
+        :param update: To indicate it's fine to "merge" the move with the previous
+            move. Only if some of the axes have :py:attr:`Axis.canUpdate` ``True``, then
+            method will accept the argument ``update``.
+            See the documentation of that attribute for more information.
+        :type update: bool
         :rtype: Future
 
     .. py:method:: moveRelSync(shift)
 
         Request a move by a relative amount, blocking until the move is over.
-
 
         :param shift: distance (or angle) that should be moved for each axis.
             If an axis is not mentioned it should not be moved.
