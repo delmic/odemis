@@ -155,6 +155,7 @@ class Camera(model.DigitalCamera):
         self._generator = None
         # Convenience event for the user to connect and fire
         self.softwareTrigger = model.Event()
+        self._last_acq_time = 0  # Time of latest acquisition
 
         # Include a thread which creates or fixes an hardware error in the simcam on the basis of the presence of the
         # file ERROR_STATE_FILE in model.BASE_DIRECTORY
@@ -243,12 +244,18 @@ class Camera(model.DigitalCamera):
         current drift.
         """
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
-        gen_img = self._simulate()
-        self.data._waitSync()
-        if self.data._sync_event:
-            # If sync event, we need to simulate period after event (not efficient, but works)
-            time.sleep(self.exposureTime.value)
+        event_t = self.data._waitSync()
+        exp = self.exposureTime.value
+        if event_t is not None:
+            # If sync event, we need to simulate period after event
+            # If several events were sent before the end of the acquisition, then
+            # it's the acquisition time that counts.
+            end_acq_time = max(self._last_acq_time, event_t) + exp
+            extra_time = max(0, end_acq_time - time.time())
+            logging.debug("Sleeping extra %g s, for simulating event", extra_time)
+            time.sleep(extra_time)
 
+        gen_img = self._simulate()
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
 
@@ -258,8 +265,8 @@ class Camera(model.DigitalCamera):
             gen_img = self._write_txt_image(gen_img, txt)
 
         # update fake output metadata
-        exp = timer.period
-        metadata[model.MD_ACQ_DATE] = time.time() - exp
+        self._last_acq_time = time.time() - exp
+        metadata[model.MD_ACQ_DATE] = self._last_acq_time
         metadata[model.MD_EXP_TIME] = exp
         logging.debug("Generating new fake image of shape %s", gen_img.shape)
 
@@ -422,7 +429,10 @@ class SimpleDataFlow(model.DataFlow):
         Block until the Event on which the dataflow is synchronised has been
           received. If the DataFlow is not synchronised on any event, this
           method immediatly returns
+        return (float or None): if an event happened, it's the time the event was
+          sent. Otherwise, it returns None.
         """
         if self._sync_event:
-            self._evtq.get()
+            return self._evtq.get()
 
+        return None
