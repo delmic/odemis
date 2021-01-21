@@ -23,6 +23,7 @@ from __future__ import division, print_function
 
 import logging
 import math
+import queue
 import threading
 import time
 from concurrent.futures import CancelledError
@@ -33,13 +34,19 @@ import numpy
 
 from odemis import model
 from odemis import util
-from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture
+from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture, \
+    DataArray
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
 
 XT_RUN = "run"
 XT_STOP = "stop"
+
+# Acquisition control messages
+GEN_START = "S"  # Start acquisition
+GEN_STOP = "E"  # Don't acquire image anymore
+GEN_TERM = "T"  # Stop the generator
 
 # Convert from a detector role (following the Odemis convention) to a detector name in xtlib
 DETECTOR2CHANNELNAME = {
@@ -96,6 +103,12 @@ class SEM(model.HwComponent):
             ckwargs = children["focus"]
             self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
+
+        # create a detector, if requested
+        if "detector" in children:
+            ckwargs = children["detector"]
+            self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._detector)
 
     def list_available_channels(self):
         """
@@ -244,7 +257,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_scanning_size(x)
+            self.server.set_scanning_size(x - 1e-18)  # Necessary because it doesn't accept the max of the range
 
     def get_scanning_size(self):
         """
@@ -584,6 +597,31 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.rotation_info()
 
+    def set_resolution(self, resolution):
+        """
+        Set the resolution of the image.
+
+        Parameters
+        ----------
+        resolution (tuple): The resolution of the image in pixels as (width, height). Options: (768, 512),
+                            (1536, 1024), (3072, 2048), (6144, 4096)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_resolution(resolution)
+
+    def get_resolution(self):
+        """Returns the resolution of the image as (width, height)."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_resolution()
+
+    def resolution_info(self):
+        """Returns the unit and range of the resolution of the image."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.resolution_info()
+
     def set_beam_power(self, state):
         """
         Turn on or off the beam power.
@@ -822,10 +860,10 @@ class Scanner(model.Emitter):
             unit=voltage_info["unit"],
             setter=self._setVoltage
         )
-
-        self.blanker = model.BooleanVA(
-            self.parent.beam_is_blanked(),
-            setter=self._setBlanker)
+        self.blanker = model.VAEnumerated(
+            None,
+            setter=self._setBlanker,
+            choices={True: 'blanked', False: 'unblanked', None: 'auto'})
 
         spotsize_info = self.parent.spotsize_info()
         self.spotSize = model.FloatContinuous(
@@ -870,67 +908,201 @@ class Scanner(model.Emitter):
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
+        rng = self.parent.resolution_info()["range"]
+        self._shape = (rng["width"][1], rng["height"][1])
+        # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
+        # == smallest size/ between two different ebeam positions
+        pxs = (self._hfw_nomag / (self._shape[0] * mag),
+               self._hfw_nomag / (self._shape[0] * mag))
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+
+        # .resolution is the number of pixels actually scanned. If it's less than
+        # the whole possible area, it's centered.
+        resolution = self.parent.get_resolution()
+
+        self.resolution = model.ResolutionVA(tuple(resolution),
+                                             ((rng["width"][0], rng["height"][0]),
+                                              (rng["width"][1], rng["height"][1])),
+                                             setter=self._setResolution)
+        self._resolution = resolution
+
+        # (float, float) as a ratio => how big is a pixel, compared to pixelSize
+        # it basically works the same as binning, but can be float
+        # (Default to scan the whole area)
+        self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
+        self.scale = model.TupleContinuous(self._scale,
+                                           [(1, 1), self._shape],
+                                           unit="",
+                                           cls=(int, float),  # int; when setting scale the GUI returns a tuple of ints.
+                                           setter=self._setScale)
+        self.scale.subscribe(self._onScale, init=True)  # to update metadata
+
+        # If scaled up, the pixels are bigger
+        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
-    # TODO Commented out code because it is currently not supproted by XT. An update or another implementation may be
-    # made later
+    def _updateSettings(self):
+        """
+        Read all the current settings from the SEM and reflects them on the VAs
+        """
+        logging.debug("Updating SEM settings")
+        try:
+            dwell_time = self.parent.get_dwell_time()
+            if dwell_time != self.dwellTime.value:
+                self.dwellTime._value = dwell_time
+                self.dwellTime.notify(dwell_time)
+            voltage = self.parent.get_ht_voltage()
+            v_range = self.accelVoltage.range
+            if not v_range[0] <= voltage <= v_range[1]:
+                logging.info("Voltage {} V is outside of range {}, clipping to nearest value.".format(voltage, v_range))
+                voltage = self.accelVoltage.clip(voltage)
+            if voltage != self.accelVoltage.value:
+                self.accelVoltage._value = voltage
+                self.accelVoltage.notify(voltage)
+            blanked = self.parent.beam_is_blanked()
+            if blanked != self.blanker.value:
+                self.blanker._value = blanked
+                self.blanker.notify(blanked)
+            spot_size = self.parent.get_ebeam_spotsize()
+            if spot_size != self.spotSize.value:
+                self.spotSize._value = spot_size
+                self.spotSize.notify(spot_size)
+            beam_shift = self.parent.get_beam_shift()
+            if beam_shift != self.beamShift.value:
+                self.beamShift._value = beam_shift
+                self.beamShift.notify(beam_shift)
+            rotation = self.parent.get_rotation()
+            if rotation != self.rotation.value:
+                self.rotation._value = rotation
+                self.rotation.notify(rotation)
+            fov = self.parent.get_scanning_size()[0]
+            if fov != self.horizontalFoV.value:
+                self.horizontalFoV._value = fov
+                mag = self._hfw_nomag / fov
+                self.magnification._value = mag
+                self.horizontalFoV.notify(fov)
+                self.magnification.notify(mag)
+        except Exception:
+            logging.exception("Unexpected failure when polling settings")
 
-    # @isasync
-    # def applyAutoStigmator(self, detector):
-    #     """
-    #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-    #     the beam must be turned on and unblanked. This call is non-blocking.
-    #
-    #     :param detector (str): Role of the detector.
-    #     :return: Future object
-    #     """
-    #     # Create ProgressiveFuture and update its state
-    #     est_start = time.time() + 0.1
-    #     f = ProgressiveFuture(start=est_start,
-    #                           end=est_start + 8)  # rough time estimation
-    #     f._auto_stigmator_lock = threading.Lock()
-    #     f._must_stop = threading.Event()  # cancel of the current future requested
-    #     f.task_canceller = self._cancelAutoStigmator
-    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
-    #         # Auto stigmation is only supported on channel electron1, not on the other channels
-    #         raise KeyError("This detector is not supported for auto stigmation")
-    #     f.c = DETECTOR2CHANNELNAME[detector]
-    #     return self._executor.submitf(f, self._applyAutoStigmator, f)
-    #
-    # def _applyAutoStigmator(self, future):
-    #     """
-    #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
-    #     :param future (Future): the future to start running.
-    #     """
-    #     channel_name = future._channel_name
-    #     with future._auto_stigmator_lock:
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #         self.parent.set_autostigmator(channel_name, XT_RUN)
-    #         time.sleep(0.5)  # Wait for the auto stigmator to start
-    #
-    #     # Wait until the microscope is no longer applying auto stigmator
-    #     while self.parent.is_autostigmating(channel_name):
-    #         future._must_stop.wait(0.1)
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #
-    # def _cancelAutoStigmator(self, future):
-    #     """
-    #     Cancels the auto stigmator. Non-blocking.
-    #     :param future (Future): the future to stop.
-    #     :return (bool): True if it successfully cancelled (stopped) the move.
-    #     """
-    #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
-    #
-    #     with future._auto_stigmator_lock:
-    #         logging.debug("Cancelling auto stigmator")
-    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
-    #         return True
+    def _setScale(self, value):
+        """
+        value (1 < float, 1 < float): increase of size between pixels compared to
+            the original pixel size. It will adapt the translation and resolution to
+            have the same ROI (just different amount of pixels scanned)
+        return the actual value used
+        """
+        prev_scale = self._scale
+        self._scale = value
+
+        # adapt resolution so that the ROI stays the same
+        change = (prev_scale[0] / self._scale[0],
+                  prev_scale[1] / self._scale[1])
+        old_resolution = self.resolution.value
+        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
+                          max(int(round(old_resolution[1] * change[1])), 1))
+        self.resolution.value = new_resolution
+        return value
+
+    def _onScale(self, s):
+        self._updatePixelSize()
+
+    def _updatePixelSize(self):
+        """
+        Update the pixel size using the horizontalFoV.
+        """
+        fov = self.horizontalFoV.value
+        # The pixel size is equal in x and y.
+        pxs = (fov / self._shape[0],
+               fov / self._shape[0])
+        # pixelSize is read-only, so we change it only via _value
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
+        # If scaled up, the pixels are bigger
+        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+
+    def _setDwellTime(self, dwell_time):
+        self.parent.set_dwell_time(dwell_time)
+        return self.parent.get_dwell_time()
+
+    def _setVoltage(self, voltage):
+        self.parent.set_ht_voltage(voltage)
+        return self.parent.get_ht_voltage()
+
+    def _setBlanker(self, blank):
+        """
+        Parameters
+        ----------
+        blank (bool): True if the the electron beam should blank, False if it should be unblanked.
+
+        Returns
+        -------
+        (bool): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case.
+
+        Notes
+        -----
+        When pausing the stream in XT it will blank the beam and return True for the beam_is_blanked check. It is
+        possible to unblank the beam when the stream is paused. The physical unblanking will then occur when the stream
+        is started, and at that moment beam_is_blanked will return False. It is impossible to check if the beam will
+        be unblanked or blanked when starting the stream.
+        """
+        if blank:
+            self.parent.blank_beam()
+        else:
+            self.parent.unblank_beam()
+        return self.parent.beam_is_blanked()
+
+    def _setSpotSize(self, spotsize):
+        self.parent.set_ebeam_spotsize(spotsize)
+        return self.parent.get_ebeam_spotsize()
+
+    def _setBeamShift(self, beam_shift):
+        self.parent.set_beam_shift(*beam_shift)
+        return self.parent.get_beam_shift()
+
+    def _setRotation(self, rotation):
+        self.parent.set_rotation(rotation)
+        return self.parent.get_rotation()
+
+    def _setHorizontalFoV(self, fov):
+        self.parent.set_scanning_size(fov)
+        fov = self.parent.get_scanning_size()[0]
+        mag = self._hfw_nomag / fov
+        self.magnification._value = mag
+        self.magnification.notify(mag)
+        self._updateDepthOfField()
+        self._updatePixelSize()
+        return fov
+
+    def _updateDepthOfField(self):
+        fov = self.horizontalFoV.value
+        # Formula was determined by experimentation
+        K = 100  # Magical constant that gives a not too bad depth of field
+        dof = K * (fov / 1024)
+        self.depthOfField._set_value(dof, force_write=True)
+
+    def _setResolution(self, value):
+        """
+        value (0<int, 0<int): defines the size of the resolution. If the requested
+            resolution is not possible, it will pick the most fitting one.
+        returns the actual value used
+        """
+        max_size = self.resolution.range[1]
+
+        # At least one pixel, and at most the whole area.
+        size = (max(min(value[0], max_size[0]), 1),
+                max(min(value[1], max_size[1]), 1))
+        self._resolution = size
+        self.parent.set_resolution(size)
+
+        self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
+        return value
 
     @isasync
     def applyAutoContrastBrightness(self, detector):
@@ -989,108 +1161,283 @@ class Scanner(model.Emitter):
                 logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
                 return False
 
-    def _updateSettings(self):
+    # TODO Commented out code because it is currently not supported by XT. An update or another implementation may be
+    # made later
+
+    # @isasync
+    # def applyAutoStigmator(self, detector):
+    #     """
+    #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
+    #     the beam must be turned on and unblanked. This call is non-blocking.
+    #
+    #     :param detector (str): Role of the detector.
+    #     :return: Future object
+    #     """
+    #     # Create ProgressiveFuture and update its state
+    #     est_start = time.time() + 0.1
+    #     f = ProgressiveFuture(start=est_start,
+    #                           end=est_start + 8)  # rough time estimation
+    #     f._auto_stigmator_lock = threading.Lock()
+    #     f._must_stop = threading.Event()  # cancel of the current future requested
+    #     f.task_canceller = self._cancelAutoStigmator
+    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
+    #         # Auto stigmation is only supported on channel electron1, not on the other channels
+    #         raise KeyError("This detector is not supported for auto stigmation")
+    #     f.c = DETECTOR2CHANNELNAME[detector]
+    #     return self._executor.submitf(f, self._applyAutoStigmator, f)
+    #
+    # def _applyAutoStigmator(self, future):
+    #     """
+    #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
+    #     :param future (Future): the future to start running.
+    #     """
+    #     channel_name = future._channel_name
+    #     with future._auto_stigmator_lock:
+    #         if future._must_stop.is_set():
+    #             raise CancelledError()
+    #         self.parent.set_autostigmator(channel_name, XT_RUN)
+    #         time.sleep(0.5)  # Wait for the auto stigmator to start
+    #
+    #     # Wait until the microscope is no longer applying auto stigmator
+    #     while self.parent.is_autostigmating(channel_name):
+    #         future._must_stop.wait(0.1)
+    #         if future._must_stop.is_set():
+    #             raise CancelledError()
+    #
+    # def _cancelAutoStigmator(self, future):
+    #     """
+    #     Cancels the auto stigmator. Non-blocking.
+    #     :param future (Future): the future to stop.
+    #     :return (bool): True if it successfully cancelled (stopped) the move.
+    #     """
+    #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
+    #
+    #     with future._auto_stigmator_lock:
+    #         logging.debug("Cancelling auto stigmator")
+    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
+    #         return True
+
+
+class Detector(model.Detector):
+    """
+    This is an extension of model.Detector class. It performs the main functionality
+    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image
+    is captured.
+    """
+
+    def __init__(self, name, role, parent, channel_name, **kwargs):
         """
-        Read all the current settings from the SEM and reflects them on the VAs
+        channel_name (str): Name of one of the electron channels.
         """
-        logging.debug("Updating SEM settings")
-        try:
-            dwell_time = self.parent.get_dwell_time()
-            if dwell_time != self.dwellTime.value:
-                self.dwellTime._value = dwell_time
-                self.dwellTime.notify(dwell_time)
-            voltage = self.parent.get_ht_voltage()
-            v_range = self.accelVoltage.range
-            if not v_range[0] <= voltage <= v_range[1]:
-                logging.info("Voltage {} V is outside of range {}, clipping to nearest value.".format(voltage, v_range))
-                voltage = self.accelVoltage.clip(voltage)
-            if voltage != self.accelVoltage.value:
-                self.accelVoltage._value = voltage
-                self.accelVoltage.notify(voltage)
-            blanked = self.parent.beam_is_blanked()
-            if blanked != self.blanker.value:
-                self.blanker._value = blanked
-                self.blanker.notify(blanked)
-            spot_size = self.parent.get_ebeam_spotsize()
-            if spot_size != self.spotSize.value:
-                self.spotSize._value = spot_size
-                self.spotSize.notify(spot_size)
-            beam_shift = self.parent.get_beam_shift()
-            if beam_shift != self.beamShift.value:
-                self.beamShift._value = beam_shift
-                self.beamShift.notify(beam_shift)
-            rotation = self.parent.get_rotation()
-            if rotation != self.rotation.value:
-                self.rotation._value = rotation
-                self.rotation.notify(rotation)
-            fov = self.parent.get_scanning_size()[0]
-            if fov != self.horizontalFoV.value:
-                self.horizontalFoV._value = fov
-                mag = self._hfw_nomag / fov
-                self.magnification._value = mag
-                self.horizontalFoV.notify(fov)
-                self.magnification.notify(mag)
-        except Exception:
-            logging.exception("Unexpected failure when polling settings")
+        # The acquisition is based on a FSM that roughly looks like this:
+        # Event\State |    Stopped    |   Acquiring    | Receiving data |
+        #    START    | Ready for acq |        .       |       .        |
+        #    DATA     |       .       | Receiving data |       .        |
+        #    STOP     |       .       |     Stopped    |    Stopped     |
+        #    TERM     |     Final     |      Final     |     Final      |
 
-    def _setDwellTime(self, dwell_time):
-        self.parent.set_dwell_time(dwell_time)
-        return self.parent.get_dwell_time()
+        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self._shape = (256,)  # Depth of the image
+        self.data = SEMDataFlow(self)
 
-    def _setVoltage(self, voltage):
-        self.parent.set_ht_voltage(voltage)
-        return self.parent.get_ht_voltage()
+        self._channel_name = channel_name
+        self._genmsg = queue.Queue()  # GEN_*
+        self._generator = None
 
-    def _setBlanker(self, blank):
-        """
-        Parameters
-        ----------
-        blank (bool): True if the the electron beam should blank, False if it should be unblanked.
+    def terminate(self):
+        if self._generator:
+            self.stop_generate()
+            self._genmsg.put(GEN_TERM)
+            self._generator.join(5)
+            self._generator = None
 
-        Returns
-        -------
-        (bool): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case.
+    def start_generate(self):
+        self._genmsg.put(GEN_START)
+        if not self._generator or not self._generator.is_alive():
+            logging.info("Starting acquisition thread")
+            self._generator = threading.Thread(target=self._acquire,
+                                               name="XT acquisition thread")
+            self._generator.start()
 
-        Notes
-        -----
-        When pausing the stream in XT it will blank the beam and return True for the beam_is_blanked check. It is
-        possible to unblank the beam when the stream is paused. The physical unblanking will then occur when the stream
-        is started, and at that moment beam_is_blanked will return False. It is impossible to check if the beam will
-        be unblanked or blanked when starting the stream.
-        """
-        if blank:
+    def stop_generate(self):
+        if self.parent._scanner.blanker.value is None:
             self.parent.blank_beam()
+        self._genmsg.put(GEN_STOP)
+
+    def _acquire(self):
+        """
+        Acquisition thread
+        Managed via the ._genmsg Queue
+        """
+        try:
+            while True:
+                # Wait until we have a start (or terminate) message
+                self._acq_wait_start()
+                logging.debug("Preparing acquisition")
+                while True:
+                    if self._acq_should_stop():
+                        break
+                    self.parent.set_channel_state(self._channel_name, True)
+                    if self.parent._scanner.blanker.value is None:
+                        self.parent.unblank_beam()
+                    # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
+                    self.parent.set_channel_state(self._channel_name, False)
+
+                    # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
+                    n_pixels = self.parent._scanner.shape[0] * self.parent._scanner.shape[1]
+                    est_acq_time = self.parent._scanner.dwellTime.value * n_pixels
+
+                    # Wait for the acquisition to be received
+                    logging.debug("Starting one image acquisition")
+                    try:
+                        if self._acq_wait_data(est_acq_time + 20):
+                            logging.debug("Stopping measurement early")
+                            self.stop_acquisition()
+                            break
+                    except TimeoutError as err:
+                        logging.error(err)
+                        self.stop_acquisition()
+                        break
+                    # Acquire the image
+                    image = self.parent.get_latest_image(self._channel_name)
+
+                    md = self.parent._metadata.copy()
+                    md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+                    md[model.MD_ROTATION] = self.parent._scanner.rotation.value
+
+                    da = DataArray(image, md)
+                    logging.debug("Notify dataflow with new image.")
+                    self.data.notify(da)
+            logging.debug("Acquisition stopped")
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception as err:
+            logging.exception("Failure in acquisition thread: {}".format(err))
+        finally:
+            self._generator = None
+
+    def stop_acquisition(self):
+        """
+        Stop acquiring images.
+        """
+        # Stopping the channel once stops it after the acquisition is done.
+        self.parent.set_channel_state(self._channel_name, False)
+        if self.parent.get_channel_state(self._channel_name) == XT_STOP:
+            return
+        else:  # Channel is canceling
+            logging.debug("Channel not fully stopped will try again.")
+            time.sleep(0.5)
+            # Stopping it twice does a full stop.
+            self.parent.set_channel_state(self._channel_name, False)
+
+    def _acq_should_stop(self, timeout=None):
+        """
+        Indicate whether the acquisition should now stop or can keep running.
+        Non blocking.
+        Note: it expects that the acquisition is running.
+
+        return (bool): True if needs to stop, False if can continue
+        raise TerminationRequested: if a terminate message was received
+        """
+        try:
+            if timeout is None:
+                msg = self._get_acq_msg(block=False)
+            else:
+                msg = self._get_acq_msg(timeout=timeout)
+        except queue.Empty:
+            # No message so no need to stop
+            return False
+
+        if msg == GEN_TERM:
+            raise TerminationRequested()
+        elif msg == GEN_STOP:
+            return True
         else:
-            self.parent.unblank_beam()
-        return self.parent.beam_is_blanked()
+            logging.warning("Skipped message: %s", msg)
+            return False
 
-    def _setSpotSize(self, spotsize):
-        self.parent.set_ebeam_spotsize(spotsize)
-        return self.parent.get_ebeam_spotsize()
+    def _acq_wait_data(self, timeout=0):
+        """
+        Block until data or a stop message is received.
+        Note: it expects that the acquisition is running.
 
-    def _setBeamShift(self, beam_shift):
-        self.parent.set_beam_shift(*beam_shift)
-        return self.parent.get_beam_shift()
+        timeout (0<=float): how long to wait to check (use 0 to not wait)
+        return (bool): True if needs to stop, False if data is ready
+        raise TerminationRequested: if a terminate message was received
+        """
+        tend = time.time() + timeout
+        t = time.time()
+        logging.debug("Waiting for %g s:", tend - t)
+        while self.parent.get_channel_state(self._channel_name) != XT_STOP:
+            t = time.time()
+            if t > tend:
+                raise TimeoutError("Acquisition timeout after %g s" % timeout)
 
-    def _setRotation(self, rotation):
-        self.parent.set_rotation(rotation)
-        return self.parent.get_rotation()
+            if self._acq_should_stop(timeout=0.1):
+                return True
 
-    def _setHorizontalFoV(self, fov):
-        self.parent.set_scanning_size(fov)
-        fov = self.parent.get_scanning_size()[0]
-        mag = self._hfw_nomag / fov
-        self.magnification._value = mag
-        self.magnification.notify(mag)
-        self._updateDepthOfField()
-        return fov
+        return False  # Data received
 
-    def _updateDepthOfField(self):
-        fov = self.horizontalFoV.value
-        # Formula was determined by experimentation
-        K = 100  # Magical constant that gives a not too bad depth of field
-        dof = K * (fov / 1024)
-        self.depthOfField._set_value(dof, force_write=True)
+    def _acq_wait_start(self):
+        """
+        Blocks until the acquisition should start.
+        Note: it expects that the acquisition is stopped.
+
+        raise TerminationRequested: if a terminate message was received
+        """
+        while True:
+            msg = self._get_acq_msg(block=True)
+            if msg == GEN_TERM:
+                raise TerminationRequested()
+            elif msg == GEN_START:
+                return
+
+            # Duplicate Stop
+            logging.debug("Skipped message %s as acquisition is stopped", msg)
+
+    def _get_acq_msg(self, **kwargs):
+        """
+        Read one message from the acquisition queue
+        return (str): message
+        raises queue.Empty: if no message on the queue
+        """
+        msg = self._genmsg.get(**kwargs)
+        if msg in (GEN_START, GEN_STOP, GEN_TERM):
+            logging.debug("Acq received message %s", msg)
+        else:
+            logging.warning("Acq received unexpected message %s", msg)
+        return msg
+
+
+class TerminationRequested(Exception):
+    """
+    Generator termination requested.
+    """
+    pass
+
+
+class SEMDataFlow(model.DataFlow):
+    """
+    This is an extension of model.DataFlow. It receives notifications from the
+    detector component once the SEM output is captured. This is the dataflow to
+    which the SEM acquisition streams subscribe.
+    """
+
+    def __init__(self, detector):
+        """
+        detector (model.Detector): the detector that the dataflow corresponds to
+        sem (model.Emitter): the SEM
+        channel_name (str): Name of one of the electron channels
+        """
+        model.DataFlow.__init__(self)
+        self._detector = detector
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        self._detector.start_generate()
+
+    def stop_generate(self):
+        self._detector.stop_generate()
 
 
 class Stage(model.Actuator):
@@ -1132,7 +1479,7 @@ class Stage(model.Actuator):
         self._updatePosition()
 
         # Refresh regularly the position
-        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
+        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
     def _updatePosition(self, raw_pos=None):
@@ -1339,7 +1686,7 @@ class Focus(model.Actuator):
         self._updatePosition()
 
         # Refresh regularly the position
-        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
+        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
 
     @isasync
@@ -1412,7 +1759,7 @@ class Focus(model.Actuator):
         """
         # We don't use the VA setters, to avoid sending back to the hardware a
         # set request
-        logging.debug("Updating SEM stage position")
+        logging.debug("Updating SEM focus position")
         try:
             self._updatePosition()
         except Exception:
