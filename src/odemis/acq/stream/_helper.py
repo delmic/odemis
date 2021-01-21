@@ -796,12 +796,12 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         Find the useful metadata for a 2D spatial projection from the metadata of a raw image.
         :returns: (dict) Metadata dictionary (MD_* -> value).
         """
-        md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
-        if model.MD_TIME_LIST in self.raw[0].metadata:
-            md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
-        if model.MD_WL_LIST in self.raw[0].metadata:
-            md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
-        return md
+        simple_md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
+        if model.MD_TIME_LIST in md:
+            simple_md[model.MD_TIME_LIST] = md[model.MD_TIME_LIST]
+        if model.MD_WL_LIST in md:
+            simple_md[model.MD_WL_LIST] = md[model.MD_WL_LIST]
+        return simple_md
 
     # Override Stream._is_active_setter() in RepetitionStream class and in _base.py
     def _is_active_setter(self, active):
