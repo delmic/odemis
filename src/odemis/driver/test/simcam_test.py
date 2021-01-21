@@ -20,12 +20,16 @@ from __future__ import division
 
 import logging
 from odemis import model
+from odemis.acq.align.shift import MeasureShift
+from odemis.dataio import tiff
 from odemis.driver import simcam, simulated
+from odemis.util import timeout, test
 from odemis.util.test import assert_array_not_equal, assert_tuple_almost_equal
 import time
 import unittest
 from unittest.case import skip
 
+import numpy
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -33,8 +37,7 @@ CLASS = simcam.Camera
 KWARGS_FOCUS = {"name": "focus", "role": "overview-focus", "axes": ["z"], "ranges": {"z": [0, 0.012]}}
 KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
 KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5")
-
-# TODO focus
+KWARGS_MOVE = dict(name="camera", role="ccd", image="songbird-sim-ccd.h5", max_res=(300, 350))
 
 
 class TestSimCam(unittest.TestCase):
@@ -302,30 +305,83 @@ class TestSimCam(unittest.TestCase):
         f.result()
         self.assertEqual(self.focus.position.value, pos)
 
-    def test_get_center(self):
-        """
-        Test getCenter function
-        """
-        # Test without cropping simulated image
-        shape = self.camera.shape
-        center = self.camera._get_center()
-        self.assertEqual(center, (shape[0] / 2, shape[1] / 2))
-        # Test with cropping image
-        cropped_shape = (int(shape[0]/4), int(shape[1]/4))
-        self.camera = CLASS(dependencies={"focus": self.focus}, max_res=cropped_shape, **KWARGS)
-        center = self.camera._get_center()
-        self.assertEqual(center, (cropped_shape[0] / 2, cropped_shape[1] / 2))
-        # Simulate stage move
-        self.camera._metadata[model.MD_POS] = (1e-3, 1e-3)
-        self.camera._metadata[model.MD_PIXEL_SIZE] = (1e-5, 1e-5)
-        center = self.camera._get_center()
-        self.assertEqual(center, (cropped_shape[0] / 2 + 100, cropped_shape[1] / 2 + 100))
-        # Move far away
-        self.camera._metadata[model.MD_POS] = (1e-2, 1e-2)
-        center = self.camera._get_center()
-        self.assertEqual(center, (shape[0] - cropped_shape[0]/2, shape[1] - cropped_shape[1]/2))
 
+class TestSimCamMove(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        # Full image is 912x912, so use about one third, to have space to move around
+        cls.camera = CLASS(**KWARGS_MOVE)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.camera.terminate()
+
+    def setUp(self):
+        self.camera.binning.value = (1, 1)
+        self.camera.exposureTime.value = 0.1
+        self.camera.updateMetadata({model.MD_PIXEL_SIZE: (1e-6, 1e-6)})
+        self.camera.updateMetadata({model.MD_POS: (0, 0)})
+
+    @timeout(20)
+    def test_move_around(self):
+        """
+        Test that moving the "stage" moves the image
+        """
+        # At pos 0, 0
+        im0 = self.camera.data.get()
+        self.assertEqual(self.camera.resolution.value[::-1], im0.shape[:2])
+        im1 = self.camera.data.get()
+        assert_tuple_almost_equal((0, 0), MeasureShift(im0, im1, 10), delta=0.5)
+
+        # Move a little bit in X,Y => should have a different image shifted by the same amount
+        self.camera.updateMetadata({model.MD_POS: (10e-6, 20e-6)})
+        im_move1 = self.camera.data.get()
+        # Y is opposite direction in pixels, compared to physical
+        assert_tuple_almost_equal((10, -20), MeasureShift(im0, im_move1, 10), delta=0.5)
+
+        # Move a little bit => should have a different image
+        self.camera.updateMetadata({model.MD_POS: (100e-6, 200e-6)})
+        im_move1 = self.camera.data.get()
+        # Note: images are always different, due to synthetic noise
+        test.assert_array_not_equal(im0, im_move1)
+
+        # Move the opposite direction
+        self.camera.updateMetadata({model.MD_POS: (-100e-6, -200e-6)})
+        im_move2 = self.camera.data.get()
+        test.assert_array_not_equal(im0, im_move2)
+        test.assert_array_not_equal(im_move1, im_move2)
+
+        # Move far => should "block" on the border
+        self.camera.updateMetadata({model.MD_POS: (-1000e-6, -2000e-6)})
+        im_move_f1 = self.camera.data.get()
+#         test.assert_array_not_equal(im0, im_move_f1)
+
+        # Move even further => no change
+        self.camera.updateMetadata({model.MD_POS: (-10000e-6, -20000e-6)})
+        im_move_f2 = self.camera.data.get()
+#         numpy.testing.assert_array_equal(im_move_f1, im_move_f2)
+
+    @timeout(20)
+    def test_binning(self):
+        """
+        Changing the binning shouldn't affect the position
+        binning x2 => same position (so shift in pixel / 2)
+        """
+        # At pos 0, 0
+        im0 = self.camera.data.get()
+
+        # Move a little bit in X,Y => should have a different image shifted by the same amount
+        self.camera.updateMetadata({model.MD_POS: (10e-6, 20e-6)})
+        im_move1 = self.camera.data.get()
+
+        # Change to binning 2
+        self.camera.binning.value = (2, 2)
+        self.camera.updateMetadata({model.MD_PIXEL_SIZE: (2e-6, 2e-6)})  # Normally updated by the mdupdater
+
+        im_move2 = self.camera.data.get()
+        assert_tuple_almost_equal((0, 0), MeasureShift(im_move1[::2,::2], im_move2, 10), delta=0.5)
+        assert_tuple_almost_equal((5, -10), MeasureShift(im0[::2,::2], im_move2, 10), delta=0.5)
 
 class TestSimCamWithPolarization(unittest.TestCase):
 
@@ -360,7 +416,7 @@ class TestSimCamWithPolarization(unittest.TestCase):
         self.camera.exposureTime.value = exp
         time.sleep(old_exp) # wait for the last frame (worst case)
 
-    #     @unittest.skip("simple")
+    @timeout(20)
     def test_acquire_ar_pol(self):
         """
         Acquire image with text of current polarization position written on top.
