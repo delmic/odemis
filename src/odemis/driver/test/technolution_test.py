@@ -1322,7 +1322,7 @@ class Test_ASMDataFlow(unittest.TestCase):
                 dataflow.next((x, y))
 
         # Wait a bit to allow some processing and receive images.
-        time.sleep(field_images[0] * field_images[1])
+        time.sleep(1.5 * field_images[0] * field_images[1])  # Allow 1.5 seconds per field image to offload.
         dataflow.unsubscribe(self.image_received)
         time.sleep(0.5)
         self.assertEqual(field_images[0] * field_images[1], self.counter)
