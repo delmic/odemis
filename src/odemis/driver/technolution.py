@@ -145,8 +145,8 @@ class AcquisitionServer(model.HwComponent):
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # NOTE: Do not write real username/password here since this is published on github in plain text!
-        # example = ftp://username:password@example.com/Pictures
-        self.externalStorageURL = model.StringVA('ftp://%s:%s@%s.com/%s' %
+        # example = ftp://username:password@127.0.0.1:5000/directory/sub-directory
+        self.externalStorageURL = model.StringVA('ftp://%s:%s@%s/%s' %
                                                  (externalStorage["username"],
                                                   externalStorage["password"],
                                                   externalStorage["host"],
@@ -528,7 +528,7 @@ class AcquisitionServer(model.HwComponent):
         """
         Setter which checks for correctness of FTP url and otherwise returns old value.
 
-        :param url(str): e.g. ftp://username:password@example.com
+        :param url(str): e.g. ftp://username:password@127.0.0.1:5000/directory/sub-directory
         :return: correct ftp url_parser
         """
         ASM_GENERAL_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-:@]'
@@ -542,7 +542,7 @@ class AcquisitionServer(model.HwComponent):
         # Perform general check on valid characters (parses works incorrectly for some invalid characters
         if re.search(ASM_GENERAL_ILLEGAL_CHARS, urlunparse(url_parser)):
             raise ValueError("Invalid character in ftp url is provided, allowed characters are %s placed in the form:"
-                             "'ftp://username:password@host_example.com/path/to/Pictures'\n"
+                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
                              "(Only use the @ to separate the password and the host." % ASM_GENERAL_ILLEGAL_CHARS[2:-1])
 
         # Perform detailed checks on input
@@ -553,7 +553,7 @@ class AcquisitionServer(model.HwComponent):
             # Note that if an extra @ is used (e.g. in the password) the parser works incorrectly and sub-elements
             # are empty after splitting the url input
             raise ValueError("Incorrect ftp url is provided, please use form: "
-                             "'ftp://username:password@host_example.com/path/to/Pictures'\n"
+                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
                              "(Only use the @ to separate the password and the host.")
 
         if re.search(ASM_USER_ILLEGAL_CHARS, url_parser.username):
