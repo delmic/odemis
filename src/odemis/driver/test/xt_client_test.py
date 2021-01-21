@@ -46,7 +46,7 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.130:4242",
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
@@ -74,6 +74,10 @@ class TestMicroscope(unittest.TestCase):
                 cls.stage = child
             elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.detector.terminate()
 
     def setUp(self):
         if TEST_NOHW:
@@ -245,16 +249,60 @@ class TestMicroscope(unittest.TestCase):
 
     def test_acquire(self):
         """Test acquiring an image using the Detector."""
+        init_dwell_time = self.scanner.dwellTime.value
         self.scanner.dwellTime.value = 25e-9  # s
         expected_duration = self._compute_expected_duration()
-
         start = time.time()
         im = self.detector.data.get()
         duration = time.time() - start
-
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        # Set back dwell time to initial value
+        self.scanner.dwellTime.value = init_dwell_time
+
+    def test_stop_acquisition(self):
+        """Test stopping the acquisition of an image using the Detector."""
+        init_dwell_time = self.scanner.dwellTime.value
+        init_resolution = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        # Set resolution to a high value for a long acquisition that will be stopped.
+        self.scanner.resolution.value = (3072, 2048)  # px
+        self.detector.data.subscribe(self.receive_data)
+        self.detector.data.unsubscribe(self.receive_data)
+        # Set resolution to a low value for a quick acquisition.
+        self.scanner.resolution.value = (768, 512)  # px
+        im = self.detector.data.get()
+        # Check that the acquired image has the last set resolution.
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        # Set back resolution and dwell time to initial values
+        self.scanner.dwellTime.value = init_dwell_time
+        self.scanner.resolution.value = init_resolution
+
+    def test_live_change(self):
+        """Test changing the resolution while the acquisition is running."""
+        init_dwell_time = self.scanner.dwellTime.value
+        init_resolution = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        # Set resolution, acquire an image and check it has the correct resolution.
+        self.scanner.resolution.value = (1536, 1024)  # px
+        self.detector.data.subscribe(self.receive_data)
+        im = self.detector.data.get()
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        # Change resolution and check if the acquired image has the new resolution.
+        self.scanner.resolution.value = (768, 512)  # px
+        im = self.detector.data.get()
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.detector.data.unsubscribe(self.receive_data)
+        # Set back resolution and dwell time to initial values
+        self.scanner.dwellTime.value = init_dwell_time
+        self.scanner.resolution.value = init_resolution
+
+    def receive_data(self, dataflow, image):
+        """Callback for dataflow of acquisition tests."""
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        dataflow.unsubscribe(self.receive_data)
 
 
 class TestMicroscopeInternal(unittest.TestCase):

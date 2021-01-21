@@ -47,7 +47,6 @@ XT_STOP = "stop"
 GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
-GEN_DATA = "D"  # New data ready
 
 # Convert from a detector role (following the Odemis convention) to a detector name in xtlib
 DETECTOR2CHANNELNAME = {
@@ -909,9 +908,8 @@ class Scanner(model.Emitter):
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
-        rng_width = self.parent.resolution_info()["range"]["width"]
-        rng_height = self.parent.resolution_info()["range"]["height"]
-        self._shape = (rng_width[1], rng_height[1])
+        rng = self.parent.resolution_info()["range"]
+        self._shape = (rng["width"][1], rng["height"][1])
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
         pxs = (self._hfw_nomag / (self._shape[0] * mag),
@@ -923,8 +921,8 @@ class Scanner(model.Emitter):
         resolution = self.parent.get_resolution()
 
         self.resolution = model.ResolutionVA(tuple(resolution),
-                                             ((rng_width[0], rng_height[0]),
-                                              (rng_width[1], rng_height[1])),
+                                             ((rng["width"][0], rng["height"][0]),
+                                              (rng["width"][1], rng["height"][1])),
                                              setter=self._setResolution)
         self._resolution = resolution
 
@@ -1237,8 +1235,6 @@ class Detector(model.Detector):
         #    DATA     |       .       | Receiving data |       .        |
         #    STOP     |       .       |     Stopped    |    Stopped     |
         #    TERM     |     Final     |      Final     |     Final      |
-        # If the acquisition is not synchronised, then the Trigger event in Ready for
-        # acq is considered as a "null" event: it's immediately switched to acquiring.
 
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._shape = (256,)  # Depth of the image
@@ -1396,7 +1392,7 @@ class Detector(model.Detector):
             elif msg == GEN_START:
                 return
 
-            # Duplicate Stop or trigger
+            # Duplicate Stop
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
     def _get_acq_msg(self, **kwargs):
@@ -1406,8 +1402,7 @@ class Detector(model.Detector):
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
-        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_DATA) or
-                isinstance(msg, float)):
+        if msg in (GEN_START, GEN_STOP, GEN_TERM):
             logging.debug("Acq received message %s", msg)
         else:
             logging.warning("Acq received unexpected message %s", msg)
@@ -1484,7 +1479,7 @@ class Stage(model.Actuator):
         self._updatePosition()
 
         # Refresh regularly the position
-        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
+        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
     def _updatePosition(self, raw_pos=None):
@@ -1691,8 +1686,8 @@ class Focus(model.Actuator):
         self._updatePosition()
 
         # Refresh regularly the position
-        # self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
-        # self._pos_poll.start()
+        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
+        self._pos_poll.start()
 
     @isasync
     def applyAutofocus(self, detector):
