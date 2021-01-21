@@ -505,13 +505,18 @@ class AcquisitionServer(model.HwComponent):
         :param mode (bool): starting calibration mode (True) or stops the calibration mode (False)
         :return (bool): starting calibration mode (True) or stops the calibration mode (False)
         """
+        prev_state_calibration_mode = self.calibrationMode.value
+
         if mode:
             if not self._mppc.acq_queue.empty():
                 logging.error("There is still an unfinished acquisition in progress. Calibration mode cannot be "
                               "started yet.")
                 return False
 
-            self.asmApiPostCall("/scan/stop_calibration_loop", 204)  # Stop the calibration before (re) starting it
+            # If the calibration loop was already running stop it so it can be restarted with new parameters.
+            if prev_state_calibration_mode:
+                # Sending this command without the calibration loop being active might cause errors.
+                self.asmApiPostCall("/scan/stop_calibration_loop", 204)
 
             # Retrieve and assemble calibration metadata.
             self._calibrationParameters = self._assembleCalibrationMetadata()
@@ -519,9 +524,13 @@ class AcquisitionServer(model.HwComponent):
             return True
 
         else:
-            # Stop calibration loop and clear the calibration parameters attribute
-            self._calibrationParameters = None
-            self.asmApiPostCall("/scan/stop_calibration_loop", 204)
+            # Only stop the calibration loop if it was running before.
+            if prev_state_calibration_mode:
+                # Stop calibration loop and clear the calibration parameters attribute
+                self._calibrationParameters = None
+                # Sending this command without the calibration loop being active might cause errors.
+                self.asmApiPostCall("/scan/stop_calibration_loop", 204)
+
             return False
 
     def _setURL(self, url):
