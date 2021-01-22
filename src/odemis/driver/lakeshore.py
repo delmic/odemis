@@ -450,7 +450,7 @@ class LakeshoreSimulator(object):
         self._status_byte = POWER_ON | COMMAND_ERROR
         self._setpoint = 150  # K
         self._temperature = 100  # K
-        self._heating = 0  # enum int 0,1,2, or 3
+        self._heating = 3  # enum int 0,1,2, or 3
 
     def write(self, data):
         self._input_buf += data
