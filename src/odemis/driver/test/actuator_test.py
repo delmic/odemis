@@ -1509,15 +1509,19 @@ class TestLinkedHeightActuator(unittest.TestCase):
 
     def test_changing_metadata(self):
         """
-        Test changing focus POS_ACTIVE/POS_DEACTIVE metadata is not allowed
+        Test changing focus POS_DEACTIVE metadata is not allowed
+        Test changing focus POS_ACTIVE metadata is allowed if within range
         Test changing focus POS_COR reflects on focus position
         """
         focus = self.focus
-        with self.assertRaises(ValueError):
-            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': self.target_value}})
 
         with self.assertRaises(ValueError):
             focus.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -1 * self.target_value}})
+
+        with self.assertRaises(ValueError):
+            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z':-1 * self.target_value}})
+
+        focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': self.target_value}})
 
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
         f.result()
