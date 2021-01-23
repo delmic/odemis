@@ -618,7 +618,6 @@ class xrcpnl_tab_localization(wx.Panel):
             get_resources().LoadPanel(self, parent, "pnl_tab_localization")
 
         # Define variables for the controls, bind event handlers
-        self.lbl_secom_overview = xrc.XRCCTRL(self, "lbl_secom_overview")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
@@ -5990,24 +5989,6 @@ def __init_resources():
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_overview">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxTOP|wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
                 <object class="spacer">
                   <option>1</option>
                   <flag>wxEXPAND</flag>
