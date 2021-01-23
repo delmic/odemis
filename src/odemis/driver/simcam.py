@@ -42,7 +42,7 @@ class Camera(model.DigitalCamera):
     given at initialisation.
     '''
 
-    def __init__(self, name, role, image, dependencies=None, daemon=None, blur_factor=1e4, max_res=None, **kwargs):
+    def __init__(self, name, role, image, dependencies=None, daemon=None, max_res=None, **kwargs):
         """
         dependencies (dict string->Component): If "focus" is passed, and it's an
             actuator with a z axis, the image will be blurred based on the
@@ -128,9 +128,6 @@ class Camera(model.DigitalCamera):
         self._metadata = {model.MD_HW_NAME: "FakeCam",
                           model.MD_SENSOR_PIXEL_SIZE: spxs,
                           model.MD_DET_TYPE: model.MD_DT_INTEGRATING}
-
-        # Set the amount of blurring during defocusing.
-        self._blur_factor = float(blur_factor)
 
         try:
             focuser = dependencies["focus"]
@@ -266,8 +263,8 @@ class Camera(model.DigitalCamera):
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
-            dist = abs(pos - self._metadata[model.MD_FAV_POS_ACTIVE]["z"]) * self._blur_factor
-            logging.debug("Focus dist = %g", dist)
+            dist = abs(pos - self._metadata[model.MD_FAV_POS_ACTIVE]["z"]) / (self.depthOfField.value * 10)
+            logging.debug("Focus blur = %g", dist)
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img

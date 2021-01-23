@@ -9,11 +9,16 @@ MultiBeamSEM: {
 "DiagnosticCam": {
     class: simcam.Camera,
     role: diagnostic-ccd,
+    dependencies: {focus: "DiagnosticCam Focus"},
     init: {
         image: "../acq/align/test/multiprobe01.tiff",
-        blur_factor: 100.e4,
     },
-    children: {focus: "DiagnosticCam Focus"}
+    metadata: {
+        # Adjust the metadata to have a small depthOfField, which makes the focus blur stronger
+        LENS_MAG: 60,
+        LENS_NA: 0.95,
+        LENS_RI: 0.13,
+    },
 }
 
 "DiagnosticCam Focus": {
