@@ -571,7 +571,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         # start moving upwards until we reach the upper bound or we find some
         # significant deviation in focus level
         # The number of steps is the distance to the upper bound divided by the step size.
-        for next_pos in numpy.linspace(orig_pos, upper_bound, (upper_bound - orig_pos) / step):
+        for next_pos in numpy.linspace(orig_pos, upper_bound, int((upper_bound - orig_pos) / step)):
             focus.moveAbsSync({"z": next_pos})
             image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
@@ -589,7 +589,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             raise CancelledError()
 
         # if nothing was found go downwards, starting one step below the original position
-        num = max((orig_pos - lower_bound) / step, 0)  # Take 0 steps if orig_pos is too close to lower_bound
+        num = max(int((orig_pos - lower_bound) / step), 0)  # Take 0 steps if orig_pos is too close to lower_bound
         for next_pos in numpy.linspace(orig_pos - step, lower_bound, num):
             focus.moveAbsSync({"z": next_pos})
             image = AcquireNoBackground(detector, dfbkg, timeout)
