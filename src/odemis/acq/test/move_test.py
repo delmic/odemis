@@ -31,7 +31,7 @@ from odemis.util import test
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/cryosecom-sim.yaml"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
 
 
 class TestCryoMove(unittest.TestCase):
@@ -43,7 +43,7 @@ class TestCryoMove(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(CRYO_SECOM_CONFIG)
+            test.start_backend(ENZEL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -60,6 +60,15 @@ class TestCryoMove(unittest.TestCase):
         cls.stage_deactive = cls.stage.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.focus_deactive = cls.focus.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+
+        # Make sure the lens is referenced too (small move will only complete after the referencing)
+        aligner = model.getComponent(role="align")
+        aligner.moveRelSync({"x": 1e-6})
+
+        # The 5DoF stage is not referenced automatically, so let's do it now
+        stage_axes = set(cls.stage.axes.keys())
+        cls.stage.reference(stage_axes).result()
+
         # Set custom value that works well within the simulator range
         cls.rx_angle = 0.3
         cls.rz_angle = 0.1

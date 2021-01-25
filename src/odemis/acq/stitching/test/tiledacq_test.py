@@ -38,7 +38,7 @@ from odemis.util.test import assert_pos_almost_equal
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYOSECOM_CONFIG = CONFIG_PATH + "sim/cryosecom-sim.yaml"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
 
 
 class CRYOSECOMTestCase(unittest.TestCase):
@@ -47,7 +47,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(CRYOSECOM_CONFIG)
+            test.start_backend(ENZEL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
