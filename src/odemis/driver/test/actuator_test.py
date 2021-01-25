@@ -41,7 +41,6 @@ import unittest
 
 import simulated_test
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
@@ -1282,38 +1281,106 @@ ATOL_LENS = 100e-6  # m
 STEP_SIZE = 5.9e-9
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/cryosecom-sim.yaml"
+CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
+
+KWARGS_5DOF = {
+    "name": "5DOF",
+    "role": None,
+    "ref_on_init": True,
+    "linear_speed": 0.01,  # m/s
+    "rotary_speed": 0.01,  # rad/s
+    "locator": "fake",
+    "hold_time": 0.1,  # s
+    "pos_deactive_after_ref": True,
+    "axes": {
+        'x': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+        },
+        'y': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+        },
+        'z': {
+            'range': [-1.e-2, 0.002],
+            'unit': 'm',
+        },
+        'rx': {
+            'range': [-0.785, 0.785],
+            'unit': 'rad',
+        },
+        'rz': {
+            'range': [-0.785, 0.785],
+            'unit': 'rad',
+        },
+    },
+}
+
+KWARGS_3DOF = {
+    "name": "3DOF",
+    "role": None,
+    "ref_on_init": True,
+    "locator": "fake",
+    "speed": 0.1,
+    "accel": 0.001,
+    "hold_time": 1.0,
+    "pos_deactive_after_ref": True,
+    "axes": {
+        'x': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+            'channel': 0,
+        },
+        'y': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+            'channel': 1,
+        },
+        'z': {
+            'range': [-0.02, 0.01],
+            'unit': 'm',
+            'channel': 2,
+        },
+    },
+}
+
+INIT_MD_3DOF = {
+    model.MD_FAV_POS_DEACTIVE: {"z":-2.e-3},
+}
+
+KWARGS_FOCUS = {
+    "name": "Focus",
+    "role": "focus",
+    "rng": [0, 4.2e-3],  # min/max positions in m
+}
+
+INIT_MD_FOCUS = {
+    model.MD_POS_COR: {'z':-0.003},
+}
+
 
 class TestLinkedHeightActuator(unittest.TestCase):
     backend_was_running = False
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(CRYO_SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        cls.sample_stage = smaract.MC_5DOF(**KWARGS_5DOF)
+        cls.lens_stage = smaract.MCS2(**KWARGS_3DOF)
+        cls.lens_stage.updateMetadata(INIT_MD_3DOF)
+        cls.stage = LinkedHeightActuator("Stage", role="stage",
+                                         dependencies={"stage": cls.sample_stage,
+                                                       "lensz": cls.lens_stage,
+                                                       },
+                                         children={"focus": KWARGS_FOCUS}
+                                        )
+        cls.focus = next(iter(cls.stage.children.value))
+        cls.focus.updateMetadata(INIT_MD_FOCUS)
 
-        cls.sample_stage = model.getComponent(name="5DOF Stage")
-        cls.lens_stage = model.getComponent(name="3DOF Stage")
-        cls.stage = model.getComponent(role="stage")
-        cls.focus = model.getComponent(role="focus")
+        # Wait for both stages to be referenced
+        cls.lens_stage.moveRelSync({"x": 1e-6})
+        cls.sample_stage.moveRelSync({"x": 1e-6})
+
         cls.target_value = 200e-6
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_move_abs(self):
         """
