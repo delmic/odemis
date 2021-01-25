@@ -592,6 +592,7 @@ class TestCanActuator(unittest.TestCase):
 
         current_dir = os.path.abspath(os.path.dirname(__file__))
         datasheet = os.path.join(current_dir, "..", 'TMCM-1240_CANopen_V322.dcf')
+        param_file = os.path.join(current_dir, "../../../../install/linux/usr/share/odemis/hwtest/tmcm-pd1240.tmcc.tsv")
         # 200 steps / cycle and 2 ** 8 µsteps per step
         sz = [2 * math.pi / (200 * 2 ** 8)]  # µstep size in rad
         cls.dev = tmcm.CANController(name="Can Actuator",
@@ -601,7 +602,7 @@ class TestCanActuator(unittest.TestCase):
                                      datasheet=datasheet,
                                      axes=['x'],
                                      refproc="Standard",
-                                     param_file=ABS_PATH + "/tmcm-pd1240.tmcc.tsv",
+                                     param_file=param_file,
                                      ustepsize=sz,
                                      rng=[[-2 * math.pi, 2 * math.pi]],
                                      unit=["rad"])
