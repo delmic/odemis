@@ -2534,7 +2534,7 @@ class MCS2(model.Actuator):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
-                self.reference()  # will reference in background
+                self.reference(set(axes_ref.keys()))  # will reference in background
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
@@ -3024,11 +3024,7 @@ class MCS2(model.Actuator):
         return f
 
     @isasync
-    def reference(self, axes=None):
-        if axes is None:
-            # then reference all axes
-            axes = self._axis_map.keys()
-
+    def reference(self, axes):
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doReference, f, axes)
         return f
