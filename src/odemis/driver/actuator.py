@@ -2471,7 +2471,7 @@ class LinkedHeightActuator(model.Actuator):
         return (rng[0] - margin) <= pos <= (rng[1] + margin)
 
     @isasync
-    def reference(self, axes=None):
+    def reference(self, axes):
         """Start the referencing of the given axes"""
         self._checkReference(axes)
         f = self._createFuture()
