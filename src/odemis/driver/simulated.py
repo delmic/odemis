@@ -114,15 +114,15 @@ class Stage(model.Actuator):
     def _doMoveRel(self, shift):
         maxtime = 0
         for axis, change in shift.items():
-            self._position[axis] += change
             rng = self.axes[axis].range
             if axis in self._inverted:
                 rng = (-rng[1], -rng[0])  # user -> internal range
-            if not rng[0] < self._position[axis] < rng[1]:
-                logging.warning("moving axis %s to %f, outside of range %r",
-                                axis, self._position[axis], rng)
-            else:
-                logging.info("moving axis %s to %f", axis, self._position[axis])
+            if not rng[0] <= self._position[axis] + change <= rng[1]:
+                raise ValueError("moving axis %s to %f, outside of range %r" %
+                                 (axis, self._position[axis] + change, rng))
+
+            self._position[axis] += change
+            logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
 
         logging.debug("Sleeping %g s", maxtime)
