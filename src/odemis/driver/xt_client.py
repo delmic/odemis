@@ -909,7 +909,7 @@ class Scanner(model.Emitter):
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
         rng = self.parent.resolution_info()["range"]
-        self._shape = (rng["width"][1], rng["height"][1])
+        self._shape = (rng["x"][1], rng["y"][1])
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
         pxs = (self._hfw_nomag / (self._shape[0] * mag),
@@ -921,8 +921,8 @@ class Scanner(model.Emitter):
         resolution = self.parent.get_resolution()
 
         self.resolution = model.ResolutionVA(tuple(resolution),
-                                             ((rng["width"][0], rng["height"][0]),
-                                              (rng["width"][1], rng["height"][1])),
+                                             ((rng["x"][0], rng["y"][0]),
+                                              (rng["x"][1], rng["y"][1])),
                                              setter=self._setResolution)
         self._resolution = resolution
 
