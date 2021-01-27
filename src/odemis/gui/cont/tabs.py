@@ -54,6 +54,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.move import getCurrentPositionLabel, IMAGING
 from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
@@ -598,6 +599,13 @@ class LocalizationTab(Tab):
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
+
+        # Enable the tab if the stage is in imaging position, disable it otherwise
+        stage = self.tab_data_model.main.stage
+        if getCurrentPositionLabel(stage.position.value, stage) is IMAGING:
+            self.panel.Enable()
+        else:
+            self.panel.Disable()
 
         # pause streams when not displayed
         if not show:
@@ -2857,8 +2865,16 @@ class SecomAlignTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        # Store/restore previous confocal settings when entering/leaving the tab
         main_data = self.tab_data_model.main
+        if main_data.role == "cryo-secom":
+            # Enable the tab if the stage is in imaging position, disable it otherwise
+            stage = self.tab_data_model.main.stage
+            if getCurrentPositionLabel(stage.position.value, stage) is IMAGING:
+                self.panel.Enable()
+            else:
+                self.panel.Disable()
+
+        # Store/restore previous confocal settings when entering/leaving the tab
         lm = main_data.laser_mirror
         if show and lm:
             # Must be done before starting the stream
