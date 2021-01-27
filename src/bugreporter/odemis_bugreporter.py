@@ -480,7 +480,7 @@ class BugreporterFrame(wx.Frame):
                 reader = csv.reader(f, delimiter='\t')
                 for name, email in reader:
                     self.known_users[name] = email
-        except OSError as ex:
+        except (OSError, IOError) as ex:  # IOError is more generic than OSError, and only needed on Python 2
             logging.error("Failed to read known users: %s", ex)
 
     def store_user_info(self, name, email):
