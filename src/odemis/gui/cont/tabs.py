@@ -292,6 +292,7 @@ class Tab(object):
     def query_terminate(self):
         """
         Called to perform action prior to terminating the tab
+        :return: (bool) True to proceed with termination, False for canceling
         """
         return True
 
@@ -1921,9 +1922,8 @@ class ChamberTab(Tab):
 
         return None
 
-DEFAULT_MILLING_ANGLE = 10
-MIN_MILLING_ANGLE = 5
-MAX_MILLING_ANGLE = 25
+DEFAULT_MILLING_ANGLE = math.radians(10)
+MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
 
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -1963,20 +1963,20 @@ class CryoChamberTab(Tab):
         # Set the milling angle range according to rx axis range
         try:
             rx_range = stage.axes['rx'].range
-            milling_range = math.degrees(self.ion_to_sample - rx_range[0]), math.degrees(
-                self.ion_to_sample - rx_range[1])
+            milling_range = [self.ion_to_sample - a for a in rx_range]
             # sort milling range in case ion_to_sample made range values flip
             actual_rng = sorted(milling_range)
-            ctrl_rng = max(actual_rng[0], MIN_MILLING_ANGLE), min(actual_rng[1], MAX_MILLING_ANGLE)
-            panel.ctrl_milling.SetValueRange(*ctrl_rng)
+            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
+            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+            panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
             # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = math.radians(DEFAULT_MILLING_ANGLE)
+            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
 
         # Create new project directory on starting the GUI
-        # FIXME: Load existing project data
         self._create_new_dir()
 
         self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
@@ -1991,9 +1991,9 @@ class CryoChamberTab(Tab):
                                  self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
         self.btn_toggle_icons = {
             self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
-            self.panel.btn_switch_imaging: ["icon/ico_optical_orange.png", "icon/ico_optical_green.png"],
-            self.panel.btn_switch_milling: ["icon/ico_ang_orange.png", "icon/ico_ang_green.png"],
-            self.panel.btn_switch_coating: ["icon/ico_fib_orange.png", "icon/ico_fib_green.png"]}
+            self.panel.btn_switch_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
+            self.panel.btn_switch_milling: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
+            self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
         # Check stage FAV positions in its metadata, and store them in respect to their movement
         if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
             raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
@@ -2037,6 +2037,14 @@ class CryoChamberTab(Tab):
         Shows a dialog to change the path and name of the project directory.
         returns nothing, but updates .conf and project path text control
         """
+        box = wx.MessageDialog(self.main_frame,
+                               "This will clear the current project data from Odemis",
+                               caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+        box.SetYesNoLabels("&Reset Project", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        if ans == wx.ID_NO:
+            return
         # Generate suggestion for the new project name to show it on the file dialog
         np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
         new_dir = ShowChamberFileDialog(self._tab_panel, np)
@@ -2210,6 +2218,7 @@ class CryoChamberTab(Tab):
         Event handler for the Advanced button to show/hide stage advanced panel
         """
         self.panel.pnl_advanced_align.Show(self.tab_data_model.show_advaned.value)
+        self.panel.Layout()
 
     def _show_cancel_warning_msg(self, txt_warning):
         """
@@ -2345,7 +2354,7 @@ class CryoChamberTab(Tab):
         if self.target_position in self.target_position_metadata.keys():
             if self.current_position is LOADING:
                 box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
-                                       style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
+                                       caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
 
                 box.SetYesNoLabels("&Load", "&Cancel")
                 ans = box.ShowModal()  # Waits for the window to be closed
@@ -2415,12 +2424,13 @@ class CryoChamberTab(Tab):
     def query_terminate(self):
         """
         Called to perform action prior to terminating the tab
+        :return: (bool) True to proceed with termination, False for canceling
         """
         if self.current_position is not LOADING:
             if self._move_future._state == RUNNING and self.target_position is LOADING:
                 box = wx.MessageDialog(self.main_frame,
                                        "The sample is still moving to the loading position, are you sure you want to close Odemis?",
-                                       style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+                                       caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
                 box.SetYesNoLabels("&Close Window", "&Cancel")
                 ans = box.ShowModal()  # Waits for the window to be closed
@@ -2431,7 +2441,7 @@ class CryoChamberTab(Tab):
 
             box = wx.MessageDialog(self.main_frame,
                                    "The sample is still loaded, are you sure you want to close Odemis?",
-                                   style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+                                   caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
             box.SetYesNoLabels("&Close Window", "&Cancel")
             ans = box.ShowModal()  # Waits for the window to be closed
@@ -5541,10 +5551,11 @@ class TabBarController(object):
     def query_terminate(self):
         """
         Call each tab query_terminate to perform any action prior to termination
-        :return: (bool) False for canceling termination, True to proceed
+        :return: (bool) True to proceed with termination, False for canceling
         """
         for t in self._tabs.choices:
             if not t.query_terminate():
+                logging.debug("Window closure vetoed by tab %s" % t.name)
                 return False
         return True
 

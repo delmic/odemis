@@ -3086,8 +3086,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_imaging">
-												<icon>img/icon/ico_optical.png</icon>
-												<icon_on>img/icon/ico_optical_orange.png</icon_on>
+												<icon>img/icon/ico_imaging.png</icon>
+												<icon_on>img/icon/ico_imaging_orange.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>IMAGING</label>
@@ -3108,8 +3108,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_milling">
-												<icon>img/icon/ico_ang.png</icon>
-												<icon_on>img/icon/ico_ang_orange.png</icon_on>
+												<icon>img/icon/ico_milling.png</icon>
+												<icon_on>img/icon/ico_milling_orange.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>MILLING</label>
@@ -3130,8 +3130,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_coating">
-												<icon>img/icon/ico_fib.png</icon>
-												<icon_on>img/icon/ico_fib_orange.png</icon_on>
+												<icon>img/icon/ico_coating.png</icon>
+												<icon_on>img/icon/ico_coating_orange.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>COATING</label>
