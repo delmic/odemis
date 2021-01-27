@@ -72,7 +72,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ARRawProjection, ARPolarimetryProjection, StaticStream
 from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
-from odemis.util.units import decompose_si_prefix, to_string_pretty
+from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -1972,6 +1972,7 @@ class CryoChamberTab(Tab):
             panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
             # Default value for milling angle, will be used to store the angle value out of milling position
             self._prev_milling_angle = DEFAULT_MILLING_ANGLE
+            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
@@ -2234,10 +2235,11 @@ class CryoChamberTab(Tab):
         Updates the milling control with the changed angle position.
         :param pos: (float) value of rx
        """
-        # Milling angle is calculated using this formula: ION_BEAM_TO_SAMPLE_ANGLE – Rx
-        milling_value = self.ion_to_sample - pos
-        milling_value = math.degrees(milling_value)
-        self.panel.ctrl_milling.Value = to_string_pretty(milling_value, unit="°")
+        # Update the milling control only during milling
+        if self.current_position is MILLING and self.target_position is None:
+            # Milling angle is calculated using this formula: ION_BEAM_TO_SAMPLE_ANGLE – Rx
+            milling_value = math.degrees(self.ion_to_sample - pos)
+            self.panel.ctrl_milling.Value = readable_str(milling_value, unit="°", sig=3)
 
     def _milling_ctrl_changed(self):
         """

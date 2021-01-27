@@ -75,10 +75,10 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
+        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
         self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
         self.temperature_display = xrc.XRCCTRL(self, "temperature_display")
-        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
         self.btn_tab_align = xrc.XRCCTRL(self, "btn_tab_align")
         self.logo = xrc.XRCCTRL(self, "logo")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
@@ -1048,6 +1048,24 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
+			<object class="sizeritem">
+              <object class="TabButton" name="btn_tab_cryosecom_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_localization">
                 <size>160,30</size>
@@ -1095,24 +1113,6 @@ def __init_resources():
                 <face_colour>def</face_colour>
                 <label>20°C</label>
                 <fg>#353535</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-			<object class="sizeritem">
-              <object class="TabButton" name="btn_tab_cryosecom_chamber">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CHAMBER</label>
-                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -4022,7 +4022,7 @@ def __init_resources():
 										<object class="sizeritem">
 											<object class="UnitFloatCtrl" name="ctrl_milling">
 												<size>-1,20</size>
-												<value>12</value>
+												<value>10</value>
 											
 												<accuracy>4</accuracy>
 												<key_step>0.1</key_step>

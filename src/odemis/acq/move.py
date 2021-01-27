@@ -106,8 +106,8 @@ def getMovementProgress(current_pos, start_pos, end_pos):
     from_start = get_distance(start_pos, current_pos)
     to_end = get_distance(current_pos, end_pos)
     total_length = get_distance(start_pos, end_pos)
-    if total_length == 0: # same value
-        return None
+    if total_length == 0:  # same value
+        return 1
     # Check if current position is on the line from start to end position
     # That would happen if start_to_current +  current_to_start = total_distance from start to end
     if util.almost_equal((from_start + to_end), total_length, rtol=RTOL_PROGRESS):
@@ -199,14 +199,15 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
-        # Some sanity checks for RZ angle
-        if 'rz' in stage_active:
-            logging.warning("Imaging position should not contain a value for RZ angle.")
-        if 'rz' not in stage_deactive:
-            logging.warning("Loading position should contain a value for RZ angle.")
-        else:
-            # Update the RZ value of imaging position from loading position
-            stage_active['rz'] = stage_deactive['rz']
+        # Some sanity checks for rotation axes
+        for rotation_axis in {'rx', 'rz'}:
+            if rotation_axis in stage_active:
+                logging.warning("Imaging position should not contain a value for %s angle." % rotation_axis)
+            if rotation_axis not in stage_deactive:
+                logging.warning("Loading position should contain a value for %s angle." % rotation_axis)
+            else:
+                # Update the rotation axis value of imaging position from loading position
+                stage_active[rotation_axis] = stage_deactive[rotation_axis]
         current_pos = stage.position.value
         # To hold the ordered sub moves list
         sub_moves = []
