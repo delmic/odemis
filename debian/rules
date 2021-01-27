@@ -6,9 +6,9 @@ VER := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 	dh $@ --with python2,python3 --with sphinxdoc
 
 override_dh_auto_install:
-	python setup.py install --root debian/odemis --install-layout=deb
-	# Don't override Python 2 scripts, so copy them in some non-standard directory
-	python3 setup.py install --root debian/odemis --install-layout=deb --install-scripts usr/lib/odemis/python3/
+	# Don't use Python 2 scripts, so copy them in some non-standard directory
+	python setup.py install --root debian/odemis --install-layout=deb --install-scripts usr/lib/odemis/python2/
+	python3 setup.py install --root debian/odemis --install-layout=deb
 
 override_dh_installdocs:
 	# Just be sure there is no left over from previous builds
