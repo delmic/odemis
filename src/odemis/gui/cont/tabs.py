@@ -1963,7 +1963,7 @@ class CryoChamberTab(Tab):
         # Set the milling angle range according to rx axis range
         try:
             rx_range = stage.axes['rx'].range
-            milling_range = [self.ion_to_sample - a for a in rx_range]
+            milling_range = [-(self.ion_to_sample - a) for a in rx_range]
             # sort milling range in case ion_to_sample made range values flip
             actual_rng = sorted(milling_range)
             ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
@@ -2237,8 +2237,11 @@ class CryoChamberTab(Tab):
        """
         # Update the milling control only during milling
         if self.current_position is MILLING and self.target_position is None:
-            # Milling angle is calculated using this formula: ION_BEAM_TO_SAMPLE_ANGLE – Rx
-            milling_value = math.degrees(self.ion_to_sample - pos)
+            # Only update when change from former value is significant
+            if pos - (self._prev_milling_angle + self.ion_to_sample) <= 1e-3:
+                return
+            # Milling angle, as opposed to FIB and Rx angles, is presented to the user as a positive value to avoid confusion (hence the minus sign here)
+            milling_value = -math.degrees(self.ion_to_sample - pos)
             self.panel.ctrl_milling.Value = readable_str(milling_value, unit="°", sig=3)
 
     def _milling_ctrl_changed(self):
@@ -2253,7 +2256,8 @@ class CryoChamberTab(Tab):
         # Store current milling angle (in case the stage moved out of milling)
         # TODO: Check if milling angle to be stored is not the same as imaging rx
         self._prev_milling_angle = milling_angle
-        rx_angle = self.ion_to_sample - milling_angle
+        # Note that the self.ion_to_sample angle is MINUS 38.0 degrees, and for milling the Rx value is always also negative
+        rx_angle = self.ion_to_sample + milling_angle
         return rx_angle
 
     def _get_milling_angle_value(self):
@@ -2371,7 +2375,7 @@ class CryoChamberTab(Tab):
             return cryoSwitchSamplePosition(self.target_position)
         else:
             # Target position is milling, get rx value from saved milling angle
-            rx_angle_value = self.ion_to_sample - self._prev_milling_angle
+            rx_angle_value = self.ion_to_sample + self._prev_milling_angle
             return cryoTiltSample(rx=rx_angle_value)
 
     def _perform_axis_relative_movement(self, target_button):
