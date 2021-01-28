@@ -1242,9 +1242,19 @@ class MC_5DOF(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # Reference tilted positioners towards the negative position
-        # FIXME: temporary hack while the controller can take care of it itself
+        # Normally this is not needed. Some old version of the controller needed
+        # some hint when the stage was at "bad" positions. Left here just for
+        # reference.
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
+
+        # Position to report when not referenced. Ideally, we could just not
+        # report the axis at all in the .position. However, there is too much
+        # code that expects a value all the time for now.
+        # TODO: remove this once the rest of Odemis handles non-reported positions.
+        # Use 0, if it's within the range, otherwise use the center of the range.
+        self._unknown_pos = {an: 0 if ad.range[0] <= 0 <= ad.range[1] else self._applyInversion(sum(ad.range) / 2)
+                             for an, ad in axes_def.items()}
 
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
@@ -1254,8 +1264,8 @@ class MC_5DOF(model.Actuator):
         axes_ref = {a: referenced for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
-        # If ref_on_init, referenced immediately.
 
+        # If ref_on_init, reference immediately.
         if referenced:
             logging.debug("SA_MC is referenced")
         else:
@@ -1488,7 +1498,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {}
+                p = self._unknown_pos
             else:
                 raise
 
