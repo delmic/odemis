@@ -1242,9 +1242,19 @@ class MC_5DOF(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # Reference tilted positioners towards the negative position
-        # FIXME: temporary hack while the controller can take care of it itself
+        # Normally this is not needed. Some old version of the controller needed
+        # some hint when the stage was at "bad" positions. Left here just for
+        # reference.
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
+
+        # Position to report when not referenced. Ideally, we could just not
+        # report the axis at all in the .position. However, there is too much
+        # code that expects a value all the time for now.
+        # TODO: remove this once the rest of Odemis handles non-reported positions.
+        # Use 0, if it's within the range, otherwise use the center of the range.
+        self._unknown_pos = {an: 0 if ad.range[0] <= 0 <= ad.range[1] else self._applyInversion(sum(ad.range) / 2)
+                             for an, ad in axes_def.items()}
 
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
@@ -1254,8 +1264,8 @@ class MC_5DOF(model.Actuator):
         axes_ref = {a: referenced for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
-        # If ref_on_init, referenced immediately.
 
+        # If ref_on_init, reference immediately.
         if referenced:
             logging.debug("SA_MC is referenced")
         else:
@@ -1488,7 +1498,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {}
+                p = self._unknown_pos
             else:
                 raise
 
@@ -1837,21 +1847,34 @@ class FakeMC_5DOF_DLL(object):
 
         return new_pos
 
-    def SA_MC_GetPose(self, id, p_pose):
-        pose = _deref(p_pose, SA_MC_Pose)
-
+    def _update_current_pos(self):
+        """
+        Update the self.pose if a move is active
+        """
         cur_time = time.time()
-        if cur_time < self._current_move_finish:
-            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
-            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
-            dt = cur_time - self._last_time
-            # calculate intermediate positions
-            self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
-            self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
-            self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
-            self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
-            self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
+        if cur_time > self._current_move_finish:
+            return
 
+        lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+        rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+        dt = cur_time - self._last_time
+
+        # calculate intermediate positions
+        self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
+        self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
+        self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
+        self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
+        self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
+
+        self._last_time = cur_time
+
+    def SA_MC_GetPose(self, id, p_pose):
+        if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED, "error")
+
+        self._update_current_pos()
+
+        pose = _deref(p_pose, SA_MC_Pose)
         pose.x = self.pose.x
         pose.y = self.pose.y
         pose.z = self.pose.z
@@ -1859,14 +1882,13 @@ class FakeMC_5DOF_DLL(object):
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
 
-        self._last_time = cur_time
-
         logging.debug("sim MC5DOF: position: %s" % (pose,))
         return MC_5DOF_DLL.SA_MC_OK
 
     def SA_MC_Stop(self, id):
         logging.debug("sim MC5DOF: Stopping")
         self.stopping.set()
+        self._update_current_pos()
         self._current_move_finish = time.time()
 
     def SA_MC_Reference(self, id):
@@ -1918,10 +1940,9 @@ class FakeMC_5DOF_DLL(object):
                 stopped = True
                 timedout = True
                 break
-            if self.stopping.is_set():
+            if self.stopping.wait(0.05):
                 stopped = True
                 break
-            time.sleep(0.05)
 
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
         if not stopped:
