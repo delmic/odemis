@@ -185,7 +185,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
-        "pos_deactive_after_ref": True,
+        "pos_deactive_after_ref": True,  # Not actually used as there is no MD_FAV_POS_DEACTIVE
         "inverted": ['z'],
         "axes": {
             'x': {
@@ -303,10 +303,8 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        # note: this test will fail with the simulator because it does not
-        # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
+        new_pos = {'x': 0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.01)
         f.cancel()
@@ -316,9 +314,9 @@ class Test5DOF(unittest.TestCase):
 
         # Test cancellation by stopping
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':2e-3, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'rz': 0.0001}
+        new_pos = {'x': 0.003, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.05)
+        time.sleep(0.1)
         self.dev.stop()
 
         difference = new_pos['x'] - self.dev.position.value['x']
