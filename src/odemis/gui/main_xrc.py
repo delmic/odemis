@@ -72,11 +72,11 @@ class xrcfr_main(wx.Frame):
         self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
+        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
+        self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
-        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
-        self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
         self.temperature_display = xrc.XRCCTRL(self, "temperature_display")
         self.btn_tab_align = xrc.XRCCTRL(self, "btn_tab_align")
@@ -994,10 +994,46 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_cryosecom_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>STREAMS</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_localization">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>LOCALIZATION</label>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -1034,42 +1070,6 @@ def __init_resources():
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ANALYSIS</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-			<object class="sizeritem">
-              <object class="TabButton" name="btn_tab_cryosecom_chamber">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CHAMBER</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_localization">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>LOCALIZATION</label>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
