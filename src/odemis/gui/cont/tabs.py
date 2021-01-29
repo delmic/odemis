@@ -44,6 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
+from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
 
@@ -1982,8 +1983,10 @@ class CryoChamberTab(Tab):
 
         self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
                               MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
-        if not {model.MD_FAV_AREA, model.MD_FAV_Z_RANGE}.issubset(stage_metadata):
-            raise ValueError('The stage is missing FAV_AREA and MD_FAV_Z_RANGE metadata.')
+        if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
+            raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
+        if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
+            raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
         self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
                                  self.panel.stage_align_btn_m_aligner_x: ("x", -1),
                                  self.panel.stage_align_btn_p_aligner_y: ("y", 1),
@@ -2219,7 +2222,8 @@ class CryoChamberTab(Tab):
         Event handler for the Advanced button to show/hide stage advanced panel
         """
         self.panel.pnl_advanced_align.Show(self.tab_data_model.show_advaned.value)
-        self.panel.Layout()
+        # Adjust the panel's static text controls
+        fix_static_text_clipping(self.panel)
 
     def _show_cancel_warning_msg(self, txt_warning):
         """
@@ -2392,22 +2396,12 @@ class CryoChamberTab(Tab):
         axis, sign = self.btn_aligner_axes[target_button]
         stage = self.tab_data_model.main.stage
         md = stage.getMetadata()
-        fav_area = md[model.MD_FAV_AREA]
-        fav_area = normalize_rect(fav_area)
-        fav_z_range = md[model.MD_FAV_Z_RANGE]
+        active_range = md[model.MD_POS_ACTIVE_RANGE]
         # The amount of relative move shift is taken from the panel slider
         shift = self.tab_data_model.stage_align_slider_va.value
         shift *= sign
         target_position = stage.position.value[axis] + shift
-        allowed_rng = None
-        if axis == 'x':
-            allowed_rng = (fav_area[0], fav_area[2])  # left, right
-        elif axis == 'y':
-            allowed_rng = (fav_area[1], fav_area[3])  # top, bottom
-        elif axis == 'z':
-            allowed_rng = tuple(fav_z_range)
-
-        if allowed_rng is not None and not self._is_in_range(target_position, allowed_rng):
+        if not self._is_in_range(target_position, active_range[axis]):
             warning_text = "Requested movement would go out of stage imaging range."
             self._show_cancel_warning_msg(warning_text)
             return
@@ -5541,17 +5535,9 @@ class TabBarController(object):
         tab.Show()
         self.main_frame.Layout()
 
-        # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
-        # the StaticText's not shown at init to be initialized with a size as if
-        # the font was standard size. So if the font is big, the text is cropped.
-        # See: https://github.com/wxWidgets/Phoenix/issues/1452
-        # https://trac.wxwidgets.org/ticket/16088
-        # => Force resize, on the first time the tab is shown
+        # Force resize, on the first time the tab is shown
         if tab.name not in self._tabs_fixed_big_text:
-            self._fix_big_static_text(tab.panel)
-            # Eventually, update the size of the parent, based on everything inside it
-            wx.CallLater(100, self._update_layout_big_text, tab.panel)  # Quickly
-            wx.CallLater(500, self._update_layout_big_text, tab.panel)  # Later, in case the first time was too early
+            fix_static_text_clipping(tab.panel)
             self._tabs_fixed_big_text.add(tab.name)
 
     def query_terminate(self):
@@ -5582,15 +5568,3 @@ class TabBarController(object):
 
         evt.Skip()
 
-    def _update_layout_big_text(self, panel):
-        self._fix_big_static_text(panel)
-        panel.Layout()
-
-    def _fix_big_static_text(self, root):
-        # Force re-calculate the size of all StaticTexts contained in the object
-        for c in root.GetChildren():
-            if isinstance(c, wx.StaticText):
-                logging.debug("Fixing size of the text %s", c.Label)
-                c.InvalidateBestSize()
-            elif isinstance(c, wx.Window):
-                self._fix_big_static_text(c)

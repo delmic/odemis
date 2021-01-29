@@ -199,15 +199,11 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
-        # Some sanity checks for rotation axes
-        for rotation_axis in {'rx', 'rz'}:
-            if rotation_axis in stage_active:
-                logging.warning("Imaging position should not contain a value for %s angle." % rotation_axis)
-            if rotation_axis not in stage_deactive:
-                logging.warning("Loading position should contain a value for %s angle." % rotation_axis)
-            else:
-                # Update the rotation axis value of imaging position from loading position
-                stage_active[rotation_axis] = stage_deactive[rotation_axis]
+        # Fail early when required axes are not found on the positions metadata
+        required_axes = {'x', 'y', 'z', 'rx', 'rz'}
+        for stage_position in [stage_active, stage_deactive, stage_coating]:
+            if not required_axes.issubset(stage_position.keys()):
+                raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
         current_pos = stage.position.value
         # To hold the ordered sub moves list
         sub_moves = []
