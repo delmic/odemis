@@ -45,16 +45,13 @@ import wx
 
 class ZStackPlugin(Plugin):
     name = "Z Stack"
-    __version__ = "1.3"
-    __author__ = u"Anders Muskens"
+    __version__ = "1.4"
+    __author__ = u"Anders Muskens, Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
-        ("numberOfAcquisitions", {
-            "control_type": odemis.gui.CONTROL_INT,  # no slider
-        }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
@@ -65,6 +62,10 @@ class ZStackPlugin(Plugin):
         ("zstart", {
             "control_type": odemis.gui.CONTROL_FLT,
         }),
+        ("numberOfAcquisitions", {
+            "control_type": odemis.gui.CONTROL_INT,  # no slider
+        }),
+        ("expectedDuration", {}),
     ))
 
     def __init__(self, microscope, main_app):
@@ -82,14 +83,22 @@ class ZStackPlugin(Plugin):
         z = max(self._zrange[0], min(self._old_pos['z'], self._zrange[1]))
         self.zstart = model.FloatContinuous(z, range=self._zrange, unit=zunit)
         self.zstep = model.FloatContinuous(1e-6, range=(-1e-5, 1e-5), unit=zunit, setter=self._setZStep)
-        self.numberofAcquisitions = model.IntContinuous(3, (2, 999), setter=self._setNumberOfAcquisitions)
+        self.numberOfAcquisitions = model.IntContinuous(3, (2, 999), setter=self._setNumberOfAcquisitions)
 
         self.filename = model.StringVA("a.h5")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         self.zstep.subscribe(self._update_exp_dur)
-        self.numberofAcquisitions.subscribe(self._update_exp_dur)
+        self.numberOfAcquisitions.subscribe(self._update_exp_dur)
         
+        # Two acquisition order possible:
+        # * for each Z, all the streams (aka intertwined): Z exactly the same for each stream
+        # * for each stream, the whole Z stack: Might be faster (if filter wheel used for changing wavelength)
+        self._streams_intertwined = True
+        if main_data.light_filter and len(main_data.light_filter.axes["band"].choices) > 1:
+            logging.info("Filter-wheel detected, Z-stack will be acquired stream-per-stream")
+            self._streams_intertwined = False
+
         self._acq_streams = None  # previously folded streams, for optimisation
         self._dlg = None
         self.addMenu("Acquisition/ZStack...\tCtrl+B", self.start)
@@ -99,7 +108,7 @@ class ZStackPlugin(Plugin):
 
     def _setZStep(self, zstep):
         # Check if the acquisition will be within the range of the actuator
-        acq_range = self.zstart.value + zstep * self.numberofAcquisitions.value
+        acq_range = self.zstart.value + zstep * self.numberOfAcquisitions.value
         if self._acqRangeIsValid(acq_range):
             return zstep
         else:
@@ -111,7 +120,7 @@ class ZStackPlugin(Plugin):
         if self._acqRangeIsValid(acq_range):
             return n_acq
         else:
-            return self.numberofAcquisitions.value  # Old value
+            return self.numberOfAcquisitions.value  # Old value
 
     def _get_new_filename(self):
         conf = get_acqui_conf()
@@ -137,14 +146,19 @@ class ZStackPlugin(Plugin):
         """
         Called when VA that affects the expected duration is changed
         """
-        nsteps = self.numberofAcquisitions.value
+        nsteps = self.numberOfAcquisitions.value
         step_time = self._estimate_step_duration()
         ss = self._get_acq_streams()
 
         sacqt = acqmng.estimateTime(ss)
-        logging.debug("Estimating %g s acquisition for %d streams", sacqt, len(ss))
+        if self._streams_intertwined:
+            # Moving the focus will have to be done for every stream
+            dur = sacqt * nsteps + step_time * (nsteps - 1) * len(ss)
+        else:
+            dur = sacqt * nsteps + step_time * (nsteps - 1)
 
-        dur = sacqt * nsteps + step_time * (nsteps - 1)
+        logging.debug("Estimating acquisition of %d streams will take %g s", len(ss), dur)
+
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(dur), force_write=True)
 
@@ -214,7 +228,7 @@ class ZStackPlugin(Plugin):
     def start(self):
         # Fail if the live tab is not selected
         tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui"):
+        if tab.name not in ("secom_live", "sparc_acqui", "cryosecom-localization"):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "ZStack acquisition must be done from the acquisition stream.",
                        "ZStack acquisition not possible", wx.OK | wx.ICON_STOP)
@@ -297,7 +311,7 @@ class ZStackPlugin(Plugin):
 
         # Computer cube centre
         c_x, c_y = metadata3d[model.MD_POS]
-        c_z = self.zstart.value + (self.zstep.value * self.numberofAcquisitions.value) / 2
+        c_z = self.zstart.value + (self.zstep.value * self.numberOfAcquisitions.value) / 2
         metadata3d[model.MD_POS] = (c_x, c_y, c_z)
 
         # For a negative pixel size, convert to a positive and flip the z axis
@@ -322,7 +336,7 @@ class ZStackPlugin(Plugin):
         Called before acquisition begins.
         Returns: (float) estimate of time per step
         """
-        logging.info("Z stack acquisition started with %d levels", self.numberofAcquisitions.value)
+        logging.info("Z stack acquisition started with %d levels", self.numberOfAcquisitions.value)
 
         # Move the focus to the start z position
         logging.debug("Preparing Z Stack acquisition. Moving focus to start position")
@@ -332,14 +346,22 @@ class ZStackPlugin(Plugin):
         self.zstart.unsubscribe(self._on_zstart)
         return self._estimate_step_duration()
 
-    def stepAcquisition(self, i, images):
+    def preStepAcquisition(self, i):
         """
-        An action that executes for the ith step of the acquisition
-        i (int): the step number
+        Called before the ith step of the acquisition
+        i (0 <= int): the step number
+        """
+        self.focus.moveAbs({'z': self.zstart.value + self.zstep.value * i}).result()
+
+    def postStepAcquisition(self, i, images):
+        """
+        Called after the ith step of the acquisition
+        i (0 <= int): the step number
         images []: A list of images as DataArrays
         """
-        self.focus.moveRel({'z': self.zstep.value}).result()
-        
+        # Nothing to do after a focus step
+        pass
+
     def completeAcquisition(self, completed):
         """
         Run actions that clean up after the acquisition occurs.
@@ -348,7 +370,7 @@ class ZStackPlugin(Plugin):
         # Mvoe back to start
         if completed:
             logging.info("Z Stack acquisition complete.")
-        logging.debug("Returning focus to start position %s", self._old_pos)
+        logging.debug("Returning focus to original position %s", self._old_pos)
         self.focus.moveAbs(self._old_pos).result()
         self.focus.position.subscribe(self._on_focus_pos)
         self.zstart.subscribe(self._on_zstart)
@@ -372,56 +394,79 @@ class ZStackPlugin(Plugin):
         stream_paused = str_ctrl.pauseStreams()
         dlg.pauseSettings()
 
-        nb = self.numberofAcquisitions.value
+        nb = self.numberOfAcquisitions.value
         ss = self._get_acq_streams()
-
         sacqt = acqmng.estimateTime(ss)
+        logging.debug("Acquisition streams: %s", ss)
+
+        # all_ss is a list of list of streams to acquire. In theory, we could do
+        # several set of acquisitions with each a set of streams. However, that's
+        # not how it's used. It's just a generic way to handle both cases:
+        # either each acquisition has only one stream, or there is a single
+        # acquisition to do all the stream.
+        if self._streams_intertwined:
+            # Streams are fastest changed: for each step, all streams are acquired
+            all_ss = [ss]
+        else:
+            # Streams are slowest changed: for each stream, do all steps together
+            all_ss = [[s] for s in ss]
         
-        completed = False
-
         try:
-            step_time = self.initAcquisition()
-            logging.debug("Acquisition streams: %s", ss)
+            # list of list of list of DataArray: for each acquisition, for each stream, for each step, the data acquired
+            all_images = [[] for _ in all_ss]
+            completed = False
 
+            step_time = self.initAcquisition()
             # TODO: if drift correction, use it over all the time
             f = model.ProgressiveFuture()
             f.task_canceller = lambda l: True  # To allow cancelling while it's running
             f.set_running_or_notify_cancel()  # Indicate the work is starting now
             dlg.showProgress(f)
 
-            # list of list of DataArray: for each stream, for each acquisition, the data acquired
-            images = None
-        
-            for i in range(nb):
-                left = nb - i
-                dur = sacqt * left + step_time * (left - 1)
-
-                logging.debug("Acquisition %d of %d", i, nb)
-
-                startt = time.time()
-                f.set_progress(end=startt + dur)
-                das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
-                if images is None:
-                    # Copy metadata from the first acquisition
-                    images = [[] for i in range(len(das))]
-
-                for im, da in zip(images, das):
-                    im.append(da)
-
-                if f.cancelled():
-                    raise CancelledError()
-
-                # Execute an action to prepare the next acquisition for the ith acquisition
-                self.stepAcquisition(i, images)
-
-            f.set_result(None)  # Indicate it's over
+            total_nb = left = len(all_ss) * nb
             
+            logging.debug("Will repeat the acquisition %d times", len(all_ss))
+            for ss, images in zip(all_ss, all_images):
+                for i in range(nb):
+                    dur = sacqt * left + step_time * (left - 1)
+                    logging.debug("Acquisition %d of %d", total_nb - left, total_nb)
+
+                    startt = time.time()
+                    f.set_progress(end=startt + dur)
+
+                    # Prepare the axis for this step
+                    self.preStepAcquisition(i)
+                    das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
+                    if e:
+                        logging.warning("Will continue, although acquisition %d partially failed: %s", e)
+                    if len(das) != len(ss):
+                        logging.warning("Expected %d DataArrays, but got %d", len(ss), len(das))
+
+                    if not images:
+                        images[:] = [[] for _ in das]
+
+                    for im, da in zip(images, das):
+                        im.append(da)
+
+                    if f.cancelled():
+                        raise CancelledError()
+
+                    # Clean-up or adjust the images
+                    self.postStepAcquisition(i, images)
+                    left -= 1
+
+            # Collate back all the data as "for each stream, all the images acquired"
+            images = []
+            for ii in all_images:
+                images.extend(ii)
             # Construct a cube from each stream's image.
             images = self.postProcessing(images)
 
             # Export image
             exporter = dataio.find_fittest_converter(self.filename.value)
             exporter.export(self.filename.value, images)
+
+            f.set_result(None)  # Indicate it's over
             completed = True
             dlg.Close()
             
@@ -429,7 +474,7 @@ class ZStackPlugin(Plugin):
             logging.debug("Acquisition cancelled.")
             dlg.resumeSettings()
 
-        except e:
+        except Exception as e:
             logging.exception(e)
 
         finally:
