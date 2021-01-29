@@ -374,6 +374,9 @@ class LocalizationTab(Tab):
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
 
+        # Default view is the Live 1
+        tab_data.focussedView.value = panel.vp_secom_bl.view
+
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
             panel,
