@@ -213,7 +213,7 @@ class StreamPanelHeader(wx.Control):
 
         colormap_combo = ColorMapComboBox(self, wx.ID_ANY, pos=(0, 0), labels=list(self.colormap_choices.keys()),
                                           choices=list(self.colormap_choices.values()), size=(88, 16),
-                              style=cbstyle)
+                                          style=cbstyle)
 
         # determine which value to select
         for index, value in enumerate(self.colormap_choices.values()):
@@ -413,13 +413,19 @@ class StreamPanelHeader(wx.Control):
         """ Update the colormap selector to reflect the provided colour """
         # determine which value to select
         for index, value in enumerate(self.colormap_choices.values()):
-            if self.Parent.stream.tint.value == value:
+            if colour == value:
                 self.combo_colormap.SetSelection(index)
                 break
-            elif self.Parent.stream.tint.value == TINT_FIT_TO_RGB:
+            elif colour == TINT_FIT_TO_RGB:
                 self.combo_colormap.SetSelection(self._colormap_fitrgb_idx)  # fit to RGB
                 break
-        else:
+        else:  # Can't find the colour => it's custom tint
+            if isinstance(colour, tuple):
+                self.colormap_choices[TINT_CUSTOM_TEXT] = colour
+                self.combo_colormap.SetClientData(self._colormap_customtint_idx, colour)
+            else:
+                logging.warning("Got unknown colormap, which is not a tint: %s", colour)
+
             self.combo_colormap.SetSelection(self._colormap_customtint_idx)  # custom tint
 
     @call_in_wx_main
@@ -431,6 +437,7 @@ class StreamPanelHeader(wx.Control):
         name, tint = list(self.colormap_choices.items())[index]
 
         if name == TINT_CUSTOM_TEXT:
+
             # Set default colour to the current value
             cldata = wx.ColourData()
             cldata.SetColour(wx.Colour(*tint))
@@ -438,11 +445,10 @@ class StreamPanelHeader(wx.Control):
             dlg = wx.ColourDialog(self, cldata)
     
             if dlg.ShowModal() == wx.ID_OK:
-                colour = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
-                logging.debug("Colour %r selected", colour)
+                tint = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
+                logging.debug("Colour %r selected", tint)
                 # Setting the VA will automatically update the button's colour
-                self.colormap_choices[TINT_CUSTOM_TEXT] = colour
-                tint = colour
+                self.colormap_choices[TINT_CUSTOM_TEXT] = tint
                 self.combo_colormap.SetClientData(index, tint)
             else:
                 self._on_colormap_value(self.Parent.stream.tint.value)
