@@ -30,6 +30,7 @@ from __future__ import division
 
 CONF_GENERAL = None
 CONF_ACQUI = None
+CONF_CHAMB = None
 CONF_CALIB = None
 
 
@@ -39,6 +40,14 @@ def get_general_conf():
         from .file import GeneralConfig
         CONF_GENERAL = GeneralConfig()
     return CONF_GENERAL
+
+def get_chamber_conf():
+    """ Return the Chamber config object and create/read it first if it does not yet exist """
+    global CONF_CHAMB
+    if not CONF_CHAMB:
+        from .file import ChamberConfig
+        CONF_CHAMB = ChamberConfig()
+    return CONF_CHAMB
 
 
 def get_acqui_conf():

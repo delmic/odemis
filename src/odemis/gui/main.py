@@ -219,6 +219,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_sparc_chamber
                 },
                 {
+                    "name": "cryosecom_chamber",
+                    "controller": tabs.CryoChamberTab,
+                    "button": self.main_frame.btn_tab_cryosecom_chamber,
+                    "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
+                },
+                {
                     "name": "analysis",
                     "controller": tabs.AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
@@ -324,6 +330,11 @@ class OdemisGUIApp(wx.App):
             # if dlg.ShowModal() == wx.ID_NO:
             dlg.ShowModal()
             dlg.Destroy()  # frame
+            return
+
+        # Check if there's any action to do before tab termination
+        # Do not terminate if returned False
+        if not self.tab_controller.query_terminate():
             return
 
         for p in self.plugins:

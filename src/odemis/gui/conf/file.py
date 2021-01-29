@@ -227,7 +227,6 @@ class GeneralConfig(Config):
             return full_path
         return None
 
-
 class AcquisitionConfig(Config):
     file_name = "acquisition.config"
 
@@ -258,6 +257,12 @@ class AcquisitionConfig(Config):
         # Cannot save the format, as it depends on the type, but at least remember
         # whether it was "raw" (= post-processing) or not.
         self.default.set("export", "raw", "False")
+
+        # Define the default settings for the project parameters
+        self.default.add_section("project")
+        self.default.set("project", "pj_last_path", ACQUI_PATH)
+        self.default.set("project", "pj_ptn", u"{datelng}-{timelng}")
+        self.default.set("project", "pj_count", "0")
 
     @property
     def last_path(self):
@@ -326,6 +331,35 @@ class AcquisitionConfig(Config):
     def fn_count(self, cnt):
         self.set("acquisition", "fn_count", cnt)
 
+    @property
+    def pj_last_path(self):
+        lp = self.get("project", "pj_last_path")
+        # Check that it (still) exists, and if not, fallback to the default
+        if not os.path.isdir(lp):
+            lp = ACQUI_PATH
+        return lp
+
+    @pj_last_path.setter
+    def pj_last_path(self, pj_last_path):
+        # Note that paths (or filenames) which end with a space have their name
+        # trimmed when read back, so they will not be recorded properly.
+        self.set("project", "pj_last_path", pj_last_path)
+
+    @property
+    def pj_ptn(self):
+        return self.get("project", "pj_ptn")
+
+    @pj_ptn.setter
+    def pj_ptn(self, ptn):
+        self.set("project", "pj_ptn", ptn)
+
+    @property
+    def pj_count(self):
+        return self.get("project", "pj_count")
+
+    @pj_count.setter
+    def pj_count(self, cnt):
+        self.set("project", "pj_count", cnt)
 
 
 class CalibrationConfig(Config):

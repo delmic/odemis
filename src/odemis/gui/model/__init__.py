@@ -34,7 +34,7 @@ from odemis.acq import path, leech, acqmng
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
     ARPolarimetryProjection
-from odemis.gui.conf import get_general_conf
+from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
@@ -656,6 +656,19 @@ class ChamberGUIData(MicroscopyGUIData):
         # possible to change the focus, and the menu is there, so why not.
 #         self.autofocus_active = BooleanVA(False)
 
+
+class CryoChamberGUIData(MicroscopyGUIData):
+
+    def __init__(self, main):
+        MicroscopyGUIData.__init__(self, main)
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        self._conf = get_acqui_conf()
+        pj_last_path = self._conf.get("project", "pj_last_path")
+        self.project_name = StringVA(pj_last_path)  # a unicode
+
+        self.stage_align_slider_va = model.FloatVA(1e-6)
+        self.show_advaned = model.BooleanVA(False)
 
 class AnalysisGUIData(MicroscopyGUIData):
     """

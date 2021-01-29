@@ -25,12 +25,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
+import copy
 import gc
 import logging
 import math
 import os.path
+import shutil
 import time
-from concurrent.futures._base import CancelledError
+from concurrent.futures._base import CancelledError, RUNNING
 from functools import partial
 
 import numpy
@@ -40,6 +42,11 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
+
+from odemis.gui import conf, img
+from odemis.gui.util.wx_adapter import fix_static_text_clipping
+from odemis.gui.win.acquisition import ShowChamberFileDialog
+from odemis.util.filename import guess_pattern, create_projectname
 
 import odemis.acq.stream as acqstream
 import odemis.gui
@@ -64,6 +71,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream
+from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
+from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
+from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -81,8 +91,8 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
-    ScannerFoVAdapter
-from odemis.util import units, spot, limit_invocation, fsdecode
+    ScannerFoVAdapter, VigilantAttributeConnector
+from odemis.util import units, spot, limit_invocation, fsdecode, normalize_rect
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
@@ -279,6 +289,13 @@ class Tab(object):
 
     def IsShown(self):
         return self.panel.IsShown()
+
+    def query_terminate(self):
+        """
+        Called to perform action prior to terminating the tab
+        :return: (bool) True to proceed with termination, False for canceling
+        """
+        return True
 
     def terminate(self):
         """
@@ -487,12 +504,19 @@ class LocalizationTab(Tab):
         streams = data_to_static_streams(data)
 
         # TODO: Clear previous overview streams
-        # self._overview_stream_controller.clear()
+        self.clear_data()
 
         for s in streams:
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
+    def clear_data(self):
+        """
+        Clear the tab data upon resetting the project:
+        - Clear overview map streams
+        - Clear live streams data
+        """
+        self._overview_stream_controller.clear()
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -1897,6 +1921,540 @@ class ChamberTab(Tab):
                 else:
                     return 2
 
+        return None
+
+DEFAULT_MILLING_ANGLE = math.radians(10)
+MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
+
+class CryoChamberTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+        """ CryoSECOM chamber view tab """
+
+        tab_data = guimod.CryoChamberGUIData(main_data)
+        super(CryoChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("CHAMBER")
+
+        # future to handle the move
+        self._move_future = model.CancellableFuture()
+
+        self._tab_panel = panel
+        # For project selection
+        self.conf = conf.get_acqui_conf()
+        self.btn_change_folder = self._tab_panel.btn_change_folder
+        self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
+        # Set project folder path from config file
+        self.txt_projectpath = self._tab_panel.txt_projectpath
+        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+        self.txt_projectpath.Enabled = False
+
+        stage = self.tab_data_model.main.stage
+        stage_metadata = stage.getMetadata()
+        # start and end position are used for the gauge progress bar
+        self.start_pos = stage.position.value
+        self.end_pos = self.start_pos
+        # Show position of the stage via the progress bar
+        main_data.stage.position.subscribe(self._update_progress_bar, init=False)
+        try:
+            self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
+        except KeyError:
+            raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
+        # Define axis connector to link milling angle to UI float ctrl
+        self.milling_connector = AxisConnector('rx', stage, panel.ctrl_milling, pos_2_ctrl=self._milling_angle_changed,
+                                               ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
+        # Set the milling angle range according to rx axis range
+        try:
+            rx_range = stage.axes['rx'].range
+            milling_range = [-(self.ion_to_sample - a) for a in rx_range]
+            # sort milling range in case ion_to_sample made range values flip
+            actual_rng = sorted(milling_range)
+            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
+            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+            panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
+            # Default value for milling angle, will be used to store the angle value out of milling position
+            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
+            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
+        except KeyError:
+            raise ValueError('The stage is missing an rx axis.')
+        panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
+
+        # Create new project directory on starting the GUI
+        self._create_new_dir()
+
+        self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
+                              MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
+        if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
+            raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
+        if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
+            raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
+        self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
+                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
+                                 self.panel.stage_align_btn_p_aligner_y: ("y", 1),
+                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
+                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
+                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
+        self.btn_toggle_icons = {
+            self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
+            self.panel.btn_switch_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
+            self.panel.btn_switch_milling: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
+            self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
+        # Check stage FAV positions in its metadata, and store them in respect to their movement
+        if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
+            raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
+        self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
+                                         IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
+                                         COATING: stage_metadata[model.MD_FAV_POS_COATING], }
+
+        # Determine and show current position of the stage
+        self.current_position, self.target_position = None, None
+        self._enable_movement_controls()
+        if self.current_position in self.position_btns.keys():
+            pos_button = next(button for pos, button in self.position_btns.items() if pos == self.current_position)
+            self._toggle_switch_buttons(pos_button)
+        self._show_cancel_warning_msg(None)
+
+        # Vigilant attribute connectors for the align slider and show advanced button
+        self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
+                                                                       self.panel.stage_align_slider_aligner,
+                                                                       events=wx.EVT_SCROLL_CHANGED)
+        self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
+                                                                      self.panel.btn_switch_advanced,
+                                                                      events=wx.EVT_BUTTON,
+                                                                      ctrl_2_va=self._btn_show_advaned_toggled,
+                                                                      va_2_ctrl=self._on_show_advanced)
+
+        # Event binding for tab controls
+        panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        panel.btn_switch_coating.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.stage_align_btn_p_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+        panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+
+    def _on_change_project_folder(self, evt):
+        """
+        Shows a dialog to change the path and name of the project directory.
+        returns nothing, but updates .conf and project path text control
+        """
+        box = wx.MessageDialog(self.main_frame,
+                               "This will clear the current project data from Odemis",
+                               caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+        box.SetYesNoLabels("&Reset Project", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        if ans == wx.ID_NO:
+            return
+        # Generate suggestion for the new project name to show it on the file dialog
+        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        if new_dir is None:
+            return
+        # Reset project, clear the data
+        self._reset_project_data()
+        # Get previous project dir from configuration
+        prev_dir = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+
+        def check_same_partition(source, destination):
+            """
+            Check if source and destination dirs in the same partition
+            """
+            return os.stat(source).st_dev == os.stat(destination).st_dev
+
+        def move_files(source, destination):
+            """
+            Move all files found in source directory to destination
+            """
+            file_names = os.listdir(source)
+            for file_name in file_names:
+                shutil.move(os.path.join(source, file_name), destination)
+
+        def is_subdir(check_dir, parent_dir):
+            """
+           Check if directory is sub directory of another one
+            """
+            return os.path.realpath(check_dir).startswith(os.path.realpath(parent_dir) + os.sep)
+
+        if not os.path.isdir(prev_dir):
+            os.mkdir(new_dir)
+            self._change_project_conf(new_dir)
+        else:
+            try:
+                os.rename(prev_dir, new_dir)
+                self._change_project_conf(new_dir)
+            # For permission related errors
+            except PermissionError:
+                logging.error("Operation not permitted.")
+            # For other errors
+            except OSError as error:
+                # Do a complete move if not on the same partition
+                if not check_same_partition(prev_dir, new_dir):
+                    move_files(prev_dir, new_dir)
+                    # delete the 'now empty' old folder
+                    os.rmdir(prev_dir)
+                    self._change_project_conf(new_dir)
+                elif is_subdir(new_dir, prev_dir):
+                    # It's inside a the current directory => If there are already files in it, tell the user it's not
+                    # possible. If the prev_dir is empty, create a directory inside it.
+                    if os.listdir(prev_dir):
+                        dlg = wx.MessageDialog(self.main_frame,
+                                               "Selected directory {} already contains files.".format(prev_dir),
+                                               style=wx.OK | wx.ICON_WARNING)
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                    else:
+                        os.mkdir(new_dir)
+                        self._change_project_conf(new_dir)
+                else:
+                    logging.error(error)
+
+    def _change_project_conf(self, new_dir):
+        """
+        Update new project info in config file and show it on the text control
+        """
+        self.conf.pj_last_path, _ = os.path.split(new_dir)
+        self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
+        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+        logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
+
+    def _create_new_dir(self):
+        """
+        Create a new project directory from config pattern and update project config with new name
+        """
+        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        os.mkdir(np)
+        self._change_project_conf(np)
+
+    def _reset_project_data(self):
+        try:
+            localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+            localization_tab.clear_data()
+        except LookupError:
+            logging.warning("Unable to find localization tab.")
+
+    @call_in_wx_main
+    def _update_progress_bar(self, pos):
+        """
+        Update the progress bar, based on the current position of the stage.
+        Called when the position of the stage changes.
+        pos (dict str->float): current position of the sample stage
+        """
+        if not self.IsShown():
+            return
+        # Get the ratio of the current position in respect to the start/end position
+        val = getMovementProgress(pos, self.start_pos, self.end_pos)
+        if val is None:
+            return
+        # Set the move gauge with the movement progress percentage
+        self.panel.gauge_move.Value = val * 100
+
+    def _toggle_switch_buttons(self, currently_pressed=None):
+        """
+        Toggle currently pressed button (if any) and untoggle rest of switch buttons
+        """
+        for button in self.position_btns.values():
+            button.SetValue(1) if button == currently_pressed else button.SetValue(0)
+
+    def _enable_movement_controls(self, cancelled=False):
+        """
+        Enable/disable chamber move controls (position and stage) based on current move
+        :param cancelled: (bool) if the move is cancelled
+        """
+        stage = self.tab_data_model.main.stage
+        # Get current movement (including unknown and on the path)
+        self.current_position = getCurrentPositionLabel(stage.position.value, stage)
+        self._enable_position_controls(self.current_position, cancelled)
+        # Enable stage advanced controls on milling
+        self._enable_advanced_controls(True) if self.current_position is MILLING else self._enable_advanced_controls(
+            False)
+
+    def _enable_position_controls(self, current_position=None, cancelled=False):
+        """
+        Enable/disable switching position button based on current move
+        """
+        # The move button should turn green only if current move is known and not cancelled
+        if current_position in self.position_btns.keys() and not cancelled:
+            currently_pressed = self.position_btns[current_position]
+            self._toggle_switch_buttons(currently_pressed)
+            currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
+            currently_pressed.Refresh()
+        else:
+            self._toggle_switch_buttons(currently_pressed=None)
+        # Define which button to disable in respect to the current move
+        disable_buttons = {LOADING: MILLING, IMAGING: None, MILLING: COATING, COATING: MILLING, LOADING_PATH: MILLING}
+        for movement, button in self.position_btns.items():
+            if current_position == UNKNOWN:
+                # Only enable loading button when the move is unknown
+                button.Enable() if movement == LOADING else button.Disable()
+            elif movement == disable_buttons[current_position]:
+                button.Disable()
+            else:
+                button.Enable()
+
+    def _enable_advanced_controls(self, enable=True):
+        """
+        Enable/disable stage advanced controls
+        """
+        self.panel.ctrl_milling.Enable(enable)
+        self.panel.stage_align_slider_aligner.Enable(enable)
+        for button in self.btn_aligner_axes.keys():
+            button.Enable(enable)
+
+    def _pause_axis_connectors(self, pause=True):
+        """
+        Pause angle axis connectors (when leaving/entering milling mode)
+        :param pause: (bool) True to pause, False to resume
+        """
+        self.milling_connector.pause() if pause else self.milling_connector.resume()
+
+    def _btn_show_advaned_toggled(self):
+        """
+        Get the value of advanced button for _show_advanced_va_connector ctrl_2_va
+        """
+        return self.panel.btn_switch_advanced.GetValue()
+
+    def _on_show_advanced(self, evt):
+        """
+        Event handler for the Advanced button to show/hide stage advanced panel
+        """
+        self.panel.pnl_advanced_align.Show(self.tab_data_model.show_advaned.value)
+        # Adjust the panel's static text controls
+        fix_static_text_clipping(self.panel)
+
+    def _show_cancel_warning_msg(self, txt_warning):
+        """
+        Show warning message under progress bar, hide if no message is indicated
+        """
+        self.panel.pnl_ref_msg.Show(txt_warning is not None)
+        if txt_warning:
+            self.panel.txt_warning.SetLabel(txt_warning)
+
+    def _milling_angle_changed(self, pos):
+        """
+        Called from the milling axis connector when the stage rx change.
+        Updates the milling control with the changed angle position.
+        :param pos: (float) value of rx
+       """
+        # Update the milling control only during milling
+        if self.current_position is MILLING and self.target_position is None:
+            # Only update when change from former value is significant
+            if pos - (self._prev_milling_angle + self.ion_to_sample) <= 1e-3:
+                return
+            # Milling angle, as opposed to FIB and Rx angles, is presented to the user as a positive value to avoid confusion (hence the minus sign here)
+            milling_value = -math.degrees(self.ion_to_sample - pos)
+            self.panel.ctrl_milling.Value = readable_str(milling_value, unit="°", sig=3)
+
+    def _milling_ctrl_changed(self):
+        """
+        Called when the milling control value is changed.
+        Used to return the correct rx angle value.
+        :return: (float or None) The calculated rx angle from the milling ctrl
+        """
+        milling_angle = self._get_milling_angle_value()
+        if milling_angle is None:
+            return
+        # Store current milling angle (in case the stage moved out of milling)
+        # TODO: Check if milling angle to be stored is not the same as imaging rx
+        self._prev_milling_angle = milling_angle
+        # Note that the self.ion_to_sample angle is MINUS 38.0 degrees, and for milling the Rx value is always also negative
+        rx_angle = self.ion_to_sample + milling_angle
+        return rx_angle
+
+    def _get_milling_angle_value(self):
+        """
+        Get the corresponding angle value from its designated UI control
+        :returns (float or None) the tilt angle value in radians
+        """
+        try:
+            # Read the angle value from the ctrl and convert its value to radians
+            angle_value, _, _ = decompose_si_prefix(self.panel.ctrl_milling.Value, unit="°")
+            angle_value = math.radians(float(angle_value))
+            return angle_value
+        except ValueError as error:
+            logging.error(error)
+            return
+
+    def _on_aligner_btn(self, evt):
+        """
+        Event handling for the stage advanced panel axes buttons
+        """
+        target_button = evt.theButton
+        move_future = self._perform_axis_relative_movement(target_button)
+        if move_future is None:
+            return
+        # Set the tab's move_future and attach its callback
+        self._move_future = move_future
+        self._move_future.add_done_callback(self._on_move_done)
+        self._show_cancel_warning_msg(None)
+        self.panel.btn_cancel.Enable()
+
+    def _on_switch_btn(self, evt):
+        """
+        Event handling for the position panel buttons
+        """
+        target_button = evt.theButton
+        target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
+        move_future = self._perform_switch_position_movement(target_button)
+        if move_future is None:
+            target_button.SetValue(0)
+            return
+        # Set the tab's move_future and attach its callback
+        self._move_future = move_future
+        self._move_future.add_done_callback(self._on_move_done)
+        # Toggle the current button (yellow) and enable cancel
+        self._toggle_switch_buttons(target_button)
+        self._show_cancel_warning_msg(None)
+        self.panel.btn_cancel.Enable()
+
+    @call_in_wx_main
+    def _on_move_done(self, future):
+        """
+        Done callback of any of the tab movements
+        :param future: cancellable future of the move
+        """
+        try:
+            future.result()
+        except Exception as ex:
+            # Something went wrong, don't go any further
+            if not isinstance(ex, CancelledError):
+                logging.warning("Failed to move stage: %s", ex)
+
+        self.panel.btn_cancel.Disable()
+        # Get currently pressed button (if any) then re-enable the tab controls
+        self._enable_movement_controls()
+        self.target_position = None
+
+    def _on_cancel(self, evt):
+        """
+        Called when the cancel button is pressed
+        """
+        # Cancel the running move
+        self._move_future.cancel()
+        self.panel.btn_cancel.Disable()
+        # Show warning message if target position is indicated
+        if self.target_position is not None:
+            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self.current_position],
+                                                                             target_pos_str[self.target_position])
+            self._show_cancel_warning_msg(txt_warning)
+            self.target_position = None
+        self._enable_movement_controls(cancelled=True)
+        logging.info("Stage move cancelled.")
+
+    def _perform_switch_position_movement(self, target_button):
+        """
+        Perform the target switch position target_position procedure based on the requested move and return back the target_position future
+        :param target_button: currently pressed button to move the stage to
+        :return (CancellableFuture or None): cancellable future of the move
+        """
+        # Only proceed if there is no currently running target_position
+        if self._move_future._state == RUNNING:
+            return
+        stage = self.tab_data_model.main.stage
+        self.start_pos = stage.position.value
+        # Get the required target_position from the pressed button
+        self.target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
+                                    None)
+        if self.target_position is None:
+            return
+        # target_position metadata has the end positions for all movements except milling
+        if self.target_position in self.target_position_metadata.keys():
+            if self.current_position is LOADING:
+                box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
+                                       caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
+
+                box.SetYesNoLabels("&Load", "&Cancel")
+                ans = box.ShowModal()  # Waits for the window to be closed
+                if ans == wx.ID_NO:
+                    return
+            # Save the milling angle control current value (to return to it when switch back to milling)
+            if self.current_position is MILLING:
+                milling_angle = self._get_milling_angle_value()
+                if milling_angle is not None:
+                    self._prev_milling_angle = milling_angle
+            self.end_pos = self.target_position_metadata[self.target_position]
+            return cryoSwitchSamplePosition(self.target_position)
+        else:
+            # Target position is milling, get rx value from saved milling angle
+            rx_angle_value = self.ion_to_sample + self._prev_milling_angle
+            return cryoTiltSample(rx=rx_angle_value)
+
+    def _perform_axis_relative_movement(self, target_button):
+        """
+        Call the stage relative movement procedure based on the currently requested axis move and return back its future
+        :param target_button: currently pressed axis button to relatively move the stage to
+        :return (CancellableFuture or None): cancellable future of the move
+        """
+        # Only proceed if there is no currently running movement
+        if self._move_future._state == RUNNING:
+            target_button.SetValue(0)
+            return
+        # Get the movement text symbol like +X, -X, +Y..etc from the currently pressed button
+        axis, sign = self.btn_aligner_axes[target_button]
+        stage = self.tab_data_model.main.stage
+        md = stage.getMetadata()
+        active_range = md[model.MD_POS_ACTIVE_RANGE]
+        # The amount of relative move shift is taken from the panel slider
+        shift = self.tab_data_model.stage_align_slider_va.value
+        shift *= sign
+        target_position = stage.position.value[axis] + shift
+        if not self._is_in_range(target_position, active_range[axis]):
+            warning_text = "Requested movement would go out of stage imaging range."
+            self._show_cancel_warning_msg(warning_text)
+            return
+        return stage.moveRel(shift={axis: shift})
+
+    def _is_in_range(self, pos, range):
+        """
+        A helper function to check if current position is in its axis range
+        :param pos: (float) position axis value
+        :param range: (tuple) position axis range
+        :return: True if position in range, False otherwise
+        """
+        # Add 1% margin for hardware slight errors
+        margin = (range[1] - range[0]) * 0.01
+        return (range[0] - margin) <= pos <= (range[1] + margin)
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+    def query_terminate(self):
+        """
+        Called to perform action prior to terminating the tab
+        :return: (bool) True to proceed with termination, False for canceling
+        """
+        if self.current_position is not LOADING:
+            if self._move_future._state == RUNNING and self.target_position is LOADING:
+                box = wx.MessageDialog(self.main_frame,
+                                       "The sample is still moving to the loading position, are you sure you want to close Odemis?",
+                                       caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+                box.SetYesNoLabels("&Close Window", "&Cancel")
+                ans = box.ShowModal()  # Waits for the window to be closed
+                if ans == wx.ID_YES:
+                    return True
+                else:
+                    return False
+
+            box = wx.MessageDialog(self.main_frame,
+                                   "The sample is still loaded, are you sure you want to close Odemis?",
+                                   caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+            box.SetYesNoLabels("&Close Window", "&Cancel")
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans == wx.ID_YES:
+                return True
+            else:
+                return False
+        return True
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        if main_data.role == "cryo-secom":
+            return 10
         return None
 
 
@@ -4977,18 +5535,21 @@ class TabBarController(object):
         tab.Show()
         self.main_frame.Layout()
 
-        # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
-        # the StaticText's not shown at init to be initialized with a size as if
-        # the font was standard size. So if the font is big, the text is cropped.
-        # See: https://github.com/wxWidgets/Phoenix/issues/1452
-        # https://trac.wxwidgets.org/ticket/16088
-        # => Force resize, on the first time the tab is shown
+        # Force resize, on the first time the tab is shown
         if tab.name not in self._tabs_fixed_big_text:
-            self._fix_big_static_text(tab.panel)
-            # Eventually, update the size of the parent, based on everything inside it
-            wx.CallLater(100, self._update_layout_big_text, tab.panel)  # Quickly
-            wx.CallLater(500, self._update_layout_big_text, tab.panel)  # Later, in case the first time was too early
+            fix_static_text_clipping(tab.panel)
             self._tabs_fixed_big_text.add(tab.name)
+
+    def query_terminate(self):
+        """
+        Call each tab query_terminate to perform any action prior to termination
+        :return: (bool) True to proceed with termination, False for canceling
+        """
+        for t in self._tabs.choices:
+            if not t.query_terminate():
+                logging.debug("Window closure vetoed by tab %s" % t.name)
+                return False
+        return True
 
     def terminate(self):
         """ Terminate each tab (i.e., indicate they are not used anymore) """
@@ -5007,15 +5568,3 @@ class TabBarController(object):
 
         evt.Skip()
 
-    def _update_layout_big_text(self, panel):
-        self._fix_big_static_text(panel)
-        panel.Layout()
-
-    def _fix_big_static_text(self, root):
-        # Force re-calculate the size of all StaticTexts contained in the object
-        for c in root.GetChildren():
-            if isinstance(c, wx.StaticText):
-                logging.debug("Fixing size of the text %s", c.Label)
-                c.InvalidateBestSize()
-            elif isinstance(c, wx.Window):
-                self._fix_big_static_text(c)

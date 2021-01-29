@@ -77,7 +77,7 @@ class TiledAcquisitionTask(object):
             for stream in self._streams:
                 if model.hasVA(stream, "horizontalFoV"):
                     # Take the max. of either width or height
-                    stream.horizontalFoV.value = max(stream.horizontalFoV.range[1])
+                    stream.horizontalFoV.value = max(stream.horizontalFoV.range)
                     # Clip horizontal fov to total area in case it's smaller than max. value
                     stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._total_area))
         # Get the smallest field of view
