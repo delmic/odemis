@@ -437,7 +437,6 @@ class StreamPanelHeader(wx.Control):
         name, tint = list(self.colormap_choices.items())[index]
 
         if name == TINT_CUSTOM_TEXT:
-
             # Set default colour to the current value
             cldata = wx.ColourData()
             cldata.SetColour(wx.Colour(*tint))
