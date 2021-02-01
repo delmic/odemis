@@ -60,6 +60,11 @@ import time
 
 import odemis.util.driver as udriver
 
+# This is the type of metadata that we could get on the CCD, but wouldn't be correct
+# for the type of EK acquisition. Note that we do keep the AR metadata, which
+# is correct in Y, and can be used to compute the angle.
+NON_SPEC_MD = {model.MD_ROTATION, model.MD_ROTATION_COR, model.MD_SHEAR, model.MD_SHEAR_COR}
+
 
 class SpectralARScanStream(stream.Stream):
     """
@@ -67,13 +72,16 @@ class SpectralARScanStream(stream.Stream):
     spectrograph and acquiring with a monochromator
     """
     def __init__(self, name, detector, sed, emitter, spectrograph, lens_switch,
-                 bigslit, opm):
+                 bigslit, opm, wl_inverted=False):
         """
         name (string): user-friendly name of this stream
-        detector (Detector): the monochromator
+        detector (Detector): the 2D CCD which get wavelength on the X axis and angles on the Y axis
         sed (Detector): the se-detector
         emitter (Emitter): the emitter (eg: ebeam scanner)
         spectrograph (Actuator): the spectrograph
+        wl_inverted (bool): if True, will swap the wavelength axis of the CCD, in
+          order to support hardware where the highest wavelengths are at the smallest
+          indices. (The MD_WL_LIST is *not* inverted)
         """
         self.name = model.StringVA(name)
 
@@ -85,6 +93,7 @@ class SpectralARScanStream(stream.Stream):
         self._opm = opm
         self._lsw = lens_switch
         self._bigslit = bigslit
+        self._wl_inverted = wl_inverted
 
         wlr = spectrograph.axes["wavelength"].range
         slitw = spectrograph.axes["slit-in"].range
@@ -482,23 +491,28 @@ class SpectralARScanStream(stream.Stream):
         Assemble spectral AR data and metadata
         """
         #get metadata, no need to ask directly to the component because the metadata is already embedded in the first dataset
-        wllist = self._sgr.getPixelToWavelength(specresx, self._detector.pixelSize.value[0] * bins[0])
-        logging.debug("WL_LIST = %s (from CCD = %s", wllist, specresx)
         md = ARdata[0].metadata.copy()
+
+        wllist = self._sgr.getPixelToWavelength(specresx, self._detector.pixelSize.value[0] * bins[0])
+        logging.debug("WL_LIST = %s (from CCD = %s)", wllist, specresx)
         md[model.MD_WL_LIST] = wllist
         #md[model.MD_DWELL_TIME] = dt
         #md[model.MD_BINNING] = self.binning.value
         md[model.MD_DESCRIPTION] = "AR spectrum"
-        md[model.MD_AR_POLE] = self._detector.getMetadata()[model.MD_AR_POLE]
+        # md[model.MD_AR_POLE] = self._detector.getMetadata()[model.MD_AR_POLE]
         #force exposure time metadata to be full time on the pixel rather than dwelltime/nDC
         md[model.MD_EXP_TIME] = self.dwellTime.value
         xres, yres = resolution
         md[model.MD_PIXEL_SIZE] = stepsize
         md[model.MD_POS] = self._get_center_pxs(resolution, roi, ARdata[0])
         md[model.MD_DESCRIPTION] = "AR spectrum"
+        # Remove non useful metadata
+        for k in NON_SPEC_MD:
+            md.pop(k, None)
 
         logging.debug("Assembling hyperspectral AR data")
         full_ARdata = model.DataArray(ARdata, metadata=md)
+
         # reshaping matrix. This needs to be checked
 
         full_ARdata = full_ARdata.swapaxes(2, 0)
@@ -506,6 +520,8 @@ class SpectralARScanStream(stream.Stream):
         # Check XY ordering
         full_ARdata = numpy.reshape(full_ARdata, [full_ARdata.shape[0], full_ARdata.shape[1], 1, yres, xres])
 
+        if self._wl_inverted:
+            full_ARdata = full_ARdata[::-1, ...]
         return full_ARdata
 
     def _assemble_sed_data(self,sedata,resolution,roi,stepsize):
@@ -723,7 +739,7 @@ class SpectralARScanStream(stream.Stream):
 
 class ARspectral(Plugin):
     name = "AR/Spectral"
-    __version__ = "2.2"
+    __version__ = "2.3"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -803,15 +819,37 @@ class ARspectral(Plugin):
         bigslit = model.getComponent(role="slit-in-big")
         lsw = model.getComponent(role="lens-switch")
 
+        # This is a little tricky: we don't directly need the spectrometer, the
+        # 1D image of the CCD, as we are interested in the raw image. However,
+        # we care about the wavelengths and the spectrometer might be inverted
+        # in order to make sure the wavelength is is the correct direction (ie,
+        # lowest pixel = lowest wavelength). So we need to do the same on the
+        # raw image. However, there is no "official" way to connect the
+        # spectrometer(s) to their raw CCD. So we rely on the fact that
+        # typically this is a wrapper, so we can check using the .dependencies.
+        wl_inverted = False
+        try:
+            spec = self._find_spectrometer(self.ccd)
+        except LookupError as ex:
+            logging.warning("%s, expect that the wavelengths are not inverted", ex)
+        else:
+            # Found spec => check transpose in X (1 or -1), and invert if it's inverted (-1)
+            try:
+                wl_inverted = (spec.transpose[0] == -1)
+            except Exception as ex:
+                # Just in case spec has no .transpose or it's not a tuple
+                # (very unlikely as all Detectors have it)
+                logging.warning("%s: expect that the wavelengths are not inverted", ex)
+
         # the SEM survey stream (will be updated when showing the window)
         self._survey_s = None
 
         # Create a stream for AR spectral measurement
         self._ARspectral_s = SpectralARScanStream("AR Spectrum", self.ccd, self.sed, self.ebeam,
-                                                  self.sgrh, lsw, bigslit, main_data.opm)
+                                                  self.sgrh, lsw, bigslit, main_data.opm, wl_inverted)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_data.getTabByName("sparc_acqui").tab_data_model
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised
@@ -931,6 +969,22 @@ class ARspectral(Plugin):
 
         logging.warning("No SEM survey stream found")
         return None
+
+    def _find_spectrometer(self, detector):
+        """
+        Find a spectrometer which wraps the given detector
+        return (Detector): the spectrometer
+        raise LookupError: if nothing found.
+        """
+        for spec in self.main_app.main_data.spectrometers:
+            # Check by name as the components are actually Pyro proxies, which
+            # might not be equal even if they point to the same component.
+            if (model.hasVA(spec, "dependencies") and
+                detector.name in (d.name for d in spec.dependencies.value)
+               ):
+                return spec
+
+        raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def start(self):
         # get region and dwelltime for drift correction
