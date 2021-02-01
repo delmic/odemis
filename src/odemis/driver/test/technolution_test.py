@@ -326,6 +326,8 @@ class TestAcquisitionServer(unittest.TestCase):
         Testing basics of checkMegaFieldExists functionality.
         """
         ASM = self.ASM_manager
+        # Set dwell time to minimum so scanning of an image is as fast.
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
         # In the "setUp" method the megafield id is (re)set everytime when te test is stared to a string which contains
         # the current time i.e. time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S").
         mega_field_id = self.MPPC.filename.value
