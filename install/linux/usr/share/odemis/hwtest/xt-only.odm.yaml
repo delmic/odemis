@@ -1,0 +1,45 @@
+SEM: {
+  class: Microscope,
+  role: sem,
+  children: ["SEM EXT", "EBeam control", "EBeam Focus", "EBeam Stage",
+             "EBeam Detector"],
+}
+
+"SEM EXT": {
+  class: xt_client.SEM,
+  role: null,
+  init: {
+    address: "PYRO:Microscope@192.168.31.150:4242",
+  },
+  children: {
+    scanner: "EBeam control",
+    focus: "EBeam Focus",
+    stage: "EBeam Stage",
+    detector: "EBeam Detector",
+  }
+}
+
+"EBeam control": {
+  role: e-beam,
+  init: {
+    hfw_nomag: 0.11,
+  },
+}
+
+"EBeam Focus": {
+  role: focus,
+}
+
+"EBeam Stage": {
+  role: stage,
+  init: {
+    inverted: ["x", "y"],
+  }
+}
+
+"EBeam Detector": {
+  role: se-detector,
+  init: {
+    channel_name: "electron1",
+  }
+}
