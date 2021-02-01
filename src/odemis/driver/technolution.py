@@ -855,8 +855,8 @@ class MirrorDescanner(model.Emitter):
         super(MirrorDescanner, self).__init__(name, role, parent=parent, **kwargs)
 
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
-        self.scanOffset = model.TupleContinuous((0.1, 0.1), range=((-1, -1), (1, 1)))
-        self.scanGain = model.TupleContinuous((0.8, 0.8), range=((-1, -1), (1, 1)))
+        self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
+        self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
