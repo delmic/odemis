@@ -1135,7 +1135,6 @@ class MPPC(model.Detector):
 
                     acquisition_in_progress = True
                     megafield_metadata = args[0]
-                    self._metadata = self._mergeMetadata()
                     self.parent.asmApiPostCall("/scan/start_mega_field", 204, megafield_metadata.to_dict())
 
                 elif command == "next":
@@ -1143,6 +1142,7 @@ class MPPC(model.Detector):
                         logging.warning("Start ASM acquisition before request to acquire field images.")
                         continue
 
+                    self._metadata = self._mergeMetadata()
                     field_data = args[0]  # Field metadata for the specific position of the field to scan
                     dataContent = args[1]  # Specifies the type of image to return (empty, thumbnail or full)
                     notifier_func = args[2]  # Return function (usually, dataflow.notify or acquire_single_field queue)
