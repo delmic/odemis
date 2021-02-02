@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 import copy
+from concurrent.futures._base import CancelledError
+
 from odemis import model
 from odemis.util import img
 
@@ -108,3 +110,19 @@ def get_fov_rect(comp, fov):
             center[1] - fov[1] / 2,  # top
             center[0] + fov[0] / 2,  # right
             center[1] + fov[1] / 2)  # bottom
+
+def execute_function_within_subfuture(future, fn, args):
+    """
+    Execute a given function within a subfuture, raise a CancelledError if it's cancelled
+    :param future: cancellable future of the whole move
+    :param fn: function to run within subfuture
+    :param args: function argument
+    :return: result() of subfuture
+    """
+    if not hasattr(future, "_running_subf"):
+        raise ValueError("Future has no _running_subf sub future.")
+    with future._moving_lock:
+        if future._must_stop.is_set():
+            raise CancelledError()
+        future._running_subf = fn(args)
+    return future._running_subf.result()

@@ -37,6 +37,7 @@ from past.builtins import basestring
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
+from odemis.util.comp import execute_function_within_subfuture
 
 
 class MultiplexActuator(model.Actuator):
@@ -2365,6 +2366,7 @@ class LinkedHeightActuator(model.Actuator):
                 self._focus._updatePosition(self._lensz.position.value)
                 raise
             except Exception as ex:
+                self._focus._updatePosition(self._lensz.position.value)
                 logging.exception("Failed to move further.")
                 raise
         # Re-update the focus position only after the second move
@@ -2697,11 +2699,15 @@ class LinkedHeightFocus(model.Actuator):
         :param rel: whether it's a relative movement or absolute
         """
         # Drop focus adjustment if lens is parked
-        if self._isParked():
-            logging.warning("Focus adjust movement is dropped as lens is parked.")
+        # if self._isParked():
+        #     logging.warning("Focus adjust movement is dropped as lens is parked.")
+        #     return
+        if not self._isInRange():
+            logging.warning("Focus adjust movement is dropped as lens is not in active range.")
             return
         if rel:
-            self._doMoveRel(future, {'z': vector_value})
+            # Move the underlying lens with the relative shift value
+            execute_function_within_subfuture(future, self._lensz.moveRel, {'z': vector_value})
         else:
             self._doMoveAbs(future, vector_value, adjust=True)
 
@@ -2717,11 +2723,7 @@ class LinkedHeightFocus(model.Actuator):
         # Prevent movement when current parent rx != 0
         self._checkParentRxRotation()
         # Move the underlying lens with the relative shift value
-        with future._moving_lock:
-            if future._must_stop.is_set():
-                raise CancelledError()
-            future._running_subf = self._lensz.moveRel(shift)
-        future._running_subf.result()
+        execute_function_within_subfuture(future, self._lensz.moveRel, {'z': shift})
         # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
         if self._isInRange():
             self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
