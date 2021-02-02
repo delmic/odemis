@@ -1,7 +1,7 @@
 SEM: {
   class: Microscope,
   role: sem,
-  children: ["SEM EXT", "EBeam Scanner", "EBeam Focus", "EBeam Stage",
+  children: ["EBeam Scanner", "EBeam Focus", "EBeam Stage",
              "EBeam Detector"],
 }
 
@@ -36,7 +36,7 @@ SEM: {
   role: stage,
   init: {
     inverted: ["x", "y"],
-  }
+  },
   affects: ["EBeam Scanner"],
 }
 
