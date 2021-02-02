@@ -54,12 +54,13 @@ SupportedObjects=3
 3=0x1018
 
 [ManufacturerObjects]
-SupportedObjects=2
+SupportedObjects=3
 1=0x2000
 2=0x2001
+3=0x2002
 
 [OptionalObjects]
-SupportedObjects=39
+SupportedObjects=40
 1=0x1008
 2=0x1014
 3=0x1015
@@ -69,36 +70,37 @@ SupportedObjects=39
 7=0x1600
 8=0x1800
 9=0x1a00
-10=0x6100
-11=0x6110
-12=0x6120
+10=0x1F80
+11=0x6100
+12=0x6110
+13=0x6120
 14=0x6121
-13=0x6122
-15=0x6123
+15=0x6122
+16=0x6123
 17=0x6124
-16=0x6125
-18=0x6126
-19=0x6127
-20=0x6130
-21=0x6131
-22=0x6132
-23=0x6150
-24=0x6402
-25=0x6406
-26=0x6407
-27=0x6410
-28=0x6411
-29=0x6422
-30=0x6450
-31=0x6451
-32=0x6452
-33=0x6453
-34=0x6454
-35=0x6455
-36=0x6456
-37=0x6457
-38=0x6458
-39=0x6459
+18=0x6125
+19=0x6126
+20=0x6127
+21=0x6130
+22=0x6131
+23=0x6132
+24=0x6150
+25=0x6402
+26=0x6406
+27=0x6407
+28=0x6410
+29=0x6411
+30=0x6422
+31=0x6450
+32=0x6451
+33=0x6452
+34=0x6453
+35=0x6454
+36=0x6455
+37=0x6456
+38=0x6457
+39=0x6458
+40=0x6459
 
 [1000]
 ParameterName=Device Type
@@ -388,6 +390,14 @@ AccessType=rw
 PDOMapping=0
 DefaultValue=0x20040010
 
+[1F80]
+ParameterName=NMT Startup
+ObjectType=7
+DataType=7
+AccessType=rw
+PDOMapping=0
+DefaultValue=0xC
+
 [2000]
 ParameterName=Voltage output PID
 ObjectType=8
@@ -482,6 +492,27 @@ DefaultValue=0
 ParameterName=Raw data CCD 8/8
 ObjectType=7
 DataType=0x0F
+AccessType=rw
+PDOMapping=0
+DefaultValue=0
+
+[2002]
+ParameterName=Bootloader On / Off
+ObjectType=8
+SubNumber=2
+
+[2002sub0]
+ParameterName=Highest sub-index supported
+ObjectType=7
+DataType=5
+AccessType=const
+PDOMapping=0
+DefaultValue=1
+
+[2002sub1]
+ParameterName=Bootloader On / Off
+ObjectType=7
+DataType=1
 AccessType=rw
 PDOMapping=0
 DefaultValue=0

@@ -38,9 +38,11 @@ logging.basicConfig(level=logging.DEBUG)
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 if TEST_NOHW:
-    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_idx": 0x10, "channel": 'fake'}
+    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_id": 0x10, "channel": 'fake',
+              "datasheet": "../FocusTracker.eds"}
 else:
-    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_idx": 0x10, "channel": 'can0'}
+    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_id": 0x10, "channel": 'can0',
+              "datasheet": "../FocusTracker.eds"}
 
 
 class TestFocusTrackerCO(unittest.TestCase):
@@ -65,46 +67,12 @@ class TestFocusTrackerCO(unittest.TestCase):
             FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel='not a channel',
                            node_idx=self.kwargs['node_idx'])
 
-    def test_position(self):
+    def test_output(self):
         """Verify that the current position can be read and not written."""
-        self.assertIsInstance(self.focus_tracker.position.value, float)
+        self.assertIsInstance(self.focus_tracker.ccd_output.value, int)
         with self.assertRaises(NotSettableError):
-            self.focus_tracker.position.value = 10
+            self.focus_tracker.ccd_output.value = 10
 
-    def test_target_pos(self):
-        """Verify that the target position can be read and not written."""
-        self.assertIsInstance(self.focus_tracker.targetPosition.value, float)
-        self.focus_tracker.targetPosition.value = 10e-6
-        self.assertAlmostEqual(self.focus_tracker.targetPosition.value, 10e-6)
-        with self.assertRaises(IndexError):
-            self.focus_tracker.targetPosition.value = -10e-6
-
-    def test_switch_tracking(self):
-        """Verify that the focus tracker can switch between tracking and untracking."""
-        self.focus_tracker.tracking.value = True
-        self.assertTrue(self.focus_tracker.tracking.value)
-        self.focus_tracker.tracking.value = False
-        self.assertFalse(self.focus_tracker.tracking.value)
-
-    def test_pid_gains(self):
-        """Test that PID gains are set when within range and remain unchanged when new gain is out of range."""
-        # Test setting all 3 values at the same time.
-        new_p = 0
-        new_i = 15.8
-        new_d = 3
-        self.focus_tracker.updateMetadata({model.MD_GAIN_P: new_p, model.MD_GAIN_I: new_i, model.MD_GAIN_D: new_d})
-        set_p = self.focus_tracker._get_proportional()
-        self.assertEqual(numpy.floor(new_p), numpy.floor(set_p))
-        set_i = self.focus_tracker._get_integral()
-        self.assertEqual(numpy.floor(new_i), numpy.floor(set_i))
-        set_d = self.focus_tracker._get_derivative()
-        self.assertEqual(numpy.floor(new_d), numpy.floor(set_d))
-        # Test setting a single value.
-        self.focus_tracker.updateMetadata({model.MD_GAIN_I: 10})
-        self.assertEqual(10, self.focus_tracker._get_integral())
-        # check that a ValueError is raised when trying to set a negative value.
-        with self.assertRaises(ValueError):
-            self.focus_tracker.updateMetadata({model.MD_GAIN_P: -10})
 
 
 if __name__ == "__main__":

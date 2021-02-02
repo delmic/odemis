@@ -7,7 +7,10 @@ MBSEM: {
 "Focus Tracker": {
     class: focustracker.FocusTrackerCO,
     role: focus-tracker,
-    init: {node_idx: 0x10, channel: 'can0'},
-    metadata: {'GAIN_P': 30.1, 'GAIN_I': 20.5, 'GAIN_D': 21},
+    init: {
+        node_id: 0x10,
+        channel: 'can0',
+        datasheet: "FocusTracker.eds",
+    },
 }
 
