@@ -37,7 +37,6 @@ from past.builtins import basestring
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
-from odemis.util.comp import execute_function_within_subfuture
 
 
 class MultiplexActuator(model.Actuator):
@@ -2423,11 +2422,7 @@ class LinkedHeightActuator(model.Actuator):
         :param future: Cancellable future of the task
         :param pos: The target absolute position
         """
-        with future._moving_lock:
-            if future._must_stop.is_set():
-                raise CancelledError()
-            future._running_subf = self._stage.moveAbs(pos)
-        future._running_subf.result()
+        self._execute_fn_within_subfuture(future, self._stage.moveAbs, pos)
 
     def _doMoveRelStage(self, future, shift):
         """
@@ -2435,11 +2430,7 @@ class LinkedHeightActuator(model.Actuator):
         :param future: Cancellable future of the task
         :param shift: The target relative position
         """
-        with future._moving_lock:
-            if future._must_stop.is_set():
-                raise CancelledError()
-            future._running_subf = self._stage.moveRel(shift)
-        future._running_subf.result()
+        self._execute_fn_within_subfuture(future, self._stage.moveRel, shift)
 
     def _doReference(self, future, axes):
         """"
@@ -2453,11 +2444,21 @@ class LinkedHeightActuator(model.Actuator):
         if not self._focus._isParked():
             raise ValueError("Focus should be in FAV_POS_DEACTIVE position.")
         # Reference the dependant stage
+        self._execute_fn_within_subfuture(future, self._stage.reference, axes)
+
+    def _execute_fn_within_subfuture(self, future, fn, args):
+        """
+        Execute a given function within a subfuture, raise a CancelledError if it's cancelled
+        :param future: cancellable future of the whole move
+        :param fn: function to run within subfuture
+        :param args: function argument
+        :return: result() of subfuture
+        """
         with future._moving_lock:
             if future._must_stop.is_set():
                 raise CancelledError()
-            future._running_subf = self._stage.reference(axes)
-        future._running_subf.result()
+            future._running_subf = fn(args)
+        return future._running_subf.result()
 
     def _isInRange(self, axis, pos=None):
         """
@@ -2699,17 +2700,16 @@ class LinkedHeightFocus(model.Actuator):
         :param rel: whether it's a relative movement or absolute
         """
         # Drop focus adjustment if lens is parked
-        # if self._isParked():
-        #     logging.warning("Focus adjust movement is dropped as lens is parked.")
-        #     return
         if not self._isInRange():
             logging.warning("Focus adjust movement is dropped as lens is not in active range.")
             return
         if rel:
             # Move the underlying lens with the relative shift value
-            execute_function_within_subfuture(future, self._lensz.moveRel, {'z': vector_value})
+            self.parent._execute_fn_within_subfuture(future, self._lensz.moveRel, {'z': vector_value})
         else:
-            self._doMoveAbs(future, vector_value, adjust=True)
+            # Get the lens value with the requested target parent stage Z position
+            lens_pos = self._getLensZValue(target_stagez=vector_value)
+            self.parent._execute_fn_within_subfuture(future, self._lensz.moveAbs, {'z': lens_pos})
 
     def _doMoveRel(self, future, shift):
         """
@@ -2723,13 +2723,13 @@ class LinkedHeightFocus(model.Actuator):
         # Prevent movement when current parent rx != 0
         self._checkParentRxRotation()
         # Move the underlying lens with the relative shift value
-        execute_function_within_subfuture(future, self._lensz.moveRel, {'z': shift})
+        self.parent._execute_fn_within_subfuture(future, self._lensz.moveRel, {'z': shift})
         # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
         if self._isInRange():
             self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
             logging.info("Focus FAV_POS_ACTIVE changed to %s" % self._metadata[model.MD_FAV_POS_ACTIVE])
 
-    def _doMoveAbs(self, future, pos, adjust=False):
+    def _doMoveAbs(self, future, pos):
         """
         Move the focus with the requested absolute value, the function handles 3 cases:
         1- Move the absolute focus with a value in active range
@@ -2737,26 +2737,20 @@ class LinkedHeightFocus(model.Actuator):
         3- Adjust the absolute focus with the same value as the parent stage position
         :param future: Cancellable future of the task
         :param pos: the absolute value of either the focus of parent stage Z axis
-        :param adjust: Whether this is a call from the parent to adjust focus (default False)
         """
         # Prevent movement when parent rx != 0
         self._checkParentRxRotation()
 
-        with future._moving_lock:
-            if future._must_stop.is_set():
-                raise CancelledError()
-            if adjust:
-                # Get the lens value with the requested target parent stage Z position
-                lens_pos = self._getLensZValue(target_stagez=pos)
-            elif self._isParked(pos):
-                # Set the lens position with the lens default deactive value
-                lens_pos = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
-            else:
-                # Change focus in active range
-                lens_pos = self._getLensZValue(target_focus=pos)
-            # Move the underlying lens with the calculated lens position
-            future._running_subf = self._lensz.moveAbs({"z": lens_pos})
-        future._running_subf.result()
+        if self._isParked(pos):
+            # Set the lens position with the lens default deactive value
+            lens_pos = self._lensz.getMetadata()[model.MD_FAV_POS_DEACTIVE]['z']
+        else:
+            # Change focus in active range
+            lens_pos = self._getLensZValue(target_focus=pos)
+
+        # Move the underlying lens with the calculated lens position
+        self.parent._execute_fn_within_subfuture(future, self._lensz.moveAbs, {'z': lens_pos})
+
         # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
         if self._isInRange():
             self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}

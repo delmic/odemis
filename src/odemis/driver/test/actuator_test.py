@@ -1426,6 +1426,20 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
+        # Move focus to lowest point
+        f = focus.moveAbs({'z': focus.axes['z'].range[0]})
+        f.result()
+        # Moving stage down should keep the focus the same value (while the lens is moved down)
+        target_pos = {'z': -1 * self.target_value}
+        initial_foc = focus.position.value
+        initial_lens = self.lens_stage.position.value
+        f = stage.moveRel(target_pos)
+        f.result()
+        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        test.assert_pos_not_almost_equal(self.lens_stage.position.value, initial_lens, atol=ATOL_LENS)
+
+
+
     def test_move_rx(self):
         """
         Test movement in Rx is permitted only when focus is in safe DEACTIVE position
