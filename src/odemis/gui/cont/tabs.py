@@ -3416,6 +3416,8 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        # stage will be used to listen to position changes (to enable/disable the tab in the right positions)
+        self.stage = self.tab_data_model.main.stage
 
     def _on_ccd_should_update(self, update):
         """
@@ -3427,14 +3429,6 @@ class SecomAlignTab(Tab):
         Tab.Show(self, show=show)
 
         main_data = self.tab_data_model.main
-        if main_data.role == "cryo-secom":
-            # Enable the tab if the stage is in imaging position, disable it otherwise
-            stage = self.tab_data_model.main.stage
-            if getCurrentPositionLabel(stage.position.value, stage) is IMAGING:
-                self.panel.Enable()
-            else:
-                self.panel.Disable()
-
         # Store/restore previous confocal settings when entering/leaving the tab
         lm = main_data.laser_mirror
         if show and lm:
@@ -3476,9 +3470,12 @@ class SecomAlignTab(Tab):
                 f = self._aligner_xy.moveAbs(md[model.MD_FAV_POS_ACTIVE])
                 self._actuator_controller._enable_buttons(False)
                 f.add_done_callback(self._on_align_move_done)
+            if main_data.role == "cryo-secom":
+                self.stage.position.subscribe(self._on_stage_pos, init=True)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
             self._aligner_xy.position.unsubscribe(self._on_align_pos)
+            self.stage.position.unsubscribe(self._on_stage_pos)
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -3713,6 +3710,15 @@ class SecomAlignTab(Tab):
         best_mpp = max(mpp)  # to fit everything if not same ratio
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
+
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved (and the tab is shown)
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        if not self.IsShown():
+            return
+        guiutil.enable_cryo_tab_on_stage_position(self, self.stage, pos)
 
     def _on_align_pos(self, pos):
         """
