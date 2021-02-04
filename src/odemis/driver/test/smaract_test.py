@@ -493,13 +493,14 @@ class TestMCS2(unittest.TestCase):
 
     def test_reference_cancel(self):
         """Test canceling referencing"""
+        axes = set(self.dev.axes.keys())
         # First, reference it
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         f.result()
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         time.sleep(0.1)
         f.cancel()
 
@@ -507,7 +508,8 @@ class TestMCS2(unittest.TestCase):
             self.assertFalse(i)
 
     def test_reference(self):
-        f = self.dev.reference()
+        axes = set(self.dev.axes.keys())
+        f = self.dev.reference(axes)
         f.result()
 
         for a, i in self.dev.referenced.value.items():
@@ -523,7 +525,7 @@ class TestMCS2(unittest.TestCase):
         self.dev.moveRel(shift).result()
         pos_move = dict(self.dev.position.value)
 
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         f.result()
         pos_refd = dict(self.dev.position.value)
 
