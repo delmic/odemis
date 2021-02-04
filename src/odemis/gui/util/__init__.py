@@ -39,6 +39,7 @@ import wx
 # Decorators & Wrappers
 # They are almost the same but the decorators assume that they are decorating
 # a method of a wx.Object (ie, it has a "self" argument)
+from odemis.acq.move import getCurrentPositionLabel, IMAGING
 
 
 @decorator
@@ -282,3 +283,17 @@ class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
+
+
+def enable_cryo_tab_on_stage_position(tab, stage, pos):
+    """
+    Enable the given tab if the stage is in imaging position, disable it otherwise
+    :param tab:
+    :param stage:
+    :param pos:
+    :return:
+    """
+    if getCurrentPositionLabel(pos, stage) == IMAGING:
+        tab.panel.Enable()
+    else:
+        tab.panel.Disable()
