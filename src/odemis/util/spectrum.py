@@ -72,7 +72,7 @@ def get_wavelength_per_pixel(da):
             raise ValueError("Length of wavelength list does not match length of wavelength data.")
         return wl
     except KeyError:
-        logging.error("No MD_WL_LIST metadata available")
+        raise KeyError("No MD_WL_LIST metadata available")
 
 
 def get_spectrum_range(data):
