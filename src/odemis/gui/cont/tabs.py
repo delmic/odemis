@@ -374,6 +374,9 @@ class LocalizationTab(Tab):
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
 
+        # Default view is the Live 1
+        tab_data.focussedView.value = panel.vp_secom_bl.view
+
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
             panel,
@@ -1942,10 +1945,10 @@ class CryoChamberTab(Tab):
         self.conf = conf.get_acqui_conf()
         self.btn_change_folder = self._tab_panel.btn_change_folder
         self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
-        # Set project folder path from config file
         self.txt_projectpath = self._tab_panel.txt_projectpath
-        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
-        self.txt_projectpath.Enabled = False
+
+        # Create new project directory on starting the GUI
+        self._create_new_dir()
 
         stage = self.tab_data_model.main.stage
         stage_metadata = stage.getMetadata()
@@ -1977,9 +1980,6 @@ class CryoChamberTab(Tab):
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
-
-        # Create new project directory on starting the GUI
-        self._create_new_dir()
 
         self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
                               MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
@@ -2057,7 +2057,7 @@ class CryoChamberTab(Tab):
         # Reset project, clear the data
         self._reset_project_data()
         # Get previous project dir from configuration
-        prev_dir = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+        prev_dir = self.conf.pj_last_path
 
         def check_same_partition(source, destination):
             """
@@ -2116,9 +2116,9 @@ class CryoChamberTab(Tab):
         """
         Update new project info in config file and show it on the text control
         """
-        self.conf.pj_last_path, _ = os.path.split(new_dir)
+        self.conf.pj_last_path = new_dir
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
-        self.txt_projectpath.Value = os.path.join(self.conf.pj_last_path, self.conf.pj_count)
+        self.txt_projectpath.Value = self.conf.pj_last_path
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
