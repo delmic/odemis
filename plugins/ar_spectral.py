@@ -837,6 +837,8 @@ class ARspectral(Plugin):
             try:
                 wl_inverted = (spec.transpose[0] == -1)
             except Exception as ex:
+                # Just in case spec has no .transpose or it's not a tuple
+                # (very unlikely as all Detectors have it)
                 logging.warning("%s: expect that the wavelengths are not inverted", ex)
 
         # the SEM survey stream (will be updated when showing the window)
@@ -975,14 +977,14 @@ class ARspectral(Plugin):
         raise LookupError: if nothing found.
         """
         for spec in self.main_app.main_data.spectrometers:
-            if not model.hasVA(spec, "dependencies"):
-                continue
             # Check by name as the components are actually Pyro proxies, which
             # might not be equal even if they point to the same component.
-            if detector.name in (d.name for d in spec.dependencies.value):
+            if (model.hasVA(spec, "dependencies") and
+                detector.name in (d.name for d in spec.dependencies.value)
+               ):
                 return spec
 
-        raise LookupError("Failed to find spectrometer corresponding to CCD %s" % (detector.name,))
+        raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def start(self):
         # get region and dwelltime for drift correction
