@@ -152,6 +152,7 @@ class Camera(model.DigitalCamera):
         self._generator = None
         # Convenience event for the user to connect and fire
         self.softwareTrigger = model.Event()
+        self._last_acq_time = 0  # Time of latest acquisition
 
         # Include a thread which creates or fixes an hardware error in the simcam on the basis of the presence of the
         # file ERROR_STATE_FILE in model.BASE_DIRECTORY
@@ -240,12 +241,18 @@ class Camera(model.DigitalCamera):
         current drift.
         """
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
-        gen_img = self._simulate()
-        self.data._waitSync()
-        if self.data._sync_event:
-            # If sync event, we need to simulate period after event (not efficient, but works)
-            time.sleep(self.exposureTime.value)
+        event_t = self.data._waitSync()
+        exp = self.exposureTime.value
+        if event_t is not None:
+            # If sync event, we need to simulate period after event
+            # If several events were sent before the end of the acquisition, then
+            # it's the acquisition time that counts.
+            end_acq_time = max(self._last_acq_time, event_t) + exp
+            extra_time = max(0, end_acq_time - time.time())
+            logging.debug("Sleeping extra %g s, for simulating event", extra_time)
+            time.sleep(extra_time)
 
+        gen_img = self._simulate()
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
 
@@ -255,8 +262,8 @@ class Camera(model.DigitalCamera):
             gen_img = self._write_txt_image(gen_img, txt)
 
         # update fake output metadata
-        exp = timer.period
-        metadata[model.MD_ACQ_DATE] = time.time() - exp
+        self._last_acq_time = time.time() - exp
+        metadata[model.MD_ACQ_DATE] = self._last_acq_time
         metadata[model.MD_EXP_TIME] = exp
         logging.debug("Generating new fake image of shape %s", gen_img.shape)
 
@@ -306,22 +313,6 @@ class Camera(model.DigitalCamera):
         """
         self._img = new_img
 
-    def _get_center(self):
-        """
-        Get the center in pixels to crop the image from
-        """
-        res = self.resolution.value
-        # MD_POS would be the starting point to crop from otherwise (0, 0)
-        pos = self._metadata.get(model.MD_POS, (0, 0))
-        pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
-        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
-        pos_pxs = abs(pos[0] / pxs[0]), abs(pos[1] / pxs[1])
-        # Get largest center point to clip calculated center to it (to always fit within the image.)
-        largest_center = self._img_res[0] - (res[0] / 2), self._img_res[1] - (res[1]/2)
-        # Center would top-left + bottom-right / 2  where bottom-right = top-left + res
-        center = (pos_pxs[0] + pos_pxs[0] + res[0]) / 2, (pos_pxs[1] + pos_pxs[1] + res[1]) / 2
-        return min(center[0], largest_center[0]), min(center[1], largest_center[1])
-
     def _simulate(self):
         """
         Processes the fake image based on the translation, resolution and
@@ -329,18 +320,39 @@ class Camera(model.DigitalCamera):
         """
         binning = self.binning.value
         res = self.resolution.value
-        pxs_pos = self.translation.value
-        center = self._get_center()
-        lt = (center[0] + pxs_pos[0] - (res[0] / 2) * binning[0],
-              center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
-        assert(lt[0] >= 0 and lt[1] >= 0)
+        trans = self.translation.value
+        center = self._img_res[0] / 2, self._img_res[1] / 2
+
+        # Extra translation to simulate stage movement
+        pos = self._metadata.get(model.MD_POS, (0, 0))
+        pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
+        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+        stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
+
+        # First and last index (eg, 0 -> 255)
+        ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
+                center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
+                center[0] + trans[0] + stage_shift[0] + ((res[0] / 2) - 1) * binning[0],
+                center[1] + trans[1] + stage_shift[1] + ((res[1] / 2) - 1) * binning[1]
+                ]
+        # If the shift caused the image to go out of bounds, limit it
+        if ltrb[0] < 0:
+            ltrb[0] = 0
+        elif ltrb[2] > self._img_res[0] - 1:
+            ltrb[0] -= ltrb[2] - (self._img_res[0] - 1)
+        if ltrb[1] < 0:
+            ltrb[1] = 0
+        elif ltrb[3] > self._img_res[1] - 1:
+            ltrb[1] -= ltrb[3] - (self._img_res[1] - 1)
+        assert(ltrb[0] >= 0 and ltrb[1] >= 0)
+
         # compute each row and column that will be included
         # TODO: Could use something more hardwarish like that:
         # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
         # (or use sum, to simulate binning)
         # Alternatively, it could use just [lt:lt+res:binning]
-        coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
-                 [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
+        coord = ([int(round(ltrb[0] + i * binning[0])) for i in range(res[0])],
+                 [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
         sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
 
         # Add some noise
@@ -419,7 +431,10 @@ class SimpleDataFlow(model.DataFlow):
         Block until the Event on which the dataflow is synchronised has been
           received. If the DataFlow is not synchronised on any event, this
           method immediatly returns
+        return (float or None): if an event happened, it's the time the event was
+          sent. Otherwise, it returns None.
         """
         if self._sync_event:
-            self._evtq.get()
+            return self._evtq.get()
 
+        return None
