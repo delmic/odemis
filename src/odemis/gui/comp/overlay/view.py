@@ -217,7 +217,7 @@ class PixelValueOverlay(ViewOverlay):
 
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
-        if not self.active:
+        if not self.active.value:
             return super(ViewOverlay, self).on_leave(evt)
         else:
             self._v_pos = None
@@ -226,7 +226,7 @@ class PixelValueOverlay(ViewOverlay):
 
     def on_motion(self, evt):
         """ Update the display of the raw pixel value based on the current mouse position """
-        if not self.active:
+        if not self.active.value:
             return super(ViewOverlay, self).on_motion(evt)
 
         if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
@@ -429,21 +429,21 @@ class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
 
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             base.SelectionMixin._on_left_down(self, evt)
 
         base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             base.SelectionMixin._on_left_up(self, evt)
 
         base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             base.SelectionMixin._on_motion(self, evt)
 
         base.ViewOverlay.on_motion(self, evt)
@@ -510,7 +510,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     # Event Handlers
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             base.DragMixin._on_left_down(self, evt)
             self.colour = self.colour[:3] + (0.5,)
             self._store_event_pos(evt)
@@ -519,7 +519,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             base.DragMixin._on_left_up(self, evt)
             self.colour = self.colour[:3] + (1.0,)
             self._store_event_pos(evt)
@@ -528,7 +528,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
-        if self.active and self.left_dragging:
+        if self.active.value and self.left_dragging:
             self._store_event_pos(evt)
             self.cnvs.Refresh()
 
@@ -650,7 +650,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     # Event Handlers
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             base.DragMixin._on_left_down(self, evt)
             self._store_event_pos(evt)
             self.cnvs.Refresh()
@@ -658,7 +658,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             base.DragMixin._on_left_up(self, evt)
             self._store_event_pos(evt)
             self.cnvs.Refresh()
@@ -666,7 +666,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
-        if self.active and self.left_dragging:
+        if self.active.value and self.left_dragging:
             self._store_event_pos(evt)
             self.cnvs.Refresh()
 
@@ -850,7 +850,7 @@ class DichotomyOverlay(base.ViewOverlay):
         self.sequence_va.subscribe(self.on_sequence_change, init=True)
 
         # Disabling the overlay will allow the event handlers to ignore events
-        self.active = False
+        self.active.value = False
 
     def on_sequence_change(self, seq):
 
@@ -878,7 +878,7 @@ class DichotomyOverlay(base.ViewOverlay):
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
 
-        if self.active:
+        if self.active.value:
             # When the mouse cursor leaves the overlay, the current top quadrant
             # should be highlighted, so clear the hover_pos attribute.
             self.hover_pos = (None, None)
@@ -889,25 +889,25 @@ class DichotomyOverlay(base.ViewOverlay):
     def on_motion(self, evt):
         """ Mouse motion event handler """
 
-        if self.active:
+        if self.active.value:
             self._update_hover(evt.GetPosition())
         else:
             base.ViewOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
         """ Prevent the left mouse button event from propagating when the overlay is active"""
-        if not self.active:
+        if not self.active.value:
             base.ViewOverlay.on_motion(self, evt)
 
     def on_dbl_click(self, evt):
         """ Prevent the double click event from propagating if the overlay is active"""
-        if not self.active:
+        if not self.active.value:
             base.ViewOverlay.on_dbl_click(self, evt)
 
     def on_left_up(self, evt):
         """ Mouse button handler """
 
-        if self.active:
+        if self.active.value:
             # If the mouse cursor is over a selectable quadrant
             if None not in self.hover_pos:
                 idx, quad = self.hover_pos
@@ -1251,13 +1251,13 @@ class PolarOverlay(base.ViewOverlay):
     # Event Handlers
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             self.dragging = True
 
         base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             self._calculate_display(evt.Position)
             self.dragging = False
             self.cnvs.Refresh()
@@ -1266,20 +1266,20 @@ class PolarOverlay(base.ViewOverlay):
 
     def on_motion(self, evt):
         # Only change the values when the user is dragging
-        if self.active and self.dragging:
+        if self.active.value and self.dragging:
             self._calculate_display(evt.Position)
             self.cnvs.Refresh()
         else:
             base.ViewOverlay.on_motion(self, evt)
 
     def on_enter(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
             base.ViewOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.reset_default_cursor()
         else:
             base.ViewOverlay.on_leave(self, evt)
@@ -1432,23 +1432,23 @@ class PointSelectOverlay(base.ViewOverlay):
     # Event Handlers
 
     def on_enter(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
             base.ViewOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.reset_default_cursor()
         else:
             base.ViewOverlay.on_leave(self, evt)
 
     def on_left_down(self, evt):
-        if not self.active:
+        if not self.active.value:
             base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
 

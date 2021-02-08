@@ -456,7 +456,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
         def toggle(evt):
-            if wsol.active:
+            if wsol.active.value:
                 wsol.deactivate()
             else:
                 wsol.activate()
@@ -522,7 +522,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_view_overlay(tol)
 
         def toggle(evt):
-            if rsol.active:
+            if rsol.active.value:
                 rsol.deactivate()
             else:
                 rsol.activate()
@@ -646,7 +646,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_view_overlay(tol)
 
         def toggle(evt):
-            if psol.active:
+            if psol.active.value:
                 psol.deactivate()
             else:
                 psol.activate()
@@ -706,7 +706,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
         def toggle(evt):
-            if slol.active:
+            if slol.active.value:
                 slol.deactivate()
             else:
                 slol.activate()
@@ -950,7 +950,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_view_overlay(tol)
 
         def toggle(evt):
-            if lsol.active:
+            if lsol.active.value:
                 lsol.deactivate()
             else:
                 lsol.activate()
