@@ -41,7 +41,6 @@ import unittest
 
 import simulated_test
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
@@ -1282,38 +1281,106 @@ ATOL_LENS = 100e-6  # m
 STEP_SIZE = 5.9e-9
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/cryosecom-sim.yaml"
+CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
+
+KWARGS_5DOF = {
+    "name": "5DOF",
+    "role": None,
+    "ref_on_init": True,
+    "linear_speed": 0.01,  # m/s
+    "rotary_speed": 0.01,  # rad/s
+    "locator": "fake",
+    "hold_time": 0.1,  # s
+    "pos_deactive_after_ref": True,
+    "axes": {
+        'x': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+        },
+        'y': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+        },
+        'z': {
+            'range': [-1.e-2, 0.002],
+            'unit': 'm',
+        },
+        'rx': {
+            'range': [-0.785, 0.785],
+            'unit': 'rad',
+        },
+        'rz': {
+            'range': [-0.785, 0.785],
+            'unit': 'rad',
+        },
+    },
+}
+
+KWARGS_3DOF = {
+    "name": "3DOF",
+    "role": None,
+    "ref_on_init": True,
+    "locator": "fake",
+    "speed": 0.01,
+    "accel": 0.001,
+    "hold_time": 1.0,
+    "pos_deactive_after_ref": True,
+    "axes": {
+        'x': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+            'channel': 0,
+        },
+        'y': {
+            'range': [-3e-3, 3e-3],
+            'unit': 'm',
+            'channel': 1,
+        },
+        'z': {
+            'range': [-0.02, 0.01],
+            'unit': 'm',
+            'channel': 2,
+        },
+    },
+}
+
+INIT_MD_3DOF = {
+    model.MD_FAV_POS_DEACTIVE: {"z":-2.e-3},
+}
+
+KWARGS_FOCUS = {
+    "name": "Focus",
+    "role": "focus",
+    "rng": [0, 4.2e-3],  # min/max positions in m
+}
+
+INIT_MD_FOCUS = {
+    model.MD_POS_COR: {'z':-0.003},
+}
+
 
 class TestLinkedHeightActuator(unittest.TestCase):
     backend_was_running = False
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(CRYO_SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        cls.sample_stage = smaract.MC_5DOF(**KWARGS_5DOF)
+        cls.lens_stage = smaract.MCS2(**KWARGS_3DOF)
+        cls.lens_stage.updateMetadata(INIT_MD_3DOF)
+        cls.stage = LinkedHeightActuator("Stage", role="stage",
+                                         dependencies={"stage": cls.sample_stage,
+                                                       "lensz": cls.lens_stage,
+                                                       },
+                                         children={"focus": KWARGS_FOCUS}
+                                        )
+        cls.focus = next(iter(cls.stage.children.value))
+        cls.focus.updateMetadata(INIT_MD_FOCUS)
 
-        cls.sample_stage = model.getComponent(name="5DOF Stage")
-        cls.lens_stage = model.getComponent(name="3DOF Stage")
-        cls.stage = model.getComponent(role="stage")
-        cls.focus = model.getComponent(role="focus")
-        cls.target_value = 200e-6
+        # Wait for both stages to be referenced
+        cls.lens_stage.moveRelSync({"x": 1e-6})
+        cls.sample_stage.moveRelSync({"x": 1e-6})
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
+        cls.target_value = 2000e-6
 
     def test_move_abs(self):
         """
@@ -1350,15 +1417,15 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        # move all axes (focus won't change)
-        target_pos = {'x': -1 * self.target_value, 'y': -1 * self.target_value, 'z': -1 * self.target_value, 'rx': -1 * self.target_value, 'rz': -1 * self.target_value}
+        # move all axes back to 0 (focus won't change)
+        target_pos = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
         initial_foc = focus.position.value
-        # Put focus back in active, so it can be adjusted if needed
         f = stage.moveAbs(target_pos)
         f.result()
         test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
+        # Put focus back in active, so it can be adjusted if needed
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
         f.result()
         # move z axis downward again (focus would be adjusted)
@@ -1398,20 +1465,23 @@ class TestLinkedHeightActuator(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        target_pos = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value, 'rx': self.target_value, 'rz': self.target_value}
+        mov = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value,
+               'rx': self.target_value, 'rz': self.target_value}
+        expected_pos = mov  # Same, because it was at 0 on each axis
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_DEACTIVE])
         f.result()
         initial_foc = focus.position.value
-        f = stage.moveRel(target_pos)
+        f = stage.moveRel(mov)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
-        target_pos = {'x': -1 * self.target_value, 'y': -1 * self.target_value, 'z': -1 * self.target_value,
-                      'rx': -1 * self.target_value, 'rz': -1 * self.target_value}
+        # move all axes (focus won't change)
+        mov = {'x':-1 * self.target_value, 'y':-1 * self.target_value, 'z':-1 * self.target_value,
+               'rx':-1 * self.target_value, 'rz':-1 * self.target_value}
         expected_pos = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
         initial_foc = focus.position.value
-        f = stage.moveRel(target_pos)
+        f = stage.moveRel(mov)
         f.result()
         test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
@@ -1420,10 +1490,11 @@ class TestLinkedHeightActuator(unittest.TestCase):
         f.result()
 
         target_pos = {'z': -1 * self.target_value}
+        expected_pos = target_pos
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
         test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Move focus to lowest point
@@ -1509,15 +1580,19 @@ class TestLinkedHeightActuator(unittest.TestCase):
 
     def test_changing_metadata(self):
         """
-        Test changing focus POS_ACTIVE/POS_DEACTIVE metadata is not allowed
+        Test changing focus POS_DEACTIVE metadata is not allowed
+        Test changing focus POS_ACTIVE metadata is allowed if within range
         Test changing focus POS_COR reflects on focus position
         """
         focus = self.focus
-        with self.assertRaises(ValueError):
-            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': self.target_value}})
 
         with self.assertRaises(ValueError):
             focus.updateMetadata({model.MD_FAV_POS_DEACTIVE: {'z': -1 * self.target_value}})
+
+        with self.assertRaises(ValueError):
+            focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z':-1 * self.target_value}})
+
+        focus.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': self.target_value}})
 
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
         f.result()
@@ -1575,13 +1650,12 @@ class TestLinkedHeightActuator(unittest.TestCase):
         move_to_initial_position()
         initial_foc_pos = focus.position.value
         f = stage.moveAbs(target_pos)
-        time.sleep(2)
+        time.sleep(0.1)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
         # Asset that initial position is not reached (during focus adjustment)
-        with self.assertRaises(AssertionError):
-            logging.debug(focus.position.value)
-            test.assert_pos_almost_equal(focus.position.value, initial_foc_pos, atol=ATOL_LENS)
+        logging.debug(focus.position.value)
+        test.assert_pos_not_almost_equal(focus.position.value, initial_foc_pos, atol=ATOL_LENS)
 
         # 3. Cancel after the movements are finished
         move_to_initial_position()
@@ -1616,6 +1690,12 @@ class TestLinkedHeightActuator(unittest.TestCase):
         self.assertTrue(cancelled)
         # Some axes could be referenced during this time but not all
         self.assertFalse(all(stage.referenced.value.values()))
+
+        # Reference again the stage to ensure the rest of the tests pass
+        focus.reference({"z"}).result()
+        stage.reference(axes).result()
+        self.assertTrue(all(stage.referenced.value.values()))
+
 
 class TestLinkedAxesActuator(unittest.TestCase):
 

@@ -319,8 +319,7 @@ class Test5DOF(unittest.TestCase):
         time.sleep(0.1)
         self.dev.stop()
 
-        difference = new_pos['x'] - self.dev.position.value['x']
-        self.assertNotEqual(round(difference, 4), 0)
+        test.assert_pos_not_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_move_rel(self):
         # Test relative moves
@@ -384,7 +383,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "ref_on_init": True,
         "locator": "network:sn:MCS2-00001604",
         # "locator": "fake",
-        "speed": 0.1,
+        "speed": 0.01,
         "accel": 0.001,
         "hold_time": 1.0,
         "pos_deactive_after_ref": True,
@@ -542,7 +541,7 @@ class TestMCS2(unittest.TestCase):
         de_pos = {'x':0, 'y':-1.2e-4, 'z': 0}
         self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
 
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
         f.result()
 
         test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)

@@ -2609,8 +2609,18 @@ class LinkedHeightFocus(model.Actuator):
 
     def updateMetadata(self, md):
         # Prevent manual update of focus FAV_POS_ACTIVE and FAV_POS_DEACTIVE
-        if model.MD_FAV_POS_ACTIVE in md or model.MD_FAV_POS_DEACTIVE in md:
-            raise ValueError("Focus FAV_POS_ACTIVE and FAV_POS_DEACTIVE cannot be set manually.")
+        if model.MD_FAV_POS_DEACTIVE in md:
+            raise ValueError("Focus FAV_POS_DEACTIVE cannot be set manually.")
+
+        # It's fine to change the active position (for instance at init, to set a
+        # good known position), as long as it's within the range.
+        try:
+            pos_active = md[model.MD_FAV_POS_ACTIVE]["z"]
+            if not self._range[0] <= pos_active <= self._range[1]:
+                raise ValueError("Focus FAV_POS_ACTIVE must be within range %s, but got %s",
+                                 self._range[0], pos_active)
+        except KeyError:
+            pass  # MD_FAV_POS_ACTIVE not changed
 
         super(LinkedHeightFocus, self).updateMetadata(md)
         # Re-update focus position if POS_COR is modified

@@ -30,7 +30,6 @@ import logging
 import math
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.util.comp import compute_camera_fov
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
@@ -693,13 +692,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
 
-        # set parameters for tiled acq
-        # FIXME: avoid hardcoding, use stage metadata
-        fm_fov = compute_camera_fov(self._main_data_model.ccd)
-        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
-        # self.area = self._main_data_model.stage.getMetadata(model.MD_FAV_AREA)
-        self.area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
+        # Set parameters for tiled acq
         self.overlap = 0.2
+        try:
+            stage_rng = self._main_data_model.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            # left, top, right, bottom
+            self.area = (stage_rng["x"][0], stage_rng["y"][0], stage_rng["x"][1], stage_rng["y"][1])
+        except (KeyError, IndexError):
+            raise ValueError("Failed to find stage.MD_POS_ACTIVE_RANGE with x and y range")
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
