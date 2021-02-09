@@ -5,7 +5,7 @@ Created on 16 Aug 2019
 
 @author: Thera Pals, Kornee Kleijwegt
 
-Copyright © 2019 Thera Pals, Delmic
+Copyright © 2019-2021 Thera Pals, Delmic
 
 This file is part of Delmic Acquisition Software.
 

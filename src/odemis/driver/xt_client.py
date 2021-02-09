@@ -2,9 +2,9 @@
 """
 Created on 16 Aug 2019
 
-@author: Thera Pals, Kornee Kleijwegt
+@author: Thera Pals, Kornee Kleijwegt, Sabrina Rossberger
 
-Copyright © 2019 Thera Pals, Delmic
+Copyright © 2019-2021 Thera Pals, Delmic
 
 This file is part of Odemis.
 
