@@ -616,6 +616,21 @@ class TestMicroscopeInternal(unittest.TestCase):
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_secondary_stigmator(*init_stig)
 
+    def test_pattern_stigmator(self):
+        """Test getting and setting the secondary stigmator."""
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+        stig_range = self.microscope.pattern_stigmator_info()["range"]
+        init_stig = self.microscope.get_pattern_stigmator()
+        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
+        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
+        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
+        self.microscope.set_pattern_stigmator(stig_x, stig_y)
+        self.assertEqual(self.microscope.get_pattern_stigmator()[0], stig_x)
+        self.assertEqual(self.microscope.get_pattern_stigmator()[1], stig_y)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
+        self.microscope.set_pattern_stigmator(*init_stig)
+
     def test_dc_coils(self):
         """Test getting the four values of the dc coils."""
         if self.xt_type != 'xttoolkit':
