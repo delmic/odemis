@@ -563,19 +563,6 @@ class TestMicroscopeInternal(unittest.TestCase):
         # Set fwd follows z back to initial value
         self.microscope.set_fwd_follows_z(init_fwd_follows_z)
 
-    def test_stigmator(self):
-        """Test setting and getting stigmator values."""
-        stig_range = self.microscope.stigmator_info()["range"]
-        init_stig = self.microscope.get_stigmator()
-        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
-        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-6
-        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-6
-        new_stig = (stig_x, stig_y)
-        self.microscope.set_stigmator(*new_stig)
-        self.assertEqual(self.microscope.get_stigmator()[0], new_stig[0])
-        self.assertEqual(self.microscope.get_stigmator()[1], new_stig[1])
-        self.microscope.set_stigmator(*init_stig)
-
     def test_pitch(self):
         """Test setting and getting the pitch between two beams within the multiprobe pattern."""
         pitch_range = self.microscope.pitch_info()["range"]
@@ -586,18 +573,40 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertAlmostEqual(new_pitch, self.microscope.get_pitch())
         self.microscope.set_pitch(current_pitch)
 
+    def test_stigmator(self):
+        """Test setting and getting stigmator values."""
+        stig_range = self.microscope.stigmator_info()["range"]
+        init_stig = self.microscope.get_stigmator()
+        self.assertIsInstance(init_stig, tuple)
+        stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
+        stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-6
+        stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-6
+        new_stig = (stig_x, stig_y)
+        self.microscope.set_stigmator(*new_stig)
+        self.assertEqual(self.microscope.get_stigmator()[0], new_stig[0])
+        self.assertEqual(self.microscope.get_stigmator()[1], new_stig[1])
+        # Try to set value outside of range
+        with self.assertRaises(Exception):
+            self.microscope.set_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
+        # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
+        self.microscope.set_stigmator(*init_stig)
+
     def test_primary_stigmator(self):
         """Test getting and setting the primary stigmator."""
         if self.xt_type != 'xttoolkit':
             self.skipTest("This test needs XTToolkit to run.")
         stig_range = self.microscope.primary_stigmator_info()["range"]
         init_stig = self.microscope.get_primary_stigmator()
+        self.assertIsInstance(init_stig, tuple)
         stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
         stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
         stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
         self.microscope.set_primary_stigmator(stig_x, stig_y)
         self.assertEqual(self.microscope.get_primary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_primary_stigmator()[1], stig_y)
+        # Try to set value outside of range
+        with self.assertRaises(Exception):
+            self.microscope.set_primary_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_primary_stigmator(*init_stig)
 
@@ -607,12 +616,16 @@ class TestMicroscopeInternal(unittest.TestCase):
             self.skipTest("This test needs XTToolkit to run.")
         stig_range = self.microscope.secondary_stigmator_info()["range"]
         init_stig = self.microscope.get_secondary_stigmator()
+        self.assertIsInstance(init_stig, tuple)
         stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
         stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
         stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
         self.microscope.set_secondary_stigmator(stig_x, stig_y)
         self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
+        # Try to set value outside of range
+        with self.assertRaises(Exception):
+            self.microscope.set_secodary_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_secondary_stigmator(*init_stig)
 
@@ -622,12 +635,16 @@ class TestMicroscopeInternal(unittest.TestCase):
             self.skipTest("This test needs XTToolkit to run.")
         stig_range = self.microscope.pattern_stigmator_info()["range"]
         init_stig = self.microscope.get_pattern_stigmator()
+        self.assertIsInstance(init_stig, tuple)
         stig_x, stig_y = (init_stig[0] + 1e-3, init_stig[1] + 1e-3)
         stig_x = stig_x if stig_range['x'][0] < stig_x < stig_range['x'][1] else init_stig[0] - 1e-3
         stig_y = stig_y if stig_range['y'][0] < stig_y < stig_range['y'][1] else init_stig[1] - 1e-3
         self.microscope.set_pattern_stigmator(stig_x, stig_y)
         self.assertEqual(self.microscope.get_pattern_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_pattern_stigmator()[1], stig_y)
+        # Try to set value outside of range
+        with self.assertRaises(Exception):
+            self.microscope.set_pattern_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_pattern_stigmator(*init_stig)
 
