@@ -37,10 +37,12 @@ import logging
 from odemis import dataio, model
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
-from odemis.gui.conf import util
+from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf import util
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import formats_to_wildcards
 import os.path
 import time
 import wx
@@ -67,6 +69,7 @@ class RGBCLIntensity(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
+            "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
         }),
         ("expectedDuration", {
         }),

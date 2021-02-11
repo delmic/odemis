@@ -333,7 +333,7 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
+    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard=None):
 
         # Create label
         lbl_ctrl = self._add_side_label(label_text)
