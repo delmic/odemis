@@ -206,8 +206,8 @@ SPARC2: {
     # Standard mirror config
     init: {
        mag: 0.31, # ratio
-       na: 0.2, # ratio, numerical aperture
-       ri: 1.0, # ratio, refractive index
+       na: 0.5, # ratio, numerical aperture (0.2 normally, but higher to force a stronger change in focus)
+       ri: 0.2, # ratio, refractive index (1.0 normally, but lower to force a stronger change in focus)
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
        x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
