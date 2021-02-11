@@ -586,7 +586,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_stigmator()[0], new_stig[0])
         self.assertEqual(self.microscope.get_stigmator()[1], new_stig[1])
         # Try to set value outside of range
-        with self.assertRaises(Exception):
+        with self.assertRaises(OSError):
             self.microscope.set_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_stigmator(*init_stig)
@@ -605,7 +605,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_primary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_primary_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(Exception):
+        with self.assertRaises(OSError):
             self.microscope.set_primary_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_primary_stigmator(*init_stig)
@@ -624,7 +624,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(Exception):
+        with self.assertRaises(OSError):
             self.microscope.set_secodary_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_secondary_stigmator(*init_stig)
@@ -643,7 +643,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_pattern_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_pattern_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(Exception):
+        with self.assertRaises(OSError):
             self.microscope.set_pattern_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         # Set back to the initial stigmator value, so the system is not misaligned after finishing the test.
         self.microscope.set_pattern_stigmator(*init_stig)
