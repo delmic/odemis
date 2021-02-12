@@ -303,13 +303,19 @@ ENZEL-Sim: {
 # angle is not such a multiple, use ConverterStage.
 #        inverted: ["x"]
     },
-    # Default position at init corresponding to (approximately) aligned
-    # It must have both x and y.
-    FAV_POS_ACTIVE: {'x': 0.0, 'y': -0.0},  # TODO: put correct position
-    # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
-    # It must have both x and y. It should be at least 0.1 mm away from ACTIVE
-    # Note: most like, these values should be the same as for 3DOF Stage.
-    FAV_POS_DEACTIVE: {'x': -0.10, 'y': -0.10},  # TODO: put correct position
+    metadata: {
+        # Default position at init corresponding to (approximately) aligned
+        # It must have both x and y.
+        FAV_POS_ACTIVE: {'x': 0.0, 'y': -0.0},  # TODO: put correct position
+        # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
+        # It must have both x and y. It should be at least 0.1 mm away from ACTIVE
+        # Note: most likely, these values should be the same as for 3DOF Stage.
+        FAV_POS_DEACTIVE: {'x': -0.01, 'y': -0.01},  # TODO: put correct position
+    },
+    # Note: we don't make the FAV_POS_ACTIVE persistent, as if the lens is mis-aligned
+    # once, it may be very hard for the user to find again the alignment position.
+    # Instead, every time Odemis is restarted, the default "okayish" position is
+    # used.
 }
 
 # Axes should be synchronized with the camera
