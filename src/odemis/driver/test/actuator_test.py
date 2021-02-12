@@ -1281,7 +1281,7 @@ ATOL_LENS = 100e-6  # m
 STEP_SIZE = 5.9e-9
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
+CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 KWARGS_5DOF = {
     "name": "5DOF",

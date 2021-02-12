@@ -31,7 +31,7 @@ from odemis.util import test
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 
 class TestCryoMove(unittest.TestCase):

@@ -38,7 +38,7 @@ from odemis.util.test import assert_pos_almost_equal
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.yaml"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 
 class CRYOSECOMTestCase(unittest.TestCase):
