@@ -285,15 +285,16 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-def enable_cryo_tab_on_stage_position(tab, stage, pos):
+@call_in_wx_main
+def enable_tab_on_stage_position(tab, stage, pos, target):
     """
-    Enable the given tab if the stage is in imaging position, disable it otherwise
-    :param tab:
-    :param stage:
-    :param pos:
-    :return:
+    Enable the given tab if the stage is in target position, disable it otherwise
+    :param tab: (Tab) the Tab object to enable/disable
+    :param stage: (Actuator) the stage driver
+    :param pos: (dict str->float) current position to check its label
+    :param target: (int) target position label (IMAGING, LOADING..etc)
     """
-    if getCurrentPositionLabel(pos, stage) == IMAGING:
+    if getCurrentPositionLabel(pos, stage) == target:
         tab.panel.Enable()
     else:
         tab.panel.Disable()
