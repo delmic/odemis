@@ -1,3 +1,13 @@
+odemis (3.1.2-1) xenial; urgency=medium
+
+  * New version: 3.1.2
+  * Main bug fixes:
+   - Command line utils also use Python 3 by default
+   - AR spectral plugin could display the wavelength inverted on some systems
+   - Do not fail after temporal spectral acquisition for a display error
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 12 Feb 2021 09:01:53 +0100
+
 odemis (3.1.1-1) xenial; urgency=medium
 
   * New version: 3.1.1
