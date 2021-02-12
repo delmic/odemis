@@ -450,6 +450,9 @@ class LocalizationTab(Tab):
         sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        self.stage = self.tab_data_model.main.stage
+        self.stage.position.subscribe(self._on_stage_pos, init=True)
+
     @property
     def settingsbar_controller(self):
         return self._settingbar_controller
@@ -600,6 +603,13 @@ class LocalizationTab(Tab):
         else:
             wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
 
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self, self.stage, pos, target=IMAGING)
+
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -621,6 +631,7 @@ class LocalizationTab(Tab):
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -3418,6 +3429,8 @@ class SecomAlignTab(Tab):
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
         # stage will be used to listen to position changes (to enable/disable the tab in the right positions)
         self.stage = self.tab_data_model.main.stage
+        if main_data.role == "cryo-secom":
+            self.stage.position.subscribe(self._on_stage_pos, init=True)
 
     def _on_ccd_should_update(self, update):
         """
@@ -3470,15 +3483,13 @@ class SecomAlignTab(Tab):
                 f = self._aligner_xy.moveAbs(md[model.MD_FAV_POS_ACTIVE])
                 self._actuator_controller._enable_buttons(False)
                 f.add_done_callback(self._on_align_move_done)
-            if main_data.role == "cryo-secom":
-                self.stage.position.subscribe(self._on_stage_pos, init=True)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
             self._aligner_xy.position.unsubscribe(self._on_align_pos)
-            self.stage.position.unsubscribe(self._on_stage_pos)
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -3713,12 +3724,10 @@ class SecomAlignTab(Tab):
 
     def _on_stage_pos(self, pos):
         """
-        Called when the stage is moved (and the tab is shown)
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        if not self.IsShown():
-            return
-        guiutil.enable_cryo_tab_on_stage_position(self, self.stage, pos)
+        guiutil.enable_tab_on_stage_position(self, self.stage, pos, target=IMAGING)
 
     def _on_align_pos(self, pos):
         """
