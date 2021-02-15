@@ -290,12 +290,12 @@ class TestSimCam(unittest.TestCase):
         Check it's possible to change the focus
         """
         pos = self.focus.position.value
-        f = self.focus.moveRel({"z": 1e-3}) # 1 mm
+        f = self.focus.moveRel({"z": 2e-3})  # 2 mm
         f.result()
         self.assertNotEqual(self.focus.position.value, pos)
         self.camera.data.get()
 
-        f = self.focus.moveRel({"z":-10e-3}) # 10 mm
+        f = self.focus.moveRel({"z":-1e-3})  # 1 mm
         f.result()
         self.assertNotEqual(self.focus.position.value, pos)
         self.camera.data.get()
