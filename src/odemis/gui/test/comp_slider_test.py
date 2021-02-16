@@ -141,6 +141,25 @@ class SliderTestCase(test.GuiTestCase):
 
         slider.SetValue(1000)
 
+    def test_integerslider(self):
+        """
+        Test UnitIntegerSlider behaviour
+        """
+        min_val = 1
+        max_val = 5
+        value = 0
+        start_val = 3
+
+        slider = slidecomp.UnitIntegerSlider(self.panel, size=(-1, 18), min_val=min_val, max_val=max_val, value=value)
+        self.add_control(slider, flags=wx.EXPAND)
+
+        va = model.IntVA(start_val)
+        con = widgets.VigilantAttributeConnector(va, slider, events=wx.EVT_SLIDER)
+
+        test.gui_loop(0.1)
+        self.assertEqual(va.value, start_val)
+        self.assertEqual(slider.GetValue(), start_val)
+
     def test_numberslider_bug(self):
         """ This test was deviced to investigate a bug in the NumblerSlider code
 
