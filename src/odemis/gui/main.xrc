@@ -6024,24 +6024,26 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
+                    <flag>wxTOP|wxEXPAND</flag>
+                    <border>20</border>
 					<object class="wxBoxSizer">
 							<object class="sizeritem">
 								<object class="wxStaticText">
-									<label>ZStack Steps</label>
+									<label>ZStack steps</label>
 									<fg>#BFBFBF</fg>
 									<XRCED>
 										<assign_var>1</assign_var>
 									</XRCED>
 									<font>
-										<size>12</size>
-										<encoding>UTF-8</encoding>
+										<size>11</size>
 									</font>
 								</object>
-								<flag>wxTOP</flag>
-								<border>25</border>
+								<option>0</option>
+								<flag>wxLEFT</flag>
+								<border>10</border>
 							</object>
 							<object class="sizeritem">
-								 <object class="UnitIntegerSlider" name="zstack_steps">
+								<object class="UnitIntegerSlider" name="zstack_steps">
 										<size>-1,20</size>
 										<value>21</value>
 										<min>1</min>
@@ -6050,11 +6052,11 @@
 										<style>wxBORDER_NONE</style>
 										<XRCED>
 										  <assign_var>1</assign_var>
-										  <flag>wxEXPAND</flag>
 										</XRCED>
-									 </object>
-								<flag>wxLEFT|wxTOP</flag>
-								<border>25</border>
+							    </object>
+							    <option>1</option>
+								<flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+								<border>10</border>
 							</object>
 						</object>
 					</object>
