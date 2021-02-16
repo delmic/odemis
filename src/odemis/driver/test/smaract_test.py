@@ -185,7 +185,8 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
-        "pos_deactive_after_ref": True,
+        "pos_deactive_after_ref": True,  # Not actually used as there is no MD_FAV_POS_DEACTIVE
+        "inverted": ['z'],
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -247,6 +248,17 @@ class Test5DOF(unittest.TestCase):
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
+    def test_inverted(self):
+        """
+        The z axis is set to inverted.
+        Determine if it is handled correctly.
+        """
+        pos1 = {'x': 0, 'y': 0, 'z':-1e-3, 'rx': 0, 'rz': 0}
+        self.dev.moveAbs(pos1).result()
+
+        pos_internal = self.dev.GetPose().asdict()
+        self.assertAlmostEqual(pos_internal['z'], -pos1['z'])
+
     def test_out_of_range(self):
         """
         Test sending a position that is out of range.
@@ -291,10 +303,8 @@ class Test5DOF(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        # note: this test will fail with the simulator because it does not
-        # simulate intermediate positions within a move.
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
+        new_pos = {'x': 0.003, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.01)
         f.cancel()
@@ -304,13 +314,12 @@ class Test5DOF(unittest.TestCase):
 
         # Test cancellation by stopping
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}).result()
-        new_pos = {'x':2e-3, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'rz': 0.0001}
+        new_pos = {'x': 0.003, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.05)
+        time.sleep(0.1)
         self.dev.stop()
 
-        difference = new_pos['x'] - self.dev.position.value['x']
-        self.assertNotEqual(round(difference, 4), 0)
+        test.assert_pos_not_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_move_rel(self):
         # Test relative moves
@@ -374,7 +383,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "ref_on_init": True,
         "locator": "network:sn:MCS2-00001604",
         # "locator": "fake",
-        "speed": 0.1,
+        "speed": 0.01,
         "accel": 0.001,
         "hold_time": 1.0,
         "pos_deactive_after_ref": True,
@@ -483,13 +492,14 @@ class TestMCS2(unittest.TestCase):
 
     def test_reference_cancel(self):
         """Test canceling referencing"""
+        axes = set(self.dev.axes.keys())
         # First, reference it
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         f.result()
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         time.sleep(0.1)
         f.cancel()
 
@@ -497,7 +507,8 @@ class TestMCS2(unittest.TestCase):
             self.assertFalse(i)
 
     def test_reference(self):
-        f = self.dev.reference()
+        axes = set(self.dev.axes.keys())
+        f = self.dev.reference(axes)
         f.result()
 
         for a, i in self.dev.referenced.value.items():
@@ -513,7 +524,7 @@ class TestMCS2(unittest.TestCase):
         self.dev.moveRel(shift).result()
         pos_move = dict(self.dev.position.value)
 
-        f = self.dev.reference()
+        f = self.dev.reference(axes)
         f.result()
         pos_refd = dict(self.dev.position.value)
 
@@ -530,7 +541,7 @@ class TestMCS2(unittest.TestCase):
         de_pos = {'x':0, 'y':-1.2e-4, 'z': 0}
         self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
 
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
         f.result()
 
         test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)

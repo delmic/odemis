@@ -53,11 +53,15 @@ class FileBrowser(wx.Panel):
                  clear_btn=False,
                  clear_label="",
                  dialog_title="Browse for file",
-                 wildcard="*.*",
+                 wildcard=None,
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
         ):
+        """
+        wildcard (None or str): the list of wildcard to pass to file dialog.
+          If it's None, it will use the default, which is to show all files (*.*).
+        """
 
         style |= wx.TAB_TRAVERSAL
 
@@ -69,7 +73,10 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.dialog_style = dialog_style
-        self.wildcard = wildcard
+        if wildcard is None:
+            self.wildcard = "Any file (*.*)|*.*"
+        else:
+            self.wildcard = wildcard
         self.label = clear_label  # Text to show when the control is cleared
 
         self.text_ctrl = None
@@ -191,8 +198,12 @@ class FileBrowser(wx.Panel):
         wildcards (str): in the format "User text|*.glob;*.ext|..."
         return (list of list of str): for each format, each extension in a separate string
         """
-        # Separate the parts of the wildcards, and skip the user-friendly text
-        exts = wildcards.split("|")[1::2]
+        if "|" in wildcards:
+            # Separate the parts of the wildcards, and skip the user-friendly text
+            exts = wildcards.split("|")[1::2]
+        else:
+            # Support very basic wildcard "*.png"
+            exts = [wildcards]
         return [es.split(";") for es in exts]
 
     def _get_exts_from_wildcards(self, wildcards, i):
@@ -203,8 +214,12 @@ class FileBrowser(wx.Panel):
         return (list of str): all the extensions for the given format, in a separate string
         raise IndexError: if the index is not in the wildcards
         """
-        # Separate the parts of the wildcards, and skip the user-friendly text
-        exts = wildcards.split("|")[1::2]
+        if "|" in wildcards:
+            # Separate the parts of the wildcards, and skip the user-friendly text
+            exts = wildcards.split("|")[1::2]
+        else:
+            # Support very basic wildcard "*.png"
+            exts = [wildcards]
         return exts[i].split(";")
 
     def _on_browse(self, evt):

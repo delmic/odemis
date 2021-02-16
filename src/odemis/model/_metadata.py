@@ -79,9 +79,6 @@ MD_TRIGGER_RATE = "Streak Repetition Rate"  # (Hz) Repetition Rate of the trigge
 # The entries should be ordered by time (the earliest the first)
 MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 
-# The following two express the same thing (in different ways), so they should
-# not be used simultaneously.
-MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 
@@ -184,8 +181,10 @@ MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration param
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
 MD_FAV_POS_DEACTIVE = "Favourite position deactive"  # dict of str -> float representing a good position for being "deactive" (eg, mirror parked, lens not in use)
 MD_FAV_POS_COATING = "Favourite position coating"  # dict of str -> float representing a good position for GIS coating
-MD_FAV_AREA = "Favourite acquisition area"  # (float, float, float, float) minX, minY, maxX, maxY of the acquisition area
-MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used imaging.
+MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used during imaging
+MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
+MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
+MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str

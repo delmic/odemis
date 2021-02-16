@@ -22,7 +22,6 @@ see http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 from odemis.gui.util import wx_adapter
-import Pyro4
 import Pyro4.errors
 import argparse
 import logging
@@ -31,6 +30,7 @@ import odemis
 from odemis.gui import main_xrc, log, img, plugin
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
+from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 import sys
@@ -68,6 +68,7 @@ class OdemisGUIApp(wx.App):
         self.tab_controller = None
         self._is_standalone = standalone
         self._snapshot_controller = None
+        self._temperature_controller = None
         self._menu_controller = None
         self.plugins = []  # List of instances of plugin.Plugins
 
@@ -218,6 +219,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_sparc_chamber
                 },
                 {
+                    "name": "cryosecom_chamber",
+                    "controller": tabs.CryoChamberTab,
+                    "button": self.main_frame.btn_tab_cryosecom_chamber,
+                    "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
+                },
+                {
                     "name": "analysis",
                     "controller": tabs.AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
@@ -263,6 +270,10 @@ class OdemisGUIApp(wx.App):
             for p in pfns:
                 pis = plugin.load_plugin(p, self.main_data.microscope, self)
                 self.plugins.extend(pis)
+
+            # add temperature controller
+            if self.main_data.sample_thermostat:
+                self._temperature_controller = TemperatureController(self.main_frame, self.main_data.sample_thermostat)
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
@@ -319,6 +330,11 @@ class OdemisGUIApp(wx.App):
             # if dlg.ShowModal() == wx.ID_NO:
             dlg.ShowModal()
             dlg.Destroy()  # frame
+            return
+
+        # Check if there's any action to do before tab termination
+        # Do not terminate if returned False
+        if not self.tab_controller.query_terminate():
             return
 
         for p in self.plugins:

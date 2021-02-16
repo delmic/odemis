@@ -254,8 +254,7 @@ def _guessModelName(das):
     # If any image has MD_AR_POLE => angular resolved => SPARC
     for da in das:
         md = da.metadata
-        if (model.MD_WL_LIST in md or model.MD_WL_POLYNOMIAL in md or
-            model.MD_AR_POLE in md):
+        if model.MD_WL_LIST in md or model.MD_AR_POLE in md:
             return "SPARC"
         elif model.MD_IN_WL in md:
             return "SECOM"
@@ -1338,7 +1337,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
     # not so pretty.
     wl_list = None
-    if set(globalMD.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
+    if model.MD_WL_LIST in globalMD:
         try:
             wl_list = spectrum.get_wavelength_per_pixel(da0)
         except Exception:

@@ -25,7 +25,6 @@ from __future__ import division
 import h5py
 import logging
 import numpy
-from numpy.polynomial import polynomial
 from odemis import model
 from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
 from odemis.dataio import hdf5
@@ -191,6 +190,7 @@ class TestHDF5IO(unittest.TestCase):
         dtype = numpy.uint16
         size3d = (512, 256, 220) # X, Y, C
         size = (512, 256)
+        sizes = [(512, 256), (100, 110, 1, 1, 200)]
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
                     model.MD_DESCRIPTION: "test3d",
@@ -198,7 +198,7 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 1), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                    model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                     model.MD_POS: (1e-3, -30e-3), # m
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
@@ -247,11 +247,6 @@ class TestHDF5IO(unittest.TestCase):
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
         self.assertEqual(im.dims[0].label, "C")
-        # wl polynomial is linear
-        cres = im.dims[0][0][()] # first dimension (C), first scale, first and only value
-        self.assertAlmostEqual(metadata3d[model.MD_WL_POLYNOMIAL][1], cres)
-        coff = f["Acquisition0/ImageData/COffset"][()]
-        self.assertAlmostEqual(metadata3d[model.MD_WL_POLYNOMIAL][0], coff)
 
         # check the 2D data
         im = numpy.array(f["Acquisition1/ImageData/Image"])
@@ -522,7 +517,6 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
-                     #model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
@@ -566,19 +560,6 @@ class TestHDF5IO(unittest.TestCase):
             # None of the images are using light => no MD_IN_WL
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
-
-            if model.MD_WL_POLYNOMIAL in md:
-                pn = md[model.MD_WL_POLYNOMIAL]
-                # 2 formats possible
-                if model.MD_WL_LIST in im.metadata:
-                    l = ldata[i].shape[0]
-                    npn = polynomial.Polynomial(pn,
-                                    domain=[0, l - 1],
-                                    window=[0, l - 1])
-                    wl = npn.linspace(l)[1]
-                    self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
-                else:
-                    self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 # Note: technically, it could be a list or tuple and still be fine
@@ -624,7 +605,6 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
-                     # model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                      model.MD_TIME_LIST: [1e-9 * i for i in range(sizes[1][-2])],
                      model.MD_STREAK_MCPGAIN: 3,
@@ -676,22 +656,9 @@ class TestHDF5IO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            if model.MD_WL_POLYNOMIAL in md:
-                pn = md[model.MD_WL_POLYNOMIAL]
-                # 2 formats possible
-                if model.MD_WL_LIST in im.metadata:
-                    l = ldata[i].shape[0]
-                    npn = polynomial.Polynomial(pn,
-                                                domain=[0, l - 1],
-                                                window=[0, l - 1])
-                    wl = npn.linspace(l)[1]
-                    self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
-                else:
-                    self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
-            elif model.MD_WL_LIST in md:
+            if model.MD_WL_LIST in md:
                 wl = md[model.MD_WL_LIST]
                 self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
-
             if model.MD_TIME_LIST in md:
                 tm = md[model.MD_TIME_LIST]
                 self.assertListEqual(im.metadata[model.MD_TIME_LIST], tm)

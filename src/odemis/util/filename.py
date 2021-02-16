@@ -139,6 +139,12 @@ def guess_pattern(fn):
 
     return fn_ptn, cnt
 
+def create_projectname(path, ptn, count="001"):
+    """
+    Create new project directory name from pattern. Calls create_filename with no extension
+    :return: pn (String): unique project name (including path)
+    """
+    return create_filename(path, ptn, ext="", count=count)
 
 def create_filename(path, ptn, ext, count="001"):
     """

@@ -553,6 +553,14 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         # average it (to reduce noise) or at least in case of fuzzing, store and
         # average the N expected images
         if not self._acq_complete[n].is_set():
+            # Update metadata based on user settings
+            s = self._streams[n]
+            if hasattr(s, "tint"):
+                try:
+                    data.metadata[model.MD_USER_TINT] = img.tint_to_md_format(s.tint.value)
+                except ValueError as ex:
+                    logging.warning("Failed to store user tint for stream %s: %s", s.name.value, ex)
+
             self._acq_data[n].append(data)  # append image acquired from detector to list
             self._acq_complete[n].set()  # indicate the data has been received
 

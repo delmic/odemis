@@ -456,9 +456,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             ostream = s.stream if isinstance(s, DataProjection) else s
-            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream)):
+            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream, stream.CLStream)):
                 images_opt.append((image, BLEND_SCREEN, s.name.value, s))
-            elif isinstance(ostream, (stream.SpectrumStream, stream.CLStream)):
+            elif isinstance(ostream, stream.SpectrumStream):
                 images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
             else:
                 images_std.append((image, BLEND_DEFAULT, s.name.value, s))
@@ -481,11 +481,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         images_opt.sort(key=get_area, reverse=True)
         images_spc.sort(key=get_area, reverse=True)
         images_std.sort(key=get_area, reverse=True)
-
-        # Reset the first image to be drawn to the default blend operator to be
-        # drawn full opacity (only useful if the background is not full black)
-        if images_opt:
-            images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
 
         return images_opt + images_std + images_spc
 
@@ -1020,15 +1015,14 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
 
-        if not self or not self.IsEnabled() or 0 in self.ClientSize:
+        if not self or 0 in self.ClientSize:
             return  # nothing to update
 
         # We need to scale the thumbnail ourselves, instead of letting the
         # button handle it, because we need to be able to draw the history
         # overlay without it being rescaled afterwards
 
-        # Create an image from the bitmap buffer
-        image = self._bmp_buffer.ConvertToImage()
+        image = self._get_img_from_buffer()
         scaled_img = img.wxImageScaleKeepRatio(image, gui.VIEW_BTN_SIZE, wx.IMAGE_QUALITY_HIGH)
         ratio = min(gui.VIEW_BTN_SIZE[0] / image.Width,
                     gui.VIEW_BTN_SIZE[1] / image.Height)

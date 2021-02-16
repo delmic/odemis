@@ -15,11 +15,37 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+import logging
 
 # If you import this module, it will try to work around some bugs in wxPython
 # by "monkey-patching" the module.
 
 import wx
+
+def fix_static_text_clipping(panel):
+    # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
+    # the StaticText's not shown at init to be initialized with a size as if
+    # the font was standard size. So if the font is big, the text is cropped.
+    # See: https://github.com/wxWidgets/Phoenix/issues/1452
+    # https://trac.wxwidgets.org/ticket/16088
+    # This following forces resizing of all static text found on the panel and its children
+    _force_resize_static_text(panel)
+    # Eventually, update the size of the parent, based on everything inside it
+    wx.CallLater(100, _update_layout_big_text, panel)  # Quickly
+    wx.CallLater(500, _update_layout_big_text, panel)  # Later, in case the first time was too early
+
+def _update_layout_big_text(panel):
+    _force_resize_static_text(panel)
+    panel.Layout()
+
+def _force_resize_static_text(root):
+    # Force re-calculate the size of all StaticTexts contained in the object
+    for c in root.GetChildren():
+        if isinstance(c, wx.StaticText):
+            logging.debug("Fixing size of the text %s", c.Label)
+            c.InvalidateBestSize()
+        elif isinstance(c, wx.Window):
+            _force_resize_static_text(c)
 
 if "gtk3" in wx.version():
 

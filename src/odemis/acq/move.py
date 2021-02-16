@@ -34,7 +34,9 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
-LOADING, IMAGING, TILTED, COATING, LOADING_PATH, UNKNOWN = 0, 1, 2, 3, 4, 5
+LOADING, IMAGING, MILLING, COATING, LOADING_PATH, UNKNOWN = 0, 1, 2, 3, 4, 5
+target_pos_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating", MILLING: "milling",
+                  LOADING_PATH: "loading path", UNKNOWN: "unknown"}
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
@@ -52,15 +54,19 @@ def getCurrentPositionLabel(current_pos, stage):
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
     stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
     stage_coating = stage_md[model.MD_FAV_POS_COATING]
+    # If stage is not referenced, set position as unknown (to only allow loading position)
+    if not all(stage.referenced.value.values()):
+        return UNKNOWN
+
     # Check the stage is near the coating position
     if _isNearPosition(current_pos, stage_coating, stage.axes):
         return COATING
     # Check that the stage X,Y,Z are within the active range
     if _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
-        if _isNearPosition(current_pos, {'rx': 0, 'rz': 0}, {'rx', 'rz'}):
+        if _isNearPosition(current_pos, {'rx': 0}, {'rx'}):
             return IMAGING
         else:
-            return TILTED
+            return MILLING
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
@@ -91,22 +97,17 @@ def getMovementProgress(current_pos, start_pos, end_pos):
 
     def get_distance(start, end):
         # Calculate the euclidean distance between two 3D points
-        sp = numpy.array([start['x'], start['y'], start['z']])
-        ep = numpy.array([end['x'], end['y'], end['z']])
+        axes = start.keys() & end.keys()  # only the axes found on both points
+        sp = numpy.array([start[a] for a in axes])
+        ep = numpy.array([end[a] for a in axes])
         return scipy.spatial.distance.euclidean(ep, sp)
 
-    def check_axes(pos):
-        if not {'x', 'y', 'z'}.issubset(set(pos.keys())):
-            raise ValueError("Missing x,y,z axes in {} for correct distance measurement.".format(pos))
-
-    # Check we have the x,y,z axes in all points
-    check_axes(current_pos)
-    check_axes(start_pos)
-    check_axes(end_pos)
     # Get distance for current point in respect to start and end
     from_start = get_distance(start_pos, current_pos)
     to_end = get_distance(current_pos, end_pos)
     total_length = get_distance(start_pos, end_pos)
+    if total_length == 0:  # same value
+        return 1
     # Check if current position is on the line from start to end position
     # That would happen if start_to_current +  current_to_start = total_distance from start to end
     if util.almost_equal((from_start + to_end), total_length, rtol=RTOL_PROGRESS):
@@ -162,9 +163,9 @@ def _isNearPosition(current_pos, target_position, axes):
     return True
 
 
-def cryoLoadSample(target):
+def cryoSwitchSamplePosition(target):
     """
-    Provide the ability to switch between loading position and imaging position, without bumping into anything.
+    Provide the ability to switch between loading, imaging and coating position, without bumping into anything.
     :param target: (int) target position either one of the constants LOADING or IMAGING
     :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the
    raise ValueError exception
@@ -179,17 +180,17 @@ def cryoLoadSample(target):
     f._task_lock = threading.Lock()
     f._running_subf = model.InstantaneousFuture()
     # Run in separate thread
-    executeAsyncTask(f, _doCryoLoadSample, args=(f, stage, focus, target))
+    executeAsyncTask(f, _doCryoSwitchSamplePosition, args=(f, stage, focus, target))
     return f
 
 
-def _doCryoLoadSample(future, stage, focus, target):
+def _doCryoSwitchSamplePosition(future, stage, focus, target):
     """
-    Do the actual switching procedure for the Cryo sample stage between loading and imaging
+    Do the actual switching procedure for the Cryo sample stage between loading, imaging and coating positions
     :param future: cancellable future of the move
     :param stage: sample stage that's being controlled
     :param focus: focus for optical lens
-    :param target: target position either one of the constants LOADING or IMAGING
+    :param target: target position either one of the constants LOADING, IMAGING and COATING
     """
     try:
         stage_md = stage.getMetadata()
@@ -197,8 +198,12 @@ def _doCryoLoadSample(future, stage, focus, target):
         stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
-        stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+        # Fail early when required axes are not found on the positions metadata
+        required_axes = {'x', 'y', 'z', 'rx', 'rz'}
+        for stage_position in [stage_active, stage_deactive, stage_coating]:
+            if not required_axes.issubset(stage_position.keys()):
+                raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
         current_pos = stage.position.value
         # To hold the ordered sub moves list
         sub_moves = []
@@ -209,12 +214,22 @@ def _doCryoLoadSample(future, stage, focus, target):
         if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
             sub_moves.append((focus, focus_deactive))
 
+        current_label = getCurrentPositionLabel(current_pos, stage)
         if target == LOADING:
-            if getCurrentPositionLabel(current_pos, stage) is UNKNOWN:
+            if current_label is UNKNOWN:
                 logging.warning("Moving stage to loading while current position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
+            # Check if stage is not referenced:
+            # 1. reference focus if not already referenced
+            # 2. Move focus to deactive position
+            # 3. reference stage
+            if not all(stage.referenced.value.values()):
+                if not all(focus.referenced.value.values()):
+                    run_reference(future, focus)
+                run_sub_move(future, focus, focus_deactive)
+                run_reference(future, stage)
 
             # Add the sub moves to perform the loading move
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, stage_deactive)))
@@ -222,8 +237,15 @@ def _doCryoLoadSample(future, stage, focus, target):
             sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
 
         elif target in (IMAGING, COATING):
-            if not _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}) and not _isNearPosition(current_pos, stage_deactive, stage.axes):
-                raise ValueError("Current position is out of active range and not near FAV_POS_DEACTIVE position.")
+            if current_label is LOADING:
+                # Automatically run the referencing procedure as part of the
+                # first step of the movement loading → imaging/coating position
+                run_reference(future, stage)
+            elif current_label is UNKNOWN:
+                raise ValueError("Unable to move to {} while current position is unknown.".format(
+                    target_pos_str.get(target, lambda: "unknown")))
+            elif current_label is MILLING and target is COATING:
+                raise ValueError("Unable to move to coating position while current position is tilted.")
 
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             target_pos = stage_active if target is IMAGING else stage_coating
@@ -243,8 +265,7 @@ def _doCryoLoadSample(future, stage, focus, target):
     except CancelledError:
         logging.info("_doCryoLoadSample cancelled.")
     except Exception as exp:
-        target_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating"}
-        logging.exception("Failure to move to {} position.".format(target_str.get(target, lambda: "unknown")))
+        logging.exception("Failure to move to {} position.".format(target_pos_str.get(target, lambda: "unknown")))
         raise
     finally:
         with future._task_lock:
@@ -253,7 +274,7 @@ def _doCryoLoadSample(future, stage, focus, target):
             future._task_state = FINISHED
 
 
-def cryoTiltSample(rx, rz=None):
+def cryoTiltSample(rx, rz=0):
     """
     Provide the ability to switch between imaging and tilted position, withing bumping into anything.
     Imaging position is considered when rx and rz are equal 0, otherwise it's considered tilting
@@ -292,15 +313,16 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
         stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         current_pos = stage.position.value
+
         # Check that the stage X,Y,Z are within the limits
         if not _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
             raise ValueError("Current position is out of active range.")
         # To hold the ordered sub moves list to perform the tilting/imaging move
         sub_moves = []
-        # Park focus only if stage rx and rz are equal to 0
+        # Park focus only if stage rx is equal to 0
         # Otherwise stop if it's not already parked
         if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
-            if _isNearPosition(current_pos,  {'rx': 0, 'rz': 0}, {'rx', 'rz'}):
+            if _isNearPosition(current_pos, {'rx': 0}, {'rx'}):
                 sub_moves.append((focus, focus_deactive))
             else:
                 raise ValueError("Cannot proceed with tilting while focus is not near FAV_POS_DEACTIVE position.")
@@ -308,13 +330,11 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
         if rx == 0 and rz == 0:  # Imaging
             # Get the actual Imaging position (which should be ~ 0 as well)
             rx = stage_active['rx']
-            rz = stage_active['rz']
             sub_moves.append((stage, {'rz': rz}))
             sub_moves.append((stage, {'rx': rx}))
         else:
             sub_moves.append((stage, {'rx': rx}))
-            if rz is not None:
-                sub_moves.append((stage, {'rz': rz}))
+            sub_moves.append((stage, {'rz': rz}))
 
         for component, sub_move in sub_moves:
             run_sub_move(future, component, sub_move)
@@ -332,7 +352,7 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
 
 def _cancelCryoMoveSample(future):
     """
-    Canceller of _doCryoTiltSample and _doCryoLoadSample tasks
+    Canceller of _doCryoTiltSample and _doCryoSwitchSamplePosition tasks
     """
     logging.debug("Cancelling CryoMoveSample...")
 
@@ -345,12 +365,33 @@ def _cancelCryoMoveSample(future):
 
     return True
 
+def run_reference(future, component):
+    """
+    Perform the stage reference procedure
+    :param future: cancellable future of the reference procedure
+    :param component: Either the stage or the focus component
+    :raises CancelledError: if the reference is cancelled
+    """
+    try:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
+                logging.info("Reference procedure is cancelled.")
+                raise CancelledError()
+            logging.debug("Performing stage referencing.")
+            future._running_subf = component.reference(set(component.axes.keys()))
+        future._running_subf.result()
+    except Exception as error:
+        logging.exception(error)
+    if future._task_state == CANCELLED:
+        logging.info("Reference procedure is cancelled.")
+        raise CancelledError()
+
 
 def run_sub_move(future, component, sub_move):
     """
     Perform the sub moveAbs using the given component and axis->pos dict
     :param future: cancellable future of the whole move
-    :param component: Either the stage of the focus component
+    :param component: Either the stage or the focus component
     :param sub_move: the sub_move axis->pos dict
     :raises TimeoutError: if the sub move timed out
     :raises CancelledError: if the sub move is cancelled

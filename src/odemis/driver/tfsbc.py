@@ -24,7 +24,6 @@ from __future__ import division
 import logging
 
 import numpy
-import serial
 import serial.tools.list_ports
 from pymodbus.client.sync import ModbusSerialClient
 
@@ -237,7 +236,7 @@ class BeamShiftController(model.HwComponent):
         """
         :param value (float, float): x, y shift from the center (in m)
         """
-        logging.debug("Requesting shift of %s m." % value)
+        logging.debug("Requesting shift of %s m.", value)
         try:
             xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB]
         except KeyError:
@@ -252,9 +251,9 @@ class BeamShiftController(model.HwComponent):
         # Read previous value of registers for debugging purpose
         # Note on duration: a write instruction takes about 14 ms, a read instruction about 20 ms
         ret = self._read_registers()
-        logging.debug("Register values before writing: %s." % ret)
+        logging.debug("Register values before writing: %s.", ret)
 
-        logging.debug("Writing register values %s" % register_values)
+        logging.debug("Writing register values %s", register_values)
         self._write_registers(register_values)
 
         # Convert back to original coordinates (should be the same as requested shift, possibly
@@ -339,7 +338,7 @@ class BeamShiftController(model.HwComponent):
             xlower, ylower, xupper, yupper = md[model.MD_CALIB]
             new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
             # Update .shift (but don't set value in hardware)
-            logging.debug("Shift after metadata update: %s" % (new_shift,))
+            logging.debug("Shift after metadata update: %s", new_shift)
             self.shift._value = new_shift
             self.shift.notify(new_shift)
         model.HwComponent.updateMetadata(self, md)

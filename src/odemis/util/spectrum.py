@@ -29,7 +29,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-from numpy.polynomial import polynomial
 from odemis import model
 from builtins import range
 
@@ -39,7 +38,7 @@ def get_wavelength_per_pixel(da):
     Computes the wavelength for each pixel along the C dimension
 
     :param da: (model.DataArray of shape C...): the DataArray with metadata
-        either MD_WL_POLYNOMIAL or MD_WL_LIST
+        MD_WL_LIST
     :return: (list of float of length C): the wavelength (in m) for each pixel
         in C
     :raises:
@@ -66,34 +65,21 @@ def get_wavelength_per_pixel(da):
             raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
 
     # MD_WL_LIST has priority
-    if model.MD_WL_LIST in da.metadata:
+    try:
         wl = da.metadata[model.MD_WL_LIST]
 
         if len(wl) != da.shape[ci]:
             raise ValueError("Length of wavelength list does not match length of wavelength data.")
         return wl
-    elif model.MD_WL_POLYNOMIAL in da.metadata:
-        pn = da.metadata[model.MD_WL_POLYNOMIAL]
-        pn = polynomial.polytrim(pn)
-        if len(pn) >= 2:
-            npn = polynomial.Polynomial(pn,  #pylint: disable=E1101
-                                        domain=[0, da.shape[ci] - 1],
-                                        window=[0, da.shape[ci] - 1])
-            ret = npn.linspace(da.shape[ci])[1]
-            return ret.tolist()
-        else:
-            # a polynomial of 0 or 1 value is useless
-            raise ValueError("Wavelength polynomial has only %d degree"
-                             % len(pn))
-
-    raise KeyError("No MD_WL_* metadata available")
+    except KeyError:
+        raise KeyError("No MD_WL_LIST metadata available")
 
 
 def get_spectrum_range(data):
     """ Return the wavelength for each pixel of a (complete) spectrum
 
     :param data: (model.DataArray of shape C...): the DataArray with metadata
-        either MD_WL_POLYNOMIAL or MD_WL_LIST
+        MD_WL_LIST
 
     :return: (list of numbers or None): one wavelength per spectrum pixel.
       Values are in meters, unless the spectrum cannot be determined, in

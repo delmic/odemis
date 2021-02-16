@@ -24,7 +24,7 @@ from __future__ import division
 import glob
 import logging
 from odemis import model
-from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture
+from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture, isasync
 from odemis.util import to_str_escape
 import os
 import threading
@@ -255,6 +255,7 @@ class PMD401Bus(Actuator):
         for ax in axes:
             self.stopAxis(self._axis_map[ax])
 
+    @isasync
     def moveRel(self, shift):
         if not shift:
             return model.InstantaneousFuture()
@@ -264,6 +265,7 @@ class PMD401Bus(Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
+    @isasync
     def moveAbs(self, pos):
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
@@ -271,6 +273,7 @@ class PMD401Bus(Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
+    @isasync
     def reference(self, axes):
         self._checkReference(axes)
         f = self._createMoveFuture()

@@ -431,7 +431,7 @@ class Lakeshore(model.HwComponent):
             logging.exception("Failed to read sensor temperature.")
 
 
-STABLE_TEMPERATURE = 50  # K, temperature reached without heating
+STABLE_TEMPERATURE = 77  # K, temperature reached without heating
 
 
 class LakeshoreSimulator(object):
@@ -450,7 +450,7 @@ class LakeshoreSimulator(object):
         self._status_byte = POWER_ON | COMMAND_ERROR
         self._setpoint = 150  # K
         self._temperature = 100  # K
-        self._heating = 0  # enum int 0,1,2, or 3
+        self._heating = 3  # enum int 0,1,2, or 3
 
     def write(self, data):
         self._input_buf += data
@@ -520,16 +520,21 @@ class LakeshoreSimulator(object):
         # Query temperature
         elif re.match('KRDG\?', msg):
             # send temperature with some noise
-            self._sendAnswer(b"+%.3f" % (self._temperature + random.uniform(-0.1, 0.1),))
-            if self._heating:
-                if self._temperature < self._setpoint:  # heating is enabled
-                    self._temperature += 0.05 * self._heating  # simulate heating
-                else:
-                    self._temperature -= 0.01
-            else:  # no heating so no temperature control
-                # maintain stable temperature
-                if self._temperature > STABLE_TEMPERATURE:
-                    self._temperature -= 0.1  # cool off with no heating
+            if os.path.exists(os.path.join(model.BASE_DIRECTORY, "temp_increase.txt")):
+                logging.info("Simulator set to increase temperature by 1 deg each reading")
+                self._temperature += 1
+                self._sendAnswer(b"+%.3f" % (self._temperature))
+            else:
+                self._sendAnswer(b"+%.3f" % (self._temperature + random.uniform(-0.1, 0.1),))
+                if self._heating:
+                    if self._temperature < self._setpoint:  # heating is enabled
+                        self._temperature += 0.05 * self._heating  # simulate heating
+                    else:
+                        self._temperature -= 0.1
+                else:  # no heating so no temperature control
+                    # maintain stable temperature
+                    if self._temperature > STABLE_TEMPERATURE:
+                        self._temperature -= 0.1  # cool off with no heating
         else:
             self._status_byte |= COMMAND_ERROR
 

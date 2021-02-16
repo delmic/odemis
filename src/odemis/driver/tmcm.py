@@ -2590,12 +2590,12 @@ class CANController(model.Actuator):
     """
 
     def __init__(self, name, role, channel, node_id, datasheet, axes, ustepsize,
-                 param_file, rng=None, unit=None, refproc=None, **kwargs):
+                 param_file=None, rng=None, unit=None, refproc=None, **kwargs):
         """
         channel (str): can port name, on linux, this is typically "can0". For testing
             with the simulator, use "fake".
         node_id (0 <= int <= 255): Address of the controller
-        datasheet (str): path to .dcf configuration file
+        datasheet (str): absolute or relative path to .dcf configuration file
         axes (list of str): names of the axes, from the 1st to the last.
           If an axis is not connected, put a "".
         ustepsize (list of float): size of a microstep in unit (the smaller, the
@@ -2646,6 +2646,10 @@ class CANController(model.Actuator):
         # Only support standard referencing and None
         if not (refproc == REFPROC_STD or refproc is None):
             raise ValueError("Reference procedure %s unknown" % (refproc,))
+
+        # Get path of datasheet
+        if not os.path.isabs(datasheet):
+            datasheet = os.path.join(os.path.dirname(__file__), datasheet)
 
         self._network, self._node = self._openCanNode(channel, node_id, datasheet)
 
@@ -3232,7 +3236,7 @@ class CANController(model.Actuator):
                 logging.debug("Cancelling failed")
             return future._was_stopped
 
-    def _doReference(self, future, axes, timeout=30):
+    def _doReference(self, future, axes, timeout=300):
         """
         Actually runs the referencing code
         future (Future): the future it handles

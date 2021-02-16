@@ -32,11 +32,8 @@ import logging
 from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
-from odemis.gui.conf.data import COLORMAPS
 import wx
 import wx.adv
-from matplotlib import cm
-import matplotlib.colors as colors
 from odemis.util.img import getColorbar, tintToColormap
 
 
@@ -205,10 +202,10 @@ class ColorMapComboBox(ComboBox):
         r = wx.Rect(*rect)  # make a copy
 
         # Draw a rectangle of the color
-        item_name = self.Strings[item]
         color_map = self.GetClientData(item)
 
         if not color_map:
+            logging.warning("Failed to find color map for combo item", item)
             return
 
         color_map = tintToColormap(color_map)
@@ -217,9 +214,6 @@ class ColorMapComboBox(ComboBox):
             # for painting the control itself
             w = r.width
             h = r.height
-
-            color_map = self.GetClientData(self.GetSelection())
-            color_map = tintToColormap(color_map)
 
             gradient = getColorbar(color_map, w, h)
             bmp = wx.Bitmap(*gradient.shape[1::-1])
@@ -235,5 +229,6 @@ class ColorMapComboBox(ComboBox):
             bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
             # image = wx.ImageFromBuffer(*gradient.shape[1::-1], gradient)
             dc.DrawBitmap(bmp, 0, item * r.height)
+            item_name = self.Strings[item]
             dc.DrawText(item_name.title(), colorbar_width + 5, item * r.height + 5)
 

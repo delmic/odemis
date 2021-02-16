@@ -30,6 +30,7 @@ import numpy
 from odemis import dataio, model, gui, util
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream, CLSettingsStream
+from odemis.dataio import png
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
@@ -38,7 +39,7 @@ from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.gui.util import img, call_in_wx_main
+from odemis.gui.util import img, call_in_wx_main, formats_to_wildcards
 from odemis.model import InstantaneousFuture
 from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
@@ -160,6 +161,7 @@ class QuickCLPlugin(Plugin):
         ("filename", {
             "tooltip": "Each acquisition will be saved with the name and the number appended.",
             "control_type": gui.CONTROL_SAVE_FILE,
+            "wildcard": formats_to_wildcards({png.FORMAT: png.EXTENSIONS})[0],
         }),
         ("hasDatabar", {
             "label": "Include data-bar",

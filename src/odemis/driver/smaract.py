@@ -1242,9 +1242,19 @@ class MC_5DOF(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         # Reference tilted positioners towards the negative position
-        # FIXME: temporary hack while the controller can take care of it itself
+        # Normally this is not needed. Some old version of the controller needed
+        # some hint when the stage was at "bad" positions. Left here just for
+        # reference.
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_TILT, 1)
         # self.SetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_REF_DIR_Y, 1)
+
+        # Position to report when not referenced. Ideally, we could just not
+        # report the axis at all in the .position. However, there is too much
+        # code that expects a value all the time for now.
+        # TODO: remove this once the rest of Odemis handles non-reported positions.
+        # Use 0, if it's within the range, otherwise use the center of the range.
+        self._unknown_pos = {an: 0 if ad.range[0] <= 0 <= ad.range[1] else self._applyInversion(sum(ad.range) / 2)
+                             for an, ad in axes_def.items()}
 
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
@@ -1254,8 +1264,8 @@ class MC_5DOF(model.Actuator):
         axes_ref = {a: referenced for a, i in self.axes.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
-        # If ref_on_init, referenced immediately.
 
+        # If ref_on_init, reference immediately.
         if referenced:
             logging.debug("SA_MC is referenced")
         else:
@@ -1488,7 +1498,7 @@ class MC_5DOF(model.Actuator):
         except SA_MCError as ex:
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 logging.warning("Position unknown because SA_MC is not referenced")
-                p = {}
+                p = self._unknown_pos
             else:
                 raise
 
@@ -1562,6 +1572,7 @@ class MC_5DOF(model.Actuator):
                 else:
                     logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
                     self._checkMoveAbs(deactive_pos)
+                    deactive_pos = self._applyInversion(deactive_pos)
                     self._doMoveAbs(future, deactive_pos)
 
         except SA_MCError as ex:
@@ -1599,6 +1610,7 @@ class MC_5DOF(model.Actuator):
             return model.InstantaneousFuture()
 
         self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
 
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
@@ -1709,7 +1721,6 @@ class MC_5DOF(model.Actuator):
             return model.InstantaneousFuture()
 
         self._checkMoveRel(shift)
-
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
@@ -1718,7 +1729,7 @@ class MC_5DOF(model.Actuator):
         """
         Do a relative move by converting it into an absolute move
         """
-        pos = add_coord(self.position.value, shift)
+        pos = self._applyInversion(add_coord(self.position.value, shift))
         self._doMoveAbs(future, pos)
 
 
@@ -1767,6 +1778,47 @@ class FakeMC_5DOF_DLL(object):
             return True
         else:
             return False
+
+    def _calc_move_after_dt(self, a, speed, dt):
+        """
+        Calculates the new position for a given axis after a time dt at speed
+        a (str): the axis name attribute ('x', 'y', 'z', 'rx', 'rz')
+        speed (float): the speed of that axis
+        dt (float): time differential
+        """
+        d = getattr(self.target, a) - getattr(self.pose, a)
+        if d >= 0:
+            new_pos = getattr(self.pose, a) + speed * dt
+            if new_pos >= getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+        elif d < 0:
+            new_pos = getattr(self.pose, a) - speed * dt
+            if new_pos < getattr(self.target, a):
+                new_pos = getattr(self.target, a)
+
+        return new_pos
+
+    def _update_current_pos(self):
+        """
+        Update the self.pose if a move is active
+        """
+        cur_time = time.time()
+        if cur_time > self._current_move_finish:
+            return
+
+        lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
+        rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
+        dt = cur_time - self._last_time
+
+        # calculate intermediate positions
+        self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
+        self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
+        self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
+        self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
+        self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
+        logging.debug("Updating simulated position to %s", self.pose)
+
+        self._last_time = cur_time
 
     """
     DLL functions (fake)
@@ -1817,40 +1869,13 @@ class FakeMC_5DOF_DLL(object):
         else:
             raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
 
-    def _calc_move_after_dt(self, a, speed, dt):
-        """
-        Calculates the new position for a given axis after a time dt at speed
-        a (str): the axis name attribute ('x', 'y', 'z', 'rx', 'rz')
-        speed (float): the speed of that axis
-        dt (float): time differential
-        """
-        d = getattr(self.target, a) - getattr(self.pose, a)
-        if d >= 0:
-            new_pos = getattr(self.pose, a) + speed * dt
-            if new_pos >= getattr(self.target, a):
-                new_pos = getattr(self.target, a)
-        elif d < 0:
-            new_pos = getattr(self.pose, a) - speed * dt
-            if new_pos < getattr(self.target, a):
-                new_pos = getattr(self.target, a)
-
-        return new_pos
-
     def SA_MC_GetPose(self, id, p_pose):
+        if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED, "error")
+
+        self._update_current_pos()
+
         pose = _deref(p_pose, SA_MC_Pose)
-
-        cur_time = time.time()
-        if cur_time < self._current_move_finish:
-            lin_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES].value
-            rad_speed = self.properties[MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES].value
-            dt = cur_time - self._last_time
-            # calculate intermediate positions
-            self.pose.x = self._calc_move_after_dt('x', lin_speed, dt)
-            self.pose.y = self._calc_move_after_dt('y', lin_speed, dt)
-            self.pose.z = self._calc_move_after_dt('z', lin_speed, dt)
-            self.pose.rx = self._calc_move_after_dt('rx', rad_speed, dt)
-            self.pose.rz = self._calc_move_after_dt('rz', rad_speed, dt)
-
         pose.x = self.pose.x
         pose.y = self.pose.y
         pose.z = self.pose.z
@@ -1858,20 +1883,20 @@ class FakeMC_5DOF_DLL(object):
         pose.ry = self.pose.ry
         pose.rz = self.pose.rz
 
-        self._last_time = cur_time
-
         logging.debug("sim MC5DOF: position: %s" % (pose,))
         return MC_5DOF_DLL.SA_MC_OK
 
     def SA_MC_Stop(self, id):
         logging.debug("sim MC5DOF: Stopping")
         self.stopping.set()
+        self._update_current_pos()
+        self._current_move_finish = time.time()
 
     def SA_MC_Reference(self, id):
         logging.debug("sim MC5DOF: Starting referencing...")
         self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED] = c_int32(0)
         self.stopping.clear()
-        self._current_move_finish = time.time() + 1.0
+        self._current_move_finish = time.time() + 5.0
         self._referencing = True
 
     def SA_MC_SetProperty_f64(self, id, prop, val):
@@ -1916,20 +1941,19 @@ class FakeMC_5DOF_DLL(object):
                 stopped = True
                 timedout = True
                 break
-            if self.stopping.is_set():
+            if self.stopping.wait(0.05):
                 stopped = True
                 break
-            time.sleep(0.05)
 
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
         if not stopped:
             ev.i32 = MC_5DOF_DLL.SA_MC_OK
+            self.pose = copy.copy(self.target)
         elif timedout:
             ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT
         else:
             ev.i32 = MC_5DOF_DLL.SA_MC_ERROR_CANCELED
 
-        self.pose = copy.copy(self.target)
         # if a reference move was in process...
         if self._referencing and not stopped and not timedout:
             self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED] = c_int32(1)
@@ -2532,7 +2556,7 @@ class MCS2(model.Actuator):
             logging.debug("SA_CTL is referenced")
         else:
             if ref_on_init:
-                self.reference()  # will reference in background
+                self.reference(set(axes_ref.keys()))  # will reference in background
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
@@ -3022,11 +3046,7 @@ class MCS2(model.Actuator):
         return f
 
     @isasync
-    def reference(self, axes=None):
-        if axes is None:
-            # then reference all axes
-            axes = self._axis_map.keys()
-
+    def reference(self, axes):
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doReference, f, axes)
         return f
@@ -3074,7 +3094,7 @@ class MCS2(model.Actuator):
                     else:
                         logging.info("Moving axes to deactivated position %s after referencing", deactive_pos)
                         self._checkMoveAbs(deactive_pos)
-                        self._doMoveAbs(future, deactive_pos)
+                        self._doMoveAbs(future, self._applyInversion(deactive_pos))
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)
 
@@ -3125,15 +3145,28 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
         }
 
-        self.target = [0, 0, 0]
-
         # Specify ranges
         self._range = [(-10e12, 10e12), (-10e12, 10e12), (-10e12, 10e12)]
 
-        self.stopping = threading.Event()
+        self._move_start_pos = [0] * 3
+        self._move_start_time = [time.time()] * 3
+        self._move_finish_time = [time.time()] * 3
+        self._target = [0] * 3
 
-        self._current_move_start = time.time()
-        self._current_move_finish = time.time()
+    def _get_current_pos(self, axis):
+        """
+        return (int): position
+        """
+        now = time.time()
+        startt = self._move_start_time[axis]
+        endt = self._move_finish_time[axis]
+        startp = self._move_start_pos[axis]
+        endp = self._target[axis]
+        if endt < now:
+            return endp
+        # model as if it was linear (it's not, it's ramp-based positioning)
+        pos = startp + (endp - startp) * (now - startt) / (endt - startt)
+        return int(pos)
 
     def _pos_in_range(self, ch, pos):
         return (self._range[ch][0] <= pos <= self._range[0][1])
@@ -3178,16 +3211,11 @@ class FakeMCS2_DLL(object):
             raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
 
         # Handle movement states before setting the value
-        if property_key.value == SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE:
-            if self.stopping.is_set():  # stopped before move could complete
-                # set the position to someplace in between
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = int(
-                     (self.target[ch.value] + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]) / 2)
-            elif self._current_move_finish < time.time():  # move is finished
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
-                    int(self.target[ch.value])
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] &= \
-                    ~ (SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
+        elif (property_key.value == SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE and
+              self._move_finish_time[ch.value] < time.time()):  # move is finished
+            self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] &= \
+                ~(SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
+
         # update the value of the key
         val = _deref(p_val, c_int32)
         val.value = self.properties[property_key.value][ch.value]
@@ -3195,6 +3223,8 @@ class FakeMCS2_DLL(object):
     def SA_CTL_GetProperty_i64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
             raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+        if property_key.value == SA_CTLDLL.SA_CTL_PKEY_POSITION:
+            self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = self._get_current_pos(ch.value)
         val = _deref(p_val, c_int64)
         val.value = self.properties[property_key.value][ch.value]
 
@@ -3209,29 +3239,36 @@ class FakeMCS2_DLL(object):
 
         # Simulating a move to 0 in 5 s
         self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
-        self.stopping.clear()
-        self._current_move_finish = time.time() + 5
-        self.target[ch.value] = 0
+        self._move_start_pos[ch.value] = self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
+        self._move_start_time[ch.value] = time.time()
+        self._move_finish_time[ch.value] = time.time() + 5
+        self._target[ch.value] = 0
 
     def SA_CTL_Calibrate(self, handle, ch, _):
         logging.debug("sim MCS2: Calibrating channel %d", ch.value)
 
     def SA_CTL_Move(self, handle, ch, pos_pm, _):
-        self.stopping.clear()
         if self._pos_in_range(ch.value, pos_pm.value):
-            self._current_move_finish = time.time() + 1.0
+            self._move_start_pos[ch.value] = self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
+            self._move_start_time[ch.value] = time.time()
             if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
-                self.target[ch.value] = pos_pm.value
+                self._target[ch.value] = pos_pm.value
                 logging.debug("sim MCS2: Abs move channel %d to %d pm" % (ch.value, pos_pm.value))
             elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
-                self.target[ch.value] = pos_pm.value + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
-                logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
+                self._target[ch.value] = pos_pm.value + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
+                logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self._target[ch.value]))
+            else:
+                raise IOError("sim move has unknown move mode")
+            dur = abs(self._target[ch.value] - self._move_start_pos[ch.value]) / self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY][ch.value]
+            self._move_finish_time[ch.value] = time.time() + dur
+            logging.debug("Simulating move of %s s", dur)
             self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
         else:
             raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_RANGE_LIMIT_REACHED, "error")
 
     def SA_CTL_Stop(self, handle, ch, _):
-        self.stopping.set()
+        self._target[ch.value] = self._get_current_pos(ch.value)
+        self._move_finish_time[ch.value] = 0
 
 
 SA_SI_TIMEOUT_INFINITE = 0xffffffff

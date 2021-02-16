@@ -1,0 +1,48 @@
+SEM: {
+  class: Microscope,
+  role: sem,
+  children: ["EBeam Scanner", "EBeam Focus", "EBeam Stage",
+             "EBeam Detector"],
+}
+
+# Connects to TFS Microscopes, the Support PC should be running the
+# Delmic XTAdapter. Update the address to match that of the Support PC.
+"SEM EXT": {
+  class: xt_client.SEM,
+  role: null,
+  init: {
+    address: "PYRO:Microscope@192.168.31.150:4242",
+  },
+  children: {
+    scanner: "EBeam Scanner",
+    focus: "EBeam Focus",
+    stage: "EBeam Stage",
+    detector: "EBeam Detector",
+  }
+}
+
+"EBeam Scanner": {
+  role: e-beam,
+  init: {
+    hfw_nomag: 0.11,
+  },
+}
+
+"EBeam Focus": {
+  role: ebeam-focus,
+}
+
+"EBeam Stage": {
+  role: stage,
+  init: {
+    inverted: ["x", "y"],
+  },
+  affects: ["EBeam Scanner"],
+}
+
+"EBeam Detector": {
+  role: se-detector,
+  init: {
+    channel_name: "electron1",
+  }
+}

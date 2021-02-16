@@ -44,21 +44,17 @@ import copy
 import logging
 import math
 import numpy
-
-from odemis.util.filename import guess_pattern, create_filename, update_counter
-
-from odemis.gui.util import call_in_wx_main
-
-from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-
-from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE
-
 from odemis import dataio, model, util, gui
 from odemis.acq import leech, acqmng
+from odemis.dataio import tiff
+from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf import util as cutil
+from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import img
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
 
 import odemis.acq.stream as acqstream
@@ -716,6 +712,7 @@ class CLAcqPlugin(Plugin):
         }),
         ("filename", {
             "control_type": gui.CONTROL_SAVE_FILE,
+            "wildcard": formats_to_wildcards({tiff.FORMAT: tiff.EXTENSIONS})[0],
         }),
         ("period", {
             "label": "Drift corr. period",

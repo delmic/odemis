@@ -30,13 +30,12 @@ import logging
 import math
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.util.comp import compute_camera_fov
-from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, StaticStream, OpticalStream, ScannedFluoStream, LiveStream
+from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
+from odemis.gui.conf import get_acqui_conf, get_chamber_conf
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, StreamView
@@ -46,7 +45,6 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
-import time
 import wx
 
 import odemis.gui.model as guimodel
@@ -694,13 +692,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
 
-        # set parameters for tiled acq
-        # FIXME: avoid hardcoding, use stage metadata
-        fm_fov = compute_camera_fov(self._main_data_model.ccd)
-        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
-        # self.area = self._main_data_model.stage.getMetadata(model.MD_FAV_AREA)
-        self.area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
+        # Set parameters for tiled acq
         self.overlap = 0.2
+        try:
+            stage_rng = self._main_data_model.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            # left, top, right, bottom
+            self.area = (stage_rng["x"][0], stage_rng["y"][0], stage_rng["x"][1], stage_rng["y"][1])
+        except (KeyError, IndexError):
+            raise ValueError("Failed to find stage.MD_POS_ACTIVE_RANGE with x and y range")
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
@@ -1038,5 +1037,30 @@ def ShowAcquisitionFileDialog(parent, filename):
 
     conf.last_extension = ext
 
+    return os.path.join(path, fn)
+
+def ShowChamberFileDialog(parent, projectname):
+    """
+    parent (wxframe): parent window
+    projectname (string): project name to propose by default
+    return (string or none): the new project name (or the none if the user cancelled)
+    """
+    # current project name
+    path, base = os.path.split(projectname)
+    dialog = wx.FileDialog(parent,
+                           message="Choose a project name and destination",
+                           defaultDir=path,
+                           defaultFile="",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                           wildcard="*")
+    dialog.SetFilename(base)
+
+    # Show the dialog and check whether is was accepted or cancelled
+    if dialog.ShowModal() != wx.ID_OK:
+        return None
+
+    # New location and name have been selected...
+    path = dialog.GetDirectory()
+    fn = dialog.GetFilename()
     return os.path.join(path, fn)
 

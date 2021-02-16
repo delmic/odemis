@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 18.04 (x86 32 or 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 18.04 (x86 64 bits)
  * `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
@@ -45,7 +45,7 @@ Detailed instructions
 ---------------------
 
 Download Ubuntu 18.04 at this address:
-https://ubuntu.com/download/desktop/thank-you?version=18.04.3&architecture=amd64
+https://ubuntu.com/download/desktop/thank-you?version=18.04.5&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -99,7 +99,7 @@ and type the following::
     comedi_config /dev/comedi1 comedi_test 100000,100000
 
 Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
-it immediately by typing ``/etc/rc.local``.
+it immediately by typing ``sudo /etc/rc.local``.
 
 Install PyCharm
 """""""""""""""
@@ -173,11 +173,12 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 2.7 32 bits.
-It's also possible to use the version with Python 3.7, 32 or 64 bits, in which case
-you should follow the second set of instructions. Also note that Odemis doesn't
-work with Python 3.7 yet (only Python 3.5 or 3.6) but that it's fine as anaconda
-supports multiple versions of Python simultaneously.
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x 64 bits.
+It's also possible to use the 32 bits, and even an old version with Python 2.7, in which case
+you should follow the first set of instructions. Also note that typically we validate
+Odemis on Python 3.6, and that is why the instructions use the fact that Anaconda
+supports multiple versions of Python simultaneously to install Python 3.6, even
+if anaconda typically comes with a newer version of Python (eg, 3.8).
 
 Python 2 setup
 """"""""""""""
@@ -199,7 +200,7 @@ Python 3 setup
 For Python 3, open the *Anaconda prompt* and type::
 
    cd Documents\odemis
-   conda create -y --name odemisdev python==3.6.8
+   conda create -y --name odemisdev python==3.6.12
    conda activate odemisdev
    conda config --append channels conda-forge
    conda install --name odemisdev --file requirements-py3.txt
@@ -292,14 +293,18 @@ Installing Python environment
 This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
-#. Install Anaconda from https://www.anaconda.com/download . Pick the Python 2.7
-   version, with the right architecture for your computer (most likely 64-bit).
+#. Install Anaconda from https://www.anaconda.com/download . Pick the right
+   architecture for your computer (most likely 64-bit).
+
+#. Switch Python to a version on which Odemis has been well-tested. Open the
+   Anaconda command prompt and type:
+   ``conda install python=3.6.12``
 
 #. Install Delmic's special version of Pyro4, by typing in the Anaconda command
    prompt the following command:
    ``pip install https://github.com/delmic/Pyro4/archive/master.zip``
 
-#. Install using ``pip install libtiff-0.4.2-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
+#. Install using ``pip install pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl`` (or ``-win32``),
    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 
 #.  Install OpenCV using ``conda install opencv -c conda-forge``.

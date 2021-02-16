@@ -3,7 +3,7 @@
 """
 Created on 16 Aug 2019
 
-@author: Thera Pals
+@author: Thera Pals, Kornee Kleijwegt
 
 Copyright © 2019 Thera Pals, Delmic
 
@@ -28,6 +28,8 @@ import os
 import time
 import unittest
 
+from odemis import model
+
 from odemis.driver import xt_client
 from odemis.driver.xt_client import DETECTOR2CHANNELNAME
 from odemis.model import ProgressiveFuture
@@ -43,10 +45,12 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 "inverted": ["x"],
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.130:4242",
+CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
+                           "detector": CONFIG_DETECTOR,
                            }
               }
 
@@ -68,6 +72,12 @@ class TestMicroscope(unittest.TestCase):
                 cls.efocus = child
             elif child.name == CONFIG_STAGE["name"]:
                 cls.stage = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.detector.terminate()
 
     def setUp(self):
         if TEST_NOHW:
@@ -229,6 +239,70 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.rotation.value += 0.01
         self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
         self.scanner.rotation.value = init_rotation
+
+    def _compute_expected_duration(self):
+        """Computes the expected duration of a single image acquisition."""
+        dwell = self.scanner.dwellTime.value
+        settle = 5.e-6
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_acquire(self):
+        """Test acquiring an image using the Detector."""
+        init_dwell_time = self.scanner.dwellTime.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        expected_duration = self._compute_expected_duration()
+        start = time.time()
+        im = self.detector.data.get()
+        duration = time.time() - start
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        # Set back dwell time to initial value
+        self.scanner.dwellTime.value = init_dwell_time
+
+    def test_stop_acquisition(self):
+        """Test stopping the acquisition of an image using the Detector."""
+        init_dwell_time = self.scanner.dwellTime.value
+        init_resolution = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        # Set resolution to a high value for a long acquisition that will be stopped.
+        self.scanner.resolution.value = (3072, 2048)  # px
+        self.detector.data.subscribe(self.receive_data)
+        self.detector.data.unsubscribe(self.receive_data)
+        # Set resolution to a low value for a quick acquisition.
+        self.scanner.resolution.value = (768, 512)  # px
+        im = self.detector.data.get()
+        # Check that the acquired image has the last set resolution.
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        # Set back resolution and dwell time to initial values
+        self.scanner.dwellTime.value = init_dwell_time
+        self.scanner.resolution.value = init_resolution
+
+    def test_live_change(self):
+        """Test changing the resolution while the acquisition is running."""
+        init_dwell_time = self.scanner.dwellTime.value
+        init_resolution = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        # Set resolution, acquire an image and check it has the correct resolution.
+        self.scanner.resolution.value = (1536, 1024)  # px
+        self.detector.data.subscribe(self.receive_data)
+        im = self.detector.data.get()
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        # Change resolution and check if the acquired image has the new resolution.
+        self.scanner.resolution.value = (768, 512)  # px
+        im = self.detector.data.get()
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.detector.data.unsubscribe(self.receive_data)
+        # Set back resolution and dwell time to initial values
+        self.scanner.dwellTime.value = init_dwell_time
+        self.scanner.resolution.value = init_resolution
+
+    def receive_data(self, dataflow, image):
+        """Callback for dataflow of acquisition tests."""
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        dataflow.unsubscribe(self.receive_data)
 
 
 class TestMicroscopeInternal(unittest.TestCase):
@@ -711,6 +785,135 @@ class TestMicroscopeInternal(unittest.TestCase):
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
         autofocus_state = self.microscope.is_autofocusing(channel)
         self.assertEqual(autofocus_state, False)
+
+    def test_set_resolution(self):
+        """Setting the beam shift."""
+        init_resolution = self.scanner.resolution.value
+        res = (768, 512)
+        self.scanner.resolution.value = res
+        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
+        # Test it still works for different values.
+        res = (1536, 1024)
+        self.scanner.resolution.value = res
+        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
+        # set resolution back to initial value
+        self.scanner.resolution.value = init_resolution
+
+    def test_get_mpp_orientation(self):
+        """
+        Test getting the multiprobe pattern orientation.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        mpp_orientation = self.microscope.get_mpp_orientation()
+        self.assertIsInstance(mpp_orientation, float)
+        self.assertTrue(-90 < mpp_orientation < 90)
+
+    def test_mpp_orientation_info(self):
+        """
+        Test getting the multiprobe pattern orientation info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        mpp_orientation_info = self.microscope.mpp_orientation_info()
+        self.assertIsInstance(mpp_orientation_info, dict)
+        self.assertTrue("unit" in mpp_orientation_info)
+        self.assertIsInstance(mpp_orientation_info["range"], tuple)
+        self.assertEqual(len(mpp_orientation_info["range"]), 2)
+
+    def test_get_aperture_index(self):
+        """
+        Test getting the aperture index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertIsInstance(aperture_index, int)
+        self.assertTrue(0 <= aperture_index <= 14)
+
+    def test_set_aperture_index(self):
+        """
+        Test setting the aperture index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        current_aperture_index = self.microscope.get_aperture_index()
+        aperture_range = tuple(self.microscope.aperture_index_info()["range"])
+        new_aperture_index = current_aperture_index + 1 if current_aperture_index < aperture_range[1] else \
+                                                                                             current_aperture_index - 1
+
+        self.microscope.set_aperture_index(new_aperture_index)
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertEqual(aperture_index, new_aperture_index)
+
+        self.microscope.set_aperture_index(current_aperture_index)
+        aperture_index = self.microscope.get_aperture_index()
+        self.assertEqual(aperture_index, current_aperture_index)
+
+    def test_aperture_index_info(self):
+        """
+        Test getting the aperture index info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        aperture_index_info = self.microscope.aperture_index_info()
+        self.assertIsInstance(aperture_index_info, dict)
+        self.assertIsInstance(aperture_index_info["range"], tuple)
+        self.assertEqual(len(aperture_index_info["range"]), 2)
+
+    def test_get_beamlet_index(self):
+        """
+        Test getting the beamlet index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertIsInstance(beamlet_index, tuple)
+        self.assertEqual(len(beamlet_index), 2)
+        self.assertTrue(1 <= beamlet_index[0] <= 8)
+        self.assertTrue(1 <= beamlet_index[1] <= 8)
+
+    def test_set_beamlet_index(self):
+        """
+        Test setting the beamlet index.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        current_index = self.microscope.get_beamlet_index()
+        # Make sure both the x and the y value are changed.
+        new_x_beamlet_index = 3 if current_index[0] != 3 else 6
+        new_y_beamlet_index = 5 if current_index[1] != 5 else 7
+        new_beamlet_index = (new_x_beamlet_index, new_y_beamlet_index)
+
+        self.microscope.set_beamlet_index(new_beamlet_index)
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertEqual(beamlet_index, new_beamlet_index)
+
+        self.microscope.set_beamlet_index(current_index)
+        beamlet_index = self.microscope.get_beamlet_index()
+        self.assertEqual(beamlet_index, current_index)
+
+    def test_beamlet_index_info(self):
+        """
+        Test getting the beamlet index info.
+        """
+        if self.xt_type != 'xttoolkit':
+            self.skipTest("This test needs XTToolkit to run.")
+
+        beamlet_index_info = self.microscope.beamlet_index_info()
+        self.assertIsInstance(beamlet_index_info, dict)
+        self.assertIsInstance(beamlet_index_info["range"], dict)
+        self.assertIsInstance(beamlet_index_info["range"]["x"], list)
+        self.assertIsInstance(beamlet_index_info["range"]["y"], list)
+        self.assertEqual(len(beamlet_index_info["range"]["x"]), 2)
+        self.assertEqual(len(beamlet_index_info["range"]["y"]), 2)
 
 
 if __name__ == '__main__':

@@ -27,7 +27,7 @@ import numpy
 from odemis import dataio
 from odemis import model
 from odemis.acq import stream
-from odemis.model import MD_WL_LIST, MD_WL_POLYNOMIAL, MD_TIME_LIST
+from odemis.model import MD_WL_LIST, MD_TIME_LIST
 import os
 
 
@@ -61,11 +61,10 @@ def data_to_static_streams(data):
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
-        if (((MD_WL_LIST in d.metadata or MD_WL_POLYNOMIAL in d.metadata) and
-             (ci >= 0 and d.shape[ci] > 1)) or
+        if ((MD_WL_LIST in d.metadata and (ci >= 0 and d.shape[ci] > 1)) or
             (ci >= 0 and d.shape[ci] >= 5)  # No metadata, but looks like a spectrum
            ):
-            if (MD_TIME_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1)):
+            if MD_TIME_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
                 klass = stream.StaticSpectrumStream
@@ -86,15 +85,11 @@ def data_to_static_streams(data):
             # AR data
             ar_data.append(d)
             continue
-        elif ((model.MD_IN_WL in d.metadata and model.MD_OUT_WL in d.metadata) or
-              model.MD_USER_TINT in d.metadata
-             ):
+        elif model.MD_IN_WL in d.metadata and model.MD_OUT_WL in d.metadata:
             # No explicit way to distinguish between Brightfield and Fluo,
-            # so guess it's Brightfield iif:
-            # * No tint
-            # * (and) Large band for excitation wl (> 100 nm)
+            # so guess it's Brightfield  if excitation wl is large (> 100 nm)
             in_wl = d.metadata.get(model.MD_IN_WL, (0, 0))
-            if model.MD_USER_TINT in d.metadata or in_wl[1] - in_wl[0] < 100e-9:
+            if in_wl[1] - in_wl[0] < 100e-9:
                 # Fluo
                 name = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
                 klass = stream.StaticFluoStream
@@ -108,6 +103,9 @@ def data_to_static_streams(data):
         elif model.MD_OUT_WL in d.metadata:  # only MD_OUT_WL
             name = d.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
             klass = stream.StaticCLStream
+        elif model.MD_USER_TINT in d.metadata:  # User requested a colour => fallback to FluoStream
+            name = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+            klass = stream.StaticFluoStream
         elif dims in ("CYX", "YXC") and d.shape[ci] in (3, 4):
             # Only decide it's RGB as last resort, because most microscopy data is not RGB
             name = d.metadata.get(model.MD_DESCRIPTION, "RGB data")

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Prepare the images to be embedded in a Python program. To be called every time
+# more images are added to the source. In practice, it just goes through PNG
+# images, and optimize them for size. (It used to do more, but that's not needed anymore.)
+# Call like:
+# ./util/groom-img.py -s src/odemis/gui/img/
 
 from __future__ import division, absolute_import, print_function
 
-import StringIO
 import argparse
-import glob
 import os
 import subprocess
 import sys
-from wx.tools.img2py import img2py
 
 
 def cmd_exists(cmd):
@@ -18,30 +20,27 @@ def cmd_exists(cmd):
                            stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE) == 0
 
-parser = argparse.ArgumentParser(description='Recursively compile all PNG images into a Python '
-                                             'module')
-#parser.add_argument("-o", "--optimize", help="Optimize PNG images", action='store_true')
-parser.add_argument("-s", "--skiplarge", help="Skip 'large' files", action='store_true')
-parser.add_argument("dir", help="Base directory (default to src/)", default="src/", nargs="?")
-args = parser.parse_args()
 
-# PNG optimisation
+def main(args):
+    parser = argparse.ArgumentParser(description='Recursively optimize all PNG images')
+    #parser.add_argument("-o", "--optimize", help="Optimize PNG images", action='store_true')
+    parser.add_argument("-s", "--skiplarge", help="Skip 'large' files", action='store_true')
+    parser.add_argument("dir", help="Base directory (default to src/)", default="src/", nargs="?")
+    args = parser.parse_args()
 
-#if args.optimize:
-if not cmd_exists('pngcrush'):
-    print("Pngcrush not found, can't optimize!")
-else:
+    if not cmd_exists('pngcrush'):
+        print("pngcrush not found, can't optimize!. Install it with \"sudo apt install pngcrush\"")
+        return 1
+
     for dirpath, dirnames, filenames in os.walk(args.dir):
         print("** Optimizing", dirpath)
 
         for f in [fn for fn in filenames if fn[-4:] == '.png']:
             ff = os.path.join(dirpath, f)
-            fs = os.path.getsize(ff)
 
-            if not args.skiplarge or fs < 10240:
+            if not args.skiplarge or os.path.getsize(ff) < 10240:
                 print(' - ', ff)
-                subprocess.call(['pngcrush', '-brute', '-rem', 'alla', ff, '%s.opt' % ff],
-                                stdout=subprocess.PIPE)
+                subprocess.check_call(['pngcrush', '-brute', '-rem', 'alla', ff, '%s.opt' % ff])
                 if os.path.exists('%s.opt' % ff):
                     os.rename('%s.opt' % ff, ff)
                 else:
@@ -49,25 +48,9 @@ else:
             else:
                 print(' - SKIPPING ', ff)
 
-# Directories that contain images to embed into data.py
-# img_dirs = (".", "button", "icon", "menu")
+    return 0
 
-# Image embedding
-#first = True
-#fakeoutput = StringIO.StringIO()  # for img2py
 
-#if not cmd_exists('img2py'):
-#    print("Img2py not found, can't generate python file!")
-#else:
-#    outpy = os.path.join(base_dir, 'data.py')
-#    for idir in img_dirs:
-#        dirpath = os.path.join(base_dir, idir)
-#        print("** Packaging", dirpath)
-
-#        for f in glob.glob(os.path.join(dirpath, "*.png")):
-#            print(' - ', f)
-
-#            sys.stdout = fakeoutput  # because img2py prints useless info uncontrollably
-#            img2py(f, outpy, append=(not first), catalog=True, functionCompatible=True)
-#            first = False
-#            sys.stdout = sys.__stdout__
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

@@ -2,4 +2,4 @@ etc/sudoers.d
 etc/logrotate.d
 etc/bash_completion.d
 usr/lib/odemis/plugins
-usr/lib/odemis/python3
+usr/lib/odemis/python2

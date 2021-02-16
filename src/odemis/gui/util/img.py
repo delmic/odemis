@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from past.builtins import basestring
-from odemis.gui.util import wx_adapter
 import threading
 import cairo
 import logging
@@ -34,7 +33,7 @@ import numpy
 from odemis import model
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion, img, units
+from odemis.util import intersect, fluo, img, units
 import time
 import wx
 import odemis.acq.stream as acqstream
@@ -44,7 +43,6 @@ from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
     SinglePointTemporalProjection, DataProjection
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
-import matplotlib.colors as colors
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -1996,9 +1994,9 @@ def get_ordered_images(streams, raw=False):
 
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
-        if isinstance(ostream, acqstream.OpticalStream):
+        if isinstance(ostream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.CLStream)):
             images_opt.append((data, BLEND_SCREEN, ostream, md))
-        elif isinstance(ostream, (acqstream.SpectrumStream, acqstream.CLStream)):
+        elif isinstance(ostream, acqstream.SpectrumStream):
             images_spc.append((data, BLEND_DEFAULT, ostream, md))
         else:
             images_std.append((data, BLEND_DEFAULT, ostream, md))
@@ -2010,11 +2008,6 @@ def get_ordered_images(streams, raw=False):
     images_opt.sort(key=get_area, reverse=True)
     images_spc.sort(key=get_area, reverse=True)
     images_std.sort(key=get_area, reverse=True)
-
-    # Reset the first image to be drawn to the default blend operator to be
-    # drawn full opacity (only useful if the background is not full black)
-    if images_opt:
-        images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
 
     return images_opt + images_std + images_spc, im_min_type
 
@@ -2270,6 +2263,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
     data_to_export = []
     fake_canvas = None
     n = len(images)
+    bm_last = images[-1].metadata["blend_mode"]
     for i, im in enumerate(images):
         if raw and not (im.ndim == 3 and im.shape[-1] == 4):
             # Non BGRA data type => we'll pass it completely as-is
@@ -2285,16 +2279,39 @@ def images_to_export_data(streams, view_hfw, view_pos,
             # The ruler overlay needs a canvas to draw itself, so use a fake canvas
             fake_canvas = FakeCanvas(ctx, buffer_size, buffer_center, (1 / buffer_scale[0], 1 / buffer_scale[1]))
 
-        if im.metadata['blend_mode'] == BLEND_SCREEN or raw:
-            # No transparency in case of "raw" export
+        blend_mode = im.metadata['blend_mode']
+        if n == 1 or raw:
+            # For single image, don't use merge ratio
+            # For raw, each image is a "single image"
             merge_ratio = 1.0
-        elif i == n - 1: # last image
-            if n == 1:
-                merge_ratio = 1.0
-            else:
-                merge_ratio = draw_merge_ratio
         else:
-            merge_ratio = 1 - i / n
+            # If there are all "screen" (= last one is screen):
+            # merge ratio   im0   im1
+            #     0         1      0
+            #    0.25       1      0.5
+            #    0.5        1      1
+            #    0.75       0.5    1
+            #     1         0      1
+            if bm_last == BLEND_SCREEN:
+                if ((draw_merge_ratio < 0.5 and i < n - 1) or
+                    (draw_merge_ratio >= 0.5 and i == n - 1)):
+                    merge_ratio = 1
+                else:
+                    merge_ratio = (0.5 - abs(draw_merge_ratio - 0.5)) * 2
+            else:  # bm_last == BLEND_DEFAULT
+                # Average all the first images
+                if i < n - 1:
+                    if blend_mode == BLEND_SCREEN:
+                        merge_ratio = 1.0
+                    else:
+                        merge_ratio = 1 - i / n
+                else:  # last image
+                    merge_ratio = draw_merge_ratio
+
+        # Reset the first image to be drawn to the default blend operator to be
+        # drawn full opacity (only useful if the background is not full black)
+        if i == 0:
+            blend_mode = BLEND_DEFAULT
 
         draw_image(
             ctx,
@@ -2308,7 +2325,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
             rotation=im.metadata['dc_rotation'],
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
-            blend_mode=im.metadata['blend_mode'],
+            blend_mode=blend_mode,
             interpolate_data=interpolate_data
         )
 
@@ -2609,16 +2626,15 @@ def merge_screen(im, background):
     Merges two images (im and background) into one using the "screen" operator:
     f(xA,xB) = xA + xB − xA·xB (with values between 0 and 1, with each channel independent)
     im, background: DataArray with im.shape = background.shape (either RGB or RGBA)
-    returns RGB DataArray (of the same shape as im)
+    returns RGBA DataArray (of the same YX as im, but with always depth=4)
     """
     assert im.shape == background.shape, "Images have different shapes."
     if im.shape[-1] != 3 and im.shape[-1] != 4:
         raise ValueError("Ovv images have an invalid number of channels: %d" % (im.shape[-1]))
 
-    md = im.metadata.copy()
-    md["dc_keepalpha"] = True
+    md = background.metadata.copy()
     im = format_rgba_darray(im, 255)  # convert to BGRA
-    im = model.DataArray(im, md)
+    im.metadata["dc_keepalpha"] = True
     background = format_rgba_darray(background, 255)
 
     height, width, _ = im.shape
@@ -2635,6 +2651,7 @@ def merge_screen(im, background):
                buffer_size, 1, blend_mode=BLEND_SCREEN)
 
     # Convert back to RGB
-    format_bgra_to_rgb(im, inplace=True)
-    return im
+    format_bgra_to_rgb(background, inplace=True)
+    background.metadata = md
+    return background
 

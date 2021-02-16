@@ -149,7 +149,6 @@ from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
 import os
-import sys
 import wx
 from wx.lib import wxcairo
 
@@ -444,14 +443,19 @@ class BufferedCanvas(wx.Panel):
         Note: the bitmap buffer is selected into the DC buffer in the buffer resize method
 
         """
+        csize = self.ClientSize
+        if 0 in csize:
+            # Cairo doesn't like 0 px contexts
+            logging.debug("Skipping draw on canvas of size %s", csize)
+            return
 
         dc_view = wx.PaintDC(self)
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.Blit(
             0, 0,  # destination point
-            self.ClientSize[0],  # size of area to copy
-            self.ClientSize[1],  # size of area to copy
+            csize[0],  # size of area to copy
+            csize[1],  # size of area to copy
             self._dc_buffer,  # source
             0, 0  # source point
         )
@@ -936,6 +940,12 @@ class BitmapCanvas(BufferedCanvas):
 
         if images:
             n = len(images)
+
+            im_last = images[-1]
+            if isinstance(im_last, tuple):
+                im_last = im_last[0][0]  # first tile
+            bm_last = im_last.metadata["blend_mode"]
+
             for i, im in enumerate(images):
                 if isinstance(im, tuple):
                     first_tile = im[0][0]
@@ -946,15 +956,39 @@ class BitmapCanvas(BufferedCanvas):
                 else:
                     md = im.metadata
 
-                if md['blend_mode'] == BLEND_SCREEN:
+                blend_mode = md['blend_mode']
+                if n == 1: # For single image, don't use merge ratio
                     merge_ratio = 1.0
-                elif i == n - 1: # last image
-                    if n == 1:
-                        merge_ratio = 1.0
-                    else:
-                        merge_ratio = self.merge_ratio
                 else:
-                    merge_ratio = 1 - i / n
+                    # If there are all "screen" (= last one is screen):
+                    # merge ratio   im0   im1
+                    #     0         1      0
+                    #    0.25       1      0.5
+                    #    0.5        1      1
+                    #    0.75       0.5    1
+                    #     1         0      1
+                    # TODO: for now, this only works correctly if the background
+                    # is black (otherwise, the background is also mixed in)
+                    if bm_last == BLEND_SCREEN:
+                        if ((self.merge_ratio < 0.5 and i < n - 1) or
+                            (self.merge_ratio >= 0.5 and i == n - 1)):
+                            merge_ratio = 1
+                        else:
+                            merge_ratio = (0.5 - abs(self.merge_ratio - 0.5)) * 2
+                    else:  # bm_last == BLEND_DEFAULT
+                        # Average all the first images
+                        if i < n - 1:
+                            if blend_mode == BLEND_SCREEN:
+                                merge_ratio = 1.0
+                            else:
+                                merge_ratio = 1 - i / n
+                        else:  # last image
+                            merge_ratio = self.merge_ratio
+
+                # Reset the first image to be drawn to the default blend operator to be
+                # drawn full opacity (only useful if the background is not full black)
+                if i == 0:
+                    blend_mode = BLEND_DEFAULT
 
                 if isinstance(im, tuple):
                     self._draw_tiles(
@@ -966,7 +1000,7 @@ class BitmapCanvas(BufferedCanvas):
                         rotation=md['dc_rotation'],
                         shear=md['dc_shear'],
                         flip=md['dc_flip'],
-                        blend_mode=md['blend_mode'],
+                        blend_mode=blend_mode,
                         interpolate_data=interpolate_data
                     )
                 else:
@@ -979,7 +1013,7 @@ class BitmapCanvas(BufferedCanvas):
                         rotation=im.metadata['dc_rotation'],
                         shear=im.metadata['dc_shear'],
                         flip=im.metadata['dc_flip'],
-                        blend_mode=im.metadata['blend_mode'],
+                        blend_mode=blend_mode,
                         interpolate_data=interpolate_data
                     )
 
@@ -1613,6 +1647,11 @@ class DraggableCanvas(BitmapCanvas):
             dc_view = wx.PaintDC(self)
 
         csize = self.ClientSize
+        if 0 in csize:
+            # Cairo doesn't like 0 px contexts
+            logging.debug("Skipping draw on canvas of size %s", csize)
+            return
+
         self.margins = ((self._bmp_buffer_size[0] - csize.x) // 2,
                         (self._bmp_buffer_size[1] - csize.y) // 2)
 

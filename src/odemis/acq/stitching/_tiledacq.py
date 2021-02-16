@@ -19,26 +19,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
 import logging
 import math
-import os
-import threading
-import time
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
-
 import numpy
-import psutil
-
 from odemis import model, dataio
 from odemis.acq import acqmng
-from odemis.acq import stitching
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
+from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
 from odemis.util import dataio as udataio
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov
+import os
+import psutil
+import threading
+import time
 
 # TODO: Find a value that works fine with cryo-secom
 # Percentage of the allowed difference of tile focus from good focus
@@ -83,7 +81,7 @@ class TiledAcquisitionTask(object):
             for stream in self._streams:
                 if model.hasVA(stream, "horizontalFoV"):
                     # Take the max. of either width or height
-                    stream.horizontalFoV.value = max(stream.horizontalFoV.range[1])
+                    stream.horizontalFoV.value = max(stream.horizontalFoV.range)
                     # Clip horizontal fov to total area in case it's smaller than max. value
                     stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._total_area))
         # Get the smallest field of view
@@ -517,10 +515,10 @@ class TiledAcquisitionTask(object):
         logging.info("Computing big image out of %d images", len(da_list))
         # TODO: Do this registration step in a separate thread while acquiring
         try:
-            das_registered = stitching.register(da_list, method=REGISTER_GLOBAL_SHIFT)
+            das_registered = register(da_list, method=REGISTER_GLOBAL_SHIFT)
         except ValueError as exp:
             logging.warning("Registration with global_shift failed %s. Retrying with identity registrar." % exp)
-            das_registered = stitching.register(da_list, method=REGISTER_IDENTITY)
+            das_registered = register(da_list, method=REGISTER_IDENTITY)
 
         weaving_method = WEAVER_COLLAGE_REVERSE  # Method used for SECOM
         logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
@@ -530,10 +528,10 @@ class TiledAcquisitionTask(object):
                 streams = []
                 for da in das_registered:
                     streams.append(da[s])
-                da = stitching.weave(streams, weaving_method)
+                da = weave(streams, weaving_method)
                 st_data.append(da)
         else:
-            da = stitching.weave(das_registered, weaving_method)
+            da = weave(das_registered, weaving_method)
             st_data.append(da)
         return st_data
 

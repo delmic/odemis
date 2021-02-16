@@ -938,6 +938,7 @@ class FluoStream(CameraStream):
         self.power.subscribe(self._onPower)
         # Colouration of the image
         self.tint.value = conversion.wave2rgb(center_em)
+        self.tint.subscribe(self._onTint)
 
     def _onActive(self, active):
         if active:
@@ -1016,6 +1017,13 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = img.tint_to_md_format(self.tint.value)
         super(FluoStream, self)._onNewData(dataflow, data)
+
+    def _onTint(self, tint):
+        """
+        Store the new tint value as metadata
+        """
+        if self.raw:
+            self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
 
 
 class StreakCamStream(CameraStream):

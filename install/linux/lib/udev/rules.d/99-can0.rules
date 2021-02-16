@@ -1,2 +1,2 @@
-SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set can0 type can bitrate 1000000"
+SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set can0 type can bitrate 500000"
 SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set up can0"

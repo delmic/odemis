@@ -166,33 +166,33 @@ class TestAcquisitionServer(unittest.TestCase):
 
     def test_externalStorageURL_VA(self):
         # Set default URL
-        test_url = 'ftp://testname:testword@testable.com/Test_images'
+        test_url = 'ftp://username:password@127.0.0.1:5000/directory/sub-directory'
         self.ASM_manager.externalStorageURL.value = test_url
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal scheme
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'wrong://testname:testword@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'wrong://username:password@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal character in user
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:testword@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:password@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal characters in password
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testwrong%$word@testable.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:testwrong%$word@127.0.0.1:5000/directory'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal character in host
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testword@non-test-%-able.com/Test_images'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@non-test-%-able/Test_images'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
         # Test illegal characters in path
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://testname:testable.com/Inval!d~Path'
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000/Inval!d~Path'
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
     def test_assembleCalibrationMetadata(self):
@@ -326,6 +326,8 @@ class TestAcquisitionServer(unittest.TestCase):
         Testing basics of checkMegaFieldExists functionality.
         """
         ASM = self.ASM_manager
+        # Set dwell time to minimum so scanning of an image is as fast.
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
         # In the "setUp" method the megafield id is (re)set everytime when te test is stared to a string which contains
         # the current time i.e. time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S").
         mega_field_id = self.MPPC.filename.value
@@ -1322,7 +1324,7 @@ class Test_ASMDataFlow(unittest.TestCase):
                 dataflow.next((x, y))
 
         # Wait a bit to allow some processing and receive images.
-        time.sleep(field_images[0] * field_images[1])
+        time.sleep(1.5 * field_images[0] * field_images[1])  # Allow 1.5 seconds per field image to offload.
         dataflow.unsubscribe(self.image_received)
         time.sleep(0.5)
         self.assertEqual(field_images[0] * field_images[1], self.counter)

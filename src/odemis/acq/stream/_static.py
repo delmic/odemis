@@ -224,6 +224,15 @@ class Static2DStream(StaticStream):
 
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
 
+        # Colouration of the image
+        if model.MD_USER_TINT in metadata:
+            try:
+                self.tint.value = img.md_format_to_tint(metadata[model.MD_USER_TINT])
+            except (ValueError, TypeError) as ex:
+                logging.warning("Failed to use tint '%s': %s.", metadata[model.MD_USER_TINT], ex)
+
+        self.tint.subscribe(self._onTint)
+
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection
         '''
@@ -245,6 +254,12 @@ class Static2DStream(StaticStream):
             if dims == "ZYX" and data.ndim == 3:
                 data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
         super(Static2DStream, self)._updateHistogram(data)
+
+    def _onTint(self, tint):
+        """
+        Store the new tint value as metadata
+        """
+        self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
 
 
 class StaticSEMStream(Static2DStream):
@@ -270,6 +285,11 @@ class StaticCLStream(Static2DStream):
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_OUT_WL.
         """
+        # Do it at the end, as it forces it the update of the image
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_CL
+
+        Static2DStream.__init__(self, name, raw, *args, **kwargs)
         try:
             em_range = raw.metadata[model.MD_OUT_WL]
             if isinstance(em_range, basestring):
@@ -281,11 +301,6 @@ class StaticCLStream(Static2DStream):
 
         except KeyError:
             logging.warning("No emission wavelength for CL stream")
-
-        # Do it at the end, as it forces it the update of the image
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_CL
-        Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
 
 class StaticBrightfieldStream(Static2DStream):
@@ -335,7 +350,7 @@ class StaticFluoStream(Static2DStream):
         except KeyError:
             logging.warning("No emission wavelength for fluorescence stream")
 
-        # colouration of the image
+        # Colouration of the image
         tint = raw.metadata.get(model.MD_USER_TINT, default_tint)
         try:
             self.tint.value = img.md_format_to_tint(tint)
@@ -534,7 +549,7 @@ class StaticSpectrumStream(StaticStream):
     A stream which displays only one static image/data. The data can be of type
     spectrum (C11YX), temporal spectrum (CT1YX) or time correlator (1T1YX).
     The main difference from the normal streams is that the data is 3D or 4D.
-    The metadata should can have a MD_WL_POLYNOMIAL or MD_WL_LIST or MD_TIME_LIST.
+    The metadata should can have a MD_WL_LIST or MD_TIME_LIST.
     When saving, the data will be converted to CTZYX.
 
     The histogram corresponds to the data after calibration, and selected via
@@ -547,8 +562,7 @@ class StaticSpectrumStream(StaticStream):
         """
         name (string)
         image (model.DataArray(Shadow) of shape (CYX), (C11YX), (CTYX), (CT1YX), (1T1YX)).
-        The metadata MD_WL_POLYNOMIAL or MD_WL_LIST can be included in order to
-        associate the C to a wavelength.
+        The metadata MD_WL_LIST can be included in order to associate the C to a wavelength.
         The metadata MD_TIME_LIST can be included to associate the T to a timestamp.
 
         .background is a DataArray of shape (CT111), where C & T have the same length as in the data.

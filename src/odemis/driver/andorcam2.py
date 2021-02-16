@@ -743,7 +743,7 @@ class AndorCam2(model.DigitalCamera):
 
         # For temporary stopping the acquisition (kludge for the andorshrk
         # SR303i which cannot communicate during acquisition)
-        self.hw_lock = threading.Lock() # to be held during DRV_ACQUIRING (or shrk communicating)
+        self.hw_lock = threading.RLock()  # to be held during DRV_ACQUIRING (or shrk communicating)
         # append None to request for a temporary stop acquisition. Like an
         # atomic counter, but Python has no atomic counter and lists are atomic.
         self.request_hw = []
