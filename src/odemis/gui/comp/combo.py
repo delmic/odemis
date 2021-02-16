@@ -223,7 +223,7 @@ class ColorMapComboBox(ComboBox):
         else:
             # for painting the items in the popup
             # Draw color map
-            colorbar_width = r.width * COLOBAR_WITH_RATIO
+            colorbar_width = int(round(r.width * COLOBAR_WITH_RATIO))
             gradient = getColorbar(color_map, colorbar_width, r.height)
             bmp = wx.Bitmap(*gradient.shape[1::-1])
             bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
