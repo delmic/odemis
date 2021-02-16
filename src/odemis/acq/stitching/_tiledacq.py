@@ -68,11 +68,11 @@ class TiledAcquisitionTask(object):
         self._future = future
         self._streams = streams
         self._stage = stage
-        self._starting_pos = {'x': area[0], 'y': area[1]}  # left, top
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
             logging.warning("Acquisition area {} rearranged into {}".format(area, normalized_area))
+        self._starting_pos = {'x': normalized_area[0], 'y': normalized_area[3]}  # left, top
 
         height = normalized_area[3] - normalized_area[1]
         width = normalized_area[2] - normalized_area[0]
@@ -231,7 +231,7 @@ class TiledAcquisitionTask(object):
             t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
                            abs(idx_change[1]) * tile_size[1] * overlap) / speed + 1
             self._future.running_subf.result(t)
-            # TODO: instead of sleeping, handle vibration effects
+            # FIXME: instead of sleeping, handle vibration effects
             time.sleep(1)
         except TimeoutError:
             logging.warning("Failed to move to tile %s", idx)
@@ -446,7 +446,8 @@ class TiledAcquisitionTask(object):
         prev_idx = [0, 0]
         i = 0
         # Make sure to begin from starting position
-        self._stage.moveAbs(self._starting_pos)
+        self._future.running_subf = self._stage.moveAbs(self._starting_pos)
+        self._future.running_subf.result()
 
         for ix, iy in self._generateScanningIndices((self._nx, self._ny)):
             logging.debug("Acquiring tile %dx%d", ix, iy)
@@ -517,8 +518,8 @@ class TiledAcquisitionTask(object):
         # TODO: Do this registration step in a separate thread while acquiring
         try:
             das_registered = stitching.register(da_list, method=REGISTER_GLOBAL_SHIFT)
-        except ValueError:
-            logging.warning("Registration with global_shift failed, retrying with identity registrar..")
+        except ValueError as exp:
+            logging.warning("Registration with global_shift failed %s. Retrying with identity registrar." % exp)
             das_registered = stitching.register(da_list, method=REGISTER_IDENTITY)
 
         weaving_method = WEAVER_COLLAGE_REVERSE  # Method used for SECOM
