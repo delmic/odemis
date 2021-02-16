@@ -303,7 +303,7 @@ class Slider(BaseSlider):
         dc.SetBackground(wx.Brush(bgc, wx.BRUSHSTYLE_SOLID))
         dc.Clear()
 
-        fgc = self.Parent.GetForegroundColour()
+        fgc = self.GetForegroundColour()
 
         if not self.Enabled:
             fgc = change_brightness(fgc, -0.5)
