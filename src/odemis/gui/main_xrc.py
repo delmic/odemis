@@ -729,6 +729,7 @@ class xrcfr_overview_acq(wx.Dialog):
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
+        self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -6783,7 +6784,42 @@ def __init_resources():
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
-                </object>
+                  <object class="sizeritem">
+					<object class="wxBoxSizer">
+							<object class="sizeritem">
+								<object class="wxStaticText">
+									<label>ZStack Steps</label>
+									<fg>#BFBFBF</fg>
+									<XRCED>
+										<assign_var>1</assign_var>
+									</XRCED>
+									<font>
+										<size>12</size>
+										<encoding>UTF-8</encoding>
+									</font>
+								</object>
+								<flag>wxTOP</flag>
+								<border>25</border>
+							</object>
+							<object class="sizeritem">
+								 <object class="UnitIntegerSlider" name="zstack_steps">
+										<size>-1,20</size>
+										<value>21</value>
+										<min>1</min>
+										<max>51</max>
+										<fg>#E5E5E5</fg>
+										<style>wxBORDER_NONE</style>
+										<XRCED>
+										  <assign_var>1</assign_var>
+										  <flag>wxEXPAND</flag>
+										</XRCED>
+									 </object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>25</border>
+							</object>
+						</object>
+					</object>
+				</object>
                 <size>400,-1</size>
                 <bg>#333333</bg>
                 <style>wxVSCROLL</style>
