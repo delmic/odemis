@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import copy
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
 import logging
 import math
@@ -31,6 +32,7 @@ from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE, REGISTER_IDE
 from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
+from odemis.model import DataArray
 from odemis.util import dataio as udataio
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 import os
@@ -46,13 +48,12 @@ FOCUS_RANGE_MARGIN = 100e-6
 # Indicate the number of tiles to skip during focus adjustment
 SKIP_TILES = 3
 
-
 class TiledAcquisitionTask(object):
     """
     The goal of this task is to acquire a set of tiles then stitch them together
     """
 
-    def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None):
+    def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None):
         """
         :param streams: (Stream) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -62,6 +63,7 @@ class TiledAcquisitionTask(object):
             that should be saved as metadata
         :param log_path: (string) directory and filename pattern to save acquired images for debugging
         :param future: (ProgressiveFuture or None) future to track progress, pass None for estimation only
+        :param zlevels: (list(float) or None) focus z positions required zstack acquisition
         """
         self._future = future
         self._streams = streams
@@ -91,6 +93,7 @@ class TiledAcquisitionTask(object):
         self._nx, self._ny = self._getNumberOfTiles()
 
         # To use in re-focusing acquired images in case they fell out of focus
+        # TODO: make adjust focus optional
         self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
         if self._focus_stream:
             # save initial focus value to be used in the AutoFocus function
@@ -113,6 +116,13 @@ class TiledAcquisitionTask(object):
             self._exporter = dataio.find_fittest_converter(filename)
             self._fn_bs, self._fn_ext = udataio.splitext(filename)
             self._log_dir = os.path.dirname(self._log_path)
+
+        if zlevels:
+            if self._focus_stream is None:
+                logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
+            self._zlevels = zlevels
+        else:
+            self._zlevels = []
 
     def _getFov(self, sd):
         """
@@ -385,7 +395,14 @@ class TiledAcquisitionTask(object):
         """
         if remaining is None:
             remaining = self._nx * self._ny
-        acq_time = acqmng.estimateTime(self._streams)
+
+        acq_time = 0
+        for stream in self._streams:
+            acq_stream_time = acqmng.estimateTime([stream])
+            if stream.focuser is not None and len(self._zlevels) > 1:
+                # Acquisition time for each stream will be multiplied by the number of zstack levels
+                acq_stream_time *= len(self._zlevels)
+            acq_time += acq_stream_time
 
         # Estimate stitching time based on number of pixels in the overlapping part
         max_pxs = 0
@@ -404,35 +421,123 @@ class TiledAcquisitionTask(object):
 
         return acq_time * remaining + move_time + stitch_time
 
-    def _save_tiles(self, ix, iy, das):
+    def _save_tiles(self, ix, iy, das, stream_cube_id=None):
         """
         Save the acquired data array to disk (for debugging)
         """
 
-        def save_tile(ix, iy, das):
-            fn_tile = "%s-%.5dx%.5d%s" % (self._fn_bs, ix, iy, self._fn_ext)
+        def save_tile(ix, iy, das, stream_cube_id=None):
+            if stream_cube_id is not None:
+                # Indicate it's a stream cube in the file name
+                fn_tile = "%s-cube%d-%.5dx%.5d%s" % (self._fn_bs, stream_cube_id, ix, iy, self._fn_ext)
+            else:
+                fn_tile = "%s-%.5dx%.5d%s" % (self._fn_bs, ix, iy, self._fn_ext)
             logging.debug("Will save data of tile %dx%d to %s", ix, iy, fn_tile)
             self._exporter.export(os.path.join(self._log_dir, fn_tile), das)
 
         # Run in a separate thread
-        threading.Thread(target=save_tile, args=(ix, iy, das), ).start()
+        threading.Thread(target=save_tile, args=(ix, iy, das, stream_cube_id), ).start()
 
-    def _acquireTile(self, i, ix, iy):
+    def _assembleZCube(self, images, zlevels):
         """
-        Calls acquire function and blocks until the data is returned.
-        :return (list of DataArrays): list of acquired das for the current tile
+        Construct xyz cube from a  z stack of images
+        :param images:  (list of DataArray of shape YX) list of z ordered images
+        :param zlevels:  (list of float) list of focus positions
+        :return: (DataArray of shape ZYX) the data array of the xyz cube
         """
-        # Update the progress bar
-        self._future.set_progress(end=self.estimateTime((self._nx * self._ny) - i) + time.time())
+        # images is a list of 3 dim data arrays.
+        # Will fail on purpose if the images contain more than 2 dimensions
+        ret = numpy.array([im.reshape(im.shape[-2:]) for im in images])
 
-        self._future.running_subf = acqmng.acquire(self._streams, self._settings_obs)
-        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
-        if e:
-            logging.warning("Acquisition for tile %dx%d partially failed: %s",
-                            ix, iy, e)
+        # Add back metadata
+        metadata3d = copy.copy(images[0].metadata)
+        # Extend pixel size to 3D
+        ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
+        ps_z = (zlevels[-1] - zlevels[0]) / (len(zlevels) - 1) if len(zlevels) > 1 else 1e-6
+
+        # Compute cube centre
+        c_x, c_y = metadata3d[model.MD_POS]
+        c_z = (zlevels[0] + zlevels[-1]) / 2  # Assuming zlevels are ordered
+        metadata3d[model.MD_POS] = (c_x, c_y, c_z)
+
+        # For a negative pixel size, convert to a positive and flip the z axis
+        if ps_z < 0:
+            ret = numpy.flipud(ret)
+            ps_z = -ps_z
+
+        metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
+        metadata3d[model.MD_DIMS] = "ZYX"
+
+        ret = DataArray(ret, metadata3d)
+
+        return ret
+
+    def _acquireStreamCompressedZStack(self, i, ix, iy, stream):
+        """
+        Acquire a compressed zstack image for the given stream.
+        The method does the following:
+            - Move focus over the list of zlevels
+            - For each focus level acquire image of the stream
+            - Construct xyz cube for the acquired zstack
+            - Compress the cube into a single image using 'maximum intensity projection'
+        :return DataArray: Acquired da for the current tile stream
+        """
+        zstack = []
+        for z in self._zlevels:
+            logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
+            stream.focuser.moveAbsSync({'z': z})
+            da = self._acquireStreamTile(i, ix, iy, stream)
+            zstack.append(da)
 
         if self._future._task_state == CANCELLED:
             raise CancelledError()
+        logging.debug(f"Zstack acquisition for tile {ix}x{iy}, stream {stream.name} finished, compressing data into a single image.")
+        # Convert zstack into a cube
+        fm_cube = self._assembleZCube(zstack, self._zlevels)
+        # Save the cube on disk if a log path exists
+        if self._log_path:
+            self._save_tiles(ix, iy, fm_cube, stream_cube_id=self._streams.index(stream))
+        # Compress the cube into a single image (using maximum intensity projection)
+        mip_image = numpy.amax(fm_cube, axis=0)
+        if self._future._task_state == CANCELLED:
+            raise CancelledError()
+        logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
+        return DataArray(mip_image, copy.copy(zstack[0].metadata))
+
+    def _acquireStreamTile(self, i, ix, iy, stream):
+        """
+        Calls acquire function and blocks until the data is returned.
+        :return DataArray: Acquired da for the current tile stream
+        """
+        # Update the progress bar
+        self._future.set_progress(end=self.estimateTime((self._nx * self._ny) - i) + time.time())
+        # Acquire data array for passed stream
+        self._future.running_subf = acqmng.acquire([stream], self._settings_obs)
+        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
+        if e:
+            logging.warning(f"Acquisition for tile {ix}x{iy}, stream {stream.name} partially failed: {e}")
+
+        if self._future._task_state == CANCELLED:
+            raise CancelledError()
+        try:
+            return das[0]  # return first da
+        except IndexError:
+            raise IndexError(f"Failure in acquiring tile {ix}x{iy}, stream {stream.name}.")
+
+    def _getTileDAs(self, i, ix, iy):
+        """
+        Iterate over each tile stream and construct their data arrays list
+        :return: list(DataArray) list of each stream DataArray
+        """
+        das = []
+        for stream in self._streams:
+            if stream.focuser is not None and len(self._zlevels) > 1:
+                # Acquire zstack images based on the given zlevels, and compress them into a single da
+                da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
+            else:
+                # Acquire a single image of the stream
+                da = self._acquireStreamTile(i, ix, iy, stream)
+            das.append(da)
         return das
 
     def _acquireTiles(self):
@@ -452,7 +557,7 @@ class TiledAcquisitionTask(object):
             self._moveToTile((ix, iy), prev_idx, self._sfov)
             prev_idx = ix, iy
 
-            das = self._acquireTile(i, ix, iy)
+            das = self._getTileDAs(i, ix, iy)
 
             if i == 0:
                 # Check the FoV is correct using the data, and if not update
@@ -503,7 +608,7 @@ class TiledAcquisitionTask(object):
                 logging.exception("Running autofocus failed on image i= %s." % i)
             else:
                 # Reacquire the out of focus tile (which should be corrected now)
-                das = self._acquireTile(i, ix, iy)
+                das = self._getTileDAs(i, ix, iy)
         return das
 
     def _stitchTiles(self, da_list):
@@ -578,27 +683,27 @@ class TiledAcquisitionTask(object):
         return st_data
 
 
-def estimateTiledAcquisitionTime(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None):
+def estimateTiledAcquisitionTime(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
     """
     Estimate the time required to complete a tiled acquisition task
     :returns: (float) estimated required time
     """
     # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None)
+    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None, zlevels=zlevels)
     return task.estimateTime()
 
 
-def estimateTiledAcquisitionMemory(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None):
+def estimateTiledAcquisitionMemory(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
     """
     Estimate the amount of memory required to complete a tiled acquisition task
     :returns (bool) True if sufficient memory available, (float) estimated memory
     """
     # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None)
+    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None, zlevels=zlevels)
     return task.estimateMemory()
 
 
-def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None):
+def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -611,6 +716,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     :param settings_obs: (SettingsObserver or None) class that contains a list of all VAs
         that should be saved as metadata
     :param log_path: (string) directory and filename pattern to save acquired images for debugging
+    :param zlevels: (list(float) or None) focus z positions required zstack acquisition
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a list of model.DataArray:
@@ -621,7 +727,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future.running_subf = model.InstantaneousFuture()
     future._task_lock = threading.Lock()
     # Create a tiled acquisition task
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future)
+    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()

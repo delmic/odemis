@@ -26,6 +26,8 @@ import time
 import unittest
 from concurrent.futures._base import CancelledError, FINISHED
 
+import numpy
+
 import odemis
 import odemis.acq.stream as stream
 from odemis import model
@@ -74,7 +76,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         fs1.excitation.value = sorted(fs1.excitation.choices)[0]
 
         fs2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
-                                cls.light, cls.light_filter)
+                                cls.light, cls.light_filter, focuser=cls.focus)
         fs2.excitation.value = sorted(fs2.excitation.choices)[-1]
         cls.sem_streams = [ss1]
         cls.fm_streams = [fs1, fs2]
@@ -183,6 +185,28 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             tiled_acq_task._getFov(None)
+
+    def test_compressed_stack(self):
+        """
+       Test the whole procedure (acquire compressed zstack + stitch) of acquireTiledArea function
+       """
+        # With fm streams
+        settings_obs = SettingsObserver([self.stage])
+        fm_fov = compute_camera_fov(self.ccd)
+        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
+        area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
+        overlap = 0.2
+        focus_value = self.focus.position.value['z']
+        zsteps = 3
+        # Create focus zlevels from the given zsteps number
+        zlevels = numpy.linspace(focus_value - (zsteps / 2 * 1e-6), focus_value + (zsteps / 2 * 1e-6), zsteps).tolist()
+
+        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap, settings_obs=settings_obs, zlevels=zlevels)
+        data = future.result()
+        self.assertTrue(future.done())
+        self.assertEqual(len(data), 2)
+        self.assertIsInstance(data[0], odemis.model.DataArray)
+        self.assertEqual(len(data[0].shape), 2)
 
     def test_whole_procedure(self):
         """

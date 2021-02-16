@@ -28,6 +28,9 @@ import copy
 import gc
 import logging
 import math
+
+import numpy
+
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
@@ -610,6 +613,8 @@ class AcquisitionDialog(xrcfr_acq):
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
 
+# Step value for z stack levels
+ZSTEP = 1e-6  # m
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
@@ -695,8 +700,13 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Set parameters for tiled acq
         self.overlap = 0.2
         try:
-            stage_rng = self._main_data_model.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-            # left, top, right, bottom
+            stage_md = self._main_data_model.stage.getMetadata()
+            stage_rng = stage_md[model.MD_POS_ACTIVE_RANGE].copy()
+            # Hack: Limit active range with overview map range if it's in metadata, until it's provided in the GUI
+            if model.MD_OVERVIEW_RANGE in stage_md and {'x', 'y'}.issubset(stage_md[model.MD_OVERVIEW_RANGE].keys()):
+                stage_rng.update(stage_md[model.MD_OVERVIEW_RANGE])
+
+            # left, bottom, right, top
             self.area = (stage_rng["x"][0], stage_rng["y"][0], stage_rng["x"][1], stage_rng["y"][1])
         except (KeyError, IndexError):
             raise ValueError("Failed to find stage.MD_POS_ACTIVE_RANGE with x and y range")
@@ -874,6 +884,20 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.streambar_controller.enable(True)
         self.streambar_controller.resume()
 
+    def _get_zstack_levels(self):
+        """
+        Calculate the zstack levels from the current focus position and zsteps value
+        :returns (list(float) or None) zstack levels for zstack acquisition
+        """
+        focus_value = self._main_data_model.focus.position.value['z']
+        # Clip zsteps value to allowed range
+        zsteps = self.zstack_steps.GetValue()
+        if zsteps == 1:
+            return None
+        # Create focus zlevels from the given zsteps number
+        zlevels = numpy.linspace(focus_value - (zsteps / 2 * ZSTEP), focus_value + (zsteps / 2 * ZSTEP), zsteps).tolist()
+        return zlevels
+
     def on_acquire(self, evt):
         """ Start the actual acquisition """
         logging.info("Acquire button clicked, starting acquisition")
@@ -895,11 +919,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
+        zlevels = self._get_zstack_levels()
         logging.info("Acquisition logged at %s", self.filename.value)
         self.acq_future = stitching.acquireTiledArea(self.get_acq_streams(), self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename.value)
+                                                     log_path=self.filename.value, zlevels=zlevels)
         # self.update_acquisition_time(est_time)
         # self.acq_future = acqmng.acquire(streams, self._main_data_model.settings_obs)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,

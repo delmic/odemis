@@ -602,7 +602,7 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
 
         # Now create the object
         slider = slide.UnitIntegerSlider(self.GetParentAsWindow(),
-                                        id=self.GetID(),
+                                        wid=self.GetID(),
                                         pos=self.GetPosition(),
                                         size=self.GetSize(),
                                         style=self.GetStyle(),
