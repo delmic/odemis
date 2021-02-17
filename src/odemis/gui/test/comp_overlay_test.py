@@ -249,7 +249,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = vol.SpotModeOverlay(cnvs)
-        sol.activate()
+        sol.active.value = True
         cnvs.add_view_overlay(sol)
         cnvs.update_drawing()
         test.gui_loop()
@@ -288,7 +288,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         vsol = vol.ViewSelectOverlay(cnvs)
-        vsol.activate()
+        vsol.active.value = True
         cnvs.add_view_overlay(vsol)
         # cnvs.current_mode = guimodel.TOOL_ZOOM
         test.gui_loop()
@@ -344,7 +344,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.dummy = do_stuff
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.sequence_va.value = [0, 1, 2, 3, 0]
-        dol.activate()
+        dol.active.value = True
 
         test.gui_loop()
 
@@ -365,7 +365,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         slol = vol.PointSelectOverlay(cnvs)
-        slol.activate()
+        slol.active.value = True
 
         def print_pos(pos):
             logging.debug(pos)
@@ -443,7 +443,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(view, tab_mod)
 
         wsol = wol.WorldSelectOverlay(cnvs)
-        wsol.activate()
+        wsol.active.value = True
         cnvs.add_world_overlay(wsol)
 
         tol = vol.TextViewOverlay(cnvs)
@@ -457,9 +457,9 @@ class OverlayTestCase(test.GuiTestCase):
 
         def toggle(evt):
             if wsol.active.value:
-                wsol.deactivate()
+                wsol.active.value = False
             else:
-                wsol.activate()
+                wsol.active.value = True
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -471,7 +471,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         rsol = wol.RepetitionSelectOverlay(cnvs)
-        rsol.activate()
+        rsol.active.value = True
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 400
         cnvs.update_drawing()
@@ -522,10 +522,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_view_overlay(tol)
 
         def toggle(evt):
-            if rsol.active.value:
-                rsol.deactivate()
-            else:
-                rsol.activate()
+            rsol.active.value = not rsol.active.value
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -547,7 +544,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         roa = model.TupleVA(UNDEFINED_ROI)
         rsol = wol.RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam)
-        rsol.activate()
+        rsol.active.value = True
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 100000
         cnvs.update_drawing()
@@ -597,7 +594,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         spotPosition = model.TupleVA((0.1, 0.1))
         sol = wol.SpotModeOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
-        sol.activate()
+        sol.active.value = True
         cnvs.add_world_overlay(sol)
         cnvs.scale = 100000
         cnvs.update_drawing()
@@ -625,7 +622,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.current_mode = TOOL_POINT
 
         psol = wol.PixelSelectOverlay(cnvs)
-        psol.activate()
+        psol.active.value = True
         psol.enabled = True
 
         cnvs.add_world_overlay(psol)
@@ -647,9 +644,9 @@ class OverlayTestCase(test.GuiTestCase):
 
         def toggle(evt):
             if psol.active.value:
-                psol.deactivate()
+                psol.active.value = False
             else:
-                psol.activate()
+                psol.active.value = True
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -679,7 +676,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.current_mode = TOOL_POINT
 
         slol = wol.SpectrumLineSelectOverlay(cnvs)
-        slol.activate()
+        slol.active.value = True
 
         cnvs.add_world_overlay(slol)
 
@@ -707,9 +704,9 @@ class OverlayTestCase(test.GuiTestCase):
 
         def toggle(evt):
             if slol.active.value:
-                slol.deactivate()
+                slol.active.value = False
             else:
-                slol.activate()
+                slol.active.value = True
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -936,7 +933,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.current_mode = TOOL_LINE
 
         lsol = wol.LineSelectOverlay(cnvs)
-        lsol.activate()
+        lsol.active.value = True
         lsol.enabled = True
 
         lsol.w_start_pos = (1e-4, 1e-4)
@@ -951,9 +948,9 @@ class OverlayTestCase(test.GuiTestCase):
 
         def toggle(evt):
             if lsol.active.value:
-                lsol.deactivate()
+                lsol.active.value = False
             else:
-                lsol.activate()
+                lsol.active.value = True
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -974,7 +971,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(pol)
 
         cnvs.current_mode = guimodel.TOOL_POINT
-        pol.activate()
+        pol.active.value = True
 
         test.gui_loop()
 

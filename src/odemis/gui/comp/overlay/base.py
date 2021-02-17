@@ -315,6 +315,7 @@ class Overlay(with_metaclass(ABCMeta, object)):
         # When an overlay is active, it will process mouse events
         # So, check for this VA if the sub class needs to process an event only if it's active.
         self.active = BooleanVA(False)
+        self.active.subscribe(self._on_active_va)
 
         # This attribute can be used to determine if the overlay needs to be drawn or not
         self.show = True
@@ -337,14 +338,19 @@ class Overlay(with_metaclass(ABCMeta, object)):
         # Window events
         self.cnvs.Bind(wx.EVT_SIZE, self.on_size)
 
-    def activate(self):
+    def _on_active_va(self, active):
+        if active:
+            self._activate()  # calls corresponding method of subclass if defined
+        else:
+            self._deactivate()
+        return active
+
+    def _activate(self):
         """ Process user generated mouse events """
-        self.active.value = True
         self.cnvs.Refresh()
 
-    def deactivate(self):
+    def _deactivate(self):
         """ Stop processing user generated mouse events """
-        self.active.value = False
         self.cnvs.Refresh()
 
     def add_label(self, text, pos=(0, 0), font_size=12, flip=True,

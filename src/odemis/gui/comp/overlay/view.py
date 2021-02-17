@@ -1613,10 +1613,10 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin, base.SpotModeBase):
         vx, vy = self.v_pos
         base.SpotModeBase.draw(self, ctx, vx, vy)
 
-    def activate(self):
+    def _activate(self):
         self._r_to_v()
-        base.ViewOverlay.activate(self)
+        base.ViewOverlay._activate(self)
 
-    def deactivate(self):
+    def _deactivate(self):
         self.v_pos = None
-        base.ViewOverlay.deactivate(self)
+        base.ViewOverlay._deactivate(self)

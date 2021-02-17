@@ -825,13 +825,15 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         else:
             WorldOverlay.on_leave(self, evt)
 
-    def activate(self):
+    def _activate(self):
+        # callback for .active VA
         self._ratio_to_phys()
-        WorldOverlay.activate(self)
+        WorldOverlay._activate(self)
 
-    def deactivate(self):
+    def _deactivate(self):
+        # callback for .active VA
         self.p_pos = None
-        WorldOverlay.deactivate(self)
+        WorldOverlay._deactivate(self)
 
 
 class GadgetToolInterface(with_metaclass(ABCMeta, object)):
@@ -2180,10 +2182,10 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
         if self.active.value:
             wx.CallAfter(self.cnvs.request_drawing_update)
 
-    def deactivate(self):
+    def _deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
-        WorldOverlay.deactivate(self)
+        WorldOverlay._deactivate(self)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     # Event handlers
