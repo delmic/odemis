@@ -186,6 +186,9 @@ class LiveStream(Stream):
         gc.collect()
 
     def _onNewData(self, dataflow, data):
+        if model.MD_ACQ_TYPE not in data.metadata and self.acquisitionType.value is not None:
+            data.metadata[model.MD_ACQ_TYPE] = self.acquisitionType.value
+
         if not self.raw:
             self.raw.append(data)
         else:
