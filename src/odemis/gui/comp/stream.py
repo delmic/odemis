@@ -1442,6 +1442,7 @@ class StreamBar(wx.Panel):
         while not isinstance(p, FoldPanelItem):
             p = p.Parent
 
+        self.Layout()
         p.Refresh()
 
     # TODO: maybe should be provided after init by the controller (like key of
@@ -1500,6 +1501,11 @@ class StreamBar(wx.Panel):
 
     def show_overview_button(self):
         self.btn_add_overview.Show()
+        self.fit_streams()
+
+    def hide_overview_button(self):
+        self.btn_add_overview.Hide()
+        self.fit_streams()
 
     def is_empty(self):
         return len(self.stream_panels) == 0
