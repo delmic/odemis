@@ -37,11 +37,11 @@ from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, Scan
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
 from odemis.gui.conf import get_acqui_conf, get_chamber_conf
+from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
-from odemis.gui.model import TOOL_NONE, StreamView
+from odemis.gui.model import TOOL_NONE, StreamView, AcquisitionWindowData
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, \
@@ -615,7 +615,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_secom_acquire.Enable()
 
 # Step value for z stack levels
-ZSTEP = 1e-6  # m
+ZSTEP = 2e-6  # m
+
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
@@ -639,8 +640,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # duplicate the interface, but with only one view
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
 
-        self.filename = model.StringVA(create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
-                                                       ".ome.tiff", self.conf.fn_count))
+        # The pattern to use for storing each tile file individually
+        # None disables storing them
+        self.filename_tiles = create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
+                                              ".ome.tiff")
 
         # Create a new settings controller for the acquisition dialog
         self._settings_controller = LocalizationSettingsController(
@@ -682,14 +685,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # attach the view to the viewport
         self.pnl_view_acq.canvas.fit_view_to_next_image = False
         self.pnl_view_acq.setView(self._view, self._tab_data_model)
-
-        # The TOOL_ROA is not present because we don't allow the user to change
-        # the ROA), so we need to explicitly request the canvas to show the ROA.
-        if hasattr(self._tab_data_model, "roa") and self._tab_data_model.roa is not None:
-            cnvs = self.pnl_view_acq.canvas
-            self.roa_overlay = RepetitionSelectOverlay(cnvs, self._tab_data_model.roa,
-                                                             self._tab_data_model.fovComp)
-            cnvs.add_world_overlay(self.roa_overlay)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
@@ -744,22 +739,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         orig (MicroscopyGUIData)
         return (MicroscopyGUIData)
         """
-        # TODO: we'd better create a new view and copy the streams
-        new = copy.copy(orig)  # shallow copy
-
-        new.streams = model.ListVA(orig.streams.value)  # duplicate
+        data_model = AcquisitionWindowData(orig.main)
+        data_model.streams.value.extend(orig.streams.value)
 
         # create view (which cannot move or focus)
         view = guimodel.MicroscopeView("All")
-
-        # differentiate it (only one view)
-        new.views = model.ListVA()
-        new.views.value.append(view)
-        new.focussedView = model.VigilantAttribute(view)
-        new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
-                                             choices={guimodel.VIEW_LAYOUT_ONE})
-        new.tool = model.IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
-        return new
+        data_model.views.value = [view]
+        data_model.focussedView.value = view
+        return data_model
 
     def add_streams(self):
         """
@@ -808,8 +795,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.gauge_acq.Hide()
             self.Layout()
 
-        # Enable/disable Fine alignment check box
-        streams = self._view.getStreams()
         self.update_acquisition_time()
 
         # update highlight
@@ -907,10 +892,26 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         zlevels = numpy.linspace(focus_value - (zsteps / 2 * ZSTEP), focus_value + (zsteps / 2 * ZSTEP), zsteps).tolist()
         return zlevels
 
+    def _fit_view_to_area(self):
+        center = ((self.area[0] + self.area[2]) / 2,
+                  (self.area[1] + self.area[3]) / 2)
+        self._view.view_pos.value = center
+
+        fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
+        self.pnl_view_acq.set_mpp_from_fov(fov)
+
     def on_acquire(self, evt):
         """ Start the actual acquisition """
         logging.info("Acquire button clicked, starting acquisition")
+        acq_streams = self.get_acq_streams()
+        if not acq_streams:
+            logging.info("No stream to acquire, ending immediately")
+            self.on_close(evt)  # Nothing to do, so it's the same as closing the window
+
         self.acquiring = True
+
+        # Adjust view FoV to the whole area, so that it's possible to follow the acquisition
+        self._fit_view_to_area()
 
         self.btn_secom_acquire.Disable()
 
@@ -923,22 +924,21 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.gauge_acq.Show()
         self.Layout()  # to put the gauge at the right place
 
-        # For now, always indicate the best quality (even if the preset is set
-        # to "live")
+        # For now, always indicate the best quality
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
         zlevels = self._get_zstack_levels()
-        logging.info("Acquisition logged at %s", self.filename.value)
-        self.acq_future = stitching.acquireTiledArea(self.get_acq_streams(), self._main_data_model.stage, area=self.area,
+        logging.info("Acquisition tiles logged at %s", self.filename_tiles)
+        self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename.value, zlevels=zlevels)
-        # self.update_acquisition_time(est_time)
-        # self.acq_future = acqmng.acquire(streams, self._main_data_model.settings_obs)
+                                                     log_path=self.filename_tiles, zlevels=zlevels)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
+        # TODO: Build-up the complete image during the acquisition, so that the
+        #       progress can be followed live.
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
         self.btn_cancel.SetLabel("Cancel")
