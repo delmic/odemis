@@ -173,31 +173,15 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x 64 bits.
-It's also possible to use the 32 bits, and even an old version with Python 2.7, in which case
-you should follow the first set of instructions. Also note that typically we validate
-Odemis on Python 3.6, and that is why the instructions use the fact that Anaconda
-supports multiple versions of Python simultaneously to install Python 3.6, even
-if anaconda typically comes with a newer version of Python (eg, 3.8).
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and
+pick the right architecture for your computer (most likely 64-bit).
+Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.8)
+The following instructions use the fact that Anaconda supports multiple versions of Python 
+simultaneously to install Python 3.6.
 
-Python 2 setup
-""""""""""""""
-For Python 2.7, open the *Anaconda prompt* and type::
-
-   cd Documents\odemis
-   conda create -y --name odemisdev python==2.7.16
-   conda activate odemisdev
-   conda config --append channels conda-forge
-   # Edit requirements.txt and remove remove Pyro4
-   conda install --name odemisdev --file requirements.txt
-   conda develop src
-   pip install git+https://github.com/delmic/Pyro4.git
-
-Download and install `Microsoft Visual C++ Compiler for Python 2.7 <https://www.microsoft.com/download/details.aspx?id=44266>`_.
-
-Python 3 setup
-""""""""""""""
-For Python 3, open the *Anaconda prompt* and type::
+Setup
+"""""
+Open the *Anaconda prompt* and type::
 
    cd Documents\odemis
    conda create -y --name odemisdev python==3.6.12
@@ -205,7 +189,7 @@ For Python 3, open the *Anaconda prompt* and type::
    conda config --append channels conda-forge
    conda install --name odemisdev --file requirements-py3.txt
    conda develop src
-   pip install git+https://github.com/delmic/Pyro4.git
+   pip install https://github.com/delmic/Pyro4/archive/master.zip
 
 Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
 and pick the "Visual C++ build tools".
@@ -281,8 +265,8 @@ Installing Odemis Viewer
 This is an optional step, which allows you to open and analyse acquisitions files
 straight into the same graphical interface as the acquisition software.
 
-Download the Odemis viewer from http://www.delmic.com/odemis. In case your
-browser warns you about potential thread, confirm you are willing to download
+Download the Odemis viewer from https://www.delmic.com/en/products/clem-solutions/secom. 
+In case your browser warns you about potential thread, confirm you are willing to download
 the file. Then run the executable, and Odemis viewer will be available as a
 standard software.
 
@@ -293,32 +277,60 @@ Installing Python environment
 This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
-#. Install Anaconda from https://www.anaconda.com/download . Pick the right
-   architecture for your computer (most likely 64-bit).
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and 
+pick the right architecture for your computer (most likely 64-bit). Anaconda typically comes
+with a newer version of Python (eg, 3.8). It's crucial to create a new environment
+with the python version (3.6.12) on which Odemis has been well tested.
 
-#. Switch Python to a version on which Odemis has been well-tested. Open the
-   Anaconda command prompt and type:
-   ``conda install python=3.6.12``
-
-#. Install Delmic's special version of Pyro4, by typing in the Anaconda command
-   prompt the following command:
-   ``pip install https://github.com/delmic/Pyro4/archive/master.zip``
-
-#. Install using ``pip install pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl`` (or ``-win32``),
-   downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
-
-#.  Install OpenCV using ``conda install opencv -c conda-forge``.
+#. To create a new conda environment, named odemis, open the Anaconda command prompt and type:
+   ``conda create -n odemis python=3.6.12``.
+   
+#. Note that the new 'odemis' environment should be activated in order to do the
+   following steps. To activate the environment type ``conda activate odemis``.
+   Note that you will have to re-execute this command every time the Anaconda command-line is started.
+   Once it's activated, the environment name is shown in the command line of
+   Anaconda command prompt. It looks like:
+   ``(odemis) C:\Users\...``.
 
 #. Download the ZIP file of the latest release of Odemis from:
-   https://github.com/delmic/odemis/releases
+   https://github.com/delmic/odemis/releases.
+      
+#. Extract the Odemis release into the folder Documents (or any folder of
+   your preference). The folder is named with the release number of Odemis.
+   You can rename the extracted folder 'odemis-release_version' to 'Odemis'.
+    
+#. Open the anaconda prompt and make sure you are in the Odemis folder, with the
+   'odemis' python environment activated::
+   
+    cd Documents\Odemis
+    conda activate odemis
+    conda config --append channels conda-forge
+    conda install --name odemis --file requirements-py3.txt
+    conda develop src   
+   
+#. To use this new conda python environment follow the instructions of 
+   http://medium.com/@apremgeorge/using-conda-python-environments-with-spyder-ide-and-jupyter-notebooks-in-windows-4e0a905aaac5.
+   Note that:
+      
+   #. to set the conda environment for jupyter install the kernel inside the 'odemis"
+      environment by typing ``conda install -c anaconda ipykernel``.
+      To use jupyter notebook, first install it by typing ``pip install jupyter notebook``.
 
-#. Extract the Odemis release into ``C:\Program Files\Odemis`` (or any folder of
-   your preference).
+   #. to set the conda environment for Spyder install the spyder kernel inside the environment 
+      and type ``conda install "spyder-kernels<1.10.0"``.
+    
+#. Install Delmic's special version of Pyro4, by typing in the Anaconda command
+   prompt the following command:
+   ``pip install https://github.com/delmic/Pyro4/archive/master.zip``.
 
-#. Open an *Anaconda Prompt* and type ``conda develop C:\Program Files\Odemis\src``.
-   (ie, the folder where you've extracted Odemis followed by ``src``)
-
+#. Download bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl (or ‑win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#bitarray ,
+   and pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl (or -win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff.
+   and install them with a single command ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl``
+   (or ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win32.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win32.whl`` based on your system type).
+   
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
+Note that you may need to navigate to the Documents/Odemis/src folder to be able to import from odemis.
+
 To read an acquisition file you can use code such as:
 
 .. code-block:: python
