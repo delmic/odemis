@@ -22,21 +22,31 @@ This file is part of Odemis.
 
 from __future__ import division
 
-import logging
-import numpy
-import wx
 import copy
-
+import logging
+from odemis.acq import stream
+from odemis.dataio import tiff
 from odemis.gui import model
+from odemis.gui.comp import popup
 from odemis.gui.comp.grid import ViewportGrid
+from odemis.gui.conf import get_acqui_conf
 from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
-from odemis.util import limit_invocation
-from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS, \
-                         MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY
 from odemis.gui.util.img import insert_tile_to_image, merge_screen
+from odemis.model import (MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS,
+                          MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY,
+                          MD_POS_ACTIVE_RANGE, MD_DESCRIPTION)
+from odemis.util import limit_invocation, comp
+from odemis.util.filename import create_filename
+from odemis.util.img import getBoundingBox
+import numpy
+import wx
+
+
 import odemis.acq.stream as acqstream
+import odemis.gui.cont.acquisition as acqcont
+import odemis.util.dataio as udataio
 
 
 class ViewPortController(object):
@@ -298,11 +308,14 @@ MAX_OVV_SIZE = 0.05  # m
 class OverviewController(object):
     """ Class to connect stage history and overview canvas together and to control the overview image  """
 
-    def __init__(self, main_data, tab_data, overview_canvas, m_view):
-        self._data_model = tab_data
+    def __init__(self, main_data, tab, overview_canvas, m_view, stream_bar):
+        self.main_data = main_data
+        self._tab = tab
+        self._data_model = tab.tab_data_model
         self.canvas = overview_canvas
         self.m_view = m_view
-        self.main_data = main_data
+        self._stream_bar = stream_bar
+        self.conf = get_acqui_conf()
 
         self.curr_s = None
 
@@ -312,10 +325,6 @@ class OverviewController(object):
         if hasattr(m_view, "merge_ratio"):
             m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
 
-        if tab_data.main.stage:
-            tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
-            tab_data.main.chamberState.subscribe(self._on_chamber_state)
-            tab_data.streams.subscribe(self._on_current_stream)
 
         # Global overview image (Delphi)
         if main_data.overview_ccd:
@@ -339,38 +348,97 @@ class OverviewController(object):
 
         # Built-up overview image
         self.ovv_im, self.m_view.mpp.value = self._initialize_ovv_im(OVV_SHAPE)
+        logging.debug("Overview image FoV: %s", getBoundingBox(self.ovv_im))
 
         # Initialize individual ovv images for optical and sem stream
         self.im_opt = copy.deepcopy(self.ovv_im)
         self.im_sem = copy.deepcopy(self.ovv_im)
+        # Extra images to be used for complete overviews, shown behind the build-up images
+        self._bkg_opt = copy.deepcopy(self.ovv_im)
+        self._bkg_sem = copy.deepcopy(self.ovv_im)
 
         # Add stream to view
         self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im,
                                                        acq_type=MD_AT_OVV_TILES)
         self.m_view.addStream(self.upd_stream)
 
+        self._data_model.focussedView.subscribe(self._on_focused_view)
+
+        if main_data.stage:
+            # Update the image when the stage move
+            main_data.stage.position.subscribe(self.on_stage_pos_change, init=True)
+            main_data.chamberState.subscribe(self._on_chamber_state)
+            self._data_model.streams.subscribe(self._on_current_stream)
+
+            # Add a "acquire overview" button.
+            self._stream_bar.btn_add_overview.Bind(wx.EVT_BUTTON, self._on_overview_acquire)
+            self._acquisition_controller = acqcont.OverviewStreamAcquiController(self._data_model, tab)
+            self._bkg_ovv_subs = {}  # Just used temporarily when background overview is projected
+
+    def _on_focused_view(self, view):
+        """
+        Called when the focused view changes, to switch the ADD STREAM button
+        with a ADD OVERVIEW button.
+        """
+        if not self.main_data.stage:
+            return
+
+        if view == self.m_view:
+            logging.debug("Will display ADD OVERVIEW button")
+            self._stream_bar.hide_add_button()
+            self._stream_bar.show_overview_button()
+        else:
+            logging.debug("Will display standard ADD STREAM button")
+            self._stream_bar.hide_overview_button()
+            self._stream_bar.show_add_button()
+
     def _initialize_ovv_im(self, shape):
         """
         Initialize an overview image, i.e. a black DataArray with corresponding
         metadata. 
-        shape: XYC tuple 
-        returns: DataArray of shape XYC, mpp value 
+        shape (int, int, int): XYC tuple
+        returns:
+            DataArray of shape XYC: a new DataArray, black, with PIXEL_SIZE and POS metadata
+              to fit the stage (active) range
+            (float, float): mpp value
         """
-        # Initialize the size of the ovv image with the stage size if the stage is small (< 5cm),
-        # otherwise fall back to OVV_SHAPE
-        ax_x = self.main_data.stage.axes["x"]
-        ax_y = self.main_data.stage.axes["y"]
+        # Initialize the size of the ovv image with the MD_POS_ACTIVE_RANGE,
+        # fallback to the stage size.
+        # It it's too "big" (> 5cm) fallback to OVV_SHAPE.
+        stg_md = self.main_data.stage.getMetadata()
+
+        def get_range(an):
+            ax_def = self.main_data.stage.axes[an]
+            rng = None
+            if hasattr(ax_def, "range"):
+                rng = ax_def.range
+
+            try:
+                rng = stg_md[MD_POS_ACTIVE_RANGE][an]
+            except KeyError:
+                pass
+            except Exception:
+                logging.exception("Failed to get active range for axis %s", an)
+
+            return rng
+
+        rng_x = get_range("x")
+        rng_y = get_range("y")
+
         mpp = max(MAX_OVV_SIZE / shape[0], MAX_OVV_SIZE / shape[1])
-        if hasattr(ax_x, "range") and hasattr(ax_y, "range"):
-            max_x = ax_x.range[1] - ax_x.range[0]
-            max_y = ax_y.range[1] - ax_y.range[0]
+        pos = self.m_view.view_pos.value
+        if rng_x is not None and rng_y is not None:
+            max_x = rng_x[1] - rng_x[0]
+            max_y = rng_y[1] - rng_y[0]
             if max_x < MAX_OVV_SIZE and max_y < MAX_OVV_SIZE:
                 mpp = max(max_x / shape[0], max_y / shape[1])
+            pos = sum(rng_x) / 2, sum(rng_y) / 2
 
         ovv_im = DataArray(numpy.zeros(shape, dtype=numpy.uint8))
         ovv_im.metadata[MD_DIMS] = "YXC"
         ovv_im.metadata[MD_PIXEL_SIZE] = (mpp, mpp)
-        ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
+        ovv_im.metadata[MD_POS] = pos
+
         return ovv_im, mpp
 
     def reset_ovv(self):
@@ -380,6 +448,8 @@ class OverviewController(object):
         self.ovv_im[:] = 0
         self.im_opt[:] = 0
         self.im_sem[:] = 0
+        self._bkg_opt[:] = 0
+        self._bkg_sem[:] = 0
 
         # Empty the stage history, as the interesting locations on the previous
         # sample have probably nothing in common with this new sample
@@ -444,7 +514,18 @@ class OverviewController(object):
     @limit_invocation(1)  # max 1 Hz
     def _onNewImage(self, _):
         # update overview whenever the streams change, limited to a frequency of 1 Hz
-        self._update_ovv()
+        if self.curr_s and self.curr_s.image.value is not None:
+            s = self.curr_s
+            img = s.image.value
+            logging.debug("Updating overview using image at %s", getBoundingBox(img))
+            if isinstance(s, acqstream.OpticalStream):
+                insert_tile_to_image(img, self.im_opt)
+            elif isinstance(s, acqstream.EMStream):
+                insert_tile_to_image(img, self.im_sem)
+            else:
+                logging.info("%s not added to overview image as it's not optical nor EM", s)
+
+            self._update_ovv()
 
     def _on_chamber_state(self, state):
         # We don't wait for CHAMBER_VACUUM, as the optical stream can already
@@ -454,23 +535,15 @@ class OverviewController(object):
             self.reset_ovv()
 
     def _update_ovv(self):
-        """ Update the overview image with the currently active stream. """
-        if self.curr_s and self.curr_s.image.value is not None:
-            s = self.curr_s
-            img = s.image.value
-            if isinstance(s, acqstream.OpticalStream):
-                self.im_opt = insert_tile_to_image(img, self.im_opt)
-            elif isinstance(s, acqstream.EMStream):
-                self.im_sem = insert_tile_to_image(img, self.im_sem)
-            else:
-                logging.info("%s not added to overview image as it's not optical nor EM", s)
+        """ Update the overview image based on the sub images. """
+        # Merge all overview images: Overview = (bkg opt + opt) + (bkg_sem + sem)
+        opt = merge_screen(self._bkg_opt, self.im_opt)
+        sem = merge_screen(self._bkg_sem, self.im_sem)
+        self.ovv_im = merge_screen(opt, sem)
 
-            # Merge optical and sem overview images
-            self.ovv_im = merge_screen(self.im_opt, self.im_sem)
-
-            # Update display
-            self.upd_stream.update(self.ovv_im)
-            self.canvas.fit_view_to_content()
+        # Update display
+        self.upd_stream.update(self.ovv_im)
+        self.canvas.fit_view_to_content()
 
     def calc_stream_size(self):
         """ Calculate the physical size of the current view """
@@ -478,23 +551,108 @@ class OverviewController(object):
         p_size = None
         # Calculate the stream size (by using the latest stream used)
         for strm in self._data_model.streams.value:
-            image = strm.image.value
-            if image is not None:
-                try:
-                    pixel_size = image.metadata[MD_PIXEL_SIZE]
-                    x, y, _ = image.shape
-                    p_size = (x * pixel_size[0], y * pixel_size[1])
-                    break
-                except KeyError:
-                    pass
+            try:
+                bbox = strm.getBoundingBox()
+                p_size = (bbox[2] - bbox[0], bbox[3] - bbox[1])
+                break
+            except ValueError:  # no data (yet) on the stream
+                pass
+
         if p_size is None:
+            # fallback to using the SEM FoV or CCD
             if self.main_data.ebeam:
-                # fallback to using the SEM FoV (if no stream has any image)
-                p_size = (self.main_data.ebeam.shape[0] * self.main_data.ebeam.pixelSize.value[0],
-                          self.main_data.ebeam.shape[1] * self.main_data.ebeam.pixelSize.value[1])
+                p_size = comp.compute_scanner_fov(self.main_data.ebeam)
+            elif self.main_data.ccd:
+                p_size = comp.compute_camera_fov(self.main_data.ccd)
             else:
-                p_size = (5, 5)
+                logging.debug(u"Unknown FoV, will guess 100 µm")
+                p_size = (100e-6, 100e-6)  # m
+
         return p_size
+
+    def _on_overview_acquire(self, evt):
+        # Disable direct image update, as it would duplicate the overview image, but less pretty.
+        self.main_data.stage.position.unsubscribe(self.on_stage_pos_change)
+        self._on_current_stream([])
+
+        try:
+            das = self._acquisition_controller.open_acquisition_dialog()
+        finally:
+            self.main_data.stage.position.subscribe(self.on_stage_pos_change)
+            self._on_current_stream(self._data_model.streams.value)
+
+        if not das:
+            return
+
+        for da in das:
+            logging.debug("Acquired overview image %s FoV: %s",
+                          da.metadata.get(MD_DESCRIPTION, ""), getBoundingBox(da))
+
+        # Store the data somewhere, so that it's possible to open it full size later
+        self._save_overview(das)
+
+        # Convert each DataArray to a Stream + Projection, so that we can display it
+        streams = udataio.data_to_static_streams(das)
+
+        # Only reset the channels which have a new data
+        opt = [s for s in streams if isinstance(s, stream.OpticalStream)]
+        if opt:
+            self._bkg_opt[:] = 0
+        em = [s for s in streams if isinstance(s, stream.EMStream)]
+        if em:
+            self._bkg_sem[:] = 0
+
+        # Compute the projection, this is done asynchronously (and for now,
+        # all at the same time, which might be clever... or not, if the
+        # data is really large and the memory is limited)
+        projs = [stream.RGBSpatialProjection(s) for s in opt + em]
+        logging.debug("Adding %s streams to the overview", len(projs))
+
+        for p in projs:
+
+            def add_bkg_ovv(im, proj=p):
+                """
+                Receive the projected image (RGB) and add it to the overview
+                """
+                # To handle cases where the projection was faster than subscribing,
+                # we get called at subscription. If we receive None, we just need
+                # to be a little bit more patient.
+                if im is None:
+                    return
+
+                if isinstance(proj.stream, stream.OpticalStream):
+                    bkg = self._bkg_opt
+                else:
+                    bkg = self._bkg_sem
+                insert_tile_to_image(im, bkg)
+                logging.debug("Added overview projection %s", proj.name.value)
+
+                # Normally not necessary as the image will not change, and the
+                # projection + stream will go out of scope, which will cause
+                # the VA to be unsubscribed automatically. But it feels cleaner.
+                proj.image.unsubscribe(add_bkg_ovv)
+                del self._bkg_ovv_subs[proj]
+
+                # We could only do it when _bkg_ovv_subs is empty, as a sign it's
+                # the last one... but it could delay quite a bit, and could easily
+                # break if for some reason projection fails.
+                self._update_ovv()
+
+            # Keep a reference
+            self._bkg_ovv_subs[p] = add_bkg_ovv
+            p.image.subscribe(add_bkg_ovv, init=True)
+
+    def _save_overview(self, das):
+        """
+        Save a set of DataArrays into a single TIFF file
+        das (list of DataArrays)
+        """
+        fn = create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
+                             ".ome.tiff")
+        # We could use find_fittest_converter(), but as we always use tiff, it's not needed
+        tiff.export(fn, das, pyramid=True)
+        popup.show_message(self._tab.main_frame, "Overview saved", "Stored in %s" % (fn,),
+                           timeout=3)
 
 
 class ViewButtonController(object):
