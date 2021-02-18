@@ -699,10 +699,18 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Set parameters for tiled acq
         self.overlap = 0.2
         try:
+            # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE,
+            # which can be overridden by MD_OVERVIEW_RANGE.
+            # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
+            stage_rng = {
+                "x": self._main_data_model.stage.axes["x"].range,
+                "y": self._main_data_model.stage.axes["y"].range
+            }
+
             stage_md = self._main_data_model.stage.getMetadata()
-            stage_rng = stage_md[model.MD_POS_ACTIVE_RANGE].copy()
-            # Hack: Limit active range with overview map range if it's in metadata, until it's provided in the GUI
-            if model.MD_OVERVIEW_RANGE in stage_md and {'x', 'y'}.issubset(stage_md[model.MD_OVERVIEW_RANGE].keys()):
+            if model.MD_POS_ACTIVE_RANGE in stage_md:
+                stage_rng.update(stage_md[model.MD_POS_ACTIVE_RANGE])
+            if model.MD_OVERVIEW_RANGE in stage_md:
                 stage_rng.update(stage_md[model.MD_OVERVIEW_RANGE])
 
             # left, bottom, right, top
