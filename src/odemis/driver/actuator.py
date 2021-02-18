@@ -2733,7 +2733,7 @@ class LinkedHeightFocus(model.Actuator):
         # Prevent movement when current parent rx != 0
         self._checkParentRxRotation()
         # Move the underlying lens with the relative shift value
-        self.parent._execute_fn_within_subfuture(future, self._lensz.moveRel, {'z': shift})
+        self.parent._execute_fn_within_subfuture(future, self._lensz.moveRel, {'z': shift['z']})
         # If the new position is in focus range, set the MD_FAV_POS_ACTIVE with this new value
         if self._isInRange():
             self._metadata[model.MD_FAV_POS_ACTIVE] = {'z': self.position.value['z']}
