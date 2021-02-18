@@ -733,9 +733,11 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
-    if mem_sufficient:
-        future.set_progress(end=mem_est + time.time())
-        # connect the future to the task and run in a thread
-        executeAsyncTask(future, task.run)
+    if not mem_sufficient:
+        raise IOError("Not enough RAM to safely acquire the overview: %g GB needed" % (mem_est / 1024 ** 3,))
+
+    future.set_progress(end=mem_est + time.time())
+    # connect the future to the task and run in a thread
+    executeAsyncTask(future, task.run)
 
     return future
