@@ -478,6 +478,8 @@ def getColorbar(color_map, width, height, alpha=False):
     alpha: (bool): set to true if you want alpha channel
     return: numpy Array of uint8 RGB tuples
     """
+    assert isinstance(width, int) and width > 0
+    assert isinstance(height, int) and height > 0
     gradient = numpy.linspace(0.0, 1.0, width)
     gradient = numpy.tile(gradient, (height, 1))
     gradient = color_map(gradient)
