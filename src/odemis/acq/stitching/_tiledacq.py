@@ -20,7 +20,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import copy
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, CancelledError
+from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
+from concurrent.futures import CancelledError, TimeoutError
 import logging
 import math
 import numpy
@@ -242,7 +243,7 @@ class TiledAcquisitionTask(object):
             # FIXME: instead of sleeping, handle vibration effects
             time.sleep(1)
         except TimeoutError:
-            logging.warning("Failed to move to tile %s", idx)
+            logging.warning("Failed to move to tile %s within %s s", idx, t)
             self._future.running_subf.cancel()
             # Continue acquiring anyway... maybe it has moved somewhere near
 
@@ -618,6 +619,7 @@ class TiledAcquisitionTask(object):
         """
         st_data = []
         logging.info("Computing big image out of %d images", len(da_list))
+
         # TODO: Do this registration step in a separate thread while acquiring
         try:
             das_registered = register(da_list, method=REGISTER_GLOBAL_SHIFT)
