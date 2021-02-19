@@ -1022,7 +1022,7 @@ class Scanner(model.Emitter):
 
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+        self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
@@ -1108,7 +1108,7 @@ class Scanner(model.Emitter):
         self.pixelSize.notify(pxs)
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+        self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, dwell_time):
         self.parent.set_dwell_time(dwell_time)
@@ -1384,7 +1384,8 @@ class Detector(model.Detector):
                     # Acquire the image
                     image = self.parent.get_latest_image(self._channel_name)
 
-                    md = self.parent._metadata.copy()
+                    md = self.parent._scanner._metadata.copy()
+                    md.update(self._metadata)
                     md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
                     md[model.MD_ROTATION] = self.parent._scanner.rotation.value
 
