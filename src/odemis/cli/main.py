@@ -347,19 +347,37 @@ def print_vattributes(component, pretty):
             continue
         print_vattribute(name, value, pretty)
 
+
+def map_metadata_names():
+    """
+    Find the name of each known metadata
+    return dict str->str: the metadata key string -> the name of the metadata (without the "MD_")
+    """
+    ret = {}
+    for n, v in inspect_getmembers(model, lambda m: isinstance(m, str)):
+        if n.startswith("MD_"):
+            ret[v] = n[3:]
+
+    return ret
+
+
 def print_metadata(component, pretty):
     md = component.getMetadata()
+
+    md2name = map_metadata_names()
     if pretty:
         if not md:
             return
         print("\tMetadata:")
-        for name, value in md.items():
+        for key, value in md.items():
+            name = md2name.get(key, "'%s'" % (key,))
             if isinstance(value, basestring):
                 print(u"\t\t%s: '%s'" % (name, value))
             else:
                 print(u"\t\t%s: %s" % (name, value))
     else:
-        for name, value in md.items():
+        for key, value in md.items():
+            name = md2name.get(key, "'%s'" % (key,))
             print(u"%s\ttype:metadata\tvalue:%s" % (name, value))
 
 def print_attributes(component, pretty):
@@ -473,14 +491,13 @@ def update_metadata(comp_name, key_val_str):
     """
     component = get_component(comp_name)
 
+    md2name = map_metadata_names()
     md = {}
     for key_name, str_val in key_val_str.items():
         # Check that the metadata is a valid one. It's a bit tricky as there is no
         # "official" list. But we look at the ones defined in model.MD_*
-        for n, v in inspect_getmembers(model, lambda m: isinstance(m, str)):
-            if n.startswith("MD_") and v == key_name:
-                key = key_name
-                break
+        if key_name in md2name:
+            key = key_name
         else:
             # fallback to looking for MD_{key_name}
             try:
