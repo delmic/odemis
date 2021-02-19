@@ -2617,8 +2617,8 @@ class LinkedHeightFocus(model.Actuator):
         try:
             pos_active = md[model.MD_FAV_POS_ACTIVE]["z"]
             if not self._range[0] <= pos_active <= self._range[1]:
-                raise ValueError("Focus FAV_POS_ACTIVE must be within range %s, but got %s",
-                                 self._range[0], pos_active)
+                raise ValueError("Focus FAV_POS_ACTIVE must be within range %s, but got %s" %
+                                 (self._range[0], pos_active))
         except KeyError:
             pass  # MD_FAV_POS_ACTIVE not changed
 
