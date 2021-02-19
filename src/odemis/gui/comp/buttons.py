@@ -190,6 +190,8 @@ class BtnMixin(object):
             font.SetPointSize(self.btns['font_size'][self.height])
             self.SetFont(font)
 
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_capture_lost)
+
     def set_face_colour(self, color):
         if color in self.btns:
             self.face_colour = color
@@ -494,6 +496,25 @@ class BtnMixin(object):
             logging.debug("Button disabled while holding mouse capture")
             self.ReleaseMouse()
         super(BtnMixin, self).Enable(enable)
+
+        # FIXME: if the button triggers the display of another window, there
+        # is risk that clicking 1.5 time keeps the capture forever (at least on
+        # Linux GTK 3, with wxPython 4.0.1). A 1.5 click means: process left down,
+        # left up, (other window starts), left down, (other window appears).
+        # Closing the other window with the keyboard brings back mouse control.
+        # This doesn't seem to happen with pre-made dialogs, but it does for our
+        # modal dialogs created from XRC.
+        # No idea how to deal with this for now...
+
+        # It's partly fixed in wxPython commit 883d093cda (released in v4.0.7),
+        # by introducing the function just below. It avoids getting an assertion
+        # error, but it's still possible to keep the capture.
+    def _on_capture_lost(self, evt):
+        # Can be deleted once we only support wxPython v4.0.7+ .
+        logging.debug("Mouse capture lost: %s", evt)
+        self.up = True
+        self.Refresh()
+        self.Update()
 
 
 class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
