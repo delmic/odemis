@@ -44,7 +44,8 @@ from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, StreamView
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector, \
+    VigilantAttributeConnector
 from odemis.util import units
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
@@ -648,6 +649,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             highlight_change=True  # also adds a "Reset" context menu
         )
 
+        self.zsteps = model.IntContinuous(1, range=(1, 51))
+        self._zsteps_vac = VigilantAttributeConnector(self.zsteps, self.zstack_steps, events=wx.EVT_SLIDER)
+
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
 
@@ -724,10 +728,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             if hasattr(entry, "vigilattr"):
                 entry.vigilattr.subscribe(self.on_setting_change)
 
+        self.zsteps.subscribe(self.on_setting_change)
+
     def stop_listening_to_va(self):
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
                 entry.vigilattr.unsubscribe(self.on_setting_change)
+
+        self.zsteps.unsubscribe(self.on_setting_change)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -828,7 +836,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             else:
                 acq_time = stitching.estimateTiledAcquisitionTime(streams,
                                                               self._main_data_model.stage,
-                                                              self.area, self.overlap)
+                                                              self.area, self.overlap,
+                                                              zlevels=self._get_zstack_levels())
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(acq_time))
@@ -891,7 +900,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         focus_value = self._main_data_model.focus.position.value['z']
         # Clip zsteps value to allowed range
-        zsteps = self.zstack_steps.GetValue()
+        zsteps = self.zsteps.value
         if zsteps == 1:
             return None
         # Create focus zlevels from the given zsteps number
