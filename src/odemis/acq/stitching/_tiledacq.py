@@ -736,7 +736,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     if not mem_sufficient:
         raise IOError("Not enough RAM to safely acquire the overview: %g GB needed" % (mem_est / 1024 ** 3,))
 
-    future.set_progress(end=mem_est + time.time())
+    future.set_progress(end=task.estimateTime() + time.time())
     # connect the future to the task and run in a thread
     executeAsyncTask(future, task.run)
 
