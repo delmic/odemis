@@ -3104,8 +3104,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_sem_imaging">
-												<icon>img/icon/ico_eject.png</icon>
-												<icon_on>img/icon/ico_eject_orange.png</icon_on>
+												<icon>img/icon/ico_sem.png</icon>
+												<icon_on>img/icon/ico_sem_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>SEM IMAGING</label>
@@ -3126,8 +3126,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_fm_imaging">
-												<icon>img/icon/ico_imaging.png</icon>
-												<icon_on>img/icon/ico_imaging_orange.png</icon_on>
+												<icon>img/icon/ico_meteorimaging.png</icon>
+												<icon_on>img/icon/ico_meteorimaging_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>FM IMAGING</label>
@@ -3148,8 +3148,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_grid1">
-												<icon>img/icon/ico_milling.png</icon>
-												<icon_on>img/icon/ico_milling_orange.png</icon_on>
+												<icon>img/icon/ico_meteorgrid.png</icon>
+												<icon_on>img/icon/ico_meteorgrid_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>GRID 1</label>
@@ -3170,8 +3170,8 @@
 										<object class="sizeritem">
 											<object class="GraphicRadioButton"
       												name="btn_switch_grid2">
-												<icon>img/icon/ico_coating.png</icon>
-												<icon_on>img/icon/ico_coating_orange.png</icon_on>
+												<icon>img/icon/ico_meteorgrid.png</icon>
+												<icon_on>img/icon/ico_meteorgrid_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>GRID 2</label>
