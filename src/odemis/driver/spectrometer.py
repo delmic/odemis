@@ -21,12 +21,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from itertools import chain
 import logging
 import math
-import numpy
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
-from itertools import chain
+from odemis.util import img
 
 # This is a class that represents a spectrometer (ie, a detector to acquire
 # a spectrum) by wrapping a DigitalCamera and a spectrograph (ie, actuator which
@@ -287,38 +287,7 @@ class SpecDataFlow(model.DataFlow):
         """
         if data.shape[0] != 1:  # Shape is YX, so shape[0] is *vertical*
             logging.debug("Shape of spectrometer data is %s, binning vertical dim", data.shape)
-            orig_dtype = data.dtype
-            orig_shape = data.shape
-            data = numpy.sum(data, axis=0)  # uint64 (if data.dtype is int)
-            data.shape = (1,) + data.shape
-            orig_bin = data.metadata.get(model.MD_BINNING, (1, 1))
-            data.metadata[model.MD_BINNING] = orig_bin[0], orig_bin[1] * orig_shape[0]
-
-            # Subtract baseline (aka black level) to avoid it from being multiplied,
-            # so instead of having "Sum(data) + Sum(bl)", we have "Sum(data) + bl".
-            try:
-                baseline = data.metadata[model.MD_BASELINE]
-                baseline_sum = orig_shape[0] * baseline
-                # If the baseline is too high compared to the actual black, we
-                # could end up subtracting too much, and values would underflow
-                # => be extra careful and never subtract more than min value.
-                minv = float(data.min())
-                extra_bl = baseline_sum - baseline
-                if extra_bl > minv:
-                    extra_bl = minv
-                    logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
-                                 baseline, orig_shape[0], extra_bl)
-
-                # Same as "data -= extra_bl", but also works if extra_bl < 0
-                numpy.subtract(data, extra_bl, out=data, casting="unsafe")
-                data.metadata[model.MD_BASELINE] = baseline_sum - extra_bl
-            except KeyError:
-                pass
-
-            # If int, revert to original type, with data clipped (not overflowing)
-            if orig_dtype.kind in "biu":
-                idtype = numpy.iinfo(orig_dtype)
-                data = data.clip(idtype.min, idtype.max).astype(orig_dtype)
+            data = img.Bin(data, (1, data.shape[0]))
 
         # Check the metadata seems correct, and if not, recompute it on-the-fly
         md = self._beg_metadata

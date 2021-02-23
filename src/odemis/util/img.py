@@ -704,6 +704,71 @@ def Subtract(a, b):
         return a - b
 
 
+def Bin(data, binning):
+    """
+    Combines adjacent pixels together, by summing them, in a similar way that
+      it's done on a CCD.
+    data (DataArray of shape YX): the data to bin. The dimensions should be
+      multiple of the binning.
+    binning (1<=int, 1<=int): binning in X and Y
+    return (DataArray of shape Y'X', with the same dtype as data): all cluster of
+      pixels of binning are summed into a single pixel. If it goes above the maximum
+      value, it's clipped to this maximum value.
+      The metadata PIXEL_SIZE and BINNING are updated (multiplied by the binning).
+      If data has MD_BASELINE (the average minimum value), the entire data will
+      be subtracted so that MD_BASELINE is kept. In other words,
+      baseline * (Bx*By - 1) is subtracted. If it would lead to negative value,
+      then the data is clipped to 0 and MD_BASELINE adjusted (increased).
+    """
+    assert data.ndim == 2
+    orig_dtype = data.dtype
+    orig_shape = data.shape
+    if binning[0] < 1 or binning[1] < 1:
+        raise ValueError("Binning must be > 0, but got %s" % (binning,))
+
+    # Reshape the data to go from YX to Y'ByX'Bx, so that we can sum on By and Bx
+    new_shape = orig_shape[0] // binning[1], orig_shape[1] // binning[0]
+    if (new_shape[0] * binning[1], new_shape[1] * binning[0]) != orig_shape:
+        raise ValueError("Data shape %s not multiple of binning %s" % (orig_shape, new_shape))
+    data = data.reshape(new_shape[0], binning[1], new_shape[1], binning[0])
+
+    data = numpy.sum(data, axis=(1, 3))  # uint64 (if data.dtype is int)
+    assert data.shape == new_shape
+    orig_bin = data.metadata.get(model.MD_BINNING, (1, 1))
+    data.metadata[model.MD_BINNING] = orig_bin[0] * binning[0], orig_bin[1] * binning[1]
+    if model.MD_PIXEL_SIZE in data.metadata:
+        pxs = data.metadata[model.MD_PIXEL_SIZE]
+        data.metadata[model.MD_PIXEL_SIZE] = pxs[0] * binning[0], pxs[1] * binning[1]
+
+    # Subtract baseline (aka black level) to avoid it from being multiplied,
+    # so instead of having "Sum(data) + Sum(bl)", we have "Sum(data) + bl".
+    try:
+        baseline = data.metadata[model.MD_BASELINE]
+        baseline_sum = binning[0] * binning[1] * baseline
+        # If the baseline is too high compared to the actual black, we
+        # could end up subtracting too much, and values would underflow
+        # => be extra careful and never subtract more than min value.
+        minv = float(data.min())
+        extra_bl = baseline_sum - baseline
+        if extra_bl > minv:
+            extra_bl = minv
+            logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
+                         baseline, orig_shape[0], extra_bl)
+
+        # Same as "data -= extra_bl", but also works if extra_bl < 0
+        numpy.subtract(data, extra_bl, out=data, casting="unsafe")
+        data.metadata[model.MD_BASELINE] = baseline_sum - extra_bl
+    except KeyError:
+        pass
+
+    # If int, revert to original type, with data clipped (not overflowing)
+    if orig_dtype.kind in "biu":
+        idtype = numpy.iinfo(orig_dtype)
+        data = data.clip(idtype.min, idtype.max).astype(orig_dtype)
+
+    return data
+
+
 # TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):
     """
