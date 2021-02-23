@@ -2,9 +2,9 @@
 """
 Created on 16 Aug 2019
 
-@author: Thera Pals, Kornee Kleijwegt
+@author: Thera Pals, Kornee Kleijwegt, Sabrina Rossberger
 
-Copyright © 2019 Thera Pals, Delmic
+Copyright © 2019-2021 Thera Pals, Delmic
 
 This file is part of Odemis.
 
@@ -562,19 +562,46 @@ class SEM(model.HwComponent):
             return self.server.beam_shift_info()
 
     def get_stigmator(self):
-        """Returns: (float) the current stigmator x and y values."""
+        """
+        Retrieves the current stigmator x and y values. This stigmator corrects for the astigmatism of the probe shape.
+        In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
+        (stigmator: secondary, physical position column: upper).
+
+        Returns
+        -------
+        tuple, (float, float) current x and y values of stigmator, unitless.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_stigmator()
+            return tuple(self.server.get_stigmator())
 
     def set_stigmator(self, x, y):
-        """Set the current stigmator values."""
+        """
+        Sets the stigmator x and y values. This stigmator corrects for the astigmatism of the probe shape.
+        In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
+        (stigmator: secondary, physical position column: upper).
+
+        Parameters
+        -------
+        x (float): x value of stigmator, unitless.
+        y (float): y value of stigmator, unitless.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_stigmator(x, y)
 
     def stigmator_info(self):
-        """Returns: (dict) the unit and xy-range of the stigmator."""
+        """
+        Returns the unit and range of the stigmator. This stigmator corrects for the astigmatism of the probe shape.
+        In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
+        (stigmator: secondary, physical position column: upper).
+
+        Returns
+        -------
+        dict, keys: "unit", "range"
+        'unit': returns physical unit of the stigmator, typically None.
+        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.stigmator_info()
@@ -703,27 +730,30 @@ class SEM(model.HwComponent):
 
     def get_primary_stigmator(self):
         """
-        Get the control values of the primary stigmator. Within the MBSEM system
+        Retrieves the current primary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Each stigmator has two control values; x and y.
+        as multi-probe shape. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Returns
         -------
-        tuple, (x, y) control values of primary stigmator, unitless.
+        tuple, (float, float) current x and y values of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_primary_stigmator()
+            return tuple(self.server.get_primary_stigmator())
 
     def set_primary_stigmator(self, x, y):
         """
-        Set the control values of the primary stigmator. Within the MBSEM system
+        Sets the primary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Each stigmator has two control values; x and y.
+        as multi-probe shape. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Parameters
         -------
-        (x, y) control values of primary stigmator, unitless.
+        x (float): x value of stigmator, unitless.
+        y (float): y value of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -731,13 +761,14 @@ class SEM(model.HwComponent):
 
     def primary_stigmator_info(self):
         """"
-        Get info about the 'unit' and 'range' of the primary stigmator.
+        Returns the unit and range of the primary stigmator. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Returns
         -------
-        dict, with keys 'unit' and 'range'
-        The key 'unit' gives the physical unit of the stigmator. The key
-        'range' returns a dict with the 'x' and 'y' range of the stigmator.
+        dict, keys: "unit", "range"
+        'unit': returns physical unit of the stigmator, typically None.
+        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -745,27 +776,30 @@ class SEM(model.HwComponent):
 
     def get_secondary_stigmator(self):
         """
-        Get the control values of the secondary stigmator. Within the MBSEM system
+        Retrieves the current secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Each stigmator has two control values; x and y.
+        as multi-probe shape. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Returns
         -------
-        tuple, (x, y) control values of primary stigmator, unitless.
+        tuple, (float, float) current x and y values of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_secondary_stigmator()
+            return tuple(self.server.get_secondary_stigmator())
 
     def set_secondary_stigmator(self, x, y):
         """
-        Get the control values of the secondary stigmator. Within the MBSEM system
+        Sets the secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Each stigmator has two control values; x and y.
+        as multi-probe shape. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Parameters
         -------
-        (x, y) control values of primary stigmator, unitless.
+        x (float): x value of stigmator, unitless.
+        y (float): y value of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -773,17 +807,63 @@ class SEM(model.HwComponent):
 
     def secondary_stigmator_info(self):
         """"
-        Get info about the 'unit' and 'range' of the secondary stigmator.
+        Returns the unit and range of the secondary stigmator. Only available on MBSEM systems.
+        Note: Will be deprecated as soon as FumoBeta is refurbished.
 
         Returns
         -------
-        dict, with keys 'unit' and 'range'
-        The key 'unit' gives the physical unit of the stigmator. The key
-        'range' returns a dict with the 'x' and 'y' range of the stigmator.
+        dict, keys: "unit", "range"
+        'unit': returns physical unit of the stigmator, typically None.
+        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.secondary_stigmator_info()
+
+    def get_pattern_stigmator(self):
+        """
+        Retrieves the current pattern stigmator x and y values. Only available on MBSEM systems.
+        This stigmator corrects for the astigmatism of the multi-probe pattern shape
+        (stigmator: primary, physical position column: lower).
+
+        Returns
+        -------
+        tuple, (float, float) current x and y values of stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return tuple(self.server.get_pattern_stigmator())
+
+    def set_pattern_stigmator(self, x, y):
+        """
+        Sets the pattern stigmator x and y values. Only available on MBSEM systems.
+        This stigmator corrects for the astigmatism of the multi-probe pattern shape
+        (stigmator: primary, physical position column: lower).
+
+        Parameters
+        -------
+        x (float): x value of stigmator, unitless.
+        y (float): y value of stigmator, unitless.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_pattern_stigmator(x, y)
+
+    def pattern_stigmator_info(self):
+        """"
+        Returns the unit and range of the pattern stigmator. Only available on MBSEM systems.
+        This stigmator corrects for the astigmatism of the multi-probe pattern shape
+        (stigmator: primary, physical position column: lower).
+
+        Returns
+        -------
+        dict, keys: "unit", "range"
+        'unit': returns physical unit of the stigmator, typically None.
+        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.pattern_stigmator_info()
 
     def get_dc_coils(self):
         """
