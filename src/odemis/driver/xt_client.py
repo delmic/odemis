@@ -2023,28 +2023,28 @@ class MultiBeamScanner(Scanner):
         # TODO change VA and method names with pitch to delta pitch
         self.pitch = model.FloatContinuous(
             self.parent.get_pitch() * 1e-6,
-            unit=pitch_info["unit"],
+            unit="m",
             range=tuple(i * 1e-6 for i in pitch_info["range"]),
             setter=self._setPitch,
         )
 
-        beam_stigmator_info = self.parent.primary_stigmator_info()
+        beam_stigmator_info = self.parent.stigmator_info()
         beam_stigmator_range_x = beam_stigmator_info["range"]["x"]
         beam_stigmator_range_y = beam_stigmator_info["range"]["y"]
         beam_stigmator_range = tuple((i, j) for i, j in zip(beam_stigmator_range_x, beam_stigmator_range_y))
         self.beamStigmator = model.TupleContinuous(
-            tuple(self.parent.get_primary_stigmator()),
+            tuple(self.parent.get_stigmator()),
             unit=beam_stigmator_info["unit"],
             range=beam_stigmator_range,
             setter=self._setBeamStigmator)
 
-        pattern_stigmator_info = self.parent.secondary_stigmator_info()
+        pattern_stigmator_info = self.parent.pattern_stigmator_info()
         pattern_stigmator_range_x = pattern_stigmator_info["range"]["x"]
         pattern_stigmator_range_y = pattern_stigmator_info["range"]["y"]
         pattern_stigmator_range = tuple((i, j) for i, j in zip(pattern_stigmator_range_x,
                                                                    pattern_stigmator_range_y))
         self.patternStigmator = model.TupleContinuous(
-            tuple(self.parent.get_secondary_stigmator()),
+            tuple(self.parent.get_pattern_stigmator()),
             unit=pattern_stigmator_info["unit"],
             range=pattern_stigmator_range,
             setter=self._setPatternStigmator)
@@ -2062,7 +2062,7 @@ class MultiBeamScanner(Scanner):
         aperture_index_info = self.parent.aperture_index_info()
         self.apertureIndex = model.IntContinuous(
             int(self.parent.get_aperture_index()),
-            unit=aperture_index_info["unit"],
+            unit=None,
             range=tuple(int(i) for i in aperture_index_info["range"]),
             setter=self._setApertureIndex)
 
@@ -2105,11 +2105,11 @@ class MultiBeamScanner(Scanner):
             if pitch != self.pitch.value:
                 self.pitch._value = pitch
                 self.pitch.notify(pitch)
-            beam_stigmator = self.parent.get_primary_stigmator()
+            beam_stigmator = self.parent.get_stigmator()
             if beam_stigmator != self.beamStigmator.value:
                 self.beamStigmator._value = beam_stigmator
                 self.beamStigmator.notify(beam_stigmator)
-            pattern_stigmator = self.parent.get_secondary_stigmator()
+            pattern_stigmator = self.parent.get_pattern_stigmator()
             if pattern_stigmator != self.patternStigmator.value:
                 self.patternStigmator._value = pattern_stigmator
                 self.patternStigmator.notify(pattern_stigmator)
@@ -2141,12 +2141,12 @@ class MultiBeamScanner(Scanner):
         return self.parent.get_pitch() * 1e-6
 
     def _setBeamStigmator(self, beam_stigmator_value):
-        self.parent.set_primary_stigmator(*beam_stigmator_value)
-        return self.parent.get_primary_stigmator()
+        self.parent.set_stigmator(*beam_stigmator_value)
+        return self.parent.get_stigmator()
 
     def _setPatternStigmator(self, pattern_stigmator_value):
-        self.parent.set_secondary_stigmator(*pattern_stigmator_value)
-        return self.parent.get_secondary_stigmator()
+        self.parent.set_pattern_stigmator(*pattern_stigmator_value)
+        return self.parent.get_pattern_stigmator()
 
     def _setApertureIndex(self, aperture_index):
         self.parent.set_aperture_index(aperture_index)

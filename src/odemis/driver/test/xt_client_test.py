@@ -977,15 +977,18 @@ class TestMBScanner(unittest.TestCase):
                 cls.scanner = child
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.efocus = child
-            elif child.name == CONFIG_STAGE["name"]:
-                cls.stage = child
 
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No hardware available.")
+
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
-        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
+
+        if "xttoolkit" in self.microscope.swVersion.lower():
+            self.xt_type = "xttoolkit"
+        else:
+            raise TypeError("Xttoolkit must be running for this test.")
 
     def test_type_scanner_child(self):
         # Check if the scanner class is of the correct type
@@ -1023,15 +1026,15 @@ class TestMBScanner(unittest.TestCase):
         # Test if directly changing it via the VA works
         for test_stigmator_value in self.scanner.beamStigmator.range:
             self.scanner.beamStigmator.value = test_stigmator_value
-            self.assertEqual(test_stigmator_value, tuple(self.microscope.get_primary_stigmator()))
+            self.assertEqual(test_stigmator_value, tuple(self.microscope.get_stigmator()))
 
         # Test if errors are produced when a value outside of the range is set.
         with self.assertRaises(IndexError):
             self.scanner.beamStigmator.value = tuple(1.2 * i for i in self.scanner.beamStigmator.range[1])
-        self.assertEqual(test_stigmator_value, tuple(self.microscope.get_primary_stigmator()))
+        self.assertEqual(test_stigmator_value, tuple(self.microscope.get_stigmator()))
 
         # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_primary_stigmator(0, 0)
+        self.microscope.set_stigmator(0, 0)
         time.sleep(6)
         self.assertEqual((0, 0), tuple(self.scanner.beamStigmator.value))
 
@@ -1043,15 +1046,15 @@ class TestMBScanner(unittest.TestCase):
         # Test if directly changing it via the VA works
         for test_stigmator_value in self.scanner.patternStigmator.range:
             self.scanner.patternStigmator.value = test_stigmator_value
-            self.assertEqual(test_stigmator_value, tuple(self.microscope.get_secondary_stigmator()))
+            self.assertEqual(test_stigmator_value, tuple(self.microscope.get_pattern_stigmator()))
 
         # Test if errors are produced when a value outside of the range is set.
         with self.assertRaises(IndexError):
             self.scanner.patternStigmator.value = tuple(1.2 * i for i in self.scanner.patternStigmator.range[1])
-        self.assertEqual(test_stigmator_value, tuple(self.microscope.get_secondary_stigmator()))
+        self.assertEqual(test_stigmator_value, tuple(self.microscope.get_pattern_stigmator()))
 
         # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_secondary_stigmator(0, 0)
+        self.microscope.set_pattern_stigmator(0, 0)
         time.sleep(6)
         self.assertEqual((0, 0), tuple(self.scanner.patternStigmator.value))
 
