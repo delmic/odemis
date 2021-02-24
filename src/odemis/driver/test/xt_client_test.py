@@ -58,7 +58,6 @@ CONFIG_MB_SCANNER = {"name": "mb-scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
               "children": {"mb-scanner": CONFIG_MB_SCANNER,
                            "focus": CONFIG_FOCUS,
-                           "stage": CONFIG_STAGE,
                            "detector": CONFIG_DETECTOR,
                            }
               }
@@ -1132,18 +1131,21 @@ class TestMBScanner(unittest.TestCase):
         current_aperture_index = self.scanner.apertureIndex.value
         current_beamlet_index = self.scanner.beamletIndex.value
 
+        # Test multiple time to see if the change from True --> False and the other way around succeeds also if it is
+        # preceded by switch in beam mode via the VA.
         for multi_beam_boolean in [True, False, True, False, True]:
             self.scanner.multiBeamMode.value = multi_beam_boolean
-            time.sleep(6)
+            time.sleep(8)
             self.assertEqual(self.scanner.multiBeamMode.value, multi_beam_boolean)
             self.assertEqual(self.microscope.get_use_case(), 'MultiBeamTile' if multi_beam_boolean else 'SingleBeamlet')
             # Check if aperture and beamlet index do not change while switching beam modes.
             self.assertEqual(self.microscope.get_aperture_index(), current_aperture_index)
             self.assertEqual(self.microscope.get_beamlet_index(), current_beamlet_index)
 
-        # Test if the value is automatically updated when the value is not changed via the VA
+        # Test if the value is automatically updated when the value is not changed via the VA (and end the test with
+        # the beam turned off)
         self.microscope.set_use_case('SingleBeamlet')
-        time.sleep(6)
+        time.sleep(8)
         self.assertEqual(False, self.scanner.multiBeamMode.value)
 
         self.scanner.multiBeamMode.value = current_beam_mode

@@ -61,7 +61,7 @@ class SEM(model.HwComponent):
     Microscope server is done via Pyro5.
 
     By adding the using 'mb-scanner' child instead of a 'scanner' child this driver extends the class with the addition
-    of the XTtoolkit functionality.XTtoolkit provides extra functionality for the FAST-EM project which xtlib does not
+    of the XTtoolkit functionality. XTtoolkit provides extra functionality for the FAST-EM project which xtlib does not
     provide, it is a development library by TFS. To use this driver the XT adapter developed by Delmic should be
     running on the TFS PC. In the user configuration file `delmic-xt-config.ini` on the Microscope PC, xt_type must
     be set to "xttoolkit".
@@ -94,6 +94,10 @@ class SEM(model.HwComponent):
         try:
             if "mb-scanner" in children:
                 kwargs = children["mb-scanner"]
+                if "xttoolkit" in self._swVersion.lower():
+                    self.xt_type = "xttoolkit"
+                else:
+                    raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
             else:
                 kwargs = children["scanner"]
         except (KeyError, TypeError):
@@ -2020,6 +2024,7 @@ class MultiBeamScanner(Scanner):
 
         # Add XTtoolkit specific VA's
         pitch_info = self.parent.pitch_info()
+        assert (pitch_info["unit"], "um")
         # TODO change VA and method names with pitch to delta pitch
         self.pitch = model.FloatContinuous(
             self.parent.get_pitch() * 1e-6,
@@ -2073,7 +2078,7 @@ class MultiBeamScanner(Scanner):
         beamlet_index = self.parent.get_beamlet_index()
         self.beamletIndex = model.TupleContinuous(
             tuple(int(i) for i in beamlet_index),  # convert tuple values to integers.,
-            unit=beamlet_index_info["unit"],
+            unit=None,
             range=beamlet_index_range,
             setter=self._setBeamletIndex
         )
@@ -2137,7 +2142,7 @@ class MultiBeamScanner(Scanner):
             logging.exception("Unexpected failure when polling XTtoolkit settings")
 
     def _setPitch(self, pitch):
-        self.parent.set_pitch(pitch * 1e6)  # Convert from micrometer to meters.
+        self.parent.set_pitch(pitch * 1e6)  # Convert from meters to micrometers.
         return self.parent.get_pitch() * 1e-6
 
     def _setBeamStigmator(self, beam_stigmator_value):
@@ -2158,10 +2163,10 @@ class MultiBeamScanner(Scanner):
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
 
     def _setMultiBeamMode(self, multi_beam_mode):
-        # TODO: When changing the beam mode of the microscope we don't want to also change the aperture and beamlet
-        #  index. However, it this is the current implementation direction of TFS. Therefore in the future code like
-        #  the uncommented parts below need to be implemented. Note this code still needs to be tested and is
-        #  therefore now just an example of an implementation.
+        # TODO: When changing the beam mode of the microscope changes we don't want to also change the aperture and
+        #  beamlet index. However, it seems that this is the way TFS will be implementing and supporting XTtoolkit.
+        #  Therefore in the future code like the uncommented parts below need to be implemented.
+        #  Note: this code still needs to be tested and is therefore now just an example of an implementation.
         # current_aperture = self.apertureIndex.value
         # current_beamlet = self.beamletIndex.value
         if multi_beam_mode:
@@ -2175,5 +2180,3 @@ class MultiBeamScanner(Scanner):
         #     self.apertureIndex.value = current_aperture
         #     self.beamletIndex.value = current_beamlet
         return (self.parent.get_use_case() == 'MultiBeamTile')
-
-
