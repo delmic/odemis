@@ -1276,12 +1276,9 @@ class TestRotationActuator(unittest.TestCase):
         self.dev_cycle.terminate()
         super(TestRotationActuator, self).tearDown()
 
-ATOL_STAGE = 100e-6  # m
-ATOL_LENS = 100e-6  # m
-STEP_SIZE = 5.9e-9
 
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-CRYO_SECOM_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+ATOL_STAGE = 10e-6  # m
+ATOL_LENS = 10e-6  # m
 
 KWARGS_5DOF = {
     "name": "5DOF",
@@ -1697,6 +1694,9 @@ class TestLinkedHeightActuator(unittest.TestCase):
         self.assertTrue(all(stage.referenced.value.values()))
 
 
+STEP_SIZE = 10e-9  # m
+
+
 class TestLinkedAxesActuator(unittest.TestCase):
 
     def setUp(self):
@@ -1776,9 +1776,9 @@ class TestLinkedAxesActuator(unittest.TestCase):
         linked_axes = self.linked_axes
         pos = linked_axes.position.value.copy()
         logging.info("Initial pos = %s", pos)
-        f = linked_axes.moveRel({"x": 50e-4})
+        f = linked_axes.moveRel({"x": 5e-3})
         exppos = pos.copy()
-        exppos["x"] += 50e-4
+        exppos["x"] += 5e-3
 
         time.sleep(0.5)  # abort after 0.5 s
         f.cancel()
@@ -1792,14 +1792,14 @@ class TestLinkedAxesActuator(unittest.TestCase):
 
         # Same thing, but using stop() method
         pos = linked_axes.position.value.copy()
-        f = linked_axes.moveRel({"x": 50e-4})
+        f = linked_axes.moveRel({"x": 5e-3})
         time.sleep(0.5)
         linked_axes.stop()
 
         exppos = pos.copy()
-        exppos["x"] += 50e-4
-        self.assertNotEqual(linked_axes.position.value, pos)
-        self.assertNotEqual(linked_axes.position.value, exppos)
+        exppos["x"] += 5e-3
+        test.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        test.assert_pos_not_almost_equal(linked_axes.position.value, exppos, atol=ATOL_STAGE)
 
         f = linked_axes.moveAbs(pos)  # Back to orig pos
         f.result()
