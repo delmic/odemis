@@ -45,8 +45,8 @@ def _clean_up_name(name):
     name = name.strip()
 
     # Some names are HTML escaped, we could use HTMLParser().unescape, but for
-    # now, we keep it simple, as there is only one character escaped
-    name = name.replace("&#39;", "'")
+    # now, we keep it simple, as there are only a few characters escaped.
+    name = name.replace("&#39;", "'").replace("&amp;", "&").replace("&quot;", "\"")
 
     # first letter upper-case
     name = name[:1].upper() + name[1:]
