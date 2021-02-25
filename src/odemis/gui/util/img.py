@@ -2623,9 +2623,11 @@ def insert_tile_to_image(tile, ovv):
 
 def merge_screen(ima, imb):
     """ 
-    Merges two images into one using the "screen" operator:
-    f(xA,xB) = xA + xB − xA·xB (with values between 0 and 1, with each channel independent)
-    ima, imb: DataArray with ima.shape = imb.shape (either RGB or RGBA)
+    Merges two images into one using the "screen" operator. Roughly, it's a
+    "soft plus", which only reaches the maximum when both values are at the maximum.
+    Precisely, it's defined as: f(xA,xB) = xA + xB − xA·xB (with values between
+    0 and 1, with each channel independent).
+    ima, imb: DataArray with ima.shape = imb.shape (YXC, either RGB or RGBA)
     returns RGBA DataArray (of the same YX as ima, but with always depth=4)
     """
     if ima.shape[-1] != 3 and ima.shape[-1] != 4:
