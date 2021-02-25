@@ -258,6 +258,7 @@ class AxisConnector(object):
         self.comp.position.unsubscribe(self._on_pos_change)
 
 
+PROGRESS_RANGE = 2 ** 12  # Arbitrary large value to always have enough resolution
 class ProgressiveFutureConnector(object):
     """ Connects a progressive future to a progress bar and label """
 
@@ -290,7 +291,7 @@ class ProgressiveFutureConnector(object):
         self._timer.Start(250.0)  # 4 Hz
 
         # Set the progress bar to 0
-        bar.Range = 100
+        bar.Range = PROGRESS_RANGE
         bar.Value = 0
 
         future.add_update_callback(self._on_progress)
@@ -316,8 +317,7 @@ class ProgressiveFutureConnector(object):
             return
 
         if not future.cancelled():
-            self._bar.Range = 100
-            self._bar.Value = 100
+            self._bar.Value = self._bar.Range
             if self._label is None:
                 self._bar.SetToolTip("Completed")
         elif self._label is None:
@@ -331,16 +331,21 @@ class ProgressiveFutureConnector(object):
     def _update_progress(self):
         """ Update the progression controls """
         now = time.time()
-        past = now - self._start
+        past = max(0, now - self._start)
         left = max(0, self._end - now)
         prev_left = self._prev_left
+        total = past + left
+        if total <= 0:
+            logging.warning("Unexpected progress %s to %s", self._start, self._end)
+            ratio = 1
+        else:
+            ratio = past / total
 
         # Avoid back and forth estimation (but at least every 10 s)
         can_update = True
         if prev_left is not None and self._last_update + 10 > now:
             # Don't update gauge if ratio reduces (a bit)
             try:
-                ratio = past / (past + left)
                 prev_ratio = self._bar.Value / self._bar.Range
                 if 1 > prev_ratio / ratio > 1.1:  # decrease < 10 %
                     can_update = False
@@ -358,10 +363,8 @@ class ProgressiveFutureConnector(object):
         else:
             self._last_update = now
 
-        # progress bar: past / past+left
-        # logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self._bar.Range = 100 * (past + left)
-        self._bar.Value = 100 * past
+        # Update progress bar
+        self._bar.Value = PROGRESS_RANGE * ratio
 
         if self._future.done():
             # Make sure we don't update the lbl_txt after the future is over as
