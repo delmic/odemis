@@ -571,15 +571,15 @@ class TestMicroscopeInternal(unittest.TestCase):
         # Set fwd follows z back to initial value
         self.microscope.set_fwd_follows_z(init_fwd_follows_z)
 
-    def test_pitch(self):
-        """Test setting and getting the pitch between two beams within the multiprobe pattern."""
-        pitch_range = self.microscope.pitch_info()["range"]
-        current_pitch = self.microscope.get_pitch()
-        new_pitch = current_pitch + 1
-        new_pitch = new_pitch if pitch_range[0] < new_pitch < pitch_range[1] else current_pitch - 1
-        self.microscope.set_pitch(new_pitch)
-        self.assertAlmostEqual(new_pitch, self.microscope.get_pitch())
-        self.microscope.set_pitch(current_pitch)
+    def test_delta_pitch(self):
+        """Test setting and getting the delta pitch."""
+        delta_pitch_range = self.microscope.delta_pitch_info()["range"]
+        current_delta_pitch = self.microscope.get_delta_pitch()
+        new_delta_pitch = current_delta_pitch + 1
+        new_delta_pitch = new_delta_pitch if delta_pitch_range[0] < new_delta_pitch < delta_pitch_range[1] else current_delta_pitch - 1
+        self.microscope.set_delta_pitch(new_delta_pitch)
+        self.assertAlmostEqual(new_delta_pitch, self.microscope.get_delta_pitch())
+        self.microscope.set_delta_pitch(current_delta_pitch)
 
     def test_stigmator(self):
         """Test setting and getting stigmator values."""
@@ -997,28 +997,27 @@ class TestMBScanner(unittest.TestCase):
         for child in self.microscope.children.value:
             self.assertIsNot(type(child), xt_client.Scanner)
 
-    def test_pitch_VA(self):
-        # TODO change VA and method names with pitch to delta pitch
-        current_value = self.scanner.pitch.value
+    def test_delta_pitch_VA(self):
+        current_value = self.scanner.deltaPitch.value
         # Test if directly changing the value via the VA works. Not always will the entirety of the range be
         # allowed. Negative delta pitch is limited by the voltage it can apply. Therefore the max range and the 0
         # value is tested.
-        for test_pitch in (0.0, self.scanner.pitch.range[1]):
-            self.scanner.pitch.value = test_pitch
-            self.assertEqual(test_pitch, self.scanner.pitch.value)
-            self.assertEqual(test_pitch, self.microscope.get_pitch() * 1e-6)
+        for test_delta_pitch in (0.0, self.scanner.deltaPitch.range[1]):
+            self.scanner.deltaPitch.value = test_delta_pitch
+            self.assertEqual(test_delta_pitch, self.scanner.deltaPitch.value)
+            self.assertEqual(test_delta_pitch, self.microscope.get_delta_pitch() * 1e-6)
 
         # Test if errors are produced when a value outside of the range is set.
         with self.assertRaises(IndexError):
-            self.scanner.pitch.value = 1.2 * self.scanner.pitch.range[1]
-        self.assertEqual(test_pitch, self.microscope.get_pitch() * 1e-6)
+            self.scanner.deltaPitch.value = 1.2 * self.scanner.deltaPitch.range[1]
+        self.assertEqual(test_delta_pitch, self.microscope.get_delta_pitch() * 1e-6)
 
         # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_pitch(0)
+        self.microscope.set_delta_pitch(0.5 * self.scanner.deltaPitch.range[1])
         time.sleep(6)
-        self.assertEqual(0, self.scanner.pitch.value)
+        self.assertEqual(0.5 * self.scanner.deltaPitch.range[1], self.scanner.deltaPitch.value)
 
-        self.scanner.pitch.value = current_value
+        self.scanner.deltaPitch.value = current_value
 
     def test_beam_stigmator_VA(self):
         current_value = self.scanner.beamStigmator.value
