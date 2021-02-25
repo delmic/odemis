@@ -25,6 +25,7 @@ from concurrent.futures._base import CancelledError
 import logging
 from odemis import model
 from odemis.driver import simulated
+from odemis.util import test
 import time
 import unittest
 from unittest.case import skip
@@ -61,18 +62,6 @@ class ActuatorTest(object):
 
     def tearDown(self):
         self.dev.terminate()
-
-    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
-        """
-        Asserts that two stage positions have almost equal coordinates.
-        """
-        try:
-            if expected.keys() != actual.keys():
-                raise AssertionError("Dimensions of coordinates do not match")
-            for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
-                self.assertAlmostEqual(actual[dim_act], expected[dim_exp], places=6)
-        except AssertionError as exc:
-            raise AssertionError(exc.message)
 
     def test_scan(self):
         """
@@ -115,8 +104,7 @@ class ActuatorTest(object):
             move[axis] = (rng[0] + rng[1]) / 2
         f = self.dev.moveAbs(move)
         f.result() # wait
-        self.assertPosAlmostEqual(move, self.dev.position.value,
-                             "Actuator didn't move to the requested position")
+        test.assert_pos_almost_equal(move, self.dev.position.value, atol=1e-7)
 
     def test_moveRel(self):
         prev_pos = self.dev.position.value
@@ -131,9 +119,7 @@ class ActuatorTest(object):
 
         f = self.dev.moveRel(move)
         f.result() # wait
-        self.assertPosAlmostEqual(expected_pos, self.dev.position.value,
-                             "Actuator didn't move to the requested position: %s != %s" %
-                             (expected_pos, self.dev.position.value))
+        test.assert_pos_almost_equal(expected_pos, self.dev.position.value, atol=1e-7)
 
     def test_stop(self):
         self.dev.stop()
