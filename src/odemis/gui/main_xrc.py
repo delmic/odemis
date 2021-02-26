@@ -635,18 +635,6 @@ class xrcpnl_tab_localization(wx.Panel):
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
-        self.vp_flim_chronograph = xrc.XRCCTRL(self, "vp_flim_chronograph")
-        self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
-        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
-        self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
-        self.pnl_load_status = xrc.XRCCTRL(self, "pnl_load_status")
-        self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
-        self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
-        self.pnl_stream_status = xrc.XRCCTRL(self, "pnl_stream_status")
-        self.bmp_stream_status_info = xrc.XRCCTRL(self, "bmp_stream_status_info")
-        self.bmp_stream_status_warn = xrc.XRCCTRL(self, "bmp_stream_status_warn")
-        self.bmp_stream_status_error = xrc.XRCCTRL(self, "bmp_stream_status_error")
-        self.lbl_stream_status = xrc.XRCCTRL(self, "lbl_stream_status")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
@@ -6202,18 +6190,8 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ChronographViewport" name="vp_flim_chronograph">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="OverviewViewport" name="vp_overview_sem">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+          
+          
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -6224,126 +6202,7 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxPanel" name="main_buttons">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_hw_info">
-                      <object class="wxBoxSizer">
-                        <orient>wxVERTICAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxPanel" name="pnl_load_status">
-                            <object class="wxBoxSizer">
-                              <object class="sizeritem">
-                                <object class="wxGauge" name="gauge_load_time">
-                                  <size>-1,10</size>
-                                  <range>100</range>
-                                  <value>0</value>
-                                  <style>wxGA_SMOOTH</style>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <option>1</option>
-                                <flag>wxBOTTOM|wxRIGHT|wxEXPAND|wxALIGN_BOTTOM</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_load_time">
-                                  <size>100,-1</size>
-                                  <label>test st s</label>
-                                  <fg>#EEEEEE</fg>
-                                  <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxBOTTOM</flag>
-                                <border>10</border>
-                              </object>
-                              <orient>wxHORIZONTAL</orient>
-                            </object>
-                            <bg>#333333</bg>
-                            <hidden>1</hidden>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel" name="pnl_stream_status">
-                            <object class="wxBoxSizer">
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_stream_status_info">
-                                  <bitmap>img_icon_dialog_info_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_stream_status_warn">
-                                  <bitmap>img_icon_dialog_warning_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_stream_status_error">
-                                  <bitmap>img_icon_dialog_error_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_stream_status">
-                                  <fg>#E5E5E5</fg>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                              </object>
-                              <orient>wxHORIZONTAL</orient>
-                            </object>
-                            <bg>#333333</bg>
-                            <hidden>1</hidden>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                      </object>
-                      <size>-1,24</size>
-                      <bg>#333333</bg>
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">

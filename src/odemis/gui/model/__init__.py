@@ -525,6 +525,16 @@ class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
         self.visible_views = model.ListVA()
 
 
+class AcquisitionWindowData(MicroscopyGUIData):
+    """ Represent an interface used to only show the streams ready to acquire.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        MicroscopyGUIData.__init__(self, main)
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+
 class LiveViewGUIData(MicroscopyGUIData):
     """ Represent an interface used to only show the current data from the microscope.
 

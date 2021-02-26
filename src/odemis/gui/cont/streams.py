@@ -229,6 +229,32 @@ class StreamController(object):
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
+    def _on_stream_panel_destroy(self, _):
+        """ Remove all references to setting entries and the possible VAs they might contain
+        """
+        logging.debug("Stream panel %s destroyed", self.stream.name.value)
+
+        # Destroy references to this controller in even handlers
+        # (More references are present, see getrefcount
+        self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
+        self.stream_panel.header_change_callback = None
+        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
+        self.stream_panel.Unbind(EVT_STREAM_PEAK)
+
+        self._unlink_resolution()
+        self._disconnectRepOverlay()
+        if hasattr(self.stream, "repetition"):
+            self.stream.repetition.unsubscribe(self._onStreamRep)
+
+        # Unsubscribe from all the VAs
+        # TODO: it seems that in some cases we still receive a call after destruction
+        for entry in self.entries:
+            entry.disconnect()
+
+        self.entries = []
+
+        gc.collect()
+
     def _display_metadata(self):
         """ 
         Display metadata for integration time, ebeam voltage, probe current and
@@ -436,30 +462,6 @@ class StreamController(object):
             self.stream_panel.add_readonly_field(label, nice_str)
         except Exception:
             logging.exception("Trying to convert metadata %s", key)
-
-    def _on_stream_panel_destroy(self, _):
-        """ Remove all references to setting entries and the possible VAs they might contain
-        """
-        # TODO: Make stream panel creation and destruction cleaner by having the
-        # StreamBarController being the main class responsible for it.
-
-        logging.debug("Stream panel %s destroyed", self.stream.name.value)
-
-        # Destroy references to this controller in even handlers
-        # (More references are present, see getrefcount
-        self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
-        self.stream_panel.header_change_callback = None
-        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
-        self.stream_panel.Unbind(EVT_STREAM_PEAK)
-
-        self._unlink_resolution()
-        self._disconnectRepOverlay()
-        if hasattr(self.stream, "repetition"):
-            self.stream.repetition.unsubscribe(self._onStreamRep)
-
-        self.entries = []
-
-        gc.collect()
 
     def _on_stream_visible(self, evt):
         """ Show or hide a stream in the focussed view if the visibility button is clicked """

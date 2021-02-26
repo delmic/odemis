@@ -395,7 +395,7 @@ class LocalizationTab(Tab):
             view_ctrl=self.view_controller
         )
 
-        self._acquisition_controller = acqcont.OverviewStreamAcquiController(tab_data, panel)
+        self._acquisition_controller = acqcont.OverviewStreamAcquiController(tab_data, self)
 
         self._overview_stream_controller = streamcont.StreamBarController(
             tab_data,
@@ -496,11 +496,12 @@ class LocalizationTab(Tab):
 
     def _on_acquire(self, _):
         """
-        Called when the user requests to extend
+        Called when ADD OVERVIEW is pressed
         (second unused argument is an event object)
         """
-        # If no acquisition file, behave as just opening a file normally
-        self._acquisition_controller.open_acquisition_dialog()
+        das = self._acquisition_controller.open_acquisition_dialog()
+        if das:
+            self.load_data(das)
 
     def load_data(self, data):
         # Create streams from data
@@ -718,9 +719,10 @@ class SecomStreamsTab(Tab):
             panel.vp_flim_chronograph.Show()
 
         # Special overview button selection
-        self.overview_controller = viewcont.OverviewController(main_data, tab_data,
+        self.overview_controller = viewcont.OverviewController(main_data, self,
                                                                panel.vp_overview_sem.canvas,
                                                                self.panel.vp_overview_sem.view,
+                                                               panel.pnl_secom_streams,
                                                                )
 
         # Connect the view selection buttons
