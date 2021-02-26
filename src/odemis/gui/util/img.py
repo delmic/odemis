@@ -2621,37 +2621,40 @@ def insert_tile_to_image(tile, ovv):
     return ovv
 
 
-def merge_screen(im, background):
+def merge_screen(ima, imb):
     """ 
-    Merges two images (im and background) into one using the "screen" operator:
-    f(xA,xB) = xA + xB − xA·xB (with values between 0 and 1, with each channel independent)
-    im, background: DataArray with im.shape = background.shape (either RGB or RGBA)
-    returns RGBA DataArray (of the same YX as im, but with always depth=4)
+    Merges two images into one using the "screen" operator. Roughly, it's a
+    "soft plus", which only reaches the maximum when both values are at the maximum.
+    Precisely, it's defined as: f(xA,xB) = xA + xB − xA·xB (with values between
+    0 and 1, with each channel independent).
+    ima, imb: DataArray with ima.shape = imb.shape (YXC, either RGB or RGBA)
+    returns RGBA DataArray (of the same YX as ima, but with always depth=4)
     """
-    assert im.shape == background.shape, "Images have different shapes."
-    if im.shape[-1] != 3 and im.shape[-1] != 4:
-        raise ValueError("Ovv images have an invalid number of channels: %d" % (im.shape[-1]))
+    if ima.shape[-1] != 3 and ima.shape[-1] != 4:
+        raise ValueError("Ovv images have an invalid number of channels: %d" % (ima.shape[-1]))
+    if ima.shape[:-1] != imb.shape[:-1]:
+        raise ValueError("Images have different shapes: %s != %s" % (ima.shape, imb.shape))
 
-    md = background.metadata.copy()
-    im = format_rgba_darray(im, 255)  # convert to BGRA
-    im.metadata["dc_keepalpha"] = True
-    background = format_rgba_darray(background, 255)
+    md = imb.metadata.copy()
+    ima = format_rgba_darray(ima, 255)  # convert to BGRA
+    ima.metadata["dc_keepalpha"] = True
+    out = format_rgba_darray(imb, 255)
 
-    height, width, _ = im.shape
+    height, width, _ = ima.shape
     buffer_size = (width, height)
     buffer_top_left = (0, 0)
     buffer_scale = (1, 1)
 
     # Combine images
     surface = cairo.ImageSurface.create_for_data(
-        background, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
+        out, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
     ctx = cairo.Context(surface)
 
-    draw_image(ctx, im, buffer_top_left, buffer_top_left, buffer_scale,
+    draw_image(ctx, ima, buffer_top_left, buffer_top_left, buffer_scale,
                buffer_size, 1, blend_mode=BLEND_SCREEN)
 
     # Convert back to RGB
-    format_bgra_to_rgb(background, inplace=True)
-    background.metadata = md
-    return background
+    format_bgra_to_rgb(out, inplace=True)
+    out.metadata = md
+    return out
 
