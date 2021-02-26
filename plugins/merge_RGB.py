@@ -238,9 +238,9 @@ class MergeChannelsPlugin(Plugin):
         """
         if len(data.shape) > 3:
             raise ValueError("Image format not supported")
-        elif len(data.shape) == 3:
-            if isinstance(data, model.DataArrayShadow):
-                data = data.getData()
+        if isinstance(data, model.DataArrayShadow):
+            data = data.getData()
+        if len(data.shape) == 3:
             data = img.ensureYXC(data)
             if (numpy.all(data[:, :, 0] == data[:, :, 1]) and
                 numpy.all(data[:, :, 0] == data[:, :, 2])):
