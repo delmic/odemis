@@ -173,6 +173,7 @@ def cryoSwitchSamplePosition(target):
     # Get the stage and focus components from the backend components
     stage = model.getComponent(role='stage')
     focus = model.getComponent(role='focus')
+    align = model.getComponent(role='align')
 
     f = model.CancellableFuture()
     f.task_canceller = _cancelCryoMoveSample
@@ -180,25 +181,28 @@ def cryoSwitchSamplePosition(target):
     f._task_lock = threading.Lock()
     f._running_subf = model.InstantaneousFuture()
     # Run in separate thread
-    executeAsyncTask(f, _doCryoSwitchSamplePosition, args=(f, stage, focus, target))
+    executeAsyncTask(f, _doCryoSwitchSamplePosition, args=(f, stage, focus, align, target))
     return f
 
 
-def _doCryoSwitchSamplePosition(future, stage, focus, target):
+def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
     """
     Do the actual switching procedure for the Cryo sample stage between loading, imaging and coating positions
     :param future: cancellable future of the move
     :param stage: sample stage that's being controlled
     :param focus: focus for optical lens
+    :param align: aligner for optical lens
     :param target: target position either one of the constants LOADING, IMAGING and COATING
     """
     try:
         stage_md = stage.getMetadata()
         focus_md = focus.getMetadata()
+        align_md = align.getMetadata()
         stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+        align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
         # Fail early when required axes are not found on the positions metadata
         required_axes = {'x', 'y', 'z', 'rx', 'rz'}
         for stage_position in [stage_active, stage_deactive, stage_coating]:
@@ -224,11 +228,16 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
             # Check if stage is not referenced:
             # 1. reference focus if not already referenced
             # 2. Move focus to deactive position
-            # 3. reference stage
+            # 3. reference aligner if not already referenced
+            # 4. Move aligner to deactive position
+            # 5. reference stage
             if not all(stage.referenced.value.values()):
                 if not all(focus.referenced.value.values()):
                     run_reference(future, focus)
                 run_sub_move(future, focus, focus_deactive)
+                if not all(align.referenced.value.values()):
+                    run_reference(future, align)
+                run_sub_move(future, align, align_deactive)
                 run_reference(future, stage)
 
             # Add the sub moves to perform the loading move
@@ -249,6 +258,8 @@ def _doCryoSwitchSamplePosition(future, stage, focus, target):
 
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             target_pos = stage_active if target is IMAGING else stage_coating
+            if target == COATING:
+                sub_moves.append((align, align_deactive))
             # Add the sub moves to perform the imaging/coating move
             sub_moves.append((stage, filter_dict({'z'}, target_pos)))
             sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
@@ -286,6 +297,7 @@ def cryoTiltSample(rx, rz=0):
     # Get the stage and focus components from the backend components
     stage = model.getComponent(role='stage')
     focus = model.getComponent(role='focus')
+    align = model.getComponent(role='align')
 
     f = model.CancellableFuture()
     f.task_canceller = _cancelCryoMoveSample
@@ -293,25 +305,28 @@ def cryoTiltSample(rx, rz=0):
     f._task_lock = threading.Lock()
     f._running_subf = model.InstantaneousFuture()
     # Run in separate thread
-    executeAsyncTask(f, _doCryoTiltSample, args=(f, stage, focus, rx, rz,))
+    executeAsyncTask(f, _doCryoTiltSample, args=(f, stage, focus, align, rx, rz,))
     return f
 
 
-def _doCryoTiltSample(future, stage, focus, rx, rz):
+def _doCryoTiltSample(future, stage, focus, align, rx, rz):
     """
     Do the actual switching procedure for the Cryo sample stage between imaging and tilting
     :param future: cancellable future of the move
     :param stage: sample stage that's being controlled
     :param focus: focus for optical lens
+    :param align: aligner for optical lens
     :param rx: (float) rotation movement in x axis
     :param rz: (float) rotation movement in z axis
     """
     try:
         stage_md = stage.getMetadata()
         focus_md = focus.getMetadata()
+        align_md = align.getMetadata()
         stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
         stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+        align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
         current_pos = stage.position.value
 
         # Check that the stage X,Y,Z are within the limits
@@ -333,6 +348,8 @@ def _doCryoTiltSample(future, stage, focus, rx, rz):
             sub_moves.append((stage, {'rz': rz}))
             sub_moves.append((stage, {'rx': rx}))
         else:
+            # Move lens aligner to its Deactive position
+            sub_moves.append((align, align_deactive))
             sub_moves.append((stage, {'rx': rx}))
             sub_moves.append((stage, {'rz': rz}))
 
