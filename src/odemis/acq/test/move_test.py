@@ -55,15 +55,16 @@ class TestCryoMove(unittest.TestCase):
         # find components by their role
         cls.stage = model.getComponent(role="stage")
         cls.focus = model.getComponent(role="focus")
+        cls.aligner = model.getComponent(role="align")
 
         cls.stage_active = cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
         cls.stage_deactive = cls.stage.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.focus_deactive = cls.focus.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+        cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
 
         # Make sure the lens is referenced too (small move will only complete after the referencing)
-        aligner = model.getComponent(role="align")
-        aligner.moveRelSync({"x": 1e-6})
+        cls.aligner.moveRelSync({"x": 1e-6})
 
         # The 5DoF stage is not referenced automatically, so let's do it now
         stage_axes = set(cls.stage.axes.keys())
@@ -89,6 +90,7 @@ class TestCryoMove(unittest.TestCase):
         """
         stage = self.stage
         focus = self.focus
+        align = self.aligner
         # Get the stage to loading position
         f = cryoSwitchSamplePosition(LOADING)
         f.result()
@@ -110,6 +112,8 @@ class TestCryoMove(unittest.TestCase):
                                      filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         test.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
                                      filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
+        # align should be in deactive position
+        test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Switch back to loading position
         f = cryoSwitchSamplePosition(LOADING)
@@ -121,6 +125,7 @@ class TestCryoMove(unittest.TestCase):
         Test moving the sample stage from imaging position to tilting position and back to imaging
         """
         stage = self.stage
+        align = self.aligner
         # Test tilting from imaging
         # Get the stage to imaging position
         f = cryoSwitchSamplePosition(LOADING)
@@ -141,6 +146,8 @@ class TestCryoMove(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': self.rz_angle},
                                      match_all=False,
                                      atol=ATOL_ROTATION_POS)
+        # align should be in deactive position
+        test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Test imaging from tilting
         f = cryoTiltSample(rx=0)
