@@ -203,6 +203,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
+        align_active = align_md[model.MD_FAV_POS_ACTIVE]
         # Fail early when required axes are not found on the positions metadata
         required_axes = {'x', 'y', 'z', 'rx', 'rz'}
         for stage_position in [stage_active, stage_deactive, stage_coating]:
@@ -268,6 +269,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
             #  the FM stream (in which case it’d be handled by the optical path manager)
             if target == IMAGING:
                 sub_moves.append((focus, focus_active))
+                sub_moves.append((align, align_active))
         else:
             raise ValueError("Unknown target value %s." % target)
 
@@ -327,6 +329,7 @@ def _doCryoTiltSample(future, stage, focus, align, rx, rz):
         stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
+        align_active = align_md[model.MD_FAV_POS_ACTIVE]
         current_pos = stage.position.value
 
         # Check that the stage X,Y,Z are within the limits
@@ -347,6 +350,8 @@ def _doCryoTiltSample(future, stage, focus, align, rx, rz):
             rx = stage_active['rx']
             sub_moves.append((stage, {'rz': rz}))
             sub_moves.append((stage, {'rx': rx}))
+            # Move lens aligner to its active position
+            sub_moves.append((align, align_active))
         else:
             # Move lens aligner to its Deactive position
             sub_moves.append((align, align_deactive))

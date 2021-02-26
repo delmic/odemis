@@ -62,6 +62,7 @@ class TestCryoMove(unittest.TestCase):
         cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.focus_deactive = cls.focus.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+        cls.align_active = cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE]
 
         # Make sure the lens is referenced too (small move will only complete after the referencing)
         cls.aligner.moveRelSync({"x": 1e-6})
@@ -103,6 +104,8 @@ class TestCryoMove(unittest.TestCase):
         f = cryoSwitchSamplePosition(IMAGING)
         f.result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
+        # align should be in active position
+        test.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
 
         # Get the stage to coating position
         f = cryoSwitchSamplePosition(COATING)
@@ -153,6 +156,8 @@ class TestCryoMove(unittest.TestCase):
         f = cryoTiltSample(rx=0)
         f.result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
+        # align should be in active position
+        test.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
 
     def test_invalid_switch_movements(self):
         """
