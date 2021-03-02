@@ -81,13 +81,13 @@ def raw_to_current(raw):
     return (raw - 0.5 - C_MIN_RAW_SHIFT) / k + C_MIN_DBL_SHIFT
 
 
-def transform_coordinates(value, xlower, ylower, xupper, yupper):
+def transform_coordinates(value, xlower, xupper, ylower, yupper):
     """
     Transform x, y coordinates to register values of beamshift hardware.
     :param value: (float, float) x, y value in the source coordinate system
     :param xlower: (float, float) xlower metadata
-    :param ylower: (float, float) ylower metadata
     :param xupper: (float, float) xupper metadata
+    :param ylower: (float, float) ylower metadata
     :param yupper: (float, float) yupper metadata
     :return (int, int, int, int): register values: x lower, y lower, x upper, y upper
     """
@@ -118,7 +118,7 @@ def transform_coordinates(value, xlower, ylower, xupper, yupper):
     return [rawLX, rawLY, rawUX, rawUY]
 
 
-def transform_coordinates_reverse(register_values, xlower, ylower, xupper, yupper):
+def transform_coordinates_reverse(register_values, xlower, xupper, ylower, yupper):
     """
     Transform register values back to x, y position in source coordindate system.
     :param register_values: (int, int, int, int) register values
@@ -157,7 +157,7 @@ class BeamShiftController(model.HwComponent):
     the x and y beam offset in m in the stage coordinate system.
 
     The conversion to internal ampere values (including scaling and rotation) is specified
-    through the MD_CALIB metadata (a 4x2 tuple, 4x (float, float), xlower, ylower, xupper, yupper).
+    through the MD_CALIB metadata (a 4x2 tuple, 4x (float, float), xlower, xupper, ylower, yupper).
     """
 
     def __init__(self, name, role, port=None, serialnum=None, **kwargs):
@@ -238,7 +238,7 @@ class BeamShiftController(model.HwComponent):
         """
         logging.debug("Requesting shift of %s m.", value)
         try:
-            xlower, ylower, xupper, yupper = self._metadata[model.MD_CALIB]
+            xlower, xupper, ylower, yupper = self._metadata[model.MD_CALIB]
         except KeyError:
             raise ValueError("Cannot set shift, MD_CALIB metadata not specified.")
         except ValueError as ex:
@@ -246,7 +246,7 @@ class BeamShiftController(model.HwComponent):
             raise ValueError("Failed to parse MD_CALIB metadata, ex: %s" % ex)
 
         # Transform to register values (including scaling and rotation)
-        register_values = transform_coordinates(value, xlower, ylower, xupper, yupper)
+        register_values = transform_coordinates(value, xlower, xupper, ylower, yupper)
 
         # Read previous value of registers for debugging purpose
         # Note on duration: a write instruction takes about 14 ms, a read instruction about 20 ms
@@ -258,7 +258,7 @@ class BeamShiftController(model.HwComponent):
 
         # Convert back to original coordinates (should be the same as requested shift, possibly
         # with a small rounding error)
-        value = transform_coordinates_reverse(register_values, xlower, ylower, xupper, yupper)
+        value = transform_coordinates_reverse(register_values, xlower, xupper, ylower, yupper)
         return value
 
     def _write_registers(self, values):
@@ -335,8 +335,8 @@ class BeamShiftController(model.HwComponent):
             vals = self._read_registers()
 
             # Transform back with new metadata
-            xlower, ylower, xupper, yupper = md[model.MD_CALIB]
-            new_shift = transform_coordinates_reverse(vals, xlower, ylower, xupper, yupper)
+            xlower, xupper, ylower, yupper = md[model.MD_CALIB]
+            new_shift = transform_coordinates_reverse(vals, xlower, xupper, ylower, yupper)
             # Update .shift (but don't set value in hardware)
             logging.debug("Shift after metadata update: %s", new_shift)
             self.shift._value = new_shift
