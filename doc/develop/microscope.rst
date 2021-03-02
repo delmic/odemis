@@ -91,6 +91,29 @@ Detectors:
 System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
 
+Roles of components found in the CRYO/ENZEL system:
+-----------------------------------------------------
+Emitters:
+ * e-beam: Electron beam of the SEM to scan the sample.
+ * light: Controls the excitation light of the FM.
+
+Actuator:
+ * Sample thermostat: Controls the temperature of the sample.
+ * Cooler controller: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
+ * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
+ * filter: Emission filter to select a specific wavelength band.
+ * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz).
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. 
+ * align: Alignment actuator. It has 2 axes: x and y. 
+
+Detectors:
+ * se-detector: Secondary electron detector of the SEM. 
+ * ccd: The main optical pixelated detector.
+
+System:
+ * lens: Contains the parameters of the parabolic mirror and the lens system.
+ * stigmator: Part of the electro-magnetic lenses used to focus the electron beam to a sharp spot.
+
 Roles of components found in the SPARCv1/SPARCv2 system:
 --------------------------------------------------------
 Emitters:
@@ -184,6 +207,12 @@ Overview schemas
     :align: center
 
     Schema of a SECOM confocal with fluorescence life-time imaging (FLIM) and the roles of the components
+
+.. figure:: enzel-roles.*
+    :width: 50 %
+    :align: center    
+
+    Schema of an enzel system and the roles of the components 
 
 .. figure:: sparc2-roles.*
     :width: 100 %
