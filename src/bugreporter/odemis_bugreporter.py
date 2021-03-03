@@ -188,8 +188,14 @@ class OdemisBugreporter(object):
             files = []
         fields["attachments"] = []
         for fn in files:
+            # File is open as bytes and converted to "bytes" with base64.
+            # We convert it then to a string by "decoding" it from ascii.
+            # The string is inserted with the rest of the dict fields (all strings).
+            # The dict is converted to JSON, which is then encoded into bytes using UTF-8 encoding.
+            # We probably could avoid the bytes -> string -> bytes conversion,
+            # but it's easier as-is, and doesn't seem to be too costly.
             with open(fn, "rb") as f:
-                encoded_data = base64.b64encode(f.read())
+                encoded_data = base64.b64encode(f.read()).decode("ascii")
             att_desc = {os.path.basename(fn): "data:application/zip;base64,%s" % encoded_data}
             fields["attachments"].append(att_desc)
 
