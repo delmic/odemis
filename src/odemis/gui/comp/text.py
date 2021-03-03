@@ -68,6 +68,9 @@ class ChoiceListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
 
+LIST_MIN_WIDTH = 300  # px
+
+
 class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
     def __init__(self, parent, choices=None, drop_down_click=True,
                  col_fetch=-1, col_search=0, hide_on_no_match=True,
@@ -93,7 +96,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._select_callback = select_callback
         self._entry_callback = entry_callback
         self._match_function = match_function
-        self._screenheight = wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y)
+        self._screen_size = (wx.SystemSettings.GetMetric(wx.SYS_SCREEN_X),
+                             wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y))
 
         # sort variable needed by listmix
         self.itemDataMap = dict()
@@ -328,18 +332,21 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         Either display the drop down list (show = True) or hide it (show = False).
         """
         if show:
-            size = self.dropdown.GetSize()
+            dwidth, dheight = self.dropdown.GetSize()
+            # Use the width of the text control
             width, height = self.GetSize()
+            width = max(width, LIST_MIN_WIDTH)
             x, y = self.ClientToScreen(0, height)
-            if size.GetWidth() != width:
-                size.SetWidth(width)
-                self.dropdown.SetSize(size)
+            if dwidth != width:
+                self.dropdown.SetSize((width, dheight))
                 self.dropdownlistbox.SetSize(self.dropdown.GetClientSize())
-            if y + size.GetHeight() < self._screenheight:
-                self.dropdown.SetPosition(wx.Point(x, y))
-            else:
-                self.dropdown.SetPosition(
-                    wx.Point(x, y - height - size.GetHeight()))
+
+            # Make sure it fits in the screen
+            if x + width > self._screen_size[0]:
+                x = self._screen_size[0] - width  # Touch the side of the screen
+            if y + dheight > self._screen_size[1]:
+                y -= height + dheight  # Drop "up" instead of drop down
+            self.dropdown.SetPosition(wx.Point(x, y))
         self.dropdown.Show(show)
 
     def _listItemVisible(self):
