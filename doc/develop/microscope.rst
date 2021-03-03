@@ -102,15 +102,13 @@ Actuator:
  * Cooler controller: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
  * filter: Emission filter to select a specific wavelength band.
- * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz).
-   stage component has the following metadata:
+ * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz). stage component has the following metadata:
     1. FAV_POS_DEACTIVE.
     2. FAV_POS_ACTIVE.
     3. FAV_POS_COATING.
     4. FAV_POS_AREA.
     5. ION_BEAM_TO_SAMPLE_ANGLE.
- * focus: Changes the distance between the sample and the optical detectors. It has one axis: z.
-   It has two metadata:
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has two metadata:
     1. FAV_POS_DEACTIVE.
     2. FAV_POS_ACTIVE. 
  * align: Alignment actuator. It has 2 axes: x and y. It has also 2 metadata:
