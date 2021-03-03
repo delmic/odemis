@@ -98,8 +98,6 @@ Emitters:
  * light: Controls the excitation light of the FM.
 
 Actuator:
- * Sample thermostat: Controls the temperature of the sample.
- * Cooler controller: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
  * filter: Emission filter to select a specific wavelength band.
  * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz). stage component has the following metadata:
@@ -116,6 +114,8 @@ Actuator:
     2. FAV_POS_DEACTIVE.
 
 Detectors:
+ * Sample thermostat: Controls the temperature of the sample.
+ * Cooler controller: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
  * se-detector: Secondary electron detector of the SEM. 
  * ccd: The main optical pixelated detector.
 
