@@ -23,6 +23,8 @@
 """
 from __future__ import division, print_function
 
+import copy
+import time
 from builtins import range
 import logging
 import math
@@ -30,13 +32,14 @@ import numpy
 from odemis import model
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
+from odemis.driver.tmcm import TMCLController
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
-from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL
+from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, TiledAreaView
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
-from odemis.util.test import assert_array_not_equal
+from odemis.util.test import assert_array_not_equal, assert_pos_not_almost_equal
 import unittest
 import wx
 
@@ -376,6 +379,46 @@ class OverlayTestCase(test.GuiTestCase):
         slol.p_pos.subscribe(print_pos)
 
         cnvs.add_view_overlay(slol)
+
+        test.gui_loop()
+
+    def test_stage_point_select_mode_overlay(self):
+        """
+        Test behavior of StagePointSelectOverlay
+        """
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        tab_mod = self.create_simple_tab_model()
+        # create a dummy stage to attach to the view
+        stage = TMCLController(name="test", role="test",
+                                    port="/dev/fake3",
+                                    axes=["x", "y"],
+                                    ustepsize=[1e-6, 1e-6],
+                                    rng=[[-3e-3, 3e-3], [-3e-3, 3e-3]],
+                                    refproc="Standard")
+
+        # Add a tiled area view to the tab model
+        logging.debug(stage.position.value)
+        fview = TiledAreaView("fakeview", stage=stage)
+        tab_mod.views.value.append(fview)
+        tab_mod.focussedView.value = fview
+        cnvs.setView(fview, tab_mod)
+
+        slol = vol.StagePointSelectOverlay(cnvs)
+        slol.activate()
+        cnvs.add_view_overlay(slol)
+
+        initial_pos = copy.deepcopy(stage.position.value)
+        # simulate double click by passing the mouse event to on_dbl_click
+        evt = wx.MouseEvent()
+        evt.x = 10
+        evt.y = 10
+        slol.on_dbl_click(evt)
+        time.sleep(1)
+        # stage should have been moved from initial position
+        assert_pos_not_almost_equal(stage.position.value, initial_pos)
+        logging.debug(stage.position.value)
 
         test.gui_loop()
 

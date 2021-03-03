@@ -1775,3 +1775,19 @@ class OverviewView(StreamView):
 
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
+
+class TiledAreaView(StreamView):
+    """
+    A large FoV view which is used to display an acquired tiled area.
+    """
+    def __init__(self, name, **kwargs):
+        StreamView.__init__(self, name, **kwargs)
+
+        self.show_crosshair.value = False
+
+        self.mpp.value = 10e-6
+        self.mpp.range = (1e-10, 1)
+
+    def moveStageBy(self, shift):
+        # Override the StreamView.moveStageBy to not move the stage if the canvas is dragged
+        pass

@@ -1464,6 +1464,37 @@ class PointSelectOverlay(base.ViewOverlay):
     def draw(self, ctx):
         pass
 
+class StagePointSelectOverlay(PointSelectOverlay):
+    """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
+
+    def __init__(self, cnvs):
+        PointSelectOverlay.__init__(self, cnvs)
+
+    def on_dbl_click(self, evt):
+        if self.active:
+            v_pos = evt.Position
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            # directly move the stage to the selected physical position
+            self.cnvs.view.moveStageTo(p_pos)
+        else:
+            base.ViewOverlay.on_dbl_click(self, evt)
+
+    def on_left_down(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_down( evt)
+        else:
+            base.ViewOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_up(evt)
+        else:
+            base.ViewOverlay.on_left_up(self, evt)
+
+    def draw(self, ctx):
+        pass
 
 class HistoryOverlay(base.ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """

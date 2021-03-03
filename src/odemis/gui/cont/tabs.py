@@ -44,6 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
+from odemis.gui.comp.overlay.view import StagePointSelectOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
@@ -372,6 +373,12 @@ class LocalizationTab(Tab):
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
 
+        # Add stage point select overlay to the top left canvas
+        panel.vp_secom_tl.canvas.enable_drag()
+        slol = StagePointSelectOverlay(panel.vp_secom_tl.canvas)
+        # Todo: proper activation from the viewport
+        slol.activate()
+        panel.vp_secom_tl.canvas.add_view_overlay(slol)
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
@@ -471,8 +478,11 @@ class LocalizationTab(Tab):
         logging.info("Creating combined SEM/Optical viewport layout")
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
-             {"name": "Overview",
-              "stream_classes": StaticStream,
+             {
+                 "cls": guimod.TiledAreaView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
               }),
             (viewports[1],
              {"name": "Acquired",
