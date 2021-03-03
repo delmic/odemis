@@ -72,6 +72,10 @@ class TileAcqPlugin(Plugin):
         ("overlap", {
             "tooltip": "Approximate amount of overlapping area between tiles",
         }),
+        ("angle", {
+            "tooltip": "Angle by which to rotate the stage movements (does not "
+                       "rotate the field of view; not compatible with stitching).",
+        }),
 
         ("filename", {
             "tooltip": "Pattern of each filename",
@@ -115,8 +119,8 @@ class TileAcqPlugin(Plugin):
 
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
-        self.overlap = model.FloatContinuous(20, (-200, 500), unit="%")
-        self.angle = model.FloatContinuous(0, (-90, 90), unit="deg")
+        self.overlap = model.FloatContinuous(20, (-80, 80), unit="%")
+        self.angle = model.FloatContinuous(0, (-90, 90), unit=u"°")
         self.filename = model.StringVA("a.ome.tiff")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
@@ -495,23 +499,13 @@ class TileAcqPlugin(Plugin):
         # |
         # --->-->-->--Z
         overlap = 1 - self.overlap.value / 100
-        angle = numpy.deg2rad(self.angle.value)
+        angle = math.radians(self.angle.value)
         # don't move on the axis that is not supposed to have changed
         m = {}
-        idx_change = numpy.subtract(idx, prev_idx)
-        if idx_change[0]:
-            m["x"] = orig_pos["x"] + idx[0] * tile_size[0] * overlap * numpy.cos(angle)
-            m["y"] = orig_pos["y"] - idx[1] * tile_size[1] * overlap * numpy.cos(angle)
-            m["x"] += numpy.sin(angle) * idx[1] * tile_size[0] * overlap
-            m["y"] += numpy.sin(angle) * idx[0] * tile_size[1] * overlap
-            logging.info("Xmove x:%s, y:%s", 1e6*(m["x"] - orig_pos["x"]), 1e6*(m["y"] - orig_pos["y"]))
-        if idx_change[1]:
-            m["y"] = orig_pos["y"] - idx[1] * tile_size[1] * overlap * numpy.cos(angle)
-            m["x"] = orig_pos["x"] + idx[0] * tile_size[0] * overlap * numpy.cos(angle)
-            m["y"] += numpy.sin(angle) * idx[0] * tile_size[1] * overlap
-            m["x"] += numpy.sin(angle) * idx[1] * tile_size[0] * overlap
-            logging.info("Ymove x:%s, y:%s", 1e6*(m["x"] - orig_pos["x"]), 1e6*(m["y"] - orig_pos["y"]))
-
+        m["x"] = orig_pos["x"] + idx[0] * tile_size[0] * overlap * math.cos(angle) \
+                               + idx[1] * tile_size[0] * overlap * math.sin(angle)
+        m["y"] = orig_pos["y"] - idx[1] * tile_size[1] * overlap * math.cos(angle) \
+                               + idx[0] * tile_size[1] * overlap * math.sin(angle)
         logging.debug("Moving to tile %s at %s m", idx, m)
         f = self.main_app.main_data.stage.moveAbs(m)
         try:
