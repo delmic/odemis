@@ -1780,10 +1780,20 @@ class TiledAreaView(StreamView):
     """
     A large FoV view which is used to display an acquired tiled area.
     """
-    def __init__(self, name, **kwargs):
-        StreamView.__init__(self, name, **kwargs)
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
 
         self.show_crosshair.value = False
+
+        if stage:
+            self.stage_pos.subscribe(self._on_stage_pos)
+            pos = self.stage_pos.value
+            current_pos_init = (pos["x"], pos["y"])
+        else:
+            current_pos_init = (0, 0)
+
+        # current_position VA will be used to show current position of the stage
+        self.current_position = model.ListVA(current_pos_init, unit="m")
 
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
@@ -1791,3 +1801,20 @@ class TiledAreaView(StreamView):
     def moveStageBy(self, shift):
         # Override the StreamView.moveStageBy to not move the stage if the canvas is dragged
         pass
+
+    def _on_stage_pos(self, pos):
+        # we want to redraw cross hair whenever the stage moves
+
+        # Don't update current position if a stage move has been requested and on going
+        if not self._fstage_move.done():
+            return
+
+        self.current_position.value = [pos["x"], pos["y"]]
+
+    def _on_stage_move_done(self, f):
+        """
+        Called whenever a stage move is completed
+        """
+        super(TiledAreaView, self)._on_stage_move_done(f)
+        self._on_stage_pos(self.stage_pos.value)
+

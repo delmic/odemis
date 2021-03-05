@@ -61,11 +61,10 @@ class CrossHairOverlay(base.ViewOverlay):
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
 
-    def draw(self, ctx):
-        """ Draw a cross hair to the Cairo context """
-
-        center = self.cnvs.get_half_view_size()
-
+    def _draw_crosshair(self, ctx, center):
+        """
+        Draw cross hair given Cairo context and center position
+        """
         tl = (center[0] - self.size, center[1] - self.size)
         br = (center[0] + self.size, center[1] + self.size)
 
@@ -87,6 +86,45 @@ class CrossHairOverlay(base.ViewOverlay):
         ctx.line_to(center[0] + 0.5, br[1] + 0.5)
         ctx.stroke()
 
+    def draw(self, ctx):
+        """ Draw a cross hair to the Cairo context """
+        center = self.cnvs.get_half_view_size()
+        self._draw_crosshair(ctx, center)
+
+class CurrentPosCrossHairOverlay(CrossHairOverlay):
+    """ Render a static cross hair to the current position of the stage"""
+
+    def __init__(self, cnvs):
+        CrossHairOverlay.__init__(self, cnvs)
+
+        if not hasattr(cnvs.view, "current_position"):
+            raise ValueError("CurrentPosCrossHairOverlay requires current_position VA on the view to function properly.")
+        cnvs.view.current_position.subscribe(self._current_pos_updated, init=True)
+
+    def _current_pos_updated(self, _):
+        """
+        Called when current stage position updated
+        """
+        # Directly refresh the canvas (so the overlay draw is called with proper context)
+        self.cnvs.Refresh()
+
+    def _get_current_stage_buffer_pos(self):
+        """
+        Get the buffer position of the current stage physical position
+        :return: (float, float) buffer coordinates of current position
+        """
+        pos = self.cnvs.view.current_position.value
+        half_size_offset = self.cnvs.get_half_view_size()
+        bpos = self.cnvs.phys_to_buffer_pos(pos, self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
+        return bpos
+
+    def on_left_up(self, evt):
+        self.cnvs.Refresh()
+
+    def draw(self, ctx):
+        """ Draw a cross hair to the Cairo context """
+        center = self._get_current_stage_buffer_pos()
+        self._draw_crosshair(ctx, center)
 
 class PlayIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
@@ -1467,9 +1505,6 @@ class PointSelectOverlay(base.ViewOverlay):
 class StagePointSelectOverlay(PointSelectOverlay):
     """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
 
-    def __init__(self, cnvs):
-        PointSelectOverlay.__init__(self, cnvs)
-
     def on_dbl_click(self, evt):
         if self.active:
             v_pos = evt.Position
@@ -1482,7 +1517,7 @@ class StagePointSelectOverlay(PointSelectOverlay):
     def on_left_down(self, evt):
         if self.active:
             # let the canvas handle dragging
-            self.cnvs.on_left_down( evt)
+            self.cnvs.on_left_down(evt)
         else:
             base.ViewOverlay.on_left_down(self, evt)
 

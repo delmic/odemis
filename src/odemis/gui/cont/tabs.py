@@ -44,7 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
-from odemis.gui.comp.overlay.view import StagePointSelectOverlay
+from odemis.gui.comp.overlay.view import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
@@ -373,8 +373,11 @@ class LocalizationTab(Tab):
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
 
-        # Add stage point select overlay to the top left canvas
         panel.vp_secom_tl.canvas.enable_drag()
+        # Add current position cross hair overlay to the top left canvas
+        cpol = CurrentPosCrossHairOverlay(panel.vp_secom_tl.canvas)
+        panel.vp_secom_tl.canvas.add_view_overlay(cpol)
+        # Add stage point select overlay to the top left canvas
         slol = StagePointSelectOverlay(panel.vp_secom_tl.canvas)
         # Todo: proper activation from the viewport
         slol.activate()

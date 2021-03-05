@@ -246,6 +246,37 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    def test_current_pos_crosshair_overlay(self):
+        """
+        Test behaviour of CurrentPosCrossHairOverlay
+        """
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        tab_mod = self.create_simple_tab_model()
+        # create a dummy stage to attach to the view
+        stage = TMCLController(name="test", role="test",
+                               port="/dev/fake3",
+                               axes=["x", "y"],
+                               ustepsize=[1e-6, 1e-6],
+                               rng=[[-3e-3, 3e-3], [-3e-3, 3e-3]],
+                               refproc="Standard")
+
+        # Add a tiled area view to the tab model
+        logging.debug(stage.position.value)
+        fview = TiledAreaView("fakeview", stage=stage)
+        tab_mod.views.value.append(fview)
+        tab_mod.focussedView.value = fview
+        cnvs.setView(fview, tab_mod)
+
+        slol = vol.CurrentPosCrossHairOverlay(cnvs)
+        slol.activate()
+        cnvs.add_view_overlay(slol)
+        test.gui_loop()
+
+        stage.moveAbs({'x': 1e-3, 'y': 1e-3}).result()
+        test.gui_loop()
+
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
