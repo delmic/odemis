@@ -60,15 +60,18 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo apt-get update
     sudo apt-get dist-upgrade
     sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp \
-     python-pyro4-delmic odemis fluodb python-wxtools \
-     python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush cython
+     python3-pyro4-delmic odemis fluodb \
+     python3-setuptools python3-sphinx inkscape dia-gnome texlive pngcrush cython3
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
     git clone https://github.com/delmic/odemis.git
     cd odemis
-    python setup.py build_ext --inplace
+    python3 setup.py build_ext --inplace
+
+Note that all dependencies should have been picked-up. Afterwards, it should
+normally not be needed to install any package via PIP.
 
 Configure Odemis for development
 """"""""""""""""""""""""""""""""
@@ -82,9 +85,9 @@ Modify the first lines so they read like this::
     PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
 
 And edit the MODEL line for the model you want (probably a simulated microscope
-like ``sparc-sim`` or ``secom-sim``). For example::
+like ``sparc2-sim`` or ``secom-sim``). For example::
 
-    MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
+    MODEL="$CONFIGPATH/sim/sparc2-sim.odm.yaml"
     
 For some simulated microscopes, you need to set-up the simulated
 acquisition board of the SEM. To automate it at computer start-up, create a
@@ -110,7 +113,11 @@ Install it with::
 
 In PyCharm, open the ``odemis`` directory.
 In the project settings, change the Python interpreter to the
-*system* interpreter (select either Python 2.7 or 3.6).
+*system* interpreter (select Python 3.6).
+
+On Ubuntu 18.04, PyCharm will report that some dependencies are not satisfied (eg, wxPython),
+however, if you have already installed Odemis from the Ubuntu packages, this is
+fine, and you should not install new version via PyCharm.
 
 Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
@@ -588,11 +595,11 @@ If you modify the application main icons in ``image/icon_gui*.png``, you need to
 To start the GUI directly as a python module, for example to run it in a debugger,
 you can run it this way::
 
-    python -m odemis.gui.main --log-level 2 --log-target $HOME/odemis-gui.log
+    python3 -m odemis.gui.main --log-level 2 --log-target $HOME/odemis-gui.log
 
 To start the GUI just in viewer mode::
 
-    python -m odemis.gui.main --standalone --log-level 2 --log-target $HOME/odemis-gui.log
+    python3 -m odemis.gui.main --standalone --log-level 2 --log-target $HOME/odemis-gui.log
 
 
 If you need to see more log messages of the GUI while it is running, it's possible
@@ -659,13 +666,13 @@ To speed up the code, first, you need to profile the code to see where is the
 bottleneck. One option is to use the cProfile.
 This allows to run the cProfile on the GUI::
 
-    PYTHONPATH=./src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
+    PYTHONPATH=./src/ python3 -m cProfile -o odemis.profile src/odemis/gui/main.py
     
 Then use the features you want to measure/optimize, and eventually close the GUI.
 
 After the program is closed, you can read the profile with the following commands::
 
-    python -m pstats odemis.profile
+    python3 -m pstats odemis.profile
     > sort time
     > stats
 
@@ -731,7 +738,7 @@ or if you have installed the pip package::
 In order to find the leaks, it's possible to add a decorator ``@profile``
 to the suspect methods/functions, and then run::
 
-    python -m memory_profiler program.py
+    python3 -m memory_profiler program.py
 
 It will list line-per-line the change of memory usage after closing the GUI.
 .. TODO: the memory usage listed in terminal of viewer is not line-by-line and displays something weired..
@@ -777,7 +784,7 @@ You may also want to combine tracking of memory and time. You can do this by com
 
 Another option to track the memory usage is the cProfile package::
 
-    python -m cProfile -s cumtime program.py
+    python3 -m cProfile -s cumtime program.py
 
 It will display the overall used memory per function, the number of calls per function and many more
 quantities regarding memory usage. However, you need to close the GUI before the statistics are displayed
