@@ -2024,7 +2024,7 @@ class MultiBeamScanner(Scanner):
 
         # Add XTtoolkit specific VA's
         pitch_info = self.parent.pitch_info()
-        assert (pitch_info["unit"], "um")
+        assert pitch_info["unit"] == "um", "Pitch unit is incorrect, current: {}, should be: um.".format(pitch_info["unit"])
         # TODO change VA and method names with pitch to delta pitch
         self.pitch = model.FloatContinuous(
             self.parent.get_pitch() * 1e-6,
@@ -2047,7 +2047,7 @@ class MultiBeamScanner(Scanner):
         pattern_stigmator_range_x = pattern_stigmator_info["range"]["x"]
         pattern_stigmator_range_y = pattern_stigmator_info["range"]["y"]
         pattern_stigmator_range = tuple((i, j) for i, j in zip(pattern_stigmator_range_x,
-                                                                   pattern_stigmator_range_y))
+                                                               pattern_stigmator_range_y))
         self.patternStigmator = model.TupleContinuous(
             tuple(self.parent.get_pattern_stigmator()),
             unit=pattern_stigmator_info["unit"],
@@ -2085,8 +2085,8 @@ class MultiBeamScanner(Scanner):
 
         multibeam_mode = (self.parent.get_use_case() == 'MultiBeamTile')
         self.multiBeamMode = model.BooleanVA(
-                multibeam_mode,
-                setter=self._setMultiBeamMode
+            multibeam_mode,
+            setter=self._setMultiBeamMode
         )
 
         # TODO If _updateSettings is updated move this to the top of the __init__ function. For now the update thread
@@ -2106,7 +2106,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self)._updateSettings()
         # Polling XTtoolkit settings
         try:
-            pitch = self.parent.get_pitch()
+            pitch = self.parent.get_pitch() * 1e-6
             if pitch != self.pitch.value:
                 self.pitch._value = pitch
                 self.pitch.notify(pitch)
