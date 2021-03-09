@@ -1232,8 +1232,9 @@ class MC_5DOF(model.Actuator):
         # Add metadata
         self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
                                                    self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
-        logging.debug("Connected to controller %s", self._hwVersion)
-        # TODO: a way to check the actual version of the library? PKEY_VERSION_STRING is private and doesn't work
+        self._swVersion = self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_VERSION_STRING)
+        logging.debug("Using MC_5DOF library version %s to connect to %s.", self._swVersion, self._hwVersion)
+        print("Using MC_5DOF library version %s to connect to %s.", self._swVersion, self._hwVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
