@@ -67,6 +67,11 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.focus = model.getComponent(role="focus")
         cls.light_filter = model.getComponent(role="filter")
         cls.stage = model.getComponent(role="stage")
+        # Make sure the lens is referenced
+        cls.focus.reference({'z'}).result()
+        # The 5DoF stage is not referenced automatically, so let's do it now
+        stage_axes = set(cls.stage.axes.keys())
+        cls.stage.reference(stage_axes).result()
         # Create 1 sem stream and 2 fm streams to be used in testing
         ss1 = stream.SEMStream("sem1", cls.sed, cls.sed.data, cls.ebeam,
                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
@@ -144,9 +149,11 @@ class CRYOSECOMTestCase(unittest.TestCase):
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture())
         fov = (10 ** -5, 10 ** -5)
-        self.stage.moveAbs({'x': -0.001, 'y': -0.001}).result()
+        # move to starting position (left, top)
+        self.stage.moveAbs({'x': -0.001, 'y': 0.001}).result()
+        # no change in movement
         tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
-        exp_pos = {'x': -0.001, 'y': -0.001}
+        exp_pos = {'x': -0.001, 'y': 0.001}
         assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
 
         tiled_acq_task._moveToTile((1, 0), (0, 0), fov)  # move right on x
@@ -154,11 +161,11 @@ class CRYOSECOMTestCase(unittest.TestCase):
         assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
 
         tiled_acq_task._moveToTile((1, 1), (1, 0), fov)  # move down on y
-        exp_pos = {'x': -0.000992, 'y': -0.001008}
+        exp_pos = {'x': -0.000992, 'y': 0.000992}
         assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
 
         tiled_acq_task._moveToTile((0, 1), (1, 1), fov)  # move back on x
-        exp_pos = {'x': -0.001, 'y': -0.001008}
+        exp_pos = {'x': -0.001, 'y': 0.000992}
         assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
 
     def test_get_fov(self):

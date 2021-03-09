@@ -1871,7 +1871,7 @@ class FakeMC_5DOF_DLL(object):
 
     def SA_MC_GetPose(self, id, p_pose):
         if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED, "error")
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED, "Not referenced error")
 
         self._update_current_pos()
 
