@@ -235,7 +235,7 @@ class Test5DOF(unittest.TestCase):
         """
         Checks whether the driver software version is valid
         """
-        self.assertFalse("Unknown (Odemis" in self.dev.swVersion)
+        self.assertNotIn("Unknown (Odemis", self.dev.swVersion)
 
     def test_reference_cancel(self):
 
