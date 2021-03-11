@@ -103,9 +103,7 @@ Emitters:
 Actuators:
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
  * filter: Emission filter to select a specific wavelength band.
- * stigmator: Controls the rotation of the astigmatic lens. It has one axis rz. It has one metadata:
-
-    1. POS_COR: Position correction to reduce astigmatism.
+ * stigmator: Controls the rotation of the astigmatic lens. It has one axis rz.
 
  * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz). Stage component has the following metadata:
   
@@ -116,11 +114,10 @@ Actuators:
     5. OVERVIEW_RANGE: The position range for the overview acquisition. 
     6. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0 
    
- * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has three metadata:
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has two metadata:
   
-    1. FAV_POS_DEACTIVE: The safe focus position along z-axis.   
-    2. FAV_POS_ACTIVE: The good focus position 
-    3. POS_COR: Position correction.
+    1. FAV_POS_DEACTIVE: A safe focus position along z-axis.   
+    2. FAV_POS_ACTIVE: The latest focus position for optical microscopy. 
    
  * align: Alignment actuator. It has 2 axes: x and y. It has also 2 metadata:
   
@@ -129,12 +126,10 @@ Actuators:
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM. 
- * ccd: The main optical pixelated detector. It includes 1 metadata:
-
-    1. FAV_POS_ACTIVE: Focus position at initialisation.
+ * ccd: The main optical pixelated detector. 
 
 System:
- * sample-thermostat: Controls the temperature of the sample. The metadata are:
+ * sample-thermostat: Controls the temperature of the sample finely. The metadata are:
 
     1. SAFE_REL_RANGE: Safe operating temperature range relative to target temperature.
     2. SAFE_SPEED_RANGE: Safe operating speed range. 
