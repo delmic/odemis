@@ -1666,6 +1666,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         cancelled = f.cancel()
         self.assertTrue(cancelled)
         # Assert that initial position is not reached (during focus adjustment)
+        time.sleep(0.01)  # give some time to update all the positions
         logging.debug(focus.position.value)
         test.assert_pos_not_almost_equal(focus.position.value, initial_foc_pos, atol=ATOL_LENS)
 
@@ -1676,7 +1677,9 @@ class TestLinkedHeightActuator(unittest.TestCase):
         time.sleep(0.1)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
+
         # Assert that stage position is neither initial nor target positions
+        time.sleep(0.01)  # give some time to update all the positions
         logging.debug(stage.position.value)
         test.assert_pos_not_almost_equal(initial_stage_pos, stage.position.value, atol=ATOL_STAGE)
         test.assert_pos_not_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
