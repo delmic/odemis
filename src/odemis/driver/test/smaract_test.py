@@ -231,6 +231,12 @@ class Test5DOF(unittest.TestCase):
     def tearDownClass(cls):
         cls.dev.terminate()
 
+    def test_driver_software_version(self):
+        """
+        Checks whether the driver software version is valid
+        """
+        self.assertNotIn("Unknown (Odemis", self.dev.swVersion)
+
     def test_reference_cancel(self):
 
         # TODO: Still fails

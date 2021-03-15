@@ -1013,8 +1013,6 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_ERROR_INVALID_PARAMETER = 0x0002
     # Invalid locator in call to Open function
     SA_MC_ERROR_INVALID_LOCATOR = 0x0003
-    # Undefined or inaccessible property in function call
-    SA_MC_ERROR_INVALID_PROPERTY = 0x0004
     # Invalid handle in call to function
     SA_MC_ERROR_INVALID_HANDLE = 0x0005
     # Tried to use an unsupported feature
@@ -1027,6 +1025,8 @@ class MC_5DOF_DLL(CDLL):
     SA_MC_ERROR_CANCELED = 0x0100
     # An operation has timed out
     SA_MC_ERROR_TIMEOUT = 0x0101
+    # Undefined or inaccessible property in function call
+    SA_MC_ERROR_INVALID_PROPERTY = 0x0020
     # The pose specified in the Move command is invalid/unreachable
     SA_MC_ERROR_POSE_UNREACHABLE = 0x0200
     # Device has not been referenced
@@ -1075,24 +1075,25 @@ class MC_5DOF_DLL(CDLL):
     # handles
     # handle value that means no object
     SA_MC_INVALID_HANDLE = 0xffffffff
+    SA_MC_GLOBAL_HANDLE = 1
     SA_MC_INFINITE = -1
 
     SA_MC_PKEY_MODEL_CODE = 0x0a02
     SA_MC_PKEY_MODEL_NAME = 0x0a03
-    SA_MC_PKEY_VERSION_STRING = 0xf001
+    SA_MC_PKEY_VERSION_STRING = 0x0100
 
     err_code = {
 0x0000: "No error",
 0x0001: "Unspecified error",
 0x0002: "Invalid parameter in function call ",
 0x0003: "Invalid locator in call to Open function ",
-0x0004: "Undefined or inaccessible property in function call ",
 0x0005: "Invalid handle in call to function ",
 0x0006: "Tried to use an unsupported feature",
 0x0007: "Reached limit of simultaneously controllable devices ",
 0x0008: "Supplied buffer too small",
 0x0100: "An operation has been canceled while waiting for a result ",
 0x0101: "An operation has timed out ",
+0x0020: "Undefined or inaccessible property in function call ",
 0x0200: "The pose specified in the Move command is invalid/unreachable ",
 0x0201: "Device has not been referenced ",
 0x0203: "An operation could not be started because the device is busy ",
@@ -1232,8 +1233,8 @@ class MC_5DOF(model.Actuator):
         # Add metadata
         self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
                                                    self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
-        logging.debug("Connected to controller %s", self._hwVersion)
-        # TODO: a way to check the actual version of the library? PKEY_VERSION_STRING is private and doesn't work
+        self._swVersion = self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_VERSION_STRING, handle=MC_5DOF_DLL.SA_MC_GLOBAL_HANDLE)
+        logging.debug("Using MC_5DOF library version %s to connect to %s.", self._swVersion, self._hwVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
@@ -1319,20 +1320,25 @@ class MC_5DOF(model.Actuator):
     # API Calls
     # Functions to set the property values in the controller, categorized by data type
 
-    def GetProperty_s(self, property_key, bufferSize=256):
+    def GetProperty_s(self, property_key, bufferSize=256, handle=None):
         """
         Parameters:
          - property_key: The property key.
          - bufferSize = 256: In: the size of the buffer.  Out: the written
         number of characters +1 (for the string termination 0-byte)  if
         successful or the required buffer size, if not.
+        - handle: int or None: If None, it will use ._id
 
         Return value(s):
          - outBuffer: A string
         """
+        if handle is None:
+            handle = self._id
+        else:
+            handle = c_uint32(handle)
         buf = create_string_buffer(bufferSize)
         slen = c_size_t(len(buf))
-        self.core.SA_MC_GetProperty_s(self._id, c_uint32(property_key), buf, byref(slen))
+        self.core.SA_MC_GetProperty_s(handle, c_uint32(property_key), buf, byref(slen))
         return buf.value.decode("latin1")
 
     def SetProperty_f64(self, property_key, value):
