@@ -1669,6 +1669,8 @@ class MC_5DOF(model.Actuator):
                         raise SA_MCError(ev.i32, "Move failed with error 0x%x: %s" %
                                                  (ev.i32, MC_5DOF_DLL.err_code.get(ev.i32, "")))
                     break
+                else:
+                    logging.warning("Unknown event type %s", ev.type)
 
                 now = time.time()
                 if now > end:
@@ -1687,6 +1689,9 @@ class MC_5DOF(model.Actuator):
                 raise CancelledError()
             elif future._must_stop:
                 raise CancelledError()
+            elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT:
+                logging.error("Move timed out after %g s: %s", max_dur, ex)
+                raise TimeoutError("Move timed out after %g s" % (max_dur,))
             else:
                 logging.error("Move failed: %s", ex)
                 raise
