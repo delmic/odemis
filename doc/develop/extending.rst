@@ -541,7 +541,7 @@ Update the microscope configuration file for instantiating the microscope with t
 parameters for your new driver.
 
 Do not forget to commit your code using ``git add ...`` and ``git commit -a``.
-Optionally, send your extension to Delmic as a git patch or a github merge request.
+Optionally, send your extension to Delmic as a git patch or a github pull request.
 
 Sometimes, on Linux, a driver needs to be associated to a udev rule. udev only
 reloads the list of rules at boot time. So, when changing the rules, you can
@@ -636,12 +636,18 @@ always run from within the main GUI thread. Another way is to call every GUI
 related function using the special ``wx.CallAfter()`` function.
 
 
-Running test cases
-==================
+Unit testing
+============
 The source code comes with a large set of unit tests and some integration tests.
 They allow checking the behaviour of the different parts of Odemis.
 After changes are made to the source, the tests should be rerun in order to validate
-these changes. To run the test cases, it is recommended to first create an
+these changes.
+
+
+Running test cases
+------------------
+
+To run the test cases, it is recommended to first create an
 empty directory next to the odemis directory, and name it ``odemis-testing``.
 Optionally, you may also have another directory ``mic-odm-yaml``, which contains
 extra microscopes files to be used during integration testing (the file names
@@ -658,6 +664,27 @@ Please note that before running the test cases, you might need to run once
 ``odemis-start`` in order to set-up some directories with the correct access
 rights. Also, running all the test cases may take up to a couple of hours, during
 which windows will pop-up and automatically close from time to time.
+
+It is also possible to run a single test at a time, by executing the test file.
+It's possible to indicate as argument the specific test case and even function to
+run.
+Note that by default the test cases for drivers attempt to use the real
+hardware by default. To force the use of a simulator (if available), the
+environment variable TEST_NOHW to 1.
+The simplest to do all of it from the command line is to write such as::
+
+    TEST_NOHW=1 python3 src/odemis/driver/test/static_test.py --verbose
+
+Adding test cases
+-----------------
+Test cases go into separate files located in a subdirectory ``test``. Each
+filename must end with ``_test.py``. They use the unittest Python framework.
+
+In the test, assertion functions can be used. In addition to the
+`standard ones <https://docs.python.org/3/library/unittest.html#test-cases>`_,
+numpy provides some useful functions in
+`numpy.testing <https://numpy.org/doc/stable/reference/routines.testing.html>`_,
+and some extra functions are available in ``odemis.util.test``.
 
 
 Speed optimization
