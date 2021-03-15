@@ -1652,6 +1652,8 @@ class MC_5DOF(model.Actuator):
         logging.debug("Expecting a move of %f s, will wait up to %g s", dur, max_dur)
 
         try:
+            # TODO: the period is only updated on the next repetition, so it might
+            # take up to 1s before the first position update happens.
             self.update_position_timer.period = 0.05
             with future._moving_lock:
                 if future._must_stop:
@@ -1948,8 +1950,11 @@ class FakeMC_5DOF_DLL(object):
                 timedout = True
                 break
             if self.stopping.wait(0.05):
-                stopped = True
                 break
+
+        # Check if it was cancelled (cancelling sets the current move to now,
+        # so it might come out of the loop due to the while)
+        stopped = stopped or self.stopping.is_set()
 
         ev.type = MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED
         if not stopped:
