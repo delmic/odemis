@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-import queue
 from ctypes import *
 import ctypes
 import gc
@@ -24,6 +23,8 @@ import logging
 import numpy
 from odemis import model
 from odemis.model import HwError, oneway
+from odemis.util import img
+import queue
 import subprocess
 import sys
 import threading
@@ -715,12 +716,20 @@ class Camera(model.DigitalCamera):
             logging.info("Set color mode to {} bits.".format(bpp))
             self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
 
+            # For now we only support software binning. Some cameras support a bit
+            # of binning (not necessarily in both dimensions), but to make it
+            # useful it'd probably need to be mixed with software binning anyway.
+            # TODO: use hardware binning when available.
+            max_bin = (16, 16)
+            self.binning = model.ResolutionVA((1, 1), ((1, 1), max_bin), setter=self._setBinning)
+
             # TODO: binning? frameRate? resolution + translation = AOI?
-            # resolution & binning are fixed (for now), but we provide them
-            # because a lot of clients expect these VAs
+
+            # For now, we only support full frame acquisition. The resolution
+            # can change, just to adjust to the binning.
             res = self._transposeSizeToUser(self._shape[:2])
-            self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
-            self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)), readonly=True)
+            min_res = res[0] // max_bin[0], res[1] // max_bin[1]
+            self.resolution = model.ResolutionVA(res, (min_res, res), readonly=True)
 
             # TODO: new buffers must be allocated whenever the resolution changes
             res = self._transposeSizeFromUser(self.resolution.value)
@@ -1005,6 +1014,20 @@ class Camera(model.DigitalCamera):
 
         return gain
 
+    def _setBinning(self, value):
+        """
+        value (2-tuple int)
+        Called when "binning" VA is modified. For now, applied in software, after
+          receiving the full frame.
+        """
+        # Update the resolution to stay full frame.
+        # Minus the remainder pixels if it's not a multiple of the binning.
+        max_res = self.resolution.range[1]
+        new_res = (max_res[0] // value[0], max_res[1] // value[1])
+
+        self.resolution._set_value(new_res, force_write=True)
+        return value
+
     def _allocate_buffers(self, num, width, height, bpp):
         """
         Create memory buffers for image acquisition
@@ -1170,6 +1193,29 @@ class Camera(model.DigitalCamera):
                 metadata = self._metadata.copy()
                 metadata[model.MD_ACQ_DATE] = time.time() - metadata[model.MD_EXP_TIME]
                 array = self._buffer_as_array(mem, metadata)
+
+                # Normally we should read the binning from just before the acquisition
+                # started. It's a little hard here as we are completely asynchronous,
+                # so we don't even try.
+                # TODO: use the binning as it was just before the acquisition.
+                binning = self._transposeSizeFromUser(self.binning.value)
+                if binning != (1, 1):
+                    # Crop the data if necessary, to make it a multiple of the binning
+                    crop_shape = ((array.shape[0] // binning[1]) * binning[1],
+                                  (array.shape[1] // binning[0]) * binning[0])
+                    if crop_shape != array.shape:
+                        logging.debug("Cropping data array to fit binning from %s to %s", array.shape, crop_shape)
+                        array = array[:crop_shape[0],:crop_shape[1]]
+
+                    # We remove PIXEL_SIZE because the Bin() function would multiply
+                    # it based on the binning. However, the metadata value already
+                    # takes into account the binning (VA) value, so no need to
+                    # change it.
+                    pxs = array.metadata.pop(model.MD_PIXEL_SIZE, None)
+                    array = img.Bin(array, binning)
+                    if pxs is not None:
+                        array.metadata[model.MD_PIXEL_SIZE] = pxs
+                    logging.debug("Binned by %s, data now has shape %s", binning, array.shape)
 
                 self.data.notify(self._transposeDAToUser(array))
 

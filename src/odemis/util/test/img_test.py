@@ -21,16 +21,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division, print_function
 
+from builtins import range
 import logging
 import numpy
 from odemis import model
+from odemis.dataio import tiff
 from odemis.util import img, get_best_dtype_for_acc
+from odemis.util.img import Bin
+import os
 import time
 import unittest
 from unittest.case import skip
-from odemis.dataio import tiff
-import os
-from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -590,6 +591,30 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertEqual(hist[1], 0)
         self.assertGreater(hist[-1], 0)
         self.assertEqual(hist[-2], 0)
+
+
+class TestBin(unittest.TestCase):
+
+    def test_simple(self):
+        d = model.DataArray(numpy.ones((20, 6), dtype=numpy.uint8))
+        db = Bin(d, (3, 5))
+        self.assertEqual(d.shape, (20, 6))  # d should stay untouched
+        self.assertEqual(db.shape, (4, 2))  # 20 / 5, 6 / 3
+        # we are summing 1s 3x5 times, so it should be 15 in all pixels
+        self.assertTrue(numpy.all(db == 3 * 5))
+
+        # Metadata is created/updated
+        self.assertEqual(db.metadata[model.MD_BINNING], (3, 5))
+
+    def test_no_binning(self):
+        d = model.DataArray(numpy.ones((20, 6), dtype=numpy.uint16))
+        db = Bin(d, (1, 1))
+        self.assertEqual(d.shape, (20, 6))  # d should stay untouched
+        self.assertEqual(db.shape, (20, 6))  # db should be identical
+        numpy.testing.assert_array_equal(d, db)
+
+        # Metadata is created/updated
+        self.assertEqual(db.metadata[model.MD_BINNING], (1, 1))
 
 
 class TestMergeMetadata(unittest.TestCase):
