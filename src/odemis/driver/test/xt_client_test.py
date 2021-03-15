@@ -248,6 +248,20 @@ class TestMicroscope(unittest.TestCase):
         self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
         self.scanner.rotation.value = init_rotation
 
+    def test_scan_mode(self):
+        """Test getting and setting the scan mode."""
+        possible_modes = ["external", "full_frame", "spot", "line"]
+        init_scan_mode = self.scanner.scanMode.value
+        self.assertTrue(init_scan_mode in possible_modes)
+        for mode in possible_modes:
+            self.scanner.scanMode.value = mode
+            self.assertEqual(self.microscope.get_scan_mode(), mode)
+
+        with self.assertRaises(IndexError):
+            self.scanner.scanMode.value = "fake_scan_mode"
+
+        self.scanner.scanMode.value = init_scan_mode
+
     def _compute_expected_duration(self):
         """Computes the expected duration of a single image acquisition."""
         dwell = self.scanner.dwellTime.value
@@ -264,7 +278,9 @@ class TestMicroscope(unittest.TestCase):
         im = self.detector.data.get()
         duration = time.time() - start
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
-        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertGreaterEqual(duration, expected_duration,
+                                "Error execution took %f s, less than exposure time %d." % (
+                                    duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
@@ -1149,6 +1165,15 @@ class TestMBScanner(unittest.TestCase):
         self.assertEqual(False, self.scanner.multiBeamMode.value)
 
         self.scanner.multiBeamMode.value = current_beam_mode
+
+    def test_beam_powerVA(self):
+        """Test getting and setting the beam power through the VA."""
+        init_beam_power = self.scanner.beamPower.value
+        self.scanner.beamPower.value = True
+        self.assertTrue(self.microscope.get_beam_is_on())
+        self.scanner.beamPower.value = False
+        self.assertFalse(self.microscope.get_beam_is_on())
+        self.scanner.beamPower.value = init_beam_power
 
 
 if __name__ == '__main__':

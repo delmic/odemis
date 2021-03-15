@@ -1120,6 +1120,12 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
+        self.scanMode = model.VAEnumerated(
+                self.parent.get_scan_mode(),
+                setter=self.parent.set_scan_mode,
+                choices={"external", "full_frame", "spot", "line"}
+        )
+
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
@@ -2087,6 +2093,11 @@ class MultiBeamScanner(Scanner):
         self.multiBeamMode = model.BooleanVA(
             multibeam_mode,
             setter=self._setMultiBeamMode
+        )
+
+        self.beamPower = model.BooleanVA(
+            self.parent.get_beam_is_on(),
+            setter=self.parent.set_beam_power
         )
 
         # TODO If _updateSettings is updated move this to the top of the __init__ function. For now the update thread
