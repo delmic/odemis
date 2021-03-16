@@ -44,7 +44,7 @@ ACQUI_PATH = get_picture_folder()
 class Config(with_metaclass(ABCMeta, object)):
     """ Abstract configuration super class
 
-    Configurations are built around the :py:class:`ConfigParser.SafeConfigParser` class.
+    Configurations are built around the :py:class:`ConfigParser.ConfigParser` class.
 
     The main difference is that the filename is fixed, and changes are automatically saved.
 
@@ -59,14 +59,15 @@ class Config(with_metaclass(ABCMeta, object)):
         # Absolute path to the configuration file
         self.file_path = os.path.abspath(os.path.join(CONF_PATH, self.file_name))
         # Attribute that contains the actual configuration
-        self.config = ConfigParser.SafeConfigParser()
+        # Disable "interpolation" to support easily storing values containing "%"
+        self.config = ConfigParser.ConfigParser(interpolation=None)
 
         # Note: the defaults argument of ConfigParser doesn't do enough, because
         # it only allows to specify default options values, independent of the
         # section.
 
         # Default configuration used to check for completeness
-        self.default = ConfigParser.SafeConfigParser()
+        self.default = ConfigParser.ConfigParser(interpolation=None)
 
         self.read()
 
