@@ -85,7 +85,8 @@ class TestFilenameSuggestions(unittest.TestCase):
                    '%stest-123' % date: ('{datelng}test-{cnt}', '123'),
                    '123-test-%s' % date: ('{cnt}-test-{datelng}', '123'),
                    'test-0000': ('test-{cnt}', '0000'),
-                   'test2-45': ('test2-{cnt}', '45')
+                   'test2-45': ('test2-{cnt}', '45'),
+                   '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),
                     }
 
         for fn, ptn in fn_ptns.items():
