@@ -277,9 +277,12 @@ Installing Python environment
 This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and 
-pick the right architecture for your computer (most likely 64-bit). Anaconda typically comes
-with a newer version of Python (eg, 3.8). It's crucial to create a new environment
+Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and pick the right
+architecture for your computer (most likely 64-bit). Note that the following instructions are valid
+for conda version 4.9.2. In case you have an older version make sure that you update the conda version
+through the Anaconda prompt before proceeding to the next steps.
+
+Anaconda typically comes with a newer version of Python (eg, 3.8). It's crucial to create a new environment
 with the python version (3.6.12) on which Odemis has been well tested.
 
 #. To create a new conda environment, named odemis, open the Anaconda command prompt and type:
