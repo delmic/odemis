@@ -22,11 +22,7 @@ see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-try:
-    import ConfigParser
-except ImportError:  # Python 3 naming
-    import configparser as ConfigParser
-
+import configparser
 import logging
 import math
 import numpy
@@ -43,6 +39,7 @@ from odemis import model
 from odemis.dataio import AuthenticationError
 from odemis.model import AcquisitionData, DataArrayShadow
 from odemis.util.conversion import get_tile_md_pos
+
 
 # User-friendly name
 FORMAT = "Catmaid"
@@ -72,7 +69,7 @@ SUPPORTED_CONTENT_TYPES = {
 # password = my_password
 #
 # The file can also be created with the following code:
-# >>> config = ConfigParser.ConfigParser()
+# >>> config = configparser.ConfigParser()
 # >>> config.add_section(base_url)
 # >>> config.set(base_url, 'token', token)
 # >>> config.set(base_url, 'username', username)
@@ -350,7 +347,7 @@ def read_config_file(base_url, token=False, username=False, password=False):
         username: the username from the config file
         password: the password from the config file
     """
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.read(KEY_PATH)
     if not config.has_section(base_url):
         logging.debug("No authentication configuration found for this url {url}.".format(url=base_url))
