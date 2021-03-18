@@ -248,19 +248,19 @@ class TestMicroscope(unittest.TestCase):
         self.assertEqual(self.scanner.rotation.value, init_rotation + 0.01)
         self.scanner.rotation.value = init_rotation
 
-    def test_scan_mode(self):
-        """Test getting and setting the scan mode."""
-        possible_modes = ["external", "full_frame", "spot", "line"]
-        init_scan_mode = self.scanner.scanMode.value
-        self.assertTrue(init_scan_mode in possible_modes)
-        for mode in possible_modes:
-            self.scanner.scanMode.value = mode
-            self.assertEqual(self.microscope.get_scan_mode(), mode)
-
-        with self.assertRaises(IndexError):
-            self.scanner.scanMode.value = "fake_scan_mode"
-
-        self.scanner.scanMode.value = init_scan_mode
+    def test_external(self):
+        """Test setting the scan mode to external."""
+        init_external = self.scanner.external.value
+        self.scanner.external.value = True
+        self.assertEqual(self.microscope.get_scan_mode(), "external")
+        self.scanner.external.value = False
+        self.assertEqual(self.microscope.get_scan_mode(), "full_frame")
+        # Test if the value is automatically updated when the value is not changed via the VA
+        self.microscope.set_scan_mode("external")
+        time.sleep(6)
+        self.assertTrue(self.scanner.external.value)
+        # set the value back to its initial value.
+        self.scanner.external.value = init_external
 
     def _compute_expected_duration(self):
         """Computes the expected duration of a single image acquisition."""
@@ -1166,14 +1166,19 @@ class TestMBScanner(unittest.TestCase):
 
         self.scanner.multiBeamMode.value = current_beam_mode
 
+    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
     def test_beam_powerVA(self):
         """Test getting and setting the beam power through the VA."""
-        init_beam_power = self.scanner.beamPower.value
-        self.scanner.beamPower.value = True
+        init_beam_power = self.scanner.power.value
+        self.scanner.power.value = True
         self.assertTrue(self.microscope.get_beam_is_on())
-        self.scanner.beamPower.value = False
+        self.scanner.power.value = False
         self.assertFalse(self.microscope.get_beam_is_on())
-        self.scanner.beamPower.value = init_beam_power
+        # Test if the value is automatically updated when the value is not changed via the VA
+        self.microscope.set_beam_power(True)
+        time.sleep(6)
+        self.assertTrue(self.scanner.power.value)
+        self.scanner.power.value = init_beam_power
 
 
 if __name__ == '__main__':
