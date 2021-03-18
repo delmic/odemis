@@ -712,37 +712,40 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.set_autostigmator(channel_name, state)
 
-    def get_pitch(self):
+    def get_delta_pitch(self):
         """
-        Get the pitch between two neighboring beams within the multiprobe pattern.
+        Get the delta pitch. The pitch is the distance between two neighboring beams within the multiprobe pattern
+        which is pre-set by TFS. The delta pitch adjusts the pre-set pitch.
 
         Returns
         -------
-        pitch: float, [um]
-            The distance between two beams of the multiprobe pattern.
+        delta pitch: float, [um]
+            The adjustment in the pitch from the factory pre-set pitch.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_pitch()
+            return self.server.get_delta_pitch()
 
-    def set_pitch(self, pitch):
+    def set_delta_pitch(self, delta_pitch):
         """
-        Set the pitch between two beams within the multiprobe pattern.
+        Set the delta pitch. The pitch is the distance between two neighboring beams within the multiprobe pattern
+        which is pre-set by TFS. The delta pitch adjusts the pre-set pitch.
 
-        Returns
+        Parameters
         -------
-        pitch: float, [um]
-            The distance between two beams of the multiprobe pattern.
+        delta pitch (float): [um]
+            The adjustment in the pitch from the factory pre-set pitch.
+
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_pitch(pitch)
+            return self.server.set_delta_pitch(delta_pitch)
 
-    def pitch_info(self):
-        """"Returns a dict with the 'unit' and 'range' of the pitch."""
+    def delta_pitch_info(self):
+        """"Returns a dict with the 'unit' and 'range' of the delta pitch."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.pitch_info()
+            return self.server.delta_pitch_info()
 
     def get_primary_stigmator(self):
         """
@@ -2012,7 +2015,7 @@ class MultiBeamScanner(Scanner):
     """
     This class extends  behaviour of the xt_client.Scanner class with XTtoolkit functionality.
     xt_client.Scanner contains Vigilant Attributes for magnification, accel voltage, blanking, spotsize, beam shift,
-    rotation and dwell time. This class adds XTtoolkit functionality via the Vigilant Attributes for the pitch,
+    rotation and dwell time. This class adds XTtoolkit functionality via the Vigilant Attributes for the delta pitch,
     beam stigmator, pattern stigmator, the beam shift transformation matrix (read-only),
     multiprobe rotation (read-only), aperture index, beamlet index, beam mode (multi/single beam)
     Whenever one of these attributes is changed, its setter also updates another value if needed.
@@ -2023,14 +2026,14 @@ class MultiBeamScanner(Scanner):
         self.parent = parent
 
         # Add XTtoolkit specific VA's
-        pitch_info = self.parent.pitch_info()
-        assert pitch_info["unit"] == "um", "Pitch unit is incorrect, current: {}, should be: um.".format(pitch_info["unit"])
-        # TODO change VA and method names with pitch to delta pitch
-        self.pitch = model.FloatContinuous(
-            self.parent.get_pitch() * 1e-6,
+        delta_pitch_info = self.parent.delta_pitch_info()
+        assert delta_pitch_info["unit"] == "um", "Delta pitch unit is incorrect, current: {}, should be: um.".format(
+                delta_pitch_info["unit"])
+        self.deltaPitch = model.FloatContinuous(
+            self.parent.get_delta_pitch() * 1e-6,
             unit="m",
-            range=tuple(i * 1e-6 for i in pitch_info["range"]),
-            setter=self._setPitch,
+            range=tuple(i * 1e-6 for i in delta_pitch_info["range"]),
+            setter=self._setDeltaPitch,
         )
 
         beam_stigmator_info = self.parent.stigmator_info()
@@ -2106,10 +2109,10 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self)._updateSettings()
         # Polling XTtoolkit settings
         try:
-            pitch = self.parent.get_pitch() * 1e-6
-            if pitch != self.pitch.value:
-                self.pitch._value = pitch
-                self.pitch.notify(pitch)
+            delta_pitch = self.parent.get_delta_pitch() * 1e-6
+            if delta_pitch != self.deltaPitch.value:
+                self.deltaPitch._value = delta_pitch
+                self.deltaPitch.notify(delta_pitch)
             beam_stigmator = self.parent.get_stigmator()
             if beam_stigmator != self.beamStigmator.value:
                 self.beamStigmator._value = beam_stigmator
@@ -2141,9 +2144,9 @@ class MultiBeamScanner(Scanner):
         except Exception:
             logging.exception("Unexpected failure when polling XTtoolkit settings")
 
-    def _setPitch(self, pitch):
-        self.parent.set_pitch(pitch * 1e6)  # Convert from meters to micrometers.
-        return self.parent.get_pitch() * 1e-6
+    def _setDeltaPitch(self, delta_pitch):
+        self.parent.set_delta_pitch(delta_pitch * 1e6)  # Convert from meters to micrometers.
+        return self.parent.get_delta_pitch() * 1e-6
 
     def _setBeamStigmator(self, beam_stigmator_value):
         self.parent.set_stigmator(*beam_stigmator_value)
