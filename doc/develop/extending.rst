@@ -60,15 +60,18 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo apt-get update
     sudo apt-get dist-upgrade
     sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp \
-     python-pyro4-delmic odemis fluodb python-wxtools \
-     python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush cython
+     python3-pyro4-delmic odemis fluodb \
+     python3-setuptools python3-sphinx inkscape dia-gnome texlive pngcrush cython3
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
     git clone https://github.com/delmic/odemis.git
     cd odemis
-    python setup.py build_ext --inplace
+    python3 setup.py build_ext --inplace
+
+Note that all dependencies should have been picked-up. Afterwards, it should
+normally not be needed to install any package via PIP.
 
 Configure Odemis for development
 """"""""""""""""""""""""""""""""
@@ -82,9 +85,9 @@ Modify the first lines so they read like this::
     PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
 
 And edit the MODEL line for the model you want (probably a simulated microscope
-like ``sparc-sim`` or ``secom-sim``). For example::
+like ``sparc2-sim`` or ``secom-sim``). For example::
 
-    MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
+    MODEL="$CONFIGPATH/sim/sparc2-sim.odm.yaml"
     
 For some simulated microscopes, you need to set-up the simulated
 acquisition board of the SEM. To automate it at computer start-up, create a
@@ -110,7 +113,11 @@ Install it with::
 
 In PyCharm, open the ``odemis`` directory.
 In the project settings, change the Python interpreter to the
-*system* interpreter (select either Python 2.7 or 3.6).
+*system* interpreter (select Python 3.6).
+
+On Ubuntu 18.04, PyCharm will report that some dependencies are not satisfied (eg, wxPython),
+however, if you have already installed Odemis from the Ubuntu packages, this is
+fine, and you should not install new version via PyCharm.
 
 Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
@@ -549,7 +556,7 @@ Update the microscope configuration file for instantiating the microscope with t
 parameters for your new driver.
 
 Do not forget to commit your code using ``git add ...`` and ``git commit -a``.
-Optionally, send your extension to Delmic as a git patch or a github merge request.
+Optionally, send your extension to Delmic as a git patch or a github pull request.
 
 Sometimes, on Linux, a driver needs to be associated to a udev rule. udev only
 reloads the list of rules at boot time. So, when changing the rules, you can
@@ -603,11 +610,11 @@ If you modify the application main icons in ``image/icon_gui*.png``, you need to
 To start the GUI directly as a python module, for example to run it in a debugger,
 you can run it this way::
 
-    python -m odemis.gui.main --log-level 2 --log-target $HOME/odemis-gui.log
+    python3 -m odemis.gui.main --log-level 2 --log-target $HOME/odemis-gui.log
 
 To start the GUI just in viewer mode::
 
-    python -m odemis.gui.main --standalone --log-level 2 --log-target $HOME/odemis-gui.log
+    python3 -m odemis.gui.main --standalone --log-level 2 --log-target $HOME/odemis-gui.log
 
 
 If you need to see more log messages of the GUI while it is running, it's possible
@@ -644,12 +651,18 @@ always run from within the main GUI thread. Another way is to call every GUI
 related function using the special ``wx.CallAfter()`` function.
 
 
-Running test cases
-==================
+Unit testing
+============
 The source code comes with a large set of unit tests and some integration tests.
 They allow checking the behaviour of the different parts of Odemis.
 After changes are made to the source, the tests should be rerun in order to validate
-these changes. To run the test cases, it is recommended to first create an
+these changes.
+
+
+Running test cases
+------------------
+
+To run the test cases, it is recommended to first create an
 empty directory next to the odemis directory, and name it ``odemis-testing``.
 Optionally, you may also have another directory ``mic-odm-yaml``, which contains
 extra microscopes files to be used during integration testing (the file names
@@ -667,6 +680,27 @@ Please note that before running the test cases, you might need to run once
 rights. Also, running all the test cases may take up to a couple of hours, during
 which windows will pop-up and automatically close from time to time.
 
+It is also possible to run a single test at a time, by executing the test file.
+It's possible to indicate as argument the specific test case and even function to
+run.
+Note that by default the test cases for drivers attempt to use the real
+hardware by default. To force the use of a simulator (if available), the
+environment variable TEST_NOHW to 1.
+The simplest to do all of it from the command line is to write such as::
+
+    TEST_NOHW=1 python3 src/odemis/driver/test/static_test.py --verbose
+
+Adding test cases
+-----------------
+Test cases go into separate files located in a subdirectory ``test``. Each
+filename must end with ``_test.py``. They use the unittest Python framework.
+
+In the test, assertion functions can be used. In addition to the
+`standard ones <https://docs.python.org/3/library/unittest.html#test-cases>`_,
+numpy provides some useful functions in
+`numpy.testing <https://numpy.org/doc/stable/reference/routines.testing.html>`_,
+and some extra functions are available in ``odemis.util.test``.
+
 
 Speed optimization
 ==================
@@ -674,13 +708,13 @@ To speed up the code, first, you need to profile the code to see where is the
 bottleneck. One option is to use the cProfile.
 This allows to run the cProfile on the GUI::
 
-    PYTHONPATH=./src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
+    PYTHONPATH=./src/ python3 -m cProfile -o odemis.profile src/odemis/gui/main.py
     
 Then use the features you want to measure/optimize, and eventually close the GUI.
 
 After the program is closed, you can read the profile with the following commands::
 
-    python -m pstats odemis.profile
+    python3 -m pstats odemis.profile
     > sort time
     > stats
 
@@ -746,7 +780,7 @@ or if you have installed the pip package::
 In order to find the leaks, it's possible to add a decorator ``@profile``
 to the suspect methods/functions, and then run::
 
-    python -m memory_profiler program.py
+    python3 -m memory_profiler program.py
 
 It will list line-per-line the change of memory usage after closing the GUI.
 .. TODO: the memory usage listed in terminal of viewer is not line-by-line and displays something weired..
@@ -792,7 +826,7 @@ You may also want to combine tracking of memory and time. You can do this by com
 
 Another option to track the memory usage is the cProfile package::
 
-    python -m cProfile -s cumtime program.py
+    python3 -m cProfile -s cumtime program.py
 
 It will display the overall used memory per function, the number of calls per function and many more
 quantities regarding memory usage. However, you need to close the GUI before the statistics are displayed
