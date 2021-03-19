@@ -344,8 +344,9 @@ class LocalizationTab(Tab):
         :type main_data: odemis.gui.model.MainGUIData
         """
 
-        tab_data = guimod.LiveViewGUIData(main_data)
-        super(LocalizationTab, self).__init__(name, button, panel, main_frame, tab_data)
+        tab_data = guimod.LocalizationGUIData(main_data)
+        super(LocalizationTab, self).__init__(
+            name, button, panel, main_frame, tab_data)
         self.set_label("LOCALIZATION")
 
         self.main_data = main_data

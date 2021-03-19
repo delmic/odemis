@@ -29,6 +29,8 @@ from abc import ABCMeta
 import collections
 import logging
 import math
+from odemis.gui import conf
+from odemis.util.filename import create_filename
 from odemis import model
 from odemis.acq import path, leech, acqmng
 import odemis.acq.stream as acqstream
@@ -594,6 +596,46 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
+
+
+class LocalizationGUIData(MicroscopyGUIData):
+    """ Represent an interface used to only show the current data from the microscope.
+
+    It it used for handling CryoSECOM systems.
+
+    """
+
+    def __init__(self, main):
+        if main.role != "cryo-secom":
+            raise ValueError("The role of the microscope is not correct")
+        MicroscopyGUIData.__init__(self, main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
+        # the relative focus position below the current position
+        self.zMin = model.FloatContinuous(
+            value=-10e-6, range=(-1000e-6, 0), unit="m")
+        # the relative focus position above the current position
+        self.zMax = model.FloatContinuous(
+            value=10e-6, range=(0, 1000e-6), unit="m")
+        # the distance between two z-levels
+        self.zStep = model.FloatContinuous(
+            value=1e-6, range=(-100e-6, 100e-6), unit="m")
+        # for enabling/disabling z-stack acquisition
+        self.zStackActive = model.BooleanVA(value=False)
+        # the streams to acquire among all streams in .streams
+        self.acquisitionStreams = model.ListVA()
+        # for the filename 
+        config = conf.get_acqui_conf()
+        self.filename = model.StringVA(create_filename(
+            config.last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
+
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
