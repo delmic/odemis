@@ -1,0 +1,388 @@
+# Configuration for the SPARC v2 system
+SPARC2-TC-Fiber: {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
+               "Optical Path Properties", "Spectrometer Selector",
+               "Camera", "Spectrometer", "Spectrograph", "Fiber align",
+               "Time Correlator", "Photon counter sync", "Photon counter signal 1",
+               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
+               "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
+               "Lens1 Mover", "Lens2 Switch"],
+}
+
+# Light (lamp with known spectrum)
+"Calibration Light": {
+    class: light.Light,
+    role: "brightlight",
+    power_supplier: "Power Control Unit",
+    affects: ["Camera", "Spectrometer", 
+              "Time Correlator", "Photon counter sync", "Photon counter signal 1"],
+}
+
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake",
+        pin_map: {
+            "Camera": 0,
+            "Spectrograph": 2,
+            "Optical Actuators": 4,
+            "Calibration Light": 6,
+        },
+        delay: { # Time it takes (in s) before a component is accessible
+            "Calibration Light": 1, # To turn on/off the light, with most bulbs it's very fast
+            "Camera": 1,
+            "Spectrograph": 3, # SR-193 needs a looong time to initialise
+            "Optical Actuators": 1,
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Calibration Light": True, # turn if on initially, to warm up. It will automatically be off when the component starts
+            "Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True,
+        },
+        # List of EEPROM IDs (of the plates) which are required to start properly
+        ids: [],
+    }
+}
+
+# Quanta SEM driven via external X/Y connection, using a DAQ board
+"SEM Scan Interface": {
+    class: semcomedi.SEMComedi,
+    role: null,
+    init: {device: "/dev/comedi0"},
+    # more detectors can be added, if necessary
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "SEM Detector",
+    }
+}
+
+# Connect:
+# X -> AO 0
+# Y -> AO 1
+# Ground -> AO GND
+"SEM E-beam": {
+    # Internal child of SEM Scan Interface, so no class
+    creator: "SEM Scan Interface",
+    role: e-beam,
+    init: {
+        channels: [1, 0],
+        # On Delmic scanning box v2, the voltage is x2, so need to specify twice smaller values than needed.
+        limits: [[2.77, -2.77], [1.82, -1.82]],  # V
+        park: [-3.5, -3.5], # V
+        max_res: [5760, 3840], # px
+        # Digital output port mapping on the Delmic scanning box v2:
+        # 0 = Relay
+        # 1 = Open drain output (Y0.0)
+        # 2 = Digital Out 1
+        # 3 = Digital Out 0
+        # 4 = Status led
+        scanning_ttl: {4: True}, # output ports -> True (indicate scanning) or False (indicate parked)
+        hfw_nomag: 0.412, # m  # TODO : Compute
+        settle_time: 30.e-6, # s  # TODO: Check ****
+    },
+    properties: {
+        scale: [8, 8], # (ratio), start with a pretty fast scan
+        dwellTime: 3.e-6, # s
+        magnification: 100, # (ratio), start low for a big field of view
+    },
+    affects: ["SEM Detector", "Camera", "Spectrometer",
+              "Time Correlator", "Photon counter sync", "Photon counter signal 1"] # affects the CCD in case of cathodoluminescence
+}
+
+# Must be connected on AI1/AI9 (differential)
+"SEM Detector": { # aka ETD
+    # Internal child of SEM Scan Interface, so no class
+    role: se-detector,
+    init: {
+        channel: 0, # 0-> sawtooth waves, 1-> square waves
+        limits: [-3, 3], # V
+    },
+}
+
+# Dedicated Andor Newton camera for spectrum acquisition
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        transp: [1, 2], # if mirrored on X axis, change 1 to -1
+        shutter_times: [50.e-3, 50.e-3], # s, opening/closing times of the shutter  # TODO: put the right values
+    },
+    properties: {
+        shutterMinimumPeriod: 0.1, # s  = Max 10Hz frequency # TODO: put the right value for the shutter
+        targetTemperature: -65,
+        fanSpeed: 0, # °C
+    },
+}
+
+# VIS-NIR Spectrometer = Andor Newton + Shamrock SR193 (connected via USB)
+"Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [-1, 2], # inverse X axis
+    },
+    properties: {
+        #binning: [4, 1080],  # 1080 instead of 2160, to acquire only on half of the CCD
+    },
+}
+
+"Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        bands: { # The filters in the filter-wheel
+            1: "pass-through",
+            2: [375.e-9, 425.e-9], # pos -> m,m
+            3: [425.e-9, 475.e-9],
+            4: [475.e-9, 525.e-9],
+            5: [525.e-9, 575.e-9],
+            6: [575.e-9, 625.e-9],
+        },
+        fstepsize: 30.e-6, # m, size of one focus step  (Note: it used to be set at 10µm, but from physical inspection 30µm seems more correct)
+        drives_shutter: [0] # flipper positions: the Spectral Camera drives the shutter
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    children: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+# It doesn't select the camera (as there is only one), but allows to make some
+# kind of blanker for the CCD
+"Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: "spec-det-selector",
+    children: {"rx": "Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera", "Spectrometer"],
+            1.5707963267948966: [],
+        },
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+# Provide the filter wheel of the spectrograph as a separate component
+"Spec Filter Wheel": {
+    class: actuator.MultiplexActuator,
+    role: filter,
+    children: {"band": "Spectrograph"},
+    init: {
+        axes_map: {"band": "band"},
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+       mag: 0.32, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       pole_pos: [600, 610], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       # TODO: update for the Quanta
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+    affects: ["Camera", "Spectrometer",
+              "Time Correlator", "Photon counter sync", "Photon counter signal 1"]
+}
+
+# Controller for the motors moving the various parts of the optical box
+# DIP must be configured with address 2 (= 0100000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
+        # These values only need to be roughly correct
+        ustepsize: [25.1e-6, 25.1e-6, 25.1e-6, 5.86e-6, 5.e-6], # m/µstep
+        rng: [null, null, null, [-3.e-3, 3.e-3], null], #to limit the fiby movement
+        unit: ["m", "m", "m", "m", "m"],
+        refproc: "Standard",
+        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4, "fiby": 4},
+        inverted: ["l2"],
+    },
+}
+
+# The first lens of Plate 1, able to move along the whole range
+"Lens1 Mover": {
+    class: actuator.MultiplexActuator,
+    role: "lens-mover",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0274499875} # m
+    },
+    affects: ["Lens2 Switch"],
+}
+
+# The second lens of Plate 1, either to working or parking position
+"Lens2 Switch": {
+    class: actuator.FixedPositionsActuator,
+    role: "lens-switch",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "l2",
+        positions: {
+            -0.0512099738: "on",
+            0.0: "off", # completely out of the path
+        },
+    },
+    affects: ["Camera", "Spectrometer",
+              "Time Correlator", "Photon counter sync", "Photon counter signal 1"],
+}
+
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
+"Slit": {
+    class: actuator.FixedPositionsActuator,
+    role: "slit-in-big",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "slit",
+        positions: {
+            -0.0: "on", # fully opened
+            0.0012: "off", # opening based on the small slit
+        },
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+"Fiber align": {
+    class: actuator.MultiplexActuator,
+    role: "fiber-aligner",
+    dependencies: {"x": "Optical Actuators", "y": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "spec-sel", "y": "fiby"},
+        ref_on_init: ["y"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        # TODO put correct value
+        FAV_POS_ACTIVE: {"y": 0.00123944274}, # m
+    },
+    affects: ["Time Correlator", "Photon counter sync", "Photon counter signal 1"],
+}
+
+# Mirror in Plate 2, selects between spectrometer and external optics (fiber output)
+"Spectrometer Selector": {
+    class: actuator.MultiplexActuator,
+    role: "spec-selector",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "spec-sel"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position of the mirror to select the external spectrometer (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0126050192}, # m
+        FAV_POS_ACTIVE_DEST: ["Fiber align", "Time Correlator", "Photon counter sync", "Photon counter signal 1"],
+        FAV_POS_DEACTIVE: {"x": 0.0451106487}, # m
+        FAV_POS_DEACTIVE_DEST: ["Camera", "Spectrometer"], # m
+    },
+    affects: ["Camera", "Spectrometer", "Fiber align",
+              "Time Correlator", "Photon counter sync", "Photon counter signal 1"],
+}
+
+"Time Correlator": {
+    class: picoquant.HH400,
+    role: time-correlator,
+    init: {
+        device: "fake",
+        # device: null, # put serial number, or it will pick the first one found
+        sync_dv: 50.e-3, # V, discriminator for sync signal (< 1.0 V)
+        sync_zc: 10.e-3, # V (< 40 mV)
+        disc_volt: [50.e-3], # V, discriminator for detector 0 (< 1.0 V)
+        zero_cross: [10.e-3], # V (< 40 mV)
+        # shutter_axes: {
+        # # internal child role of the actuator -> axis name, position when shutter is closed (ie, protected), position when opened (receiving light)
+        #     "shutter0": ["x", 1, 0],
+        #     "shutter1": ["x", 1, 0],
+        # },
+    },
+    # These children allow to have access to the raw data on the PMTs
+    children: {
+        "detector0": "Photon counter sync",
+        "detector1": "Photon counter signal 1",
+    },
+    # dependencies: {
+    #     "shutter0": "Shutter 0",
+    #     "shutter1": "Shutter 1",
+    # },
+}
+
+"Photon counter sync": {
+    # Internal child of "Time Correlator", so no class
+    role: photo-detector0,
+}
+
+"Photon counter signal 1": {
+    # Internal child of "Time Correlator", so no class
+    # role: photo-detector0, # det0, to be shown as main graph in GUI
+    role: photo-detector1,
+}
+
+# Controller for moving the 'Redux' stage
+# DIP must be configured with address 4 (= 0010000)
+"Mirror Actuators": {
+    class: tmcm.TMCLController,
+    role: "mirror",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l", "s"],
+        ustepsize: [2.e-6, 2.e-6], # m/µstep, for simulator
+        rng: [[0, 51.e-3], [-1.5e-3, 1.5e-3]],  # m, min/max
+        refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"l": 0.0464095534, "s": -0.0019880168},  # m, m
+    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    dependencies: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["l", "s"], # mapped respectively to X, Y
+        rotation: 0.17453292519 # rad (= 10°)
+        # Note: if you want to use absolute moves, add a "translation" too
+    },
+}
