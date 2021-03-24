@@ -1123,6 +1123,9 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
+        emode = self._isExternal()
+        self.external = model.BooleanVA(emode, setter=self._setExternal)
+
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
@@ -1169,6 +1172,10 @@ class Scanner(model.Emitter):
                 self.magnification._value = mag
                 self.horizontalFoV.notify(fov)
                 self.magnification.notify(mag)
+            external = self._isExternal()
+            if external != self.external.value:
+                self.external._value = external
+                self.external.notify(external)
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
@@ -1285,6 +1292,22 @@ class Scanner(model.Emitter):
 
         self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
         return value
+
+    def _isExternal(self):
+        """
+        :return:
+        bool, True if the scan mode is 'external', False if the scan mode is different than 'external'.
+        """
+        return self.parent.get_scan_mode().lower() == "external"
+
+    def _setExternal(self, external):
+        """
+
+        :param external: bool
+        bool, True if the scan mode should be 'external', False if the scan mode should be different than 'external'.
+        """
+        scan_mode = "external" if external else "full_frame"
+        self.parent.set_scan_mode(scan_mode)
 
     @isasync
     def applyAutoContrastBrightness(self, detector):
@@ -2092,6 +2115,11 @@ class MultiBeamScanner(Scanner):
             setter=self._setMultiBeamMode
         )
 
+        self.power = model.BooleanVA(
+            self.parent.get_beam_is_on(),
+            setter=self.parent.set_beam_power
+        )
+
         # TODO If _updateSettings is updated move this to the top of the __init__ function. For now the update thread
         #  can only be started after the MB VA's are initialized.
         # Instantiate the super scanner class with the update thread
@@ -2141,6 +2169,10 @@ class MultiBeamScanner(Scanner):
             if multibeam_mode != self.multiBeamMode.value:
                 self.multiBeamMode._value = multibeam_mode
                 self.multiBeamMode.notify(multibeam_mode)
+            power = self.parent.get_beam_is_on()
+            if power != self.power.value:
+                self.power._value = power
+                self.power.notify(power)
         except Exception:
             logging.exception("Unexpected failure when polling XTtoolkit settings")
 
