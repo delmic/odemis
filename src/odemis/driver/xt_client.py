@@ -120,8 +120,15 @@ class SEM(model.HwComponent):
             self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
-        # create a detector, if requested
-        if "detector" in children:
+        if "mb-detector" in children:
+            ckwargs = children["mb-detector"]
+            self._detector = MultiBeamDetector(parent=self, daemon=daemon, address=address, **ckwargs)
+            self.children.value.add(self._detector)
+            if "xttoolkit" in self._swVersion.lower():
+                self.xt_type = "xttoolkit"
+            else:
+                raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
+        elif "detector" in children:
             ckwargs = children["detector"]
             self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
@@ -1009,6 +1016,21 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beamlet_index_info()
+
+    def scan_image(self, channel_name='electron1'):
+        """
+        Start the scan of a single image and block until the image is done scanning.
+        This function does not return the image, to get the image call get_latest_image after this function.
+
+        Parameters
+        ----------
+        channel_name: str
+            Name of one of the channels.
+
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.scan_image(channel_name)
 
     def start_autofocusing_flash(self):
         """
@@ -2087,7 +2109,7 @@ class MultiBeamScanner(Scanner):
         # Add XTtoolkit specific VA's
         delta_pitch_info = self.parent.delta_pitch_info()
         assert delta_pitch_info["unit"] == "um", "Delta pitch unit is incorrect, current: {}, should be: um.".format(
-                delta_pitch_info["unit"])
+            delta_pitch_info["unit"])
         self.deltaPitch = model.FloatContinuous(
             self.parent.get_delta_pitch() * 1e-6,
             unit="m",
@@ -2251,3 +2273,90 @@ class MultiBeamScanner(Scanner):
         #     self.apertureIndex.value = current_aperture
         #     self.beamletIndex.value = current_beamlet
         return (self.parent.get_use_case() == 'MultiBeamTile')
+
+
+class MultiBeamDetector(Detector):
+    """
+    This is an extension of xt_client.Detector class. It overwrites the image acquisition
+    to work with image acquisition in XTToolkit.
+    """
+
+    def __init__(self, name, role, parent, channel_name, address, **kwargs):
+        """
+        channel_name (str): Name of one of the electron channels.
+        """
+        # The acquisition is based on a FSM that roughly looks like this:
+        # Event\State |    Stopped    |   Acquiring    | Receiving data |
+        #    START    | Ready for acq |        .       |       .        |
+        #    DATA     |       .       | Receiving data |       .        |
+        #    STOP     |       .       |     Stopped    |    Stopped     |
+        #    TERM     |     Final     |      Final     |     Final      |
+        self._proxy_access = threading.Lock()
+        try:
+            self.cancel_connection = Pyro5.api.Proxy(address)
+            self.cancel_connection._pyroTimeout = 30  # seconds
+        except Exception as err:
+            raise HwError("Failed to connect to XT server '%s'. Check that the "
+                          "uri is correct and XT server is"
+                          " connected to the network. %s" % (address, err))
+        Detector.__init__(self, name, role, parent=parent, channel_name=channel_name, **kwargs)
+        self._shape = (2**16,)  # Depth of the image
+
+    def stop_generate(self):
+        logging.debug("Stopping image acquisition")
+        with self._proxy_access:
+            self.cancel_connection._pyroClaimOwnership()
+            # Directly calling set_channel_state does not work with XT. Therefore
+            # call get_channel_state, before trying to stop the channel.
+            self.cancel_connection.get_channel_state(self._channel_name)
+            self.cancel_connection.set_channel_state(self._channel_name, False)
+            # Stop twice, to make sure the channel fully stops.
+            self.cancel_connection.set_channel_state(self._channel_name, False)
+        if self.parent._scanner.blanker.value is None:
+            self.parent.blank_beam()
+        self._genmsg.put(GEN_STOP)
+
+    def _acquire(self):
+        """
+        Acquisition thread
+        Managed via the ._genmsg Queue
+        """
+        try:
+            while True:
+                # Wait until we have a start (or terminate) message
+                self._acq_wait_start()
+                logging.debug("Preparing acquisition")
+                while True:
+                    if self._acq_should_stop():
+                        break
+
+                    # Start a complete scan.
+                    try:
+                        self.parent.scan_image()
+                    except OSError as err:
+                        if err.errno == -2147467260:
+                            logging.debug("Scan image aborted.")
+                            # Operation aborted, indicating acquisition should stop.
+                            break
+                        else:
+                            raise
+
+                    # Acquire the image
+                    # =================
+                    image = self.parent.get_latest_image(self._channel_name)
+
+                    md = self.parent._scanner._metadata.copy()
+                    md.update(self._metadata)
+                    md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+                    md[model.MD_ROTATION] = self.parent._scanner.rotation.value
+
+                    da = DataArray(image, md)
+                    logging.debug("Notify dataflow with new image.")
+                    self.data.notify(da)
+            logging.debug("Acquisition stopped")
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception as err:
+            logging.exception("Failure in acquisition thread: {}".format(err))
+        finally:
+            self._generator = None
