@@ -607,7 +607,8 @@ class LocalizationGUIData(MicroscopyGUIData):
 
     def __init__(self, main):
         if main.role != "cryo-secom":
-            raise ValueError("The role of the microscope is not correct")
+            raise ValueError(
+                "Microscope role was found to be %s, while expected 'cryo-secom'" % main.role)
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
@@ -616,10 +617,10 @@ class LocalizationGUIData(MicroscopyGUIData):
         self.tool.choices = tools
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
-        # the relative focus position below the current position
+        # the zstack minimum range below current focus position
         self.zMin = model.FloatContinuous(
             value=-10e-6, range=(-1000e-6, 0), unit="m")
-        # the relative focus position above the current position
+        # the zstack maximum range above current focus position
         self.zMax = model.FloatContinuous(
             value=10e-6, range=(0, 1000e-6), unit="m")
         # the distance between two z-levels
