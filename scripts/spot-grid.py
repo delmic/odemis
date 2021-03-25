@@ -14,13 +14,13 @@ import argparse
 import cairo
 import logging
 import numpy
-import skimage.io
+import os
 import sys
 import threading
 import wx
 import wx.lib.wxcairo  # should be imported before cairo
 
-from odemis import model
+from odemis import model, dataio
 from odemis.acq.align.spot import FindGridSpots
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.driver import ueye
@@ -191,15 +191,14 @@ def image_update(imp, window):
         logging.debug("Display thread ended")
 
 
-class StaticImageComponent(model.DigitalCamera):
+class StaticCCD(model.DigitalCamera):
 
-    def __init__(self, filename):
-        super(StaticImageComponent, self).__init__(name=filename, role='ccd')
+    def __init__(self, name, role, array, **kwargs):
+        super(StaticCCD, self).__init__(name, role, **kwargs)
+        self.array = array
         self.data = StaticImageDataFlow(self)
-        image = skimage.io.imread(filename)
-        res = image.shape
+        res = self.array.shape
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
-        self.array = model.DataArray(image, {})
 
 
 class StaticImageDataFlow(model.DataFlow):
@@ -273,8 +272,10 @@ def main(args):
 
     if options.filename:
         logging.info("Will process image file %s" % options.filename)
-        image = StaticImageComponent(options.filename)
-        live_display(image, image.data, gridsize=options.gridsize)
+        converter = dataio.find_fittest_converter(options.filename, default=None, mode=os.O_RDONLY)
+        data = converter.read_data(options.filename)[0]
+        fakeccd = StaticCCD(options.filename, "fakeccd", data)
+        live_display(fakeccd, fakeccd.data, gridsize=options.gridsize)
     elif options.role:
         if get_backend_status() != BACKEND_RUNNING:
             raise ValueError("Backend is not running while role command is specified.")
