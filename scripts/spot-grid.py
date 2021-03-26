@@ -14,12 +14,13 @@ import argparse
 import cairo
 import logging
 import numpy
+import os
 import sys
 import threading
 import wx
 import wx.lib.wxcairo  # should be imported before cairo
 
-from odemis import model
+from odemis import model, dataio
 from odemis.acq.align.spot import FindGridSpots
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.driver import ueye
@@ -99,16 +100,38 @@ class ImageWindowApp(wx.App):
         width = self.img.Width
         spot_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         ctx = cairo.Context(spot_surface)
-        ctx.set_source_rgb(0.5, 0.1, 0.1)
         ctx.scale(width, height)
         spots = numpy.abs(self.spots) * self.magn / numpy.array([width, height])
-        spot_temp = numpy.array([0, 0])
+
+        # draw a polygon connecting all spots
+        ctx.save()
+        prev = spots[0]
+        ctx.translate(*prev)
         for spot in spots:
-            ctx.translate(*spot_temp)  # translate back to the origin since spot_temp is negative
-            ctx.translate(*spot)  # translate from the origin to the coordinate of the spot
-            spot_temp = numpy.copy(-spot)
+            delta = spot - prev
+            ctx.line_to(*delta)
+        ctx.set_source_rgb(0.98, 0.91, 0.62)
+        ctx.set_line_width(0.002)
+        ctx.set_dash((0.005, 0.002))
+        ctx.stroke()
+        ctx.restore()
+
+        # draw a square at the first spot, and a circle at every other spot
+        ctx.save()
+        ctx.set_source_rgb(0.8, 0.1, 0.1)
+        ctx.set_line_width(0.002)
+        prev = spots[0]
+        ctx.translate(*prev)
+        ctx.rectangle(-0.005, -0.005, 0.01, 0.01)
+        ctx.stroke()
+        for spot in spots[1:]:
+            delta = spot - prev
+            prev = spot
+            ctx.translate(*delta)
             ctx.arc(0, 0, 0.0025, 0, 2 * numpy.pi)
             ctx.fill()
+        ctx.restore()
+
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         info = [
             "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
@@ -168,6 +191,26 @@ def image_update(imp, window):
         logging.debug("Display thread ended")
 
 
+class StaticCCD(model.DigitalCamera):
+
+    def __init__(self, name, role, array, **kwargs):
+        super(StaticCCD, self).__init__(name, role, **kwargs)
+        self.array = array
+        self.data = StaticImageDataFlow(self)
+        res = self.array.shape
+        self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
+
+
+class StaticImageDataFlow(model.DataFlow):
+
+    def __init__(self, detector):
+        model.DataFlow.__init__(self)
+        self._detector = detector
+
+    def start_generate(self):
+        self.notify(self._detector.array)
+
+
 def live_display(ccd, dataflow, kill_ccd=True, gridsize=None):
     """
     Acquire an image from one (or more) dataflow and display it with a spot grid overlay.
@@ -207,8 +250,11 @@ def main(args):
     """
     # arguments handling
     parser = argparse.ArgumentParser()
-    parser.add_argument("--role", dest="role", metavar="<component>",
-                        help="display and update an image on the screen")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--role", dest="role", metavar="<component>",
+                       help="display and update an image on the screen")
+    group.add_argument("--file", metavar="<filename>", dest="filename",
+                       help="display and update an image on the screen")
     parser.add_argument("--gridsize", dest="gridsize", nargs=2, metavar="<gridsize>", type=int, default=None,
                         help="size of the grid of spots in x y, default 8 8")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
@@ -224,7 +270,13 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
-    if options.role:
+    if options.filename:
+        logging.info("Will process image file %s" % options.filename)
+        converter = dataio.find_fittest_converter(options.filename, default=None, mode=os.O_RDONLY)
+        data = converter.read_data(options.filename)[0]
+        fakeccd = StaticCCD(options.filename, "fakeccd", data)
+        live_display(fakeccd, fakeccd.data, gridsize=options.gridsize)
+    elif options.role:
         if get_backend_status() != BACKEND_RUNNING:
             raise ValueError("Backend is not running while role command is specified.")
         ccd = model.getComponent(role=options.role)
