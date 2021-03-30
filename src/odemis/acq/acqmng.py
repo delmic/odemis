@@ -238,6 +238,8 @@ def _weight_stream(stream):
         logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
 
+def sortStreams(streams):
+    return sorted(streams, key=_weight_stream, reverse=True)
 
 class AcquisitionTask(object):
 

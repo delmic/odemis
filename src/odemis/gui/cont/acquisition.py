@@ -51,6 +51,8 @@ from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDia
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
 from odemis.util import units
+from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.util.dataio import data_to_static_streams
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -448,6 +450,181 @@ class SecomAcquiController(object):
             tab = main_data.getTabByName('analysis')
             main_data.tab.value = tab
             tab.load_data(acq_dialog.last_saved_file)
+
+class CryoAcquiController(object):
+    def __init__(self, tab_data, panel, tab):
+        self._panel=panel
+        self.overview_acqui_controller=OverviewStreamAcquiController(tab_data,tab)
+        self.config = conf.get_acqui_conf()
+        self.prev_streams=[]
+        self.VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
+                                "is_active", "should_update", "status", "name", "tint")
+
+        # VA's
+        self.filename=tab_data.filename
+        self.acquiStreams = tab_data.acquisitionStreams
+        
+        # hide the acquisition gauge at initialization  
+        self._panel.gauge_cryosecom_acq.Hide()
+        # hide the remaining acquisition time at init 
+        self._panel.txt_cryosecom_left_time.Hide()
+        # show the estimated acquisition time at init  
+        self._panel.txt_cryosecom_est_time.Show()
+
+        # link/bind events (buttons, toggeling, ...) with behavior 
+        # for "ACQUIRE" button
+        self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._onAcquire)
+        # for "change..." button
+        self._panel.btn_cryosecom_change_file.Bind(wx.EVT_BUTTON,self._onChangeFilename)
+        # for "acquire overview" button 
+        self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON,self._onAcquireOverview)
+        # for "cancel" button 
+        self._panel.btn_cryosecom_acqui_cancel.Hide()
+        self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._onCancel)
+        # for the check list box 
+        self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._onChkList)
+
+        # callbacks of VA's
+        self.filename.subscribe(self._updateFilename, init=True)
+        tab_data.zStackActive.subscribe(self._updateZStackActive, init=True)
+        tab_data.streams.subscribe(self._updateChkList, init=True)
+        # TODO link .acquisitionStreams with a callback that gets called
+        # to check/uncheck items (?)
+
+        # VA's connectors 
+        self._vac_z_activated = VigilantAttributeConnector(
+            va=tab_data.zStackActive,
+            value_ctrl=self._panel.z_stack_chkbox,
+            events=wx.EVT_CHECKBOX
+        )
+
+    def _onAcquire(self, _):
+        # called whenever the button "acquire" is pressed 
+        self._panel.gauge_cryosecom_acq.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Show()
+        self._panel.txt_cryosecom_left_time.Show()
+        self._panel.txt_cryosecom_est_time.Hide()
+
+    @call_in_wx_main
+    def _updateChkList(self, streams):
+        """
+        called when .streams is updated 
+        """
+        # for every entry in the list, is it still present in the new streams? 
+        for i in range(self._panel.streams_chk_list.GetCount()-1, -1, -1):
+            item_stream = self._panel.streams_chk_list.GetClientData(i)
+            if item_stream not in streams:
+                self._panel.streams_chk_list.Delete(i)
+                self.acquiStreams.value.remove(item_stream)
+                # TODO get the settings vas of this stream then
+                # unsubscribe those va's from the callback 
+                for va in self._get_settings_vas(item_stream):
+                    va.unsubscribe(self._onAnyVA)
+                self.prev_streams.remove(item_stream)
+                self.update_acquisition_time()
+        
+        # for every stream in streams, is it already present in the list?
+        counts = self._panel.streams_chk_list.GetCount()
+        item_stream = [self._panel.streams_chk_list.GetClientData(i) for i in range(counts)]      
+        for s,i in zip(streams,range(len(streams))):
+            if s not in item_stream:
+                self._panel.streams_chk_list.Insert(s.name.value, i, s)
+                self._panel.streams_chk_list.Check(i)
+                self.acquiStreams.value.append(s)
+                self.prev_streams.append(s)
+                # get the settings va's of this stream
+                # and then subscribe those va's to callback 
+                for va in self._get_settings_vas(s):
+                    va.subscribe(self._onAnyVA)
+                self.update_acquisition_time()
+
+    @call_in_wx_main 
+    def _updateZStackActive(self, active):
+        self._panel.param_Zmin.Enable(active)
+        self._panel.param_Zmax.Enable(active)
+        self._panel.param_Zstep.Enable(active) 
+
+    def _onChkList(self, _):
+        """
+        called when user checks/unchecks the items in checklist 
+        """
+        for i in range(self._panel.streams_chk_list.GetCount()):
+            item =self._panel.streams_chk_list.GetClientData(i)
+            if self._panel.streams_chk_list.IsChecked(i) and item not in self.acquiStreams.value:
+                self.acquiStreams.value.append(item)
+                # TODO when user check item in the checklist, then 
+                # get the VA's of this checked stream/item and subscibe 
+                # them to the callback 
+            elif not self._panel.streams_chk_list.IsChecked(i) and item in self.acquiStreams.value:
+                self.acquiStreams.value.remove(item)
+                # TODO when user unchecks item in the list, then 
+                # get the VA's of this unchecked item and unsubscribe them
+                # from the callback
+
+    def _onCancel(self, _):
+        # called whenever the button "cancel" is pressed 
+        self._panel.gauge_cryosecom_acq.Hide()
+        self._panel.txt_cryosecom_left_time.Hide()
+        self._panel.btn_cryosecom_acqui_cancel.Hide()
+        self._panel.txt_cryosecom_est_time.Show()
+
+    def _onAcquireOverview(self, _):
+        # called whenever the button "acquire overview" is pressed 
+        das=self.overview_acqui_controller.open_acquisition_dialog()
+        if das:
+            streams=data_to_static_streams(das)
+            for s in streams:
+                sc=tab._overview_stream_controller.addStream(s, add_to_view=True)
+                sc.stream_panel.show_remove_btn(True)
+
+    @call_in_wx_main
+    def _updateFilename(self,name):
+        # called whenever the filename VA changes 
+        path,base=os.path.split(name)
+        self._panel.txt_filename.SetValue(str(path))
+        self._panel.txt_filename.SetInsertionPointEnd()
+        self._panel.txt_filename.SetValue(str(base))
+
+    def _onChangeFilename(self, _):
+        # called whenever the button "change" is pressed
+        current_filename = create_filename(
+            self.config.last_path, self.config.fn_ptn,
+            self.config.last_extension,
+            self.config.fn_count)
+        new_name=ShowAcquisitionFileDialog(self._panel, current_filename)
+        if new_name is not None:
+            self.filename.value=new_name
+            self.config.fn_ptn,self.config.fn_count=guess_pattern(new_name)
+            logging.debug("Generated filename pattern '%s'", self.config.fn_ptn)
+
+    def _get_settings_vas(self, stream):
+        """
+        Find all the VAs of a stream which can potentially affect the acquisition time
+        return (set of VAs)
+        """
+        nvas = model.getVAs(stream) # name -> va
+        vas = set()
+        # remove some VAs known to not affect the acquisition time
+        for n, va in nvas.items():
+            if n not in self.VAS_NO_ACQUSITION_EFFECT:
+                vas.add(va)
+        return vas
+
+    def _onAnyVA(self, _):
+        """
+        Called whenever a VA which might affect the acquisition is modified
+        """
+        # self.update_acquisition_time()
+        pass
+
+    @wxlimit_invocation(1) # max 1/s
+    def update_acquisition_time(self):
+        streams = tab_data.acquisitionStreams
+        acq_time = acqmng.estimateTime(streams)
+        acq_time = math.ceil(acq_time)  # round a bit pessimistic
+        txt = u"Estimated time is {}."
+        txt = txt.format(units.readable_time(acq_time))
+        self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
 
 class OverviewStreamAcquiController(object):
