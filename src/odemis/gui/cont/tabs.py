@@ -503,12 +503,12 @@ class LocalizationTab(Tab):
             (viewports[2],
              {"name": "Live 1",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream),
+              "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream)
+              "stream_classes": LiveStream,
               }),
         ])
 
