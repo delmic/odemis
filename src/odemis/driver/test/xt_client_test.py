@@ -1014,26 +1014,28 @@ class TestMBScanner(unittest.TestCase):
             self.assertIsNot(type(child), xt_client.Scanner)
 
     def test_delta_pitch_VA(self):
-        current_value = self.scanner.deltaPitch.value
+        init_value = self.scanner.deltaPitch.value
         # Test if directly changing the value via the VA works. Not always will the entirety of the range be
         # allowed. Negative delta pitch is limited by the voltage it can apply. Therefore the max range and the 0
         # value is tested.
-        for test_delta_pitch in (0.0, self.scanner.deltaPitch.range[1]):
+        current_value = init_value
+        for test_delta_pitch in (0.0, 0.5e-6, self.scanner.deltaPitch.range[1]):
             self.scanner.deltaPitch.value = test_delta_pitch
-            self.assertEqual(test_delta_pitch, self.scanner.deltaPitch.value)
-            self.assertEqual(test_delta_pitch, self.microscope.get_delta_pitch() * 1e-6)
+            current_value += test_delta_pitch
+            self.assertAlmostEqual(current_value, self.scanner.deltaPitch.value, places=8)
+            self.assertAlmostEqual(current_value, self.microscope.get_delta_pitch() * 1e-6, places=8)
 
         # Test if errors are produced when a value outside of the range is set.
         with self.assertRaises(IndexError):
             self.scanner.deltaPitch.value = 1.2 * self.scanner.deltaPitch.range[1]
-        self.assertEqual(test_delta_pitch, self.microscope.get_delta_pitch() * 1e-6)
+        self.assertAlmostEqual(current_value, self.microscope.get_delta_pitch() * 1e-6, places=8)
 
         # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_delta_pitch(0.5 * self.scanner.deltaPitch.range[1])
+        self.microscope.set_delta_pitch(0.5 * self.scanner.deltaPitch.range[1] * 1e6)
         time.sleep(6)
-        self.assertEqual(0.5 * self.scanner.deltaPitch.range[1], self.scanner.deltaPitch.value)
+        self.assertAlmostEqual(0.5 * self.scanner.deltaPitch.range[1], self.scanner.deltaPitch.value, places=8)
 
-        self.scanner.deltaPitch.value = current_value
+        self.scanner.deltaPitch.value = init_value
 
     def test_beam_stigmator_VA(self):
         current_value = self.scanner.beamStigmator.value

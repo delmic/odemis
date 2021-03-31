@@ -2177,7 +2177,10 @@ class MultiBeamScanner(Scanner):
             logging.exception("Unexpected failure when polling XTtoolkit settings")
 
     def _setDeltaPitch(self, delta_pitch):
-        self.parent.set_delta_pitch(delta_pitch * 1e6)  # Convert from meters to micrometers.
+        """Add the new delta pitch to the current delta pitch value and set it on the microscope."""
+        current_delta_pitch = self.deltaPitch.value
+        new_pitch = (current_delta_pitch + delta_pitch) * 1e6  # Convert from meters to micrometers.
+        self.parent.set_delta_pitch(new_pitch)
         return self.parent.get_delta_pitch() * 1e-6
 
     def _setBeamStigmator(self, beam_stigmator_value):
@@ -2214,4 +2217,4 @@ class MultiBeamScanner(Scanner):
         #     time.sleep(3)
         #     self.apertureIndex.value = current_aperture
         #     self.beamletIndex.value = current_beamlet
-        return (self.parent.get_use_case() == 'MultiBeamTile')
+        return self.parent.get_use_case() == 'MultiBeamTile'
