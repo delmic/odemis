@@ -268,13 +268,18 @@ class OverlayTestCase(test.GuiTestCase):
         tab_mod.views.value.append(fview)
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)
+        cnvs.view.show_crosshair.value = False
 
-        slol = vol.CurrentPosCrossHairOverlay(cnvs)
+        slol = wol.CurrentPosCrossHairOverlay(cnvs)
         slol.activate()
-        cnvs.add_view_overlay(slol)
+        cnvs.add_world_overlay(slol)
+        # stage start at 0,0 (cross hair at center) -> move bt 1mm, 1mm -> then back to 0,0
         test.gui_loop()
-
+        time.sleep(1)
         stage.moveAbs({'x': 1e-3, 'y': 1e-3}).result()
+        test.gui_loop()
+        time.sleep(1)
+        stage.moveAbs({'x': 0, 'y': 0}).result()
         test.gui_loop()
 
     def test_spot_mode_overlay(self):
@@ -436,9 +441,9 @@ class OverlayTestCase(test.GuiTestCase):
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)
 
-        slol = vol.StagePointSelectOverlay(cnvs)
+        slol = wol.StagePointSelectOverlay(cnvs)
         slol.activate()
-        cnvs.add_view_overlay(slol)
+        cnvs.add_world_overlay(slol)
 
         initial_pos = copy.deepcopy(stage.position.value)
         # simulate double click by passing the mouse event to on_dbl_click

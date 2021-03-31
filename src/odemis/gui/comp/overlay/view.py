@@ -93,23 +93,6 @@ class CrossHairOverlay(base.ViewOverlay):
         center = self.cnvs.get_half_view_size()
         self.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
 
-    def _get_current_stage_buffer_pos(self):
-        """
-        Get the buffer position of the current stage physical position
-        :return: (float, float) buffer coordinates of current position
-        """
-        pos = self.cnvs.view.current_position.value
-        half_size_offset = self.cnvs.get_half_view_size()
-        bpos = self.cnvs.phys_to_buffer_pos(pos, self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
-        return bpos
-
-    def on_left_up(self, evt):
-        self.cnvs.Refresh()
-
-    def draw(self, ctx):
-        """ Draw a cross hair to the Cairo context """
-        center = self._get_current_stage_buffer_pos()
-        self._draw_crosshair(ctx, center)
 
 class PlayIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
@@ -1483,35 +1466,6 @@ class PointSelectOverlay(base.ViewOverlay):
             base.ViewOverlay.on_left_up(self, evt)
 
     # END Event Handlers
-
-    def draw(self, ctx):
-        pass
-
-class StagePointSelectOverlay(PointSelectOverlay):
-    """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
-
-    def on_dbl_click(self, evt):
-        if self.active:
-            v_pos = evt.Position
-            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-            # directly move the stage to the selected physical position
-            self.cnvs.view.moveStageTo(p_pos)
-        else:
-            base.ViewOverlay.on_dbl_click(self, evt)
-
-    def on_left_down(self, evt):
-        if self.active:
-            # let the canvas handle dragging
-            self.cnvs.on_left_down(evt)
-        else:
-            base.ViewOverlay.on_left_down(self, evt)
-
-    def on_left_up(self, evt):
-        if self.active:
-            # let the canvas handle dragging
-            self.cnvs.on_left_up(evt)
-        else:
-            base.ViewOverlay.on_left_up(self, evt)
 
     def draw(self, ctx):
         pass
