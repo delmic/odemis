@@ -61,12 +61,14 @@ class CrossHairOverlay(base.ViewOverlay):
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
 
-    def _draw_crosshair(self, ctx, center):
+    @staticmethod
+    def draw_crosshair(ctx, center, size, colour):
         """
         Draw cross hair given Cairo context and center position
+        The method is static to be used from other classes
         """
-        tl = (center[0] - self.size, center[1] - self.size)
-        br = (center[0] + self.size, center[1] + self.size)
+        tl = (center[0] - size, center[1] - size)
+        br = (center[0] + size, center[1] + size)
 
         ctx.set_line_width(1)
 
@@ -79,7 +81,7 @@ class CrossHairOverlay(base.ViewOverlay):
         ctx.stroke()
 
         # Draw cross hair
-        ctx.set_source_rgba(*self.colour)
+        ctx.set_source_rgba(*colour)
         ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
         ctx.line_to(br[0] + 0.5, center[1] + 0.5)
         ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
@@ -89,24 +91,7 @@ class CrossHairOverlay(base.ViewOverlay):
     def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
         center = self.cnvs.get_half_view_size()
-        self._draw_crosshair(ctx, center)
-
-class CurrentPosCrossHairOverlay(CrossHairOverlay):
-    """ Render a static cross hair to the current position of the stage"""
-
-    def __init__(self, cnvs):
-        CrossHairOverlay.__init__(self, cnvs)
-
-        if not hasattr(cnvs.view, "current_position"):
-            raise ValueError("CurrentPosCrossHairOverlay requires current_position VA on the view to function properly.")
-        cnvs.view.current_position.subscribe(self._current_pos_updated, init=True)
-
-    def _current_pos_updated(self, _):
-        """
-        Called when current stage position updated
-        """
-        # Directly refresh the canvas (so the overlay draw is called with proper context)
-        self.cnvs.Refresh()
+        self.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
 
     def _get_current_stage_buffer_pos(self):
         """
