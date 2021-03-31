@@ -27,4 +27,4 @@ __all__ = ["andorcam3", "andorcam2", "andorshrk", "pi", "pigcs", "lle",
            "blinkstick", "picoquant", "ueye", "pwrcomedi", "smaract",
            # Modules that do not support scanning because that wouldn't make sense:
            "actuator", "scanner", "spectrometer", "simcam", "simsem", "emitter",
-           "simulated", "static"]
+           "simulated", "static", "piezomotor"]
