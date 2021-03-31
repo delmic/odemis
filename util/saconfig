@@ -62,23 +62,26 @@ def calibrate(dev, channels):
         logging.info("Calibrating channel %d", channel)
         # set calibration options
         dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS,
-                        channel, calibration_options)
+                            channel, calibration_options)
 
         dev.Calibrate(channel)
 
 
-def autozero(dev, channels):
+# Reference mode to set
+NORMAL_REF, AUTO_ZERO_REF = 0, 1
+
+
+def set_autozero_reference(dev, channels):
     if not channels:
         return
-    # Set auto-zero mode
+    # Set auto-zero referencing mode
     for channel in channels:
         logging.info("Setting auto-zero mode for channel %d", channel)
         dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
                             channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO)  # auto zero
-    reference(dev)
 
 
-def normal_reference(dev, channels):
+def set_normal_reference(dev, channels):
     if not channels:
         return
     # Set normal referencing mode
@@ -86,10 +89,14 @@ def normal_reference(dev, channels):
         logging.info("Setting the reference mode to normal for channel %d", channel)
         dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
                             channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)  # normal
-    reference(dev)
 
 
-def reference(dev):
+def reference(dev, channels, mode=NORMAL_REF):
+    # Set referencing mode, currently either normal or autozero
+    if mode == NORMAL_REF:
+        set_normal_reference(dev, channels)
+    elif mode == AUTO_ZERO_REF:
+        set_autozero_reference(dev, channels)
     # Run the referencing
     logging.info("Starting reference...")
     dev.reference().result()
@@ -99,7 +106,7 @@ def reference(dev):
 
 def set_zero(dev, channels):
     """
-    Using the scale offset, set the current position of the controller to 0.
+    Set current position directly to zero, automatically adjusting the logical scale offset.
     """
     if not channels:
         return
@@ -112,7 +119,8 @@ def set_zero(dev, channels):
     #     # set the new scale offset
     #     dev.SetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET, channel, scale_offset + position)
 
-    logging.info("Setting current position to 0. This automatically adjusts the logical scale offset.")
+    logging.info(
+        f"Setting current position: {dev.position.value} to 0. This automatically adjusts the logical scale offset.")
     for channel in channels:
         dev.SetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_POSITION, channel, 0)
 
@@ -136,9 +144,9 @@ def main(args):
                         help="Run the calibration command. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--autozero', metavar='N', type=int, nargs='+', default=[],
-                        help="Run referencing with autozero functionality. Specify the channel to calibrate (0, 1, 2)")
+                        help="Run referencing with set_autozero_reference functionality. Specify the channel to calibrate (0, 1, 2)")
 
-    parser.add_argument('--normalref', metavar='N', type=int, nargs='+', default=[],
+    parser.add_argument('--reference', metavar='N', type=int, nargs='+', default=[],
                         help="Run referencing with normal functionality. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--setzero', metavar='N', type=int, nargs='+', default=[],
@@ -155,14 +163,14 @@ def main(args):
     logging.getLogger().setLevel(loglev)
 
     locator = options.locator
-    channels = set(options.calibrate + options.autozero + options.normalref + options.setzero)
+    channels = set(options.calibrate + options.autozero + options.reference + options.setzero)
     axes = {str(c): {"range": [-1, 1], "unit": "m", "channel": c} for c in channels}
 
     dev = smaract.MCS2(locator=locator, axes=axes, **CONFIG_3DOF)
 
     calibrate(dev, options.calibrate)
-    autozero(dev, options.autozero)
-    normal_reference(dev, options.normalref)
+    reference(dev, options.autozero, mode=AUTO_ZERO_REF)
+    reference(dev, options.reference, mode=NORMAL_REF)
     set_zero(dev, options.setzero)
 
     logging.info("Completed all operations.")
