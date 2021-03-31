@@ -51,8 +51,8 @@ class TestBeamShiftController(unittest.TestCase):
         cls.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "FT2OMDD5")
         # Values found during testing on the hardware
         md = ((-0.00027788219369730165, 0.0013604844623992785),
-              (-0.0013604844623992785, -0.00027788219369730165),
               (0.00012699407486043473, -0.0006217507619527259),
+              (-0.0013604844623992785, -0.00027788219369730165),
               (0.0006217507619527259, 0.00012699407486043473))
         cls.bc.updateMetadata({model.MD_CALIB: md})
 
@@ -114,8 +114,8 @@ class TestBeamShiftController(unittest.TestCase):
     def test_transform_coordinates(self):
         val = (0, 4e-6)
         md = ((-0.00027788219369730165, 0.0013604844623992785),
-              (-0.0013604844623992785, -0.00027788219369730165),
               (0.00012699407486043473, -0.0006217507619527259),
+              (-0.0013604844623992785, -0.00027788219369730165),
               (0.0006217507619527259, 0.00012699407486043473))
         expected = [0x6f7e, 0x835f, 0x7874, 0x7e75]  # from testing with example script
         ret = tfsbc.transform_coordinates(val, *md)
