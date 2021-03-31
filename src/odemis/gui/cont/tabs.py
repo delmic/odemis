@@ -539,9 +539,15 @@ class LocalizationTab(Tab):
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
+            # load the same  acquired data to the chamber tab view
+            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+            chamber_tab.load_data(streams)
+
     def clear_live_streams(self):
         """
         Clear the content of the live streams
+
+
         """
         live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
         for stream in live_streams:
@@ -2080,7 +2086,20 @@ class CryoChamberTab(Tab):
 
         # future to handle the move
         self._move_future = model.CancellableFuture()
+        # create the tiled area view and its controller to show on the chamber tab
+        vpv = collections.OrderedDict([
+            (panel.vp_overview_map,
+             {
+                 "cls": guimod.TiledAreaView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
+             }), ])
 
+        self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        # add the needed overlays from localization tab
+        LocalizationTab.create_overlays(panel.vp_overview_map.canvas)
+        self._tab_data_model = tab_data
         self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
@@ -2176,6 +2195,20 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+
+    def load_data(self, streams):
+        """
+        Load the overview view with the given list of acquired static streams
+        :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
+        """
+        # Replace the old streams with the newly acquired ones in the view
+        overview_view = self._tab_data_model.focussedView.value
+        existing_streams = overview_view.getStreams()
+        for stream in streams:
+            ex_st = next((ex_st for ex_st in existing_streams if ex_st.acquisitionType.value == stream.acquisitionType.value and ex_st.name.value == stream.name.value), None)
+            if ex_st:
+                overview_view.removeStream(ex_st)
+            overview_view.addStream(stream)
 
     def _on_change_project_folder(self, evt):
         """
@@ -3851,7 +3884,7 @@ class SecomAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
-        
+
     def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)

@@ -368,7 +368,7 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
         self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
+        self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
 
 
 
@@ -4401,6 +4401,7 @@ def __init_resources():
 							</XRCED>
 						</object>
 					</object>
+					
 				</object>
 				<size>300,-1</size>
 				<bg>#333333</bg>
@@ -4411,14 +4412,16 @@ def __init_resources():
 			<minsize>400,-1</minsize>
 		</object>
 		<object class="sizeritem">
-			<object class="ARAcquiViewport" name="vp_chamber">
-				<XRCED>
-					<assign_var>1</assign_var>
-				</XRCED>
-			</object>
-			<option>1</option>
-			<flag>wxEXPAND</flag>
-		</object>
+						<object class="LiveViewport" name="vp_overview_map">
+						<fg>#BFBFBF</fg>
+						<bg>#000000</bg>
+						<XRCED>
+						  <assign_var>1</assign_var>
+						</XRCED>
+					  </object>
+					<option>1</option>
+					<flag>wxEXPAND</flag>
+					</object>
 		<orient>wxHORIZONTAL</orient>
 	</object>
 	<bg>#333333</bg>
