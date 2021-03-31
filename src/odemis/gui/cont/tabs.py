@@ -608,7 +608,7 @@ class LocalizationTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self, self.stage, pos, target=IMAGING)
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
     def _on_stream_update(self, updated):
         """
@@ -3727,7 +3727,7 @@ class SecomAlignTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self, self.stage, pos, target=IMAGING)
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
     def _on_align_pos(self, pos):
         """
