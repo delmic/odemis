@@ -44,7 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
-from odemis.gui.comp.overlay.view import StagePointSelectOverlay, CurrentPosCrossHairOverlay
+from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
@@ -373,15 +373,7 @@ class LocalizationTab(Tab):
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
 
-        panel.vp_secom_tl.canvas.enable_drag()
-        # Add current position cross hair overlay to the top left canvas
-        cpol = CurrentPosCrossHairOverlay(panel.vp_secom_tl.canvas)
-        panel.vp_secom_tl.canvas.add_view_overlay(cpol)
-        # Add stage point select overlay to the top left canvas
-        slol = StagePointSelectOverlay(panel.vp_secom_tl.canvas)
-        # Todo: proper activation from the viewport
-        slol.activate()
-        panel.vp_secom_tl.canvas.add_view_overlay(slol)
+        self.create_overlays(panel.vp_secom_tl.canvas)
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
@@ -470,6 +462,23 @@ class LocalizationTab(Tab):
     @property
     def streambar_controller(self):
         return self._streambar_controller
+
+    @staticmethod
+    def create_overlays(cnvs):
+        """
+        Create needed overlays for the given canvas.
+        The method is static to be used by other tabs (ie chamber)
+        :param cnvs: the canvas to add the created overlays to it
+        """
+        cnvs.enable_drag()
+        # Add current position cross hair overlay to the top left canvas
+        cpol = CurrentPosCrossHairOverlay(cnvs)
+        cnvs.add_world_overlay(cpol)
+        # Add stage point select overlay to the top left canvas
+        slol = StagePointSelectOverlay(cnvs)
+        # Todo: proper activation from the viewport
+        slol.activate()
+        cnvs.add_world_overlay(slol)
 
     def _create_views(self, main_data, viewports):
         """
