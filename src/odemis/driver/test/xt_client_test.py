@@ -1150,7 +1150,6 @@ class TestMBScanner(unittest.TestCase):
         # preceded by switch in beam mode via the VA.
         for multi_beam_boolean in [True, False, True, False, True]:
             self.scanner.multiBeamMode.value = multi_beam_boolean
-            time.sleep(8)
             self.assertEqual(self.scanner.multiBeamMode.value, multi_beam_boolean)
             self.assertEqual(self.microscope.get_use_case(), 'MultiBeamTile' if multi_beam_boolean else 'SingleBeamlet')
             # Check if aperture and beamlet index do not change while switching beam modes.
