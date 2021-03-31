@@ -508,20 +508,30 @@ class LocalizationTab(Tab):
         # Create streams from data
         streams = data_to_static_streams(data)
 
-        # TODO: Clear previous overview streams
-        self.clear_data()
-
         for s in streams:
+            self.clear_data(s)
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
-    def clear_data(self):
+    def clear_data(self, new_stream=None):
         """
         Clear the tab data upon resetting the project:
         - Clear overview map streams
-        - Clear live streams data
+        @:param new_stream: (StaticStream or None) the newly acquired overview stream
         """
-        self._overview_stream_controller.clear()
+        # Clear old static streams from the view
+        # TODO: Remove old streams from the panel as well, currently it's hidden
+        if new_stream:
+            # Replace only the stream matching the new stream in acquisition type and name
+            old_stream = next((stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)
+                               and stream.acquisitionType.value == new_stream.acquisitionType.value and stream.name.value == new_stream.name.value), None)
+            if old_stream:
+                self._overview_stream_controller.removeStream(old_stream)
+        else:
+            # Clear all static streams
+            static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
+            for stream in static_streams:
+                self._overview_stream_controller.removeStream(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
