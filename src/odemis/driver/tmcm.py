@@ -2757,12 +2757,9 @@ class CANController(model.Actuator):
             self._executor = None
 
         # Disconnect from the CAN bus
-        logging.debug("Shutting down ...")
         if self._network:
-            for node_id in self._network:
-                node = self._network[node_id]
-                node.nmt.state = 'PRE-OPERATIONAL'
-                node.nmt.stop_node_guarding()
+            logging.debug("Shutting down device...")
+            self._node.nmt.state = 'PRE-OPERATIONAL'
             self._network.sync.stop()
             self._network.disconnect()
 
