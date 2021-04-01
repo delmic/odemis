@@ -746,9 +746,9 @@ class PMD401Bus(Actuator):
             if not resp.startswith(cmd[:-len(EOL)-1]):
                 raise IOError("Response starts with %s != %s" % (to_str_escape(resp[:len(cmd)]), cmd))
             if b"_??_" in resp:
-                raise ValueError("Received response %s, command %s not understood." % (resp.decode("latin1"), cmd))
+                raise ValueError("Received response %s, command %s not understood." % (to_str_escape(resp), cmd))
             if b"!" in resp:
-                raise PMDError(0, resp.decode("latin1"))
+                raise PMDError(0, to_str_escape(resp))
             # Format:
             #    * for query with response: <cmd>:<ret><EOL> (will return <ret>)
             #    * for set command without response: <cmd><EOL> (will return "")
@@ -862,10 +862,7 @@ class PMD401Bus(Actuator):
         returns (list of 2-tuple): name, kwargs
         Note: it's obviously not advised to call this function if a device is already under use
         """
-        if os.name == "nt":
-            raise NotImplementedError("OS not yet supported")
-        else:
-            ports = list(serial.tools.list_ports.grep('/dev/ttyUSB*'))
+        ports = [p.device for p in serial.tools.list_ports.comports()]
 
         logging.info("Scanning for Piezomotor controllers in progress...")
         found = []  # (list of 2-tuple): name, kwargs
