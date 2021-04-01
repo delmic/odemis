@@ -65,13 +65,6 @@ def spc_manual_conf(address, stage, steps=200):
     """
     axname = [name for name, num in stage._axis_map.items() if num == address][0]  # get axis name from number
 
-    # Move to a position in the middle of the axis
-    # WARNING:  Moving and referencing might not be very reliable since the hardware hasn't been configured.
-    stage.reference({'x'}).result()
-    # TODO: this move is specific to the current hardware where the reference switch is very close to 0
-    #   In the future, this might need to be extended to be more generic.
-    stage.moveAbsSync({'x': 0.005})
-
     # Move by a certain number of motor steps. Read the encoder position before and after the move.
     # The quotient of encoder counts and motor steps is the spc parameter.
     stage._updatePosition()
@@ -89,7 +82,7 @@ def spc_manual_conf(address, stage, steps=200):
     stage.setParam(address, 11, spc * (65536 * 4))
     time.sleep(1)
     stage.writeParamsToFlash(address)
-    logging.info("SPC value %s saved to flash.", stage.readParam(address, 11))
+    logging.debug("SPC value %s saved to flash.", stage.readParam(address, 11))
 
 
 def main(args):
@@ -129,8 +122,26 @@ def main(args):
     logging.getLogger().setLevel(loglev)
 
     # Initialize driver with one axis ('x'), closed loop
-    axes = {"x": {"axis_number": options.address, "closed_loop": True, 'speed': 0.001}}
-    stage = PMD401Bus("PM Control", "stage", options.port, axes)
+    try:
+        axes = {"x": {"axis_number": options.address, "closed_loop": True, 'speed': 0.001}}
+        stage = PMD401Bus("PM Control", "stage", options.port, axes)
+    except Exception as ex:
+        # Failed to start controller, try to start with different axis numbers to give the user a hint
+        good_axes = []
+        for i in range(5):  # most of the time, it's a small axis number (<5)
+            try:
+                axes = {"x": {"axis_number": i, "closed_loop": True, 'speed': 0.001}}
+                stage = PMD401Bus("PM Control", "stage", options.port, axes)
+                # If it didn't fail, append to good axes
+                good_axes.append(i)
+            except:
+                pass
+            finally:
+                if good_axes:
+                    raise ValueError("Failed to find controller on axis %s, try axes %s."
+                                     % (options.address, good_axes))
+                else:
+                    raise ValueError("Cannot connect to PMD controller! Ex: %s" % ex)
 
     # Address used for spc configuration (if target address is provided, use target address,
     # otherwise use address)

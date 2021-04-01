@@ -14,17 +14,28 @@ Piezomotor: {
                 axis_number: 1,
                 speed: 0.001, # m/s
                 closed_loop: True,
+                range: [-25e-3, 25e-3],  # m
+                motorstep_resolution: 4.5e-6,  # m / step
+                encoder_resolution: 6.103515625e-10,  # m / count, should be 20 µm / 2 ** 14 = 1.22e-9, why factor 2?
                 },
             'y': {
                 axis_number: 2,
                 speed: 0.001, # m/s
                 closed_loop: True,
+                range: [-25e-3, 25e-3],  # m
+                motorstep_resolution: 4.5e-6,  # m / step
+                encoder_resolution: 6.103515625e-10,  # m / count
                 },
             'z': {
                 axis_number: 3,
-                speed: 0.001, # m/s
+                speed: 2e-5, # m/s, 0.001 * tan(2)
                 closed_loop: True,
+                range: [-85e-6, 5e-6],  # m
+                motorstep_resolution: 7.85478e-8,  # m / step, 4.5e-6 * tan(1)
+                encoder_resolution: 2.13623e-11,  # m / count, 20e-6 / 2**14 / 2 * tan(1)
                 },
         },
+        inverted: {'x', 'y', 'z'},
+        param_file: "../../../install/linux/usr/share/odemis/hwtest/pmd401.pmd.tsv",
     },
 }

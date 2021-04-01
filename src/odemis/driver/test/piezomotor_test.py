@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
+import odemis
 import logging
 import os
 import unittest
@@ -35,22 +36,24 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
-MULTIPLE_AXES = (os.environ.get("MULTIPLE_AXES", 0) != 0)  # if available, test 2 axes
 
 if TEST_NOHW:
     PORT = "/dev/fake"
 else:
     PORT = "/dev/ttyUSB*"
 
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+PMD_CONFIG = CONFIG_PATH + "hwtest/pmd401.pmd.tsv"
+
 KWARGS_OPEN = dict(name="test", role="test", port=PORT,
-              axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': False},
-                    'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': False}}
-              )
+                   axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': False},
+                         'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': False}},
+                   param_file=PMD_CONFIG)
 
 KWARGS_CLOSED = dict(name="test", role="test", port=PORT,
-              axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': True},
-                    'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': True}}
-              )
+                     axes={'x': {'axis_number': 1, 'speed': 0.001, 'closed_loop': True},
+                           'y': {'axis_number': 2, 'speed': 0.001, 'closed_loop': True}},
+                     param_file=PMD_CONFIG)
 
 
 class TestPMD401OpenLoop(unittest.TestCase):
