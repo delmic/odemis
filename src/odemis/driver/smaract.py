@@ -3063,6 +3063,8 @@ class MCS2(model.Actuator):
 
     @isasync
     def reference(self, axes):
+        self._checkReference(axes)
+
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doReference, f, axes)
         return f
