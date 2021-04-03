@@ -6967,7 +6967,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zmin">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-1000</min>
                                                         <max>0</max>
                                                         <unit>m</unit>
@@ -7009,7 +7009,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zstep">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-100</min>
                                                         <max>100</max>
                                                         <unit>m</unit>
@@ -7051,7 +7051,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zmax">
                                                         <size>-1,15</size>
                                                         <value>1</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>0</min>
                                                         <max>1000</max>
                                                         <unit>m</unit>
@@ -7195,7 +7195,7 @@ def __init_resources():
                                                         </object>
                                                         <object class="sizeritem">
                                                             <object class="wxStaticText" name="txt_cryosecom_left_time">
-                                                                <label>3 m 15 s left</label>
+                                                                <label/>
                                                                 <fg>#E5E5E5</fg>
                                                                 <hidden>1</hidden>
                                                             </object>

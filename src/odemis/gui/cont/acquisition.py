@@ -35,12 +35,11 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 
-from wx.core import CallAfter
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream, FastEMOverviewStream
 from odemis.gui import conf, FG_COLOUR_BUTTON
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -52,8 +51,9 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
-from odemis.util import units
 from odemis.util.dataio import open_acquisition, data_to_static_streams
+from odemis.util import units
+from odemis.util.comp import generate_zlevels
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -462,7 +462,6 @@ ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
 
-
 class CryoAcquiController(object):
     """
     Controller to handle the acquisitions of the cryo-secom
@@ -506,6 +505,10 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
+        # for the z parameters widgets 
+        self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
+        self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
+        self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -543,6 +546,29 @@ class CryoAcquiController(object):
         """
         called when the button "acquire" is pressed
         """
+        # store the focuser position 
+        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+
+        # acquire the data 
+        if self._zStackActive.value: # if zstack 
+            self._acq_future = acqmng.acquireZStack(
+                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
+
+        else: # if no zstack 
+            self._acq_future = acqmng.acquire(
+                self._acquiStreams.value, self._tab_data.main.settings_obs)
+
+        self._tab_data.main.is_acquiring.value = True
+        logging.info("Acquisition started")
+
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
+
         # hide/show/disable some widgets
         self._panel.gauge_cryosecom_acq.Show()
         self._panel.btn_cryosecom_acqui_cancel.Show()
@@ -553,28 +579,14 @@ class CryoAcquiController(object):
         self._panel.btn_acquire_overview.Disable()
         self._panel.z_stack_chkbox.Disable()
         self._panel.streams_chk_list.Disable()
+        self._panel.param_Zmin.Enable(False)
+        self._panel.param_Zmax.Enable(False)
+        self._panel.param_Zstep.Enable(False)
         # disable the streams settings
         self._tab.streambar_controller.pauseStreams()
         self._tab.streambar_controller.pause()
         self._panel.Layout()
-
-        # TODO use the function "generate_zlevels". The zrange
-        # is defined using the zMax and zMin obtained
-        # from the GUI from the user. Similarly for zStep. Pass
-        # the returned dictionary to the acquisition function below,
-        # after replacing "acquire" function with "acquireZStack".
-        self._acq_future = acqmng.acquire(
-            self._acquiStreams.value, self._tab_data.main.settings_obs
-        )
-        self._tab_data.main.is_acquiring.value = True
-        logging.info("Acquisition started")
-        # link the acquisition gauge to the acquisition future
-        self._gauge_future_conn = ProgressiveFutureConnector(
-            future=self._acq_future,
-            bar=self._panel.gauge_cryosecom_acq,
-            label=self._panel.txt_cryosecom_left_time,
-            full=False,
-        )
+        
         self._acq_future.add_done_callback(self._on_acquisition_done)
 
     @call_in_wx_main
@@ -586,6 +598,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
+        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
 
         # try to get the acquisition data
         try:
@@ -629,6 +642,9 @@ class CryoAcquiController(object):
         self._panel.z_stack_chkbox.Enable()
         self._panel.streams_chk_list.Enable()
         self._panel.txt_cryosecom_left_time.Hide()
+        self._panel.param_Zmin.Enable(self._zStackActive.value)
+        self._panel.param_Zmax.Enable(self._zStackActive.value)
+        self._panel.param_Zstep.Enable(self._zStackActive.value)
         self._tab.streambar_controller.resume()
         self._panel.Layout()
 
@@ -644,7 +660,7 @@ class CryoAcquiController(object):
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
         else:
-            raise ValueError("The acquisition future state %s is unknown" % state)
+            raise ValueError("The acquisition future state %s is unknown" %state)
 
     def _display_acquired_data(self, data):
         """
@@ -742,16 +758,24 @@ class CryoAcquiController(object):
         ]
         self._sort_streams(item_streams)
 
+        # update the zlevels dictionary with the added/removed stream, if required
+        if self._zStackActive.value:
+            self._on_zstack()
+
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
         """
         Updates the estimated time
         required for acquisition
         """
-        acq_time = acqmng.estimateTime(self._acquiStreams.value)
-        acq_time = math.ceil(acq_time)  # round a bit pessimistic
-        # TODO take into account the time of acquiring the zlevels
-        # as well as the time required for moving the actuator
+        if not self._zStackActive.value: # if no zstack 
+            acq_time = acqmng.estimateTime(self._acquiStreams.value)
+
+        else: # if zstack 
+            acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
+
+        acq_time = math.ceil(acq_time)
+        # display the time on the GUI 
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
@@ -798,16 +822,44 @@ class CryoAcquiController(object):
         self._panel.param_Zmin.Enable(active)
         self._panel.param_Zmax.Enable(active)
         self._panel.param_Zstep.Enable(active)
+        if active:
+            self._on_zstack()
+        else:
+            self._update_acquisition_time()
+
+    def _on_zstack(self):
+        """
+        Takes care of preparing for the zstack by generating the zlevels,
+        and making the streams-zlevel dictionary that will be passed to the acquisition manager 
+        """
+        self._zlevels = {}
+        for s in self._acquiStreams.value:
+            if isinstance(s, FluoStream):
+                if not self._tab_data.main.focus:
+                    raise LookupError("Focuser was not found in the tab data")
+                levels = generate_zlevels(
+                    self._tab_data.main.focus,
+                    [self._tab_data.zMin.value, self._tab_data.zMax.value],
+                    self._tab_data.zStep.value)
+                self._zlevels[s] = list(levels)
+
+        # update the time, taking the zstack into account 
         self._update_acquisition_time()
 
     def _on_z_min(self, zmin):
         self._tab_data.zMin.value = zmin
+        if self._zStackActive.value: # during init, don't call _on_zstack()
+            self._on_zstack()
 
     def _on_z_max(self, zmax):
         self._tab_data.zMax.value = zmax
+        if self._zStackActive.value: # during init, don't call _on_zstack()
+            self._on_zstack()
 
     def _on_z_step(self, zstep):
         self._tab_data.zStep.value = zstep
+        if self._zStackActive.value: # during init, don't call _on_zstack()
+            self._on_zstack()
 
     def _on_check_list(self, _):
         """
@@ -821,7 +873,6 @@ class CryoAcquiController(object):
                 and item not in self._acquiStreams.value
             ):
                 self._acquiStreams.value.append(item)
-                self._update_acquisition_time()
 
             # the user unchecked item
             elif (
@@ -829,7 +880,11 @@ class CryoAcquiController(object):
                 and item in self._acquiStreams.value
             ):
                 self._acquiStreams.value.remove(item)
-                self._update_acquisition_time()
+        
+        # update the zlevels dictionary, if required
+        if self._zStackActive.value:
+            self._on_zstack()
+        self._update_acquisition_time()
 
     def _on_cancel(self, _):
         """
