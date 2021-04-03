@@ -21,7 +21,6 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -91,7 +90,6 @@ class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -161,7 +159,6 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -230,7 +227,6 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc2_align.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -317,7 +313,6 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_cryosecom_chamber.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -376,7 +371,6 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -414,7 +408,6 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -517,7 +510,6 @@ class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -573,7 +565,6 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -641,7 +632,6 @@ class xrcpnl_tab_localization(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_localization.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -703,7 +693,6 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -747,7 +736,6 @@ class xrcfr_overview_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_overview_acq.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
@@ -786,7 +774,6 @@ class xrcfr_plugin(wx.Dialog):
 #!XRCED:begin-block:xrcfr_plugin.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
