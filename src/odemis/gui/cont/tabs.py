@@ -686,6 +686,7 @@ class LocalizationTab(Tab):
                                            show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
             stream_cont.stream_panel.collapse(True)
 
+
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """
