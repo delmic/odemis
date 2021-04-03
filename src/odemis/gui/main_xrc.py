@@ -6258,8 +6258,7 @@ def __init_resources():
                           <object class="wxBoxSizer">
                             <object class="sizeritem">
                               <object class="wxCheckListBox" name="streams_chk_list">
-                                <content>
-                                </content>
+                                <content/>
                                 <font>
                                   <size>10</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -6306,7 +6305,7 @@ def __init_resources():
                                             <value>-7 um</value>
                                             <fg>#2FA7D4</fg>
                                             <bg>#333333</bg>
-                                            <style>wxBORDER_NONE</style>
+                                            <style>wxBORDER_NONE|wxTE_PROCESS_ENTER</style>
                                             <XRCED>
                                               <assign_var>1</assign_var>
                                             </XRCED>
@@ -6327,7 +6326,7 @@ def __init_resources():
                                   </object>
                                   <option>0</option>
                                   <flag>wxLEFT</flag>
-                                  <border>10</border>
+                                  <border>25</border>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxFlexGridSizer">
@@ -6368,7 +6367,7 @@ def __init_resources():
                                   </object>
                                   <option>0</option>
                                   <flag>wxLEFT</flag>
-                                  <border>20</border>
+                                  <border>1</border>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxFlexGridSizer">
@@ -6409,7 +6408,7 @@ def __init_resources():
                                   </object>
                                   <option>0</option>
                                   <flag>wxLEFT</flag>
-                                  <border>12</border>
+                                  <border>-5</border>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -6494,10 +6493,17 @@ def __init_resources():
                                 <object class="sizeritem">
                                   <object class="wxFlexGridSizer">
                                     <object class="sizeritem">
-                                      <object class="wxStaticText" name="txt_cryosecom_est_time">
-                                        <label>Estimated time ...</label>
-                                        <fg>#E5E5E5</fg>
-                                        <hidden>1</hidden>
+                                      <object class="wxBoxSizer">
+                                        <object class="sizeritem">
+                                          <object class="wxStaticText" name="txt_cryosecom_est_time">
+                                            <label>Estimated time ...</label>
+                                            <fg>#E5E5E5</fg>
+                                            <hidden>1</hidden>
+                                          </object>
+                                          <flag>wxLEFT</flag>
+                                          <border>-8</border>
+                                        </object>
+                                        <orient>wxHORIZONTAL</orient>
                                       </object>
                                       <flag>wxTOP</flag>
                                       <border>8</border>
@@ -6514,6 +6520,8 @@ def __init_resources():
                                 <object class="sizeritem">
                                   <object class="wxBoxSizer">
                                     <object class="sizeritem">
+                                      <object class="wxBoxSizer">
+                                        <object class="sizeritem">
                                       <object class="wxGauge" name="gauge_cryosecom_acq">
                                         <size>-1,10</size>
                                         <range>100</range>
@@ -6523,25 +6531,27 @@ def __init_resources():
                                           <assign_var>1</assign_var>
                                         </XRCED>
                                       </object>
+                                      <option>1</option>
+                                        <flag>wxTOP</flag>
+                                        <border>10</border>
+                                      </object>
+                                      <object class="sizeritem">
+                                        <object class="wxStaticText" name="txt_cryosecom_left_time">
+                                          <label>3 m 15 s left</label>
+                                          <fg>#E5E5E5</fg>
+                                          <hidden>1</hidden>
+                                        </object>
+                                        <option>1</option>
+                                        <flag>wxTOP</flag>
+                                        <border>10</border>
+                                      </object>
+                                      <orient>wxVERTICAL</orient>
+                                      </object>
                                       <!-- <option>1</option> -->
                                       <flag>wxTOP</flag>
-                                      <border>20</border>
+                                      <border>-8</border>
                                     </object>
-                                    <object class="sizeritem">
-                                      <object class="wxTextCtrl" name="txt_cryosecom_left_time">
-                                        <size>-1,10</size>
-                                        <value>3 m 15 s left</value>
-                                        <fg>#E5E5E5</fg>
-                                        <bg>#333333</bg>
-                                        <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <option>1</option>
-                                      <flag>wxTOP</flag>
-                                      <border>18</border>
-                                    </object>
+                                    
                                     <object class="sizeritem">
                                       <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
                                         <!-- <size>-1,10</size> -->
