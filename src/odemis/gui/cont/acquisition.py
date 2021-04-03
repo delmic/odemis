@@ -644,7 +644,7 @@ class CryoAcquiController(object):
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
         else:
-            raise ValueError("The acquisition future state %s is unknown" % state)
+            raise ValueError("The acquisition future state %s is unknown" %state)
 
     def _display_acquired_data(self, data):
         """
