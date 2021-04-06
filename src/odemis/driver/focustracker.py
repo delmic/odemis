@@ -4,7 +4,7 @@ Created on 2 Jul 2019
 
 @author: Thera Pals & Éric Piel
 
-Copyright © 2012-2021 Thera Pals, Éric Piel, Delmic
+Copyright © 2019-2021 Thera Pals, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -27,6 +27,7 @@ from canopen import node
 import canopen  # TODO add to project requirements.
 from canopen.nmt import NmtError
 import logging
+import numbers
 from odemis import model, util
 import os
 import pkg_resources
@@ -56,7 +57,7 @@ MAX_POS_AGE = 0.1  # s
 class FocusTrackerCO(model.HwComponent):
     """
     Driver for the in-house (Delmic) focus tracker device.
-    It's connected via CANopen. 
+    It's connected via CANopen.
     """
     def __init__(self, name, role, channel, node_idx, datasheet=None, inverted=None, ** kwargs):
         """
@@ -242,8 +243,23 @@ class FocusTrackerCO(model.HwComponent):
         self.state._set_value(model.ST_RUNNING, force_write=True)
         logging.info("Recovered device on bus %s", self._channel)
 
-    # TODO: convert MD_POS_COR to setting the value in "AI Tare zero"?
-    # Without doing this, the client code would have to read back the metadata and do the subtraction itself
+    def updateMetadata(self, md):
+        if model.MD_POS_COR in md:
+            # Set the MD_POS_COR as Tare zero, so that we don't need to do the
+            # subtraction ourselves... and it's stays stored as long as the device
+            # is powered up (main advantage).
+            pos_cor = md[model.MD_POS_COR]
+            if not isinstance(pos_cor, numbers.Real):
+                raise ValueError("MD_POS_COR must be a float, but got %s" % (pos_cor,))
+            self.node.sdo["AI Tare zero"][1].raw = pos_cor * 1e6
+            # Read back the actual value (to read the floating error caused by float32)
+            md[model.MD_POS_COR] = self.node.sdo["AI Tare zero"][1].raw * 1e-6
+            logging.info("Updated MD_POS_COR to %s", md[model.MD_POS_COR])
+
+            # Force an update of the position, with the new shift
+            self._updatePosition(self._read_position())
+
+        model.HwComponent.updateMetadata(self, md)
 
     def _read_position(self):
         """
@@ -264,7 +280,8 @@ class FocusTrackerCO(model.HwComponent):
         Callback when the TPDOs are received
         pdos (pdo.Map): the variables received
         """
-        logging.debug("received TPDO with %s = %s", pdos[0].name, pdos[0].raw)
+        # This normally happens at 50Hz, so no log
+        # logging.debug("received TPDO with %s = %s", pdos[0].name, pdos[0].raw)
         pos = pdos[0].raw * 1e-6
         # TODO: this is updated very often, and is blocking the reception. So it
         # might be safer to update the position in a separate thread
@@ -274,7 +291,8 @@ class FocusTrackerCO(model.HwComponent):
         if self._inverted:
             pos = -pos
 
-        logging.debug("Reporting new position at %s", pos)
+        # This normally happens at 50Hz, so no log
+        # logging.debug("Reporting new position at %s", pos)
         p = {"z": pos}
         self.position._set_value(p, force_write=True)
         self._last_pos_update = time.time()
@@ -295,7 +313,7 @@ class FocusTrackerCO(model.HwComponent):
 
 # The size of the CCD, plus a margin corresponding to where the gaussian peak
 # could be when it's on the border.
-INPUT_FV_RANGE = [-50, 512 + 50]  # px
+INPUT_FV_RANGE = [-50, 4096 + 50]  # px
 class FakeRemoteNode(canopen.RemoteNode):
 
     # Note: in reality, idx and subidx can be either a string or a int.
@@ -332,6 +350,10 @@ class FakeRemoteNode(canopen.RemoteNode):
             sdo_array = fake_sdos.setdefault(idx, {})
             sdo_array[subidx] = FakeSdoVariable(client[idx][subidx], self.object_dictionary[idx][subidx], init_value=v)
 
+        # Force recomputing everything when Tare zero or Scaling Factor are set
+        fake_sdos['AI Tare zero'][1].callback = self._updateTPDO
+        fake_sdos['AI Scaling Factor'][1].callback = self._updateTPDO
+
         client.overlay.update(fake_sdos)
 
         self.sdo_channels.append(client)
@@ -339,7 +361,7 @@ class FakeRemoteNode(canopen.RemoteNode):
             self.network.subscribe(client.tx_cobid, client.on_response)
         return client
 
-    def _updateTPDO(self):
+    def _updateTPDO(self, _=None):
         # Generate a new position, randomly a little bit away from the previous position
         pos = self.sdo["AI Input FV"][1].raw
         pos = max(INPUT_FV_RANGE[0], min(pos + random.randint(-2, 2), INPUT_FV_RANGE[1]))
@@ -347,7 +369,7 @@ class FakeRemoteNode(canopen.RemoteNode):
         self.sdo["AI Input PV"][1].raw = pos * self.sdo["AI Scaling Factor"][1].raw
         self.sdo["AI Net PV"][1].raw = self.sdo["AI Input PV"][1].raw - self.sdo["AI Tare zero"][1].raw
 
-        self.tpdo[1]["AI Input PV.AI Input PV 1"].raw = self.sdo[POS_SDO][1].raw
+        self.tpdo[1][f"{POS_SDO}.{POS_SDO} 1"].raw = self.sdo[POS_SDO][1].raw
 
         # Send the new pos
         self.tpdo._notify()
@@ -356,10 +378,11 @@ class FakeRemoteNode(canopen.RemoteNode):
 class FakeSdoVariable(canopen.sdo.base.Variable):
     """Simulates an SDO Variable object where the raw data can set and read."""
 
-    def __init__(self, object_sdo, object_dict, init_value):
+    def __init__(self, object_sdo, object_dict, init_value, callback=None):
         # canopen.sdo.base.Array.__init__(self, object_sdo, object_dict)
         super(FakeSdoVariable, self).__init__(object_sdo, object_dict)
         self._raw = init_value
+        self.callback = callback
 
     @property
     def raw(self):
@@ -368,6 +391,8 @@ class FakeSdoVariable(canopen.sdo.base.Variable):
     @raw.setter
     def raw(self, value):
         self._raw = value
+        if self.callback:
+            self.callback(self)
 
 
 class FakeTPDO(canopen.pdo.TPDO):

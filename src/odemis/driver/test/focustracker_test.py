@@ -32,6 +32,7 @@ import unittest
 
 
 logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
@@ -73,7 +74,7 @@ class TestFocusTrackerCO(unittest.TestCase):
         """Verify that the current position can be read and not written."""
         pos = self.focus_tracker.position.value["z"]
         self.assertIsInstance(pos, float)
-        self.assertGreaterEqual(pos, 0)
+        self.assertGreaterEqual(pos, -10e-6)  # In theory, it can be a tiny bit negative, but it's unlikely
         # It should be in m. The distance is typically < 1mm. So let's say always < 10cm
         self.assertLess(pos, 0.1)
 
@@ -108,6 +109,22 @@ class TestFocusTrackerCO(unittest.TestCase):
 
     def on_position(self, pos):
         self._positions.append(pos["z"])
+
+    def test_pos_cor(self):
+        """Check that the MD_POS_COR is subtracted from the original value"""
+
+        with self.assertRaises(ValueError):
+            self.focus_tracker.updateMetadata({model.MD_POS_COR: "booo"})
+
+        # Subtract a big enough value that it's always negative
+        self.focus_tracker.updateMetadata({model.MD_POS_COR: 10e-3})
+        pos_cor = self.focus_tracker.getMetadata()[model.MD_POS_COR]
+        self.assertAlmostEqual(pos_cor, 10e-3)
+
+        pos = self.focus_tracker.position.value["z"]
+        self.assertLess(pos, 0)
+
+        self.focus_tracker.updateMetadata({model.MD_POS_COR: 0})
 
 
 if __name__ == "__main__":
