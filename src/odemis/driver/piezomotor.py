@@ -31,6 +31,7 @@ import os
 import threading
 import time
 import serial
+import serial.tools.list_ports
 import re
 from threading import Thread
 import copy
