@@ -1,9 +1,9 @@
 [DeviceInfo]
 VendorName=DELMIC B.V.
-VendorNumber=0x00000360
+VendorNumber=0x00c0ffee
 ProductName=
-ProductNumber=0x00000000
-RevisionNumber=0x00000000
+ProductNumber=0x00000001
+RevisionNumber=0x00000002
 OrderCode=
 BaudRate_10=0
 BaudRate_20=0
@@ -39,19 +39,20 @@ SupportedObjects=3
 3=0x1018
 
 [OptionalObjects]
-SupportedObjects=12
+SupportedObjects=13
 1=0x1012
 2=0x1017
 3=0x1F80
 4=0x1800
 5=0x1A00
-6=0x6100
-7=0x6126
-8=0x6130
-9=0x6131
-10=0x6138
-11=0x6139
-12=0x6140
+6=0x1F51
+7=0x6100
+8=0x6126
+9=0x6130
+10=0x6131
+11=0x6138
+12=0x6139
+13=0x6140
 
 [ManufacturerObjects]
 SupportedObjects=4
@@ -97,17 +98,19 @@ DefaultValue=0x4
 ParameterName=Vendor-ID
 DataType=0x0007
 AccessType=ro
-DefaultValue=0x00000360
+DefaultValue=0x00c0ffee
 
 [1018sub2]
 ParameterName=Product code
 DataType=0x0007
 AccessType=ro
+DefaultValue=0x00000001
 
 [1018sub3]
 ParameterName=Revision number
 DataType=0x0007
 AccessType=ro
+DefaultValue=0x00000002
 
 [1018sub4]
 ParameterName=Serial number
@@ -193,6 +196,27 @@ AccessType=rw
 DefaultValue=0x61000120
 PDOMapping=0
 
+[1F51]
+SubNumber=2
+ParameterName=Program Control
+ObjectType=0x09
+
+[1F51sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x0
+PDOMapping=0
+
+[1F51sub1]
+ParameterName=Program Control 1
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+PDOMapping=0
+
 [2000]
 ParameterName=Object with custom SDO download callback
 DataType=0x0007
@@ -252,6 +276,7 @@ ParameterName=AI Scaling Factor 1
 ObjectType=0x07
 DataType=0x0008
 AccessType=rw
+DefaultValue=1
 PDOMapping=0
 
 [6130]
