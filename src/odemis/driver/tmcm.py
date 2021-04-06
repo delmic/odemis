@@ -2616,7 +2616,7 @@ class CANController(model.Actuator):
         # to allow still loading the Serial/USB TMCM component
         # TODO: drop it once python3-canopen is part of the Odemis dependencies
         if canopen is None:
-            raise HwError("CANopen module missing, run \"sudo apt install python-canopen python3-canopen\".")
+            raise HwError("CANopen module missing, run \"sudo apt install python3-canopen\".")
 
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" % (len(axes), ustepsize))
@@ -2660,6 +2660,11 @@ class CANController(model.Actuator):
         if self._modl not in KNOWN_MODELS_CAN:
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             self._modl)
+
+        # Do not leave canopen log to DEBUG, even if the general log level is set
+        # to DEBUG, because it generates logs for every CAN packet, which is too much.
+        canlog = logging.getLogger("canopen")
+        canlog.setLevel(max(canlog.getEffectiveLevel(), logging.INFO))
 
         # Check that the device support that many axes
         try:
