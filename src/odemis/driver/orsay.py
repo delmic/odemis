@@ -346,10 +346,13 @@ class vacuumChamber(model.Actuator):
 class pumpingSystem(model.HwComponent):
     """
     This represents the pumping system from Orsay Physics
-    Attributes:
-        • _system (is parent.datamodel.HybridPlatform.PumpingSystem, for easier access)
-        • _parent (Component, contains an instance of class Orsay)
-        • state (StringVA, read-only, value is combination of _system.Manometer1.ErrorState.Actual and _system.TurboPump1.ErrorState.Actual)
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • state (StringVA, read-only, value is combination of _system.Manometer1.ErrorState.Actual and _system.
+          TurboPump1.ErrorState.Actual)
         • speed (FloatVA, read-only, unit is "Hz", value is _system.TurboPump1.Speed.Actual)
         • temperature (FloatVA, read-only, unit is "°C", value is _system.TurboPump1.Temperature.Actual)
         • power (FloatVA, read-only, unit is "W", value is _system.TurboPump1.Power.Actual)
@@ -357,120 +360,117 @@ class pumpingSystem(model.HwComponent):
         • turboPumpOn (BooleanVA, read-only, value is _system.TurboPump1.IsOn.Actual)
         • primaryPumpOn (BooleanVA, read-only, value is parent.datamodel.HybridPlatform.PrimaryPumpState.Actual)
         • nitrogenPressure (FloatVA, read-only, unit is "Pa", value is _system.Manometer1.Pressure.Actual)
-    """
-
-    def __init__(self, name, role, parent, **kwargs):
         """
 
-        """
-        # 		Inits an HwComponent
-        # 		Defines _system attribute
-        #       Defines state, speed, temperature, power, speedReached, turboPumpOn, primaryPumpOn and nitrogenPressure VA's
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._system = parent.datamodel.HybridPlatform.PumpingSystem
+        self._parent = parent
+
+        self.state = model.StringVA("", readonly=True)
+        self.speed = model.FloatVA(0.0, readonly=True, unit="Hz")
+        self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
+        self.power = model.FloatVA(0.0, readonly=True, unit="W")
+        self.speedReached = model.BooleanVA(False, readonly=True)
+        self.turboPumpOn = model.BooleanVA(False, readonly=True)
+        self.primaryPumpOn = model.BooleanVA(False, readonly=True)
+        self.nitrogenPressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+
+        # Todo!
         #       Connects _updateErrorState method as a callback to _system.Manometer1.ErrorState [This feature is still in the works at Orsay]
         #       Connects _updateErrorState method as a callback to _system.TurboPump1.ErrorState [This feature is still in the works at Orsay]
-        # 		Calls _updateErrorState
         #       Connects _updateSpeed method as a callback to _system.TurboPump1.Speed [This feature is still in the works at Orsay]
-        # 		Calls _updateSpeed
         #       Connects _updateTemperature method as a callback to _system.TurboPump1.Temperature [This feature is still in the works at Orsay]
-        # 		Calls _updateTemperature
         #       Connects _updatePower method as a callback to _system.TurboPump1.Power [This feature is still in the works at Orsay]
-        # 		Calls _updatePower
         #       Connects _updateSpeedReached method as a callback to _system.TurboPump1.SpeedReached [This feature is still in the works at Orsay]
-        # 		Calls _updateSpeedReached
         #       Connects _updateTurboPumpOn method as a callback to _system.TurboPump1.IsOn [This feature is still in the works at Orsay]
-        # 		Calls _updateTurboPumpOn
         #       Connects _updatePrimaryPumpOn method as a callback to parent.datamodel.HybridPlatform.PrimaryPumpState [This feature is still in the works at Orsay]
-        # 		Calls _updatePrimaryPumpOn
         #       Connects _updateNitrogenPressure method as a callback to _system.Manometer1.Pressure [This feature is still in the works at Orsay]
-        # 		Calls _updateNitrogenPressure
-        pass
+
+        self._updateErrorState()
+        self._updateSpeed()
+        self._updateTemperature()
+        self._updatePower()
+        self._updateSpeedReached()
+        self._updateTurboPumpOn()
+        self._updatePrimaryPumpOn()
+        self._updateNitrogenPressure()
 
     def _updateErrorState(self):
         """
-
+        Reads the error state from the Orsay server and saves it in the state VA
         """
-        #           Makes empty string variable eState
-        #           Reads _system.Manometer1.ErrorState.Actual and puts it in temporary variable manEState
-        #           Reads _system.TurboPump1.ErrorState.Actual and puts it in temporary variable tpEState
-        #           If manEState is not 0:
-        # 	            Adds “Manometer1 error: ” + manEState to eState
-        #           If tpEState is not 0:
-        # 			    If eState is not empty:
-        # 	                Adds “, ” to eState
-        #               Adds “TurboPump1 error: ” + tpEState to eState
-        # 		    Calls state._set_value(eState, force_write=True)
-        pass
+        eState = ""
+        manEState = self._system.Manometer1.ErrorState.Actual
+        tpEState = self._system.TurboPump1.ErrorState.Actual
+        if manEState is not "0" and manEState is not 0:
+            eState += "Manometer1 error: " + manEState
+        if tpEState is not "0" and tpEState is not 0:
+            if eState is not "":
+                eState += ", "
+            eState += "TurboPump1 error: " + tpEState
+        self.state._set_value(eState, force_write=True)
 
     def _updateSpeed(self):
         """
-
+        Reads the turbopump's speed from the Orsay server and saves it in the speed VA
         """
-        #       Reads _system.TurboPump1.Speed.Actual and puts it in temporary variable currentSpeed
-        # 		Calls speed._set_value(currentSpeed, force_write=True)
+        self.speed._set_value(self._system.TurboPump1.Speed.Actual, force_write=True)
         pass
 
     def _updateTemperature(self):
         """
-
+        Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA
         """
-        #       Reads _system.TurboPump1.Temperature.Actual and puts it in temporary variable currentTemperature
-        # 		Calls temperature._set_value(currentTemperature, force_write=True)
+        self.temperature._set_value(self._system.TurboPump1.Temperature.Actual, force_write=True)
         pass
 
     def _updatePower(self):
         """
-
+        Reads the turbopump's power from the Orsay server and saves it in the power VA
         """
-        #       Reads _system.TurboPump1.Power.Actual and puts it in temporary variable currentPower
-        # 		Calls power._set_value(currentPower, force_write=True)
+        self.power._set_value(self._system.TurboPump1.Power.Actual, force_write=True)
         pass
 
     def _updateSpeedReached(self):
         """
-
+        Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA
         """
-        #       Reads _system.TurboPump1.SpeedReached.Actual and puts it in temporary variable currentSpeedReached
-        #       Calls speedReached._set_value(currentSpeedReached, force_write=True)
+        self.speedReached._set_value(self._system.TurboPump1.SpeedReached.Actual, force_write=True)
         pass
 
     def _updateTurboPumpOn(self):
         """
-
+        Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA
         """
-        #       Reads _system.TurboPump1.IsOn.Actual and puts it in temporary variable currentTurboPumpOn
-        #       Calls turboPumpOn._set_value(currentTurboPumpOn, force_write=True)
+        self.turboPumpOn._set_value(self._system.TurboPump1.IsOn.Actual, force_write=True)
         pass
 
     def _updatePrimaryPumpOn(self):
         """
-
+        Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
         """
-        #       Reads parent.datamodel.HybridPlatform.PrimaryPumpState.Actual and puts it in temporary variable currentPrimaryPumpOn
-        #       Calls primaryPumpOn._set_value(currentPrimaryPumpOn, force_write=True)
+        self.primaryPumpOn._set_value(self._parent.datamodel.HybridPlatform.PrimaryPumpState.Actual, force_write=True)
         pass
 
     def _updateNitrogenPressure(self):
         """
-
+        Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA
         """
-        #       Reads _system.Manometer1.Pressure.Actual and puts it in temporary variable currentNitrogenPressure
-        #       Calls nitrogenPressure._set_value(currentNitrogenPressure, force_write=True)
+        self.nitrogenPressure._set_value(self._system.Manometer1.Pressure.Actual, force_write=True)
         pass
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        # 		Sets _system to None
+        self._system = None
         pass
 
 
 class UPS(model.HwComponent):
     """
     This represents the uniterupted power supply from Orsay Physics
-    Attributes:
-        • _system (is parent.datamodel.HybridPlatform.UPS, for easier access)
-        • _parent (Component, contains an instance of class Orsay)
     """
 
     def __init__(self, name, role, parent, **kwargs):
