@@ -471,31 +471,35 @@ class UPS(model.HwComponent):
     Attributes:
         • _system (is parent.datamodel.HybridPlatform.UPS, for easier access)
         • _parent (Component, contains an instance of class Orsay)
-        • level (FloatVA, read-only, unit is "", value is _system.UPScontroller.BatteryLevel.Actual, between 0 and 1)
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
-
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • level (FloatVA, read-only, unit is "", value is _system.UPScontroller.BatteryLevel.Actual, between 0 and 1)
         """
-        # 		Inits an HwComponent
-        # 		Defines _system attribute
-        # 		Defines level VA
-        #       Connects _updateLevel method as a callback to _system.UPScontroller.BatteryLevel [This feature is still in the works at Orsay]
-        # 		Calls _updateLevel
-        pass
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._system = parent.datamodel.HybridPlatform.UPS
+        self._parent = parent
+
+        self.level = model.FloatVA(1.0, readonly=True, unit="")
+
+        # Todo!
+        #   Connects _updateLevel method as a callback to _system.UPScontroller.BatteryLevel [This feature is still in the works at Orsay]
+
+        self._updateLevel()
 
     def _updateLevel(self):
         """
-
+        Reads the battery level of the UPS from the Orsay server and saves it in the level VA
         """
-        #       Reads _system.UPScontroller.BatteryLevel.Actual and puts it in temporary variable currentLevel
-        # 		Calls level._set_value(currentLevel / 100, force_write=True)
-        pass
+        currentLevel = float(self._system.UPScontroller.BatteryLevel.Actual)
+        self.level._set_value(currentLevel / 100, force_write=True)
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        # 		Sets _system to None
-        pass
+        _system = None
