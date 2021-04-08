@@ -1010,6 +1010,42 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.beamlet_index_info()
 
+    def start_autofocusing_flash(self):
+        """
+        Start running autofocus through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_autofocusing_flash()
+
+    def start_autostigmating_flash(self):
+        """
+        Start running auto stigmation through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_autostigmating_flash()
+
+    def start_auto_lens_centering_flash(self):
+        """
+        Start running lens alignment through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_auto_lens_centering_flash()
+
 
 class Scanner(model.Emitter):
     """
