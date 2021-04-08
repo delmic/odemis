@@ -99,7 +99,7 @@ def reference(dev, channels, mode=NORMAL_REF):
         set_autozero_reference(dev, channels)
     # Run the referencing
     logging.info("Starting reference...")
-    dev.reference().result()
+    dev.reference(axes=[str(ch) for ch in channels]).result()
     time.sleep(0.1)
     logging.info("Complete")
 
@@ -144,10 +144,10 @@ def main(args):
                         help="Run the calibration command. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--autozero', metavar='N', type=int, nargs='+', default=[],
-                        help="Run referencing with set_autozero_reference functionality. Specify the channel to calibrate (0, 1, 2)")
+                        help="Run referencing with autozero reference mode. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--reference', metavar='N', type=int, nargs='+', default=[],
-                        help="Run referencing with normal functionality. Specify the channel to calibrate (0, 1, 2)")
+                        help="Run referencing with normal reference mode. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--setzero', metavar='N', type=int, nargs='+', default=[],
                         help="Force the current position on a channel to be 0. Specify the channel to calibrate (0, 1, 2)")
@@ -168,10 +168,14 @@ def main(args):
 
     dev = smaract.MCS2(locator=locator, axes=axes, **CONFIG_3DOF)
 
-    calibrate(dev, options.calibrate)
-    reference(dev, options.autozero, mode=AUTO_ZERO_REF)
-    reference(dev, options.reference, mode=NORMAL_REF)
-    set_zero(dev, options.setzero)
+    if options.calibrate:
+        calibrate(dev, options.calibrate)
+    elif options.autozero:
+        reference(dev, options.autozero, mode=AUTO_ZERO_REF)
+    elif options.reference:
+        reference(dev, options.reference, mode=NORMAL_REF)
+    elif options.setzero:
+        set_zero(dev, options.setzero)
 
     logging.info("Completed all operations.")
 
