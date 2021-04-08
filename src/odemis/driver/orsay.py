@@ -48,65 +48,100 @@ from ConsoleClient.Communication.Connection import Connection
 
 class Orsay(model.HwComponent):
     """
-    This represents a bare Orsay component
+    This is an overarching component to represent the Orsay hardware
     Attributes:
-        • _host (string, contains the IP address of the Orsay server)
-        • _device (contains the server object of the Orsay server)
         • _pneumaticSuspension (an instance of class pneumaticSuspension)
         • _pressure (an instance of class vacuumChamber)
         • _pumpingSystem (an instance of class pumpingSystem)
         • _ups (an instance of class UPS)
-        • datamodel (is _device.datamodel, for easier access to the datamodel)
         • children (set of components; is set(_pneumaticSyspension, _pressure, _pumpingSystem, _ups))
-        • processInfo (StringVA, read-only, value is datamodel.HybridPlatform.ProcessInfo.Actual)
     """
 
     def __init__(self, name, role, children, host, daemon=None, **kwargs):
         """
-
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • processInfo (StringVA, read-only, value is datamodel.HybridPlatform.ProcessInfo.Actual)
         """
-        # 		Inits an HwComponent
-        # 		Defines _host attribute
-        #       Connects to the Orsay server using the IP address in _host and puts the connection in _device
-        # 		Defines datamodel as _server.datamodel
-        # 		Defines processInfo VA
+
+        model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
+
+        self._host = host
+        self._device = Connection(self._host)
+        time.sleep(1)  # allow for the connection to be made and the datamodel to be loaded
+        self.datamodel = self._device.datamodel
+
+        self.processInfo = model.StringVA("", readonly=True)
+
+        # Todo!
         #       Connects _updateProcessInfo method as a callback to datamodel.HybridPlatform.ProcessInfo [This feature is still in the works at Orsay]
-        # 		Calls _updateProcessInfo
-        # 		If children["pneumatic-suspension"]:
-        # 			Initialise _pneumaticSuspension
-        # 			Add _pneumaticSuspension to children attribute
-        # 		If children["pressure"]:
-        # 			Initialise _pressure
-        # 			Add _pressure to children attribute
-        # 		If children["pumping-system"]:
-        # 			Initialise _pumpingSystem
-        # 			Add _pumpingSystem to children attribute
-        # 		If children["ups"]:
-        # 			Initialise _ ups
-        # 			Add _ ups to children attribute
-        pass
+
+        self._updateProcessInfo()
+
+        # create the pneumatic suspension child
+        try:
+            kwargs = children["pneumatic-suspension"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'pneumatic-suspension' child")
+        else:
+            self._pneumaticSuspension = pneumaticSuspension(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._pneumaticSuspension)
+
+        # create the pressure child for the chamber
+        try:
+            kwargs = children["pressure"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'pressure' child")
+        else:
+            self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._pressure)
+
+        # create the pumping system child
+        try:
+            kwargs = children["pumping-system"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'pumping-system' child")
+        else:
+            self._pumpingSystem = pumpingSystem(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._pumpingSystem)
+
+        # create the UPS child
+        try:
+            kwargs = children["ups"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'ups' child")
+        else:
+            self._ups = UPS(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._ups)
 
     def _updateProcessInfo(self):
         """
-
+        Reads the process information from the Orsay server and saves it in the processInfo VA
         """
-        #       Reads datamodel.HybridPlatform.ProcessInfo.Actual and puts it in temporary variable currentProcessInfo
-        # 		Calls logging.debug(currentProcessInfo)
-        # 		Calls processInfo._set_value(currentProcessInfo, force_write=True)
-        pass
+        currentProcessInfo = str(self.datamodel.HybridPlatform.ProcessInfo.Actual)
+        currentProcessInfo.replace("N/A", "")
+        logging.debug("ProcessInfo update: " + currentProcessInfo)
+        self.processInfo._set_value(currentProcessInfo, force_write=True)
 
     def terminate(self):
         """
-
+        Called when Odemis is closed
         """
-        # 		If _device:
-        # 			Terminates _pneumaticSuspension if present
-        # 			Terminates _pressure if present
-        # 			Terminates _pumpingSystem if present
-        # 			Terminates _ups if present
-        # 			Terminates its super
-        # 			Sets _device and datamodel to None
-        pass
+        if self._device:
+            if self._pneumaticSuspension:
+                self._pneumaticSuspension.terminate()
+                self._pneumaticSuspension = None
+            if self._pressure:
+                self._pressure.terminate()
+                self._pressure = None
+            if self._pumpingSystem:
+                self._pumpingSystem.terminate()
+                self._pumpingSystem = None
+            if self._ups:
+                self._ups.terminate()
+                self._ups = None
+            super(Orsay, self).terminate()
+            self._device = None
+            self.datamodel = None
 
 
 class pneumaticSuspension(model.HwComponent):
