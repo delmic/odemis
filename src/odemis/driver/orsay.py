@@ -204,143 +204,143 @@ class pneumaticSuspension(model.HwComponent):
         """
         self._valve = None
         self._gauge = None
-        pass
 
 
 class vacuumChamber(model.Actuator):
     """
     This represents the vacuum chamber from Orsay Physics
-    Attributes:
-        • _executor (is CancellableThreadPoolExecutor(max_workers=1))
-        • _gate (is parent.datamodel.HybridPlatform.ValveP5, for easier access)
-        • _chamber (is parent.datamodel.HybridPlatform.AnalysisChamber, for easier access)
-        • _gateStatus (boolean, contains _gate.IsOpen.Actual == 1 (Open))
-        • _vacuumStatusReached (threading.Event, set when _chamber.Pressure.Actual equals its .Target)
-        • _gateStatusReached (threading.Event, set when _gate.IsOpen.Actual equals its .Target)
-        • _parent (Component, contains an instance of class Orsay)
-        • state (StringVA, read-only, value is combination of _gate.ErrorState.Actual and _gate.IsOpen.Actual)
-        • axes ("vacuum": [unit is "None", choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}], "gate": [unit is "None", choices is {True = "open", False = "closed"}])
-        • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual, "gate" : _gateStatus})
-        • pressure (FloatVA, read-only, unit is "Pa", value is _chamber.Pressure.Actual)
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
+        Has axes:
+        • "vacuum": unit is "None", choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}
 
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • state (StringVA, read-only, value is combination of _gate.ErrorState.Actual and _gate.IsOpen.Actual)
+        • parent (Component, contains an instance of class Orsay)
+        • gateOpen (BooleanVA, set to True to open/start and False to close/stop)
+        • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
+        • pressure (FloatVA, read-only, unit is "Pa", value is _chamber.Pressure.Actual)
         """
-        # 		Defines axes
-        # 		Inits an Actuator
-        # 		Defines _gateStatus attribute
-        # 		Defines state, position and pressure VA's
-        # 		Defines and sets _vacuumStatusReached and _gateStatusReached
-        #       Connects _updateErrorState method as a callback to _gate.ErrorState [This feature is still in the works at Orsay]
-        # 		Calls _updateErrorState
-        #       Connects _updatePosition method as a callback to _chamber.VacuumStatus [This feature is still in the works at Orsay]
-        #       Connects _updatePosition method as a callback to _gate.IsOpen [This feature is still in the works at Orsay]
-        # 		Calls _updatePosition
-        #       Connects _updatePressure method as a callback to _chamber.Pressure [This feature is still in the works at Orsay]
-        # 		Calls _updatePressure
-        # 		Defines _executor
-        pass
+
+        axes = {"vacuum": model.Axis(unit=None, choices={0: "vented", 1: "primary vacuum", 2: "high vacuum"})}
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
+
+        self._parent = parent
+        self._gate = parent.datamodel.HybridPlatform.ValveP5
+        self._chamber = parent.datamodel.HybridPlatform.AnalysisChamber
+
+        self.state = model.StringVA("", readonly=True)
+        self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+        self.gateOpen = model.BooleanVA(False, readonly=True, setter=self._changeGateOpen)
+        self.position = model.VigilantAttribute({"vacuum": 0, "gate": False}, readonly=True)
+
+        self._vacuumStatusReached = threading.Event()
+        self._vacuumStatusReached.set()
+
+        # Todo!
+        #   Connects _updateErrorState method as a callback to _gate.ErrorState [This feature is still in the works at Orsay]
+        #   Connects _updatePosition method as a callback to _chamber.VacuumStatus [This feature is still in the works at Orsay]
+        #   Connects _updatePosition method as a callback to _gate.IsOpen [This feature is still in the works at Orsay]
+        #   Connects _updatePressure method as a callback to _chamber.Pressure [This feature is still in the works at Orsay]
+
+        self._updateErrorState()
+        self._updatePosition()
+        self._updatePressure()
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
 
     def _updateErrorState(self):
         """
-
+        Reads the error state from the Orsay server and saves it in the state VA
         """
-        #           Makes empty string variable eState
-        #           Reads _gate.ErrorState.Actual and puts it in a temporary variable gateEState
-        #           If gateEState is not 0:
-        #               Adds “ValveP5 error: ” + gateEState to eState
-        # 		    If _gate.IsOpen.Actual equals 3 (Error):
-        # 			    If eState is not empty:
-        # 			    	Adds “, ” to eState
-        # 			    Adds “ValveP5 is in error” to eState
-        # 		    If _gate.IsOpen.Actual equals -1 (Initialisation):
-        # 		    	If eState is not empty:
-        # 				    Adds “, ” to eState
-        # 		    	Adds “ValveP5 could not be contacted” to eState
-        # 		    Calls state._set_value(eState, force_write=True)
-        pass
+        eState = ""
+        gateEState = self._gate.ErrorState.Actual
+        if gateEState is not "0" and gateEState is not 0:
+            eState += "ValveP5 error: " + gateEState
+        if self._gate.IsOpen.Actual is 3:  # in case of valve error
+            if eState is not "":
+                eState += ", "
+            eState += "ValveP5 is in error"
+        if self._gate.IsOpen.Actual is -1:  # in case no communication is present with the valve
+            if eState is not "":
+                eState += ", "
+            eState += "ValveP5 could not be contacted"
+        self.state._set_value(eState, force_write=True)
+
+    def _updateGateOpen(self):
+        """
+        Reads if ValveP5 is open from the Orsay server and saves it in the gateOpen VA
+        """
+        if self._gate.IsOpen.Actual is 3 or self._gate.IsOpen.Actual is -1:
+            self._updateErrorState()
+        elif self._gate.IsOpen.Actual is 1 or self._gate.IsOpen.Actual is 2:
+            new_value = self._gate.IsOpen.Actual is 1
+            self.gateOpen._value = new_value  # to not call the setter
+            self.gateOpen.notify(new_value)
+        else:  # if _gate.IsOpen.Actual is 0 (Transit), or undefined
+            pass
 
     def _updatePosition(self):
         """
-
+        Reads the vacuum state from the Orsay server and saves it in the position VA
         """
-        #       Puts _chamber.VacuumStatus.Actual in temporary variable currentVacuum
-        # 		Reads _gate.IsOpen.Actual
-        # 		If _gate.IsOpen.Actual is 3 (Error) or -1 (Initialisation):
-        # 			Calls _updateErrorState()
-        # 		Else if _gate.IsOpen.Actual is 1 (Open) or 2 (Closed):
-        # 			Puts (_gate.IsOpen.Actual == 1 (Open)) in _gateStatus
-        # 		Else (in case _gate.IsOpen..Actual is 0 (Transit), or undefined):
-        # 			Do nothing
-        #       Calls position._set_value({"vacuum" : currentVacuum, "gate" : _gateStatus}, force_write=True)
-        #       If _chamber.VacuumStatus.Actual equals _chamber.VacuumStatus.Target:
-        # 			Calls _vacuumStatusReached.set()
-        # 		Else:
-        # 			Calls _vacuumStatusReached.clear()
-        # 		If _gate.IsOpen.Actual equals _gate.IsOpen.Target:
-        # 			Calls _gateStatusReached.set()
-        # 		Else:
-        # 			Calls _gateStatusReached.clear()
-        pass
+        currentVacuum = self._chamber.VacuumStatus.Actual
+        self.position._set_value({"vacuum": currentVacuum}, force_write=True)
+        if self._chamber.VacuumStatus.Actual is self._chamber.VacuumStatus.Target:
+            self._vacuumStatusReached.set()
+        else:
+            self._vacuumStatusReached.clear()
 
     def _updatePressure(self):
         """
-
+        Reads the chamber pressure from the Orsay server and saves it in the pressure VA
         """
-        #       Reads _chamber.Pressure.Actual and puts it in temporary variable currentPressure
-        # 		Calls pressure._set_value(currentPressure, force_write=True)
-        pass
+        self.pressure._set_value(self._chamber.Pressure.Actual, force_write=True)
 
     def _changeVacuum(self, goal):
         """
-
+        Sets the vacuum status on the Orsay server to argument goal and waits until it is reached.
+        Then returns the reached vacuum status.
         """
-        # 		Sets _chamber.VacuumStatus.Target to goal
-        # 		Calls _vacuumStatusReached.wait()
-        # 		Returns _chamber.VacuumStatus.Actual
-        pass
+        self._chamber.VacuumStatus.Target = goal
+        self._vacuumStatusReached.wait()
+        return self._chamber.VacuumStatus.Actual
 
-    def _changeGate(self, goal):
+    def _changeGateOpen(self, goal):
         """
-
+        Opens ValveP5 on the Orsay server if argument goal is True. Closes it otherwise.
         """
-        #       Sets _gate.IsOpen.Target to 1 (Open) if goal is True, to 2 (Closed) otherwise
-        # 		Calls _gateStatusReached.wait()
-        # 		Returns _gate.IsOpen.Actual
-        pass
+        self._gate.IsOpen.Target = 1 if goal else 2
+        return self._gate.IsOpen.Target == 1
 
     @isasync
     def moveAbs(self, pos):
         """
-
+        Move the axis of this actuator.
         """
-        # 		Calls _checkMoveAbs(pos)
-        #       If pos["vacuum"] and pos["vacuum"] does not equal position["vacuum"].value:
-        # 			Calls _executor.submit(_changeVacuum, pos["vacuum"])
-        # 		If pos["gate"] and pos["gate"] does not equal position["gate"].value:
-        # 			Calls _executor.submit(_changeGate, pos["gate"])
-        pass
+        self._checkMoveAbs(pos)
+        self._executor.submit(self._changeVacuum, pos["vacuum"])
 
-    def stof(self):
+    def stop(self, axes=None):
         """
-
+        Stop changing the vacuum status
         """
-        # 		Sets datamodel.HybridPlatform.AnalysisChamber.Stop.Target to 1
-        # 		Sets datamodel.HybridPlatform.ValveP5.Stop.Target = 1
-        # 		Calls _executor.cancel()
-        pass
+        if "vacuum" in axes or not axes:
+            self.parent.datamodel.HybridPlatform.AnalysisChamber.Stop.Target = 1
+            self._executor.cancel()
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-# 		If _executor:
-# 			Calls _executor.shutdown()
-# 			Sets _executor to None
-# 		Sets _gate and _chamber to None
-        pass
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
+        _gate = None
+        _chamber = None
 
 
 class pumpingSystem(model.HwComponent):
