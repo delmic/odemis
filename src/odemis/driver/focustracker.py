@@ -50,7 +50,7 @@ VENDOR_ID = 0xc0ffee  # Not an official ID, but tasty enough for our internal us
 PRODUCT_CODE = 0x0001
 
 # The maximum acceptable duration since a position update.
-# If the latest known position is "older", the getter will explicitly position.
+# If the latest known position is "older", the getter will explicitly read the position.
 MAX_POS_AGE = 0.1  # s
 
 
@@ -66,13 +66,12 @@ class FocusTrackerCO(model.HwComponent):
         datasheet (str or None): absolute or relative path to .dcf configuration file
           This can be used to set default parameters value. If None, it will use the
           default .eds file.
-        inverted (set of str): names of the axes which are inverted (IOW, either
-         empty or the name of the axis)
+        inverted (set of str): pass {"z"} to invert the reported position (ie, * -1).
         """
         model.HwComponent.__init__(self, name, role, **kwargs)
 
         if inverted is None:
-            inverted = {}
+            inverted = set()
         if set(inverted) > {"z"}:
             raise ValueError("Only axis z exists, but got inverted axes: %s." %
                                  (", ".join(inverted),))
@@ -81,7 +80,6 @@ class FocusTrackerCO(model.HwComponent):
         # Conveniently, python-canopen accepts both an opened File and a filename (str)
         if datasheet is None:
             logging.debug("Using default focus tracker datasheet")
-            # FIXME: update .eds file
             datasheet = pkg_resources.resource_filename("odemis.driver", "FocusTracker.eds")
         elif not os.path.isabs(datasheet):
             # For relative path, use the current path as root
@@ -183,7 +181,7 @@ class FocusTrackerCO(model.HwComponent):
     def _configure_device(self):
         # Configure for automatic transmission (Transmit Process Data Object)
         # For some background info, see https://canopen.readthedocs.io/en/latest/pdo.html
-        # The focus track typically sends the position at ~50Hz.
+        # The focus tracker typically sends the position at ~50Hz.
         self.node.nmt.state = "PRE-OPERATIONAL"
 
         # Read PDO configuration from node
@@ -212,7 +210,7 @@ class FocusTrackerCO(model.HwComponent):
             self.network.disconnect()
             self.network = None
 
-        super(FocusTrackerCO, self).terminate()
+        super().terminate()
 
     def _try_recover(self):
         self.state._set_value(model.HwError("Connection lost, reconnecting..."), force_write=True)
@@ -376,11 +374,10 @@ class FakeRemoteNode(canopen.RemoteNode):
 
 
 class FakeSdoVariable(canopen.sdo.base.Variable):
-    """Simulates an SDO Variable object where the raw data can set and read."""
+    """Simulates an SDO Variable object where the raw data can be set and read."""
 
     def __init__(self, object_sdo, object_dict, init_value, callback=None):
-        # canopen.sdo.base.Array.__init__(self, object_sdo, object_dict)
-        super(FakeSdoVariable, self).__init__(object_sdo, object_dict)
+        super().__init__(object_sdo, object_dict)
         self._raw = init_value
         self.callback = callback
 
@@ -413,11 +410,11 @@ class SdoClientOverlay(canopen.sdo.SdoClient):
     """Creates a dictionary that can be accessed with dots."""
 
     def __init__(self, rx_cobid, tx_cobid, od):
-        super(SdoClientOverlay, self).__init__(rx_cobid, tx_cobid, od)
+        super().__init__(rx_cobid, tx_cobid, od)
         self.overlay = {}
 
     def __getitem__(self, idx):
         try:
             return self.overlay[idx]
         except KeyError:
-            return super(SdoClientOverlay, self).__getitem__(idx)
+            return super().__getitem__(idx)

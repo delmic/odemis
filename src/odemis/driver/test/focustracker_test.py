@@ -63,9 +63,9 @@ class TestFocusTrackerCO(unittest.TestCase):
             # If the node_idx is not found, maybe the device is disconnected => raise HwError
             with self.assertRaises(model.HwError):
                 FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel=KWARGS['channel'],
-                               node_idx=0x12)
+                               node_idx=KWARGS['node_idx'] + 10)
 
-        # If channel not fount, maybe the CAN adapter is disconnected => raise HwError
+        # If channel not found, maybe the CAN adapter is disconnected => raise HwError
         with self.assertRaises(model.HwError):
             FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel='not a channel',
                            node_idx=KWARGS['node_idx'])
