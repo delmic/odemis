@@ -19,31 +19,14 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
 
-from future.utils import with_metaclass
-from past.builtins import long
-from abc import abstractmethod, ABCMeta
-import base64
-import collections
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
-from functools import reduce
-import functools
-import logging
-import math
-import numpy
-from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, oneway
-import queue
-import re
-import suds
-from suds.client import Client
-import sys
+from __future__ import division
+from odemis import model
+from odemis.model import isasync, CancellableThreadPoolExecutor
+from ConsoleClient.Communication.Connection import Connection
 import threading
 import time
-import weakref
-
-from ConsoleClient.Communication.Connection import Connection
+import logging
 
 
 class Orsay(model.HwComponent):
@@ -129,6 +112,7 @@ class Orsay(model.HwComponent):
         Called when Odemis is closed
         """
         if self._device:
+            self.datamodel.HybridPlatform.ProcessInfo.Unsubscribe(self._updateProcessInfo)
             if self._pneumaticSuspension:
                 self._pneumaticSuspension.terminate()
                 self._pneumaticSuspension = None
@@ -251,6 +235,10 @@ class pneumaticSuspension(model.HwComponent):
         """
         Called when Odemis is closed
         """
+        self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Unsubscribe(self._updateErrorState)
+        self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Unsubscribe(self._updateErrorState)
+        self._valve.Unsubscribe(self._updatePower)
+        self._gauge.Unsubscribe(self._updatePressure)
         self._valve = None
         self._gauge = None
 
@@ -404,6 +392,10 @@ class vacuumChamber(model.Actuator):
         """
         Called when Odemis is closed
         """
+        self._gate.ErrorState.Unsubscribe(self._updateErrorState)
+        self._chamber.VacuumStatus.Unsubscribe(self._updatePosition)
+        self._chamber.Pressure.Unsubscribe(self._updatePressure)
+        self._gate.IsOpen.Unsubscribe(self._updateGateOpen)
         if self._executor:
             self._executor.shutdown()
             self._executor = None
@@ -565,6 +557,15 @@ class pumpingSystem(model.HwComponent):
         """
         Called when Odemis is closed
         """
+        self._system.Manometer1.ErrorState.Unsubscribe(self._updateErrorState)
+        self._system.TurboPump1.ErrorState.Unsubscribe(self._updateErrorState)
+        self._system.TurboPump1.Speed.Unsubscribe(self._updateSpeed)
+        self._system.TurboPump1.Temperature.Unsubscribe(self._updateTemperature)
+        self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
+        self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
+        self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
+        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
+        self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
         self._system = None
 
 
@@ -604,4 +605,5 @@ class UPS(model.HwComponent):
         """
         Called when Odemis is closed
         """
+        self._system.UPScontroller.BatteryLevel.Unsubscribe(self._updateLevel)
         _system = None
