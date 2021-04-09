@@ -1,51 +1,36 @@
-; EDS file for FocusTracker -
-[FileInfo]
-FileName=FocusTracker.eds
-FileVersion=1
-FileRevision=1
-EDSVersion=4.0
-Description=EDS
-CreationTime=13:54 PM
-CreationDate=10-04-19
-CreatedBy=Wouter_Berghuis
-ModifiedBy=oe
-
-[Comments]
-Lines=1
-Line1=Created by Wouter Berghuis, Delmic B.V.
-
 [DeviceInfo]
-VendorName=Delmic B.V.
-VendorNumber=1
-ProductName=FocusTracker
-ProductNumber=1
-RevisionNumber=0x00010001
-OrderCode=1
+VendorName=DELMIC B.V.
+VendorNumber=0x00c0ffee
+ProductName=
+ProductNumber=0x00000001
+RevisionNumber=0x00000002
+OrderCode=
 BaudRate_10=0
 BaudRate_20=0
 BaudRate_50=0
-BaudRate_125=1
-BaudRate_250=1
+BaudRate_125=0
+BaudRate_250=0
 BaudRate_500=1
 BaudRate_800=0
 BaudRate_1000=0
-NrOfRxPDO=1
+SimpleBootUpSlave=1
+SimpleBootUpMaster=0
+NrOfRxPDO=0
 NrOfTxPDO=1
-SimpleBootupSlave=1
-SimpleBootupMaster=0
 LSS_Supported=0
-Granularity=0
-DynamicChannelsSupported=0
-GroupMessaging=0
 
 [DummyUsage]
-Dummy0001=0
-Dummy0002=0
-Dummy0003=0
-Dummy0004=0
-Dummy0005=0
-Dummy0006=0
-Dummy0007=0
+Dummy0001=1
+Dummy0002=1
+Dummy0003=1
+Dummy0004=1
+Dummy0005=1
+Dummy0006=1
+Dummy0007=1
+
+[DeviceComissioning]
+NodeID=2
+BaudRate=500
 
 [MandatoryObjects]
 SupportedObjects=3
@@ -53,1069 +38,344 @@ SupportedObjects=3
 2=0x1001
 3=0x1018
 
+[OptionalObjects]
+SupportedObjects=13
+1=0x1012
+2=0x1017
+3=0x1F80
+4=0x1800
+5=0x1A00
+6=0x1F51
+7=0x6100
+8=0x6126
+9=0x6130
+10=0x6131
+11=0x6138
+12=0x6139
+13=0x6140
+
 [ManufacturerObjects]
-SupportedObjects=2
+SupportedObjects=4
 1=0x2000
 2=0x2001
-
-[OptionalObjects]
-SupportedObjects=39
-1=0x1008
-2=0x1014
-3=0x1015
-4=0x1017
-5=0x1200
-6=0x1400
-7=0x1600
-8=0x1800
-9=0x1a00
-10=0x6100
-11=0x6110
-12=0x6120
-14=0x6121
-13=0x6122
-15=0x6123
-17=0x6124
-16=0x6125
-18=0x6126
-19=0x6127
-20=0x6130
-21=0x6131
-22=0x6132
-23=0x6150
-24=0x6402
-25=0x6406
-26=0x6407
-27=0x6410
-28=0x6411
-29=0x6422
-30=0x6450
-31=0x6451
-32=0x6452
-33=0x6453
-34=0x6454
-35=0x6455
-36=0x6456
-37=0x6457
-38=0x6458
-39=0x6459
+3=0x2002
+4=0x2003
 
 [1000]
-ParameterName=Device Type
-ObjectType=7
-DataType=7
+ParameterName=Device type
+DataType=0x0007
 AccessType=ro
-PDOMapping=0
-DefaultValue=0x00120194
-;;This objects contains the CANopen device type of the device.
 
 [1001]
-ParameterName=Error Register
-ObjectType=7
-DataType=5
+ParameterName=Error register
+DataType=0x0005
 AccessType=ro
-PDOMapping=1
-DefaultValue=0
-;;This object contains a register of 8 error information bits.
 
-[1008]
-ParameterName=Manufacturer device name
-ObjectType=7
-DataType=9
-AccessType=const
-PDOMapping=0
-DefaultValue=FocusTracker
-
-[1014]
-ParameterName=COB ID EMCY
-ObjectType=7
-DataType=7
+[1012]
+ParameterName=COB-ID time stamp object
+DataType=0x0007
 AccessType=rw
-PDOMapping=0
-DefaultValue=0x90
-;;This object shall indicate the configured COB-ID for the EMCY write service.
-;;
-;;DefaultValue = NODEID + 0x80
-;;
-
-[1015]
-ParameterName=Inhibit Time Emergency
-ObjectType=7
-DataType=6
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-;;This object shall indicate the configured inhibit time for the EMCY message. The value shall be given in multiples of 100 μs. The value 0 shall disable the inhibit time.
-;;
+DefaultValue=0x80000100
 
 [1017]
-ParameterName=Producer Heartbeat Time
-ObjectType=7
-DataType=6
+ParameterName=Producer heartbeat time
+DataType=0x0006
 AccessType=rw
-PDOMapping=0
-DefaultValue=1000
-;;The producer heartbeat time shall indicate the configured cycle time of the heartbeat produced by the device.
-;;
-;;The value shall be given in multiples of 1 ms. The value 0 shall disable the producer heartbeat.
-;;
+DefaultValue=200
 
 [1018]
-ParameterName=Identity Object
-ObjectType=9
 SubNumber=5
-;;This objects contains the identity information of the device.
-;;
+ParameterName=Identity object
+ObjectType=0x09
 
 [1018sub0]
-ParameterName=Number of entries
-ObjectType=7
-DataType=5
-AccessType=ro
-PDOMapping=0
-DefaultValue=4
+ParameterName=Highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=0x4
 
 [1018sub1]
-ParameterName=Vendor Id
-ObjectType=7
-DataType=7
+ParameterName=Vendor-ID
+DataType=0x0007
 AccessType=ro
-PDOMapping=0
-DefaultValue=0x10
+DefaultValue=0x00c0ffee
 
 [1018sub2]
-ParameterName=Product Code
-ObjectType=7
-DataType=7
+ParameterName=Product code
+DataType=0x0007
 AccessType=ro
-PDOMapping=0
-DefaultValue=0x1234
+DefaultValue=0x00000001
 
 [1018sub3]
 ParameterName=Revision number
-ObjectType=7
-DataType=7
+DataType=0x0007
 AccessType=ro
-PDOMapping=0
-DefaultValue=0x00010001
+DefaultValue=0x00000002
 
 [1018sub4]
 ParameterName=Serial number
-ObjectType=7
-DataType=7
+DataType=0x0007
 AccessType=ro
-PDOMapping=0
-DefaultValue=12345
 
-[1200]
-ParameterName=SDO server parameter
-ObjectType=9
-SubNumber=3
-
-[1200sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=2
-
-[1200sub1]
-ParameterName=COB-ID client to server
-ObjectType=7
-DataType=7
-AccessType=const
-PDOMapping=0
-DefaultValue=0x610
-;;DefaultValue = NODEID + 0x80
-;;
-
-[1200sub2]
-ParameterName=COB-ID server to client
-ObjectType=7
-DataType=7
-AccessType=ro
-PDOMapping=0
-DefaultValue=0x590
-;;DefaultValue = NODEID + 0x80
-;;
-
-[1400]
-ParameterName=Receive PDO Communication Parameter
-ObjectType=9
-SubNumber=3
-;;This object contains the communication parameters for the PDO the CANopen device is able to receive.
-;;
-
-[1400sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=ro
-PDOMapping=0
-DefaultValue=2
-
-[1400sub1]
-ParameterName=COB ID
-ObjectType=7
-DataType=7
+[1F80]
+ParameterName=NMT startup
+DataType=0x0007
 AccessType=rw
-PDOMapping=0
-DefaultValue=210
-;;DefaultValue = NODEID + 0x80
-;;
-
-[1400sub2]
-ParameterName=Transmission Type
-ObjectType=7
-DataType=5
-AccessType=rw
-PDOMapping=0
-DefaultValue=254
-;;Sub-index 0x2 defines the reception character of the RPDO.
-
-[1600]
-ParameterName=Receive PDO Mapping Parameter
-ObjectType=9
-SubNumber=4
-;;This object contains the mapping parameters for the PDO the CANopen device is able to receive.
-;;
-
-[1600sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=3
-
-[1600sub1]
-ParameterName=Mapping to port 4
-ObjectType=7
-DataType=7
-AccessType=const
-PDOMapping=0
-DefaultValue=0x20020008
-
-[1600sub2]
-ParameterName=Mapping to port 1
-ObjectType=7
-DataType=7
-AccessType=const
-PDOMapping=0
-DefaultValue=0x20030008
-
-[1600sub3]
-ParameterName=Mapping to variable first
-ObjectType=7
-DataType=7
-AccessType=const
-PDOMapping=0
-DefaultValue=0x20000010
+ParameterValue=0x00000004
 
 [1800]
-ParameterName=Transmit PDO Communication Parameter
-ObjectType=9
-SubNumber=4
-;;This object contains the communication parameters for the PDO the CANopen device is able to transmit.
-;;
+SubNumber=6
+ParameterName=Transmit PDO Communication Parameter 1
+ObjectType=0x09
 
 [1800sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=ro
+DefaultValue=0x05
 PDOMapping=0
-DefaultValue=5
 
 [1800sub1]
-ParameterName=COB ID
-ObjectType=7
-DataType=7
+ParameterName=COB-ID
+ObjectType=0x07
+DataType=0x0007
 AccessType=rw
+DefaultValue=$NODEID+0x40000180
 PDOMapping=0
-DefaultValue=0x190
-;;DefaultValue = NODEID + 0x80
-;;
 
 [1800sub2]
 ParameterName=Transmission Type
-ObjectType=7
-DataType=5
+ObjectType=0x07
+DataType=0x0005
 AccessType=rw
+DefaultValue=0xFF
 PDOMapping=0
-DefaultValue=255
-;;Sub-index 0x2 defines the transmission type  of the TPDO.
-;;0 .. synchronous (acyclic)
-;;1 .. synchronous (every SYNC)
-;;2 .. synchronous (every 2nd SYNC)
-;;240 .. synchronous (every 240th SYNC)
-;;
-;;254 .. event-driven (manufacturer-specific)
-;;255 .. event-driven (profile-specific)
+
+[1800sub3]
+ParameterName=Inhibit Time
+ObjectType=0x07
+DataType=0x0006
+AccessType=rw
+DefaultValue=0x0
+PDOMapping=0
+
+[1800sub4]
+ParameterName=Compatibility Entry
+ObjectType=0x07
+DataType=0x0005
+AccessType=ro
+PDOMapping=0
 
 [1800sub5]
 ParameterName=Event Timer
-ObjectType=7
-DataType=6
+ObjectType=0x07
+DataType=0x0006
 AccessType=rw
+DefaultValue=0x0
 PDOMapping=0
-DefaultValue=2500
-;; Sub-index 0x05 contains the event-timer. The time is the maximum interval for PDO
-;;transmission if the transmission type is set to 254 and 255 . The value is defined as multiple of 1 ms. The value of 0 shall disable the event-timer.
-;;
 
-[1a00]
-ParameterName=Transmit PDO Mapping Parameter
-ObjectType=9
+[1A00]
 SubNumber=2
-;;This object contains the mapping for the PDO the device is able to transmit.
-;;
+ParameterName=Transmit PDO Mapping Parameter 1
+ObjectType=0x09
 
-[1a00sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[1a00sub1]
-ParameterName=Mapping Entry 1
-ObjectType=7
-DataType=7
+[1A00sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=rw
+DefaultValue=0x01
 PDOMapping=0
-DefaultValue=0x20040010
+
+[1A00sub1]
+ParameterName=Mapping Entry 1
+ObjectType=0x07
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x61000120
+PDOMapping=0
+
+[1F51]
+SubNumber=2
+ParameterName=Program Control
+ObjectType=0x09
+
+[1F51sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x0
+PDOMapping=0
+
+[1F51sub1]
+ParameterName=Program Control 1
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+PDOMapping=0
 
 [2000]
-ParameterName=Voltage output PID
-ObjectType=8
-SubNumber=2
-
-[2000sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[2000sub1]
-ParameterName=Voltage output PID 1
-ObjectType=7
-DataType=8
+ParameterName=Object with custom SDO download callback
+DataType=0x0007
 AccessType=rw
-PDOMapping=0
-DefaultValue=0
 
 [2001]
-ParameterName=Raw data CCD
-ObjectType=8
-SubNumber=9
+ParameterName=Object with custom SDO upload callback
+DataType=0x0007
+AccessType=ro
+PDOMapping=1
 
-[2001sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=8
+[2002]
+ParameterName=Object with custom SDO upload callback of DOMAIN datatype
+DataType=0x000f
+AccessType=ro
 
-[2001sub1]
-ParameterName=Raw data CCD 1/8
-ObjectType=7
-DataType=0x0F
+[2003]
+ParameterName=Write analog output 16-bit
+DataType=0x0006
 AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub2]
-ParameterName=Raw data CCD 2/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub3]
-ParameterName=Raw data CCD 3/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub4]
-ParameterName=Raw data CCD 4/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub5]
-ParameterName=Raw data CCD 5/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub6]
-ParameterName=Raw data CCD 6/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub7]
-ParameterName=Raw data CCD 7/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[2001sub8]
-ParameterName=Raw data CCD 8/8
-ObjectType=7
-DataType=0x0F
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
 
 [6100]
-ParameterName=AI Input FV
-ObjectType=8
 SubNumber=2
+ParameterName=AI Input FV
+ObjectType=0x08
 
 [6100sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=const
+DefaultValue=0x1
 PDOMapping=0
-DefaultValue=1
 
 [6100sub1]
 ParameterName=AI Input FV 1
-ObjectType=7
-DataType=0x11
+ObjectType=0x07
+DataType=0x0008
 AccessType=ro
-PDOMapping=0
-DefaultValue=0
-
-[6110]
-ParameterName=AI Sensor Type
-ObjectType=8
-SubNumber=2
-
-[6110sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6110sub1]
-ParameterName=AI Sensor type 1
-ObjectType=7
-DataType=6
-AccessType=rw
-PDOMapping=0
-DefaultValue=10000
-;;This object contains the sensor type, using manufacture specific
-;;
-
-[6120]
-ParameterName=AI Input scaling 1 FV
-ObjectType=8
-SubNumber=2
-
-[6120sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6120sub1]
-ParameterName=AI Input scaling 1 FV 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6121]
-ParameterName=AI Input scaling 1 PV
-ObjectType=8
-SubNumber=2
-
-[6121sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6121sub1]
-ParameterName=AI Input scaling 1 PV 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6122]
-ParameterName=AI Input scaling 2 FV
-ObjectType=8
-SubNumber=2
-
-[6122sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6122sub1]
-ParameterName=AI Input scaling 2 FV 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6123]
-ParameterName=AI Input scaling 2 PV
-ObjectType=8
-SubNumber=2
-
-[6123sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6123sub1]
-ParameterName=AI Input scaling 2 PV 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6124]
-ParameterName=AI Input offset
-ObjectType=8
-SubNumber=2
-
-[6124sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6124sub1]
-ParameterName=AI Input offset 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6125]
-ParameterName=AI Autozero
-ObjectType=8
-SubNumber=2
-
-[6125sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6125sub1]
-ParameterName=AI Autozero 1
-ObjectType=7
-DataType=7
-AccessType=wo
-PDOMapping=0
-DefaultValue=0
+PDOMapping=1
 
 [6126]
-ParameterName=AI Scaling Factor
-ObjectType=8
 SubNumber=2
+ParameterName=AI Scaling Factor
+ObjectType=0x08
 
 [6126sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=const
+DefaultValue=0x1
 PDOMapping=0
-DefaultValue=1
 
 [6126sub1]
 ParameterName=AI Scaling Factor 1
-ObjectType=7
-DataType=8
+ObjectType=0x07
+DataType=0x0008
 AccessType=rw
-PDOMapping=0
-DefaultValue=0x3e6b851f
-;; 0x3e6b851f == 0,23
-;;
-
-[6127]
-ParameterName=AI Scaling Offset
-ObjectType=8
-SubNumber=2
-
-[6127sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
 DefaultValue=1
-
-[6127sub1]
-ParameterName=AI Scaling Offset 1
-ObjectType=7
-DataType=8
-AccessType=rw
 PDOMapping=0
-DefaultValue=0
 
 [6130]
-ParameterName=AI Input PV
-ObjectType=8
 SubNumber=2
+ParameterName=AI Input PV
+ObjectType=0x08
 
 [6130sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=const
+DefaultValue=0x1
 PDOMapping=0
-DefaultValue=1
 
 [6130sub1]
 ParameterName=AI Input PV 1
-ObjectType=7
-DataType=0x11
+ObjectType=0x07
+DataType=0x0008
 AccessType=ro
-PDOMapping=0
-DefaultValue=0
+PDOMapping=1
 
 [6131]
-ParameterName=AI Physical unit PV
-ObjectType=8
 SubNumber=2
+ParameterName=AI Physical Unit PV
+ObjectType=0x08
 
 [6131sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=const
+DefaultValue=0x1
 PDOMapping=0
-DefaultValue=1
 
 [6131sub1]
-ParameterName=AI Physical unit PV 1
-ObjectType=7
-DataType=7
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6132]
-ParameterName=AI Decimal digits PV
-ObjectType=8
-SubNumber=2
-
-[6132sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+ParameterName=AI Physical Unit PV 1
+ObjectType=0x07
+DataType=0x0007
 AccessType=const
+DefaultValue=0xFA010000
 PDOMapping=0
-DefaultValue=1
 
-[6132sub1]
-ParameterName=AI Decimal digits PV 1
-ObjectType=7
-DataType=5
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6150]
-ParameterName=AI Status
-ObjectType=8
+[6138]
 SubNumber=2
+ParameterName=AI Tare zero
+ObjectType=0x08
 
-[6150sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
+[6138sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
 AccessType=const
+DefaultValue=0x1
 PDOMapping=0
-DefaultValue=1
 
-[6150sub1]
-ParameterName=AI Status 1
-ObjectType=7
-DataType=5
+[6138sub1]
+ParameterName=AI Tare zero 1
+ObjectType=0x07
+DataType=0x0008
+AccessType=rw
+PDOMapping=1
+
+[6139]
+SubNumber=2
+ParameterName=AI Autotare
+ObjectType=0x08
+
+[6139sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=0x1
+PDOMapping=0
+
+[6139sub1]
+ParameterName=AI Autotare 1
+ObjectType=0x07
+DataType=0x0007
+AccessType=wo
+PDOMapping=0
+
+[6140]
+SubNumber=2
+ParameterName=AI Net PV
+ObjectType=0x08
+
+[6140sub0]
+ParameterName=Number of Entries
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=0x1
+PDOMapping=0
+
+[6140sub1]
+ParameterName=AI Net PV 1
+ObjectType=0x07
+DataType=0x0008
 AccessType=ro
-PDOMapping=0
-DefaultValue=0
-
-[6402]
-ParameterName=CO Set Point W
-ObjectType=8
-SubNumber=2
-
-[6402sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6402sub1]
-ParameterName=CO Set Point W 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6406]
-ParameterName=CO Physical Unit XW
-ObjectType=8
-SubNumber=2
-
-[6406sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6406sub1]
-ParameterName=CO Physical Unit XW 1
-ObjectType=7
-DataType=7
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6407]
-ParameterName=CO Decimal Digits XW
-ObjectType=8
-SubNumber=2
-
-[6407sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6407sub1]
-ParameterName=CO Decimal Digits XW 1
-ObjectType=7
-DataType=5
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6410]
-ParameterName=CO Effective Controller Output Y
-ObjectType=8
-SubNumber=2
-
-[6410sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6410sub1]
-ParameterName=CO Effective Controller Output 1
-ObjectType=7
-DataType=8
-AccessType=ro
-PDOMapping=0
-DefaultValue=0
-
-[6411]
-ParameterName=Differential Controller Output Ydiff
-ObjectType=8
-SubNumber=2
-
-[6411sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6411sub1]
-ParameterName=CO Differential Controller Output 1
-ObjectType=7
-DataType=6
-AccessType=ro
-PDOMapping=0
-DefaultValue=0
-
-[6422]
-ParameterName=Controller On/ Off
-ObjectType=8
-SubNumber=2
-
-[6422sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6422sub1]
-ParameterName=Controller On/ Off 1
-ObjectType=7
-DataType=1
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6450]
-ParameterName=CO Proportional Band Xp1
-ObjectType=8
-SubNumber=2
-
-[6450sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6450sub1]
-ParameterName=CO Proportional Band Xp1 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6451]
-ParameterName=CO Proportional Band Xp2
-ObjectType=8
-SubNumber=2
-
-[6451sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6451sub1]
-ParameterName=CO Proportional Band Xp2 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6452]
-ParameterName=CO Integral Action Time Tn1
-ObjectType=8
-SubNumber=2
-
-[6452sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6452sub1]
-ParameterName=CO Integral Action Time Tn1 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6453]
-ParameterName=CO Integral Action Time Tn2
-ObjectType=8
-SubNumber=2
-
-[6453sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6453sub1]
-ParameterName=CO Integral Action Time Tn2 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6454]
-ParameterName=CO Derivative Action Time Tv1
-ObjectType=8
-SubNumber=2
-
-[6454sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6454sub1]
-ParameterName=CO Derivative Action Time Tv1 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6455]
-ParameterName=CO Derivative Action Time Tv2
-ObjectType=8
-SubNumber=2
-
-[6455sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6455sub1]
-ParameterName=CO Derivative Action Time Tv2 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6456]
-ParameterName=CO Cycle Time T1
-ObjectType=8
-SubNumber=2
-
-[6456sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6456sub1]
-ParameterName=CO Cycle Time T1 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6457]
-ParameterName=CO Cycle Time T2
-ObjectType=8
-SubNumber=2
-
-[6457sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6457sub1]
-ParameterName=CO Cycle Time T2 1
-ObjectType=7
-DataType=3
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
-
-[6458]
-ParameterName=CO Physical Unit PID
-ObjectType=8
-SubNumber=2
-
-[6458sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6458sub1]
-ParameterName=CO Physical Unit PID 1
-ObjectType=7
-DataType=7
-AccessType=rw
-PDOMapping=0
-DefaultValue=0x00030000
-
-[6459]
-ParameterName=CO Decimal Digits PID
-ObjectType=8
-SubNumber=2
-
-[6459sub0]
-ParameterName=Highest sub-index supported
-ObjectType=7
-DataType=5
-AccessType=const
-PDOMapping=0
-DefaultValue=1
-
-[6459sub1]
-ParameterName=CO Physical Unit PID 1
-ObjectType=7
-DataType=5
-AccessType=rw
-PDOMapping=0
-DefaultValue=0
+PDOMapping=1
