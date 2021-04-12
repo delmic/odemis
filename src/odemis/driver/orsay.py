@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Created on 6 April 2021
 
@@ -21,15 +21,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor
 from ConsoleClient.Communication.Connection import Connection
+
 import threading
 import time
 import logging
 
 
-class Orsay(model.HwComponent):
+class OrsayComponent(model.HwComponent):
     """
     This is an overarching component to represent the Orsay hardware
     Attributes:
@@ -67,13 +69,13 @@ class Orsay(model.HwComponent):
             self.children.value.add(self._pneumaticSuspension)
 
         # create the pressure child for the chamber
-        try:
-            kwargs = children["pressure"]
-        except (KeyError, TypeError):
-            logging.info("Orsay was not given a 'pressure' child")
-        else:
-            self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._pressure)
+        # try:
+        #     kwargs = children["pressure"]
+        # except (KeyError, TypeError):
+        #     logging.info("Orsay was not given a 'pressure' child")
+        # else:
+        #     self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
+        #     self.children.value.add(self._pressure)
 
         # create the pumping system child
         try:
@@ -125,7 +127,7 @@ class Orsay(model.HwComponent):
             if self._ups:
                 self._ups.terminate()
                 self._ups = None
-            super(Orsay, self).terminate()
+            super(OrsayComponent, self).terminate()
             self._device = None
             self.datamodel = None
 
@@ -174,10 +176,11 @@ class pneumaticSuspension(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updatePower. Parameter should be "
                             "datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen")
         elif attributeName == "Actual":
-            if parameter.Actual == 3 or parameter.Actual == -1:
+            valve_state = int(parameter.Actual)
+            if valve_state == 3 or valve_state == -1:
                 self._updateErrorState()
-            elif parameter.Actual == 1 or parameter.Actual == 2:
-                new_value = parameter.Actual == 1
+            elif valve_state == 1 or valve_state == 2:
+                new_value = valve_state == 1
                 self.power._value = new_value  # to not call the setter
                 self.power.notify(new_value)
             else:  # if _valve.Actual == 0 (Transit), or undefined
@@ -192,32 +195,33 @@ class pneumaticSuspension(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updatePressure. Parameter should be "
                             "datamodel.HybridPlatform.Manometer2.Pressure")
         elif attributeName == "Actual":
-            self.pressure._set_value(parameter.Actual, force_write=True)
+            self.pressure._set_value(float(parameter.Actual), force_write=True)
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
         """
-        if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and \
-                parameter is not self.parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
+        if parameter is not self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
+                not self._parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
             raise Exception("Incorrect parameter passed to _updateErrorState. Parameter should be "
                             "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
                             "datamodel.HybridPlatform.Manometer2.ErrorState or None")
         elif attributeName == "Actual":
             eState = ""
-            vpsEState = self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual
-            manEState = self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual
+            vpsEState = self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual
+            manEState = self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual
             if not vpsEState == "0" and not vpsEState == 0:
                 eState += "ValvePneumaticSuspension error: " + vpsEState
             if not manEState == "0" and not manEState == 0:
                 if not eState == "":
                     eState += ", "
                 eState += "Manometer2 error: " + manEState
-            if self._valve.Actual == 3:  # in case of valve error
+            valve_state = int(self._valve.Actual)
+            if valve_state == 3:  # in case of valve error
                 if not eState == "":
                     eState += ", "
                 eState += "ValvePneumaticSuspension is in error"
-            if self._valve.Actual == -1:  # in case no communication is present with the valve
+            elif valve_state == -1:  # in case no communication is present with the valve
                 if not eState == "":
                     eState += ", "
                 eState += "ValvePneumaticSuspension could not be contacted"
@@ -301,11 +305,12 @@ class vacuumChamber(model.Actuator):
             gateEState = self._gate.ErrorState.Actual
             if not gateEState == "0" and not gateEState == 0:
                 eState += "ValveP5 error: " + gateEState
-            if self._gate.IsOpen.Actual == 3:  # in case of valve error
+            valve_state = int(self._gate.IsOpen.Actual)
+            if valve_state == 3:  # in case of valve error
                 if not eState == "":
                     eState += ", "
                 eState += "ValveP5 is in error"
-            if self._gate.IsOpen.Actual == -1:  # in case no communication is present with the valve
+            elif valve_state == -1:  # in case no communication is present with the valve
                 if not eState == "":
                     eState += ", "
                 eState += "ValveP5 could not be contacted"
@@ -320,10 +325,11 @@ class vacuumChamber(model.Actuator):
             raise Exception("Incorrect parameter passed to _updateGateOpen. Parameter should be "
                             "datamodel.HybridPlatform.ValveP5.IsOpen")
         elif attributeName == "Actual":
-            if parameter.Actual == 3 or parameter.Actual == -1:
+            valve_state = int(parameter.Actual)
+            if valve_state == 3 or valve_state == -1:
                 self._updateErrorState()
-            elif parameter.Actual == 1 or parameter.Actual == 2:
-                new_value = parameter.Actual == 1
+            elif valve_state == 1 or valve_state == 2:
+                new_value = valve_state == 1
                 self.gateOpen._value = new_value  # to not call the setter
                 self.gateOpen.notify(new_value)
             else:  # if parameter.Actual is 0 (Transit), or undefined
@@ -354,7 +360,7 @@ class vacuumChamber(model.Actuator):
             raise Exception("Incorrect parameter passed to _updatePressure. Parameter should be "
                             "datamodel.HybridPlatform.AnalysisChamber.Pressure")
         elif attributeName == "Actual":
-            self.pressure._set_value(parameter.Actual, force_write=True)
+            self.pressure._set_value(float(parameter.Actual), force_write=True)
 
     def _changeVacuum(self, goal):
         """
@@ -385,7 +391,7 @@ class vacuumChamber(model.Actuator):
         Stop changing the vacuum status
         """
         if "vacuum" in axes or not axes:
-            self.parent.datamodel.HybridPlatform.AnalysisChamber.Stop.Target = 1
+            self._parent.datamodel.HybridPlatform.AnalysisChamber.Stop.Target = 1
             self._executor.cancel()
 
     def terminate(self):
@@ -443,7 +449,7 @@ class pumpingSystem(model.HwComponent):
         self._system.TurboPump1.Power.Subscribe(self._updatePower)
         self._system.TurboPump1.SpeedReached.Subscribe(self._updateSpeedReached)
         self._system.TurboPump1.IsOn.Subscribe(self._updateTurboPumpOn)
-        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
+        self._parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
         self._system.Manometer1.Pressure.Subscribe(self._updateNitrogenPressure)
 
         self._updateErrorState()
@@ -485,7 +491,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateSpeed. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Speed")
         elif attributeName == "Actual":
-            self.speed._set_value(parameter.Actual, force_write=True)
+            self.speed._set_value(float(parameter.Actual), force_write=True)
 
     def _updateTemperature(self, parameter=None, attributeName="Actual"):
         """
@@ -496,7 +502,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateTemperature. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature")
         elif attributeName == "Actual":
-            self.temperature._set_value(self._system.TurboPump1.Temperature.Actual, force_write=True)
+            self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
 
     def _updatePower(self, parameter=None, attributeName="Actual"):
         """
@@ -507,7 +513,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateTemperature. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature")
         elif attributeName == "Actual":
-            self.power._set_value(parameter.Actual, force_write=True)
+            self.power._set_value(float(parameter.Actual), force_write=True)
 
     def _updateSpeedReached(self, parameter=None, attributeName="Actual"):
         """
@@ -518,7 +524,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached")
         elif attributeName == "Actual":
-            self.speedReached._set_value(parameter.Actual, force_write=True)
+            self.speedReached._set_value(parameter.Actual.lower() == "true", force_write=True)
 
     def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
         """
@@ -529,7 +535,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn")
         elif attributeName == "Actual":
-            self.turboPumpOn._set_value(parameter.Actual, force_write=True)
+            self.turboPumpOn._set_value(parameter.Actual.lower() == "true", force_write=True)
 
     def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
         """
@@ -540,7 +546,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
                             "datamodel.HybridPlatform.PrimaryPumpState")
         elif attributeName == "Actual":
-            self.primaryPumpOn._set_value(parameter.Actual, force_write=True)
+            self.primaryPumpOn._set_value(parameter.Actual.lower() == "true", force_write=True)
 
     def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
         """
@@ -551,7 +557,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure")
         elif attributeName == "Actual":
-            self.nitrogenPressure._set_value(parameter.Actual, force_write=True)
+            self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
 
     def terminate(self):
         """
@@ -564,7 +570,7 @@ class pumpingSystem(model.HwComponent):
         self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
         self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
         self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
-        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
+        self._parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
         self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
         self._system = None
 
