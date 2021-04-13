@@ -1186,10 +1186,11 @@ class StreakCamera(model.HwComponent):
                             except Exception:
                                 break
                             logging.debug("Received: '%s'", to_str_escape(additional_info))
+
                         try:
-                            additional_info = additional_info.decode("latin1").split(b"\r")
+                            additional_info = additional_info.decode("latin1").split("\r")
                             for item in additional_info[:-1]:
-                                msg_splitted.append(item.strip(b"\n"))
+                                msg_splitted.append(item.strip("\n"))
                             if additional_info[-1]:
                                 logging.warning("Discarding data after CameraInfo '%s'", additional_info[-1])
                         except Exception:
