@@ -216,7 +216,7 @@ def _weight_stream(stream):
         if isinstance(ewl_center, collections.Iterable):
             # multi-band filter, so fallback to guess based on excitation
             xwl_center = fluo.get_center(stream.excitation.value)
-            if isinstance(ewl_center, collections.Iterable):
+            if isinstance(xwl_center, collections.Iterable):
                 # also unguessable => just pick one "randomly"
                 ewl_bonus = ewl_center[0]
             else:
