@@ -120,7 +120,9 @@ class SEM(model.HwComponent):
             self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
-        if "mb-detector" in children:
+        if "mb-detector" in children and "detector" in children:
+            raise ValueError("A detector and mb-detector are provided, can only have one.")
+        elif "mb-detector" in children:
             ckwargs = children["mb-detector"]
             self._detector = MultiBeamDetector(parent=self, daemon=daemon, address=address, **ckwargs)
             self.children.value.add(self._detector)
@@ -1021,6 +1023,7 @@ class SEM(model.HwComponent):
         """
         Start the scan of a single image and block until the image is done scanning.
         This function does not return the image, to get the image call get_latest_image after this function.
+        Only works for systems running XTToolkit.
 
         Parameters
         ----------
@@ -2291,8 +2294,11 @@ class MultiBeamDetector(Detector):
         #    DATA     |       .       | Receiving data |       .        |
         #    STOP     |       .       |     Stopped    |    Stopped     |
         #    TERM     |     Final     |      Final     |     Final      |
-        self._proxy_access = threading.Lock()
+        self._cancel_access = threading.Lock()
         try:
+            # A second connection to the xtadapter is needed to properly cancel a scan.
+            # The scan_image call is blocking, therefore we cannot cancel a scan
+            # using the same thread and connection the scan_image call is made.
             self.cancel_connection = Pyro5.api.Proxy(address)
             self.cancel_connection._pyroTimeout = 30  # seconds
         except Exception as err:
@@ -2304,10 +2310,10 @@ class MultiBeamDetector(Detector):
 
     def stop_generate(self):
         logging.debug("Stopping image acquisition")
-        with self._proxy_access:
+        with self._cancel_access:
             self.cancel_connection._pyroClaimOwnership()
-            # Directly calling set_channel_state does not work with XT. Therefore
-            # call get_channel_state, before trying to stop the channel.
+            # Directly calling set_channel_state does not work with XTToolkit.
+            # Therefore call get_channel_state, before trying to stop the channel.
             self.cancel_connection.get_channel_state(self._channel_name)
             self.cancel_connection.set_channel_state(self._channel_name, False)
             # Stop twice, to make sure the channel fully stops.
@@ -2334,7 +2340,7 @@ class MultiBeamDetector(Detector):
                     try:
                         self.parent.scan_image()
                     except OSError as err:
-                        if err.errno == -2147467260:
+                        if err.errno == -2147467260:  # -2147467260 corresponds to: Operation aborted.
                             logging.debug("Scan image aborted.")
                             # Operation aborted, indicating acquisition should stop.
                             break
@@ -2351,12 +2357,12 @@ class MultiBeamDetector(Detector):
                     md[model.MD_ROTATION] = self.parent._scanner.rotation.value
 
                     da = DataArray(image, md)
-                    logging.debug("Notify dataflow with new image.")
+                    logging.debug("Notify dataflow with new image of shape: %s.", image.shape)
                     self.data.notify(da)
             logging.debug("Acquisition stopped")
         except TerminationRequested:
             logging.debug("Acquisition thread requested to terminate")
         except Exception as err:
-            logging.exception("Failure in acquisition thread: {}".format(err))
+            logging.exception("Failure in acquisition thread: %s", err)
         finally:
             self._generator = None
