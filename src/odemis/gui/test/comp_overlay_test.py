@@ -35,7 +35,7 @@ from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
-from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, TiledAreaView
+from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
@@ -264,7 +264,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Add a tiled area view to the tab model
         logging.debug(stage.position.value)
-        fview = TiledAreaView("fakeview", stage=stage)
+        fview = FeatureOverviewView("fakeview", stage=stage)
         tab_mod.views.value.append(fview)
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)
@@ -274,12 +274,20 @@ class OverlayTestCase(test.GuiTestCase):
         slol.activate()
         cnvs.add_world_overlay(slol)
         # stage start at 0,0 (cross hair at center) -> move bt 1mm, 1mm -> then back to 0,0
-        test.gui_loop()
-        time.sleep(1)
         stage.moveAbs({'x': 1e-3, 'y': 1e-3}).result()
-        test.gui_loop()
-        time.sleep(1)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        buffer_ch_move = wxImage2NDImage(img)
+        test.gui_loop(1)
+
         stage.moveAbs({'x': 0, 'y': 0}).result()
+        cnvs.update_drawing()
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        buffer_ch_center = wxImage2NDImage(img)
+        assert_array_not_equal(buffer_ch_center, buffer_ch_move,
+                               msg="Buffers are equal, which means the crosshair didn't change on stage movement.")
+
         test.gui_loop()
 
     def test_spot_mode_overlay(self):
@@ -436,7 +444,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Add a tiled area view to the tab model
         logging.debug(stage.position.value)
-        fview = TiledAreaView("fakeview", stage=stage)
+        fview = FeatureOverviewView("fakeview", stage=stage)
         tab_mod.views.value.append(fview)
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)
@@ -451,7 +459,7 @@ class OverlayTestCase(test.GuiTestCase):
         evt.x = 10
         evt.y = 10
         slol.on_dbl_click(evt)
-        time.sleep(1)
+        test.gui_loop(1)
         # stage should have been moved from initial position
         assert_pos_not_almost_equal(stage.position.value, initial_pos)
         logging.debug(stage.position.value)
