@@ -69,13 +69,13 @@ class OrsayComponent(model.HwComponent):
             self.children.value.add(self._pneumaticSuspension)
 
         # create the pressure child for the chamber
-        # try:
-        #     kwargs = children["pressure"]
-        # except (KeyError, TypeError):
-        #     logging.info("Orsay was not given a 'pressure' child")
-        # else:
-        #     self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
-        #     self.children.value.add(self._pressure)
+        try:
+            kwargs = children["pressure"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'pressure' child")
+        else:
+            self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._pressure)
 
         # create the pumping system child
         try:
@@ -208,11 +208,11 @@ class pneumaticSuspension(model.HwComponent):
                             "datamodel.HybridPlatform.Manometer2.ErrorState or None")
         elif attributeName == "Actual":
             eState = ""
-            vpsEState = self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual
-            manEState = self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual
-            if not vpsEState == "0" and not vpsEState == 0:
+            vpsEState = str(self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
+            manEState = str(self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
+            if not vpsEState == "0" and not vpsEState == 0 and vpsEState is not None and not vpsEState == "":
                 eState += "ValvePneumaticSuspension error: " + vpsEState
-            if not manEState == "0" and not manEState == 0:
+            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "":
                 if not eState == "":
                     eState += ", "
                 eState += "Manometer2 error: " + manEState
@@ -275,7 +275,7 @@ class vacuumChamber(model.Actuator):
 
         self.state = model.StringVA("", readonly=True)
         self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
-        self.gateOpen = model.BooleanVA(False, readonly=True, setter=self._changeGateOpen)
+        self.gateOpen = model.BooleanVA(False, setter=self._changeGateOpen)
         self.position = model.VigilantAttribute({"vacuum": 0, "gate": False}, readonly=True)
 
         self._vacuumStatusReached = threading.Event()
@@ -303,7 +303,7 @@ class vacuumChamber(model.Actuator):
         elif attributeName == "Actual":
             eState = ""
             gateEState = self._gate.ErrorState.Actual
-            if not gateEState == "0" and not gateEState == 0:
+            if not gateEState == "0" and not gateEState == 0 and gateEState is not None and not gateEState == "":
                 eState += "ValveP5 error: " + gateEState
             valve_state = int(self._gate.IsOpen.Actual)
             if valve_state == 3:  # in case of valve error
@@ -381,10 +381,17 @@ class vacuumChamber(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         """
-        Move the axis of this actuator.
+        Move the axis of this actuator to pos.
         """
         self._checkMoveAbs(pos)
         self._executor.submit(self._changeVacuum, pos["vacuum"])
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the axis of this actuator by shift.
+        """
+        pass
 
     def stop(self, axes=None):
         """
@@ -474,9 +481,9 @@ class pumpingSystem(model.HwComponent):
             eState = ""
             manEState = self._system.Manometer1.ErrorState.Actual
             tpEState = self._system.TurboPump1.ErrorState.Actual
-            if not manEState == "0" and not manEState == 0:
+            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "":
                 eState += "Manometer1 error: " + manEState
-            if not tpEState == "0" and not tpEState == 0:
+            if not tpEState == "0" and not tpEState == 0 and tpEState is not None and not tpEState == "":
                 if not eState == "":
                     eState += ", "
                 eState += "TurboPump1 error: " + tpEState
@@ -508,10 +515,10 @@ class pumpingSystem(model.HwComponent):
         """
         Reads the turbopump's power from the Orsay server and saves it in the power VA
         """
-        parameter = self._system.TurboPump1.Temperature if (parameter is None) else parameter
-        if parameter is not self._system.TurboPump1.Temperature:
-            raise Exception("Incorrect parameter passed to _updateTemperature. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature")
+        parameter = self._system.TurboPump1.Power if (parameter is None) else parameter
+        if parameter is not self._system.TurboPump1.Power:
+            raise Exception("Incorrect parameter passed to _updatePower. Parameter should be "
+                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Power")
         elif attributeName == "Actual":
             self.power._set_value(float(parameter.Actual), force_write=True)
 
@@ -524,7 +531,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached")
         elif attributeName == "Actual":
-            self.speedReached._set_value(parameter.Actual.lower() == "true", force_write=True)
+            self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
         """
@@ -535,7 +542,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn")
         elif attributeName == "Actual":
-            self.turboPumpOn._set_value(parameter.Actual.lower() == "true", force_write=True)
+            self.turboPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
         """
@@ -546,7 +553,7 @@ class pumpingSystem(model.HwComponent):
             raise Exception("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
                             "datamodel.HybridPlatform.PrimaryPumpState")
         elif attributeName == "Actual":
-            self.primaryPumpOn._set_value(parameter.Actual.lower() == "true", force_write=True)
+            self.primaryPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
         """
