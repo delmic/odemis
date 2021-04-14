@@ -31,7 +31,7 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
@@ -91,7 +91,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.view = None
         self._tab_data_model = None
 
-        self.abilities |= {CAN_ZOOM, CAN_FOCUS}
+        self.abilities |= {CAN_ZOOM, CAN_FOCUS, CAN_MOVE_STAGE}
         self.fit_view_to_next_image = True
 
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
@@ -622,7 +622,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         shift (float, float): offset moved in physical coordinates
         """
-        if self.view:
+        if self.view and CAN_MOVE_STAGE in self.abilities:
             self.view.moveStageBy(shift)
 
     def fit_view_to_content(self, recenter=None):
