@@ -91,7 +91,7 @@ class TestOrsay(unittest.TestCase):
         """
         self.oserver.terminate()
 
-    def test_process_info(self):
+    def test_updateProcessInfo(self):
         """
         Check that the processInfo VA is updated properly and an exception is raised when the wrong parameter is passed
         """
@@ -149,8 +149,11 @@ class TestPneumaticSuspension(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updated properly
+        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
         """
+        self.assertRaises(Exception, self.oserver._updateProcessInfo,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
                           "simulation")
@@ -173,6 +176,37 @@ class TestPneumaticSuspension(unittest.TestCase):
         sleep(0.5)
         self.assertIn("ValvePneumaticSuspension could not be contacted", self.psus.state.value)
         self.psus._valve.Target = 1
+
+    def test_updatePower(self):
+        """
+        Check that the power VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psus._updatePower,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
+        self.psus._valve.Target = 1
+        sleep(0.5)
+        self.assertTrue(self.psus.power.value)
+
+        self.psus._valve.Target = 2
+        sleep(0.5)
+        self.assertFalse(self.psus.power.value)
+
+    def test_updatePressure(self):
+        """
+        Check that the pressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psus._updatePressure,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.psus._gauge.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psus.pressure.value, test_value)
+        self.psus._gauge.Actual = 0.0
 
 
 class TestVacuumChamber(unittest.TestCase):
@@ -217,35 +251,54 @@ class TestVacuumChamber(unittest.TestCase):
         self.pressure.gateOpen.value = False
         self.assertEqual(self.pressure._gate.IsOpen.Target, 2)
 
-    def test_vacuum(self):
+    def test_vacuum_sim(self):
         """
-        Test for controlling the vacuum
+        Test for controlling the vacuum that can be run in simulation and on the real system
+        """
+        self.pressure.moveAbs({"vacuum": 1}, wait=False)
+        sleep(0.5)
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
+        self.pressure.stop()
+
+        self.pressure.moveAbs({"vacuum": 2}, wait=False)
+        sleep(0.5)
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
+        self.pressure.stop()
+
+        self.pressure.moveAbs({"vacuum": 0}, wait=False)
+        sleep(0.5)
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
+        self.pressure.stop()
+
+    def test_vacuum_real(self):
+        """
+        Test for controlling the real vacuum
         """
         if TEST_NOHW:
             self.skipTest("TEST_NOHW is set, cannot change vacuum pressure in simulation")
 
-        f = self.pressure.moveAbs({"vacuum": "primary vacuum"})
+        f = self.pressure.moveAbs({"vacuum": 1})
         f.wait()
         self.assertEqual(self.pressure.position.value["vacuum"], 1)
         self.assertAlmostEqual(self.pressure.pressure.value, 50000, delta=5000)  # tune the goal and alowed difference
 
-        f = self.pressure.moveAbs({"vacuum": "high vacuum"})
+        f = self.pressure.moveAbs({"vacuum": 2})
         f.wait()
         self.assertEqual(self.pressure.position.value["vacuum"], 2)
         self.assertAlmostEqual(self.pressure.pressure.value, 0.1, delta=0.01)  # tune the goal and alowed difference
 
-        f = self.pressure.moveAbs({"vacuum": "vented"})
+        f = self.pressure.moveAbs({"vacuum": 0})
         f.wait()
         self.assertEqual(self.pressure.position.value["vacuum"], 0)
         self.assertAlmostEqual(self.pressure.pressure.value, 100000, delta=10000)  # tune the goal and alowed difference
 
-        self.pressure.moveAbs({"vacuum": "primary vacuum"})
-        f = self.pressure.moveAbs({"vacuum": "vented"})
+        self.pressure.moveAbs({"vacuum": 1})
+        f = self.pressure.moveAbs({"vacuum": 0})
         f.wait()
         self.assertEqual(self.pressure.position.value["vacuum"], 0)
         self.assertAlmostEqual(self.pressure.pressure.value, 100000, delta=10000)  # tune the goal and alowed difference
 
-        self.pressure.moveAbs({"vacuum": "primary vacuum"})
+        self.pressure.moveAbs({"vacuum": 1})
         sleep(5)
         self.pressure.stop()
         self.assertEqual(self.pressure.position.value["vacuum"], 0)
@@ -274,6 +327,38 @@ class TestVacuumChamber(unittest.TestCase):
         sleep(0.5)
         self.assertIn("ValveP5 could not be contacted", self.pressure.state.value)
         self.pressure._gate.IsOpen.Target = 1
+
+    def test_updatePressure(self):
+        """
+        Check that the pressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.pressure._updatePressure,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.pressure._chamber.Pressure.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.pressure.pressure.value, test_value)
+        self.pressure._chamber.Pressure.Actual = 0.0
+
+    def test_updatePosition(self):
+        """
+        Check that the position VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.pressure._updatePosition,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1
+        self.pressure._chamber.VacuumStatus.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(int(self.pressure.position.value['vacuum']), test_value)
+        self.pressure._chamber.VacuumStatus.Actual = 0
 
 
 class TestPumpingSystem(unittest.TestCase):
@@ -364,7 +449,8 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateSpeedReached(self):
         """
-        Check that the speedReached VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the speedReached VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
         """
         self.assertRaises(Exception, self.psys._updateSpeedReached, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
@@ -392,7 +478,8 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updatePrimaryPumpOn(self):
         """
-        Check that the primaryPumpOn VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the primaryPumpOn VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
         """
         self.assertRaises(Exception, self.psys._updatePrimaryPumpOn, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
@@ -406,9 +493,11 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateNitrogenPressure(self):
         """
-        Check that the nitrogenPressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the nitrogenPressure VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
         """
-        self.assertRaises(Exception, self.psys._updateNitrogenPressure, {'parameter': self.psys._system.TurboPump1.Stop})
+        self.assertRaises(Exception, self.psys._updateNitrogenPressure,
+                          {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
                           "simulation")
@@ -448,7 +537,6 @@ class TestUPS(unittest.TestCase):
         Check that the level VA raises an exception when the wrong parameter is passed
         """
         self.assertRaises(Exception, self.ups._updateLevel, {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
-
 
 
 if __name__ == '__main__':
