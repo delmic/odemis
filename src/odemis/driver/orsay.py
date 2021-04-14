@@ -128,6 +128,7 @@ class OrsayComponent(model.HwComponent):
                 self._ups.terminate()
                 self._ups = None
             super(OrsayComponent, self).terminate()
+            self._device.HttpConnection.close()
             self._device = None
             self.datamodel = None
 
