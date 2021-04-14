@@ -47,6 +47,7 @@ class TestOrsayStatic(unittest.TestCase):
     """
     Tests which don't need an Orsay component ready
     """
+
     def test_creation(self):
         """
         Test to create an Orsay component
@@ -92,8 +93,10 @@ class TestOrsay(unittest.TestCase):
 
     def test_process_info(self):
         """
-        Check that the processInfo VA is updates properly
+        Check that the processInfo VA is updated properly and an exception is raised when the wrong parameter is passed
         """
+        self.assertRaises(Exception, self.oserver._updateProcessInfo,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
                           "simulation")
@@ -146,7 +149,7 @@ class TestPneumaticSuspension(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updates properly
+        Check that the state VA is updated properly
         """
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
@@ -250,8 +253,10 @@ class TestVacuumChamber(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updates properly
+        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
         """
+        self.assertRaises(Exception, self.pressure._updateErrorState,
+                          {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
                           "simulation")
@@ -297,8 +302,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updates properly
+        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
         """
+        self.assertRaises(Exception, self.psys._updateErrorState, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
             self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
                           "simulation")
@@ -313,6 +319,104 @@ class TestPumpingSystem(unittest.TestCase):
         self.assertIn("TurboPump1", self.psys.state.value)
         self.assertIn(test_string, self.psys.state.value)
         self.psys._system.TurboPump1.ErrorState.Actual = ""
+
+    def test_updateSpeed(self):
+        """
+        Check that the speed VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updateSpeed, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.psys._system.TurboPump1.Speed.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.speed.value, test_value)
+        self.psys._system.TurboPump1.Speed.Actual = 0
+
+    def test_updateTemperature(self):
+        """
+        Check that the temperature VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updateTemperature, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.psys._system.TurboPump1.Temperature.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.temperature.value, test_value)
+        self.psys._system.TurboPump1.Temperature.Actual = 0
+
+    def test_updatePower(self):
+        """
+        Check that the power VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updatePower, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.psys._system.TurboPump1.Power.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.power.value, test_value)
+        self.psys._system.TurboPump1.Power.Actual = 0
+
+    def test_updateSpeedReached(self):
+        """
+        Check that the speedReached VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updateSpeedReached, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = True
+        self.psys._system.TurboPump1.SpeedReached.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.speedReached.value, test_value)
+        self.psys._system.TurboPump1.SpeedReached.Actual = False
+
+    def test_updateTurboPumpOn(self):
+        """
+        Check that the turboPumpOn VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updateTurboPumpOn, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = True
+        self.psys._system.TurboPump1.IsOn.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.turboPumpOn.value, test_value)
+        self.psys._system.TurboPump1.IsOn.Actual = False
+
+    def test_updatePrimaryPumpOn(self):
+        """
+        Check that the primaryPumpOn VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updatePrimaryPumpOn, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = True
+        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.primaryPumpOn.value, test_value)
+        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
+
+    def test_updateNitrogenPressure(self):
+        """
+        Check that the nitrogenPressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.psys._updateNitrogenPressure, {'parameter': self.psys._system.TurboPump1.Stop})
+        if not TEST_NOHW:
+            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
+                          "simulation")
+        test_value = 1.0
+        self.psys._system.Manometer1.Pressure.Actual = test_value
+        sleep(0.5)
+        self.assertEqual(self.psys.nitrogenPressure.value, test_value)
+        self.psys._system.Manometer1.Pressure.Actual = 0
 
 
 class TestUPS(unittest.TestCase):
@@ -338,6 +442,13 @@ class TestUPS(unittest.TestCase):
         Terminate the Orsay client
         """
         self.oserver.terminate()
+
+    def test_updateLevel(self):
+        """
+        Check that the level VA raises an exception when the wrong parameter is passed
+        """
+        self.assertRaises(Exception, self.ups._updateLevel, {'parameter': self.oserver.datamodel.HybridPlatform.Cancel})
+
 
 
 if __name__ == '__main__':
