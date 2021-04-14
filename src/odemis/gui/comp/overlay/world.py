@@ -51,9 +51,9 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
     def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
         WorldOverlay.__init__(self, cnvs)
 
-        if not hasattr(cnvs.view, "current_position"):
-            raise ValueError("CurrentPosCrossHairOverlay requires current_position VA on the view to function properly.")
-        cnvs.view.current_position.subscribe(self._current_pos_updated, init=True)
+        if not hasattr(cnvs.view, "stage_pos"):
+            raise ValueError("CurrentPosCrossHairOverlay requires stage_pos VA on the view to function properly.")
+        cnvs.view.stage_pos.subscribe(self._current_pos_updated, init=True)
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
@@ -71,10 +71,10 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
         Get the buffer position of the current stage physical position
         :return: (float, float) buffer coordinates of current position
         """
-        pos = self.cnvs.view.current_position.value
+        pos = self.cnvs.view.stage_pos.value
         half_size_offset = self.cnvs.get_half_buffer_size()
         # convert physical position to buffer 'world' coordinates
-        bpos = self.cnvs.phys_to_buffer_pos(pos, self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
+        bpos = self.cnvs.phys_to_buffer_pos((pos['x'], pos['y']), self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
         return bpos
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
