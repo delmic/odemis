@@ -979,7 +979,7 @@ class SecomStreamsTab(Tab):
         if len(viewports) == 6:
             logging.debug("Inserting Overview viewport")
             vpv[viewports[5]] = {
-                "cls": guimod.OverviewView,
+                "cls": guimod.FixedOverviewView,
                 "name": "Overview",
                 "stage": main_data.stage,
                 "stream_classes": (RGBUpdatableStream, RGBCameraStream, BrightfieldStream),

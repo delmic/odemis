@@ -667,24 +667,24 @@ class MicroscopeViewport(ViewPort):
             self.canvas.abilities.discard(CAN_FOCUS)
 
 
-class OverviewViewport(MicroscopeViewport):
+class FixedOverviewViewport(MicroscopeViewport):
     """ A Viewport containing a downscaled overview image of the loaded sample """
 
     canvas_class = miccanvas.OverviewCanvas
     bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
-        super(OverviewViewport, self).__init__(*args, **kwargs)
+        super(FixedOverviewViewport, self).__init__(*args, **kwargs)
         self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
-        super(OverviewViewport, self).OnSize(evt)
+        super(FixedOverviewViewport, self).OnSize(evt)
         self.canvas.fit_view_to_content(True)
 
     def setView(self, view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
 
-        super(OverviewViewport, self).setView(view, tab_data)
+        super(FixedOverviewViewport, self).setView(view, tab_data)
 
         self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
         # Only allow moving when chamber is under vacuum

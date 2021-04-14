@@ -1759,7 +1759,7 @@ class ContentView(StreamView):
     # is not yet at the place where the move finished.
 
 
-class OverviewView(StreamView):
+class FixedOverviewView(StreamView):
     """
     A large FoV view which is used to display the previous positions reached
     (if possible) on top of an overview image of the sample.

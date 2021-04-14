@@ -6013,7 +6013,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="OverviewViewport" name="vp_overview_sem">
+          <object class="FixedOverviewViewport" name="vp_overview_sem">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
