@@ -24,8 +24,9 @@ from __future__ import division
 import fcntl
 import glob
 import logging
+import queue
 from odemis import model
-from odemis.model import ComponentBase, DataFlowBase, isasync, HwError, CancellableThreadPoolExecutor
+from odemis.model import ComponentBase, DataFlowBase, isasync, HwError, CancellableThreadPoolExecutor, numbers
 from odemis.util import driver, to_str_escape
 import os
 import serial
@@ -174,11 +175,16 @@ class PMT(model.Detector):
         return value
 
 
+# Messages to the protection manager
+REQ_TERMINATE = "T"
+REQ_PROTECT_OFF = "F"
+
+
 class PMTDataFlow(model.DataFlow):
     def __init__(self, detector, pmt, control, signal):
         """
         detector (Detector): the detector that the dataflow corresponds to
-        control (PMTControl): pmt control unit
+        control (PMTControl): PMT control unit
         signal (model.Detector): extra detector to be activated during the acquisition
             (eg, for shutter control)
         """
@@ -188,24 +194,95 @@ class PMTDataFlow(model.DataFlow):
         self._control = control
         self._signal = signal
         self.active = False
+        self._protect_req = queue.Queue()
+        self._control_ready = threading.Event()
+        self._protection_mng = threading.Thread(target=self._protection_mng_run,
+                             name="Protection manager")
+        self._protection_mng.daemon = True
+        self._protection_mng.start()
 
     def start_generate(self):
-        if self._control:  # reset protection
-            self._control.protection.value = False
+        if self._control:
+            self._acquireControl()  # it's blocked until the protection is disabled and the gain is ready
         if self._signal:  # requesting the DataFlow to be ready
             self._signal.data.subscribe(self._on_signal)
-        logging.info("Activating PMT, and waiting %f s for gain settling", self.component._settle_time)
-        time.sleep(self.component._settle_time)
         self._pmt.data.subscribe(self._newFrame)
         self.active = True
 
     def stop_generate(self):
         self._pmt.data.unsubscribe(self._newFrame)
         if self._control:  # set protection
-            self._control.protection.value = True
+            # the settle time can also be used as a delay to wait longer --> delay=max(settle_time, 0.1)
+            self._releaseControl(delay=0.1)
         if self._signal:  # requesting the DataFlow to be ready
             self._signal.data.unsubscribe(self._on_signal)
         self.active = False
+
+    def _protection_mng_run(self):
+        """
+        Main loop for protection manager thread:
+        Activate/Deactivate the PMT protection based on the requests received
+        """
+        try:
+            q = self._protect_req
+            protect_t = None  # None if protection must be activated, otherwise time to stop
+            while True:
+                # wait for a new message or for the time to activate the protection
+                now = time.time()
+                if protect_t is None or not q.empty():
+                    msg = q.get()
+                elif now < protect_t:  # soon time to activate the protection
+                    timeout = protect_t - now
+                    try:
+                        msg = q.get(timeout=timeout)
+                    except queue.Empty:
+                        # time to activate the protection => just do the loop again
+                        continue
+                else:  # time to activate the protection
+                    # the queue should be empty (with some high likelihood)
+                    logging.debug("Activating PMT protection at %f > %f (queue has %d element)",
+                                  now, protect_t, q.qsize())
+                    self._control_ready.clear()
+                    self._control.protection.value = True
+                    protect_t = None
+                    continue
+
+                # parse the new message
+                logging.debug("Decoding protection manager message %s", msg)
+                if msg == REQ_TERMINATE:
+                    return
+                elif msg == REQ_PROTECT_OFF:
+                    if not self._control_ready.is_set():
+                        self._control.protection.value = False
+                        logging.info("Activating PMT, and waiting %f s for gain settling", self.component._settle_time)
+                        time.sleep(self.component._settle_time)
+                        self._control_ready.set()
+                    protect_t = None
+                elif isinstance(msg, numbers.Real):  # time at which to activate the protection
+                    protect_t = msg
+                else:
+                    raise ValueError("Unexpected message %s" % (msg,))
+
+        except Exception:
+            logging.exception("Protection manager failed")
+        finally:
+            logging.info("Protection manager thread over")
+            self._control.protection.value = True  # activate PMT protection for safety
+
+    def _acquireControl(self):
+        """
+        Ensure the PMT protection is deactivated. Need to call _releaseControl once the protection should be activated.
+        It will block until the acquisition is completed.
+        """
+        self._protect_req.put(REQ_PROTECT_OFF)
+        self._control_ready.wait()
+
+    def _releaseControl(self, delay=0):
+        """
+        Let the PMT protection be activated (within some time).
+        delay (0<float): time (in s) before actually activating the protection
+        """
+        self._protect_req.put(time.time() + delay)
 
     def synchronizedOn(self, event):
         self._pmt.data.synchronizedOn(event)
