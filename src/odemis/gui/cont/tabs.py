@@ -538,9 +538,17 @@ class LocalizationTab(Tab):
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
-            # load the same  acquired data to the chamber tab view
+            # Display the same acquired data in the chamber tab view
             chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-            chamber_tab.load_data(streams)
+            chamber_tab.load_overview_data(streams)
+
+    def _load_overview_data(self, stream):
+        """
+        Add the given stream to the overview view and stream panel
+        """
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        scont = self._overview_stream_controller.addStream(stream, add_to_view=overview_view)
+        scont.stream_panel.show_remove_btn(True)
 
     def clear_live_streams(self):
         """
@@ -2193,16 +2201,20 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-    def load_data(self, streams):
+    def load_overview_data(self, streams):
         """
         Load the overview view with the given list of acquired static streams
         :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
         """
         # Replace the old streams with the newly acquired ones in the view
-        overview_view = self._tab_data_model.focussedView.value
+
+        overview_view = next((view for view in self._tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        if not overview_view:
+            logging.warning("Could not find view of type FeatureOverviewView.")
+            return
         existing_streams = overview_view.getStreams()
         for stream in streams:
-            ex_st = next((ex_st for ex_st in existing_streams if ex_st.acquisitionType.value == stream.acquisitionType.value and ex_st.name.value == stream.name.value), None)
+            ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
             if ex_st:
                 overview_view.removeStream(ex_st)
             overview_view.addStream(stream)
