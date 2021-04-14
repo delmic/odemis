@@ -174,6 +174,7 @@ class TestPMT(unittest.TestCase):
                 cls.bsd = child
             elif child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
+
         cls.pmt = CLASS_PMT(name="test", role="detector",
                                  dependencies={"detector": cls.bsd,
                                            "pmt-control": cls.control})
@@ -212,7 +213,10 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.control.protection.value, False)
         self.assertEqual(self.pmt.data.active, True)
         self.is_received.wait()
-        # Protection should be reset after acquisition is done
+        # Immediately after the acquisition is done, PMT protection remains deactivated
+        self.assertEqual(self.control.protection.value, False)
+        # Protection is reset with some delay after acquisition is done
+        time.sleep(0.2)
         self.assertEqual(self.control.protection.value, True)
 
     def test_wrong_acquisition(self):
@@ -227,7 +231,8 @@ class TestPMT(unittest.TestCase):
         self.control._sendCommand(b"SWITCH 0")
         self.is_received.wait()
         self.assertTrue(h.matches(message="PMT protection was triggered during acquisition."))
-        # Protection should be reset after acquisition is done
+        # Protection is reset with some delay after acquisition is done
+        time.sleep(0.2)
         self.assertEqual(self.control.protection.value, True)
 
     def test_gain_decrease_acquisition(self):
@@ -245,7 +250,8 @@ class TestPMT(unittest.TestCase):
         self.pmt.gain.value = 0.5
         self.is_received.wait()
         self.assertFalse(h.matches(message="PMT protection was triggered during acquisition."))
-        # Protection should be reset after acquisition is done
+        # Protection is reset with some delay after acquisition is done
+        time.sleep(0.2)
         self.assertEqual(self.control.protection.value, True)
 
     def receive_image(self, dataflow, image):
@@ -260,6 +266,51 @@ class TestPMT(unittest.TestCase):
         dataflow.unsubscribe(self.receive_image)
         self.assertEqual(self.pmt.data.active, False)
         self.is_received.set()
+
+    def test_while_acquiring(self):
+        """
+        While acquiring the underline protection is always off
+        """
+        self.acq_left = 10
+        self.pmt_protection_recorded = []
+        self.pmt_protection_expected = [False] * self.acq_left
+        self.acq_complete = threading.Event()
+
+        # Protection should be on before start acquisition
+        self.assertEqual(self.control.protection.value, True)
+        self.assertEqual(self.pmt.data.active, False)
+
+        logging.debug("Acquisition starts...")
+        self.pmt.data.subscribe(self.acquire_data)
+
+        # Protection should be off while acquiring
+        self.assertEqual(self.control.protection.value, False)
+        # wait the last point is fully acquired
+        self.acq_complete.wait()
+        self.assertEqual(self.acq_left, 0)
+        # the protection remains off during the acquisition
+        self.assertEqual(self.pmt_protection_recorded, self.pmt_protection_expected)
+
+        logging.debug("Acquiring again...")
+        self.acq_left = 10
+        self.pmt.data.subscribe(self.acquire_data)
+        # Protection remains off while acquiring
+        self.assertEqual(self.control.protection.value, False)
+        self.acq_complete.wait()
+
+        # Immediately after the acquisition is done, PMT protection remains off
+        self.assertEqual(self.control.protection.value, False)
+        # Protection is reset with some delay after acquisition is done
+        time.sleep(0.2)
+        self.assertEqual(self.control.protection.value, True)
+
+    def acquire_data(self, dataflow, data):
+        self.acq_left -= 1
+        self.pmt_protection_recorded.append(self.control.protection.value)
+        if self.acq_left <= 0:
+            dataflow.unsubscribe(self.acquire_data)
+            self.acq_complete.set()
+
 
 class TestTCPMT(unittest.TestCase):
 
