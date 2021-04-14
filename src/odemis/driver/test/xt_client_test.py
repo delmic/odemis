@@ -31,7 +31,7 @@ import unittest
 from odemis import model
 
 from odemis.driver import xt_client
-from odemis.driver.xt_client import DETECTOR2CHANNELNAME
+from odemis.driver.xt_client import DETECTOR2CHANNELNAME, XTTKDetector
 from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
@@ -46,7 +46,7 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
@@ -54,14 +54,11 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
                            }
               }
 
-CONFIG_MB_DETECTOR = {"name": "mb-detector",
-                      "role": "mb-detector",
-                      "channel_name": "electron1", }
 CONFIG_MB_SCANNER = {"name": "mb-scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
                  "children": {"mb-scanner": CONFIG_MB_SCANNER,
                               "focus": CONFIG_FOCUS,
-                              "mb-detector": CONFIG_MB_DETECTOR,
+                              "detector": CONFIG_DETECTOR,
                               }
                  }
 
@@ -1182,20 +1179,20 @@ class TestMBScanner(unittest.TestCase):
         self.scanner.power.value = init_beam_power
 
 
-class TestMBDetector(unittest.TestCase):
+class TestXTTKDetector(unittest.TestCase):
     """
-    Test image acquisition using the MultiBeam Detector class.
+    Test image acquisition using the XTToolkit Detector class.
     """
 
     @classmethod
     def setUpClass(cls):
 
-        cls.microscope = xt_client.SEM(**CONFIG_MB_SEM)
+        cls.microscope = xt_client.SEM(**CONFIG_SEM)
 
         for child in cls.microscope.children.value:
-            if child.name == CONFIG_MB_SCANNER["name"]:
+            if child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
-            elif child.name == CONFIG_MB_DETECTOR["name"]:
+            elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
 
     @classmethod

@@ -120,19 +120,13 @@ class SEM(model.HwComponent):
             self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
-        if "mb-detector" in children and "detector" in children:
-            raise ValueError("A detector and mb-detector are provided, can only have one.")
-        elif "mb-detector" in children:
-            ckwargs = children["mb-detector"]
-            self._detector = MultiBeamDetector(parent=self, daemon=daemon, address=address, **ckwargs)
-            self.children.value.add(self._detector)
+        if "detector" in children:
+            ckwargs = children["detector"]
             if "xttoolkit" in self._swVersion.lower():
                 self.xt_type = "xttoolkit"
+                self._detector = XTTKDetector(parent=self, daemon=daemon, address=address, **ckwargs)
             else:
-                raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
-        elif "detector" in children:
-            ckwargs = children["detector"]
-            self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
+                self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
 
     def list_available_channels(self):
@@ -2278,7 +2272,7 @@ class MultiBeamScanner(Scanner):
         return (self.parent.get_use_case() == 'MultiBeamTile')
 
 
-class MultiBeamDetector(Detector):
+class XTTKDetector(Detector):
     """
     This is an extension of xt_client.Detector class. It overwrites the image acquisition
     to work with image acquisition in XTToolkit.
