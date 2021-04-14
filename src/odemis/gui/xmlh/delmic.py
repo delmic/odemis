@@ -151,7 +151,8 @@ component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 
 msvps = [
     ('CameraViewport', xh_delmic.CameraViewportXmlHandler),
-    ('OverviewViewport', xh_delmic.OverviewViewportXmlHandler),
+    ('FixedOverviewViewport', xh_delmic.FixedOverviewViewportXmlHandler),
+    ('FeatureOverviewViewport', xh_delmic.FeatureOverviewViewportXmlHandler),
     ('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
     ('LiveViewport', xh_delmic.LiveViewportXmlHandler),
     ('ARAcquiViewport', xh_delmic.ARAcquiViewportXmlHandler),

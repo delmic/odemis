@@ -373,7 +373,6 @@ class LocalizationTab(Tab):
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
 
-        self.create_overlays(panel.vp_secom_tl.canvas)
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
@@ -491,7 +490,7 @@ class LocalizationTab(Tab):
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {
-                 "cls": guimod.TiledAreaView,
+                 "cls": guimod.FeatureOverviewView,
                  "stage": main_data.stage,
                  "name": "Overview",
                  "stream_classes": StaticStream,
@@ -2090,15 +2089,13 @@ class CryoChamberTab(Tab):
         vpv = collections.OrderedDict([
             (panel.vp_overview_map,
              {
-                 "cls": guimod.TiledAreaView,
+                 "cls": guimod.FeatureOverviewView,
                  "stage": main_data.stage,
                  "name": "Overview",
                  "stream_classes": StaticStream,
              }), ])
 
         self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        # add the needed overlays from localization tab
-        LocalizationTab.create_overlays(panel.vp_overview_map.canvas)
         self._tab_data_model = tab_data
         self._tab_panel = panel
         # For project selection
