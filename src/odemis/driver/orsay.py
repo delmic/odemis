@@ -260,7 +260,6 @@ class vacuumChamber(model.Actuator):
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • state (StringVA, read-only, value is combination of _gate.ErrorState.Actual and _gate.IsOpen.Actual)
-        • parent (Component, contains an instance of class Orsay)
         • gateOpen (BooleanVA, set to True to open/start and False to close/stop)
         • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
         • pressure (FloatVA, read-only, unit is "Pa", value is _chamber.Pressure.Actual)
@@ -347,10 +346,10 @@ class vacuumChamber(model.Actuator):
         elif attributeName == "Actual":
             currentVacuum = parameter.Actual
             self.position._set_value({"vacuum": currentVacuum}, force_write=True)
-            if parameter.Actual == parameter.Target:
-                self._vacuumStatusReached.set()
-            else:
-                self._vacuumStatusReached.clear()
+        if parameter.Actual == parameter.Target:
+            self._vacuumStatusReached.set()
+        else:
+            self._vacuumStatusReached.clear()
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
@@ -363,13 +362,14 @@ class vacuumChamber(model.Actuator):
         elif attributeName == "Actual":
             self.pressure._set_value(float(parameter.Actual), force_write=True)
 
-    def _changeVacuum(self, goal):
+    def _changeVacuum(self, goal, wait=True):
         """
         Sets the vacuum status on the Orsay server to argument goal and waits until it is reached.
         Then returns the reached vacuum status.
         """
         self._chamber.VacuumStatus.Target = goal
-        self._vacuumStatusReached.wait()
+        if wait:
+            self._vacuumStatusReached.wait()
         return self._chamber.VacuumStatus.Actual
 
     def _changeGateOpen(self, goal):
@@ -380,12 +380,12 @@ class vacuumChamber(model.Actuator):
         return self._gate.IsOpen.Target == 1
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos, wait=True):
         """
         Move the axis of this actuator to pos.
         """
         self._checkMoveAbs(pos)
-        self._executor.submit(self._changeVacuum, pos["vacuum"])
+        self._executor.submit(self._changeVacuum, goal=pos["vacuum"], wait=wait)
 
     @isasync
     def moveRel(self, shift):
@@ -398,8 +398,9 @@ class vacuumChamber(model.Actuator):
         """
         Stop changing the vacuum status
         """
-        if "vacuum" in axes or not axes:
-            self._parent.datamodel.HybridPlatform.AnalysisChamber.Stop.Target = 1
+        if not axes or "vacuum" in axes:
+            self._parent.datamodel.HybridPlatform.Stop.Target = 1
+            self._parent.datamodel.HybridPlatform.Cancel.Target = True
             self._executor.cancel()
 
     def terminate(self):
