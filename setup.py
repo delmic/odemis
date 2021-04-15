@@ -3,7 +3,7 @@
 
 # To rebuild just the cython modules, use these commands:
 # sudo apt-get install python-setuptools cython
-# python setup.py build_ext --inplace
+# python3 setup.py build_ext --inplace
 from __future__ import division, print_function
 
 from setuptools import setup, find_packages

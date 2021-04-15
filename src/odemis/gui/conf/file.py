@@ -21,12 +21,8 @@ from __future__ import division
 
 from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
-try:
-    import ConfigParser
-    from ConfigParser import NoOptionError
-except ImportError:  # Python 3 naming
-    import configparser as ConfigParser
-    from configparser import NoOptionError
+import configparser
+from configparser import NoOptionError
 import logging
 import math
 import os.path
@@ -44,7 +40,7 @@ ACQUI_PATH = get_picture_folder()
 class Config(with_metaclass(ABCMeta, object)):
     """ Abstract configuration super class
 
-    Configurations are built around the :py:class:`ConfigParser.ConfigParser` class.
+    Configurations are built around the :py:class:`configparser.ConfigParser` class.
 
     The main difference is that the filename is fixed, and changes are automatically saved.
 
@@ -60,14 +56,14 @@ class Config(with_metaclass(ABCMeta, object)):
         self.file_path = os.path.abspath(os.path.join(CONF_PATH, self.file_name))
         # Attribute that contains the actual configuration
         # Disable "interpolation" to support easily storing values containing "%"
-        self.config = ConfigParser.ConfigParser(interpolation=None)
+        self.config = configparser.ConfigParser(interpolation=None)
 
         # Note: the defaults argument of ConfigParser doesn't do enough, because
         # it only allows to specify default options values, independent of the
         # section.
 
         # Default configuration used to check for completeness
-        self.default = ConfigParser.ConfigParser(interpolation=None)
+        self.default = configparser.ConfigParser(interpolation=None)
 
         self.read()
 
@@ -144,7 +140,7 @@ class Config(with_metaclass(ABCMeta, object)):
                 return ret.decode("utf-8", "replace")
             else:  # python3
                 return ret
-        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
+        except (configparser.NoOptionError, configparser.NoSectionError):
             return self.default.get(section, option)
 
     def _ensure_str_format(self, s):

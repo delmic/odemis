@@ -25,10 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
-import copy
 import gc
 import logging
 import math
+import os
 import os.path
 import shutil
 import time
@@ -92,7 +92,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, fsdecode, normalize_rect
+from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
@@ -2670,7 +2670,7 @@ class AnalysisTab(Tab):
             return False
 
         # Detect the format to use
-        filename = fsdecode(dialog.GetPath())
+        filename = os.fsdecode(dialog.GetPath())
         if extend:
             logging.debug("Extending the streams with file %s", filename)
         else:
