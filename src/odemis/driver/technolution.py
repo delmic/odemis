@@ -826,7 +826,7 @@ class EBeamScanner(model.Emitter):
 
         :param resolution (int, int): requested resolution for a single field image. It is the product of the number of
         cell images multiplied by the effective cell size.
-        :return resolution  (int, int): resolution closest possible to the requested resolution for the single field image.
+        :return (int, int): resolution closest possible to the requested resolution for the single field image.
         """
         COMMON_DIVISOR = 4
 
@@ -835,7 +835,7 @@ class EBeamScanner(model.Emitter):
         eff_cell_size = numpy.round(req_eff_cell_size / COMMON_DIVISOR) * COMMON_DIVISOR
         resolution = eff_cell_size * self.parent._mppc.shape[0:2]
 
-        return tuple(resolution.astype(int))
+        return tuple(int(i) for i in resolution)
 
 
 class MirrorDescanner(model.Emitter):
