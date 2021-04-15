@@ -2170,7 +2170,7 @@ class AndorCam2(model.DigitalCamera):
                         self.Reinitialize()
                     else:
                         time.sleep(0.1)
-                        logging.warning("trying again to acquire image after error %s", ex.strerr)
+                        logging.warning("trying again to acquire image after error %s", ex)
                     need_reinit = True
                     continue
                 else:
