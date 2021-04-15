@@ -31,7 +31,7 @@ import unittest
 from odemis import model
 
 from odemis.driver import xt_client
-from odemis.driver.xt_client import DETECTOR2CHANNELNAME
+from odemis.driver.xt_client import DETECTOR2CHANNELNAME, XTTKDetector
 from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
@@ -46,7 +46,7 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
+CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
@@ -56,11 +56,11 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
 
 CONFIG_MB_SCANNER = {"name": "mb-scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
-              "children": {"mb-scanner": CONFIG_MB_SCANNER,
-                           "focus": CONFIG_FOCUS,
-                           "detector": CONFIG_DETECTOR,
-                           }
-              }
+                 "children": {"mb-scanner": CONFIG_MB_SCANNER,
+                              "focus": CONFIG_FOCUS,
+                              "detector": CONFIG_DETECTOR,
+                              }
+                 }
 
 
 class TestMicroscope(unittest.TestCase):
