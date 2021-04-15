@@ -61,8 +61,8 @@ def get_ar_data(das):
     for polmode, ldas in ar_data.items():
         if len(ldas) > 1:
             logging.warning("AR calibration file contained %d AR data, "
-                            "will pick the earliest acquired", len(das))
-            earliest = min(ar_data,
+                            "will pick the earliest acquired", len(ldas))
+            earliest = min(ldas,
                            key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
             ar_data[polmode] = [earliest]
 
