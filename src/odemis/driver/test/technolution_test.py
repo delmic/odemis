@@ -432,49 +432,6 @@ class TestEBeamScanner(unittest.TestCase):
         self.EBeamScanner.resolution.value = (6385, 6385)
         self.assertEqual(self.EBeamScanner.resolution.value, (6400, 6400))
 
-#     +  #################################### ===================
-#     +  # This test fails as soon as you set values on the mppc.cellCompleteResolution VA and scanner.resolution VA
-#     +  # I used the same values as already put on the VA and it fails.
-#     +
-#     +  # This error does not pop up ad the VA tests do not upload the changed values. It might be worse if we extend
-#     +  # the VA tests, to actually upload the values via start megafield calls to capture errors there. What do you think?
-#     +
-#     +
-#
-#     def test_cellCompleteResolution_Resolution_acqImage(self):
-#         +
-#
-#     +  # Check if small resolution values are allowed
-#     +        self.MPPC.cellCompleteResolution.value = (900, 900)
-#     +        self.EBeamScanner.resolution.value = (6400, 6400)
-#     +  # self.MPPC.cellCompleteResolution.value = (12, 12)   # min values as used in scan2mp script (20,20)
-#     +  # self.EBeamScanner.resolution.value = (96, 96)  # min values as used in scan2mp script
-#     +
-#     +        self.EBeamScanner.scanOffset.value = (0.0, 0.0)
-#     +        self.EBeamScanner.scanGain.value = (0.3, 0.3)
-#     +        self.MirrorDescanner.scanOffset.value = (0.0, 0.0)
-#     +        self.MirrorDescanner.scanGain.value = (0.007, 0.007)
-#     +
-#     +        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
-#     +        dataflow = self.MPPC.data
-#     +
-#     +        image = dataflow.get()
-#     +  # image = dataflow.get(dataContent="empty")
-#     +        self.assertIsInstance(image, model.DataArray)
-#
-# ############################################
-#     # Check if small resolution values are allowed
-#     -        self.MPPC.cellCompleteResolution.value = (900, 900)
-#     -        self.EBeamScanner.resolution.value = (6400, 6400)
-#     -  # self.MPPC.cellCompleteResolution.value = (12, 12)   # min values as used in scan2mp script (20,20)
-#     -  # self.EBeamScanner.resolution.value = (96, 96)  # min values as used in scan2mp script
-#     +  # self.MPPC.cellCompleteResolution.value = (900, 900)
-#     +  # self.EBeamScanner.resolution.value = (6400, 6400)
-#     +        self.MPPC.cellCompleteResolution.value = (70, 70)  # min values as used in scan2mp script (20,20)
-#     +        self.EBeamScanner.resolution.value = (96, 96)  # min values as used in scan2mp script
-
-    ###################################################################################################
-
     def test_dwellTimeVA(self):
         min_dwellTime = self.EBeamScanner.dwellTime.range[0]
         max_dwellTime = self.EBeamScanner.dwellTime.range[1]
