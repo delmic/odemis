@@ -55,16 +55,20 @@ def get_ar_data(das):
     if not ar_data:
         raise LookupError("Failed to find any AR data within the %d data acquisitions" %
                           (len(das)))
-    # If there is more than one data for a polarization mode, just pick one.
-    # For now we just pick the first one acquired.
-    # TODO: average all the data?
+    # For a polarization mode, if there is more than one data, average them.
+    # They all should be very similar, so this just reduces the noise.
+    # Note: it's typical, as often, after an AR acquisition the user re-acquires
+    # the same area with the same settings excepted the e-beam is blanked. So we
+    # end-up with MxN AR background data.
     for polmode, ldas in ar_data.items():
         if len(ldas) > 1:
+            # Just a check that all AR is the same shape (and if not, just pick
+            # the ones which are the same as the first found).
+            ar_same_shape = [da for da in ldas if da.shape == ldas[0].shape]
             logging.warning("AR calibration file contained %d AR data, "
-                            "will pick the earliest acquired", len(ldas))
-            earliest = min(ldas,
-                           key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
-            ar_data[polmode] = [earliest]
+                            "will use the average of %d", len(ldas), len(ar_same_shape))
+            ar_mean = numpy.mean(ar_same_shape, axis=0)
+            ar_data[polmode] = [model.DataArray(ar_mean, ar_same_shape[0].metadata)]
 
     # Merge all the data together as a single
     ar_data = list(ldas[0] for ldas in ar_data.values())
