@@ -31,6 +31,7 @@ from odemis import util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, CancellableFuture
 from odemis.util import to_str_escape
 import os
+import queue
 import re
 import serial
 import threading
@@ -47,6 +48,7 @@ RS_VALID = b"@"
 RS_INVALID = b"#"
 RS_SUCCESS = b">"
 RS_FAIL = b"*"
+RS_EOL = b"\r\n"
 
 
 class RemconError(Exception):
@@ -76,7 +78,6 @@ class SEM(model.HwComponent):
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        self.eol = b"\r\n"
         # create a special function, that look for the port, cf _findDevice
         self._ser_access = threading.Lock()
         self._ser_access_sub = threading.Lock()
@@ -204,53 +205,76 @@ class SEM(model.HwComponent):
                           "to the SEM PC. No Zeiss SEM found on ports %s" %
                           (ports,))
 
-    def _SendCmd(self, cmd):
+    def _SendCmd(self, cmd, timeout=10):
         """
         Send query/order to device
         cmd: valid query command for Remcon SEM
+        timeout (0<float): maximum time to wait for the response
         returns bytes if successful, otherwise raises error
         """
-        cmd = cmd + self.eol
+        cmd = cmd + RS_EOL
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
-            # Acknowledge
-            ack = self._serial.read()  # valid/invalid
-            if ack not in (RS_VALID, RS_INVALID):
-                raise IOError("Acknowledge sign is expected, received '%s' instead." % ack)
-            ans = ack
-
-            # EOL
-            while ans[-len(self.eol):] != self.eol:
+            # Read the acknowledgement (should come back immediately)
+            # eg: @\r\n
+            ans = b""
+            while not ans.endswith(RS_EOL):
                 char = self._serial.read()
                 if not char:
+                    logging.error("Received answer %s, and then timed out", to_str_escape(ans))
                     raise IOError("Timeout after receiving %s" % to_str_escape(ans))
                 else:
                     ans += char
             logging.debug("Received answer %s", to_str_escape(ans))
 
-            # Status
-            stat = self._serial.read()  # Success/fail
-            ans = stat
+            # Check the acknowledgement is correct
+            ack = ans[0:1]
+            if ack == RS_VALID:
+                pass
+            elif ack == RS_INVALID:
+                raise RemconError(0, "Invalid command %s" % to_str_escape(cmd))
+            else:
+                # Flush input, to be sure there is no extra data left
+                self._serial.flushInput()
+                raise IOError("Acknowledge byte expected, received '%s' instead." % to_str_escape(ack))
+
+            # Wait and read for complete answer
+            # eg: >20 20 5 0.0\r\n
+            try:
+                # We wait extra long for the first byte (status), the other ones
+                # should come just after.
+                self._serial.timeout = timeout
+                ans = b""
+                while not ans.endswith(RS_EOL):
+                    char = self._serial.read()
+                    if not char:
+                        logging.error("Received answer %s, and then timed out", to_str_escape(ans))
+                        raise IOError("Timeout after receiving %s" % to_str_escape(ans))
+                    else:
+                        ans += char
+                    if len(ans) == 1:  # reset after the first byte
+                        self._serial.timeout = 1
+                logging.debug("Received answer %s", to_str_escape(ans))
+            finally:
+                self._serial.timeout = 1
 
             # Value
-            while ans[-len(self.eol):] != self.eol:
-                char = self._serial.read()
-                if not char:
-                    raise IOError("Timeout after receiving %s" % to_str_escape(ans))
-                else:
-                    ans += char
-            logging.debug("Received answer %s", to_str_escape(ans))
-
-            value = ans[1:-len(self.eol)]
-            if stat == RS_SUCCESS:
+            status = ans[0:1]
+            value = ans[1:-len(RS_EOL)]
+            if status == RS_SUCCESS:
                 return value
-            elif stat == RS_FAIL:
-                raise RemconError(int(value),
-                                  "Error %s after receiving command %s." % (int(value), cmd))
+            elif status == RS_FAIL:
+                try:
+                    errno = int(value)
+                except ValueError:
+                    raise IOError("Unexpected failure response %s" % to_str_escape(ans))
+                raise RemconError(errno,
+                                  "Error %s after receiving command %s." % (errno, cmd))
             else:
-                raise IOError("Status sign is expected, received '%s' instead." % stat)
+                self._serial.flushInput()
+                raise IOError("Status byte expected, received '%s' instead." % to_str_escape(status))
 
     # Define 1 function per SEM command
     def NullCommand(self):
@@ -802,7 +826,7 @@ class Focus(model.Actuator):
         self._updatePosition()
 
         # Refresh regularly the position
-        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
+        self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
 
     def _updatePosition(self):
@@ -822,7 +846,7 @@ class Focus(model.Actuator):
         try:
             self._updatePosition()
         except Exception:
-            logging.exception("Unexpected failure when updating position")
+            logging.exception("Unexpected failure when updating focus position")
 
     def _doMoveRel(self, foc):
         """
@@ -895,12 +919,9 @@ class RemconSimulator(object):
 
     def __init__(self, timeout=1, *args, **kwargs):
         self.timeout = timeout
-        self._output_buf = b""  # what the commands sends back to the "host computer"
-        self._input_buf = b""  # what we receive from the "host computer"
 
         self._speed = 0.1  # mm/s
         self._hfw_nomag = 1  # m
-        self.eol = b'\r\n'
 
         # Initialize parameters
         self.magnification = 10
@@ -920,6 +941,13 @@ class RemconSimulator(object):
         self._end_move = 0
         self._stage_stop = threading.Event()
         self._is_moving = False
+
+        # Put None in the input_q to request     the end of the thread
+        self._input_q = queue.Queue()  # 1 byte at a time received from the "host computer"
+        self._output_q = queue.Queue()  # 1 byte at a time to the "host computer"
+
+        self._thread = threading.Thread(target=self._run_sim)
+        self._thread.start()
 
     def _run_move(self):
         try:
@@ -941,38 +969,55 @@ class RemconSimulator(object):
             self._is_moving = False
 
     def write(self, data):
-        self._input_buf += data
-        msgs = self._input_buf.split(self.eol)
-        for m in msgs[:-1]:
-            self._parseMessage(m)  # will update _output_buf
-
-        self._input_buf = msgs[-1]
+        for b in data:  # b is an int!
+            self._input_q.put(bytes([b]))
 
     def read(self, size=1):
-        ret = self._output_buf[:size]
-        self._output_buf = self._output_buf[len(ret):]
-
-        if len(ret) < size:
-            # simulate timeout
-            time.sleep(self.timeout)
-        return ret
+        buf = b""
+        while len(buf) < size:
+            try:
+                buf += self._output_q.get(timeout=self.timeout)
+            except queue.Empty:
+                break
+        return buf
 
     def flush(self):
-        pass
+        self._input_q = queue.Queue()  # New queue, empty
 
     def flushInput(self):
-        self._output_buf = b""
+        self._output_q = queue.Queue()  # New queue, empty
 
     def close(self):
-        # using read or write will fail after that
-        del self._output_buf
-        del self._input_buf
+        self._input_q.put(None)  # Special message to stop the thread
+
+    def _run_sim(self):
+        buf = b""
+        try:
+            while True:
+                c = self._input_q.get()
+                if c is None:  # The end
+                    return
+                buf += c
+                if buf.endswith(RS_EOL):
+                    try:
+                        self._parseMessage(buf[:-2])
+                    except Exception:
+                        logging.exception("Failure during message parsing")
+                    buf = b""
+        except Exception:
+            logging.exception("Failure in simulator")
+        finally:
+            logging.debug("Simulator thread ended")
 
     def _sendAck(self, status):
-        self._output_buf += b"%s\r\n" % (status,)
+        out = b"%s\r\n" % (status,)
+        for b in out:  # b is a int!
+            self._output_q.put(bytes([b]))
 
     def _sendAnswer(self, status, ans):
-        self._output_buf += b"%s%s\r\n" % (status, ans)
+        out = b"%s%s\r\n" % (status, ans)
+        for b in out:  # b is a int!
+            self._output_q.put(bytes([b]))
 
     def _parseMessage(self, msg):
         """
@@ -1012,6 +1057,8 @@ class RemconSimulator(object):
             self._sendAnswer(RS_SUCCESS, b"%G" % self.rotation)
         elif com == b"FOC?":
             self._sendAck(RS_VALID)
+            # Simulate a long answer
+            time.sleep(2)
             self._sendAnswer(RS_SUCCESS, b"%G" % self.focus)
         elif com == b"EHT?":
             self._sendAck(RS_VALID)
