@@ -257,18 +257,18 @@ class TestVacuumChamber(unittest.TestCase):
         """
         self.pressure.moveAbs({"vacuum": 1}, wait=False)
         sleep(0.5)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
         self.pressure.stop()
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
 
         self.pressure.moveAbs({"vacuum": 2}, wait=False)
         sleep(0.5)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
         self.pressure.stop()
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
 
         self.pressure.moveAbs({"vacuum": 0}, wait=False)
         sleep(0.5)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
         self.pressure.stop()
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
 
     def test_vacuum_real(self):
         """
@@ -411,13 +411,13 @@ class TestPumpingSystem(unittest.TestCase):
         """
         self.assertRaises(Exception, self.psys._updateSpeed, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
+            self.skipTest("TEST_NOHW is not set, data isn't copied from Target to Actual outside of simulation")
+
         test_value = 1.0
-        self.psys._system.TurboPump1.Speed.Actual = test_value
+        self.psys._system.TurboPump1.Speed.Target = test_value
         sleep(0.5)
         self.assertEqual(self.psys.speed.value, test_value)
-        self.psys._system.TurboPump1.Speed.Actual = 0
+        self.psys._system.TurboPump1.Speed.Target = 0
 
     def test_updateTemperature(self):
         """
@@ -425,13 +425,13 @@ class TestPumpingSystem(unittest.TestCase):
         """
         self.assertRaises(Exception, self.psys._updateTemperature, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
+            self.skipTest("TEST_NOHW is not set, data isn't copied from Target to Actual outside of simulation")
+
         test_value = 1.0
-        self.psys._system.TurboPump1.Temperature.Actual = test_value
+        self.psys._system.TurboPump1.Temperature.Target = test_value
         sleep(0.5)
         self.assertEqual(self.psys.temperature.value, test_value)
-        self.psys._system.TurboPump1.Temperature.Actual = 0
+        self.psys._system.TurboPump1.Temperature.Target = 0
 
     def test_updatePower(self):
         """
@@ -439,13 +439,13 @@ class TestPumpingSystem(unittest.TestCase):
         """
         self.assertRaises(Exception, self.psys._updatePower, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
+            self.skipTest("TEST_NOHW is not set, data isn't copied from Target to Actual outside of simulation")
+
         test_value = 1.0
-        self.psys._system.TurboPump1.Power.Actual = test_value
+        self.psys._system.TurboPump1.Power.Target = test_value
         sleep(0.5)
         self.assertEqual(self.psys.power.value, test_value)
-        self.psys._system.TurboPump1.Power.Actual = 0
+        self.psys._system.TurboPump1.Power.Target = 0
 
     def test_updateSpeedReached(self):
         """
@@ -454,27 +454,26 @@ class TestPumpingSystem(unittest.TestCase):
         """
         self.assertRaises(Exception, self.psys._updateSpeedReached, {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
+            self.skipTest("TEST_NOHW is not set, data isn't copied from Target to Actual outside of simulation")
+
         test_value = True
-        self.psys._system.TurboPump1.SpeedReached.Actual = test_value
+        self.psys._system.TurboPump1.SpeedReached.Target = test_value
         sleep(0.5)
         self.assertEqual(self.psys.speedReached.value, test_value)
-        self.psys._system.TurboPump1.SpeedReached.Actual = False
+        self.psys._system.TurboPump1.SpeedReached.Target = False
 
     def test_updateTurboPumpOn(self):
         """
         Check that the turboPumpOn VA is updated correctly and an exception is raised when the wrong parameter is passed
         """
         self.assertRaises(Exception, self.psys._updateTurboPumpOn, {'parameter': self.psys._system.TurboPump1.Stop})
-        if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
-        test_value = True
-        self.psys._system.TurboPump1.IsOn.Actual = test_value
+
+        self.psys._system.TurboPump1.IsOn.Target = True
         sleep(0.5)
-        self.assertEqual(self.psys.turboPumpOn.value, test_value)
-        self.psys._system.TurboPump1.IsOn.Actual = False
+        self.assertTrue(self.psys.turboPumpOn.value)
+        self.psys._system.TurboPump1.IsOn.Target = False
+        sleep(0.5)
+        self.assertFalse(self.psys.turboPumpOn.value)
 
     def test_updatePrimaryPumpOn(self):
         """
@@ -482,14 +481,13 @@ class TestPumpingSystem(unittest.TestCase):
         passed
         """
         self.assertRaises(Exception, self.psys._updatePrimaryPumpOn, {'parameter': self.psys._system.TurboPump1.Stop})
-        if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
-        test_value = True
-        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Actual = test_value
+
+        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Target = True
         sleep(0.5)
-        self.assertEqual(self.psys.primaryPumpOn.value, test_value)
-        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
+        self.assertTrue(self.psys.primaryPumpOn.value)
+        self.oserver.datamodel.HybridPlatform.PrimaryPumpState.Target = False
+        sleep(0.5)
+        self.assertFalse(self.psys.primaryPumpOn.value)
 
     def test_updateNitrogenPressure(self):
         """
@@ -499,13 +497,12 @@ class TestPumpingSystem(unittest.TestCase):
         self.assertRaises(Exception, self.psys._updateNitrogenPressure,
                           {'parameter': self.psys._system.TurboPump1.Stop})
         if not TEST_NOHW:
-            self.skipTest("TEST_NOHW is not set, cannot force data on Actual parameters of Orsay server outside of "
-                          "simulation")
+            self.skipTest("TEST_NOHW is not set, data isn't copied from Target to Actual outside of simulation")
         test_value = 1.0
-        self.psys._system.Manometer1.Pressure.Actual = test_value
+        self.psys._system.Manometer1.Pressure.Target = test_value
         sleep(0.5)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
-        self.psys._system.Manometer1.Pressure.Actual = 0
+        self.psys._system.Manometer1.Pressure.Target = 0
 
 
 class TestUPS(unittest.TestCase):
