@@ -5,7 +5,7 @@ Created on 11 May 2020
 
 @author: Sabrina Rossberger, Kornee Kleijwegt
 
-Copyright © 2019-2020 Kornee Kleijwegt, Delmic
+Copyright © 2019-2021 Kornee Kleijwegt, Delmic
 
 This file is part of Odemis.
 
@@ -931,7 +931,7 @@ class TestMPPC(unittest.TestCase):
         self.assertEqual(self.MPPC.dataContent.value, key)  # Check if variable remains unchanged
 
     def test_cellTranslationVA(self):
-        """ Testing assigning of different values to the tuple structure"""
+        """ Testing the cell translation VA (position of the cell image within the overscanned cell image)"""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of x values being from 10 to 17, and for y values from 100 to
         # 107. This allows to have a human readable check on the tuple structure created while testing input values.
@@ -939,8 +939,7 @@ class TestMPPC(unittest.TestCase):
             tuple(tuple((10 + j, 100 + j) for j in range(i, i + self.MPPC.shape[0]))
                   for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
 
-        self.assertEqual(
-                self.MPPC.cellTranslation.value,
+        self.assertEqual(self.MPPC.cellTranslation.value,
                 tuple(tuple((10 + j, 100 + j) for j in range(i, i + self.MPPC.shape[0]))
                       for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0])))
 
@@ -993,26 +992,27 @@ class TestMPPC(unittest.TestCase):
             self.MPPC.cellTranslation.value = tuple(tuple((50, 50.0) for i in range(0, self.MPPC.shape[0]))
                                                     for i in range(0, self.MPPC.shape[1]))
         self.assertEqual(self.MPPC.cellTranslation.value,
-                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0])) for i in
-                               range(0, self.MPPC.shape[1])))
+                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0]))
+                               for i in range(0, self.MPPC.shape[1])))
 
         # Negative number for x
         with self.assertRaises(ValueError):
             self.MPPC.cellTranslation.value = tuple(tuple((-1, 50) for i in range(0, self.MPPC.shape[0]))
                                                     for i in range(0, self.MPPC.shape[1]))
         self.assertEqual(self.MPPC.cellTranslation.value,
-                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0])) for i in
-                               range(0, self.MPPC.shape[1])))
+                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0]))
+                               for i in range(0, self.MPPC.shape[1])))
 
         # Negative number for y
         with self.assertRaises(ValueError):
             self.MPPC.cellTranslation.value = tuple(tuple((50, -1) for i in range(0, self.MPPC.shape[0]))
                                                     for i in range(0, self.MPPC.shape[1]))
         self.assertEqual(self.MPPC.cellTranslation.value,
-                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0])) for i in
-                               range(0, self.MPPC.shape[1])))
+                         tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0]))
+                               for i in range(0, self.MPPC.shape[1])))
 
     def test_cellDarkOffsetVA(self):
+        """ Testing the dark offset VA (background noise per cell)"""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of values being from 0 to 7. This allows to have a human
         # readable check on the tuple structure created while testing input values.
@@ -1020,15 +1020,13 @@ class TestMPPC(unittest.TestCase):
             tuple(tuple(j for j in range(i, i + self.MPPC.shape[0]))
                   for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
 
-        self.assertEqual(
-                self.MPPC.cellDarkOffset.value,
-                tuple(tuple(j for j in range(i, i + self.MPPC.shape[0]))
-                      for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
-        )
+        self.assertEqual(self.MPPC.cellDarkOffset.value,
+                         tuple(tuple(j for j in range(i, i + self.MPPC.shape[0]))
+                               for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0])))
 
-        # Changing the digital gain back to something simple
-        self.MPPC.cellDarkOffset.value = tuple(
-                tuple(0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        # Changing the dark offset back to something simple
+        self.MPPC.cellDarkOffset.value = \
+            tuple(tuple(0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
 
         # Test missing rows
         with self.assertRaises(ValueError):
@@ -1059,6 +1057,7 @@ class TestMPPC(unittest.TestCase):
                          tuple(tuple(0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1])))
 
     def test_cellDigitalGainVA(self):
+        """ Testing the digital gain VA (amplification value per cell)"""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of values being from 0.0 to 7.0. This allows to have a human
         # readable check on the tuple structure created while testing input values.
@@ -1066,15 +1065,13 @@ class TestMPPC(unittest.TestCase):
             tuple(tuple(float(j) for j in range(i, i + self.MPPC.shape[0]))
                   for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
 
-        self.assertEqual(
-                self.MPPC.cellDigitalGain.value,
-                tuple(tuple(float(j) for j in range(i, i + self.MPPC.shape[0]))
-                      for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
-        )
+        self.assertEqual(self.MPPC.cellDigitalGain.value,
+                         tuple(tuple(float(j) for j in range(i, i + self.MPPC.shape[0]))
+                               for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0])))
 
         # Changing the digital gain back to something simple
-        self.MPPC.cellDigitalGain.value = tuple(
-                tuple(0.0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.MPPC.cellDigitalGain.value = \
+            tuple(tuple(0.0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
 
         # Test missing rows
         with self.assertRaises(ValueError):
@@ -1087,12 +1084,6 @@ class TestMPPC(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.MPPC.cellDigitalGain.value = tuple(tuple(0.0 for i in range(0, self.MPPC.shape[0]))
                                                     for i in range(0, self.MPPC.shape[1] - 1))
-        self.assertEqual(self.MPPC.cellDigitalGain.value,
-                         tuple(tuple(0.0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1])))
-
-        # Test int as type for input value (should be converted to a float)
-        self.MPPC.cellDigitalGain.value = tuple(
-                tuple(int(0) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
         self.assertEqual(self.MPPC.cellDigitalGain.value,
                          tuple(tuple(0.0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1])))
 

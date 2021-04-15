@@ -4,7 +4,7 @@ Created on 11 May 2020
 
 @author: Sabrina Rossberger, Kornee Kleijwegt
 
-Copyright © 2019-2020 Kornee Kleijwegt, Delmic
+Copyright © 2019-2021 Kornee Kleijwegt, Delmic
 
 This file is part of Odemis.
 
@@ -1374,37 +1374,37 @@ class MPPC(model.Detector):
             raise ValueError("An incorrect shape of the cell translation parameters is provided.\n "
                              "Please change the shape of the cell translation parameters according to the shape of the "
                              "mppc detector.\n "
-                             "Cell translation parameters remain unchanged.")
+                             "Cell translation parameter values remain unchanged.")
 
         for row, cellTranslationRow in enumerate(cellTranslation):
             if len(cellTranslationRow) != self._shape[1]:
                 raise ValueError("An incorrect shape of the cell translation parameters is provided.\n"
-                                 "Please change the shape of the cellTranslation parameters according to the shape of "
+                                 "Please change the shape of the cell translation parameters according to the shape of "
                                  "the mppc detector.\n "
-                                 "Cell translation parameters remain unchanged.")
+                                 "Cell translation parameter values remain unchanged.")
 
             for column, eff_origin in enumerate(cellTranslationRow):
-                if not isinstance(eff_origin, tuple) or len(eff_origin) != 2:
+                if not isinstance(eff_origin, (tuple, list)) or len(eff_origin) != 2:
                     raise ValueError("Incorrect cell translation parameters provided, wrong number/type of coordinates "
                                      "for cell (%s, %s) are provided.\n"
-                                     "Please provide an 'x effective origin' and an 'y effective origin' for this cell "
-                                     "image.\n "
-                                     "Cell translation parameters remain unchanged." %
+                                     "Cell translation parameter values remain unchanged." %
                                      (row, column))
 
                 if not isinstance(eff_origin[0], int) or not isinstance(eff_origin[1], int):
                     raise ValueError(
                             "An incorrect type is used for the cell translation coordinates of cell (%s, %s).\n"
-                            "Please use type integer for both 'x effective origin' and and 'y effective "
-                            "origin' for this cell image.\n"
                             "Type expected is: '(%s, %s)' type received '(%s, %s)'\n"
-                            "Cell translation parameters remain unchanged." %
+                            "Cell translation parameter values remain unchanged." %
                             (row, column, int, int, type(eff_origin[0]), type(eff_origin[1])))
 
-                elif eff_origin[0] < 0 or eff_origin[1] < 0:
+                if eff_origin[0] < 0 or eff_origin[1] < 0:
                     raise ValueError("Please use a minimum of 0 cell translation coordinates of cell (%s, %s).\n"
-                                     "Cell translation parameters remain unchanged." %
+                                     "Cell translation parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellTranslation = tuple(tuple(tuple(item) for item in row) for row in cellTranslation)
+
         return cellTranslation
 
     def _setCellDigitalGain(self, cellDigitalGain):
@@ -1421,34 +1421,30 @@ class MPPC(model.Detector):
         if len(cellDigitalGain) != self._shape[0]:
             raise ValueError("An incorrect shape of the digital gain parameters is provided. Please change the "
                              "shape of the digital gain parameters according to the shape of the mppc detector.\n"
-                             "Digital gain parameters value remain unchanged.")
+                             "Digital gain parameter values remain unchanged.")
 
         for row, cellDigitalGain_row in enumerate(cellDigitalGain):
             if len(cellDigitalGain_row) != self._shape[1]:
                 raise ValueError("An incorrect shape of the digital gain parameters is provided.\n"
                                  "Please change the shape of the digital gain parameters according to the shape of the "
                                  "mppc detector.\n "
-                                 "Digital gain parameters value remain unchanged.")
+                                 "Digital gain parameter values remain unchanged.")
 
             for column, DigitalGain in enumerate(cellDigitalGain_row):
-                if isinstance(DigitalGain, int):
-                    # Convert all input values to floats.
-                    logging.warning("Input integer values for the digital gain are converted to floats.")
-                    cellDigitalGain = tuple(tuple(float(cellDigitalGain[i][j]) for j in range(0, self.shape[0]))
-                                            for i in range(0, self.shape[0]))
-                    # Call the setter again with all int values converted to floats and return the output
-                    return self._setCellDigitalGain(cellDigitalGain)
 
-                elif not isinstance(DigitalGain, float):
+                if not isinstance(DigitalGain, (int, float)):
                     raise ValueError("An incorrect type is used for the digital gain parameters of cell (%s, %s).\n"
-                                     "Please use type float for digital gain parameters for this cell image.\n"
-                                     "Type expected is: '%s' type received '%s' \n"
-                                     "Digital gain parameters value remain unchanged." %
-                                     (row, column, float, type(DigitalGain)))
-                elif DigitalGain < 0:
+                                     "Type expected is: '%s' or '%s'; type received '%s' \n"
+                                     "Digital gain parameter values remain unchanged." %
+                                     (row, column, float, int, type(DigitalGain)))
+
+                if DigitalGain < 0:
                     raise ValueError("Please use a minimum of 0 for digital gain parameters of cell image (%s, %s).\n"
-                                     "Digital gain parameters value remain unchanged." %
+                                     "Digital gain parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellDigitalGain = tuple(tuple(item) for item in cellDigitalGain)
 
         return cellDigitalGain
 
@@ -1456,9 +1452,8 @@ class MPPC(model.Detector):
         """
         Setter for the dark offset of the cells, each cell has a dark offset stored as an integer (compensating for
         the offset in darkness in each detector cell). The dark offset  values for a full row are nested in a tuple.
-        And finally, all dark offset values per row are nested in a another tuple
-        representing the full cell image. This setter checks the correct shape of the nested tuples, the type and
-        minimum value.
+        And finally, all dark offset values per row are nested in a another tuple representing the full cell image.
+        This setter checks the correct shape of the nested tuples, the type and minimum value.
 
         :param cellDarkOffset: (nested tuple of ints)
         :return: cellDarkOffset: (nested tuple of ints)
@@ -1467,14 +1462,14 @@ class MPPC(model.Detector):
             raise ValueError("An incorrect shape of the dark offset parameters is provided.\n"
                              "Please change the shape of the dark offset parameters according to the shape of the mppc "
                              "detector.\n "
-                             "Dark offset parameters value remain unchanged.")
+                             "Dark offset parameter values remain unchanged.")
 
         for row, cellDarkOffsetRow in enumerate(cellDarkOffset):
             if len(cellDarkOffsetRow) != self._shape[1]:
                 raise ValueError("An incorrect shape of the dark offset parameters is provided.\n"
                                  "Please change the shape of the dark offset parameters according to the shape of the "
                                  "mppc detector.\n "
-                                 "Dark offset parameters value remain unchanged.")
+                                 "Dark offset parameter values remain unchanged.")
 
             for column, DarkOffset in enumerate(cellDarkOffsetRow):
                 if not isinstance(DarkOffset, int):
@@ -1482,13 +1477,16 @@ class MPPC(model.Detector):
                                      "%s). \n"
                                      "Please use type integer for dark offset for this cell image.\n"
                                      "Type expected is: '%s' type received '%s' \n"
-                                     "Dark offset parameters value remain unchanged." %
+                                     "Dark offset parameter values remain unchanged." %
                                      (row, column, int, type(DarkOffset)))
 
-                elif DarkOffset < 0:
+                if DarkOffset < 0:
                     raise ValueError("Please use a minimum of 0 for dark offset parameters of cell image (%s, %s).\n"
-                                     "Dark offset parameters value remain unchanged." %
+                                     "Dark offset parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellDarkOffset = tuple(tuple(item) for item in cellDarkOffset)
 
         return cellDarkOffset
 
