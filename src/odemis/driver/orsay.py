@@ -151,7 +151,6 @@ class pneumaticSuspension(model.HwComponent):
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
-        self._parent = parent
         self._valve = parent.datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen
         self._gauge = parent.datamodel.HybridPlatform.Manometer2.Pressure
 
@@ -159,8 +158,8 @@ class pneumaticSuspension(model.HwComponent):
         self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
         self.power = model.BooleanVA(False, setter=self._changeValve)
 
-        self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Subscribe(self._updateErrorState)
-        self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Subscribe(self._updateErrorState)
+        self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Subscribe(self._updateErrorState)
+        self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Subscribe(self._updateErrorState)
         self._valve.Subscribe(self._updatePower)
         self._gauge.Subscribe(self._updatePressure)
 
@@ -202,18 +201,20 @@ class pneumaticSuspension(model.HwComponent):
         """
         Reads the error state from the Orsay server and saves it in the state VA
         """
-        if parameter is not self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
-                not self._parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
+        if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
+                not self.parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
             raise Exception("Incorrect parameter passed to _updateErrorState. Parameter should be "
                             "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
                             "datamodel.HybridPlatform.Manometer2.ErrorState or None")
         elif attributeName == "Actual":
             eState = ""
-            vpsEState = str(self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
-            manEState = str(self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
-            if not vpsEState == "0" and not vpsEState == 0 and vpsEState is not None and not vpsEState == "":
+            vpsEState = str(self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
+            manEState = str(self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
+            if not vpsEState == "0" and not vpsEState == 0 and vpsEState is not None and not vpsEState == "" \
+                    and not vpsEState.lower() == "none":
                 eState += "ValvePneumaticSuspension error: " + vpsEState
-            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "":
+            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "" \
+                    and not manEState.lower() == "none":
                 if not eState == "":
                     eState += ", "
                 eState += "Manometer2 error: " + manEState
@@ -240,8 +241,8 @@ class pneumaticSuspension(model.HwComponent):
         """
         Called when Odemis is closed
         """
-        self._parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Unsubscribe(self._updateErrorState)
-        self._parent.datamodel.HybridPlatform.Manometer2.ErrorState.Unsubscribe(self._updateErrorState)
+        self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Unsubscribe(self._updateErrorState)
+        self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Unsubscribe(self._updateErrorState)
         self._valve.Unsubscribe(self._updatePower)
         self._gauge.Unsubscribe(self._updatePressure)
         self._valve = None
@@ -269,14 +270,13 @@ class vacuumChamber(model.Actuator):
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
-        self._parent = parent
         self._gate = parent.datamodel.HybridPlatform.ValveP5
         self._chamber = parent.datamodel.HybridPlatform.AnalysisChamber
 
         self.state = model.StringVA("", readonly=True)
         self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
         self.gateOpen = model.BooleanVA(False, setter=self._changeGateOpen)
-        self.position = model.VigilantAttribute({"vacuum": 0, "gate": False}, readonly=True)
+        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
 
         self._vacuumStatusReached = threading.Event()
         self._vacuumStatusReached.set()
@@ -303,7 +303,8 @@ class vacuumChamber(model.Actuator):
         elif attributeName == "Actual":
             eState = ""
             gateEState = self._gate.ErrorState.Actual
-            if not gateEState == "0" and not gateEState == 0 and gateEState is not None and not gateEState == "":
+            if not gateEState == "0" and not gateEState == 0 and gateEState is not None and not gateEState == "" \
+                    and not gateEState.lower() == "none":
                 eState += "ValveP5 error: " + gateEState
             valve_state = int(self._gate.IsOpen.Actual)
             if valve_state == 3:  # in case of valve error
@@ -385,7 +386,7 @@ class vacuumChamber(model.Actuator):
         Move the axis of this actuator to pos.
         """
         self._checkMoveAbs(pos)
-        self._executor.submit(self._changeVacuum, goal=pos["vacuum"], wait=wait)
+        return self._executor.submit(self._changeVacuum, goal=pos["vacuum"], wait=wait)
 
     @isasync
     def moveRel(self, shift):
@@ -399,8 +400,8 @@ class vacuumChamber(model.Actuator):
         Stop changing the vacuum status
         """
         if not axes or "vacuum" in axes:
-            self._parent.datamodel.HybridPlatform.Stop.Target = 1
-            self._parent.datamodel.HybridPlatform.Cancel.Target = True
+            self.parent.datamodel.HybridPlatform.Stop.Target = 1
+            self.parent.datamodel.HybridPlatform.Cancel.Target = True
             self._executor.cancel()
 
     def terminate(self):
@@ -440,7 +441,6 @@ class pumpingSystem(model.HwComponent):
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
         self._system = parent.datamodel.HybridPlatform.PumpingSystem
-        self._parent = parent
 
         self.state = model.StringVA("", readonly=True)
         self.speed = model.FloatVA(0.0, readonly=True, unit="Hz")
@@ -458,7 +458,7 @@ class pumpingSystem(model.HwComponent):
         self._system.TurboPump1.Power.Subscribe(self._updatePower)
         self._system.TurboPump1.SpeedReached.Subscribe(self._updateSpeedReached)
         self._system.TurboPump1.IsOn.Subscribe(self._updateTurboPumpOn)
-        self._parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
+        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
         self._system.Manometer1.Pressure.Subscribe(self._updateNitrogenPressure)
 
         self._updateErrorState()
@@ -483,9 +483,11 @@ class pumpingSystem(model.HwComponent):
             eState = ""
             manEState = self._system.Manometer1.ErrorState.Actual
             tpEState = self._system.TurboPump1.ErrorState.Actual
-            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "":
+            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "" \
+                    and not manEState.lower() == "none":
                 eState += "Manometer1 error: " + manEState
-            if not tpEState == "0" and not tpEState == 0 and tpEState is not None and not tpEState == "":
+            if not tpEState == "0" and not tpEState == 0 and tpEState is not None and not tpEState == "" \
+                    and not tpEState.lower() == "none":
                 if not eState == "":
                     eState += ", "
                 eState += "TurboPump1 error: " + tpEState
@@ -550,8 +552,8 @@ class pumpingSystem(model.HwComponent):
         """
         Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
         """
-        parameter = self._parent.datamodel.HybridPlatform.PrimaryPumpState if (parameter is None) else parameter
-        if parameter is not self._parent.datamodel.HybridPlatform.PrimaryPumpState:
+        parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState if (parameter is None) else parameter
+        if parameter is not self.parent.datamodel.HybridPlatform.PrimaryPumpState:
             raise Exception("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
                             "datamodel.HybridPlatform.PrimaryPumpState")
         elif attributeName == "Actual":
@@ -579,7 +581,7 @@ class pumpingSystem(model.HwComponent):
         self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
         self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
         self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
-        self._parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
+        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
         self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
         self._system = None
 
@@ -598,7 +600,6 @@ class UPS(model.HwComponent):
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
         self._system = parent.datamodel.HybridPlatform.UPS
-        self._parent = parent
 
         self.level = model.FloatVA(1.0, readonly=True, unit="")
         self._system.UPScontroller.BatteryLevel.Subscribe(self._updateLevel)
