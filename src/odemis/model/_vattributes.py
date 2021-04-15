@@ -794,11 +794,20 @@ class TupleVA(VigilantAttribute):
     def __init__(self, value=None, *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
+    def _set_value(self, value, **kwargs):
+        if isinstance(value, list):
+            # force tuple
+            value = tuple(value)
+        VigilantAttribute._set_value(self, value, **kwargs)
+    # need to overwrite the whole property
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value,
+                     "The actual value")
+
     def _check(self, value):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
+        # TODO remove None functionality in future?
         if not (isinstance(value, tuple) or value is None):
             raise TypeError("Value '%r' is not a tuple." % value)
-
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
