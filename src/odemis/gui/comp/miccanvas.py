@@ -216,7 +216,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.gadget_overlay = world_overlay.GadgetOverlay(self, tab_data.tool)
             # Ruler selection overlay: always shown & active
             self.add_world_overlay(self.gadget_overlay)
-            self.gadget_overlay.activate()
+            self.gadget_overlay.active.value = True
 
         if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
@@ -302,9 +302,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 view = self.view
                 self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
             self.add_view_overlay(self._pixelvalue_ol)
-            self._pixelvalue_ol.activate()
+            self._pixelvalue_ol.active.value = True
         elif self._pixelvalue_ol:
-            self._pixelvalue_ol.deactivate()
+            self._pixelvalue_ol.active.value = False
             self.remove_view_overlay(self._pixelvalue_ol)
 
     @ignore_dead
@@ -335,17 +335,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             if use_world:
                 self.add_world_overlay(self._spotmode_ol)
-                self._spotmode_ol.activate()
+                self._spotmode_ol.active.value = True
             else:
                 self.add_view_overlay(self._spotmode_ol)
-                self._spotmode_ol.activate()
+                self._spotmode_ol.active.value = True
 
         elif self._spotmode_ol:
             if use_world:
                 self.remove_world_overlay(self._spotmode_ol)
             else:
                 self.remove_view_overlay(self._spotmode_ol)
-            self._spotmode_ol.deactivate()
+            self._spotmode_ol.active.value = False
 
         if self._spotmode_ol:
             self.view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
@@ -358,9 +358,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.dicho_overlay = view_overlay.DichotomyOverlay(self,
                                                                    self._tab_data_model.dicho_seq)
                 self.add_view_overlay(self.dicho_overlay)
-            self.dicho_overlay.activate()
+            self.dicho_overlay.active.value = True
         elif self.dicho_overlay:
-            self.dicho_overlay.deactivate()
+            self.dicho_overlay.active.value = False
 
     # TODO: move the logic of 'tool -> overlay' to the (tab?) controller
     # => different mode for "pixel" or "point"
@@ -383,20 +383,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not len(stream_tree):
                 return
             elif stream_tree.get_projections_by_type(stream.SpectrumStream):
-                self.pixel_overlay.activate()
+                self.pixel_overlay.active.value = True
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
                 self.add_world_overlay(self.points_overlay)
-                self.points_overlay.activate()
+                self.points_overlay.active.value = True
             elif any(isinstance(s, stream.SpectrumStream) for s in tab_streams):
-                self.pixel_overlay.activate()
+                self.pixel_overlay.active.value = True
                 self.add_world_overlay(self.pixel_overlay)
         else:
             if self.pixel_overlay:
-                self.pixel_overlay.deactivate()
+                self.pixel_overlay.active.value = False
                 self.remove_world_overlay(self.pixel_overlay)
             if self.points_overlay:
-                self.points_overlay.deactivate()
+                self.points_overlay.active.value = False
                 self.remove_world_overlay(self.points_overlay)
 
     def _set_line_select_mode(self, tool_mode):
@@ -407,11 +407,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # is attached to the view
             stream_tree = self.view.stream_tree
             if stream_tree.get_projections_by_type(stream.SpectrumStream):
-                self.line_overlay.activate()
+                self.line_overlay.active.value = True
                 self.add_world_overlay(self.line_overlay)
         else:
             if self.line_overlay:
-                self.line_overlay.deactivate()
+                self.line_overlay.active.value = False
                 self.remove_world_overlay(self.line_overlay)
 
     # END Overlay creation and activation
@@ -924,15 +924,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_roa_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_ROA:
-            self.roa_overlay.activate()
+            self.roa_overlay.active.value = True
         elif self.roa_overlay:
-            self.roa_overlay.deactivate()
+            self.roa_overlay.active.value = False
 
     def _set_dc_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_RO_ANCHOR:
-            self.driftcor_overlay.activate()
+            self.driftcor_overlay.active.value = True
         elif self.driftcor_overlay:
-            self.driftcor_overlay.deactivate()
+            self.driftcor_overlay.active.value = False
 
         # TODO: maybe should not be called directly, but should be a VA on the view or the tab?
     def show_repetition(self, rep, style=None):
@@ -1167,14 +1167,14 @@ class BarPlotCanvas(canvas.PlotCanvas):
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
         if data is not None:
-            self.markline_overlay.activate()
+            self.markline_overlay.active.value = True
         else:
-            self.markline_overlay.deactivate()
+            self.markline_overlay.active.value = False
 
     def clear(self):
         super(BarPlotCanvas, self).clear()
         self.markline_overlay.clear_labels()
-        self.markline_overlay.deactivate()
+        self.markline_overlay.active.value = False
         wx.CallAfter(self.update_drawing)
 
     def setView(self, view, tab_data):
@@ -1494,7 +1494,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = None
         self.range_y = None
         self.markline_overlay.clear_labels()
-        self.markline_overlay.deactivate()
+        self.markline_overlay.active.value = False
         wx.CallAfter(self.update_drawing)
 
     def setView(self, view, tab_data):
@@ -1548,7 +1548,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = range_x
         self.range_y = range_y
 
-        self.markline_overlay.activate()
+        self.markline_overlay.active.value = True
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
@@ -1667,7 +1667,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         # any image changes
         self.view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
-        self.polar_overlay.activate()
+        self.polar_overlay.active.value = True
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as

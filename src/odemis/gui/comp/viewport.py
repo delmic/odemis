@@ -698,9 +698,9 @@ class OverviewViewport(MicroscopeViewport):
         # while the chamber is opened)
         if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
                 self._view.has_stage()):
-            self.canvas.point_select_overlay.activate()
+            self.canvas.point_select_overlay.active.value = True
         else:
-            self.canvas.point_select_overlay.deactivate()
+            self.canvas.point_select_overlay.active.value = False
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position
@@ -803,11 +803,11 @@ class ARLiveViewport(LiveViewport):
         """ Activate the mirror overlay to enable user manipulation """
         self.canvas.add_world_overlay(self.canvas.mirror_ol)
         if activate:
-            self.canvas.mirror_ol.activate()
+            self.canvas.mirror_ol.active.value = True
 
     def hide_mirror_overlay(self):
         """ Deactivate the mirror overlay to disable user manipulation """
-        self.canvas.mirror_ol.deactivate()
+        self.canvas.mirror_ol.active.value = False
         self.canvas.remove_world_overlay(self.canvas.mirror_ol)
 
 
@@ -1545,12 +1545,12 @@ class PointSpectrumViewport(NavigablePlotViewport):
     def _on_peak_method(self, state):
         if state is not None:
             self.canvas.add_view_overlay(self._curve_overlay)
-            self._curve_overlay.activate()
+            self._curve_overlay.active.value = True
             if self._projection is not None:
                 # Force update of the peak_method
                 self._on_new_data(self._projection.image.value)
         else:
-            self._curve_overlay.deactivate()
+            self._curve_overlay.active.value = False
             self.canvas.remove_view_overlay(self._curve_overlay)
             self.canvas.Refresh()
 
