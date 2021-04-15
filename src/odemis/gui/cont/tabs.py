@@ -462,23 +462,6 @@ class LocalizationTab(Tab):
     def streambar_controller(self):
         return self._streambar_controller
 
-    @staticmethod
-    def create_overlays(cnvs):
-        """
-        Create needed overlays for the given canvas.
-        The method is static to be used by other tabs (ie chamber)
-        :param cnvs: the canvas to add the created overlays to it
-        """
-        cnvs.enable_drag()
-        # Add current position cross hair overlay to the top left canvas
-        cpol = CurrentPosCrossHairOverlay(cnvs)
-        cnvs.add_world_overlay(cpol)
-        # Add stage point select overlay to the top left canvas
-        slol = StagePointSelectOverlay(cnvs)
-        # Todo: proper activation from the viewport
-        slol.activate()
-        cnvs.add_world_overlay(slol)
-
     def _create_views(self, main_data, viewports):
         """
         Create views depending on the actual hardware present
@@ -2104,7 +2087,6 @@ class CryoChamberTab(Tab):
              }), ])
 
         self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self._tab_data_model = tab_data
         self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
@@ -2208,7 +2190,7 @@ class CryoChamberTab(Tab):
         """
         # Replace the old streams with the newly acquired ones in the view
 
-        overview_view = next((view for view in self._tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
         if not overview_view:
             logging.warning("Could not find view of type FeatureOverviewView.")
             return
