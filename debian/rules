@@ -3,11 +3,9 @@
 VER := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 
 %:
-	dh $@ --with python2,python3 --with sphinxdoc
+	dh $@ --with python3 --with sphinxdoc
 
 override_dh_auto_install:
-	# Don't use Python 2 scripts, so copy them in some non-standard directory
-	python setup.py install --root debian/odemis --install-layout=deb --install-scripts usr/lib/odemis/python2/
 	python3 setup.py install --root debian/odemis --install-layout=deb
 
 override_dh_installdocs:
@@ -18,23 +16,18 @@ override_dh_installdocs:
 	make -C doc/develop/ images # To build dependencies (eg: SVG -> PDF)
 
 	# build & install multiple doc in multiple formats
-	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder html --version $(VER) --release $(VER)
+	python3 setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder html --version $(VER) --release $(VER)
 	# HTML is build/doc/develop/html/ , but rename so that it looks like ../develop-html
 	mv build/doc/develop/html/ build/doc/develop/develop-html
 	dh_installdocs build/doc/develop/develop-html
 	
 	# rst -> latex -> pdf
-	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder latex --version $(VER) --release $(VER)
+	python3 setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder latex --version $(VER) --release $(VER)
 	make -C build/doc/develop/latex all-pdf # PDF is build/doc/develop/latex/odemis-develop.pdf
 	dh_installdocs build/doc/develop/latex/odemis-develop.pdf
-	
+
 	# Install the "normal" documentation files (not needed? taken care by setup.py?)
 	#dh_installdocs
-
-override_dh_python:
-	# Leave the scripts marked as /usr/bin/python as-is. We'll switch to Python 3
-	# explicitily.
-	dh_python --no-shebang-rewrite
 
 override_dh_python3:
 	# Leave the scripts marked as /usr/bin/python as-is. We'll switch to Python 3
