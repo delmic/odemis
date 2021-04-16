@@ -86,7 +86,11 @@ class TestAR(unittest.TestCase):
 
         # Give one DA, the correct one, so expect to get it back
         out = calibration.get_ar_data([calib, calib2])
-        numpy.testing.assert_equal(out.shape, calib.shape)  # For now, it picks the first one
+        # The average (of calib=0 and calib2=1)
+        numpy.testing.assert_equal(out.shape, calib.shape)
+        numpy.testing.assert_equal(out, 0.5)
+        self.assertIsInstance(out, model.DataArray)
+        self.assertEqual(out.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
 
         # More DataArrays, just to make it slightly harder to find the data
         data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
@@ -94,7 +98,9 @@ class TestAR(unittest.TestCase):
         data2 = model.DataArray(17 * numpy.ones((1, 1), dtype=numpy.uint16),
                                 metadata={model.MD_POS: (1.2e-3, -30e-3)})
         out = calibration.get_ar_data([data1, calib2, data2, calib])
-        numpy.testing.assert_equal(out, calib2)
+        numpy.testing.assert_equal(out.shape, calib.shape)
+        numpy.testing.assert_equal(out, 0.5)
+        self.assertIsInstance(out, model.DataArray)
 
     def test_load_full(self):
         """
