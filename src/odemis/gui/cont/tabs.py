@@ -5089,6 +5089,8 @@ class Sparc2AlignTab(Tab):
             # Update GUI
             self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
         else:  # manual focus button is untoggled
+            # First pause the streams
+            self._stream_controller.pauseStreams()
             # Go back to previous mode (=> open the slit & turn off the lamp)
             # Get the optical path from align mode
             opath = self._mode_to_opm[align_mode]
