@@ -15,7 +15,7 @@ import sys
 import numpy
 
 # To be updated to the current version
-VERSION = "3.1.3"
+VERSION = "3.1.4"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 

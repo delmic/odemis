@@ -1,3 +1,17 @@
+odemis (3.1.4-1) xenial; urgency=medium
+
+  * New version: 3.1.4
+  * Main bug fixes:
+     - Reduce SPARC live update frequency to 0.5 Hz.
+     - Delay PMT protection a tiny bit after end of acquisition
+     - Fix regression preventing loading AR background containing multiple AR images
+     - Fix Fluorescence stream ordering when emission is the same between two streams
+     - Fix the year in filename sometimes replaced by %Y
+     - Fix hamamatsurx driver incorrectly logging an error at init with Python 3
+     - After SPARC manual focus, immediately pause the stream, to keep the slit image
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 16 Apr 2021 12:32:27 +0200
+
 odemis (3.1.3-1) xenial; urgency=medium
 
   * New version: 3.1.3
