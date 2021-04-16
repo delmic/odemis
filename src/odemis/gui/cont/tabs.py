@@ -2062,11 +2062,27 @@ class CryoChamberTab(Tab):
         # Get previous project dir from configuration
         prev_dir = self.conf.pj_last_path
 
+        def get_mount_point(pathname):
+            """
+            Get the mount point of the filesystem containing pathname
+            """
+            pathname = os.path.normcase(os.path.realpath(pathname))
+            parent_device = path_device = os.stat(pathname).st_dev
+            mount_point = ""
+            while parent_device == path_device:
+                mount_point = pathname
+                pathname = os.path.dirname(pathname)
+                if pathname == mount_point:
+                    break
+                parent_device = os.stat(pathname).st_dev
+            return mount_point
+
         def check_same_partition(source, destination):
             """
             Check if source and destination dirs in the same partition
             """
-            return os.stat(source).st_dev == os.stat(destination).st_dev
+            # Mount point of source would be the same in destination if both in same partition
+            return destination.startswith(get_mount_point(source))
 
         def move_files(source, destination):
             """
