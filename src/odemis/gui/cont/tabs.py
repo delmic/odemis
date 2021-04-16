@@ -610,6 +610,7 @@ class LocalizationTab(Tab):
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
+
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -3728,7 +3729,7 @@ class SecomAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
-
+        
     def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
