@@ -41,7 +41,6 @@ other dealings in the software.
 
 from __future__ import division
 
-from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -57,8 +56,10 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
 import os.path
+from past.builtins import long
 import threading
 import time
+import wx
 
 import odemis.util.driver as udriver
 
@@ -741,7 +742,7 @@ class SpectralARScanStream(stream.Stream):
 
 class ARspectral(Plugin):
     name = "AR/Spectral"
-    __version__ = "2.3"
+    __version__ = "2.4"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -852,7 +853,8 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, bigslit, main_data.opm, wl_inverted)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_data.getTabByName("sparc_acqui").tab_data_model
+        self._tab = main_data.getTabByName("sparc_acqui")
+        self._tab_data = self._tab.tab_data_model
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised
@@ -965,8 +967,7 @@ class ARspectral(Plugin):
         Finds the SEM survey stream in the acquisition tab
         return (SEMStream or None): None if not found
         """
-        tab_data = self.main_app.main_data.tab.value.tab_data_model
-        for s in tab_data.streams.value:
+        for s in self._tab_data.streams.value:
             if isinstance(s, stream.SEMStream):
                 return s
 
@@ -990,9 +991,17 @@ class ARspectral(Plugin):
         raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def start(self):
+        if self.main_app.main_data.tab.value.name != "sparc_acqui":
+            box = wx.MessageDialog(self.main_app.main_frame,
+                       "AR spectral acquisition must be done from the acquisition tab.",
+                       "AR spectral acquisition not possible", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
+
         # get region and dwelltime for drift correction
-        self._ARspectral_s.dcRegion.value = self._acqui_tab.driftCorrector.roi.value
-        self._ARspectral_s.dcDwellTime.value = self._acqui_tab.driftCorrector.dwellTime.value
+        self._ARspectral_s.dcRegion.value = self._tab_data.driftCorrector.roi.value
+        self._ARspectral_s.dcDwellTime.value = self._tab_data.driftCorrector.dwellTime.value
 
         # Update the grating position to its current position
         self.grating.value = self.sgrh.position.value["grating"]
@@ -1001,7 +1010,7 @@ class ARspectral(Plugin):
         self._survey_s = self._get_sem_survey()
 
         # For ROI:
-        roi = self._acqui_tab.semStream.roi.value
+        roi = self._tab_data.semStream.roi.value
         if roi == UNDEFINED_ROI:
             roi = (0, 0, 1, 1)
         self.roi.value = roi
@@ -1037,10 +1046,7 @@ class ARspectral(Plugin):
 
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
-        try:
-            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
-        except AttributeError: # Odemis v2.6 and earlier versions
-            str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        str_ctrl = self._tab.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
 
         strs = []
