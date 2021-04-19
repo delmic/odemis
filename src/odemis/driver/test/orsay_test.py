@@ -23,12 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import os
 import unittest
 from time import sleep
 from odemis.driver import orsay
 
-# TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
-TEST_NOHW = True
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
