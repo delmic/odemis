@@ -103,6 +103,26 @@ class TestOrsay(unittest.TestCase):
         test_string = "Some process information"
         self.oserver.datamodel.HybridPlatform.ProcessInfo.Actual = test_string
         self.assertEqual(self.oserver.processInfo.value, test_string)
+        self.oserver.datamodel.HybridPlatform.ProcessInfo.Actual = ""
+
+    def test_reconnection(self):
+        """
+        Checks that after reconnection things still work
+        """
+        self.oserver._device.HttpConnection.close()  # close the connection
+        self.oserver._device.MessageConnection.Connection.close()
+        self.oserver._device.DataConnection.Connection.close()
+        self.oserver._device.MessageConnection.dataConnection.Connection.close()
+        while not self.oserver.connected.is_set():
+            sleep(1)  # wait for the reconnection
+
+        # perform some test to check writing and reading still works
+        self.psus._valve.Target = 1
+        sleep(1)
+        self.assertTrue(self.psus.power.value)
+        self.psus._valve.Target = 2
+        sleep(1)
+        self.assertFalse(self.psus.power.value)
 
 
 class TestPneumaticSuspension(unittest.TestCase):
