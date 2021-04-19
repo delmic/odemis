@@ -432,6 +432,58 @@ class TestEBeamScanner(unittest.TestCase):
         self.EBeamScanner.resolution.value = (6385, 6385)
         self.assertEqual(self.EBeamScanner.resolution.value, (6400, 6400))
 
+    def test_VA_dependencies(self):
+        """ Testing the dependencies between the scanner.resolution, mppc.cellCompleteResolution and
+        mppc.cellTranslation VAs. """
+
+        # rule: max cell translation <= cell complete size - effective cell size
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((0, 0) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.EBeamScanner.resolution.value = (6400, 6400)  # -> cell eff res = 800
+        self.MPPC.cellCompleteResolution.value = (810, 810)
+        with self.assertRaises(ValueError):
+            # not max cell translation <= cell complete size - effective cell size  (! 50 <= 810 - 800)
+            self.MPPC.cellTranslation.value = \
+                tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+
+        # rule: cell complete size >= cell effective size
+        self.MPPC.cellCompleteResolution.value = (900, 900)
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((0, 0) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.EBeamScanner.resolution.value = (6400, 6400)  # -> cell eff res = 800
+        with self.assertRaises(ValueError):
+            # not cell complete size >= cell effective size (! 100 >= 800)
+            self.MPPC.cellCompleteResolution.value = (100, 100)
+
+        # rule: cell complete size >= max cell translation + effective cell size
+        self.MPPC.cellCompleteResolution.value = (900, 900)
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((20, 10) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.EBeamScanner.resolution.value = (6400, 6400)  # -> cell eff res = 800
+        with self.assertRaises(ValueError):
+            # cell complete size >= cell effective size (! 804 >= 800)
+            # but not cell complete >= max cell translation + effective cell size (! 804 >= 20 + 800)
+            self.MPPC.cellCompleteResolution.value = (804, 804)
+
+        # rule: cell effective size <= cell complete size
+        self.EBeamScanner.resolution.value = (6400, 6400)
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((0, 0) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.MPPC.cellCompleteResolution.value = (900, 900)
+        with self.assertRaises(ValueError):
+            # not cell effective size <= cell complete size (! 1000 <= 900)
+            self.EBeamScanner.resolution.value = (8000, 8000)
+
+        # rule: effective cell size <= cell complete size - max cell translation
+        self.EBeamScanner.resolution.value = (6400, 6400)
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((20, 10) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.MPPC.cellCompleteResolution.value = (900, 900)
+        with self.assertRaises(ValueError):
+            # cell effective size <= cell complete size (888 <= 900)
+            # but not effective cell size <= cell complete size - cell translation (! 888 <= 900-20)
+            self.EBeamScanner.resolution.value = (7104, 7104)
+
     def test_dwellTimeVA(self):
         min_dwellTime = self.EBeamScanner.dwellTime.range[0]
         max_dwellTime = self.EBeamScanner.dwellTime.range[1]
