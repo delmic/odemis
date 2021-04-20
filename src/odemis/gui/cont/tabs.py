@@ -2044,6 +2044,7 @@ class CryoChamberTab(Tab):
         Shows a dialog to change the path and name of the project directory.
         returns nothing, but updates .conf and project path text control
         """
+        # TODO: do not warn if there is no data (eg, at init)
         box = wx.MessageDialog(self.main_frame,
                                "This will clear the current project data from Odemis",
                                caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
@@ -2052,68 +2053,57 @@ class CryoChamberTab(Tab):
         ans = box.ShowModal()  # Waits for the window to be closed
         if ans == wx.ID_NO:
             return
-        # Generate suggestion for the new project name to show it on the file dialog
-        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
-        new_dir = ShowChamberFileDialog(self._tab_panel, np)
-        if new_dir is None:
-            return
-        # Reset project, clear the data
-        self._reset_project_data()
-        # Get previous project dir from configuration
+
         prev_dir = self.conf.pj_last_path
 
-        def check_same_partition(source, destination):
-            """
-            Check if source and destination dirs in the same partition
-            """
-            return os.stat(source).st_dev == os.stat(destination).st_dev
+        # Generate suggestion for the new project name to show it on the file dialog
+        root_dir = os.path.dirname(self.conf.pj_last_path)
+        np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
+        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        if new_dir is None: # Cancelled
+            return
 
-        def move_files(source, destination):
-            """
-            Move all files found in source directory to destination
-            """
-            file_names = os.listdir(source)
-            for file_name in file_names:
-                shutil.move(os.path.join(source, file_name), destination)
+        logging.debug("Selected project folder %s", new_dir)
 
-        def is_subdir(check_dir, parent_dir):
-            """
-           Check if directory is sub directory of another one
-            """
-            return os.path.realpath(check_dir).startswith(os.path.realpath(parent_dir) + os.sep)
-
-        if not os.path.isdir(prev_dir):
+        # Three possibilities:
+        # * The folder doesn't exists yet => create it
+        # * The folder already exists and is empty => nothing else to do
+        # * The folder already exists and has files in it => Error (because we might override files)
+        # TODO: in the last case, ask the user if we should re-open this project,
+        # to add new acquisitions to it.
+        if not os.path.isdir(new_dir):
             os.mkdir(new_dir)
-            self._change_project_conf(new_dir)
-        else:
-            try:
-                os.rename(prev_dir, new_dir)
-                self._change_project_conf(new_dir)
-            # For permission related errors
-            except PermissionError:
-                logging.error("Operation not permitted.")
-            # For other errors
-            except OSError as error:
-                # Do a complete move if not on the same partition
-                if not check_same_partition(prev_dir, new_dir):
-                    move_files(prev_dir, new_dir)
-                    # delete the 'now empty' old folder
-                    os.rmdir(prev_dir)
-                    self._change_project_conf(new_dir)
-                elif is_subdir(new_dir, prev_dir):
-                    # It's inside a the current directory => If there are already files in it, tell the user it's not
-                    # possible. If the prev_dir is empty, create a directory inside it.
-                    if os.listdir(prev_dir):
-                        dlg = wx.MessageDialog(self.main_frame,
-                                               "Selected directory {} already contains files.".format(prev_dir),
-                                               style=wx.OK | wx.ICON_WARNING)
-                        dlg.ShowModal()
-                        dlg.Destroy()
-                    else:
-                        os.mkdir(new_dir)
-                        self._change_project_conf(new_dir)
-                else:
-                    logging.error(error)
+        elif os.listdir(new_dir):
+            dlg = wx.MessageDialog(self.main_frame,
+                                   "Selected directory {} already contains files.".format(new_dir),
+                                   style=wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        # Reset project, clear the data
+        self._reset_project_data()
+
+        # If the previous project is empty, it means the user never used it.
+        # (for instance, this happens just after starting the GUI and the user
+        # doesn't like the automatically chosen name)
+        # => Just automatically delete previous folder if empty.
+        try:
+            if os.path.isdir(prev_dir) and not os.listdir(prev_dir):
+                logging.debug("Deleting empty project folder %s", prev_dir)
+                os.rmdir(prev_dir)
+        except Exception:
+            # It might be just due to some access rights, let's not worry too much
+            logging.exception("Failed to delete previous project folder %s", prev_dir)
+
+        # Handle weird cases where the previous directory would point to the same
+        # folder as the new folder, either with completely the same path, or with
+        # different paths (eg, due to symbolic links).
+        if not os.path.isdir(new_dir):
+            logging.warning("Recreating folder %s which was gone", new_dir)
+            os.mkdir(new_dir)
+
+        self._change_project_conf(new_dir)
 
     def _change_project_conf(self, new_dir):
         """
@@ -2128,7 +2118,8 @@ class CryoChamberTab(Tab):
         """
         Create a new project directory from config pattern and update project config with new name
         """
-        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        root_dir = os.path.dirname(self.conf.pj_last_path)
+        np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
         os.mkdir(np)
         self._change_project_conf(np)
 
