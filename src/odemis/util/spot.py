@@ -27,6 +27,7 @@ from scipy import ndimage
 from scipy.spatial import cKDTree as KDTree
 from scipy.spatial.distance import cdist
 from scipy.cluster.vq import kmeans
+import warnings
 
 
 def _SubtractBackground(data, background=None):
@@ -132,6 +133,15 @@ def SpotIntensity(data, background=None):
 
 
 def FindCenterCoordinates(image, smoothing=True):
+    warnings.warn(
+        "FindCenterCoordinates will become deprecated, use RadialSymmetryCenter instead.",
+        PendingDeprecationWarning
+    )
+    jc, ic = RadialSymmetryCenter(image, smoothing)
+    return ic, jc
+
+
+def RadialSymmetryCenter(image, smoothing=True):
     """
     Returns the radial symmetry center of the image with sub-pixel resolution.
     This is the spot center location if there is only a single spot contained
@@ -147,70 +157,72 @@ def FindCenterCoordinates(image, smoothing=True):
     Returns
     -------
     pos : tuple
-        Position of the radial symmetry center in px from the center of the
-        image.
+        Position of the radial symmetry center `(dj, di)` in pixels relative to
+        the center of the image, where `dj` is the positon in the row-index and
+        `di` is the position in the column index.
+
+    References
+    ----------
+    .. [1] Parthasarathy, R. (2012). Rapid, accurate particle tracking by
+    calculation of radial symmetry centers. Nature methods, 9(7), 724-726.
 
     Examples
     --------
-    >>> img = numpy.zeros((5, 5))
+    >>> img = numpy.zeros((5, 7))
     >>> img[2, 2] = 1
-    >>> FindCenterCoordinates(img)
-    (0.0, 0.0)
+    >>> RadialSymmetryCenter(img, smoothing=False)
+    (0.0, -1.0)
 
     """
     image = numpy.asarray(image, dtype=numpy.float64)
 
-    # Compute lattice midpoints (ik, jk).
+    # Compute lattice midpoints (jk, ik).
     n, m = image.shape
-    jk, ik = numpy.meshgrid(numpy.arange(m - 1) + 0.5, numpy.arange(n - 1) + 0.5)
+    jk, ik = numpy.mgrid[:(n - 1), :(m - 1)] - 0.5 * numpy.array([[[n - 2]], [[m - 2]]])
 
     # Calculate the intensity gradient.
-    ki = numpy.array([(1, 1), (-1, -1)])
-    kj = numpy.array([(1, -1), (1, -1)])
-    dIdi = scipy.signal.convolve2d(image, ki, mode='valid')
+    kj = numpy.array([(1, 1), (-1, -1)])
+    ki = numpy.array([(1, -1), (1, -1)])
     dIdj = scipy.signal.convolve2d(image, kj, mode='valid')
+    dIdi = scipy.signal.convolve2d(image, ki, mode='valid')
     if smoothing:
         k = numpy.ones((3, 3)) / 9.
-        dIdi = scipy.signal.convolve2d(dIdi, k, boundary='symm', mode='same')
         dIdj = scipy.signal.convolve2d(dIdj, k, boundary='symm', mode='same')
-    dI2 = numpy.square(dIdi) + numpy.square(dIdj)
+        dIdi = scipy.signal.convolve2d(dIdi, k, boundary='symm', mode='same')
+    dI2 = numpy.square(dIdj) + numpy.square(dIdi)
 
     # Discard entries where the intensity gradient magnitude is zero, flatten
     # the array in the same go.
     idx = numpy.flatnonzero(dI2)
-    ik = numpy.take(ik, idx)
     jk = numpy.take(jk, idx)
-    dIdi = numpy.take(dIdi, idx)
+    ik = numpy.take(ik, idx)
     dIdj = numpy.take(dIdj, idx)
+    dIdi = numpy.take(dIdi, idx)
     dI2 = numpy.take(dI2, idx)
 
     # Construct the set of equations for a line passing through the midpoint
-    # (ik, jk), parallel to the gradient intensity, in implicit form:
-    # `a*i + b*j + c = 0`, normalized such that `a^2 + b^2 = 1`.
+    # `(jk, ik)`, parallel to the gradient intensity, in implicit form:
+    # `a*j + b*i = c`, normalized such that `a^2 + b^2 = 1`.
     dI = numpy.sqrt(dI2)
-    a = -dIdj / dI
-    b = dIdi / dI
-    c = a * ik + b * jk
+    a = -dIdi / dI
+    b = dIdj / dI
+    c = a * jk + b * ik
 
     # Weighting: weight by the square of the gradient magnitude and inverse
     # distance to the centroid of the square of the gradient intensity
     # magnitude.
     sdI2 = numpy.sum(dI2)
-    i0 = numpy.sum(dI2 * ik) / sdI2
     j0 = numpy.sum(dI2 * jk) / sdI2
-    w = numpy.sqrt(dI2 / numpy.hypot(ik - i0, jk - j0))
+    i0 = numpy.sum(dI2 * ik) / sdI2
+    w = numpy.sqrt(dI2 / numpy.hypot(jk - j0, ik - i0))
 
     # Solve the linear set of equations in a least-squares sense.
     # Note: rcond is set explicitly to have correct and consistent behavior,
     #       independent on numpy version.
     rcond = numpy.finfo(numpy.float64).eps * max(m, n)
-    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond)[0]
+    jc, ic = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond)[0]
 
-    # Convert from index (top-left) to (center) position information.
-    xc = jc - 0.5 * float(m) + 0.5
-    yc = ic - 0.5 * float(n) + 0.5
-
-    return xc, yc
+    return jc, ic
 
 
 def _CreateSEDisk(r=3):
