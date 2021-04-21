@@ -178,7 +178,10 @@ def RadialSymmetryCenter(image, smoothing=True):
 
     # Compute lattice midpoints (jk, ik).
     n, m = image.shape
-    jk, ik = numpy.mgrid[:(n - 1), :(m - 1)] - 0.5 * numpy.array([[[n - 2]], [[m - 2]]])
+    jk, ik = numpy.meshgrid(
+        numpy.arange(n - 1, dtype=float) - 0.5 * float(n - 2),
+        numpy.arange(m - 1, dtype=float) - 0.5 * float(m - 2),
+        indexing='ij')
 
     # Calculate the intensity gradient.
     kj = numpy.array([(1, 1), (-1, -1)])
