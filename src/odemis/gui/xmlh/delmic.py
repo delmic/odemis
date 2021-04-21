@@ -103,6 +103,50 @@ component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 
 
+### Stream Bar Fast EM
+c = component.Container(
+    'StreamBar',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'add_button']
+)
+c.setParamClass('add_button', params.ParamBool)
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamBarXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Calibration Bar FastEM', 'CalibrationBarFastEM', 3)
+
+c = component.Container(
+    'StreamPanel',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed']
+)
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
+
+c = component.Container(
+    'StreamBar',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'add_button']
+)
+c.setParamClass('add_button', params.ParamBool)
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamBarXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Stream Bar FastEM', 'StreamBarFastEM', 3)
+
+c = component.Container(
+    'StreamPanel',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size', 'label', 'collapsed']
+)
+c.setParamClass('collapsed', params.ParamBool)
+c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.StreamPanelXmlHandler)
+component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
+
+
 ### gui.comp.viewport.MicroscopeViewport and subclasses
 
 msvps = [

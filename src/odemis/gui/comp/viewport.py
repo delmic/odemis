@@ -1878,3 +1878,9 @@ class LineSpectrumViewport(TwoDViewPort):
             self.clear()
 
         self.Refresh()
+
+
+class FastEMAcquisitionViewport(MicroscopeViewport):
+    """ MicroscopeViewport with specialized FastEMCanvas. """
+
+    canvas_class = miccanvas.FastEMAcquisitionCanvas

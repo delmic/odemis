@@ -3,7 +3,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2021 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
 
 Handles the switch of the content of the main GUI tabs.
 
@@ -79,7 +79,7 @@ from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
@@ -1580,6 +1580,96 @@ class SparcAcquisitionTab(Tab):
     def get_display_priority(cls, main_data):
         # For SPARCs
         if main_data.role in ("sparc-simplex", "sparc", "sparc2"):
+            return 1
+        else:
+            return None
+
+
+class FastEMAcquisitionTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes the given viewports by creating views for them, and
+        #   assigning them to their viewport.
+        #
+        # ProjectBarController
+        #   Manages the projects.
+        #
+        # CalibrationBarController
+        #   Manages the calibration regions.
+        #
+        # Acquisition Controller
+        #   Takes care of what happens after the "Start" button is pressed,
+        #   calls functions of the acquisition manager.
+
+        tab_data = guimod.FastEMAcquisitionGUIData(main_data)
+        super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ACQUISITION")
+
+        # View Controller
+        vp = panel.vp_fastem_acqui
+        assert(isinstance(vp, FastEMAcquisitionViewport))
+        vpv = collections.OrderedDict([
+            (vp,
+             {"name": "Acquisition",
+              "cls": guimod.ContentView,  # Center on content (instead of stage)
+              "stream_classes": EMStream,
+              "zPos": self.tab_data_model.zPos,
+              }),
+        ])
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        for num, s in tab_data.overview_streams.value:
+            vp.view.addStream(s)
+
+        # Project bar controller
+        self._projectbar_controller = streamcont.FastEMProjectBarController(
+            tab_data,
+            panel.pnl_fastem_projects,
+            view_ctrl=self.view_controller,
+        )
+
+        # Controller for calibration regions
+        self._calibrationbar_controller = streamcont.FastEMCalibrationController(
+            tab_data,
+            panel.pnl_fastem_calibration,
+            view_ctrl=self.view_controller,
+        )
+
+        # Acquisition controller
+        self._acquisition_controller = acqcont.FastEMAcquiController(
+            tab_data,
+            panel,
+            self._projectbar_controller,
+            self._calibrationbar_controller
+        )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def projectbar_controller(self):
+        return self._projectbar_controller
+
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
+    @property
+    def calibrationbar_controller(self):
+        return self._calibrationbar_controller
+
+    def on_acquisition(self, is_acquiring):
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self.projectbar_controller._project_bar.Enable(not is_acquiring)
+        self.calibrationbar_controller._calibration_bar.Enable(not is_acquiring)
+
+    def Show(self, show=True):
+        super(FastEMAcquisitionTab, self).Show(show)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # Tab is used only for FastEM
+        if main_data.role in ("fast-em",):
             return 1
         else:
             return None
@@ -3185,7 +3275,11 @@ class AnalysisTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        return 0
+        # Don't display tab for FastEM
+        if main_data.role in ("fast-em",):
+            return None
+        else:
+            return 0
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform
