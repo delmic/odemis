@@ -867,11 +867,13 @@ class TestMPPC(unittest.TestCase):
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_file_name_VA(self):
+        """Testing the filename VA"""
         self.MPPC.filename.value = "testing_file_name"
         self.assertEqual(self.MPPC.filename.value, "testing_file_name")
-        # Test if invalid file name is entered the file name remains unchanged.
-        self.MPPC.filename.value = "@testing_file_name"
-        self.assertEqual(self.MPPC.filename.value, "testing_file_name")
+
+        # Raise an error if invalid filename is provided
+        with self.assertRaises(ValueError):
+            self.MPPC.filename.value = "@testing_file_name"
 
     def test_acqDelay_VA(self):
         max_acqDelay = self.MPPC.acqDelay.range[1]

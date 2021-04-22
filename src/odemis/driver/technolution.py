@@ -1347,15 +1347,14 @@ class MPPC(model.Detector):
 
     def _setFilename(self, file_name):
         """
-        Check if filename complies with set allowed characters
-        :param file_name (string):
-        :return: file_name (string)
+        Check if filename complies with the set of allowed characters.
+        :param file_name: (str) The requested filename for the image data to be acquired.
+        :return: (str) The set filename for the image data to be acquired.
         """
-        ASM_FILE_ILLEGAL_CHARS = r'[^a-z0-9_()-]'
-        if re.search(ASM_FILE_ILLEGAL_CHARS, file_name):
-            logging.warning("File_name contains invalid characters, file_name remains unchanged (only the characters "
-                            "'%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return self.filename.value
+        ASM_FILE_CHARS = r'[^a-z0-9_()-]'
+        if re.search(ASM_FILE_CHARS, file_name):
+            raise ValueError("Filename contains invalid characters. Only the following characters are allowed: "
+                             "'%s'. Please choose a new filename." % ASM_FILE_CHARS[2:-1])
         else:
             return file_name
 
