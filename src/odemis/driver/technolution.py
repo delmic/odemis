@@ -835,19 +835,17 @@ class EBeamScanner(model.Emitter):
         # Round to closest multiple of COMMON_DIVISOR (x.5 is rounded down)
         eff_cell_size = numpy.round(eff_cell_size / COMMON_DIVISOR) * COMMON_DIVISOR
 
-        # check: effective cell size <= cell complete size - max cell translation = minimal effective cell size;
-        max_cell_translation = max(max(self.parent._mppc.cellTranslation.value))
-        min_eff_cell_size = (self.parent._mppc.cellCompleteResolution.value[0] - max_cell_translation[0],
-                             self.parent._mppc.cellCompleteResolution.value[1] - max_cell_translation[1])
+        # check: effective cell size <= cell complete size - max cell translation = maximal effective cell size
+        max_cell_translation = numpy.max(numpy.array(self.parent._mppc.cellTranslation.value),
+                                         axis=(0, 1))  # (max_x, max_y)
+        max_eff_cell_size = numpy.array(self.parent._mppc.cellCompleteResolution.value) - max_cell_translation
 
-        if tuple(eff_cell_size) > min_eff_cell_size:
-            raise ValueError("(Requested resolution of %s is too big. The resolution is the effective cell size "
-                             "multiplied by the detector shape. The effective cell size must be equal or smaller than "
-                             "the complete cell size minus the maximum cell translation value. "
-                             "The minimal resolution possible with the currently settings for cell complete resolution "
-                             "and cell translation is %s.\n "
-                             "Resolution values remain unchanged."
-                             % (resolution, min_eff_cell_size))
+        if numpy.any(eff_cell_size > max_eff_cell_size):
+            raise ValueError("(Requested resolution of %s is too big. The following condition must be met: "
+                             "effective cell size <= cell complete size - max cell translation "
+                             "with effective cell size * detector shape = resolution"
+                             "The minimal resolution possible with the current settings is %s."
+                             % (resolution, max_eff_cell_size))
 
         resolution = eff_cell_size * self.parent._mppc.shape[0:2]
 
@@ -1421,18 +1419,15 @@ class MPPC(model.Detector):
                                      (row, column))
 
         # check: max cell translation <= cell complete size - effective cell size = max possible cell translation
-        max_cell_translation = max(max(cellTranslation))
-        eff_cell_res = (int(self.parent._ebeam_scanner.resolution.value[0] / self.shape[0]),
-                        int(self.parent._ebeam_scanner.resolution.value[1] / self.shape[1]))
-        max_possible_cell_translation = (self.cellCompleteResolution.value[0] - eff_cell_res[0],
-                                         self.cellCompleteResolution.value[1] - eff_cell_res[1])
+        max_cell_translation = numpy.max(numpy.array(cellTranslation), axis=(0, 1))  # (max_x, max_y)
+        eff_cell_size = numpy.array(numpy.array(self.parent._ebeam_scanner.resolution.value) /
+                                   numpy.array(self.shape[0:2]), dtype=int)
+        max_possible_cell_translation = numpy.array(self.cellCompleteResolution.value) - eff_cell_size
 
-        if max_cell_translation > max_possible_cell_translation:
-            raise ValueError("Requested maximum cell translation value of %s is too large. The cell translation values "
-                             "must be equal or smaller than the complete cell size minus the effective cell size. "
-                             "The maximal cell translation value possible with the currently set effective cell size "
-                             "and cell complete size is %s.\n "
-                             "Cell translation values remain unchanged."
+        if numpy.any(max_cell_translation > max_possible_cell_translation):
+            raise ValueError("Requested maximum cell translation value of %s is too large. The following condition "
+                             "must be met: max cell translation <= cell complete size - effective cell size. "
+                             "The maximal cell translation value possible with the current settings is %s."
                              % (max_cell_translation, max_possible_cell_translation))
 
         # force items to be a tuple
@@ -1534,19 +1529,16 @@ class MPPC(model.Detector):
         """
 
         # check: cell complete size >= effective cell size + max cell translation = minimal cell complete size
-        max_cell_translation = max(max(self.cellTranslation.value))
-        eff_cell_res = (int(self.parent._ebeam_scanner.resolution.value[0] / self.shape[0]),
-                        int(self.parent._ebeam_scanner.resolution.value[1] / self.shape[1]))
-        min_complete_cell_res = (eff_cell_res[0] + max_cell_translation[0],
-                                 eff_cell_res[1] + max_cell_translation[1])
+        max_cell_translation = numpy.max(numpy.array(self.cellTranslation.value), axis=(0, 1))  # (max_x, max_y)
+        eff_cell_size = numpy.array(numpy.array(self.parent._ebeam_scanner.resolution.value) /
+                                    numpy.array(self.shape[0:2]), dtype=int)
+        min_complete_cell_size = eff_cell_size + max_cell_translation
 
-        if min_complete_cell_res > cellCompleteResolution:
-            raise ValueError("Requested cell complete resolution of %s is too small. The cell complete size must "
-                             "be equal or larger than the effective cell size plus the maximum cell translation value. "
-                             "The minimal cell complete resolution possible with the currently set effective cell size "
-                             "and cell translation values is %s.\n "
-                             "Cell complete resolution values remain unchanged."
-                             % (cellCompleteResolution, min_complete_cell_res))
+        if numpy.any(cellCompleteResolution < min_complete_cell_size):
+            raise ValueError("Requested cell complete resolution of %s is too small. The following condition must be "
+                             "met:  cell complete size >= effective cell size + max cell translation. "
+                             "The minimal cell complete resolution possible with the current settings is %s.\n"
+                             % (cellCompleteResolution, min_complete_cell_size))
 
         return cellCompleteResolution
 
