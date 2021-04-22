@@ -32,7 +32,8 @@ from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
-from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
+from odemis.util.spot import FindCenterCoordinates, MaximaFind, EstimateLatticeConstant
+from odemis.util.spot import GridPointsLegacy as GridPoints
 from odemis.util.transform import AffineTransform
 import os
 from scipy.spatial import cKDTree as KDTree

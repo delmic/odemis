@@ -828,7 +828,7 @@ class AnamorphosisTransformKnownValues(unittest.TestCase):
         an affine transform if the input coordinates contain no higher order
         aberrations.
         """
-        src = GridPoints(8, 8)
+        src = GridPoints((8, 8), mode='ji')
         rotationList = [0., ROT45, ROT90, ROT135, ROT180, -ROT135, -ROT90, -ROT45]
         scaleList = [(1, 1), (SQ05, SQ05), (SQ2, SQ2), S23, SQ2S23]
         shearList = [-1., 0., 1.]

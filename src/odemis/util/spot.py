@@ -373,7 +373,7 @@ def EstimateLatticeConstant(pos):
     return lattice_constants
 
 
-def GridPoints(grid_size_x, grid_size_y):
+def GridPointsLegacy(grid_size_x, grid_size_y):
     """
     Parameters
     ----------
@@ -381,17 +381,55 @@ def GridPoints(grid_size_x, grid_size_y):
         size of the grid in the x direction.
     grid_size_y : int
         size of the grid in the y direction.
-
     Returns
     -------
     array like
         The coordinates of a grid of points of size x by y.
-
     """
     xv = numpy.arange(grid_size_x).astype(float) - 0.5 * float(grid_size_x - 1)
     yv = numpy.arange(grid_size_y).astype(float) - 0.5 * float(grid_size_y - 1)
     xx, yy = numpy.meshgrid(xv, yv)
     return numpy.column_stack((xx.ravel(), yy.ravel()))
+
+
+def GridPoints(shape, mode):
+    """
+    Returns an ordered array of coordinates of a square grid.
+
+    This function returns a row-major ordered array of coordinates of a square
+    grid of points with unit spacing. The coordinates are returned either in
+    Cartesian or matrix mode.
+
+    Parameters
+    ----------
+    shape : tuple of two ints
+        The shape of the grid given as a tuple `(height, width)`.
+    mode : {'ji', 'xy'}
+        Cartesian ('xy') or matrix ('ji') indexing of output.
+
+    Returns
+    -------
+    out : ndarray
+        Array with the coordinates of a square grid of points with unit spacing
+        in row-major order. I.e. for a grid of shape `(n, m)` the first entry
+        `out[0]` is the top-left corner of the grid, `out[m - 1]` is the
+        top-right corner point, `out[(n - 1) * m]` is the bottom-left grid
+        point, and `out[n * m - 1]` is the bottom right corner.
+
+    """
+    if mode not in ('ji', 'xy'):
+        raise ValueError("Valid values for `mode` are 'ji' and 'xy'.")
+
+    n, m = shape
+    j, i = numpy.meshgrid(
+        numpy.arange(n, dtype=float) - 0.5 * float(n - 1),
+        numpy.arange(m, dtype=float) - 0.5 * float(m - 1),
+        indexing='ij')
+
+    if mode == 'ji':
+        return numpy.column_stack((j.ravel(), i.ravel()))
+    else:  # indexing == 'xy'
+        return numpy.column_stack((i.ravel(), -j.ravel()))
 
 
 def BandPassFilter(image, len_noise, len_object):

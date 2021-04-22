@@ -218,5 +218,28 @@ class TestFindCenterCoordinates(unittest.TestCase):
                         self.assertAlmostEqual(i, yc + 0.5 * (n - 1))
 
 
+class TestGridPoints(unittest.TestCase):
+    """
+    Unit test class to test the behavior of GridPoints in odemis.util.spot.
+    """
+
+    _known_values = [
+        ((2, 2), 'ji', [(-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5)]),
+        ((2, 2), 'xy', [(-0.5, 0.5), (0.5, 0.5), (-0.5, -0.5), (0.5, -0.5)]),
+        ((2, 3), 'ji', [(-0.5, -1), (-0.5, 0.0), (-0.5, 1), (0.5, -1), (0.5, 0.0), (0.5, 1)]),
+        ((2, 3), 'xy', [(-1, 0.5), (0.0, 0.5), (1, 0.5), (-1, -0.5), (0.0, -0.5), (1, -0.5)]),
+        ((3, 2), 'ji', [(-1, -0.5), (-1, 0.5), (0.0, -0.5), (0.0, 0.5), (1, -0.5), (1, 0.5)]),
+        ((3, 2), 'xy', [(-0.5, 1), (0.5, 1), (-0.5, -0.0), (0.5, -0.0), (-0.5, -1), (0.5, -1)])
+    ]
+
+    def test_known_values(self):
+        """
+        GridPoints should return known result with known input.
+        """
+        for shape, mode, expected in self._known_values:
+            out = spot.GridPoints(shape, mode)
+            numpy.testing.assert_array_almost_equal(expected, out)
+
+
 if __name__ == "__main__":
     unittest.main()
