@@ -402,10 +402,6 @@ class TestEBeamScanner(unittest.TestCase):
         self.EBeamScanner.resolution.value = (min_res, min_res)
         self.assertEqual(self.EBeamScanner.resolution.value, (min_res, min_res))
 
-        # Check if max resolutions can be set
-        self.EBeamScanner.resolution.value = (max_res, max_res)
-        self.assertEqual(self.EBeamScanner.resolution.value, (max_res, max_res))
-
         # Check if VA refuses to set limits outside allowed range
         with self.assertRaises(IndexError):
             self.EBeamScanner.resolution.value = (max_res + 10, max_res + 10)
@@ -460,6 +456,14 @@ class TestEBeamScanner(unittest.TestCase):
         self.MPPC.cellTranslation.value = \
             tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
         self.MPPC.cellCompleteResolution.value = (850, 850)
+
+        # Third example increase sizes 2:
+        # first cellCompleteResolution, then reduce cellTranslation, then increase resolution
+        # (1000, 1000) >= (980, 980) + (20, 20)
+        self.MPPC.cellCompleteResolution.value = (1000, 1000)
+        self.MPPC.cellTranslation.value = \
+            tuple(tuple((20, 20) for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1]))
+        self.EBeamScanner.resolution.value = (7840, 7840)  # -> eff cell size = (980, 980)
 
         # rule: max cell translation <= cell complete size - effective cell size
         self.MPPC.cellTranslation.value = \
@@ -1014,14 +1018,14 @@ class TestMPPC(unittest.TestCase):
     def test_cellTranslationVA(self):
         """ Testing the cell translation VA (position of the cell image within the overscanned cell image)"""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
-        # to a row based numbering with the first row of x values being from 10 to 17, and for y values from 100 to
-        # 107. This allows to have a human readable check on the tuple structure created while testing input values.
+        # to a row based numbering with the first row of x values being from 1 to 7, and for y values from 10 to
+        # 17. This allows to have a human readable check on the tuple structure created while testing input values.
         self.MPPC.cellTranslation.value = \
-            tuple(tuple((10 + j, 100 + j) for j in range(i, i + self.MPPC.shape[0]))
+            tuple(tuple((1 + j, 10 + j) for j in range(i, i + self.MPPC.shape[0]))
                   for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0]))
 
         self.assertEqual(self.MPPC.cellTranslation.value,
-                tuple(tuple((10 + j, 100 + j) for j in range(i, i + self.MPPC.shape[0]))
+                tuple(tuple((1 + j, 10 + j) for j in range(i, i + self.MPPC.shape[0]))
                       for i in range(0, self.MPPC.shape[1] * self.MPPC.shape[0], self.MPPC.shape[0])))
 
         # Changing the digital translation back to something simple
@@ -1186,27 +1190,23 @@ class TestMPPC(unittest.TestCase):
         min_res = self.MPPC.cellCompleteResolution.range[0][0]
         max_res = self.MPPC.cellCompleteResolution.range[1][0]
 
-        # Check if small resolution values are allowed
-        self.MPPC.cellCompleteResolution.value = (min_res + 5, min_res + 5)
-        self.assertEqual(self.MPPC.cellCompleteResolution.value, (min_res + 5, min_res + 5))
-
         # Check if big resolutions values are allowed
-        self.MPPC.cellCompleteResolution.value = (max_res - 200, max_res - 200)
-        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res - 200, max_res - 200))
+        self.MPPC.cellCompleteResolution.value = (max_res, max_res)
+        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res, max_res))
 
         # Check if VA refuses to set limits outside allowed range
         with self.assertRaises(IndexError):
             self.MPPC.cellCompleteResolution.value = (max_res + 10, max_res + 10)
 
-        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res - 200, max_res - 200))
+        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res, max_res))
 
         with self.assertRaises(IndexError):
             self.MPPC.cellCompleteResolution.value = (min_res - 1, min_res - 1)
-        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res - 200, max_res - 200))
+        self.assertEqual(self.MPPC.cellCompleteResolution.value, (max_res, max_res))
 
         # Check if setter allows setting of non-square resolutions.
-        self.MPPC.cellCompleteResolution.value = (int(0.2 * max_res), int(0.5 * max_res))
-        self.assertEqual(self.MPPC.cellCompleteResolution.value, (int(0.2 * max_res), int(0.5 * max_res)))
+        self.MPPC.cellCompleteResolution.value = (int(0.95 * max_res), int(0.9 * max_res))
+        self.assertEqual(self.MPPC.cellCompleteResolution.value, (int(0.95 * max_res), int(0.9 * max_res)))
 
     def test_assemble_megafield_metadata(self):
         """
