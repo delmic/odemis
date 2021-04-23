@@ -1420,8 +1420,7 @@ class MPPC(model.Detector):
 
         # check: max cell translation <= cell complete size - effective cell size = max possible cell translation
         max_cell_translation = numpy.max(numpy.array(cellTranslation), axis=(0, 1))  # (max_x, max_y)
-        eff_cell_size = numpy.array(numpy.array(self.parent._ebeam_scanner.resolution.value) /
-                                   numpy.array(self.shape[0:2]), dtype=int)
+        eff_cell_size = numpy.array(self.parent._ebeam_scanner.resolution.value) // self.parent._mppc.shape[0:2]
         max_possible_cell_translation = numpy.array(self.cellCompleteResolution.value) - eff_cell_size
 
         if numpy.any(max_cell_translation > max_possible_cell_translation):
@@ -1530,8 +1529,7 @@ class MPPC(model.Detector):
 
         # check: cell complete size >= effective cell size + max cell translation = minimal cell complete size
         max_cell_translation = numpy.max(numpy.array(self.cellTranslation.value), axis=(0, 1))  # (max_x, max_y)
-        eff_cell_size = numpy.array(numpy.array(self.parent._ebeam_scanner.resolution.value) /
-                                    numpy.array(self.shape[0:2]), dtype=int)
+        eff_cell_size = numpy.array(self.parent._ebeam_scanner.resolution.value) // self.parent._mppc.shape[0:2]
         min_complete_cell_size = eff_cell_size + max_cell_translation
 
         if numpy.any(cellCompleteResolution < min_complete_cell_size):
