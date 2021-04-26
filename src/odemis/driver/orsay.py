@@ -20,30 +20,34 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 from odemis import model
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from ConsoleClient.Communication.Connection import Connection
 
 import threading
 import time
 import logging
 
+VALVE_UNDEF = -1
+VALVE_TRANSIT = 0
+VALVE_OPEN = 1
+VALVE_CLOSED = 2
+VALVE_ERROR = 3
+
+EMPTY_VALUES = (None, "", "None", "none")
+
 
 class OrsayComponent(model.HwComponent):
     """
     This is an overarching component to represent the Orsay hardware
-    Attributes:
-        • _pneumaticSuspension (an instance of class pneumaticSuspension)
-        • _pressure (an instance of class vacuumChamber)
-        • _pumpingSystem (an instance of class pumpingSystem)
-        • _ups (an instance of class UPS)
-        • children (set of components; is set(_pneumaticSyspension, _pressure, _pumpingSystem, _ups))
     """
 
     def __init__(self, name, role, children, host, daemon=None, **kwargs):
         """
+        children (dict string->kwargs): parameters setting for the children.
+            Known children are "pneumatic-suspension", "pressure", "pumping-system" and "ups"
+            They will be provided back in the .children VA
+        host (string): ip address of the Orsay server
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • processInfo (StringVA, read-only, value is datamodel.HybridPlatform.ProcessInfo.Actual)
         """
@@ -51,25 +55,26 @@ class OrsayComponent(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         self._host = host  # IP address of the Orsay server
-        self.connected = threading.Event()  # set when server is connected and callbacks and shorthands are up-to-date
-        self.connected.clear()
         try:
             self._device = Connection(self._host)
-        except Exception:
-            logging.warning("Failed to connect to Orsay server")
+        except Exception as ex:
+            msg = "Failed to connect to Orsay server: %s. Check the network connection to the Orsay server." % str(ex)
+            raise HwError(msg)
         time.sleep(1)  # allow for the connection to be made and the datamodel to be loaded
         self.datamodel = None
 
-        self.processInfo = model.StringVA("", readonly=True)
+        self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently 
+        # running process and a wide range thereof. For example it will show which valves are being closed and when 
+        # the pumps are activated when setting the vacuum state to a new value. 
 
         self.on_connect()
 
-        self._stop_connection_check = threading.Event()
-        self._stop_connection_check.clear()
-        self._connection_thread = threading.Thread(target=self._check_connection_thread,
-                                                   name="Orsay server connection check",
-                                                   daemon=True)
-        self._connection_thread.start()
+        self._stop_connection_monitor = threading.Event()
+        self._stop_connection_monitor.clear()
+        self._connection_monitor_thread = threading.Thread(target=self._connection_monitor,
+                                                           name="Orsay server connection check",
+                                                           daemon=True)
+        self._connection_monitor_thread.start()
 
         # create the pneumatic suspension child
         try:
@@ -107,11 +112,9 @@ class OrsayComponent(model.HwComponent):
             self._ups = UPS(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._ups)
 
-        self.connected.set()
-
     def on_connect(self):
         """
-        Defines the shorthand access points and connects parameter callbacks for the Orsay server.
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
         self.datamodel = self._device.datamodel
@@ -125,14 +128,15 @@ class OrsayComponent(model.HwComponent):
         """
         self._updateProcessInfo()
 
-    def _check_connection_thread(self):
+    def _connection_monitor(self):
         """
         Once in a while, check the connection to the Orsay server, reconnect if needed and update all VA's
         """
-        while not self._stop_connection_check.is_set():
+        while not self._stop_connection_monitor.is_set():
             if self._device.HttpConnection._HTTPConnection__response is None or \
                     self._device.MessageConnection.Connection._HTTPConnection__response is None:
-                self.connected.clear()  # report the connection is broken
+                self.state._set_value(HwError("Connection to Orsay server lost. Trying to reconnect..."),
+                                      force_write=True)
                 self._device.HttpConnection.close()  # close the current connection
                 self._device.MessageConnection.Connection.close()
                 self._device = None  # destroy the current connection object
@@ -142,32 +146,34 @@ class OrsayComponent(model.HwComponent):
                     self.on_connect()
                     for child in self.children.value:
                         child.on_connect()
-                    self.connected.set()  # report the connection is fixed
-                except Exception:
-                    logging.warning("Trying to reconnect to Orsay server")
+                    self.state._set_value(model.ST_RUNNING, force_write=True)
+                except Exception as ex:
+                    logging.exception("Trying to reconnect to Orsay server: %s." % ex)
             else:
                 self.update_VAs()
                 for child in self.children.value:
                     child.update_VAs()
-            time.sleep(5)
+            self._stop_connection_monitor.wait(5)
 
         logging.debug("Orsay server connection check thread closed")
-        self._stop_connection_check.clear()
+        self._stop_connection_monitor.clear()
 
     def _updateProcessInfo(self, parameter=None, attributeName="Actual"):
         """
         Reads the process information from the Orsay server and saves it in the processInfo VA
         """
-        parameter = self.datamodel.HybridPlatform.ProcessInfo if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self.datamodel.HybridPlatform.ProcessInfo
         if parameter is not self.datamodel.HybridPlatform.ProcessInfo:
-            raise Exception("Incorrect parameter passed to _updateProcessInfo. Parameter should be "
-                            "datamodel.HybridPlatform.ProcessInfo. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            currentProcessInfo = str(parameter.Actual)
-            currentProcessInfo.replace("N/A", "")
-            logging.debug("ProcessInfo update: " + currentProcessInfo)
-            self.processInfo._set_value(currentProcessInfo, force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateProcessInfo. Parameter should be "
+                             "datamodel.HybridPlatform.ProcessInfo. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        currentProcessInfo = str(parameter.Actual)
+        currentProcessInfo.replace("N/A", "")
+        logging.debug("ProcessInfo update: " + currentProcessInfo)
+        self.processInfo._set_value(currentProcessInfo, force_write=True)
 
     def terminate(self):
         """
@@ -188,7 +194,7 @@ class OrsayComponent(model.HwComponent):
                 self._ups.terminate()
                 self._ups = None
             super(OrsayComponent, self).terminate()
-            self._stop_connection_check.set()  # stop trying to reconnect
+            self._stop_connection_monitor.set()  # stop trying to reconnect
             self._device.HttpConnection.close()  # close the connection
             self._device.MessageConnection.Connection.close()
             self._device = None
@@ -203,11 +209,9 @@ class pneumaticSuspension(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • state (StringVA, read-only, value is combination of parent.datamodel.HybridPlatform.ValvePneumaticSuspension.
-          ErrorState.Actual and parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
-        • power (BooleanVA, value corresponds to _valve.Actual == 1 (Open), set to True to open/start and False to close
-          /stop)
-        • pressure (FloatVA, read-only, unit is "Pa", value is _gauge.Actual)
+        • power (BooleanVA, value corresponds to _valve.Actual == VALVE_OPEN, set to True to open/start and False to
+        close/stop)
+        • pressure (FloatContinuous, range=(0, 110000), read-only, unit is "Pa", value is _gauge.Actual)
         """
 
         # we will fill the set of children with Components later in ._children
@@ -216,15 +220,14 @@ class pneumaticSuspension(model.HwComponent):
         self._valve = None
         self._gauge = None
 
-        self.state = model.StringVA("", readonly=True)
-        self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+        self.pressure = model.FloatContinuous(0.0, range=(0, 110000), readonly=True, unit="Pa")
         self.power = model.BooleanVA(False, setter=self._changeValve)
 
         self.on_connect()
 
     def on_connect(self):
         """
-        Defines the shorthand access points and connects parameter callbacks for the Orsay server.
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
         self._valve = self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen
@@ -249,33 +252,39 @@ class pneumaticSuspension(model.HwComponent):
         """
         Reads the power status from the Orsay server and saves it in the power VA
         """
-        parameter = self._valve if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._valve
         if parameter is not self._valve:
-            raise Exception("Incorrect parameter passed to _updatePower. Parameter should be "
-                            "datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            valve_state = int(parameter.Actual)
-            if valve_state == 3 or valve_state == -1:
-                self._updateErrorState()
-            elif valve_state == 1 or valve_state == 2:
-                new_value = valve_state == 1
-                self.power._value = new_value  # to not call the setter
-                self.power.notify(new_value)
-            else:  # if _valve.Actual == 0 (Transit), or undefined
-                pass
+            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
+                             "datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        valve_state = int(parameter.Actual)
+        if valve_state in (VALVE_UNDEF, VALVE_ERROR):
+            logging.warning("ValvePneumaticSuspension state changed to: %s." % valve_state)
+            self._updateErrorState()
+        elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
+            logging.debug("ValvePneumaticSuspension state changed to: %s." % valve_state)
+            new_value = valve_state == VALVE_OPEN
+            self.power._value = new_value  # to not call the setter
+            self.power.notify(new_value)
+        else:  # if _valve.Actual == VALVE_TRANSIT, or undefined
+            logging.debug("ValvePneumaticSuspension state changed to: %s." % valve_state)
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
         Reads the pressure from the Orsay server and saves it in the pressure VA
         """
-        parameter = self._gauge if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._gauge
         if parameter is not self._gauge:
-            raise Exception("Incorrect parameter passed to _updatePressure. Parameter should be "
-                            "datamodel.HybridPlatform.Manometer2.Pressure. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.pressure._set_value(float(parameter.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
+                             "datamodel.HybridPlatform.Manometer2.Pressure. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.pressure._set_value(float(parameter.Actual), force_write=True)
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
@@ -283,40 +292,42 @@ class pneumaticSuspension(model.HwComponent):
         """
         if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
                 not self.parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
-            raise Exception("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                            "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
-                            "datamodel.HybridPlatform.Manometer2.ErrorState or None. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            eState = ""
-            vpsEState = str(self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
-            manEState = str(self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
-            if not vpsEState == "0" and not vpsEState == 0 and vpsEState is not None and not vpsEState == "" \
-                    and not vpsEState.lower() == "none":
-                eState += "ValvePneumaticSuspension error: " + vpsEState
-            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "" \
-                    and not manEState.lower() == "none":
-                if not eState == "":
-                    eState += ", "
-                eState += "Manometer2 error: " + manEState
-            valve_state = int(self._valve.Actual)
-            if valve_state == 3:  # in case of valve error
-                if not eState == "":
-                    eState += ", "
-                eState += "ValvePneumaticSuspension is in error"
-            elif valve_state == -1:  # in case no communication is present with the valve
-                if not eState == "":
-                    eState += ", "
-                eState += "ValvePneumaticSuspension could not be contacted"
-            self.state._set_value(eState, force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
+                             "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
+                             "datamodel.HybridPlatform.Manometer2.ErrorState or None. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        eState = ""
+        vpsEState = str(self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
+        manEState = str(self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
+        if vpsEState not in ("0", 0) + EMPTY_VALUES:
+            eState += "ValvePneumaticSuspension error: " + vpsEState
+        if manEState not in ("0", 0) + EMPTY_VALUES:
+            if not eState == "":
+                eState += ", "
+            eState += "Manometer2 error: " + manEState
+        valve_state = int(self._valve.Actual)
+        if valve_state == VALVE_ERROR:  # in case of valve error
+            if not eState == "":
+                eState += ", "
+            eState += "ValvePneumaticSuspension is in error"
+        elif valve_state == VALVE_UNDEF:  # in case no communication is present with the valve
+            if not eState == "":
+                eState += ", "
+            eState += "ValvePneumaticSuspension could not be contacted"
+        if eState == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(eState), force_write=True)
 
     def _changeValve(self, goal):
         """
         Opens or closes the valve.
         Returns True if the valve is opened, False otherwise
         """
-        self._valve.Target = 1 if goal else 2
-        return self._valve.Target == 1
+        self._valve.Target = VALVE_OPEN if goal else VALVE_CLOSED
+        return self._valve.Target == VALVE_OPEN
 
     def terminate(self):
         """
@@ -341,10 +352,9 @@ class vacuumChamber(model.Actuator):
         • "vacuum": unit is "None", choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • state (StringVA, read-only, value is combination of _gate.ErrorState.Actual and _gate.IsOpen.Actual)
         • gateOpen (BooleanVA, set to True to open/start and False to close/stop)
         • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
-        • pressure (FloatVA, read-only, unit is "Pa", value is _chamber.Pressure.Actual)
+        • pressure (FloatContinuous, range=(0, 110000), read-only, unit is "Pa", value is _chamber.Pressure.Actual)
         """
 
         axes = {"vacuum": model.Axis(unit=None, choices={0: "vented", 1: "primary vacuum", 2: "high vacuum"})}
@@ -354,8 +364,7 @@ class vacuumChamber(model.Actuator):
         self._gate = None
         self._chamber = None
 
-        self.state = model.StringVA("", readonly=True)
-        self.pressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+        self.pressure = model.FloatContinuous(0.0, range=(0, 110000), readonly=True, unit="Pa")
         self.gateOpen = model.BooleanVA(False, setter=self._changeGateOpen)
         self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
 
@@ -368,7 +377,7 @@ class vacuumChamber(model.Actuator):
 
     def on_connect(self):
         """
-        Defines the shorthand access points and connects parameter callbacks for the Orsay server.
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
         self._gate = self.parent.datamodel.HybridPlatform.ValveP5
@@ -395,74 +404,85 @@ class vacuumChamber(model.Actuator):
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is not self._gate.ErrorState and parameter is not None:
-            raise Exception("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                            "datamodel.HybridPlatform.ValveP5.ErrorState or None. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            eState = ""
-            gateEState = self._gate.ErrorState.Actual
-            if not gateEState == "0" and not gateEState == 0 and gateEState is not None and not gateEState == "" \
-                    and not gateEState.lower() == "none":
-                eState += "ValveP5 error: " + gateEState
-            valve_state = int(self._gate.IsOpen.Actual)
-            if valve_state == 3:  # in case of valve error
-                if not eState == "":
-                    eState += ", "
-                eState += "ValveP5 is in error"
-            elif valve_state == -1:  # in case no communication is present with the valve
-                if not eState == "":
-                    eState += ", "
-                eState += "ValveP5 could not be contacted"
-            self.state._set_value(eState, force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
+                             "datamodel.HybridPlatform.ValveP5.ErrorState or None. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        eState = ""
+        gateEState = self._gate.ErrorState.Actual
+        if gateEState not in ("0", 0) + EMPTY_VALUES:
+            eState += "ValveP5 error: " + gateEState
+        valve_state = int(self._gate.IsOpen.Actual)
+        if valve_state == VALVE_ERROR:  # in case of valve error
+            if not eState == "":
+                eState += ", "
+            eState += "ValveP5 is in error"
+        elif valve_state == VALVE_UNDEF:  # in case no communication is present with the valve
+            if not eState == "":
+                eState += ", "
+            eState += "ValveP5 could not be contacted"
+        if eState == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(eState), force_write=True)
 
     def _updateGateOpen(self, parameter=None, attributeName="Actual"):
         """
         Reads if ValveP5 is open from the Orsay server and saves it in the gateOpen VA
         """
-        parameter = self._gate.IsOpen if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._gate.IsOpen
         if parameter is not self._gate.IsOpen:
-            raise Exception("Incorrect parameter passed to _updateGateOpen. Parameter should be "
-                            "datamodel.HybridPlatform.ValveP5.IsOpen. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            valve_state = int(parameter.Actual)
-            if valve_state == 3 or valve_state == -1:
-                self._updateErrorState()
-            elif valve_state == 1 or valve_state == 2:
-                new_value = valve_state == 1
-                self.gateOpen._value = new_value  # to not call the setter
-                self.gateOpen.notify(new_value)
-            else:  # if parameter.Actual is 0 (Transit), or undefined
-                pass
+            raise ValueError("Incorrect parameter passed to _updateGateOpen. Parameter should be "
+                             "datamodel.HybridPlatform.ValveP5.IsOpen. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        valve_state = int(parameter.Actual)
+        if valve_state in (VALVE_UNDEF, VALVE_ERROR):
+            logging.warning("ValveP5 state changed to: %s." % valve_state)
+            self._updateErrorState()
+        elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
+            logging.debug("ValveP5 state changed to: %s." % valve_state)
+            new_value = valve_state == VALVE_OPEN
+            self.gateOpen._value = new_value  # to not call the setter
+            self.gateOpen.notify(new_value)
+        else:  # if parameter.Actual is VALVE_TRANSIT, or undefined
+            logging.debug("ValveP5 state changed to: %s." % valve_state)
 
     def _updatePosition(self, parameter=None, attributeName="Actual"):
         """
         Reads the vacuum state from the Orsay server and saves it in the position VA
         """
-        parameter = self._chamber.VacuumStatus if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._chamber.VacuumStatus
         if parameter is not self._chamber.VacuumStatus:
-            raise Exception("Incorrect parameter passed to _updatePosition. Parameter should be "
-                            "datamodel.HybridPlatform.AnalysisChamber.VacuumStatus. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            currentVacuum = parameter.Actual
-            self.position._set_value({"vacuum": currentVacuum}, force_write=True)
+            raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
+                             "datamodel.HybridPlatform.AnalysisChamber.VacuumStatus. Parameter passed is %s"
+                             % parameter.Name)
         if parameter.Actual == parameter.Target:
             self._vacuumStatusReached.set()
         else:
             self._vacuumStatusReached.clear()
+        if attributeName != "Actual":
+            return
+        currentVacuum = parameter.Actual
+        self.position._set_value({"vacuum": currentVacuum}, force_write=True)
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
         Reads the chamber pressure from the Orsay server and saves it in the pressure VA
         """
-        parameter = self._chamber.Pressure if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._chamber.Pressure
         if parameter is not self._chamber.Pressure:
-            raise Exception("Incorrect parameter passed to _updatePressure. Parameter should be "
-                            "datamodel.HybridPlatform.AnalysisChamber.Pressure. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.pressure._set_value(float(parameter.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
+                             "datamodel.HybridPlatform.AnalysisChamber.Pressure. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.pressure._set_value(float(parameter.Actual), force_write=True)
 
     def _changeVacuum(self, goal, wait=True):
         """
@@ -478,8 +498,8 @@ class vacuumChamber(model.Actuator):
         """
         Opens ValveP5 on the Orsay server if argument goal is True. Closes it otherwise.
         """
-        self._gate.IsOpen.Target = 1 if goal else 2
-        return self._gate.IsOpen.Target == 1
+        self._gate.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
+        return self._gate.IsOpen.Target == VALVE_OPEN
 
     @isasync
     def moveAbs(self, pos, wait=True):
@@ -528,8 +548,6 @@ class pumpingSystem(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • state (StringVA, read-only, value is combination of _system.Manometer1.ErrorState.Actual and _system.
-          TurboPump1.ErrorState.Actual)
         • speed (FloatVA, read-only, unit is "Hz", value is _system.TurboPump1.Speed.Actual)
         • temperature (FloatVA, read-only, unit is "°C", value is _system.TurboPump1.Temperature.Actual)
         • power (FloatVA, read-only, unit is "W", value is _system.TurboPump1.Power.Actual)
@@ -543,7 +561,6 @@ class pumpingSystem(model.HwComponent):
 
         self._system = None
 
-        self.state = model.StringVA("", readonly=True)
         self.speed = model.FloatVA(0.0, readonly=True, unit="Hz")
         self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
         self.power = model.FloatVA(0.0, readonly=True, unit="W")
@@ -556,7 +573,7 @@ class pumpingSystem(model.HwComponent):
 
     def on_connect(self):
         """
-        Defines the shorthand access points and connects parameter callbacks for the Orsay server.
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
         self._system = self.parent.datamodel.HybridPlatform.PumpingSystem
@@ -592,107 +609,123 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is not self._system.Manometer1.ErrorState and parameter is not self._system.TurboPump1.ErrorState \
                 and parameter is not None:
-            raise Exception("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.Manometer1.ErrorState or "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.ErrorState or None. "
-                            "Parameter passed is %s" % parameter.Name)
-        elif attributeName == "Actual":
-            eState = ""
-            manEState = self._system.Manometer1.ErrorState.Actual
-            tpEState = self._system.TurboPump1.ErrorState.Actual
-            if not manEState == "0" and not manEState == 0 and manEState is not None and not manEState == "" \
-                    and not manEState.lower() == "none":
-                eState += "Manometer1 error: " + manEState
-            if not tpEState == "0" and not tpEState == 0 and tpEState is not None and not tpEState == "" \
-                    and not tpEState.lower() == "none":
-                if not eState == "":
-                    eState += ", "
-                eState += "TurboPump1 error: " + tpEState
-            self.state._set_value(eState, force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.Manometer1.ErrorState or "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.ErrorState or None. "
+                             "Parameter passed is %s" % parameter.Name)
+        if attributeName != "Actual":
+            return
+        eState = ""
+        manEState = self._system.Manometer1.ErrorState.Actual
+        tpEState = self._system.TurboPump1.ErrorState.Actual
+        if manEState not in ("0", 0) + EMPTY_VALUES:
+            eState += "Manometer1 error: " + manEState
+        if tpEState not in ("0", 0) + EMPTY_VALUES:
+            if not eState == "":
+                eState += ", "
+            eState += "TurboPump1 error: " + tpEState
+        if eState == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(eState), force_write=True)
 
     def _updateSpeed(self, parameter=None, attributeName="Actual"):
         """
         Reads the turbopump's speed from the Orsay server and saves it in the speed VA
         """
-        parameter = self._system.TurboPump1.Speed if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.TurboPump1.Speed
         if parameter is not self._system.TurboPump1.Speed:
-            raise Exception("Incorrect parameter passed to _updateSpeed. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Speed. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.speed._set_value(float(parameter.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateSpeed. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Speed. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.speed._set_value(float(parameter.Actual), force_write=True)
 
     def _updateTemperature(self, parameter=None, attributeName="Actual"):
         """
         Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA
         """
-        parameter = self._system.TurboPump1.Temperature if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.TurboPump1.Temperature
         if parameter is not self._system.TurboPump1.Temperature:
-            raise Exception("Incorrect parameter passed to _updateTemperature. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateTemperature. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
 
     def _updatePower(self, parameter=None, attributeName="Actual"):
         """
         Reads the turbopump's power from the Orsay server and saves it in the power VA
         """
-        parameter = self._system.TurboPump1.Power if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.TurboPump1.Power
         if parameter is not self._system.TurboPump1.Power:
-            raise Exception("Incorrect parameter passed to _updatePower. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Power. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.power._set_value(float(parameter.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Power. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.power._set_value(float(parameter.Actual), force_write=True)
 
     def _updateSpeedReached(self, parameter=None, attributeName="Actual"):
         """
         Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA
         """
-        parameter = self._system.TurboPump1.SpeedReached if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.TurboPump1.SpeedReached
         if parameter is not self._system.TurboPump1.SpeedReached:
-            raise Exception("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
         """
         Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA
         """
-        parameter = self._system.TurboPump1.IsOn if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.TurboPump1.IsOn
         if parameter is not self._system.TurboPump1.IsOn:
-            raise Exception("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.turboPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.turboPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
         """
         Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
         """
-        parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState
         if parameter is not self.parent.datamodel.HybridPlatform.PrimaryPumpState:
-            raise Exception("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
-                            "datamodel.HybridPlatform.PrimaryPumpState. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.primaryPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
+            raise ValueError("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
+                             "datamodel.HybridPlatform.PrimaryPumpState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        self.primaryPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
         """
         Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA
         """
-        parameter = self._system.Manometer1.Pressure if (parameter is None) else parameter
+        if parameter is None:
+            parameter = self._system.Manometer1.Pressure
         if parameter is not self._system.Manometer1.Pressure:
-            raise Exception("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
-                            "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure. Parameter passed is %s"
-                            % parameter.Name)
-        elif attributeName == "Actual":
-            self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
+            raise ValueError("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
+                             "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName == "Actual":
+            return
+        self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
 
     def terminate(self):
         """
@@ -718,25 +751,26 @@ class UPS(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • level (FloatVA, read-only, unit is "", value is _system.UPScontroller.BatteryLevel.Actual, between 0 and 1)
+        • level (FloatContinuous, range=(0.0, 1.0), read-only, unit is "",
+                 value is _system.UPScontroller.BatteryLevel.Actual)
         """
 
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
-        self._system = None
+        self._blevel = None
 
-        self.level = model.FloatVA(1.0, readonly=True, unit="")
+        self.level = model.FloatContinuous(1.0, range=(0.0, 1.0), readonly=True, unit="")
 
         self.on_connect()
 
     def on_connect(self):
         """
-        Defines the shorthand access points and connects parameter callbacks for the Orsay server.
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        self._system = self.parent.datamodel.HybridPlatform.UPS
+        self._blevel = self.parent.datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel
 
-        self._system.UPScontroller.BatteryLevel.Subscribe(self._updateLevel)
+        self._blevel.Subscribe(self._updateLevel)
 
         self.update_VAs()
 
@@ -750,17 +784,19 @@ class UPS(model.HwComponent):
         """
         Reads the battery level of the UPS from the Orsay server and saves it in the level VA
         """
-        parameter = self._system.UPScontroller.BatteryLevel if (parameter is None) else parameter
-        if parameter is not self._system.UPScontroller.BatteryLevel:
-            raise Exception("Incorrect parameter passed to _updateLevel. Parameter should be "
-                            "datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel")
-        elif attributeName == "Actual":
-            currentLevel = float(parameter.Actual)
-            self.level._set_value(currentLevel / 100, force_write=True)
+        if parameter is None:
+            parameter = self._blevel
+        if parameter is not self._blevel:
+            raise ValueError("Incorrect parameter passed to _updateLevel. Parameter should be "
+                             "datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel")
+        if attributeName != "Actual":
+            return
+        currentLevel = float(parameter.Actual)
+        self.level._set_value(currentLevel / 100, force_write=True)
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        self._system.UPScontroller.BatteryLevel.Unsubscribe(self._updateLevel)
-        _system = None
+        self._blevel.Unsubscribe(self._updateLevel)
+        _blevel = None
