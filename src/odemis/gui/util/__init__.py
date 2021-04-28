@@ -39,8 +39,7 @@ import wx
 # Decorators & Wrappers
 # They are almost the same but the decorators assume that they are decorating
 # a method of a wx.Object (ie, it has a "self" argument)
-from odemis.acq.move import getCurrentPositionLabel, IMAGING
-
+from odemis.acq.move import getCurrentPositionLabel
 
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
@@ -294,7 +293,4 @@ def enable_tab_on_stage_position(button, stage, pos, target):
     :param pos: (dict str->float) current position to check its label
     :param target: (int) target position label (IMAGING, LOADING..etc)
     """
-    if getCurrentPositionLabel(pos, stage) == target:
-        button.Enable(enable=True)
-    else:
-        button.Disable()
+    button.Enable(getCurrentPositionLabel(pos, stage) == target)
