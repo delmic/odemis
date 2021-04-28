@@ -629,11 +629,11 @@ class LocalizationGUIData(MicroscopyGUIData):
         # the streams to acquire among all streams in .streams
         self.acquisitionStreams = model.ListVA()
         # for the filename 
-        self.config = conf.get_acqui_conf()
+        config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
-            self.config.last_path, self.config.fn_ptn,
-            self.config.last_extension,
-            self.config.fn_count))
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):

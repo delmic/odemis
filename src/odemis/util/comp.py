@@ -108,4 +108,3 @@ def get_fov_rect(comp, fov):
             center[1] - fov[1] / 2,  # top
             center[0] + fov[0] / 2,  # right
             center[1] + fov[1] / 2)  # bottom
-            

@@ -62,6 +62,10 @@ from datetime import datetime
 
 import odemis.gui.model as guimod
 
+# black list of VAs name which are known to not affect the acquisition time
+VAS_NO_ACQUISITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
+                             "is_active", "should_update", "status", "name", "tint")
+
 
 class SnapshotController(object):
     """ Controller to handle snapshot acquisition in a 'global' context.
@@ -450,6 +454,10 @@ class SecomAcquiController(object):
             main_data.tab.value = tab
             tab.load_data(acq_dialog.last_saved_file)
 
+# constants for the acquisition future state of the cryo-secom
+ST_FINISHED = "FINISHED"
+ST_FAILED = "FAILED"
+ST_CANCELED = "CANCELED"
 
 class CryoAcquiController(object):
     """
@@ -465,21 +473,9 @@ class CryoAcquiController(object):
         self.overview_acqui_controller = OverviewStreamAcquiController(
             self._tab_data, self._tab
         )
-        self._config = self._tab_data.config
-        self._VAS_NO_ACQUSITION_EFFECT = (
-            "image",
-            "autoBC",
-            "intensityRange",
-            "histogram",
-            "is_active",
-            "should_update",
-            "status",
-            "name",
-            "tint",
-        )
+        self._config = conf.get_acqui_conf()
+        # contains the acquisition progressive future for the given streams 
         self._acq_future = None
-        self._executor = futures.ThreadPoolExecutor(max_workers=2)
-        self._scheduled_future = None
 
         # VA's
         self._filename = self._tab_data.filename
@@ -492,21 +488,13 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.Show()
         self._panel.btn_cryosecom_acqui_cancel.Hide()
         self._panel.Layout()
-        # limit number of characters
-        self._panel.param_Zmin.SetMaxLength(8)
-        self._panel.param_Zmax.SetMaxLength(8)
-        self._panel.param_Zstep.SetMaxLength(8)
-        # set the default values
-        self._panel.param_Zmax.SetValue("10 µm")
-        self._panel.param_Zmin.SetValue("-10 µm")
-        self._panel.param_Zstep.SetValue("1 µm")
 
         # bind events (buttons, checking, ...) with callbacks 
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
         # for "change..." button
         self._panel.btn_cryosecom_change_file.Bind(
-            wx.EVT_BUTTON, self._on_change
+            wx.EVT_BUTTON, self._on_btn_change
         )
         # for "acquire overview" button
         self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON, self._on_acquire_overview)
@@ -514,23 +502,37 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
-        # for the z-stack parameters
-        self._panel.param_Zmin.Bind(wx.EVT_TEXT_ENTER, self._on_Zmin_param)
-        self._panel.param_Zmax.Bind(wx.EVT_TEXT_ENTER, self._on_Zmax_param)
-        self._panel.param_Zstep.Bind(wx.EVT_TEXT_ENTER, self._on_Zstep_param)
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
+        self._tab_data.zMin.subscribe(self._on_z_min, init=True)
+        self._tab_data.zMax.subscribe(self._on_z_max, init=True)
+        self._tab_data.zStep.subscribe(self._on_z_step, init=True)
         self._tab_data.streams.subscribe(self._on_streams, init=True)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
 
         # VA's connector
-        self._zstack_chkbox_vac = VigilantAttributeConnector(
+        _ = VigilantAttributeConnector(
             va=self._tab_data.zStackActive,
             value_ctrl=self._panel.z_stack_chkbox,
             events=wx.EVT_CHECKBOX,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zMin,
+            value_ctrl=self._panel.param_Zmin,
+            events=wx.EVT_COMMAND_ENTER,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zMax,
+            value_ctrl=self._panel.param_Zmax,
+            events=wx.EVT_COMMAND_ENTER,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zStep,
+            value_ctrl=self._panel.param_Zstep,
+            events=wx.EVT_COMMAND_ENTER,
         )
 
     def _on_acquire(self, _):
@@ -584,21 +586,23 @@ class CryoAcquiController(object):
         # try to get the acquisition data
         try:
             data, exp = future.result()
-            self._reset_acquisition_gui(state="FINISHED")
+            self._panel.txt_cryosecom_est_time.Show()
+            self._panel.txt_cryosecom_est_time.SetLabel("Saving file ...")
             logging.info("The acquisition is done")
         except CancelledError:
             logging.info("The acquisition was canceled")
-            self._reset_acquisition_gui(state="CANCELED")
+            self._reset_acquisition_gui(state=ST_CANCELED)
             return
         except Exception as exp:
             logging.exception("The acquisition failed")
             self._reset_acquisition_gui(
-                text="Acquisition failed (see log panel).", state="FAILED"
+                text="Acquisition failed (see log panel).", state=ST_FAILED
             )
             return
         # save the data
-        self._scheduled_future = self._executor.submit(self._export_data, future)
-        self._scheduled_future.add_done_callback(self._on_export_data_done)
+        executor = futures.ThreadPoolExecutor(max_workers=2)
+        scheduled_future = executor.submit(self._export_data, future)
+        scheduled_future.add_done_callback(self._on_export_data_done)
 
     def _reset_acquisition_gui(self, text=None, state=None):
         """
@@ -619,17 +623,15 @@ class CryoAcquiController(object):
         self._tab.streambar_controller.resume()
         self._panel.Layout()
 
-        if state == "FINISHED":
-            self._panel.txt_cryosecom_est_time.Show()
-            self._panel.txt_cryosecom_est_time.SetLabel("Saving file ...")
+        if state == ST_FINISHED:
             # update the counter of the filename
             self._config.fn_count = update_counter(self._config.fn_count)
             # reset the storing directory to the project directory
             self._config.last_path = self._config.pj_last_path
-        elif state == "FAILED":
+        elif state == ST_FAILED:
             self._panel.txt_cryosecom_est_time.Show()
             self._panel.txt_cryosecom_est_time.SetLabel(text)
-        elif state == "CANCELED":
+        elif state == ST_CANCELED:
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
 
@@ -646,10 +648,10 @@ class CryoAcquiController(object):
         """
         Called after exporting the data
         """
-        data = future.result()
+        self._reset_acquisition_gui(state=ST_FINISHED)
         self._update_acquisition_time()
+        data = future.result()
         self._display_acquired_data(data)
-        self._scheduled_future = None
 
     def _export_data(self, future):
         """
@@ -676,36 +678,6 @@ class CryoAcquiController(object):
 
         return data
 
-    def _on_Zmin_param(self, _):
-        """
-        Called when the user enters an input
-        for the Zmin parameter
-        """
-        # TODO get the input from the user,
-        # and then filter it from non digits characters,
-        # then clip it to the limits of the actuator.
-        pass
-
-    def _on_Zmax_param(self, _):
-        """
-        Called to handle the user input for
-        the Zmax parameter
-        """
-        # TODO get the input from the user,
-        # and then filter it from non digits characters,
-        # then clip it to the limits of the actuator.
-        pass
-
-    def _on_Zstep_param(self, _):
-        """
-        Called when the user enters some input
-        for the parameter Zmax
-        """
-        # TODO get the input from the user,
-        # and then filter it from non digits characters,
-        # then clip it to the limits of the actuator.
-        pass
-
     @call_in_wx_main
     def _on_streams(self, streams):
         """
@@ -717,14 +689,14 @@ class CryoAcquiController(object):
             if item_stream not in streams:
                 self._panel.streams_chk_list.Delete(i)
                 self._acquiStreams.value.remove(item_stream)
-                logging.info("A stream was removed")
                 # unsubscribe the settings VA's of this removed stream
                 for va in self._get_settings_vas(item_stream):
                     va.unsubscribe(self._on_settings_va)
                 self._update_acquisition_time()
                 # unsubscribe the name and wavelength VA's of this removed stream
-                for va in self._get_name_wavelength_vas(item_stream):
-                    va.unsubscribe(self._on_name_and_wavelength)
+                for va in self._get_wavelength_vas(item_stream):
+                    va.unsubscribe(self._on_stream_wavelength)
+                item_stream.name.unsubscribe(self._on_stream_name)
 
         # for every stream in .streams, is it already present in the list?
         item_stream = [
@@ -736,10 +708,10 @@ class CryoAcquiController(object):
                 self._panel.streams_chk_list.Insert(s.name.value, i, s)
                 self._panel.streams_chk_list.Check(i)
                 self._acquiStreams.value.append(s)
-                logging.info("A stream was added")
                 # subscribe the name and wavelength VA's of this added stream
-                for va in self._get_name_wavelength_vas(s):
-                    va.subscribe(self._on_name_and_wavelength, init=False)
+                for va in self._get_wavelength_vas(s):
+                    va.subscribe(self._on_stream_wavelength, init=False)
+                s.name.subscribe(self._on_stream_name, init=False)
                 # subscribe the settings VA's of this added stream
                 for va in self._get_settings_vas(s):
                     va.subscribe(self._on_settings_va)
@@ -762,34 +734,39 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
     @call_in_wx_main
-    def _on_name_and_wavelength(self, VA_value):
+    def _on_stream_wavelength(self, _):
         """
         a VA callback that is called when the user changes
-         the name of a stream or the emission/excitation wavelength
+         the emission or excitation wavelength
         """
-        if isinstance(VA_value, str):  # the user changed the stream name
-            counts = self._panel.streams_chk_list.GetCount()
-            chcklist_names = [
-                self._panel.streams_chk_list.GetString(i) for i in range(counts)
-            ]
-            streams = [
-                self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
-            ]
-            stream_names = [s.name.value for s in streams]
-            for name, i, s in zip(chcklist_names, range(counts), streams):
-                if name not in stream_names:
-                    self._panel.streams_chk_list.Delete(i)
-                    self._panel.streams_chk_list.Insert(VA_value, i, s)
-                    self._panel.streams_chk_list.Check(i)
-        else:  # the user changed the wavelength
-            counts = self._panel.streams_chk_list.GetCount()
-            streams = [
-                self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
-            ]
-            for i, s in zip(range(counts), acqmng.sortStreams(streams)):
-                # replace the unsorted streams with the sorted streams one by one
+        counts = self._panel.streams_chk_list.GetCount()
+        streams = [
+            self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
+        ]
+        for i, s in zip(range(counts), acqmng.sortStreams(streams)):
+            # replace the unsorted streams with the sorted streams one by one
+            self._panel.streams_chk_list.Delete(i)
+            self._panel.streams_chk_list.Insert(s.name.value, i, s)
+            self._panel.streams_chk_list.Check(i)
+
+    @call_in_wx_main
+    def _on_stream_name(self, stream_name):
+        """
+        a VA callback that is called when the user changes
+         the name of a stream 
+        """
+        counts = self._panel.streams_chk_list.GetCount()
+        chcklist_names = [
+            self._panel.streams_chk_list.GetString(i) for i in range(counts)
+        ]
+        streams = [
+            self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
+        ]
+        stream_names = [s.name.value for s in streams]
+        for name, i, s in zip(chcklist_names, range(counts), streams):
+            if name not in stream_names:
                 self._panel.streams_chk_list.Delete(i)
-                self._panel.streams_chk_list.Insert(s.name.value, i, s)
+                self._panel.streams_chk_list.Insert(stream_name, i, s)
                 self._panel.streams_chk_list.Check(i)
 
     @call_in_wx_main
@@ -802,6 +779,15 @@ class CryoAcquiController(object):
         self._panel.param_Zmax.Enable(active)
         self._panel.param_Zstep.Enable(active)
         self._update_acquisition_time()
+
+    def _on_z_min(self, zmin):
+        self._tab_data.zMin.value = zmin
+
+    def _on_z_max(self, zmax):
+        self._tab_data.zMax.value = zmax
+
+    def _on_z_step(self, zstep):
+        self._tab_data.zStep.value = zstep
 
     def _on_check_list(self, _):
         """
@@ -829,8 +815,9 @@ class CryoAcquiController(object):
         """
         called when the button "cancel" is pressed
         """
-        # cancel the acquisition future
-        self._acq_future.cancel()
+        if self._acq_future is not None:
+            # cancel the acquisition future
+            self._acq_future.cancel()
 
     def _on_acquire_overview(self, _):
         """
@@ -850,32 +837,27 @@ class CryoAcquiController(object):
         self._panel.txt_filename.SetInsertionPointEnd()
         self._panel.txt_filename.SetValue(str(base))
 
-    def _on_change(self, _):
+    def _on_btn_change(self, _):
         """
         called when the button "change" is pressed
         """
-        current_filename = create_filename(
-            self._config.last_path,
-            self._config.fn_ptn,
-            self._config.last_extension,
-            self._config.fn_count,
-        )
+        current_filename = self._filename.value
         new_filename = ShowAcquisitionFileDialog(self._panel, current_filename)
         if new_filename is not None:
             self._filename.value = new_filename
             self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
-    def _get_name_wavelength_vas(self, stream):
+    def _get_wavelength_vas(self, stream):
         """
-        Gets the name, excitation and emission VAs of a stream.
+        Gets the excitation and emission VAs of a stream.
         return (set of VAs)
         """
         nvas = model.getVAs(stream)  # name -> va
         vas = set()
         # only add the name, emission and excitation VA's
         for n, va in nvas.items():
-            if n in ["name", "emission", "excitation"]:
+            if n in ["emission", "excitation"]:
                 vas.add(va)
         return vas
 
@@ -888,11 +870,10 @@ class CryoAcquiController(object):
         vas = set()
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
-            if n not in self._VAS_NO_ACQUSITION_EFFECT:
+            if n not in VAS_NO_ACQUISITION_EFFECT:
                 vas.add(va)
         return vas
 
-    @call_in_wx_main
     def _on_settings_va(self, _):
         """
         Called when a VA which might affect the acquisition is modified
@@ -1046,10 +1027,6 @@ class SparcAcquiController(object):
     def __del__(self):
         self._executor.shutdown(wait=False)
 
-    # black list of VAs name which are known to not affect the acquisition time
-    VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
-                                "is_active", "should_update", "status", "name", "tint")
-
     def _get_settings_vas(self, stream):
         """
         Find all the VAs of a stream which can potentially affect the acquisition time
@@ -1059,7 +1036,7 @@ class SparcAcquiController(object):
         vas = set()
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
-            if n not in self.VAS_NO_ACQUSITION_EFFECT:
+            if n not in VAS_NO_ACQUISITION_EFFECT:
                 vas.add(va)
         return vas
 
