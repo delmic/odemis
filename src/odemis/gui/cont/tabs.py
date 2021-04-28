@@ -641,13 +641,6 @@ class LocalizationTab(Tab):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
 
-        # Enable the tab if the stage is in imaging position, disable it otherwise
-        stage = self.tab_data_model.main.stage
-        if getCurrentPositionLabel(stage.position.value, stage) is IMAGING:
-            self.panel.Enable()
-        else:
-            self.panel.Disable()
-
         # pause streams when not displayed
         if not show:
             self._streambar_controller.pauseStreams()
