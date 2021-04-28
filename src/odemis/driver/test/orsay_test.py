@@ -215,22 +215,28 @@ class TestPneumaticSuspension(unittest.TestCase):
         test_string = "This thing broke"
 
         self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = test_string
+        self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("Manometer2", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
         self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = ""
 
         self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = test_string
+        self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
         self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = ""
 
         self.psus._valve.Target = 3
         sleep(1)
+        self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension is in error", str(self.psus.state.value))
         self.psus._valve.Target = -1
         sleep(1)
+        self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension could not be contacted", str(self.psus.state.value))
         self.psus._valve.Target = 1
+
+        self.assertEqual(self.psus.state.value, model.ST_RUNNING)
 
     def test_updatePower(self):
         """
@@ -380,17 +386,22 @@ class TestVacuumChamber(unittest.TestCase):
         test_string = "This thing broke"
 
         self.pressure._gate.ErrorState.Actual = test_string
+        self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5", str(self.pressure.state.value))
         self.assertIn(test_string, str(self.pressure.state.value))
         self.pressure._gate.ErrorState.Actual = ""
 
         self.pressure._gate.IsOpen.Target = 3
         sleep(1)
+        self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5 is in error", str(self.pressure.state.value))
         self.pressure._gate.IsOpen.Target = -1
         sleep(1)
+        self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5 could not be contacted", str(self.pressure.state.value))
         self.pressure._gate.IsOpen.Target = 1
+
+        self.assertEqual(self.pressure.state.value, model.ST_RUNNING)
 
     def test_updatePressure(self):
         """
@@ -470,14 +481,18 @@ class TestPumpingSystem(unittest.TestCase):
         test_string = "This thing broke"
 
         self.psys._system.Manometer1.ErrorState.Actual = test_string
+        self.assertIsInstance(self.psys.state.value, HwError)
         self.assertIn("Manometer1", str(self.psys.state.value))
         self.assertIn(test_string, str(self.psys.state.value))
         self.psys._system.Manometer1.ErrorState.Actual = ""
 
         self.psys._system.TurboPump1.ErrorState.Actual = test_string
+        self.assertIsInstance(self.psys.state.value, HwError)
         self.assertIn("TurboPump1", str(self.psys.state.value))
         self.assertIn(test_string, str(self.psys.state.value))
         self.psys._system.TurboPump1.ErrorState.Actual = ""
+
+        self.assertEqual(self.psys.state.value, model.ST_RUNNING)
 
     def test_updateSpeed(self):
         """
