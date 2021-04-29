@@ -344,6 +344,7 @@ class pneumaticSuspension(model.HwComponent):
         Opens or closes the valve.
         Returns True if the valve is opened, False otherwise
         """
+        logging.debug("Setting valve to %s." % goal)
         self._valve.Target = VALVE_OPEN if goal else VALVE_CLOSED
         return self._valve.Target == VALVE_OPEN
 
@@ -489,12 +490,14 @@ class vacuumChamber(model.Actuator):
                              "datamodel.HybridPlatform.AnalysisChamber.VacuumStatus. Parameter passed is %s"
                              % parameter.Name)
         if parameter.Actual == parameter.Target:
+            logging.debug("Target vacuum state reached.")
             self._vacuumStatusReached.set()
         else:
             self._vacuumStatusReached.clear()
         if attributeName != "Actual":
             return
-        currentVacuum = parameter.Actual
+        currentVacuum = int(parameter.Actual)
+        logging.debug("Vacuum status changed to %f." % currentVacuum)
         self.position._set_value({"vacuum": currentVacuum}, force_write=True)
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
@@ -524,6 +527,7 @@ class vacuumChamber(model.Actuator):
         Sets the vacuum status on the Orsay server to argument goal and waits until it is reached.
         Then returns the reached vacuum status.
         """
+        logging.debug("Setting vacuum status to %s." % self.axes["vacuum"].choices[goal])
         self._chamber.VacuumStatus.Target = goal
         if wait:
             self._vacuumStatusReached.wait()
@@ -536,6 +540,7 @@ class vacuumChamber(model.Actuator):
 
         Opens ValveP5 on the Orsay server if argument goal is True. Closes it otherwise.
         """
+        logging.debug("Setting gate to %s." % ("open" if goal else "closed"))
         self._gate.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
         return self._gate.IsOpen.Target == VALVE_OPEN
 
@@ -559,6 +564,7 @@ class vacuumChamber(model.Actuator):
         Stop changing the vacuum status
         """
         if not axes or "vacuum" in axes:
+            logging.debug("Stopping vacuum.")
             self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
             self.parent.datamodel.HybridPlatform.Cancel.Target = True
             self._executor.cancel()
@@ -736,6 +742,7 @@ class pumpingSystem(model.HwComponent):
                              % parameter.Name)
         if attributeName != "Actual":
             return
+        logging.debug("Speed reached changed to %s." % str(parameter.Actual))
         self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
     def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
@@ -753,7 +760,9 @@ class pumpingSystem(model.HwComponent):
                              % parameter.Name)
         if attributeName != "Actual":
             return
-        self.turboPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
+        state = str(parameter.Actual).lower() == "true"
+        logging.debug("Turbopump turned %s." % ("on" if state else "off"))
+        self.turboPumpOn._set_value(state, force_write=True)
 
     def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
         """
@@ -770,7 +779,9 @@ class pumpingSystem(model.HwComponent):
                              % parameter.Name)
         if attributeName != "Actual":
             return
-        self.primaryPumpOn._set_value(str(parameter.Actual).lower() == "true", force_write=True)
+        state = str(parameter.Actual).lower() == "true"
+        logging.debug("Primary pump turned %s." % ("on" if state else "off"))
+        self.primaryPumpOn._set_value(state, force_write=True)
 
     def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
         """
