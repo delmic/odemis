@@ -904,3 +904,176 @@ class UPS(model.HwComponent):
         if self._blevel:
             self._blevel.Unsubscribe(self._updateLevel)
             self._blevel = None
+
+
+class GIS(model.Actuator):
+    """
+    This represents the GIS from Orsay Physics
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Has axes:
+        • "operational": unit is "None", choices is (True, False)
+
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • position (VA, read-only, value is {"operational" : _positionPar.Actual})
+        • gasOn (BooleanVA, set to True to open/start the gas flow and False to close/stop the gas flow)
+        """
+        axes = {"operation": model.Axis(unit=None, choices=(True, False))}
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
+
+        self._gis = None
+        self._errorPar = None
+        self._positionPar = None
+        self._reservoirPar = None
+
+        self._operationalReached = threading.Event()
+        self._operationalReached.set()
+
+        self.position = model.VigilantAttribute({"operational": False}, readonly=True)
+        self.gasOn = model.BooleanVA(False, setter=self._setGasOn)
+
+        self.on_connect()
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+        self._gis = self.parent.datamodel.HybridGIS
+        self._errorPar = self._gis.ErrorState
+        self._positionPar = self._gis.PositionState
+        self._reservoirPar = self._gis.ReservoirState
+        self._errorPar.Subscribe(self._updateErrorState)
+        self._positionPar.Subscribe(self._updatePosition)
+        self._reservoirPar.Subscribe(self._updateGasOn)
+        self.update_VAs()
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        self._updateErrorState()
+        self._updatePosition()
+        self._updateGasOn()
+
+    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the error state from the Orsay server and saves it in the state VA
+        """
+        if parameter is None:
+            parameter = self._errorPar
+        if parameter is not self._errorPar:
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
+                             "datamodel.HybridGIS.ErrorState. Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+        if self._errorPar.Actual not in (0, "0") + EMPTY_VALUES:
+            self.state._set_value(HwError(self._errorPar.Actual), force_write=True)
+        else:
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+
+    def _updatePosition(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the position of the GIS from the Orsay server and saves it in the position VA
+        """
+        if parameter is None:
+            parameter = self._positionPar
+        if parameter is not self._positionPar:
+            raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
+                             "datamodel.HybridGIS.PositionState. Parameter passed is %s." % parameter.Name)
+        if attributeName == "Actual":
+            pos = self._positionPar.Actual.lower()
+            logging.debug("Current position is %s." % pos)
+            self.position._set_value({"operational": pos == "work"}, force_write=True)
+        if self._positionPar.Actual == self._positionPar.Target:
+            logging.debug("Target position reached.")
+            self._operationalReached.set()
+        else:
+            self._operationalReached.clear()
+
+    def _updateGasOn(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the GIS gas flow state from the Orsay server and saves it in the gasOn VA
+        """
+        if parameter is None:
+            parameter = self._reservoirPar
+        if parameter is not self._reservoirPar:
+            raise ValueError("Incorrect parameter passed to _updateGasOn. Parameter should be "
+                             "datamodel.HybridGIS.ReservoirState. Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+        logging.debug("Gas flow is now %s." % self._reservoirPar.Actual)
+        self.gasOn._set_value(self._reservoirPar.Actual.lower() == "open", force_write=True)
+
+    def _setGasOn(self, goal):
+        """
+        Opens the GIS reservoir if argument goal is True. Closes it otherwise.
+        Also closes the reservoir if the position of the GIS is not operational.
+        """
+        if not self.position.value("operational"):
+            logging.warning("Gas flow was attempted to be changed while not in working position.")
+            goal = False
+        if goal:
+            logging.debug("Starting gas flow.")
+            self._reservoirPar.Target = "OPEN"
+        else:
+            logging.debug("Stopping gas flow.")
+            self._reservoirPar.Target = "CLOSED"
+        return self._reservoirPar.Target.lower() == "open"
+
+    def _setOperational(self, goal):
+        """
+        Moves the GIS to working position if argument goal is True. Moves it to parking position otherwise.
+        """
+        if goal:
+            logging.debug("Moving GIS to operational position.")
+            self._positionPar.Target = "WORK"
+        else:
+            logging.debug("Moving GIS to parking position.")
+            self._positionPar.Target = "PARK"
+        self._operationalReached.wait()
+        return self._positionPar.Actual.lower() == "work"
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the axis of this actuator to pos.
+        """
+        self._checkMoveAbs(pos)
+        return self._executor.submit(self._setOperational, goal=pos["operational"])
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the axis of this actuator by shift.
+        """
+        pass
+
+    def stop(self, axes=None):
+        """
+        Stop changing the vacuum status
+        """
+        if axes is None or "operational" in axes:
+            self._gis.Stop.Target = 1
+            self._executor.cancel()
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        self._errorPar.Unsubscribe(self._updateErrorState)
+        self._positionPar.Unsubscribe(self._updatePosition)
+        self._reservoirPar.Unsubscribe(self._updateGasOn)
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
+        self._gis = None
+        self._errorPar = None
+        self._positionPar = None
+        self._reservoirPar = None
+
