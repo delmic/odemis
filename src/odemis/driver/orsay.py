@@ -163,6 +163,9 @@ class OrsayComponent(model.HwComponent):
 
     def _updateProcessInfo(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the process information from the Orsay server and saves it in the processInfo VA
         """
         if parameter is None:
@@ -253,6 +256,9 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updatePower(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the power status from the Orsay server and saves it in the power VA
         """
         if parameter is None:
@@ -277,6 +283,9 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the pressure from the Orsay server and saves it in the pressure VA
         """
         if parameter is None:
@@ -291,6 +300,9 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
@@ -326,6 +338,9 @@ class pneumaticSuspension(model.HwComponent):
 
     def _changeValve(self, goal):
         """
+        goal (bool): goal position of the valve: (True: "open", False: "closed")
+        return (bool): goal position of the valve set to the server: (True: "open", False: "closed")
+
         Opens or closes the valve.
         Returns True if the valve is opened, False otherwise
         """
@@ -404,6 +419,9 @@ class vacuumChamber(model.Actuator):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is not self._gate.ErrorState and parameter is not None:
@@ -432,6 +450,9 @@ class vacuumChamber(model.Actuator):
 
     def _updateGateOpen(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads if ValveP5 is open from the Orsay server and saves it in the gateOpen VA
         """
         if parameter is None:
@@ -456,6 +477,9 @@ class vacuumChamber(model.Actuator):
 
     def _updatePosition(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the vacuum state from the Orsay server and saves it in the position VA
         """
         if parameter is None:
@@ -475,6 +499,9 @@ class vacuumChamber(model.Actuator):
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the chamber pressure from the Orsay server and saves it in the pressure VA
         """
         if parameter is None:
@@ -489,6 +516,11 @@ class vacuumChamber(model.Actuator):
 
     def _changeVacuum(self, goal, wait=True):
         """
+        goal (int): goal state of the vacuum: (0: "vented", 1: "primary vacuum", 2: "high vacuum")
+        wait (bool): if True, the function will block until the goal vacuum state is reached
+        return (int): actual state of the vacuum at the end of this function: (0: "vented", 1: "primary vacuum",
+                      2: "high vacuum")
+
         Sets the vacuum status on the Orsay server to argument goal and waits until it is reached.
         Then returns the reached vacuum status.
         """
@@ -499,6 +531,9 @@ class vacuumChamber(model.Actuator):
 
     def _changeGateOpen(self, goal):
         """
+        goal (bool): goal position of the gate: (True: "open", False: "closed")
+        return (bool): goal position of the gate as set to the server: (True: "open", False: "closed")
+
         Opens ValveP5 on the Orsay server if argument goal is True. Closes it otherwise.
         """
         self._gate.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
@@ -608,6 +643,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is not self._system.Manometer1.ErrorState and parameter is not self._system.TurboPump1.ErrorState \
@@ -634,6 +672,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateSpeed(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the turbopump's speed from the Orsay server and saves it in the speed VA
         """
         if parameter is None:
@@ -648,6 +689,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateTemperature(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA
         """
         if parameter is None:
@@ -662,6 +706,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updatePower(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the turbopump's power from the Orsay server and saves it in the power VA
         """
         if parameter is None:
@@ -676,6 +723,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateSpeedReached(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA
         """
         if parameter is None:
@@ -690,6 +740,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA
         """
         if parameter is None:
@@ -704,6 +757,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
         """
         if parameter is None:
@@ -718,6 +774,9 @@ class pumpingSystem(model.HwComponent):
 
     def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA
         """
         if parameter is None:
@@ -785,6 +844,9 @@ class UPS(model.HwComponent):
 
     def _updateLevel(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the battery level of the UPS from the Orsay server and saves it in the level VA
         """
         if parameter is None:
