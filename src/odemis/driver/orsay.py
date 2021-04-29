@@ -42,6 +42,11 @@ NITROGEN_PRESSURE_RNG = (0, 5000000)  # Pa  Eventhough 0 is nowhere near a reali
 # nitrogen, it is the initialisation value of this parameter in the Orsay server, meaning it needs to be included in
 # the VA's range
 
+ROD_NOT_DETECTED = 0
+ROD_RESERVOIR_NOT_STRUCK = 1
+ROD_OK = 2
+ROD_READING_ERROR = 3
+
 EMPTY_VALUES = (None, "", "None", "none")
 
 
@@ -1077,3 +1082,211 @@ class GIS(model.Actuator):
         self._positionPar = None
         self._reservoirPar = None
 
+
+class GISReservoir(model.HwComponent):
+    """
+    This represents the GIS gas reservoir from Orsay Physics
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • temperatureTarget: FloatContinuous, unit=“°C”, range=(-273.15, 10^3), setter=_setTemperatureTarget
+        • temperatureActual: FloatContinuous, readonly, unit=“°C”, range=(-273.15, 10^3)
+        • temperatureRegulation: EnumeratedVA, unit=None, choices={0: “off”, 1: “on”, 2: “rush”},
+                                 setter=_setTemperatureRegulation
+        • age: FloatContinuous, readonly, unit=“h”, range=(0, 10^9)
+        • precursorType: StringVA, readonly
+        """
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._gis = None
+        self._temperaturePar = None
+
+        self.temperatureTarget = model.FloatContinuous(0, unit="°C", range=(-273.15, 10**3),
+                                                       setter=self._setTemperatureTarget)
+        self.temperatureActual = model.FloatContinuous(0, unit="°C", range=(-273.15, 10**3), readonly=True)
+        self.temperatureRegulation = model.VAEnumerated(0, unit=None, choices={0: "off", 1: "on", 2: "rush"},
+                                                        setter=self._setTemperatureRegulation)
+        self.age = model.FloatContinuous(0, unit="h", readonly=True, range=(0, 10**9))
+        self.precursorType = model.StringVA("", readonly=True)
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+        self._gis = self.parent.datamodel.HybridGIS
+        self._temperaturePar = self._gis.ReservoirTemperature
+
+        self._gis.ErrorState.Subscribe(self._updateErrorState)
+        self._gis.RodPosition.Subscribe(self._updateErrorState)
+        self._temperaturePar.Subscribe(self._updateTemperatureTarget)
+        self._temperaturePar.Subscribe(self._updateTemperatureActual)
+        self._gis.RegulationOn.Subscribe(self._updateTemperatureRegulation)
+        self._gis.RegulationRushOn.Subscribe(self._updateTemperatureRegulation)
+        self._gis.ReservoirLifeTime.Subscribe(self._updateAge)
+        self._gis.PrecursorType.Subscribe(self._updatePrecursorType)
+
+        self.update_VAs()
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        self._updateErrorState()
+        self._updateTemperatureTarget()
+        self._updateTemperatureActual()
+        self._updateTemperatureRegulation()
+        self._updateAge()
+        self._updatePrecursorType()
+
+    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the error state from the Orsay server and saves it in the state VA
+        """
+        if parameter not in (self._gis.ErrorState, self._gis.RodPosition, None):
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
+                             "datamodel.HybridGIS.ErrorState, datamodel.HybridGIS.RodPosition, or None. "
+                             "Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+
+        msg = ""
+        rod_pos = int(self._gis.RodPosition.Actual)
+        if rod_pos == ROD_NOT_DETECTED:
+            msg += "Reservoir rod not detected. "
+        elif rod_pos == ROD_RESERVOIR_NOT_STRUCK:
+            msg += "Reservoir not struck. "
+        elif rod_pos == ROD_READING_ERROR:
+            msg += "Error in reading the rod position. "
+        if self._gis.ErrorState.Actual not in ("0", 0) + EMPTY_VALUES:
+            msg += self._gis.ErrorState.Actual
+        if msg == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(msg), force_write=True)
+
+    def _updateTemperatureTarget(self, parameter=None, attributeName="Target"):
+        """
+        Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the temperatureTarget VA
+        """
+        if parameter is None:
+            parameter = self._temperaturePar
+        if parameter is not self._temperaturePar:
+            raise ValueError("Incorrect parameter passed to _updateTemperatureTarget. Parameter should be "
+                             "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Target":
+            return
+        logging.debug("Target temperature changed to %f." % float(self._temperaturePar.Target))
+        self.temperatureTarget._set_value(float(self._temperaturePar.Target), force_write=True)
+
+    def _updateTemperatureActual(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperatureActual VA
+        """
+        if parameter is None:
+            parameter = self._temperaturePar
+        if parameter is not self._temperaturePar:
+            raise ValueError("Incorrect parameter passed to _updateTemperatureActual. Parameter should be "
+                             "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
+
+        if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
+            logging.debug("Target temperature reached.")
+
+        if not attributeName == "Actual":
+            return
+        self.temperatureActual._set_value(float(self._temperaturePar.Actual), force_write=True)
+
+    def _updateTemperatureRegulation(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
+        temperatureRegulation VA
+        """
+        if parameter not in (self._gis.RegulationOn, self._gis.RegulationRushOn, None):
+            raise ValueError("Incorrect parameter passed to _updateTemperatureRegulation. Parameter should be "
+                             "datamodel.HybridGIS.RegulationOn, datamodel.HybridGIS.RegulationRushOn, or None. "
+                             "Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+        if bool(self._gis.RegulationRushOn.Actual):
+            logging.debug("Accelerated temeprature regulation turned on.")
+            self._setTemperatureRegulation(2)
+        elif bool(self._gis.RegulationOn.Actual):
+            logging.debug("Temperature regulation turned on.")
+            self._setTemperatureRegulation(1)
+        else:
+            logging.debug("Temperature regulation turned off.")
+            self._setTemperatureRegulation(0)
+
+    def _updateAge(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA
+        """
+        if parameter is None:
+            parameter = self._gis.ReservoirLifeTime
+        if parameter is not self._gis.ReservoirLifeTime:
+            raise ValueError("Incorrect parameter passed to _updateAge. Parameter should be "
+                             "datamodel.HybridGIS.ReservoirLifeTime. Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+        logging.debug("GIS reservoir lifetime updated to %f hours." % float(self._gis.ReservoirLifeTime.Actual))
+        self.age._set_value(float(self._gis.ReservoirLifeTime.Actual), force_write=True)
+
+    def _updatePrecursorType(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA
+        """
+        if parameter is None:
+            parameter = self._gis.PrecursorType
+        if parameter is not self._gis.PrecursorType:
+            raise ValueError("Incorrect parameter passed to _updatePrecursorType. Parameter should be "
+                             "datamodel.HybridGIS.PrecursorType. Parameter passed is %s." % parameter.Name)
+        if not attributeName == "Actual":
+            return
+        logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
+        self.precursorType._set_value(self._gis.PrecursorType.Actual, force_write=True)
+
+    def _setTemperatureTarget(self, goal):
+        """
+        goal (int): temperature to set as a target temperature
+        Sets the target temperature of the GIS reservoir to goal °C
+        """
+        logging.debug("“Setting target temperature to %f." % goal)
+        self._temperaturePar.Target = goal
+        return self._temperaturePar.Target
+
+    def _setTemperatureRegulation(self, goal):
+        """
+        Turns temperature regulation off (if goal = 0), on (if goal = 1) or on in accelerated mode (if goal = 2)
+        """
+        reg = False
+        rush = False
+        if goal == 2:
+            logging.debug("Setting temperature regulation to accelerated mode.")
+            rush = True
+        elif goal == 1:
+            logging.debug("Turning on temperature regulation.")
+            reg = True
+        else:
+            logging.debug("Turning off temperature regulation.")
+        self._gis.RegulationOn.Target = reg
+        self._gis.RegulationRushOn.Target = rush
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        self._gis.ErrorState.Unsubscribe(self._updateErrorState)
+        self._gis.RodPosition.Unsubscribe(self._updateErrorState)
+        self._temperaturePar.Unsubscribe(self._updateTemperatureTarget)
+        self._temperaturePar.Unsubscribe(self._updateTemperatureActual)
+        self._gis.RegulationOn.Unsubscribe(self._updateTemperatureRegulation)
+        self._gis.RegulationRushOn.Unsubscribe(self._updateTemperatureRegulation)
+        self._gis.ReservoirLifeTime.Unsubscribe(self._updateAge)
+        self._gis.PrecursorType.Unsubscribe(self._updatePrecursorType)
+        self._gis = None
+        self._temperaturePar = None
