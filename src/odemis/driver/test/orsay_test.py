@@ -235,7 +235,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension could not be contacted", str(self.psus.state.value))
         self.psus._valve.Target = 1
-
+        sleep(5)
         self.assertEqual(self.psus.state.value, model.ST_RUNNING)
 
     def test_updatePower(self):
@@ -400,7 +400,7 @@ class TestVacuumChamber(unittest.TestCase):
         self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5 could not be contacted", str(self.pressure.state.value))
         self.pressure._gate.IsOpen.Target = 1
-
+        sleep(5)
         self.assertEqual(self.pressure.state.value, model.ST_RUNNING)
 
     def test_updatePressure(self):
@@ -585,7 +585,7 @@ class TestPumpingSystem(unittest.TestCase):
         sleep(1)
         self.assertTrue(self.psys.primaryPumpOn.value)
         self.datamodel.HybridPlatform.PrimaryPumpState.Target = False
-        sleep(1)
+        sleep(5)
         self.assertFalse(self.psys.primaryPumpOn.value)
 
     def test_updateNitrogenPressure(self):
@@ -600,7 +600,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
         test_value = 1.0
         self.psys._system.Manometer1.Pressure.Target = test_value
-        sleep(1)
+        sleep(5)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
         self.psys._system.Manometer1.Pressure.Target = 0
 
