@@ -28,6 +28,9 @@ import threading
 import time
 import logging
 
+COMPONENT_STOP = 1
+COMPONENT_EMERGENCY_STOP = 2
+
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
 VALVE_OPEN = 1
@@ -521,7 +524,7 @@ class vacuumChamber(model.Actuator):
         Stop changing the vacuum status
         """
         if not axes or "vacuum" in axes:
-            self.parent.datamodel.HybridPlatform.Stop.Target = 1
+            self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
             self.parent.datamodel.HybridPlatform.Cancel.Target = True
             self._executor.cancel()
 
