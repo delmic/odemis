@@ -58,7 +58,7 @@ class OrsayComponent(model.HwComponent):
     def __init__(self, name, role, children, host, daemon=None, **kwargs):
         """
         children (dict string->kwargs): parameters setting for the children.
-            Known children are "pneumatic-suspension", "pressure", "pumping-system" and "ups"
+            Known children are "pneumatic-suspension", "pressure", "pumping-system", "ups", "gis" and "gis-reservoir"
             They will be provided back in the .children VA
         host (string): ip address of the Orsay server
         Defines the following VA's and links them to the callbacks from the Orsay server:
@@ -124,6 +124,24 @@ class OrsayComponent(model.HwComponent):
         else:
             self._ups = UPS(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._ups)
+
+        # create the GIS child
+        try:
+            kwargs = children["gis"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'gis' child")
+        else:
+            self._gis = GIS(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._gis)
+
+        # create the GIS Reservoir child
+        try:
+            kwargs = children["gis-reservoir"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'gis-reservoir' child")
+        else:
+            self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._gis_reservoir)
 
     def on_connect(self):
         """
@@ -1081,7 +1099,7 @@ class GIS(model.Actuator):
         and move the GIS away from the sample (PositionState.Target = "PARK").
         """
         if axes is None or "operational" in axes:
-            self._gis.Stop.Target = 1
+            self._gis.Stop.Target = COMPONENT_STOP
             self._executor.cancel()
 
     def terminate(self):
@@ -1108,11 +1126,11 @@ class GISReservoir(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • temperatureTarget: FloatContinuous, unit=“°C”, range=(-273.15, 10^3), setter=_setTemperatureTarget
-        • temperatureActual: FloatContinuous, readonly, unit=“°C”, range=(-273.15, 10^3)
-        • temperatureRegulation: EnumeratedVA, unit=None, choices={0: “off”, 1: “on”, 2: “rush”},
+        • temperatureTarget: FloatContinuous, unit="°C", range=(-273.15, 10^3), setter=_setTemperatureTarget
+        • temperatureActual: FloatContinuous, readonly, unit="°C", range=(-273.15, 10^3)
+        • temperatureRegulation: EnumeratedVA, unit=None, choices={0: "off", 1: "on", 2: "rush"},
                                  setter=_setTemperatureRegulation
-        • age: FloatContinuous, readonly, unit=“h”, range=(0, 10^9)
+        • age: FloatContinuous, readonly, unit="h", range=(0, 10^9)
         • precursorType: StringVA, readonly
         """
 
@@ -1292,7 +1310,7 @@ class GISReservoir(model.HwComponent):
 
         Sets the target temperature of the GIS reservoir to goal °C
         """
-        logging.debug("“Setting target temperature to %f." % goal)
+        logging.debug("Setting target temperature to %f." % goal)
         self._temperaturePar.Target = goal
         return float(self._temperaturePar.Target)
 
