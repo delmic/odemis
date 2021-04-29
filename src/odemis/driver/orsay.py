@@ -968,6 +968,9 @@ class GIS(model.Actuator):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is None:
@@ -984,6 +987,9 @@ class GIS(model.Actuator):
 
     def _updatePosition(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the position of the GIS from the Orsay server and saves it in the position VA
         """
         if parameter is None:
@@ -1003,6 +1009,9 @@ class GIS(model.Actuator):
 
     def _updateGasOn(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the GIS gas flow state from the Orsay server and saves it in the gasOn VA
         """
         if parameter is None:
@@ -1017,6 +1026,9 @@ class GIS(model.Actuator):
 
     def _setGasOn(self, goal):
         """
+        goal (bool): the goal state of the gas flow: (True: "open", False: "closed")
+        return (bool): the new state the gas flow: (True: "open", False: "closed")
+
         Opens the GIS reservoir if argument goal is True. Closes it otherwise.
         Also closes the reservoir if the position of the GIS is not operational.
         """
@@ -1033,6 +1045,9 @@ class GIS(model.Actuator):
 
     def _setOperational(self, goal):
         """
+        goal (bool): the goal state of the GIS position: (True: "work", False: "park")
+        return (bool): the state the GIS position is in after finishing moving: (True: "work", False: "park")
+
         Moves the GIS to working position if argument goal is True. Moves it to parking position otherwise.
         """
         if goal:
@@ -1061,7 +1076,9 @@ class GIS(model.Actuator):
 
     def stop(self, axes=None):
         """
-        Stop changing the vacuum status
+        Stop the GIS. This will turn off temperature regulation (RegulationOn.Target = False),
+        close the reservoir valve (ReservoirState.Target = "CLOSED")
+        and move the GIS away from the sample (PositionState.Target = "PARK").
         """
         if axes is None or "operational" in axes:
             self._gis.Stop.Target = 1
@@ -1146,6 +1163,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter not in (self._gis.ErrorState, self._gis.RodPosition, None):
@@ -1172,6 +1192,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateTemperatureTarget(self, parameter=None, attributeName="Target"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the temperatureTarget VA
         """
         if parameter is None:
@@ -1186,6 +1209,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateTemperatureActual(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperatureActual VA
         """
         if parameter is None:
@@ -1203,6 +1229,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateTemperatureRegulation(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
         temperatureRegulation VA
         """
@@ -1224,6 +1253,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateAge(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA
         """
         if parameter is None:
@@ -1238,6 +1270,9 @@ class GISReservoir(model.HwComponent):
 
     def _updatePrecursorType(self, parameter=None, attributeName="Actual"):
         """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
         Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA
         """
         if parameter is None:
@@ -1252,15 +1287,19 @@ class GISReservoir(model.HwComponent):
 
     def _setTemperatureTarget(self, goal):
         """
-        goal (int): temperature to set as a target temperature
+        goal (float): temperature in °C to set as a target temperature
+        return (float): temperature in °C the target temperature is set to
+
         Sets the target temperature of the GIS reservoir to goal °C
         """
         logging.debug("“Setting target temperature to %f." % goal)
         self._temperaturePar.Target = goal
-        return self._temperaturePar.Target
+        return float(self._temperaturePar.Target)
 
     def _setTemperatureRegulation(self, goal):
         """
+        goal (int): mode to set the temperature regulation to. Must be 0, 1 or 2
+
         Turns temperature regulation off (if goal = 0), on (if goal = 1) or on in accelerated mode (if goal = 2)
         """
         reg = False
