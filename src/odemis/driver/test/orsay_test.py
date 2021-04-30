@@ -64,7 +64,7 @@ class TestOrsayStatic(unittest.TestCase):
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         except Exception as e:
             self.fail(e)
-        self.assertEqual(len(oserver.children.value), 4)
+        self.assertEqual(len(oserver.children.value), 6)
 
         oserver.terminate()
 
@@ -753,13 +753,13 @@ class TestGIS(unittest.TestCase):
         Test movement of the gis to operational position and parking position
         """
         f = self.gis.moveAbs({"operational": True})
-        f.wait()
+        f.result()
         self.assertTrue(self.gis.position.value["operational"])
 
-        f = self.gis.moveAbs({"operational", False})
+        f = self.gis.moveAbs({"operational": False})
         sleep(0.5)
         self.assertFalse(self.gis.position.value["operational"])
-        f.wait()
+        f.result()
         self.assertFalse(self.gis.position.value["operational"])
 
     def test_gasFlow(self):
@@ -767,7 +767,7 @@ class TestGIS(unittest.TestCase):
         Tests the gas flow control and checks that gas flow cannot be started if the gis is not in operational position
         """
         f = self.gis.moveAbs({"operational": True})
-        f.wait()
+        f.result()
 
         self.gis._gis.ReservoirState.Target = "OPEN"
         sleep(1)
@@ -782,7 +782,7 @@ class TestGIS(unittest.TestCase):
         self.assertIs(self.gis._gis.ReservoirState.Target, "CLOSED")
 
         f = self.gis.moveAbs({"operational": False})
-        f.wait()
+        f.result()
 
         with self.assertLogs(logger=None, level=logging.WARN):
             self.gis.gasOn.value = True
@@ -792,11 +792,15 @@ class TestGIS(unittest.TestCase):
         """
         Tests that calling stop has the expected behaviour
         """
+        if not TEST_NOHW == 0:
+            self.skipTest("No hardware present to test stop function.")
+
         f = self.gis.moveAbs({"operational": True})
-        f.wait()
+        f.result()
         self.gis.gasOn.value = True
         sleep(0.5)
         self.gis.stop()
+        sleep(0.5)
         self.assertFalse(self.gis.gasOn.value)
         self.assertFalse(self.gis.position.value["operational"])
 
@@ -907,22 +911,22 @@ class TestGISReservoir(unittest.TestCase):
 
         self.gis_res._gis.RegulationOn.Target = True
         self.gis_res._gis.RegulationRushOn.Target = True
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
 
         self.gis_res._gis.RegulationOn.Target = False
         self.gis_res._gis.RegulationRushOn.Target = True
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
 
         self.gis_res._gis.RegulationOn.Target = True
         self.gis_res._gis.RegulationRushOn.Target = False
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureRegulation.value, 1)
 
         self.gis_res._gis.RegulationOn.Target = False
         self.gis_res._gis.RegulationRushOn.Target = False
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
     def test_updateAge(self):
@@ -975,14 +979,17 @@ class TestGISReservoir(unittest.TestCase):
         Test the setter of the temperatureRegulation VA
         """
         self.gis_res.temperatureRegulation.value = 0
-        self.assertFalse(bool(self.gis_res._gis.RegulationOn.Target))
-        self.assertFalse(bool(self.gis_res._gis.RegulationRushOn.Target))
+        sleep(0.5)
+        self.assertFalse(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertFalse(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
         self.gis_res.temperatureRegulation.value = 1
-        self.assertTrue(bool(self.gis_res._gis.RegulationOn.Target))
-        self.assertFalse(bool(self.gis_res._gis.RegulationRushOn.Target))
+        sleep(0.5)
+        self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertFalse(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
         self.gis_res.temperatureRegulation.value = 2
-        self.assertFalse(bool(self.gis_res._gis.RegulationOn.Target))
-        self.assertTrue(bool(self.gis_res._gis.RegulationRushOn.Target))
+        sleep(0.5)
+        self.assertFalse(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertTrue(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
         self.gis_res.temperatureRegulation.value = 0
 
     def test_temperatureRegulation(self):
@@ -995,6 +1002,8 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res.temperatureRegulation.value = 2
         if not TEST_NOHW == "sim":
             sleep(10)  # Sleep long enough so the target temperature can be reached
+        else:
+            sleep(0.5)
         self.assertAlmostEqual(self.gis_res.temperatureActual.value, test_value1, places=0)  # might have to tune
         # these places, depending on the accuracy of the temperature regulation
 
@@ -1002,6 +1011,8 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res.temperatureTarget.value = test_value2
         if not TEST_NOHW == "sim":
             sleep(10)  # Sleep long enough so the target temperature can be reached
+        else:
+            sleep(0.5)
         self.assertAlmostEqual(self.gis_res.temperatureActual.value, test_value2, places=0)  # might have to tune
         # these places, depending on the accuracy of the temperature regulation
 
@@ -1011,6 +1022,9 @@ class TestGISReservoir(unittest.TestCase):
         """
         Tests that calling stop has the expected behaviour
         """
+        if not TEST_NOHW == 0:
+            self.skipTest("No hardware present to test stop function.")
+
         try:
             self.gis_res.temperatureRegulation.value = 1
             sleep(0.5)

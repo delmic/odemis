@@ -47,7 +47,7 @@ ROD_RESERVOIR_NOT_STRUCK = 1
 ROD_OK = 2
 ROD_READING_ERROR = 3
 
-EMPTY_VALUES = (None, "", "None", "none")
+NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
 
 class OrsayComponent(model.HwComponent):
@@ -355,9 +355,9 @@ class pneumaticSuspension(model.HwComponent):
         eState = ""
         vpsEState = str(self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
         manEState = str(self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Actual)
-        if vpsEState not in ("0", 0) + EMPTY_VALUES:
+        if vpsEState not in NO_ERROR_VALUES:
             eState += "ValvePneumaticSuspension error: " + vpsEState
-        if manEState not in ("0", 0) + EMPTY_VALUES:
+        if manEState not in NO_ERROR_VALUES:
             if not eState == "":
                 eState += ", "
             eState += "Manometer2 error: " + manEState
@@ -475,7 +475,7 @@ class vacuumChamber(model.Actuator):
             return
         eState = ""
         gateEState = self._gate.ErrorState.Actual
-        if gateEState not in ("0", 0) + EMPTY_VALUES:
+        if gateEState not in NO_ERROR_VALUES:
             eState += "ValveP5 error: " + gateEState
         valve_state = int(self._gate.IsOpen.Actual)
         if valve_state == VALVE_ERROR:  # in case of valve error
@@ -715,9 +715,9 @@ class pumpingSystem(model.HwComponent):
         eState = ""
         manEState = self._system.Manometer1.ErrorState.Actual
         tpEState = self._system.TurboPump1.ErrorState.Actual
-        if manEState not in ("0", 0) + EMPTY_VALUES:
+        if manEState not in NO_ERROR_VALUES:
             eState += "Manometer1 error: " + manEState
-        if tpEState not in ("0", 0) + EMPTY_VALUES:
+        if tpEState not in NO_ERROR_VALUES:
             if not eState == "":
                 eState += ", "
             eState += "TurboPump1 error: " + tpEState
@@ -943,7 +943,7 @@ class GIS(model.Actuator):
         • position (VA, read-only, value is {"operational" : _positionPar.Actual})
         • gasOn (BooleanVA, set to True to open/start the gas flow and False to close/stop the gas flow)
         """
-        axes = {"operation": model.Axis(unit=None, choices=(True, False))}
+        axes = {"operational": model.Axis(unit=None, choices={True, False})}
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
@@ -998,7 +998,7 @@ class GIS(model.Actuator):
                              "datamodel.HybridGIS.ErrorState. Parameter passed is %s." % parameter.Name)
         if not attributeName == "Actual":
             return
-        if self._errorPar.Actual not in (0, "0") + EMPTY_VALUES:
+        if self._errorPar.Actual not in NO_ERROR_VALUES:
             self.state._set_value(HwError(self._errorPar.Actual), force_write=True)
         else:
             self.state._set_value(model.ST_RUNNING, force_write=True)
@@ -1040,7 +1040,9 @@ class GIS(model.Actuator):
         if not attributeName == "Actual":
             return
         logging.debug("Gas flow is now %s." % self._reservoirPar.Actual)
-        self.gasOn._set_value(self._reservoirPar.Actual.lower() == "open", force_write=True)
+        new_value = self._reservoirPar.Actual.lower() == "open"
+        self.gasOn._value = new_value  # to not call the setter
+        self.gasOn.notify(new_value)
 
     def _setGasOn(self, goal):
         """
@@ -1050,7 +1052,7 @@ class GIS(model.Actuator):
         Opens the GIS reservoir if argument goal is True. Closes it otherwise.
         Also closes the reservoir if the position of the GIS is not operational.
         """
-        if not self.position.value("operational"):
+        if not self.position.value["operational"]:
             logging.warning("Gas flow was attempted to be changed while not in working position.")
             goal = False
         if goal:
@@ -1194,14 +1196,18 @@ class GISReservoir(model.HwComponent):
             return
 
         msg = ""
-        rod_pos = int(self._gis.RodPosition.Actual)
+        try:
+            rod_pos = int(self._gis.RodPosition.Actual)
+        except TypeError:
+            rod_pos = ROD_NOT_DETECTED
+
         if rod_pos == ROD_NOT_DETECTED:
             msg += "Reservoir rod not detected. "
         elif rod_pos == ROD_RESERVOIR_NOT_STRUCK:
             msg += "Reservoir not struck. "
         elif rod_pos == ROD_READING_ERROR:
             msg += "Error in reading the rod position. "
-        if self._gis.ErrorState.Actual not in ("0", 0) + EMPTY_VALUES:
+        if self._gis.ErrorState.Actual not in NO_ERROR_VALUES:
             msg += self._gis.ErrorState.Actual
         if msg == "":
             self.state._set_value(model.ST_RUNNING, force_write=True)
@@ -1222,8 +1228,10 @@ class GISReservoir(model.HwComponent):
                              "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
         if not attributeName == "Target":
             return
-        logging.debug("Target temperature changed to %f." % float(self._temperaturePar.Target))
-        self.temperatureTarget._set_value(float(self._temperaturePar.Target), force_write=True)
+        new_value = float(self._temperaturePar.Target)
+        logging.debug("Target temperature changed to %f." % new_value)
+        self.temperatureTarget._value = new_value  # to not call the setter
+        self.temperatureTarget.notify(new_value)
 
     def _updateTemperatureActual(self, parameter=None, attributeName="Actual"):
         """
@@ -1259,15 +1267,27 @@ class GISReservoir(model.HwComponent):
                              "Parameter passed is %s." % parameter.Name)
         if not attributeName == "Actual":
             return
-        if bool(self._gis.RegulationRushOn.Actual):
+
+        try:
+            rush = self._gis.RegulationRushOn.Actual.lower() == "true"
+        except AttributeError:
+            rush = False
+        try:
+            reg = self._gis.RegulationOn.Actual.lower() == "true"
+        except AttributeError:
+            reg = False
+
+        if rush:
             logging.debug("Accelerated temeprature regulation turned on.")
-            self._setTemperatureRegulation(2)
-        elif bool(self._gis.RegulationOn.Actual):
+            new_value = 2
+        elif reg:
             logging.debug("Temperature regulation turned on.")
-            self._setTemperatureRegulation(1)
+            new_value = 1
         else:
             logging.debug("Temperature regulation turned off.")
-            self._setTemperatureRegulation(0)
+            new_value = 0
+        self.temperatureRegulation._value = new_value  # to not call the setter
+        self.temperatureRegulation.notify(new_value)
 
     def _updateAge(self, parameter=None, attributeName="Actual"):
         """
