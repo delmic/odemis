@@ -584,8 +584,11 @@ class TestPumpingSystem(unittest.TestCase):
         self.datamodel.HybridPlatform.PrimaryPumpState.Target = True
         sleep(1)
         self.assertTrue(self.psys.primaryPumpOn.value)
-        self.datamodel.HybridPlatform.PrimaryPumpState.Target = False
-        sleep(5)
+        if TEST_NOHW == "sim":  # for some reason simulation does not properly deal with setting Target to False
+            self.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
+        else:
+            self.datamodel.HybridPlatform.PrimaryPumpState.Target = False
+        sleep(1)
         self.assertFalse(self.psys.primaryPumpOn.value)
 
     def test_updateNitrogenPressure(self):
