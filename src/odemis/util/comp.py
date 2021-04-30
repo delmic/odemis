@@ -18,6 +18,7 @@ from __future__ import division
 import copy
 from odemis import model
 from odemis.util import img
+from numpy import floor, ceil, round, linspace 
 
 
 # Essentially, it's very straight-forward: FoV = max resolution * pixel size
@@ -108,3 +109,38 @@ def get_fov_rect(comp, fov):
             center[1] - fov[1] / 2,  # top
             center[0] + fov[0] / 2,  # right
             center[1] + fov[1] / 2)  # bottom
+
+
+def generate_zlevels(actuator, zrange, zstep):
+    """
+    Calculates the zlevels for a zstack acquisition, using the zmax, zmin
+    and zstep obtained from the GUI, as well as the current focus z position
+    actuator (Actuator): focus component
+    zrange (list or tuple of floats): contains the zMin and zMax, respectively 
+    zstep (float): distance between two successive zlevels 
+    returns (numpy.ndarray of floats): array of zlevels     
+    """
+    if zstep == 0:
+        raise ZeroDivisionError("The step size 'Zstep' can not be zero")
+    if zrange[0] == zrange[1] == 0:
+        raise ValueError("'zmax' and 'zmin' can not be both zeros")
+
+    # clip the zMax and zMin to the actuator limits if necessary 
+    if zrange[1] + actuator.position.value["z"] > actuator.axes["z"].range[1]:
+        zrange[1] = actuator.axes["z"].range[1] - actuator.position.value["z"]
+    elif actuator.position.value["z"] + zrange[0] < actuator.axes["z"].range[0]:
+        zrange[0] = actuator.axes["z"].range[0] - actuator.position.value["z"]
+
+    n = (zrange[1] - zrange[0]) / abs(zstep) + 1
+    step_f = (zrange[1] - zrange[0]) / (floor(n) - 1)
+    step_c = (zrange[1] - zrange[0]) / (ceil(n) - 1)
+    ef = abs(step_f - abs(zstep))
+    ec = abs(step_c - abs(zstep))
+    n = floor(n) if ef < ec else ceil(n)
+
+    if zstep > 0:
+        zlevels = linspace(zrange[0], zrange[1], n)
+        return round(zlevels + actuator.position.value["z"], decimals=8)
+    elif zstep < 0:
+        zlevels = linspace(zrange[1], zrange[0], n)
+        return round(zlevels + actuator.position.value["z"], decimals=8)

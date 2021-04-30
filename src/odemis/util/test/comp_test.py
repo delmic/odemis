@@ -28,9 +28,11 @@ import odemis
 from odemis.util import test
 import os
 import unittest
+from odemis.driver.tmcm import TMCLController
+from numpy import asarray, round
 
 from odemis.util.comp import compute_scanner_fov, get_fov_rect, \
-    compute_camera_fov
+    compute_camera_fov, generate_zlevels
 
 #logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -111,6 +113,123 @@ class TestFoV(unittest.TestCase):
                    center_im[0] + fov_im[0] / 2,
                    center_im[1] + fov_im[1] / 2)
         self.assertEqual(rect, rect_im)
+
+
+class TestGenerateZlevels(unittest.TestCase):
+    def setUp(self):
+        self.focus = TMCLController(name="test_focus", role="focus",
+                                         port="/dev/fake3",
+                                         axes=["z"],
+                                         ustepsize=[1e-6],
+                                         rng=[[-3000e-6, 3000e-6], ],
+                                         refproc="Standard")
+        self.zMin = model.FloatContinuous(value=0, range=(-1000e-6, 0))
+        self.zMax = model.FloatContinuous(value=0, range=(0, 1000e-6))
+        self.zstep = model.FloatContinuous(value=0, range=(-100e-6, 100e-6))
+
+    def test_zero_zstep(self):
+        self.focus.position.value["z"] = 1300e-6
+        self.zMin.value = -500e-6
+        self.zMax.value = 500e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 0e-6
+        self.assertRaises(ZeroDivisionError, generate_zlevels,
+                          self.focus, self.zrange, self.zstep.value)
+
+    def test_zmax_and_zmin_both_zeros(self):
+        self.focus.position.value["z"] = 1300e-6
+        self.zMin.value = -0e-6
+        self.zMax.value = 0e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 10e-6
+        self.assertRaises(ValueError, generate_zlevels,
+                          self.focus, self.zrange, self.zstep.value)
+
+    def test_zstep_greater_than_zmax_and_zmin(self):
+        self.focus.position.value["z"] = 1300e-6
+        self.zMin.value = -10e-6
+        self.zMax.value = 10e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 70e-6
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        expected = asarray([-10e-6, 10e-6]) + self.focus.position.value["z"]
+        self.assertListEqual(list(actual), list(expected))
+
+    def test_normal_zlevels_output_with_positive_zstep(self):
+        self.focus.position.value["z"] = 1000e-6
+        self.zMax.value = 100e-6
+        self.zMin.value = -250e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 50e-6
+        expected = round(asarray([-250e-6, -200e-6, -150e-6, -100e-6, -50e-6,
+                           0e-6, 50e-6, 100e-6]) + self.focus.position.value["z"], decimals=8)
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(list(expected), list(actual))
+
+    def test_normal_zlevels_output_with_negative_zstep(self):
+        self.focus.position.value["z"] = 1000e-6
+        self.zMax.value = 100e-6
+        self.zMin.value = -250e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = -50e-6
+        expected = round(asarray([-250e-6, -200e-6, -150e-6, -100e-6, -50e-6,
+                           0e-6, 50e-6, 100e-6]) + self.focus.position.value["z"], decimals=8)
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(
+            sorted(list(expected), reverse=True), list(actual))
+
+    def test_normal_zlevels_output_with_rounding_down(self):
+        self.focus.position.value["z"] = 1000e-6
+        self.zMax.value = 10e-6
+        self.zMin.value = -10e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 6e-6
+        expected = asarray([-10e-6, -3.33e-6, 3.33e-6, 10e-6]
+                           ) + self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(list(expected), list(actual))
+
+    def test_normal_zlevels_output_with_rounding_up(self):
+        self.focus.position.value["z"] = 1000e-6
+        self.zMax.value = 24e-6
+        self.zMin.value = -24e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 17e-6
+        expected = asarray([-24e-6, -8e-6, 8e-6, 24e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(list(expected), list(actual))
+
+    def test_large_number_of_levels(self):
+        self.focus.position.value["z"] = 1000e-6
+        self.zMax.value = 100e-6
+        self.zMin.value = -100e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 0.5e-6
+        output = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertEqual(len(output), 401)
+
+    def test_clipping_zmin_on_actuator_lower_limit(self):
+        self.focus.position.value["z"] = -2800e-6
+        self.zMax.value = 0e-6
+        self.zMin.value = -300e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 100e-6
+        expected = asarray([-200e-6, -100e-6, 0e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(list(expected), list(actual))
+
+    def test_clipping_zmax_on_actuator_upper_limit(self):
+        self.focus.position.value["z"] = 2800e-6
+        self.zMax.value = 300e-6
+        self.zMin.value = 0e-6
+        self.zrange = [self.zMin.value, self.zMax.value]
+        self.zstep.value = 100e-6
+        expected = asarray([0e-6, 100e-6, 200e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, self.zrange, self.zstep.value)
+        self.assertListEqual(list(expected), list(actual))
 
 
 if __name__ == "__main__":

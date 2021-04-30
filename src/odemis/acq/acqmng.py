@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 
 from __future__ import division
-
+import numpy
 from collections import OrderedDict
 import collections
 from concurrent.futures import CancelledError
@@ -40,7 +40,8 @@ from odemis.util import img, fluo, executeAsyncTask
 import time
 import copy
 from odemis.model import prepare_to_listen_to_more_vas
-
+from concurrent.futures._base import CANCELLED
+from odemis.util.driver import estimateMoveDuration
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
@@ -81,6 +82,189 @@ def acquire(streams, settings_obs=None):
 
     # return the interface to manipulate the task
     return future
+
+
+def acquireZStack(streams, zlevels, settings_obs=None):
+    """
+    The acquisition manager of a zstack
+    streams (list of Stream): the streams to be acquired
+    zlevels (dict Stream -> list of floats): a dictionary containing the streams and the
+    corresponding lists of actuator z positions
+    settings_obs (SettingsObserver):
+    return (ProgressiveFuture): the future that will be executing the task
+    """
+    # TODO settings observer
+    # create future
+    future = model.ProgressiveFuture()
+    # create acquisition task
+    acqui_task = ZStackAcquisitionTask(future, streams, zlevels, settings_obs)
+    # add the ability of cancelling the future during execution
+    future.task_canceller = acqui_task.cancel
+
+    # set the progress of the future
+    total_duration = acqui_task.estimate_total_duration()
+    future.set_end_time(time.time() + total_duration)
+
+    # assign the acquisition task to the future
+    executeAsyncTask(future, acqui_task.run)
+
+    return future
+
+
+class ZStackAcquisitionTask(object):
+    """
+    This class represents an acquisition task for a zstack of data.
+    """
+
+    def __init__(self, future, streams, zlevels, settings_obs):
+        """
+        The class constructor
+        future (ProgressiveFuture): the future that will execute the task asynchronously
+        streams (list of Stream): the streams to be acquired
+        zlevels (dict Stream -> list of floats): a dictionary containing the streams and the
+        corresponding lists of actuator z positions
+        settings_obs (SettingsObserver):
+        """
+        self._main_future = future
+        self._future_state = None
+        self._streams = sortStreams(streams)
+        self._zpos = next((l for l in zlevels.values() if len(l) > 1), None)
+        self._zlevels = zlevels
+        self._settings_obs = settings_obs
+        self._zstep_duration = self._estimate_zstep_duration()
+
+    def cancel(self, _):
+        """
+        Called when the user presses the button "cancel" and the future is still running.
+        (but there might  be some delay (not instantly called) )
+        return (Boolean): True if canceled, False otherwise
+        """
+        self._future_state = CANCELLED
+        # cancel the sub-futures
+        self._actuator_f.cancel()
+        self._single_acqui_f.cancel()
+        return True
+
+    def _estimate_zstep_duration(self):
+        """
+        return (float > 0): estimated time (in s) that it takes to move the focus actuator
+          by one step.
+        """
+        # get the focuser of any of the FM streams
+        focuser = next(
+            (s.focuser for s in self._streams if isinstance(s, FluoStream)), None
+        )
+        speed = None
+        if focuser is not None:
+            if model.hasVA(focuser, "speed"):
+                speed = focuser.speed.value.get("z", None)
+        if speed is None:
+            speed = 10e-6  # m/s, pessimistic
+        zstep = 0
+        if self._zpos:
+            zstep = abs(self._zpos[0] - self._zpos[1])
+        return estimateMoveDuration(zstep, speed, 0.01)
+
+    def estimate_total_duration(self):
+        """
+        Estimates the total time for the zstack acquisition.
+        return (Float > 0): the estimated time
+        """
+        acqui_time = 0.0
+        zstep_time = 0
+        nr_FM_streams = 0
+        for s in self._streams:
+            acqui_time += s.estimateAcquisitionTime() * len(self._zlevels[s])
+            if isinstance(s, FluoStream):
+                nr_FM_streams += 1
+        if self._zpos:
+            zstep_time = self._zstep_duration * (len(self._zpos) - 1) * nr_FM_streams
+        return acqui_time + zstep_time
+
+    def _construct_zcube(self, data_arrays):
+        """
+        Create 3D data array from the 2D acquired data arrays 
+        data_arrays (list of DataArray): a list of acquired images at different z levels.
+        return (DataArray): a data array embedding all the data acquired at all z levels.
+        """
+        # pixel size along z axis
+        metadata = data_arrays[0].metadata
+        px, py = metadata[model.MD_PIXEL_SIZE]
+        pz = (self._zpos[-1] - self._zpos[0]) / (len(self._zpos) - 1)
+
+        if pz < 0:
+            data_arrays = numpy.flipud(data_arrays)
+            pz = -pz
+        # upgrade the metadata with the z pixel size
+        metadata[model.MD_PIXEL_SIZE] = (px, py, round(pz, ndigits=7))
+
+        # z coordinate of center
+        cx, cy = metadata[model.MD_POS]
+        cz = (self._zpos[0] + self._zpos[-1]) / 2
+        # upgrade the metadata with the z center position
+        metadata[model.MD_POS] = (cx, cy, round(cz, ndigits=5))
+
+        return model.DataArray(data_arrays, metadata)
+
+    def run(self):
+        """
+        The main function of the task class, which will be called by the future asynchronously
+        """
+        remaining_t = self.estimate_total_duration()
+        acquired_data = []
+        # iterate through streams
+        for stream in self._streams:
+            zstack = []
+            # for each stream, iterate through zlevels (if exist)
+            for i, z in enumerate(self._zlevels[stream]):
+                # move the focuser
+                self._actuator_f = stream.focuser.moveAbs({"z": z})
+                self._actuator_f.result()
+
+                # check if cancellation happened while the actuator future is working
+                if self._future_state == CANCELLED:
+                    raise CancelledError()
+
+                # if FM stream, then subtract one zstep time
+                if isinstance(stream, FluoStream):
+                    if i != len(self._zpos) - 1:
+                        remaining_t -= self._zstep_duration
+                        self._main_future.set_end_time(time.time() + remaining_t)
+
+                try:
+                    # acquire this single stream, and get the data
+                    self._single_acqui_f = acquire([stream], self._settings_obs)
+                    data, exp = self._single_acqui_f.result()
+
+                    # check if cancellation happened while the acquiring future is working
+                    if self._future_state == CANCELLED:
+                        raise CancelledError()
+
+                    # check on the acquired data
+                    if not data:
+                        logging.warning(
+                            "The acquired data array for stream %s is empty", stream
+                        )
+                    else:
+                        logging.info("The acquisition for stream %s is done", stream)
+
+                except CancelledError:
+                    logging.exception("The acquisition was canceled")
+                except Exception:
+                    logging.exception("The acquisition failed")
+                finally:
+                    zstack.append(data[0])
+                    # update the remaining time
+                    remaining_t -= stream.estimateAcquisitionTime()
+                    self._main_future.set_end_time(time.time() + remaining_t)
+
+            if isinstance(stream, FluoStream):
+                zcube = self._construct_zcube(zstack)
+                acquired_data.append(zcube)
+            elif isinstance(stream, EMStream):
+                acquired_data.append(zstack[0])
+
+        return acquired_data, exp
 
 
 def estimateTime(streams):
