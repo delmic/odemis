@@ -825,6 +825,8 @@ class TestGISReservoir(unittest.TestCase):
         for child in cls.oserver.children.value:
             if child.name == CONFIG_GISRES["name"]:
                 cls.gis_res = child
+            elif child.name == CONFIG_GIS["name"]:
+                cls.gis = child
 
     @classmethod
     def tearDownClass(cls):
@@ -832,6 +834,196 @@ class TestGISReservoir(unittest.TestCase):
         Terminate the Orsay client
         """
         cls.oserver.terminate()
+
+    def test_errorstate(self):
+        """
+        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updateErrorState(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+        test_string = "This thing broke"
+
+        self.gis_res._gis.ErrorState.Actual = test_string
+        self.assertIsInstance(self.gis_res.state.value, HwError)
+        self.assertIn(test_string, str(self.gis_res.state.value))
+        self.gis_res._gis.ErrorState.Actual = ""
+
+        self.gis_res._gis.RodPosition.Actual = 0
+        self.assertIsInstance(self.gis_res.state.value, HwError)
+        self.assertIn("Reservoir rod not detected", str(self.gis_res.state.value))
+        self.gis_res._gis.RodPosition.Actual = 1
+        self.assertIsInstance(self.gis_res.state.value, HwError)
+        self.assertIn("Reservoir not struck", str(self.gis_res.state.value))
+        self.gis_res._gis.RodPosition.Actual = 3
+        self.assertIsInstance(self.gis_res.state.value, HwError)
+        self.assertIn("Error in reading the rod position", str(self.gis_res.state.value))
+        self.gis_res._gis.RodPosition.Actual = 2
+        sleep(0.5)
+        self.assertEqual(self.gis_res.state.value, model.ST_RUNNING)
+
+    def test_updateTemperatureTarget(self):
+        """
+        Check that the temperatureTarget VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updateTemperatureTarget(self.datamodel.HybridPlatform.Cancel)
+
+        test_value = 20
+        self.gis_res._temperaturePar.Target = test_value
+        self.assertEqual(self.gis_res.temperatureTarget.value, test_value)
+        self.gis_res._temperaturePar.Target = 0
+        self.assertEqual(self.gis_res.temperatureTarget.value, 0)
+
+    def test_updateTemperatureActual(self):
+        """
+        Check that the temperatureActual VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updateTemperatureActual(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+
+        test_value = 20
+        self.gis_res._temperaturePar.Actual = test_value
+        self.assertEqual(self.gis_res.temperatureActual.value, test_value)
+        self.gis_res._temperaturePar.Actual = 0
+        self.assertEqual(self.gis_res.temperatureActual.value, 0)
+
+    def test_updateTemperatureRegulation(self):
+        """
+        Check that the temperatureRegulation VA is updated correctly and an exception is raised when the wrong parameter
+        is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updateTemperatureRegulation(self.datamodel.HybridPlatform.Cancel)
+
+        self.gis_res._gis.RegulationOn.Target = True
+        self.gis_res._gis.RegulationRushOn.Target = True
+        sleep(0.5)
+        self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
+
+        self.gis_res._gis.RegulationOn.Target = False
+        self.gis_res._gis.RegulationRushOn.Target = True
+        sleep(0.5)
+        self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
+
+        self.gis_res._gis.RegulationOn.Target = True
+        self.gis_res._gis.RegulationRushOn.Target = False
+        sleep(0.5)
+        self.assertEqual(self.gis_res.temperatureRegulation.value, 1)
+
+        self.gis_res._gis.RegulationOn.Target = False
+        self.gis_res._gis.RegulationRushOn.Target = False
+        sleep(0.5)
+        self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+
+    def test_updateAge(self):
+        """
+        Check that the age VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updateAge(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+
+        test_value = 20
+        self.gis_res._gis.ReservoirLifeTime.Actual = test_value
+        self.assertEqual(self.gis_res.age.value, test_value)
+        self.gis_res._gis.ReservoirLifeTime.Actual = 0
+        self.assertEqual(self.gis_res.age.value, 0)
+
+    def test_updatePrecursorType(self):
+        """
+        Check that the precursorType VA is updated correctly and an exception is raised when the wrong parameter is
+        passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis_res._updatePrecursorType(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+
+        test_value = "test precursor"
+        self.gis_res._gis.PrecursorType.Actual = test_value
+        self.assertEqual(self.gis_res.precursorType.value, test_value)
+        self.gis_res._gis.PrecursorType.Actual = "Simulation"
+        self.assertEqual(self.gis_res.precursorType.value, "Simulation")
+
+    def test_setTemperatureTarget(self):
+        """
+        Test the setter of the temperatureTarget VA
+        """
+        test_value = 20
+        self.gis_res.temperatureTarget.value = test_value
+        self.assertEqual(self.gis_res._temperaturePar.Target, test_value)
+        self.gis_res.temperatureTarget.value = 0
+        self.assertEqual(self.gis_res._temperaturePar.Target, 0)
+
+    def test_setTemperatureRegulation(self):
+        """
+        Test the setter of the temperatureRegulation VA
+        """
+        self.gis_res.temperatureRegulation.value = 0
+        self.assertFalse(bool(self.gis_res._gis.RegulationOn.Target))
+        self.assertFalse(bool(self.gis_res._gis.RegulationRushOn.Target))
+        self.gis_res.temperatureRegulation.value = 1
+        self.assertTrue(bool(self.gis_res._gis.RegulationOn.Target))
+        self.assertFalse(bool(self.gis_res._gis.RegulationRushOn.Target))
+        self.gis_res.temperatureRegulation.value = 2
+        self.assertFalse(bool(self.gis_res._gis.RegulationOn.Target))
+        self.assertTrue(bool(self.gis_res._gis.RegulationRushOn.Target))
+        self.gis_res.temperatureRegulation.value = 0
+
+    def test_temperatureRegulation(self):
+        """
+        Test if temperature regulation is functioning properly
+        """
+        test_value1 = 30
+        test_value2 = 40
+        self.gis_res.temperatureTarget.value = test_value1
+        self.gis_res.temperatureRegulation.value = 2
+        if not TEST_NOHW == "sim":
+            sleep(10)  # Sleep long enough so the target temperature can be reached
+        self.assertAlmostEqual(self.gis_res.temperatureActual.value, test_value1, places=0)  # might have to tune
+        # these places, depending on the accuracy of the temperature regulation
+
+        self.gis_res.temperatureRegulation.value = 1
+        self.gis_res.temperatureTarget.value = test_value2
+        if not TEST_NOHW == "sim":
+            sleep(10)  # Sleep long enough so the target temperature can be reached
+        self.assertAlmostEqual(self.gis_res.temperatureActual.value, test_value2, places=0)  # might have to tune
+        # these places, depending on the accuracy of the temperature regulation
+
+        self.gis_res.temperatureRegulation.value = 0
+
+    def test_stop(self):
+        """
+        Tests that calling stop has the expected behaviour
+        """
+        try:
+            self.gis_res.temperatureRegulation.value = 1
+            sleep(0.5)
+            self.gis.stop()
+            self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+
+            self.gis_res.temperatureRegulation.value = 2
+            sleep(0.5)
+            self.gis.stop()
+            self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+
+        except NameError:
+            self.skipTest("No GIS to call stop on.")
 
 
 if __name__ == '__main__':
