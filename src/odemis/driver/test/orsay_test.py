@@ -20,7 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import logging
 import os
 import unittest
 from time import sleep
@@ -36,12 +36,16 @@ CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
 CONFIG_UPS = {"name": "ups", "role": "ups"}
+CONFIG_GIS = {"name": "gis", "role": "gis"}
+CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 
 CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
-                             "ups": CONFIG_UPS}
+                             "ups": CONFIG_UPS,
+                             "gis": CONFIG_GIS,
+                             "gis-reservoir": CONFIG_GISRES}
                 }
 
 
@@ -99,6 +103,10 @@ class TestOrsay(unittest.TestCase):
                 cls.psys = child
             elif child.name == CONFIG_UPS["name"]:
                 cls.ups = child
+            elif child.name == CONFIG_GIS["name"]:
+                cls.gis = child
+            elif child.name == CONFIG_GISRES["name"]:
+                cls.gis_res = child
 
     @classmethod
     def tearDownClass(cls):
@@ -653,6 +661,177 @@ class TestUPS(unittest.TestCase):
         """
         with self.assertRaises(ValueError):
             self.ups._updateLevel(self.datamodel.HybridPlatform.Cancel)
+
+
+class TestGIS(unittest.TestCase):
+    """
+    Tests for the gas injection system (GIS)
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
+        try:
+            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        except Exception as e:
+            raise HwError(str(e))
+
+        cls.datamodel = cls.oserver.datamodel
+
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_GIS["name"]:
+                cls.gis = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_errorstate(self):
+        """
+        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis._updateErrorState(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+        test_string = "This thing broke"
+
+        self.gis._gis.ErrorState.Actual = test_string
+        self.assertIsInstance(self.gis.state.value, HwError)
+        self.assertIn(test_string, str(self.gis.state.value))
+        self.gis._gis.ErrorState.Actual = ""
+
+        self.assertEqual(self.gis.state.value, model.ST_RUNNING)
+
+    def test_updatePosition(self):
+        """
+        Check that the position VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis._updatePosition(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+
+        self.gis._gis.PositionState.Actual = "WORK"
+        self.assertTrue(self.gis.position.value["operational"])
+        self.gis._gis.PositionState.Actual = "MOVING"
+        self.assertFalse(self.gis.position.value["operational"])
+        self.gis._gis.PositionState.Actual = "PARK"
+        self.assertFalse(self.gis.position.value["operational"])
+
+    def test_updateGasOn(self):
+        """
+        Check that the gasOn VA is updated correctly and an exception is raised when the wrong parameter is passed
+        """
+        with self.assertRaises(ValueError):
+            self.gis._updateGasOn(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
+                          "outside of simulation.")
+
+        self.gis._gis.ReservoirState.Actual = "OPEN"
+        self.assertTrue(self.gis.gasOn.value)
+        self.gis._gis.ReservoirState.Actual = "CLOSED"
+        self.assertFalse(self.gis.gasOn.value)
+
+    def test_moveAbs(self):
+        """
+        Test movement of the gis to operational position and parking position
+        """
+        f = self.gis.moveAbs({"operational": True})
+        f.wait()
+        self.assertTrue(self.gis.position.value["operational"])
+
+        f = self.gis.moveAbs({"operational", False})
+        sleep(0.5)
+        self.assertFalse(self.gis.position.value["operational"])
+        f.wait()
+        self.assertFalse(self.gis.position.value["operational"])
+
+    def test_gasFlow(self):
+        """
+        Tests the gas flow control and checks that gas flow cannot be started if the gis is not in operational position
+        """
+        f = self.gis.moveAbs({"operational": True})
+        f.wait()
+
+        self.gis._gis.ReservoirState.Target = "OPEN"
+        sleep(1)
+        self.assertTrue(self.gis.gasOn.value)
+        self.gis._gis.ReservoirState.Target = "CLOSED"
+        sleep(1)
+        self.assertFalse(self.gis.gasOn.value)
+
+        self.gis.gasOn.value = True
+        self.assertIs(self.gis._gis.ReservoirState.Target, "OPEN")
+        self.gis.gasOn.value = False
+        self.assertIs(self.gis._gis.ReservoirState.Target, "CLOSED")
+
+        f = self.gis.moveAbs({"operational": False})
+        f.wait()
+
+        with self.assertLogs(logger=None, level=logging.WARN):
+            self.gis.gasOn.value = True
+        self.assertFalse(self.gis.gasOn.value)
+
+    def test_stop(self):
+        """
+        Tests that calling stop has the expected behaviour
+        """
+        f = self.gis.moveAbs({"operational": True})
+        f.wait()
+        self.gis.gasOn.value = True
+        sleep(0.5)
+        self.gis.stop()
+        self.assertFalse(self.gis.gasOn.value)
+        self.assertFalse(self.gis.position.value["operational"])
+
+
+class TestGISReservoir(unittest.TestCase):
+    """
+    Tests for the gas injection system (GIS) reservoir
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
+        try:
+            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        except Exception as e:
+            raise HwError(str(e))
+
+        cls.datamodel = cls.oserver.datamodel
+
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_GISRES["name"]:
+                cls.gis_res = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
 
 
 if __name__ == '__main__':
