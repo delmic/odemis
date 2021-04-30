@@ -177,7 +177,7 @@ class OrsayComponent(model.HwComponent):
         if attributeName != "Actual":
             return
         currentProcessInfo = str(parameter.Actual)
-        currentProcessInfo.replace("N/A", "")
+        currentProcessInfo = currentProcessInfo.replace("N/A", "")
         logging.debug("ProcessInfo update: " + currentProcessInfo)
         self.processInfo._set_value(currentProcessInfo, force_write=True)
 
@@ -270,16 +270,17 @@ class pneumaticSuspension(model.HwComponent):
         if attributeName != "Actual":
             return
         valve_state = int(parameter.Actual)
+        log_msg = "ValvePneumaticSuspension state changed to: %s."
         if valve_state in (VALVE_UNDEF, VALVE_ERROR):
-            logging.warning("ValvePneumaticSuspension state changed to: %s." % valve_state)
+            logging.warning(log_msg % valve_state)
             self._updateErrorState()
         elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
-            logging.debug("ValvePneumaticSuspension state changed to: %s." % valve_state)
+            logging.debug(log_msg % valve_state)
             new_value = valve_state == VALVE_OPEN
             self.power._value = new_value  # to not call the setter
             self.power.notify(new_value)
         else:  # if _valve.Actual == VALVE_TRANSIT, or undefined
-            logging.debug("ValvePneumaticSuspension state changed to: %s." % valve_state)
+            logging.debug(log_msg % valve_state)
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
@@ -465,16 +466,17 @@ class vacuumChamber(model.Actuator):
         if attributeName != "Actual":
             return
         valve_state = int(parameter.Actual)
+        log_msg = "ValveP5 state changed to: %s."
         if valve_state in (VALVE_UNDEF, VALVE_ERROR):
-            logging.warning("ValveP5 state changed to: %s." % valve_state)
+            logging.warning(log_msg % valve_state)
             self._updateErrorState()
         elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
-            logging.debug("ValveP5 state changed to: %s." % valve_state)
+            logging.debug(log_msg % valve_state)
             new_value = valve_state == VALVE_OPEN
             self.gateOpen._value = new_value  # to not call the setter
             self.gateOpen.notify(new_value)
         else:  # if parameter.Actual is VALVE_TRANSIT, or undefined
-            logging.debug("ValveP5 state changed to: %s." % valve_state)
+            logging.debug(log_msg % valve_state)
 
     def _updatePosition(self, parameter=None, attributeName="Actual"):
         """
