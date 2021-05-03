@@ -61,6 +61,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.move import getCurrentPositionLabel, IMAGING
 from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
@@ -449,6 +450,9 @@ class LocalizationTab(Tab):
         sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        self.stage = self.tab_data_model.main.stage
+        self.stage.position.subscribe(self._on_stage_pos, init=True)
+
     @property
     def settingsbar_controller(self):
         return self._settingbar_controller
@@ -599,6 +603,14 @@ class LocalizationTab(Tab):
         else:
             wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
 
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
+
+
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -620,6 +632,7 @@ class LocalizationTab(Tab):
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -3416,6 +3429,10 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        # stage will be used to listen to position changes (to enable/disable the tab in the right positions)
+        self.stage = self.tab_data_model.main.stage
+        if main_data.role == "cryo-secom":
+            self.stage.position.subscribe(self._on_stage_pos, init=True)
 
     def _on_ccd_should_update(self, update):
         """
@@ -3426,8 +3443,8 @@ class SecomAlignTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        # Store/restore previous confocal settings when entering/leaving the tab
         main_data = self.tab_data_model.main
+        # Store/restore previous confocal settings when entering/leaving the tab
         lm = main_data.laser_mirror
         if show and lm:
             # Must be done before starting the stream
@@ -3474,6 +3491,7 @@ class SecomAlignTab(Tab):
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -3706,6 +3724,13 @@ class SecomAlignTab(Tab):
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
+        
     def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
