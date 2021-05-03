@@ -376,7 +376,7 @@ HW_SETTINGS_CONFIG = {
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
-                "range": (0.01, 500.0),
+                "range": (1e-6, 500.0),
                 "type": "float",
                 "accuracy": 2,
             }),
