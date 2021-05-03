@@ -721,7 +721,7 @@ class TabButton(GraphicRadioButton):
 
         self.highlighted = False
 
-    def Enable(self, enable):
+    def Enable(self, enable=True):
         if enable:
             if self.highlighted:
                 self.SetForegroundColour(FG_COLOUR_HIGHLIGHT)
