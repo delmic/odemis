@@ -1956,9 +1956,9 @@ class CryoChamberTab(Tab):
         stage = self.tab_data_model.main.stage
         stage_metadata = stage.getMetadata()
         # start and end position are used for the gauge progress bar
-        self.start_pos = stage.position.value
-        self.end_pos = self.start_pos
-        # Show position of the stage via the progress bar
+        self._start_pos = stage.position.value
+        self._end_pos = self._start_pos
+        # Show current position of the stage via the progress bar
         main_data.stage.position.subscribe(self._update_progress_bar, init=False)
         try:
             self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
@@ -2009,10 +2009,10 @@ class CryoChamberTab(Tab):
                                          COATING: stage_metadata[model.MD_FAV_POS_COATING], }
 
         # Determine and show current position of the stage
-        self.current_position, self.target_position = None, None
+        self._current_position, self._target_position = None, None
         self._enable_movement_controls()
-        if self.current_position in self.position_btns.keys():
-            pos_button = next(button for pos, button in self.position_btns.items() if pos == self.current_position)
+        if self._current_position in self.position_btns.keys():
+            pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
             self._toggle_switch_buttons(pos_button)
         self._show_cancel_warning_msg(None)
 
@@ -2148,8 +2148,12 @@ class CryoChamberTab(Tab):
         """
         if not self.IsShown():
             return
+        # start and end position should be set for the progress bar to update
+        # otherwise, the movement is not coming from the tab switching buttons
+        if not self._start_pos or not self._end_pos:
+            return
         # Get the ratio of the current position in respect to the start/end position
-        val = getMovementProgress(pos, self.start_pos, self.end_pos)
+        val = getMovementProgress(pos, self._start_pos, self._end_pos)
         if val is None:
             return
         # Set the move gauge with the movement progress percentage
@@ -2169,10 +2173,10 @@ class CryoChamberTab(Tab):
         """
         stage = self.tab_data_model.main.stage
         # Get current movement (including unknown and on the path)
-        self.current_position = getCurrentPositionLabel(stage.position.value, stage)
-        self._enable_position_controls(self.current_position, cancelled)
+        self._current_position = getCurrentPositionLabel(stage.position.value, stage)
+        self._enable_position_controls(self._current_position, cancelled)
         # Enable stage advanced controls on milling
-        self._enable_advanced_controls(True) if self.current_position is MILLING else self._enable_advanced_controls(
+        self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(
             False)
 
     def _enable_position_controls(self, current_position=None, cancelled=False):
@@ -2243,7 +2247,7 @@ class CryoChamberTab(Tab):
         :param pos: (float) value of rx
        """
         # Update the milling control only during milling
-        if self.current_position is MILLING and self.target_position is None:
+        if self._current_position is MILLING and self._target_position is None:
             # Only update when change from former value is significant
             if pos - (self._prev_milling_angle + self.ion_to_sample) <= 1e-3:
                 return
@@ -2329,7 +2333,11 @@ class CryoChamberTab(Tab):
         self.panel.btn_cancel.Disable()
         # Get currently pressed button (if any) then re-enable the tab controls
         self._enable_movement_controls()
-        self.target_position = None
+        # After the movement is done, set start, end and target position to None
+        # That way any stage moves from outside the the chamber tab are not considered
+        self._target_position = None
+        self._start_pos = None
+        self._end_pos = None
 
     def _on_cancel(self, evt):
         """
@@ -2339,11 +2347,11 @@ class CryoChamberTab(Tab):
         self._move_future.cancel()
         self.panel.btn_cancel.Disable()
         # Show warning message if target position is indicated
-        if self.target_position is not None:
-            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self.current_position],
-                                                                             target_pos_str[self.target_position])
+        if self._target_position is not None:
+            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self._current_position],
+                                                                             target_pos_str[self._target_position])
             self._show_cancel_warning_msg(txt_warning)
-            self.target_position = None
+            self._target_position = None
         self._enable_movement_controls(cancelled=True)
         logging.info("Stage move cancelled.")
 
@@ -2357,15 +2365,15 @@ class CryoChamberTab(Tab):
         if self._move_future._state == RUNNING:
             return
         stage = self.tab_data_model.main.stage
-        self.start_pos = stage.position.value
+        self._start_pos = stage.position.value
         # Get the required target_position from the pressed button
-        self.target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
-                                    None)
-        if self.target_position is None:
+        self._target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
+                                     None)
+        if self._target_position is None:
             return
         # target_position metadata has the end positions for all movements except milling
-        if self.target_position in self.target_position_metadata.keys():
-            if self.current_position is LOADING:
+        if self._target_position in self.target_position_metadata.keys():
+            if self._current_position is LOADING:
                 box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
                                        caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
 
@@ -2374,12 +2382,12 @@ class CryoChamberTab(Tab):
                 if ans == wx.ID_NO:
                     return
             # Save the milling angle control current value (to return to it when switch back to milling)
-            if self.current_position is MILLING:
+            if self._current_position is MILLING:
                 milling_angle = self._get_milling_angle_value()
                 if milling_angle is not None:
                     self._prev_milling_angle = milling_angle
-            self.end_pos = self.target_position_metadata[self.target_position]
-            return cryoSwitchSamplePosition(self.target_position)
+            self._end_pos = self.target_position_metadata[self._target_position]
+            return cryoSwitchSamplePosition(self._target_position)
         else:
             # Target position is milling, get rx value from saved milling angle
             rx_angle_value = self.ion_to_sample + self._prev_milling_angle
@@ -2429,8 +2437,8 @@ class CryoChamberTab(Tab):
         Called to perform action prior to terminating the tab
         :return: (bool) True to proceed with termination, False for canceling
         """
-        if self.current_position is not LOADING:
-            if self._move_future._state == RUNNING and self.target_position is LOADING:
+        if self._current_position is not LOADING:
+            if self._move_future._state == RUNNING and self._target_position is LOADING:
                 box = wx.MessageDialog(self.main_frame,
                                        "The sample is still moving to the loading position, are you sure you want to close Odemis?",
                                        caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
