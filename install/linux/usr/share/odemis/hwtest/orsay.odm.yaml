@@ -2,7 +2,7 @@
 Orsay: {
     class: Microscope,
     role: orsaymic,
-    children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS"]
+    children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS", "GIS", "GIS-reservoir"]
 }
 
 # Connection to the Orsay server
@@ -15,7 +15,9 @@ Orsay: {
     children: { pneumatic-suspension: "Pneumatic Suspension",
                 pressure: "Chamber",
                 pumping-system: "Pumping System",
-                ups: "UPS"
+                ups: "UPS",
+                gis: "GIS",
+                gis-reservoir: "GIS-reservoir"
     }
 }
 
@@ -36,5 +38,15 @@ Orsay: {
 
 "UPS": {
     role: ups,
+    init: {}
+}
+
+"GIS": {
+    role: gis,
+    init: {}
+}
+
+"GIS-reservoir": {
+    role: gis-reservoir,
     init: {}
 }
