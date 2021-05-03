@@ -23,6 +23,9 @@ ENZEL-Sim: {
         sensor_input: "B",
         output_channel: 2,
     },
+    properties: {
+        targetTemperature: -173, # °C
+    },
     metadata: {
         # TODO: Change values from test to real values
         SAFE_REL_RANGE: [-5, 5],  # °C, safe operating range relative to targetTemperature
