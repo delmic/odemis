@@ -200,6 +200,26 @@ class SpectralARScanStream(stream.Stream):
             yres = 1
         return int(xres), int(yres)
 
+    def _estimateCCDTime(self):
+        """
+        Estimate the time it will take for measurement at one ebeam position
+        """
+        # Each pixel = the exposure time (of the detector) + readout time +
+        # 10ms overhead + 20% overhead
+
+        binning = (self.binninghorz.value, self.binningvert.value)
+        res = [s / b for s, b in zip(self._detector.resolution.range[1], binning)]
+
+        try:
+            ro_rate = self._detector.readoutRate.value
+        except Exception:
+            ro_rate = 100e6  # Hz
+        readout = numpy.prod(res) / ro_rate
+
+        exp = self.dwellTime.value
+
+        return (exp + readout + 0.01) * 1.20
+
     def estimateAcquisitionTime(self):
         """
         Estimate the time it will take for the measurement. The number of pixels still has to be defined in the stream part
@@ -207,17 +227,18 @@ class SpectralARScanStream(stream.Stream):
         xres, yres = self.get_scan_res()
         npos = xres * yres
 
-        dt = self.dwellTime.value * npos * 1.1
+        dt = self._estimateCCDTime()
         # logic that only adds acquisition time for DC if a DC region is defined
         if self.dcRegion.value != UNDEFINED_ROI:
             dc = drift.AnchoredEstimator(self._emitter, self._sed,
                                          self.dcRegion.value, self.dcDwellTime.value)
             dctime = dc.estimateAcquisitionTime()
             nDC = self.nDC.value
-            # time for spatial drift correction, for now we just assume that spatial drift correction is done every pixel but we could include actual number of scanned pixelsv
-            dt += (npos * nDC + 1) * (dctime + 0.1)
+            # time for spatial drift correction, for now we just assume that spatial
+            # drift correction is done every pixel but we could include actual number of scanned pixels
+            dt = dt * nDC * (dctime + 0.1)
 
-        return dt
+        return dt * npos + self.SETUP_OVERHEAD
 
     def _cancelAcquisition(self, future):
         """
@@ -240,9 +261,6 @@ class SpectralARScanStream(stream.Stream):
         future._acq_done.wait(5)
         return True
 
-    def _discard_data(self, sed, data):
-        pass
-
     def _runAcquisition(self, future):
         # number of drift corrections per pixel
         nDC = self.nDC.value
@@ -259,10 +277,9 @@ class SpectralARScanStream(stream.Stream):
         #exposure time and dwell time should be the same in this case
         bins = (self.binninghorz.value,self.binningvert.value)
         self._detector.binning.value = bins
-        #check if this is correct syntax
         specresx = self._detector.shape[0] // bins[0]
         specresy = self._detector.shape[1] // bins[1]
-        self._detector.resolution.value = (specresx,specresy)
+        self._detector.resolution.value = (specresx, specresy)
         # semfov, physwidth = self._get_sem_fov()
         #xyps, stepsize = self._calc_xy_pos()
         xres, yres = self.get_scan_res()
@@ -395,7 +412,7 @@ class SpectralARScanStream(stream.Stream):
             raise
         finally:
             logging.debug("AR spectral acquisition finished")
-            self._sed.data.unsubscribe(self._discard_data)
+            self._sed.data.unsubscribe(self._receive_sem_data)
             future._acq_done.set()
             self._resume_hw_settings()
 
@@ -414,7 +431,7 @@ class SpectralARScanStream(stream.Stream):
         startt = time.time()
         #dat = self._detector.data.get()
         self._detector.data.subscribe(self._receive_ARspectral_data)
-        timeout = 1 + dwellT * 2.5
+        timeout = 1 + self._estimateCCDTime() * 2.5
         if not self.ARspectral_data_received.wait(timeout):
             if future._acq_state == CANCELLED:
                 raise CancelledError()
@@ -740,7 +757,7 @@ class SpectralARScanStream(stream.Stream):
 
 class ARspectral(Plugin):
     name = "AR/Spectral"
-    __version__ = "2.4"
+    __version__ = "2.5"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -878,6 +895,8 @@ class ARspectral(Plugin):
         self.dwellTime.subscribe(self._update_exp_dur)
         self.stepsize.subscribe(self._update_exp_dur)
         self.nDC.subscribe(self._update_exp_dur)
+        self.readoutRate.subscribe(self._update_exp_dur)
+        self.cam_res.subscribe(self._update_exp_dur)
 
         # subscribe to update X/Y res
         self.stepsize.subscribe(self._update_res)
