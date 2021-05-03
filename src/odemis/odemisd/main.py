@@ -662,7 +662,7 @@ def main(args):
     # The settings file is opened here because root privileges are dropped at some point after
     # the initialization.
     opt_grp.add_argument("--settings", dest='settings',
-                         type=argparse.FileType('a+'), help="Path to the settings file "
+                         default=DEFAULT_SETTINGS_FILE, help="Path to the settings file "
                          "(stores values of persistent properties and metadata). "
                          "Default is %s, if writable." % DEFAULT_SETTINGS_FILE)
     parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open,
@@ -745,11 +745,18 @@ def main(args):
         if options.model is None:
             raise ValueError("No microscope model instantiation file provided")
 
-        if options.settings is None:
-            try:
-                options.settings = open(DEFAULT_SETTINGS_FILE, "r+")
-            except IOError as ex:
-                logging.warning("%s. Will not be able to use persistent data", ex)
+        try:
+            if os.path.exists(options.settings):
+                settings_file = open(options.settings, "rt+")
+            else:
+                # Create the file if it doesn't exist yet. Note that "at+" doesn't
+                # work because not only it automatically creates the file if missing,
+                # but it also forces the writes to be appended to the end of the file,
+                # so it's not possible to change the values.
+                settings_file = open(options.settings, "wt+")
+        except IOError as ex:
+            logging.warning("%s. Will not be able to use persistent data", ex)
+            settings_file = None
 
         if options.debug:
             cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
@@ -757,7 +764,7 @@ def main(args):
             cont_pol = BackendRunner.CONTAINER_SEPARATED
 
         # let's become the back-end for real
-        runner = BackendRunner(options.model, options.settings, options.daemon,
+        runner = BackendRunner(options.model, settings_file, options.daemon,
                                dry_run=options.validate, containement=cont_pol)
         runner.run()
     except ValueError as exp:
