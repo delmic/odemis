@@ -291,6 +291,7 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.acq_left, 0)
         # the protection remains off during the acquisition
         self.assertEqual(self.pmt_protection_recorded, self.pmt_protection_expected)
+        self.acq_complete.clear()
 
         logging.debug("Acquiring again...")
         self.acq_left = 10
