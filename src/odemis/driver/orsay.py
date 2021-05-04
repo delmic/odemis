@@ -1071,6 +1071,7 @@ class GIS(model.Actuator):
         Moves the GIS to working position if argument goal is True. Moves it to parking position otherwise.
         """
         if self.gasOn.value:
+            logging.warning("Gas flow was still on when attempting to move the GIS. Turning off gas flow.")
             self.gasOn._set_value(False)  # turn off the gas flow if it wasn't already
         if goal:
             logging.debug("Moving GIS to operational position.")
