@@ -71,37 +71,37 @@ def calibrate(dev, channels):
 NORMAL_REF, AUTO_ZERO_REF = 0, 1
 
 
-def set_autozero_reference(dev, channels):
+
+def set_reference_autozero(dev, channels):
     if not channels:
         return
     # Set auto-zero referencing mode
     for channel in channels:
-        logging.info("Setting auto-zero mode for channel %d", channel)
+        logging.info(f"Setting auto-zero mode for channel {channel}")
         dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
                             channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO)  # auto zero
 
+    reference(dev, channels)
 
-def set_normal_reference(dev, channels):
+
+def set_reference_normal(dev, channels):
     if not channels:
         return
     # Set normal referencing mode
     for channel in channels:
-        logging.info("Setting the reference mode to normal for channel %d", channel)
+        logging.info(f"Setting the reference mode to normal for channel {channel}")
         dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
                             channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)  # normal
 
 
-def reference(dev, channels, mode=NORMAL_REF):
-    # Set referencing mode, currently either normal or autozero
-    if mode == NORMAL_REF:
-        set_normal_reference(dev, channels)
-    elif mode == AUTO_ZERO_REF:
-        set_autozero_reference(dev, channels)
+def reference(dev, channels):
     # Run the referencing
     logging.info("Starting reference...")
-    dev.reference(axes=[str(ch) for ch in channels]).result()
+    dev.reference(axes=set([str(ch) for ch in channels])).result()
     time.sleep(0.1)
-    logging.info("Complete")
+    logging.info("Referencing complete.")
+    # Always set reference to normal after referencing
+    set_reference_normal(dev, channels)
 
 
 def set_zero(dev, channels):
@@ -110,14 +110,6 @@ def set_zero(dev, channels):
     """
     if not channels:
         return
-
-    # logging.info("Setting scale offsets. Current position: %s", dev.position.value)
-    # for channel in channels:
-    #     logging.info("Setting the scale offset for channel %d", channel)
-    #     scale_offset = dev.GetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET, channel)
-    #     position = dev.GetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_POSITION, channel)
-    #     # set the new scale offset
-    #     dev.SetProperty_i64(smaract.SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET, channel, scale_offset + position)
 
     logging.info(
         f"Setting current position: {dev.position.value} to 0. This automatically adjusts the logical scale offset.")
@@ -171,9 +163,9 @@ def main(args):
     if options.calibrate:
         calibrate(dev, options.calibrate)
     elif options.autozero:
-        reference(dev, options.autozero, mode=AUTO_ZERO_REF)
+        set_reference_autozero(dev, options.autozero)
     elif options.reference:
-        reference(dev, options.reference, mode=NORMAL_REF)
+        reference(dev, options.reference)
     elif options.setzero:
         set_zero(dev, options.setzero)
 
