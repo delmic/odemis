@@ -37,7 +37,7 @@ import math
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream
 from odemis.gui import conf
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
@@ -509,7 +509,7 @@ class CryoAcquiController(object):
         self._tab_data.zMin.subscribe(self._on_z_min, init=True)
         self._tab_data.zMax.subscribe(self._on_z_max, init=True)
         self._tab_data.zStep.subscribe(self._on_z_step, init=True)
-        self._tab_data.streams.subscribe(self._on_streams, init=True)
+        self._tab_data.streams.subscribe(self._on_streams_change, init=True)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
 
@@ -593,15 +593,20 @@ class CryoAcquiController(object):
             logging.info("The acquisition was canceled")
             self._reset_acquisition_gui(state=ST_CANCELED)
             return
-        except Exception as exp:
+        except Exception:
             logging.exception("The acquisition failed")
             self._reset_acquisition_gui(
                 text="Acquisition failed (see log panel).", state=ST_FAILED
             )
             return
+        if exp:
+            logging.error("Acquisition partially failed %s: ", exp)
+
         # save the data
         executor = futures.ThreadPoolExecutor(max_workers=2)
-        scheduled_future = executor.submit(self._export_data, future)
+        st = stream.StreamTree(streams=list(self._acquiStreams.value))
+        thumb_nail = acqmng.computeThumbnail(st, future)
+        scheduled_future = executor.submit(self._export_data, data, thumb_nail)
         scheduled_future.add_done_callback(self._on_export_data_done)
 
     def _reset_acquisition_gui(self, text=None, state=None):
@@ -634,6 +639,8 @@ class CryoAcquiController(object):
         elif state == ST_CANCELED:
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
+        else:
+            raise ValueError("The acquisition future state was not found")
 
     def _display_acquired_data(self, data):
         """
@@ -653,22 +660,20 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
-    def _export_data(self, future):
+    def _export_data(self, data, thumb_nail):
         """
-        Called to get the data from the future,
-        and to export the acquired data
+        Called to export the acquired data.
+        data (DataArrays): the returned data/images from the future
+        thumb_nail (model.DataArray): the data for the miniature views of the stream view ports  
         """
-        st = stream.StreamTree(streams=list(self._acquiStreams.value))
-        thumb = acqmng.computeThumbnail(st, future)
-        data, _ = future.result()
         filename = self._filename.value
         if data:
             exporter = dataio.get_converter(self._config.last_format)
-            exporter.export(filename, data, thumb)
+            exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)
             # update the filename
             self._filename.value = create_filename(
-                self._config.last_path,
+                self._config.pj_last_path,
                 self._config.fn_ptn,
                 self._config.last_extension,
                 self._config.fn_count,
@@ -679,7 +684,7 @@ class CryoAcquiController(object):
         return data
 
     @call_in_wx_main
-    def _on_streams(self, streams):
+    def _on_streams_change(self, streams):
         """
         a VA callback that is called when the .streams VA is changed
         """
@@ -688,7 +693,8 @@ class CryoAcquiController(object):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
             if item_stream not in streams:
                 self._panel.streams_chk_list.Delete(i)
-                self._acquiStreams.value.remove(item_stream)
+                if item_stream in self._acquiStreams.value:
+                    self._acquiStreams.value.remove(item_stream)
                 # unsubscribe the settings VA's of this removed stream
                 for va in self._get_settings_vas(item_stream):
                     va.unsubscribe(self._on_settings_va)
@@ -704,7 +710,7 @@ class CryoAcquiController(object):
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
         for s, i in zip(streams, range(len(streams))):
-            if s not in item_stream:
+            if s not in item_stream and not isinstance(s, StaticStream):
                 self._panel.streams_chk_list.Insert(s.name.value, i, s)
                 self._panel.streams_chk_list.Check(i)
                 self._acquiStreams.value.append(s)
@@ -727,10 +733,7 @@ class CryoAcquiController(object):
         acq_time = math.ceil(acq_time)  # round a bit pessimistic
         # TODO take into account the time of acquiring the zlevels
         # as well as the time required for moving the actuator
-        # if self._zStackActive.value:
-        #     acq_time = acq_time * len(generate_zlevels(....))
-        txt = u"Estimated time: {}."
-        txt = txt.format(units.readable_time(acq_time, full=False))
+        txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
     @call_in_wx_main
@@ -747,27 +750,21 @@ class CryoAcquiController(object):
             # replace the unsorted streams with the sorted streams one by one
             self._panel.streams_chk_list.Delete(i)
             self._panel.streams_chk_list.Insert(s.name.value, i, s)
-            self._panel.streams_chk_list.Check(i)
+            if s in self._acquiStreams.value:
+                self._panel.streams_chk_list.Check(i)
 
     @call_in_wx_main
-    def _on_stream_name(self, stream_name):
+    def _on_stream_name(self, _):
         """
         a VA callback that is called when the user changes
          the name of a stream 
         """
         counts = self._panel.streams_chk_list.GetCount()
-        chcklist_names = [
-            self._panel.streams_chk_list.GetString(i) for i in range(counts)
-        ]
-        streams = [
-            self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
-        ]
-        stream_names = [s.name.value for s in streams]
-        for name, i, s in zip(chcklist_names, range(counts), streams):
-            if name not in stream_names:
-                self._panel.streams_chk_list.Delete(i)
-                self._panel.streams_chk_list.Insert(stream_name, i, s)
-                self._panel.streams_chk_list.Check(i)
+        for i in range(counts):
+            sname = self._panel.streams_chk_list.GetString(i)
+            s = self._panel.streams_chk_list.GetClientData(i)
+            if s.name.value != sname:
+                self._panel.streams_chk_list.SetString(i, s.name.value)
 
     @call_in_wx_main
     def _update_zstack_active(self, active):
@@ -848,12 +845,12 @@ class CryoAcquiController(object):
             self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
-    def _get_wavelength_vas(self, stream):
+    def _get_wavelength_vas(self, stream_item):
         """
         Gets the excitation and emission VAs of a stream.
         return (set of VAs)
         """
-        nvas = model.getVAs(stream)  # name -> va
+        nvas = model.getVAs(stream_item)  # name -> va
         vas = set()
         # only add the name, emission and excitation VA's
         for n, va in nvas.items():

@@ -241,8 +241,7 @@ def _weight_stream(stream):
 
 def sortStreams(streams):
     """
-    Sorts a list of streams based on the 
-    weighting function  _weight_stream()
+    Sorts a list of streams based on the order they will be acquired 
     streams (acq.stream.Stream): a list of streams to be sorted 
     returns (acq.stream.Stream): a list of sorted streams 
     """

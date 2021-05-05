@@ -347,8 +347,6 @@ class LocalizationTab(Tab):
         """
 
         tab_data = guimod.LocalizationGUIData(main_data)
-        self._tab_data_model = tab_data
-        self._panel = panel
         super(LocalizationTab, self).__init__(
             name, button, panel, main_frame, tab_data)
         self.set_label("LOCALIZATION")
@@ -677,10 +675,14 @@ class LocalizationTab(Tab):
 
     @call_in_wx_main
     def display_acquired_data(self, data):
+        """
+        Displays the acquired streams on the top right view
+        data (DataArray): the images/data acquired 
+        """
         # get the top right view port
         view = self.tab_data_model.views.value[1]
         for s in data_to_static_streams(data):
-            stream_cont = StreamController(self._panel.pnl_cryosecom_acquired, s, self._tab_data_model,
+            stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, s, self.tab_data_model,
                                            show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
             stream_cont.stream_panel.collapse(True)
 
