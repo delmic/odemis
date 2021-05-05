@@ -347,8 +347,6 @@ class LocalizationTab(Tab):
         """
 
         tab_data = guimod.LocalizationGUIData(main_data)
-        self._tab_data_model = tab_data
-        self._panel = panel
         super(LocalizationTab, self).__init__(
             name, button, panel, main_frame, tab_data)
         self.set_label("LOCALIZATION")
