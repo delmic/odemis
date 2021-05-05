@@ -67,9 +67,21 @@ def calibrate(dev, channels):
         dev.Calibrate(channel)
 
 
-# Reference mode to set
-NORMAL_REF, AUTO_ZERO_REF = 0, 1
+DISTANCE_CODED_MARK_POSITIONER = 304
 
+
+def set_positioner_type(dev, channels, ptype):
+    """
+    Set the type of positioner that is connected to the device channels. The positioner type implicitly gives the
+    controller information about how to calculate positions, handle the referencing, configure the control-loop,
+    etc. See sections 2.5 and 4.4.6 in programmer manual.
+    """
+    if not channels:
+        return
+    for channel in channels:
+        logging.info(f"Setting positioner type for channel {channel} to {ptype}.")
+        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE, channel,
+                            ptype)
 
 
 def set_reference_autozero(dev, channels):
@@ -135,6 +147,9 @@ def main(args):
     parser.add_argument('--calibrate', metavar='N', type=int, nargs='+', default=[],
                         help="Run the calibration command. Specify the channel to calibrate (0, 1, 2)")
 
+    parser.add_argument('--postype', metavar='N', type=int, nargs='+', default=[],
+                        help="Set positioner type to distance coded mark. Specify the channel to calibrate (0, 1, 2)")
+
     parser.add_argument('--autozero', metavar='N', type=int, nargs='+', default=[],
                         help="Run referencing with autozero reference mode. Specify the channel to calibrate (0, 1, 2)")
 
@@ -162,6 +177,8 @@ def main(args):
 
     if options.calibrate:
         calibrate(dev, options.calibrate)
+    elif options.postype:
+        set_positioner_type(dev, options.postype, DISTANCE_CODED_MARK_POSITIONER)
     elif options.autozero:
         set_reference_autozero(dev, options.autozero)
     elif options.reference:
