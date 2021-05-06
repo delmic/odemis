@@ -54,6 +54,25 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
                            }
               }
 
+CONFIG_FIB_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "ion1"}
+CONFIG_FIB_SCANNER = {"name": "fib-scanner", "role": "ion"}
+CONFIG_FIB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
+                  "children": {"fib-scanner": CONFIG_FIB_SCANNER,
+                               "focus": CONFIG_FOCUS,
+                               "stage": CONFIG_STAGE,
+                               "detector": CONFIG_FIB_DETECTOR,
+                               }
+                  }
+CONFIG_DUAL_MODE_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "dual_mode"}
+CONFIG_DUAL_MODE_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
+                    "children": {"scanner": CONFIG_SCANNER,
+                                "fib-scanner": CONFIG_FIB_SCANNER,
+                                "focus": CONFIG_FOCUS,
+                                "stage": CONFIG_STAGE,
+                                "detector": CONFIG_DUAL_MODE_DETECTOR,
+                                }
+                        }
+
 CONFIG_MB_SCANNER = {"name": "mb-scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.138:4242",
                  "children": {"mb-scanner": CONFIG_MB_SCANNER,
@@ -955,6 +974,116 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(len(beamlet_index_info["range"]["x"]), 2)
         self.assertEqual(len(beamlet_index_info["range"]["y"]), 2)
 
+class TestFIBScanner(unittest.TestCase):
+    """
+    Test the FIB Scanner class.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+
+        cls.microscope = xt_client.SEM(**CONFIG_FIB_SEM)
+
+        for child in cls.microscope.children.value:
+            if child.name == CONFIG_FIB_SCANNER["name"]:
+                cls.FIB_scanner = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware available.")
+
+        if self.microscope.get_vacuum_state() != 'vacuum':
+            self.skipTest("Chamber needs to be in vacuum, please pump.")
+
+        if "xttoolkit" in self.microscope.swVersion.lower():
+            self.xt_type = "xttoolkit"
+        else:
+            raise TypeError("Xttoolkit must be running for this test.")
+
+    def test_acquire(self):
+        """Test acquiring an image from the FIB/ion2 channel."""
+        image = self.detector.data.get()
+        self.assertEqual(len(image.shape), 2)
+
+class TestDualModeMicroscope(unittest.TestCase):
+    """
+    Test the SEM using both the FIB and the ebeam.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+
+        cls.microscope = xt_client.SEM(**CONFIG_DUAL_MODE_SEM)
+
+        for child in cls.microscope.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_FIB_SCANNER["name"]:
+                cls.FIB_scanner = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware available.")
+
+        if self.microscope.get_vacuum_state() != 'vacuum':
+            self.skipTest("Chamber needs to be in vacuum, please pump.")
+
+        if "xttoolkit" in self.microscope.swVersion.lower():
+            self.xt_type = "xttoolkit"
+        else:
+            raise TypeError("Xttoolkit must be running for this test.")
+
+    def _compute_expected_duration(self):
+        """Computes the expected duration of a single image acquisition."""
+        dwell = self.scanner.dwellTime.value
+        settle = 5.e-6
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_active_scanner_VA(self):
+        scanner_modi = {"electron": self.scanner, "ion": self.FIB_scanner}
+        for _ in range(2):
+            for scanner_mode in scanner_modi:
+                # Switch active scanner mode
+                self.detector.active_scanner_type.value = scanner_mode
+                self.assertEqual(self.detector.active_scanner_type.value, scanner_mode)
+                self.assertIsInstance(self.detector._active_scanner, type(scanner_modi[scanner_mode]))
+
+        # Check if mode remains unchanged if any non existing mode is tried to be set
+        with self.assertRaises(IndexError):
+            self.detector.active_scanner_type.value = "non existing mode"
+        # The mode should be equal to the last set correct mode.
+        self.assertEqual(self.detector.active_scanner_type.value, scanner_mode)
+        self.assertIsInstance(self.detector._active_scanner, type(scanner_modi[scanner_mode]))
+
+    def test_acquire_FIB_image(self):
+        """Test acquiring an image from the FIB/ion2 channel."""
+        # Switch to ion mode
+        self.detector.active_scanner_type.value = "ion"
+        image = self.detector.data.get()
+        self.assertEqual(len(image.shape), 2)
+
+    def test_acquire_ebeam_image(self):
+        """Test acquiring an image using the Detector."""
+        # Switch to electron mode
+        self.detector.active_scanner_type.value = "electron"
+        init_dwell_time = self.scanner.dwellTime.value
+        self.scanner.dwellTime.value = 25e-9  # s
+        expected_duration = self._compute_expected_duration()
+        start = time.time()
+        im = self.detector.data.get()
+        duration = time.time() - start
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertGreaterEqual(duration, expected_duration,
+                                "Error execution took %f s, less than exposure time %d." % (
+                                    duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        # Set back dwell time to initial value
+        self.scanner.dwellTime.value = init_dwell_time
 
 class TestMBScanner(unittest.TestCase):
     """

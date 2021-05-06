@@ -35,7 +35,7 @@ import numpy
 from odemis import model
 from odemis import util
 from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture, \
-    DataArray
+    DataArray, StringEnumerated
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -90,23 +90,34 @@ class SEM(model.HwComponent):
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
 
-        # create the scanner child
-        try:
-            if "mb-scanner" in children:
-                kwargs = children["mb-scanner"]
-                if "xttoolkit" in self._swVersion.lower():
-                    self.xt_type = "xttoolkit"
-                else:
-                    raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
-            else:
-                kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            raise KeyError("SEM was not given a 'scanner' or 'mb-scanner' child")
-        if "mb-scanner" in children:
-            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
-        else:
+        # Create the scanner type child(ren)
+        # Check if at least one of the required scanner types is instantiated
+        scanner_types = ["scanner", "fib-scanner", "mb-scanner"]  # All allowed scanners types
+        if not any(scanner_type in children for scanner_type in scanner_types):
+            raise KeyError("SEM was not given any scanner type as child."
+                           "On of the types 'scanner', 'fib-scanner' or 'mb-scanner' need to be included as child")
+
+        if "scanner" in children:
+            kwargs = children["scanner"]
             self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._scanner)
+            self.children.value.add(self._scanner)
+
+        if "fib-scanner" in children:
+            kwargs = children["fib-scanner"]
+            self._fib_scanner = FibScanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_scanner)
+
+        if "mb-scanner" in children:
+            if "scanner" in children:
+                raise NotImplementedError("The combination of both an multi beam scanner and single beam scanner at "
+                                          "the same time is not supported")
+            kwargs = children["mb-scanner"]
+            if "xttoolkit" in self._swVersion.lower():
+                self.xt_type = "xttoolkit"
+            else:
+                raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
+            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._scanner)
 
         # create the stage child, if requested
         if "stage" in children:
@@ -1447,6 +1458,24 @@ class Scanner(model.Emitter):
     #         return True
 
 
+class FibScanner(model.Emitter):
+    """
+    This is an extension of the model.Emitter class for controlling the FIB. Currently via XTLib only minimal control
+    of the FIB is possible, which is limited to pause/unpausing the image beam, and getting the latest image (via the
+    detector with the appropriate channel).
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        # Set unknown values to None or 0
+        self.dwellTime = model.VigilantAttribute(None, readonly=True)
+        self._shape = (0,)
+        self.updateMetadata({model.MD_DWELL_TIME: None,
+                             model.MD_ROTATION  : None,
+                             model.MD_PIXEL_SIZE: None})
+
+
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality
@@ -1469,7 +1498,19 @@ class Detector(model.Detector):
         self._shape = (256,)  # Depth of the image
         self.data = SEMDataFlow(self)
 
-        self._channel_name = channel_name
+        if hasattr(self.parent, "_scanner") and hasattr(self.parent, "_fib_scanner"):
+            self.active_scanner_type = StringEnumerated("electron", choices={"electron", "ion"},
+                                                        setter=self._set_active_scanner_type)
+        elif hasattr(self.parent, "_scanner"):
+            self._channel_name = channel_name
+            self._active_scanner = self.parent._scanner
+        elif hasattr(self.parent, "_fib_scanner"):
+            self._channel_name = channel_name
+            self._active_scanner = self.parent._fib_scanner
+        else:
+            raise ValueError("Non of the required scanner children are provided. Provide at least an ebeam scanner ("
+                             "single of multi beam) or a FIB scanner.")
+
         self._genmsg = queue.Queue()  # GEN_*
         self._generator = None
 
@@ -1489,8 +1530,9 @@ class Detector(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        if self.parent._scanner.blanker.value is None:
-            self.parent.blank_beam()
+        if hasattr(self._active_scanner, "blanker"):
+            if self._active_scanner.blanker.value is None:
+                self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
 
     def _acquire(self):
@@ -1507,14 +1549,23 @@ class Detector(model.Detector):
                     if self._acq_should_stop():
                         break
                     self.parent.set_channel_state(self._channel_name, True)
-                    if self.parent._scanner.blanker.value is None:
-                        self.parent.unblank_beam()
+                    if hasattr(self._active_scanner, "blanker"):
+                        if self._active_scanner.blanker.value is None:
+                            self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
                     self.parent.set_channel_state(self._channel_name, False)
+                    md = self._active_scanner._metadata.copy()
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
-                    n_pixels = self.parent._scanner.shape[0] * self.parent._scanner.shape[1]
-                    est_acq_time = self.parent._scanner.dwellTime.value * n_pixels
+                    if self._active_scanner.dwellTime.value and self._active_scanner.shape:
+                        n_pixels = self._active_scanner.shape[0] * self._active_scanner.shape[1]
+                        est_acq_time = self._active_scanner.dwellTime.value * n_pixels
+                        md[model.MD_DWELL_TIME] = self._active_scanner.dwellTime.value
+                        md[model.MD_ROTATION] = self._active_scanner.rotation.value
+                    else:
+                        # Estimated acquisition time used the timeout if not all info about this acquisition time is
+                        # known.
+                        est_acq_time = 60
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
@@ -1527,14 +1578,10 @@ class Detector(model.Detector):
                         logging.error(err)
                         self.stop_acquisition()
                         break
-                    # Acquire the image
+
+                    # Retrieve the image
                     image = self.parent.get_latest_image(self._channel_name)
-
-                    md = self.parent._scanner._metadata.copy()
                     md.update(self._metadata)
-                    md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
-                    md[model.MD_ROTATION] = self.parent._scanner.rotation.value
-
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
                     self.data.notify(da)
@@ -1637,6 +1684,24 @@ class Detector(model.Detector):
         else:
             logging.warning("Acq received unexpected message %s", msg)
         return msg
+
+    def _set_active_scanner_type(self, scan_mode):
+        """
+        Setter for changing the current active scanner type.
+        When switching electron <--> ion beam mode automatically the channel name is updated. With channel
+        'electron1' as standard for the electron mode, and "ion2" as the standard for the ion mode.
+        :param scan_mode (string): contains mode, can be either 'electron' or 'ion'
+        :return (string): The set mode, if it was one of the two valid options. Otherwise the mode remains unset.
+        """
+        if scan_mode == "electron":
+            self._active_scanner = self.parent._scanner
+            self._channel_name = "electron1"
+            return scan_mode
+
+        elif scan_mode == "ion":
+            self._active_scanner = self.parent._fib_scanner
+            self._channel_name = "ion2"
+            return scan_mode
 
 
 class TerminationRequested(Exception):
