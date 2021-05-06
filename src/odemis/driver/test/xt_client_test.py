@@ -31,7 +31,6 @@ import unittest
 from odemis import model
 
 from odemis.driver import xt_client
-from odemis.driver.xt_client import DETECTOR2CHANNELNAME, XTTKDetector
 from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
@@ -40,12 +39,12 @@ logging.basicConfig(level=logging.INFO)
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)
 
 # arguments used for the creation of basic components
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1, "channel": "electron1"}
 CONFIG_STAGE = {"name": "stage", "role": "stage",
                 "inverted": ["x"],
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
-CONFIG_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "electron1"}
+CONFIG_DETECTOR = {"name": "detector", "role": "se-detector"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
@@ -54,22 +53,21 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
                            }
               }
 
-CONFIG_FIB_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "ion1"}
-CONFIG_FIB_SCANNER = {"name": "fib-scanner", "role": "ion"}
+CONFIG_FIB_SCANNER = {"name": "fib-scanner", "role": "ion", "channel": "ion2"}
 CONFIG_FIB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
                   "children": {"fib-scanner": CONFIG_FIB_SCANNER,
                                "focus": CONFIG_FOCUS,
                                "stage": CONFIG_STAGE,
-                               "detector": CONFIG_FIB_DETECTOR,
+                               "detector": CONFIG_DETECTOR,
                                }
                   }
-CONFIG_DUAL_MODE_DETECTOR = {"name": "detector", "role": "se-detector", "channel_name": "dual_mode"}
+
 CONFIG_DUAL_MODE_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
                     "children": {"scanner": CONFIG_SCANNER,
                                 "fib-scanner": CONFIG_FIB_SCANNER,
                                 "focus": CONFIG_FOCUS,
                                 "stage": CONFIG_STAGE,
-                                "detector": CONFIG_DUAL_MODE_DETECTOR,
+                                "detector": CONFIG_DETECTOR,
                                 }
                         }
 
@@ -365,6 +363,9 @@ class TestMicroscopeInternal(unittest.TestCase):
                 cls.efocus = child
             elif child.name == CONFIG_STAGE["name"]:
                 cls.stage = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
 
     def setUp(self):
         if TEST_NOHW:
@@ -705,28 +706,25 @@ class TestMicroscopeInternal(unittest.TestCase):
         """
         Test for the auto stigmation functionality.
         """
-        detector = 'se-detector'  # autostigmator only works for the se-detector with channel=electron1
-        channel = DETECTOR2CHANNELNAME[detector]
-
         # Start auto stigmation and check if it is running.
-        autostigmator_future = self.scanner.applyAutoStigmator(detector)
+        autostigmator_future = self.scanner.applyAutoStigmator(self.detector.role)
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
+        autostigmator_state = self.microscope.is_autostigmating(self.scanner.channel)
         self.assertEqual(autostigmator_state, True)
         self.assertIsInstance(autostigmator_future, ProgressiveFuture)
 
         # Stop auto stigmation and check if it stopped running.
         autostigmator_future.cancel()
         time.sleep(5.0)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
+        autostigmator_state = self.microscope.is_autostigmating(self.scanner.channel)
         self.assertEqual(autostigmator_state, False)
 
         max_execution_time = 30  # Approximately 3 times the normal expected execution time (s)
         for i in range(0, 5):
             starting_time = time.time()
-            autostigmator_future = self.scanner.applyAutoStigmator(detector)
+            autostigmator_future = self.scanner.applyAutoStigmator(self.detector.role)
             time.sleep(0.5)  # Give microscope/simulator the time to update the state
-            autostigmator_state = self.microscope.is_autostigmating(channel)
+            autostigmator_state = self.microscope.is_autostigmating(self.scanner.channel)
             self.assertEqual(autostigmator_state, True)
             self.assertIsInstance(autostigmator_future, ProgressiveFuture)
 
@@ -743,108 +741,90 @@ class TestMicroscopeInternal(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.scanner.applyAutoStigmator("error_expected")
         time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
+        autostigmator_state = self.microscope.is_autostigmating(self.scanner.channel)
         self.assertEqual(autostigmator_state, False)  # Check if state remained unchanged
 
     def test_apply_auto_contrast_brightness(self):
         """
         Test for the auto contrast brightness functionality.
         """
-        # Check all the different detector types by looping over them
-        for role, channel in DETECTOR2CHANNELNAME.items():
-            # Start auto contrast brightness and check if it is running.
-            auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(role)
-            auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
-            time.sleep(0.01)
-            self.assertEqual(auto_contrast_brightness_state, True)
-            self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
+        # Start auto contrast brightness and check if it is running.
+        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
+        time.sleep(0.01)
+        self.assertEqual(auto_contrast_brightness_state, True)
+        self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
-            # Stop auto auto contrast brightness and check if it stopped running.
-            auto_contrast_brightness_future.cancel()
-            time.sleep(5.0)  # Give microscope/simulator the time to update the state
-            auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
-            self.assertEqual(auto_contrast_brightness_state, False)
-            self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
+        # Stop auto auto contrast brightness and check if it stopped running.
+        auto_contrast_brightness_future.cancel()
+        time.sleep(5.0)  # Give microscope/simulator the time to update the state
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
+        self.assertEqual(auto_contrast_brightness_state, False)
+        self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
-            # Test starting auto contrast brightness and cancelling directly
-            auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(role)
-            auto_contrast_brightness_future.cancel()
-            time.sleep(5.0)  # Give microscope/simulator the time to update the state
-            auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
-            self.assertEqual(auto_contrast_brightness_state, False)
-            self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
+        # Test starting auto contrast brightness and cancelling directly
+        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        auto_contrast_brightness_future.cancel()
+        time.sleep(5.0)  # Give microscope/simulator the time to update the state
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
+        self.assertEqual(auto_contrast_brightness_state, False)
+        self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
-            # Start auto contrast brightness
-            max_execution_time = 60  # Approximately 3 times the normal expected execution time (s)
-            starting_time = time.time()
-            auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(role)
-            time.sleep(0.5)  # Give microscope/simulator the time to update the state
-            # Wait until the auto contrast brightness is finished
-            auto_contrast_brightness_future.result(timeout=max_execution_time)
+        # Start auto contrast brightness
+        max_execution_time = 60  # Approximately 3 times the normal expected execution time (s)
+        starting_time = time.time()
+        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        time.sleep(0.5)  # Give microscope/simulator the time to update the state
+        # Wait until the auto contrast brightness is finished
+        auto_contrast_brightness_future.result(timeout=max_execution_time)
 
-            # Check if the time to perform the auto contrast brightness is not too long
-            self.assertLess(time.time() - starting_time, max_execution_time,
-                            "Execution of auto contrast brightness was stopped because it took more than %s seconds."
-                            % max_execution_time)
+        # Check if the time to perform the auto contrast brightness is not too long
+        self.assertLess(time.time() - starting_time, max_execution_time,
+                        "Execution of auto contrast brightness was stopped because it took more than %s seconds."
+                        % max_execution_time)
 
-            auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
-            self.assertEqual(auto_contrast_brightness_state, False)
-
-        # Test if an error is raised when an invalid detector is provided
-        with self.assertRaises(KeyError):
-            self.scanner.applyAutoContrastBrightness("error_expected")
-        time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(channel)
+        auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
         self.assertEqual(auto_contrast_brightness_state, False)
 
     def test_apply_autofocus(self):
         """
         Test for the auto functionality of the autofocus.
         """
-        # Check all the different detector types by looping over them
-        for role, channel in DETECTOR2CHANNELNAME.items():
-            # Start auto focus and check if it is running.
-            autofocus_future = self.efocus.applyAutofocus(role)
-            autofocus_state = self.microscope.is_autofocusing(channel)
-            time.sleep(0.01)
-            self.assertEqual(autofocus_state, True)
-            self.assertIsInstance(autofocus_future, ProgressiveFuture)
+        # Start auto focus and check if it is running.
+        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
+        time.sleep(0.01)
+        self.assertEqual(autofocus_state, True)
+        self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
-            # Stop auto focus and check if it stopped running.
-            autofocus_future.cancel()
-            time.sleep(5.0)  # Give microscope/simulator the time to update the state
-            autofocus_state = self.microscope.is_autofocusing(channel)
-            self.assertEqual(autofocus_state, False)
-            self.assertIsInstance(autofocus_future, ProgressiveFuture)
+        # Stop auto focus and check if it stopped running.
+        autofocus_future.cancel()
+        time.sleep(5.0)  # Give microscope/simulator the time to update the state
+        autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
+        self.assertEqual(autofocus_state, False)
+        self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
-            # Test starting auto focus and cancelling directly
-            autofocus_future = self.efocus.applyAutofocus(role)
-            autofocus_future.cancel()
-            time.sleep(5.0)  # Give microscope/simulator the time to update the state
-            autofocus_state = self.microscope.is_autofocusing(channel)
-            self.assertEqual(autofocus_state, False)
-            self.assertIsInstance(autofocus_future, ProgressiveFuture)
+        # Test starting auto focus and cancelling directly
+        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        autofocus_future.cancel()
+        time.sleep(5.0)  # Give microscope/simulator the time to update the state
+        autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
+        self.assertEqual(autofocus_state, False)
+        self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
-            # Start autofocus
-            max_execution_time = 40  # Approximately 3 times the normal expected execution time (s)
-            starting_time = time.time()
-            autofocus_future = self.efocus.applyAutofocus(role)
-            time.sleep(0.5)  # Give microscope/simulator the time to update the state
-            autofocus_future.result(timeout=max_execution_time)  # Wait until the autofocus is finished
+        # Start autofocus
+        max_execution_time = 40  # Approximately 3 times the normal expected execution time (s)
+        starting_time = time.time()
+        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        time.sleep(0.5)  # Give microscope/simulator the time to update the state
+        autofocus_future.result(timeout=max_execution_time)  # Wait until the autofocus is finished
 
-            # Check if the time to perform the autofocus is not too long
-            self.assertLess(time.time() - starting_time, max_execution_time,
-                            "Execution autofocus was stopped because it took more than %s seconds."
-                            % max_execution_time)
+        # Check if the time to perform the autofocus is not too long
+        self.assertLess(time.time() - starting_time, max_execution_time,
+                        "Execution autofocus was stopped because it took more than %s seconds."
+                        % max_execution_time)
 
-            autofocus_state = self.microscope.is_autofocusing(channel)
-            self.assertEqual(autofocus_state, False)
-
-        # Test if an error is raised when an invalid detector is provided
-        with self.assertRaises(KeyError):
-            self.efocus.applyAutofocus("error_expected")
-        time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autofocus_state = self.microscope.is_autofocusing(channel)
+        autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
         self.assertEqual(autofocus_state, False)
 
     def test_set_resolution(self):
@@ -974,6 +954,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(len(beamlet_index_info["range"]["x"]), 2)
         self.assertEqual(len(beamlet_index_info["range"]["y"]), 2)
 
+
 class TestFIBScanner(unittest.TestCase):
     """
     Test the FIB Scanner class.
@@ -986,26 +967,22 @@ class TestFIBScanner(unittest.TestCase):
 
         for child in cls.microscope.children.value:
             if child.name == CONFIG_FIB_SCANNER["name"]:
-                cls.FIB_scanner = child
+                cls.fib_scanner = child
             elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
 
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No hardware available.")
-
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
-
-        if "xttoolkit" in self.microscope.swVersion.lower():
-            self.xt_type = "xttoolkit"
-        else:
-            raise TypeError("Xttoolkit must be running for this test.")
+        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def test_acquire(self):
         """Test acquiring an image from the FIB/ion2 channel."""
         image = self.detector.data.get()
         self.assertEqual(len(image.shape), 2)
+
 
 class TestDualModeMicroscope(unittest.TestCase):
     """
@@ -1021,21 +998,16 @@ class TestDualModeMicroscope(unittest.TestCase):
             if child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
             elif child.name == CONFIG_FIB_SCANNER["name"]:
-                cls.FIB_scanner = child
+                cls.fib_scanner = child
             elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
 
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No hardware available.")
-
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
-
-        if "xttoolkit" in self.microscope.swVersion.lower():
-            self.xt_type = "xttoolkit"
-        else:
-            raise TypeError("Xttoolkit must be running for this test.")
+        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def _compute_expected_duration(self):
         """Computes the expected duration of a single image acquisition."""
@@ -1044,33 +1016,33 @@ class TestDualModeMicroscope(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
-    def test_active_scanner_VA(self):
-        scanner_modi = {"electron": self.scanner, "ion": self.FIB_scanner}
+    def test_scanner_VA(self):
+        scanner_modi = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
         for _ in range(2):
             for scanner_mode in scanner_modi:
                 # Switch active scanner mode
-                self.detector.active_scanner_type.value = scanner_mode
-                self.assertEqual(self.detector.active_scanner_type.value, scanner_mode)
-                self.assertIsInstance(self.detector._active_scanner, type(scanner_modi[scanner_mode]))
+                self.detector.scanner.value = scanner_mode
+                self.assertEqual(self.detector.scanner.value, scanner_mode)
+                self.assertIsInstance(self.detector._scanner, type(scanner_modi[scanner_mode]))
 
         # Check if mode remains unchanged if any non existing mode is tried to be set
         with self.assertRaises(IndexError):
-            self.detector.active_scanner_type.value = "non existing mode"
+            self.detector.scanner.value = "non existing mode"
         # The mode should be equal to the last set correct mode.
-        self.assertEqual(self.detector.active_scanner_type.value, scanner_mode)
-        self.assertIsInstance(self.detector._active_scanner, type(scanner_modi[scanner_mode]))
+        self.assertEqual(self.detector.scanner.value, scanner_mode)
+        self.assertIsInstance(self.detector._scanner, type(scanner_modi[scanner_mode]))
 
     def test_acquire_FIB_image(self):
-        """Test acquiring an image from the FIB/ion2 channel."""
+        """Test acquiring an image from the FIB/ion channel."""
         # Switch to ion mode
-        self.detector.active_scanner_type.value = "ion"
+        self.detector.scanner.value = self.fib_scanner.name
         image = self.detector.data.get()
         self.assertEqual(len(image.shape), 2)
 
     def test_acquire_ebeam_image(self):
         """Test acquiring an image using the Detector."""
         # Switch to electron mode
-        self.detector.active_scanner_type.value = "electron"
+        self.detector.scanner.value = self.scanner.name
         init_dwell_time = self.scanner.dwellTime.value
         self.scanner.dwellTime.value = 25e-9  # s
         expected_duration = self._compute_expected_duration()
@@ -1084,6 +1056,7 @@ class TestDualModeMicroscope(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
+
 
 class TestMBScanner(unittest.TestCase):
     """

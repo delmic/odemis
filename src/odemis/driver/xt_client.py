@@ -48,11 +48,6 @@ GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
 
-# Convert from a detector role (following the Odemis convention) to a detector name in xtlib
-DETECTOR2CHANNELNAME = {
-    "se-detector": "electron1",
-}
-
 
 class SEM(model.HwComponent):
     """
@@ -1054,8 +1049,10 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        self.channel = channel  # Name of the electron channel used.
 
         # will take care of executing auto contrast/brightness and auto stigmator asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -1345,14 +1342,13 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
 
     @isasync
-    def applyAutoContrastBrightness(self, detector):
+    def applyAutoContrastBrightness(self):
         """
         Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
         automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
         contrast brightness functionality works best if there is a feature visible in the image. This call is
         non-blocking.
 
-        :param detector (str): Role of the detector.
         :return: Future object
 
         """
@@ -1363,7 +1359,7 @@ class Scanner(model.Emitter):
         f._auto_contrast_brighness_lock = threading.Lock()
         f._must_stop = threading.Event()  # Cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
-        f._channel_name = DETECTOR2CHANNELNAME[detector]
+        f._channel_name = self.channel
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
     def _applyAutoContrastBrightness(self, future):
@@ -1461,19 +1457,17 @@ class Scanner(model.Emitter):
 class FibScanner(model.Emitter):
     """
     This is an extension of the model.Emitter class for controlling the FIB. Currently via XTLib only minimal control
-    of the FIB is possible, which is limited to pause/unpausing the image beam, and getting the latest image (via the
-    detector with the appropriate channel).
+    of the FIB is possible.
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name, role, parent, channel="ion2", **kwargs):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        # Set unknown values to None or 0
-        self.dwellTime = model.VigilantAttribute(None, readonly=True)
-        self._shape = (0,)
-        self.updateMetadata({model.MD_DWELL_TIME: None,
-                             model.MD_ROTATION  : None,
-                             model.MD_PIXEL_SIZE: None})
+        self.channel = channel  # Name of the ion channel used.
+
+        self._shape = (4096, 4096)
+        res = self._shape[:2]
+        self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
 
 class Detector(model.Detector):
@@ -1483,10 +1477,7 @@ class Detector(model.Detector):
     is captured.
     """
 
-    def __init__(self, name, role, parent, channel_name, **kwargs):
-        """
-        channel_name (str): Name of one of the electron channels.
-        """
+    def __init__(self, name, role, parent, **kwargs):
         # The acquisition is based on a FSM that roughly looks like this:
         # Event\State |    Stopped    |   Acquiring    | Receiving data |
         #    START    | Ready for acq |        .       |       .        |
@@ -1499,17 +1490,14 @@ class Detector(model.Detector):
         self.data = SEMDataFlow(self)
 
         if hasattr(self.parent, "_scanner") and hasattr(self.parent, "_fib_scanner"):
-            self.active_scanner_type = StringEnumerated("electron", choices={"electron", "ion"},
-                                                        setter=self._set_active_scanner_type)
+            self.scanner = StringEnumerated(self.parent._scanner.name,
+                        choices={self.parent._scanner.name, self.parent._fib_scanner.name}, setter=self._set_scanner)
         elif hasattr(self.parent, "_scanner"):
-            self._channel_name = channel_name
-            self._active_scanner = self.parent._scanner
+            self._scanner = self.parent._scanner
         elif hasattr(self.parent, "_fib_scanner"):
-            self._channel_name = channel_name
-            self._active_scanner = self.parent._fib_scanner
+            self._scanner = self.parent._fib_scanner
         else:
-            raise ValueError("Non of the required scanner children are provided. Provide at least an ebeam scanner ("
-                             "single of multi beam) or a FIB scanner.")
+            raise ValueError("No Scanner available")
 
         self._genmsg = queue.Queue()  # GEN_*
         self._generator = None
@@ -1530,8 +1518,8 @@ class Detector(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        if hasattr(self._active_scanner, "blanker"):
-            if self._active_scanner.blanker.value is None:
+        if hasattr(self._scanner, "blanker"):
+            if self._scanner.blanker.value is None:
                 self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
 
@@ -1548,24 +1536,26 @@ class Detector(model.Detector):
                 while True:
                     if self._acq_should_stop():
                         break
-                    self.parent.set_channel_state(self._channel_name, True)
-                    if hasattr(self._active_scanner, "blanker"):
-                        if self._active_scanner.blanker.value is None:
+                    self.parent.set_channel_state(self._scanner.channel, True)
+                    if hasattr(self._scanner, "blanker"):
+                        if self._scanner.blanker.value is None:
                             self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
-                    self.parent.set_channel_state(self._channel_name, False)
-                    md = self._active_scanner._metadata.copy()
+                    self.parent.set_channel_state(self._scanner.channel, False)
+                    md = self._scanner._metadata.copy()
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
-                    if self._active_scanner.dwellTime.value and self._active_scanner.shape:
-                        n_pixels = self._active_scanner.shape[0] * self._active_scanner.shape[1]
-                        est_acq_time = self._active_scanner.dwellTime.value * n_pixels
-                        md[model.MD_DWELL_TIME] = self._active_scanner.dwellTime.value
-                        md[model.MD_ROTATION] = self._active_scanner.rotation.value
+                    if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "shape"):
+                        n_pixels = self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
+                        est_acq_time = self._scanner.dwellTime.value * n_pixels
+                        md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
                     else:
                         # Estimated acquisition time used the timeout if not all info about this acquisition time is
                         # known.
                         est_acq_time = 60
+
+                    if hasattr(self._scanner, "rotation"):
+                        md[model.MD_ROTATION] = self._scanner.rotation.value
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
@@ -1580,7 +1570,7 @@ class Detector(model.Detector):
                         break
 
                     # Retrieve the image
-                    image = self.parent.get_latest_image(self._channel_name)
+                    image = self.parent.get_latest_image(self._scanner.channel)
                     md.update(self._metadata)
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
@@ -1598,14 +1588,14 @@ class Detector(model.Detector):
         Stop acquiring images.
         """
         # Stopping the channel once stops it after the acquisition is done.
-        self.parent.set_channel_state(self._channel_name, False)
-        if self.parent.get_channel_state(self._channel_name) == XT_STOP:
+        self.parent.set_channel_state(self._scanner.channel, False)
+        if self.parent.get_channel_state(self._scanner.channel) == XT_STOP:
             return
         else:  # Channel is canceling
             logging.debug("Channel not fully stopped will try again.")
             time.sleep(0.5)
             # Stopping it twice does a full stop.
-            self.parent.set_channel_state(self._channel_name, False)
+            self.parent.set_channel_state(self._scanner.channel, False)
 
     def _acq_should_stop(self, timeout=None):
         """
@@ -1645,7 +1635,7 @@ class Detector(model.Detector):
         tend = time.time() + timeout
         t = time.time()
         logging.debug("Waiting for %g s:", tend - t)
-        while self.parent.get_channel_state(self._channel_name) != XT_STOP:
+        while self.parent.get_channel_state(self._scanner.channel) != XT_STOP:
             t = time.time()
             if t > tend:
                 raise TimeoutError("Acquisition timeout after %g s" % timeout)
@@ -1685,23 +1675,18 @@ class Detector(model.Detector):
             logging.warning("Acq received unexpected message %s", msg)
         return msg
 
-    def _set_active_scanner_type(self, scan_mode):
+    def _set_scanner(self, scan_mode):
         """
-        Setter for changing the current active scanner type.
-        When switching electron <--> ion beam mode automatically the channel name is updated. With channel
-        'electron1' as standard for the electron mode, and "ion2" as the standard for the ion mode.
-        :param scan_mode (string): contains mode, can be either 'electron' or 'ion'
-        :return (string): The set mode, if it was one of the two valid options. Otherwise the mode remains unset.
+        Setter for changing the current active scanner type. The correct scanner object is also updated in ._scanner.
+        :param scan_mode (string): contains mode, can be either 'Scanner' or 'FibScanner'
+        :return (string): The set mode
         """
-        if scan_mode == "electron":
-            self._active_scanner = self.parent._scanner
-            self._channel_name = "electron1"
-            return scan_mode
+        if scan_mode == self.parent._scanner.name:
+            self._scanner = self.parent._scanner
+        elif scan_mode == self.parent._fib_scanner.name:
+            self._scanner = self.parent._fib_scanner
 
-        elif scan_mode == "ion":
-            self._active_scanner = self.parent._fib_scanner
-            self._channel_name = "ion2"
-            return scan_mode
+        return scan_mode
 
 
 class TerminationRequested(Exception):
@@ -1722,7 +1707,6 @@ class SEMDataFlow(model.DataFlow):
         """
         detector (model.Detector): the detector that the dataflow corresponds to
         sem (model.Emitter): the SEM
-        channel_name (str): Name of one of the electron channels
         """
         model.DataFlow.__init__(self)
         self._detector = detector
@@ -1985,15 +1969,13 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def applyAutofocus(self, detector):
+    def applyAutofocus(self):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
         the beam must be turned on and unblanked. Also a a reasonable manual focus is needed. When the image is too far
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Role of the detector.
-        :param state (str):  "run", or "stop"
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
@@ -2003,7 +1985,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f._channel_name = DETECTOR2CHANNELNAME[detector]
+        f._channel_name = self._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):
@@ -2133,7 +2115,9 @@ class MultiBeamScanner(Scanner):
     Whenever one of these attributes is changed, its setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
+        self.channel = channel  # Name of the electron channel used.
+
         # First instantiate the xt_toolkit VA's then call the __init__ of the super for the update thread.
         self.parent = parent
 
@@ -2312,10 +2296,7 @@ class XTTKDetector(Detector):
     to work with image acquisition in XTToolkit.
     """
 
-    def __init__(self, name, role, parent, channel_name, address, **kwargs):
-        """
-        channel_name (str): Name of one of the electron channels.
-        """
+    def __init__(self, name, role, parent, address, **kwargs):
         # The acquisition is based on a FSM that roughly looks like this:
         # Event\State |    Stopped    |   Acquiring    | Receiving data |
         #    START    | Ready for acq |        .       |       .        |
@@ -2333,8 +2314,9 @@ class XTTKDetector(Detector):
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
-        Detector.__init__(self, name, role, parent=parent, channel_name=channel_name, **kwargs)
+        Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._shape = (2**16,)  # Depth of the image
+        self._scanner = self.parent._scanner
 
     def stop_generate(self):
         logging.debug("Stopping image acquisition")
@@ -2342,10 +2324,10 @@ class XTTKDetector(Detector):
             self.cancel_connection._pyroClaimOwnership()
             # Directly calling set_channel_state does not work with XTToolkit.
             # Therefore call get_channel_state, before trying to stop the channel.
-            self.cancel_connection.get_channel_state(self._channel_name)
-            self.cancel_connection.set_channel_state(self._channel_name, False)
+            self.cancel_connection.get_channel_state(self._scanner.channel)
+            self.cancel_connection.set_channel_state(self._scanner.channel, False)
             # Stop twice, to make sure the channel fully stops.
-            self.cancel_connection.set_channel_state(self._channel_name, False)
+            self.cancel_connection.set_channel_state(self._scanner.channel, False)
         if self.parent._scanner.blanker.value is None:
             self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
@@ -2377,7 +2359,7 @@ class XTTKDetector(Detector):
 
                     # Acquire the image
                     # =================
-                    image = self.parent.get_latest_image(self._channel_name)
+                    image = self.parent.get_latest_image(self._scanner.channel)
 
                     md = self.parent._scanner._metadata.copy()
                     md.update(self._metadata)
