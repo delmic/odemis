@@ -71,7 +71,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream
+    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
 from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -512,20 +512,35 @@ class LocalizationTab(Tab):
         # Create streams from data
         streams = data_to_static_streams(data)
 
-        # TODO: Clear previous overview streams
-        self.clear_data()
-
         for s in streams:
+            self.clear_overview_data(s.name.value)
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
-    def clear_data(self):
+    def clear_live_streams(self):
+        """
+        Clear the content of the live streams
+        """
+        live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
+        for stream in live_streams:
+            if stream.raw:
+                stream.raw = []
+                stream.image.value = None
+                stream.histogram._value = numpy.empty(0)
+                stream.histogram.notify(stream.histogram._value)
+
+    def clear_overview_data(self, filter_stream_name=None):
         """
         Clear the tab data upon resetting the project:
         - Clear overview map streams
-        - Clear live streams data
+        @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
         """
-        self._overview_stream_controller.clear()
+        # TODO: Remove old streams from the panel as well, currently it's hidden
+        static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
+        for stream in static_streams:
+            if filter_stream_name and stream.name.value != filter_stream_name:
+                continue
+            self._overview_stream_controller.removeStream(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -2139,7 +2154,8 @@ class CryoChamberTab(Tab):
     def _reset_project_data(self):
         try:
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
-            localization_tab.clear_data()
+            localization_tab.clear_overview_data()
+            localization_tab.clear_live_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")
 
