@@ -509,7 +509,7 @@ class LocalizationTab(Tab):
         streams = data_to_static_streams(data)
 
         for s in streams:
-            self.clear_overview_data(s)
+            self.clear_overview_data(s.name.value)
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
@@ -519,7 +519,11 @@ class LocalizationTab(Tab):
         """
         live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
         for stream in live_streams:
-            stream.image.value = None
+            if stream.raw:
+                stream.raw = []
+                stream.image.value = None
+                stream.histogram._value = numpy.empty(0)
+                stream.histogram.notify(stream.histogram._value)
 
     def clear_overview_data(self, filter_stream_name=None):
         """
