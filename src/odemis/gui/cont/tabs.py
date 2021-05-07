@@ -513,7 +513,7 @@ class LocalizationTab(Tab):
         streams = data_to_static_streams(data)
 
         for s in streams:
-            self.clear_overview_data(s.name.value)
+            self.clear_overview_streams(s.name.value)
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
@@ -529,18 +529,16 @@ class LocalizationTab(Tab):
                 stream.histogram._value = numpy.empty(0)
                 stream.histogram.notify(stream.histogram._value)
 
-    def clear_overview_data(self, filter_stream_name=None):
+    def clear_overview_streams(self, filter_stream_name=None):
         """
-        Clear the tab data upon resetting the project:
-        - Clear overview map streams
+        Remove overview map (Static) streams and clear them from view and panel.
         @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
         """
-        # TODO: Remove old streams from the panel as well, currently it's hidden
         static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
         for stream in static_streams:
             if filter_stream_name and stream.name.value != filter_stream_name:
                 continue
-            self._overview_stream_controller.removeStream(stream)
+            self._overview_stream_controller.removeStreamPanel(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -2154,7 +2152,7 @@ class CryoChamberTab(Tab):
     def _reset_project_data(self):
         try:
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
-            localization_tab.clear_overview_data()
+            localization_tab.clear_overview_streams()
             localization_tab.clear_live_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")
