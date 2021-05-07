@@ -204,6 +204,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
         align_active = align_md[model.MD_FAV_POS_ACTIVE]
+        stage_referenced = all(stage.referenced.value.values())
         # Fail early when required axes are not found on the positions metadata
         required_axes = {'x', 'y', 'z', 'rx', 'rz'}
         for stage_position in [stage_active, stage_deactive, stage_coating]:
@@ -221,7 +222,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
 
         current_label = getCurrentPositionLabel(current_pos, stage)
         if target == LOADING:
-            if current_label is UNKNOWN:
+            if current_label is UNKNOWN and stage_referenced:
                 logging.warning("Moving stage to loading while current position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
@@ -232,7 +233,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
             # 3. reference aligner if not already referenced
             # 4. Move aligner to deactive position
             # 5. reference stage
-            if not all(stage.referenced.value.values()):
+            if not stage_referenced:
                 if not all(focus.referenced.value.values()):
                     run_reference(future, focus)
                 run_sub_move(future, focus, focus_deactive)
@@ -243,8 +244,14 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
 
             # Add the sub moves to perform the loading move
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, stage_deactive)))
-            sub_moves.append((stage, filter_dict({'x', 'y'}, stage_deactive)))
-            sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
+            if current_label is UNKNOWN and not stage_referenced:
+                # After referencing the stage could move near the maximum axes range,
+                # and moving single axes may result in an invalid/reachable position error,
+                # so all axes will moved together for this special case.
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, stage_deactive)))
+            else:
+                sub_moves.append((stage, filter_dict({'x', 'y'}, stage_deactive)))
+                sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
 
         elif target in (IMAGING, COATING):
             if current_label is LOADING:
