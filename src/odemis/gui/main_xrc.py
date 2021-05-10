@@ -818,7 +818,7 @@ class xrcfr_plugin(wx.Dialog):
 
 def __init_resources():
     global __res
-    __res = xrc.EmptyXmlResource()
+    __res = xrc.XmlResource()
 
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
