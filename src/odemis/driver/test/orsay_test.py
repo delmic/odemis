@@ -5,7 +5,7 @@ Created on 6 April 2021
 
 @author: Arthur Helsloot
 
-Copyright © 2021-2023 Arthur Helsloot, Delmic
+Copyright © 2021 Arthur Helsloot, Delmic
 
 This file is part of Odemis.
 
@@ -66,10 +66,10 @@ class TestOrsayStatic(unittest.TestCase):
 
     def test_wrong_ip(self):
         """
-        Tests that an HwError is raised when a wrong ip address is entered
+        Tests that an HwError is raised when an empty ip address is entered
         """
         with self.assertRaises(HwError):
-            orsay.OrsayComponent(name="Orsay", role="orsay", host="192.168.1.1", children="")
+            orsay.OrsayComponent(name="Orsay", role="orsay", host="", children="")
 
 
 class TestOrsay(unittest.TestCase):
@@ -86,10 +86,7 @@ class TestOrsay(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-        try:
-            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        except Exception as e:
-            raise HwError(str(e))
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
 
         cls.datamodel = cls.oserver.datamodel
 
@@ -121,6 +118,7 @@ class TestOrsay(unittest.TestCase):
                           "outside of simulation.")
         test_string = "Some process information"
         self.datamodel.HybridPlatform.ProcessInfo.Actual = test_string
+        sleep(1)
         self.assertEqual(self.oserver.processInfo.value, test_string)
         self.datamodel.HybridPlatform.ProcessInfo.Actual = ""
 
@@ -137,19 +135,21 @@ class TestOrsay(unittest.TestCase):
             sleep(2)  # wait for the reconnection
 
         # perform some test to check writing and reading still works
-        self.psus._valve.Target = 1
+        self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(1)
         self.assertTrue(self.psus.power.value)
 
-        self.psus._valve.Target = 2
+        self.psus._valve.Target = orsay.VALVE_CLOSED
         sleep(1)
         self.assertFalse(self.psus.power.value)
 
         self.psus.power.value = True
-        self.assertEqual(self.psus._valve.Target, 1)
+        sleep(1)
+        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
 
         self.psus.power.value = False
-        self.assertEqual(self.psus._valve.Target, 2)
+        sleep(1)
+        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
 
 
 class TestPneumaticSuspension(unittest.TestCase):
@@ -166,10 +166,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-        try:
-            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        except Exception as e:
-            raise HwError(str(e))
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
 
         cls.datamodel = cls.oserver.datamodel
 
@@ -188,19 +185,21 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         Test for controlling the power valve
         """
-        self.psus._valve.Target = 1
+        self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(1)
         self.assertTrue(self.psus.power.value)
 
-        self.psus._valve.Target = 2
+        self.psus._valve.Target = orsay.VALVE_CLOSED
         sleep(1)
         self.assertFalse(self.psus.power.value)
 
         self.psus.power.value = True
-        self.assertEqual(self.psus._valve.Target, 1)
+        sleep(1)
+        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
 
         self.psus.power.value = False
-        self.assertEqual(self.psus._valve.Target, 2)
+        sleep(1)
+        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
 
     def test_errorstate(self):
         """
@@ -215,12 +214,14 @@ class TestPneumaticSuspension(unittest.TestCase):
         test_string = "This thing broke"
 
         self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = test_string
+        sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("Manometer2", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
         self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = ""
 
         self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = test_string
+        sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
@@ -234,7 +235,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension could not be contacted", str(self.psus.state.value))
-        self.psus._valve.Target = 1
+        self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertEqual(self.psus.state.value, model.ST_RUNNING)
 
@@ -245,11 +246,11 @@ class TestPneumaticSuspension(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.psus._updatePower(self.datamodel.HybridPlatform.Cancel)
 
-        self.psus._valve.Target = 1
+        self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(1)
         self.assertTrue(self.psus.power.value)
 
-        self.psus._valve.Target = 2
+        self.psus._valve.Target = orsay.VALVE_CLOSED
         sleep(1)
         self.assertFalse(self.psus.power.value)
 
@@ -284,10 +285,7 @@ class TestVacuumChamber(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-        try:
-            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        except Exception as e:
-            raise HwError(str(e))
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
 
         cls.datamodel = cls.oserver.datamodel
 
@@ -306,72 +304,83 @@ class TestVacuumChamber(unittest.TestCase):
         """
         Test for controlling the gate valve of the chamber
         """
-        self.pressure._gate.IsOpen.Target = 1
+        self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
         sleep(1)
         self.assertTrue(self.pressure.gateOpen.value)
 
-        self.pressure._gate.IsOpen.Target = 2
+        self.pressure._gate.IsOpen.Target = orsay.VALVE_CLOSED
         sleep(1)
         self.assertFalse(self.pressure.gateOpen.value)
 
         self.pressure.gateOpen.value = True
-        self.assertEqual(self.pressure._gate.IsOpen.Target, 1)
+        sleep(1)
+        self.assertEqual(int(self.pressure._gate.IsOpen.Target), orsay.VALVE_OPEN)
 
         self.pressure.gateOpen.value = False
-        self.assertEqual(self.pressure._gate.IsOpen.Target, 2)
+        sleep(1)
+        self.assertEqual(int(self.pressure._gate.IsOpen.Target), orsay.VALVE_CLOSED)
 
     def test_vacuum_sim(self):
         """
         Test for controlling the vacuum that can be run in simulation and on the real system
         """
-        self.pressure.moveAbs({"vacuum": 1}, wait=False)
+        self.pressure.moveAbs({"vacuum": 1})
         sleep(1)
-        self.pressure.stop()
         self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
-
-        self.pressure.moveAbs({"vacuum": 2}, wait=False)
-        sleep(1)
         self.pressure.stop()
+
+        self.pressure.moveAbs({"vacuum": 2})
+        sleep(1)
         self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
-
-        self.pressure.moveAbs({"vacuum": 0}, wait=False)
-        sleep(1)
         self.pressure.stop()
+
+        self.pressure.moveAbs({"vacuum": 0})
+        sleep(1)
         self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
+        self.pressure.stop()
 
     def test_vacuum_real(self):
         """
         Test for controlling the real vacuum
+        TODO: Tune the goal pressure and allowed difference (delta) of all vacuum statuses in this test!!!
+              Tune these such that they are realistic and appropriate for primary vacuum, high vacuum or vented chamber.
         """
         if TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is set, cannot change vacuum pressure in simulation")
 
-        f = self.pressure.moveAbs({"vacuum": 1})
-        f.wait()
-        self.assertEqual(self.pressure.position.value["vacuum"], 1)
-        self.assertAlmostEqual(self.pressure.pressure.value, 50000, delta=5000)  # tune the goal and alowed difference
+        pressure_primary = 50000  # TODO: Tune this to primary vacuum!
+        delta_primary = 5000  # TODO: Tune this to primary vacuum!
+        pressure_high = 0.1  # TODO: Tune this to high vacuum!
+        delta_high = 0.01  # TODO: Tune this to high vacuum!
+        pressure_vented = 100000  # TODO: Tune this to vented chamber!
+        delta_vented = 10000  # TODO: Tune this to vented chamber!
 
-        f = self.pressure.moveAbs({"vacuum": 2})
+        f = self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
         f.wait()
-        self.assertEqual(self.pressure.position.value["vacuum"], 2)
-        self.assertAlmostEqual(self.pressure.pressure.value, 0.1, delta=0.01)  # tune the goal and alowed difference
+        self.assertEqual(self.pressure.position.value["vacuum"], 1)  # check that primary vacuum is reached
+        self.assertAlmostEqual(self.pressure.pressure.value, pressure_primary, delta=delta_primary)
 
-        f = self.pressure.moveAbs({"vacuum": 0})
+        f = self.pressure.moveAbs({"vacuum": 2})  # go to high vacuum
         f.wait()
-        self.assertEqual(self.pressure.position.value["vacuum"], 0)
-        self.assertAlmostEqual(self.pressure.pressure.value, 100000, delta=10000)  # tune the goal and alowed difference
+        self.assertEqual(self.pressure.position.value["vacuum"], 2)  # check that high vacuum is reached
+        self.assertAlmostEqual(self.pressure.pressure.value, pressure_high, delta=delta_high)
 
-        self.pressure.moveAbs({"vacuum": 1})
-        f = self.pressure.moveAbs({"vacuum": 0})
+        f = self.pressure.moveAbs({"vacuum": 0})  # vent chamber
         f.wait()
-        self.assertEqual(self.pressure.position.value["vacuum"], 0)
-        self.assertAlmostEqual(self.pressure.pressure.value, 100000, delta=10000)  # tune the goal and alowed difference
+        self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
+        self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
 
-        self.pressure.moveAbs({"vacuum": 1})
+        self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
+        f = self.pressure.moveAbs({"vacuum": 0})  # immediately vent the chamber
+        f.wait()
+        self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
+        self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
+
+        self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
         sleep(5)
         self.pressure.stop()
-        self.assertEqual(self.pressure.position.value["vacuum"], 0)
-        self.assertAlmostEqual(self.pressure.pressure.value, 100000, delta=10000)  # tune the goal and alowed difference
+        self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
+        self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
 
     def test_errorstate(self):
         """
@@ -386,6 +395,7 @@ class TestVacuumChamber(unittest.TestCase):
         test_string = "This thing broke"
 
         self.pressure._gate.ErrorState.Actual = test_string
+        sleep(1)
         self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5", str(self.pressure.state.value))
         self.assertIn(test_string, str(self.pressure.state.value))
@@ -399,7 +409,7 @@ class TestVacuumChamber(unittest.TestCase):
         sleep(1)
         self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5 could not be contacted", str(self.pressure.state.value))
-        self.pressure._gate.IsOpen.Target = 1
+        self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertEqual(self.pressure.state.value, model.ST_RUNNING)
 
@@ -450,10 +460,7 @@ class TestPumpingSystem(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-        try:
-            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        except Exception as e:
-            raise HwError(str(e))
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
 
         cls.datamodel = cls.oserver.datamodel
 
@@ -481,17 +488,20 @@ class TestPumpingSystem(unittest.TestCase):
         test_string = "This thing broke"
 
         self.psys._system.Manometer1.ErrorState.Actual = test_string
+        sleep(1)
         self.assertIsInstance(self.psys.state.value, HwError)
         self.assertIn("Manometer1", str(self.psys.state.value))
         self.assertIn(test_string, str(self.psys.state.value))
         self.psys._system.Manometer1.ErrorState.Actual = ""
 
         self.psys._system.TurboPump1.ErrorState.Actual = test_string
+        sleep(1)
         self.assertIsInstance(self.psys.state.value, HwError)
         self.assertIn("TurboPump1", str(self.psys.state.value))
         self.assertIn(test_string, str(self.psys.state.value))
-        self.psys._system.TurboPump1.ErrorState.Actual = ""
 
+        self.psys._system.TurboPump1.ErrorState.Actual = ""
+        sleep(1)
         self.assertEqual(self.psys.state.value, model.ST_RUNNING)
 
     def test_updateSpeed(self):
@@ -603,7 +613,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
         test_value = 1.0
         self.psys._system.Manometer1.Pressure.Target = test_value
-        sleep(5)
+        sleep(1)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
         self.psys._system.Manometer1.Pressure.Target = 0
 
@@ -622,10 +632,7 @@ class TestUPS(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-        try:
-            cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        except Exception as e:
-            raise HwError(str(e))
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
 
         cls.datamodel = cls.oserver.datamodel
 
