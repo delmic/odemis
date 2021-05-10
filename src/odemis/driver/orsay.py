@@ -4,7 +4,7 @@ Created on 6 April 2021
 
 @author: Arthur Helsloot
 
-Copyright © 2021-2023 Arthur Helsloot, Delmic
+Copyright © 2021 Arthur Helsloot, Delmic
 
 This file is part of Odemis.
 
@@ -36,6 +36,11 @@ VALVE_TRANSIT = 0
 VALVE_OPEN = 1
 VALVE_CLOSED = 2
 VALVE_ERROR = 3
+
+VACUUM_CHAMBER_PRESSURE_RNG = (0, 110000)  # Pa
+NITROGEN_PRESSURE_RNG = (0, 5000000)  # Pa  Eventhough 0 is nowhere near a realistic value for the compressed
+# nitrogen, it is the initialisation value of this parameter in the Orsay server, meaning it needs to be included in
+# the VA's range
 
 EMPTY_VALUES = (None, "", "None", "none")
 
@@ -135,31 +140,40 @@ class OrsayComponent(model.HwComponent):
         """
         Once in a while, check the connection to the Orsay server, reconnect if needed and update all VA's
         """
-        while not self._stop_connection_monitor.is_set():
-            if self._device.HttpConnection._HTTPConnection__response is None or \
-                    self._device.MessageConnection.Connection._HTTPConnection__response is None:
-                self.state._set_value(HwError("Connection to Orsay server lost. Trying to reconnect..."),
-                                      force_write=True)
-                self._device.HttpConnection.close()  # close the current connection
-                self._device.MessageConnection.Connection.close()
-                self._device = None  # destroy the current connection object
-                try:
-                    self._device = Connection(self._host)
-                    time.sleep(1)
-                    self.on_connect()
-                    for child in self.children.value:
-                        child.on_connect()
-                    self.state._set_value(model.ST_RUNNING, force_write=True)
-                except Exception as ex:
-                    logging.exception("Trying to reconnect to Orsay server: %s." % ex)
-            else:
-                self.update_VAs()
-                for child in self.children.value:
-                    child.update_VAs()
-            self._stop_connection_monitor.wait(5)
+        try:
+            while not self._stop_connection_monitor.is_set():
 
-        logging.debug("Orsay server connection check thread closed")
-        self._stop_connection_monitor.clear()
+                if self._device and (self._device.HttpConnection._HTTPConnection__response is None or
+                                     self._device.MessageConnection.Connection._HTTPConnection__response is None):
+                    self.state._set_value(HwError("Connection to Orsay server lost. Trying to reconnect..."),
+                                          force_write=True)
+                    self._device.HttpConnection.close()  # close the current connection
+                    self._device.MessageConnection.Connection.close()
+                    self._device = None  # destroy the current connection object
+
+                if not self._device:  # if there currently is no connection
+                    try:  # try to reconnect
+                        self._device = Connection(self._host)
+                        time.sleep(1)
+                        self.on_connect()
+                        for child in self.children.value:
+                            child.on_connect()
+                        self.state._set_value(model.ST_RUNNING, force_write=True)
+                    except Exception as ex:
+                        logging.exception("Trying to reconnect to Orsay server: %s." % ex)
+                else:
+                    try:
+                        self.update_VAs()
+                        for child in self.children.value:
+                            child.update_VAs()
+                    except Exception as e:
+                        logging.exception(e)
+                self._stop_connection_monitor.wait(5)
+        except Exception as e:
+            logging.exception(e)
+        finally:
+            logging.debug("Orsay server connection check thread finished.")
+            self._stop_connection_monitor.clear()
 
     def _updateProcessInfo(self, parameter=None, attributeName="Actual"):
         """
@@ -203,8 +217,8 @@ class OrsayComponent(model.HwComponent):
             self._stop_connection_monitor.set()  # stop trying to reconnect
             self._device.HttpConnection.close()  # close the connection
             self._device.MessageConnection.Connection.close()
-            self._device = None
             self.datamodel = None
+            self._device = None
 
 
 class pneumaticSuspension(model.HwComponent):
@@ -217,7 +231,7 @@ class pneumaticSuspension(model.HwComponent):
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • power (BooleanVA, value corresponds to _valve.Actual == VALVE_OPEN, set to True to open/start and False to
         close/stop)
-        • pressure (FloatContinuous, range=(0, 110000), read-only, unit is "Pa", value is _gauge.Actual)
+        • pressure (FloatContinuous, range=NITROGEN_PRESSURE_RNG, read-only, unit is "Pa", value is _gauge.Actual)
         """
 
         # we will fill the set of children with Components later in ._children
@@ -226,7 +240,8 @@ class pneumaticSuspension(model.HwComponent):
         self._valve = None
         self._gauge = None
 
-        self.pressure = model.FloatContinuous(0.0, range=(0, 110000), readonly=True, unit="Pa")
+        self.pressure = model.FloatContinuous(NITROGEN_PRESSURE_RNG[0], range=NITROGEN_PRESSURE_RNG,
+                                              readonly=True, unit="Pa")
         self.power = model.BooleanVA(False, setter=self._changeValve)
 
         self.on_connect()
@@ -353,12 +368,13 @@ class pneumaticSuspension(model.HwComponent):
         """
         Called when Odemis is closed
         """
-        self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Unsubscribe(self._updateErrorState)
-        self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Unsubscribe(self._updateErrorState)
-        self._valve.Unsubscribe(self._updatePower)
-        self._gauge.Unsubscribe(self._updatePressure)
-        self._valve = None
-        self._gauge = None
+        if self._gauge:
+            self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Unsubscribe(self._updateErrorState)
+            self.parent.datamodel.HybridPlatform.Manometer2.ErrorState.Unsubscribe(self._updateErrorState)
+            self._valve.Unsubscribe(self._updatePower)
+            self._gauge.Unsubscribe(self._updatePressure)
+            self._valve = None
+            self._gauge = None
 
 
 class vacuumChamber(model.Actuator):
@@ -369,12 +385,13 @@ class vacuumChamber(model.Actuator):
     def __init__(self, name, role, parent, **kwargs):
         """
         Has axes:
-        • "vacuum": unit is "None", choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}
+        • "vacuum": choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • gateOpen (BooleanVA, set to True to open/start and False to close/stop)
         • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
-        • pressure (FloatContinuous, range=(0, 110000), read-only, unit is "Pa", value is _chamber.Pressure.Actual)
+        • pressure (FloatContinuous, range=VACUUM_CHAMBER_PRESSURE_RNG, read-only, unit is "Pa",
+                    value is _chamber.Pressure.Actual)
         """
 
         axes = {"vacuum": model.Axis(unit=None, choices={0: "vented", 1: "primary vacuum", 2: "high vacuum"})}
@@ -384,7 +401,8 @@ class vacuumChamber(model.Actuator):
         self._gate = None
         self._chamber = None
 
-        self.pressure = model.FloatContinuous(0.0, range=(0, 110000), readonly=True, unit="Pa")
+        self.pressure = model.FloatContinuous(VACUUM_CHAMBER_PRESSURE_RNG[0], range=VACUUM_CHAMBER_PRESSURE_RNG,
+                                              readonly=True, unit="Pa")
         self.gateOpen = model.BooleanVA(False, setter=self._changeGateOpen)
         self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
 
@@ -466,13 +484,14 @@ class vacuumChamber(model.Actuator):
         if attributeName != "Actual":
             return
         valve_state = int(parameter.Actual)
-        log_msg = "ValveP5 state changed to: %s."
+        log_msg = "ValveP5 state is: %s."
         if valve_state in (VALVE_UNDEF, VALVE_ERROR):
             logging.warning(log_msg % valve_state)
             self._updateErrorState()
         elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
-            logging.debug(log_msg % valve_state)
             new_value = valve_state == VALVE_OPEN
+            if not new_value == self.gateOpen.value:
+                logging.debug(log_msg % valve_state)
             self.gateOpen._value = new_value  # to not call the setter
             self.gateOpen.notify(new_value)
         else:  # if parameter.Actual is VALVE_TRANSIT, or undefined
@@ -519,10 +538,9 @@ class vacuumChamber(model.Actuator):
             return
         self.pressure._set_value(float(parameter.Actual), force_write=True)
 
-    def _changeVacuum(self, goal, wait=True):
+    def _changeVacuum(self, goal):
         """
         goal (int): goal state of the vacuum: (0: "vented", 1: "primary vacuum", 2: "high vacuum")
-        wait (bool): if True, the function will block until the goal vacuum state is reached
         return (int): actual state of the vacuum at the end of this function: (0: "vented", 1: "primary vacuum",
                       2: "high vacuum")
 
@@ -530,9 +548,10 @@ class vacuumChamber(model.Actuator):
         Then returns the reached vacuum status.
         """
         logging.debug("Setting vacuum status to %s." % self.axes["vacuum"].choices[goal])
+        self._vacuumStatusReached.clear()  # to make sure it will wait
         self._chamber.VacuumStatus.Target = goal
-        if wait:
-            self._vacuumStatusReached.wait()
+        if not self._vacuumStatusReached.wait(18000):  # wait maximally 5 hours
+            raise TimeoutError("Something went wrong awaiting a change in the vacuum status.")
         return self._chamber.VacuumStatus.Actual
 
     def _changeGateOpen(self, goal):
@@ -547,19 +566,19 @@ class vacuumChamber(model.Actuator):
         return self._gate.IsOpen.Target == VALVE_OPEN
 
     @isasync
-    def moveAbs(self, pos, wait=True):
+    def moveAbs(self, pos):
         """
         Move the axis of this actuator to pos.
         """
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._changeVacuum, goal=pos["vacuum"], wait=wait)
+        return self._executor.submit(self._changeVacuum, goal=pos["vacuum"])
 
     @isasync
     def moveRel(self, shift):
         """
         Move the axis of this actuator by shift.
         """
-        pass
+        raise NotImplementedError("Relative movements are not implemented for vacuum control. Use moveAbs instead.")
 
     def stop(self, axes=None):
         """
@@ -568,22 +587,28 @@ class vacuumChamber(model.Actuator):
         if not axes or "vacuum" in axes:
             logging.debug("Stopping vacuum.")
             self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
-            self.parent.datamodel.HybridPlatform.Cancel.Target = True
+            self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing
+            self._changeVacuum(int(self._chamber.VacuumStatus.Actual))  # the current target is the current state and
+            # wait. This assures the executor does not infinitely wait until VacuumStatus.Actual equals
+            # VacuumStatus.Target
+            self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
+            self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing again
             self._executor.cancel()
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        self._gate.ErrorState.Unsubscribe(self._updateErrorState)
-        self._chamber.VacuumStatus.Unsubscribe(self._updatePosition)
-        self._chamber.Pressure.Unsubscribe(self._updatePressure)
-        self._gate.IsOpen.Unsubscribe(self._updateGateOpen)
-        if self._executor:
-            self._executor.shutdown()
-            self._executor = None
-        _gate = None
-        _chamber = None
+        if self._chamber:
+            self._gate.ErrorState.Unsubscribe(self._updateErrorState)
+            self._chamber.VacuumStatus.Unsubscribe(self._updatePosition)
+            self._chamber.Pressure.Unsubscribe(self._updatePressure)
+            self._gate.IsOpen.Unsubscribe(self._updateGateOpen)
+            if self._executor:
+                self._executor.shutdown()
+                self._executor = None
+            self._gate = None
+            self._chamber = None
 
 
 class pumpingSystem(model.HwComponent):
@@ -798,7 +823,7 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName == "Actual":
+        if attributeName != "Actual":
             return
         self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
 
@@ -806,16 +831,17 @@ class pumpingSystem(model.HwComponent):
         """
         Called when Odemis is closed
         """
-        self._system.Manometer1.ErrorState.Unsubscribe(self._updateErrorState)
-        self._system.TurboPump1.ErrorState.Unsubscribe(self._updateErrorState)
-        self._system.TurboPump1.Speed.Unsubscribe(self._updateSpeed)
-        self._system.TurboPump1.Temperature.Unsubscribe(self._updateTemperature)
-        self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
-        self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
-        self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
-        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
-        self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
-        self._system = None
+        if self._system:
+            self._system.Manometer1.ErrorState.Unsubscribe(self._updateErrorState)
+            self._system.TurboPump1.ErrorState.Unsubscribe(self._updateErrorState)
+            self._system.TurboPump1.Speed.Unsubscribe(self._updateSpeed)
+            self._system.TurboPump1.Temperature.Unsubscribe(self._updateTemperature)
+            self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
+            self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
+            self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
+            self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
+            self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
+            self._system = None
 
 
 class UPS(model.HwComponent):
@@ -826,8 +852,7 @@ class UPS(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • level (FloatContinuous, range=(0.0, 1.0), read-only, unit is "",
-                 value is _system.UPScontroller.BatteryLevel.Actual)
+        • level (FloatContinuous, range=(0.0, 1.0), read-only, value represents the fraction of full charge of the UPS)
         """
 
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
@@ -876,5 +901,6 @@ class UPS(model.HwComponent):
         """
         Called when Odemis is closed
         """
-        self._blevel.Unsubscribe(self._updateLevel)
-        _blevel = None
+        if self._blevel:
+            self._blevel.Unsubscribe(self._updateLevel)
+            self._blevel = None
