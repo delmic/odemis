@@ -356,23 +356,23 @@ class TestVacuumChamber(unittest.TestCase):
         delta_vented = 10000  # TODO: Tune this to vented chamber!
 
         f = self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
-        f.wait()
+        f.result()
         self.assertEqual(self.pressure.position.value["vacuum"], 1)  # check that primary vacuum is reached
         self.assertAlmostEqual(self.pressure.pressure.value, pressure_primary, delta=delta_primary)
 
         f = self.pressure.moveAbs({"vacuum": 2})  # go to high vacuum
-        f.wait()
+        f.result()
         self.assertEqual(self.pressure.position.value["vacuum"], 2)  # check that high vacuum is reached
         self.assertAlmostEqual(self.pressure.pressure.value, pressure_high, delta=delta_high)
 
         f = self.pressure.moveAbs({"vacuum": 0})  # vent chamber
-        f.wait()
+        f.result()
         self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
         self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
 
         self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
         f = self.pressure.moveAbs({"vacuum": 0})  # immediately vent the chamber
-        f.wait()
+        f.result()
         self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
         self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
 
