@@ -867,6 +867,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.acq_future.cancel()
 
         self.terminate_listeners()
+        # Set the streambar controller to None so it wouldn't be a listener to stream.remove
+        self.streambar_controller = None
 
         self.EndModal(wx.ID_CANCEL)
 

@@ -2129,6 +2129,15 @@ class StreamBarController(object):
             s.should_update.value = True
             # it will be activated by the stream scheduler
 
+    def removeStreamPanel(self, stream):
+        """
+        Remove the stream & its panel
+        """
+        sp = next((sp for sp in self._stream_bar.stream_panels if sp.stream == stream), None)
+        if sp:
+            # Simulate clicking the remove stream button (will take care or removing the stream & panel)
+            sp.on_remove_btn(stream)
+
     def removeStream(self, stream):
         """ Removes the given stream
 
