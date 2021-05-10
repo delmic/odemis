@@ -648,7 +648,10 @@ class CryoAcquiController(object):
         Shows the acquired image on the view
         """
         # get the localization tab
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        try:
+            local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        except LookupError:
+            logging.warning("Localization tab was not found")
         local_tab.display_acquired_data(data)
 
     @call_in_wx_main
