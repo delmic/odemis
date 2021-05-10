@@ -269,8 +269,13 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
             if target == COATING:
                 sub_moves.append((align, align_deactive))
             # Add the sub moves to perform the imaging/coating move
-            sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-            sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
+            if current_label == LOADING:
+                # As moving from loading position requires re-referencing the stage, move all axes together to
+                # prevent invalid/reachable position error
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, stage_deactive)))
+            else:
+                sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
             # TODO: check if the following movement is necessary as it could be done later, only when the user start
             #  the FM stream (in which case it’d be handled by the optical path manager)
