@@ -34,6 +34,8 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
 import math
+
+from wx.core import CallAfter
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
@@ -648,10 +650,7 @@ class CryoAcquiController(object):
         Shows the acquired image on the view
         """
         # get the localization tab
-        try:
-            local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        except LookupError:
-            logging.warning("Localization tab was not found")
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
         local_tab.display_acquired_data(data)
 
     @call_in_wx_main
@@ -667,8 +666,8 @@ class CryoAcquiController(object):
     def _export_data(self, data, thumb_nail):
         """
         Called to export the acquired data.
-        data (DataArrays): the returned data/images from the future
-        thumb_nail (model.DataArray): the data for the miniature views of the stream view ports  
+        data (DataArray): the returned data/images from the future
+        thumb_nail (DataArray): the thumbnail of the views  
         """
         filename = self._filename.value
         if data:
@@ -690,8 +689,10 @@ class CryoAcquiController(object):
     @call_in_wx_main
     def _on_streams_change(self, streams):
         """
-        a VA callback that is called when the .streams VA is changed
+        a VA callback that is called when the .streams VA is changed, more specifically
+        it is called when the user adds or removes a stream 
         """
+        # removing a stream 
         # for every entry in the list, is it also present in the .streams?
         for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
@@ -708,12 +709,13 @@ class CryoAcquiController(object):
                     va.unsubscribe(self._on_stream_wavelength)
                 item_stream.name.unsubscribe(self._on_stream_name)
 
+        # adding a stream 
         # for every stream in .streams, is it already present in the list?
         item_stream = [
             self._panel.streams_chk_list.GetClientData(i)
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
-        for s, i in zip(streams, range(len(streams))):
+        for i, s in enumerate(streams):
             if s not in item_stream and not isinstance(s, StaticStream):
                 self._panel.streams_chk_list.Insert(s.name.value, i, s)
                 self._panel.streams_chk_list.Check(i)
@@ -726,6 +728,13 @@ class CryoAcquiController(object):
                 for va in self._get_settings_vas(s):
                     va.subscribe(self._on_settings_va)
                 self._update_acquisition_time()
+
+        # sort streams after addition or removal
+        item_stream = [
+            self._panel.streams_chk_list.GetClientData(i)
+            for i in range(self._panel.streams_chk_list.GetCount())
+        ]
+        self._sort_streams(item_stream)
 
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
@@ -741,16 +750,20 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
     @call_in_wx_main
-    def _on_stream_wavelength(self, _):
+    def _on_stream_wavelength(self, _=None):
         """
-        a VA callback that is called when the user changes
+        a VA callback that is called to sort the streams when the user changes
          the emission or excitation wavelength
         """
         counts = self._panel.streams_chk_list.GetCount()
         streams = [
             self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
         ]
-        for i, s in zip(range(counts), acqmng.sortStreams(streams)):
+        self._sort_streams(streams)
+
+    @call_in_wx_main
+    def _sort_streams(self, streams):
+        for i, s in enumerate(acqmng.sortStreams(streams)):
             # replace the unsorted streams with the sorted streams one by one
             self._panel.streams_chk_list.Delete(i)
             self._panel.streams_chk_list.Insert(s.name.value, i, s)
