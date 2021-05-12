@@ -272,7 +272,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
             if current_label == LOADING:
                 # As moving from loading position requires re-referencing the stage, move all axes together to
                 # prevent invalid/reachable position error
-                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, stage_deactive)))
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
             else:
                 sub_moves.append((stage, filter_dict({'z'}, target_pos)))
                 sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
