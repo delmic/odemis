@@ -552,7 +552,7 @@ class vacuumChamber(model.Actuator):
         self._chamber.VacuumStatus.Target = goal
         if not self._vacuumStatusReached.wait(18000):  # wait maximally 5 hours
             raise TimeoutError("Something went wrong awaiting a change in the vacuum status.")
-        return self._chamber.VacuumStatus.Actual
+        self._updatePosition()
 
     def _changeGateOpen(self, goal):
         """
