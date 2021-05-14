@@ -1225,7 +1225,7 @@ class MPPC(model.Detector):
         self.acq_queue.put(("start", megafield_metadata))
 
     def getNextField(self, field_num):
-        '''
+        """
         Puts the command 'next' field image scan on the queue with the appropriate field meta data model of the field
         image to be scanned. Can only be executed if it preceded by a 'start' mega field scan command on the queue.
         The acquisition thread returns the acquired image to the provided notifier function added in the acquisition queue
@@ -1233,7 +1233,13 @@ class MPPC(model.Detector):
         returned to the dataflow.notify which will provide the new data to all the subscribers of the dataflow.
 
         :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
-        '''
+        """
+        # Note that this means we don't support numpy ints for now.
+        # That's actually correct, as they'd fail in the JSON encoding (which
+        # could be worked around too, of course, for instance with the JsonExtraEncoder).
+        if len(field_num) != 2 or not all(v >= 0 and isinstance(v, int) for v in field_num):
+            raise ValueError("field_num must be 2 ints >= 0, but got %s" % (field_num,))
+
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
         self.acq_queue.put(("next", field_data, self.dataContent.value, self.data.notify))
 
