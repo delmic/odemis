@@ -3740,7 +3740,7 @@ class IPBusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com)
+            logging.debug("Sending: '%s'", to_str_escape(full_com))
             self.socket.sendall(full_com.encode('ascii'))
 
     def sendQueryCommand(self, addr, com):
