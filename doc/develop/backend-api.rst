@@ -201,7 +201,13 @@ light with a shape of (1) (i.e., no scanning).
 Scanner
 =======
 
-An emitter that scan a set of points repetitively.
+Scanners are a type of component that typically control in a synchronized way the position
+of the emission and the acquisition of the detector, at high speed (eg, < 1ms per pixel).
+This allows to build multi-dimensional data.
+Most typically, when the emitter is a single point, this is an X/Y scan, to build a complete image.
+
+In Odemis, we can take a short cut, and represent the emitter and the scanner as
+a single component. That is why Scanner inherit from Emitter.
 
 .. py:class:: Scanner()
 
@@ -248,16 +254,16 @@ An emitter that scan a set of points repetitively.
 
     .. py:attribute:: accelVoltage
 
-        *(VA, float, unit=V)* Acceleration voltage of the e-beam.
+        *(VA, float, unit=V, optional)* Acceleration voltage of the e-beam.
 
     .. py:attribute:: probeCurrent
 
-        *(VA, float, unit=A)* probe current of the e-beam (which is typically
+        *(VA, float, unit=A, optional)* probe current of the e-beam (which is typically
         affecting the spot size linearly).
 
     .. py:attribute:: blanker
 
-        *(VA, choice of True, False or None)* whether the blanker is enabled
+        *(VA, choice of True, False or None, optional)* whether the blanker is enabled
         (True), disabled (False), or automatically enabled whenever a scanning
         takes place (None).
 
@@ -267,7 +273,7 @@ An emitter that scan a set of points repetitively.
 
     .. py:attribute:: external
 
-        *(VA, choice of True, False or None)* whether the "external" signal, to
+        *(VA, choice of True, False or None, optional)* whether the "external" signal, to
         indicate that Odemis is taking control of the scanning, is enabled
         (True), disabled (False), or automatically enabled whenever a scanning
         takes place (None). When it's disabled, the standard user interface of
@@ -568,4 +574,27 @@ quantities. The convention is to use the standard
 `SI <http://en.wikipedia.org/wiki/SI>`_ measurement units whenever it can be
 applied. For example, distance and wavelengths are expressed in meters (m), angles
 in radians (rad), and times in seconds (s). Never express anything in multiples of a
-official unit (e.g., never put anything in nm).
+official unit (e.g., never put anything in nm). An exception to this rule is the
+temperature, which is expressed in °C (while the SI unit is K).
+
+Dependent attributes
+====================
+
+In some cases, the value of an attribute is correct relative to another attribute.
+For instance, the maximum acceptable resolution of the camera depends on the binning.
+So, depending on the binning value, not all resolution values are possible.
+When such an attribute is modified, the recommended behaviour is to
+automatically adjust the attribute to ensure that everything is valid
+(and *not* to raise an error when the other attribute is not matching).
+Note that in practice, this might be more than just two attributes: 
+it could be 3, 4, or even more attributes that are dependent on each other.
+
+It should be made sure though that it's easy to change all the attributes to any
+given valid combination. The simplest way to ensure this behaviour is to have an 
+"acyclic chain of updates": an attribute can change other attributes, but these
+other attributes may never change the first attribute (even indirectly).
+
+For instance, for the cameras, the convention is binning -> resolution -> translation.
+This means that assuming the user has a correct combination of values, without looking
+at the current values, it's always possible to set them by writing them in order:
+binning, resolution, translation.
