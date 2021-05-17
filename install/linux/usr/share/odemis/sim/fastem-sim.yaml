@@ -1,7 +1,7 @@
 # Minimal configuration file to start the Fast-EM GUI
 FASTEM-sim: {
     class: Microscope,
-    role: fast-em,
+    role: mbsem,
     children: ["SEM", "EBeam Scanner", "EBeam Focus", "SED",
                "Sample Stage"],
 }
@@ -51,9 +51,14 @@ FASTEM-sim: {
                 speed: 0.001, # m/s
                 closed_loop: True,
                 },
+            'y': {
+                axis_number: 2,
+                speed: 0.001, # m/s
+                closed_loop: True,
+            },
         },
     },
     metadata: {
-        POS_ACTIVE_RANGE: {"tl": [-60e-3, 60e-3], "br": [60e-3, -60e-3]},
+        POS_ACTIVE_RANGE: {"x": [-60e-3, 60e-3], "y": [-60e-3, 60e-3]},
     },
 }

@@ -32,7 +32,7 @@ import logging
 from collections import OrderedDict 
 from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
+    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE, FG_COLOUR_BUTTON
 from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
@@ -1407,7 +1407,7 @@ class StreamBar(wx.Panel):
             label="ADD STREAM",
             style=wx.ALIGN_CENTER
         )
-        self.btn_add_stream.SetForegroundColour("#999999")
+        self.btn_add_stream.SetForegroundColour(FG_COLOUR_BUTTON)
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
         self.btn_add_stream.Show(add_btn)
 
@@ -1417,7 +1417,7 @@ class StreamBar(wx.Panel):
             style=wx.ALIGN_CENTER,
         )
 
-        self.btn_add_overview.SetForegroundColour("#999999")
+        self.btn_add_overview.SetForegroundColour(FG_COLOUR_BUTTON)
         self._sz.Add(self.btn_add_overview, flag=wx.ALL, border=15)
         self.btn_add_overview.Show(False)
 
@@ -1585,6 +1585,10 @@ class StreamBar(wx.Panel):
 
 
 class FastEMProjectPanelHeader(wx.Control):
+    """
+    A widget for expanding and collapsing the project panel. It also contains a remove button and a
+    text control for the project name.
+    """
 
     BUTTON_SIZE = (18, 18)  # The pixel size of the button
     BUTTON_BORDER_SIZE = 9  # Border space around the buttons
@@ -1597,9 +1601,6 @@ class FastEMProjectPanelHeader(wx.Control):
 
         # This style enables us to draw the background with our own paint event handler
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-
-        # Callback when the label changes: (string (text) -> None)
-        self.label_change_callback = None
 
         # Create and add sizer and populate with controls
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
@@ -1623,18 +1624,18 @@ class FastEMProjectPanelHeader(wx.Control):
 
     # Control creation methods
     def _add_remove_btn(self):
-        """ Add a button for stream removal """
+        """ Add a button for project removal """
         btn_rem = buttons.ImageButton(self,
                                       bitmap=img.getBitmap("icon/ico_rem_str.png"),
                                       size=self.BUTTON_SIZE)
         btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
-        btn_rem.SetToolTip("Remove stream")
+        btn_rem.SetToolTip("Remove project")
         self._add_ctrl(btn_rem)
         return btn_rem
 
     def _add_text_ctrl(self, name):
         """ Add a label control to the header panel """
-        txt_ctrl = wx.TextCtrl(self, -1, name, style=wx.BORDER_NONE)
+        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, name, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE)
         txt_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         txt_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(txt_ctrl, stretch=True)
@@ -1707,7 +1708,7 @@ class FastEMProjectBar(wx.Panel):
             style=wx.ALIGN_CENTER,
             bitmap=img.getBitmap("stream_add_b.png")
         )
-        self.btn_add_project.SetForegroundColour("#999999")
+        self.btn_add_project.SetForegroundColour(FG_COLOUR_BUTTON)
         self._sz.Add(self.btn_add_project, flag=wx.ALL, border=10)
         self.btn_add_project.Show(add_btn)
 
@@ -1723,11 +1724,8 @@ class FastEMProjectBar(wx.Panel):
         """
         p = evt.spanel.project
         logging.debug("User removed project (panel) %s", p.name.value)
-        # delete stream panel
+        # delete project panel
         self.remove_project_panel(evt.ppanel)
-
-        # Publish removal notification
-        pub.sendMessage("project.remove", project=p)
 
     def on_projectp_destroy(self, evt):
         """
@@ -1860,7 +1858,7 @@ class FastEMProjectPanel(wx.Panel):
             style=wx.ALIGN_CENTER,
             bitmap=img.getBitmap("stream_add_b.png")
         )
-        self.btn_add_roi.SetForegroundColour("#999999")
+        self.btn_add_roi.SetForegroundColour(FG_COLOUR_BUTTON)
         self._panel_sizer.Add(self.btn_add_roi, flag=wx.TOP | wx.LEFT | wx.RIGHT, border=10)
         self.btn_add_roi.Show(True)
 
@@ -1926,7 +1924,7 @@ class FastEMProjectPanel(wx.Panel):
 
         self._header.on_draw_expander(dc)
 
-    def add_roi_panel(self, roa_panel):
+    def add_roa_panel(self, roa_panel):
         """ Add a ROA control panel to the project panel, append .roa_panels.
         :param roa_panel: (FastEMROAPanel) panel to be added
         """
@@ -2000,7 +1998,7 @@ class FastEMROAPanel(wx.Panel):
         """ Add a button for ROI removal """
         btn_rem = buttons.ImageButton(self, bitmap=img.getBitmap("icon/ico_rem_str.png"), size=self.BUTTON_SIZE)
         btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
-        btn_rem.SetToolTip("Remove ROI")
+        btn_rem.SetToolTip("Remove RoA")
         self._add_ctrl(btn_rem)
         return btn_rem
 
@@ -2010,7 +2008,7 @@ class FastEMROAPanel(wx.Panel):
         :param default_text: (str)
         :return: (wx.TextCtrl)
         """
-        txt_ctrl = wx.TextCtrl(self, -1, default_text, style=wx.BORDER_NONE)
+        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, default_text, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE)
         txt_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         txt_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self._add_ctrl(txt_ctrl, True)
@@ -2094,13 +2092,13 @@ class FastEMCalibrationPanel(wx.Panel):
 
         # Calibration Grid
         nrows = len(layout)
-        ncols = max([len(row) for row in layout])
+        ncols = max(len(row) for row in layout)
         calgrid_sz = wx.GridBagSizer(nrows, ncols)
         for row_idx, row in enumerate(layout):
             for col_idx, elem in enumerate(row):
                 subsz = wx.BoxSizer(wx.HORIZONTAL)
                 btn = wx.Button(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
-                btn.SetBackgroundColour("#999999")
+                btn.SetBackgroundColour(FG_COLOUR_BUTTON)
                 subsz.Add(btn)
                 subsz.AddSpacer(8)
 

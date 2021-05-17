@@ -2665,8 +2665,8 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # END DEBUG Lines Mirror Center
 
 
-class FastEMROAOverlay(WorldSelectOverlay):
-    """ Overlay representing one region of acquisition (ROA) on the FastEM. """
+class FastEMSelectOverlay(WorldSelectOverlay):
+    """ Superclass for FastEM selection overlays (region of acquisition and region of calibration). """
 
     def __init__(self, cnvs, coordinates, colour=gui.SELECTION_COLOUR):
         """
@@ -2674,18 +2674,22 @@ class FastEMROAOverlay(WorldSelectOverlay):
         coordinates (TupleContinuousVA): VA representing region of acquisition coordinates
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        super(FastEMROAOverlay, self).__init__(cnvs, colour)
+        super(FastEMSelectOverlay, self).__init__(cnvs, colour)
         self._coordinates = coordinates
         self._coordinates.subscribe(self._on_coordinates, init=True)
 
     def _on_coordinates(self, coordinates):
         """
-        Update the ROA overlay with the new ROA VA data.
+        Update the overlay with the new data of the .coordinates VA.
         coordinates (tuple of 4 floats): left, top, right, bottom position in m
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
             wx.CallAfter(self.cnvs.request_drawing_update)
+
+
+class FastEMROAOverlay(FastEMSelectOverlay):
+    """ Overlay representing one region of acquisition (ROA) on the FastEM. """
 
     def on_left_down(self, evt):
         """
@@ -2733,7 +2737,7 @@ class FastEMROAOverlay(WorldSelectOverlay):
             # so use .p_start_pos and .p_end_pos instead.
             rect = self.p_start_pos + self.p_end_pos
             pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-            self.active.value = True if self._is_point_in_rect(pos, rect) else False
+            self.active.value = True if util.is_point_in_rect(pos, rect) else False
 
             # Update ._coordinates VA
             if self.active.value:
@@ -2749,26 +2753,14 @@ class FastEMROAOverlay(WorldSelectOverlay):
         self.cnvs.reset_default_cursor()
         WorldOverlay.on_left_up(self, evt)
 
-    def _is_point_in_rect(self, p, rect):
-        """
-        Checks if point is contained in rectangle.
-        p (tuple of 2 floats): x, y coordinates of point in m
-        rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
-        """
-        l, t, r, b = rect
-        if l <= p[0] <= r and b <= p[1] <= t:
-            return True
-        else:
-            return False
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=None, dash=True):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw the selection as a rectangle. Exactly the same as parent function except that
          it has an adaptive line width (wider if the overlay is active). """
         line_width = 5 if self.active.value else 2
-        super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash)
+        super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash=True)
 
 
-class FastEMROCOverlay(WorldSelectOverlay):
+class FastEMROCOverlay(FastEMSelectOverlay):
     """ Overlay representing one region of calibration (ROC) on the FastEM. """
 
     def __init__(self, cnvs, coordinates, label, colour=gui.SELECTION_COLOUR):
@@ -2778,19 +2770,8 @@ class FastEMROCOverlay(WorldSelectOverlay):
         label (str or int): label to be displayed next to rectangle
         colour (str): hex colour code for ROC display in viewport
         """
-        super(FastEMROCOverlay, self).__init__(cnvs, colour)
+        super(FastEMROCOverlay, self).__init__(cnvs, coordinates, colour)
         self.label = label
-        self._coordinates = coordinates
-        self._coordinates.subscribe(self._on_coordinates, init=True)
-
-    def _on_coordinates(self, coordinates):
-        """
-        Update the ROC overlay with the new ROA VA data.
-        coordinates (tuple of 4 floats): left, top, right, bottom position in m
-        """
-        if coordinates != UNDEFINED_ROI:
-            self.set_physical_sel(coordinates)
-        wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_down(self, evt):
         """
@@ -2817,7 +2798,11 @@ class FastEMROCOverlay(WorldSelectOverlay):
         self._view_to_phys()
         rect = self.p_start_pos + self.p_end_pos
         pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-        self.active.value = True if self._is_point_in_rect(pos, rect) else False
+        # The calibration region often needs to be selected from a distant zoom level, so it is difficult
+        # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
+        # the rectangle if the selection is near (based on mpp value, so independent of scale).
+        margin = self.cnvs.view.mpp.value * 20
+        self.active.value = True if util.is_point_in_rect(pos, util.expand_rect(rect, margin)) else False
 
         # Get new ROC coordinates
         if self.active.value:
@@ -2853,29 +2838,14 @@ class FastEMROCOverlay(WorldSelectOverlay):
         else:
             WorldOverlay.on_motion(self, evt)
 
-    def _is_point_in_rect(self, p, rect):
-        """
-        Similar to function in FastEMROAOverlay, but allows for error margin when selecting the point.
-        The calibration region often needs to be selected from a distant zoom level, so it is difficult
-        to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
-        the rectangle if the selection is near (based on mpp value, so independent of scale).
-        p (tuple of 2 floats): x, y coordinates of point in m
-        rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
-        """
-        l, t, r, b = rect
-        margin = self.cnvs.view.mpp.value * 20
-        if l - margin <= p[0] <= r + margin and b - margin <= p[1] <= t + margin:
-            return True
-        else:
-            return False
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=None, dash=False):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
         Draw with adaptive line width (depending on whether or not the overlay is active) and add label.
         """
         line_width = 5 if self.active.value else 2
-        super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash)
+        super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash=False)
 
+        # Draw the label of the ROC on the bottom left of the rectangle
         if self.p_start_pos and self.p_end_pos:
             offset = self.cnvs.get_half_buffer_size()
             b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)

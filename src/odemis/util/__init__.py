@@ -350,6 +350,33 @@ def normalize_rect(rect):
     return type(rect)((l, t, r, b))
 
 
+def is_point_in_rect(p, rect):
+    """
+    Check if a point is inside in a rectangle.
+
+    p (tuple of 2 floats): x, y coordinates of point in m
+    rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
+    return (bool): True if point is in rectangle, False otherwise
+    """
+    l, t, r, b = rect
+    if l <= p[0] <= r and b <= p[1] <= t:
+        return True
+    else:
+        return False
+
+
+def expand_rect(rect, margin):
+    """
+    Expand a rectangle by a fixed margin.
+
+    rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
+    margin (float): margin to increase rectangle by in m
+    return (tuple of 4 floats): l, t, r, b positions of adjusted rectangle in m
+    """
+    l, t, r, b = rect
+    return l - margin, t + margin, r + margin, b - margin
+
+
 def find_plot_content(xd, yd):
     """
     Locate the first leftmost non-zero value and the first rightmost non-zero

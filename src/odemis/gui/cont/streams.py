@@ -49,6 +49,7 @@ from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
+from odemis.util.filename import individualize_filename
 from odemis.util.fluo import to_readable_band, get_one_center
 from odemis.util.units import readable_str
 import time
@@ -3088,18 +3089,25 @@ class FastEMProjectController(object):
         # Create the panel and add it to the project bar. Subscribe to controls.
         self.panel = FastEMProjectPanel(project_bar, name=name)
         project_bar.add_project_panel(self.panel)
-        self.panel.btn_add_roi.Bind(wx.EVT_BUTTON, self._on_btn_roi)
-        self.panel.txt_ctrl.Bind(wx.EVT_TEXT, self._on_text)
+        self.panel.btn_add_roi.Bind(wx.EVT_BUTTON, self._on_btn_roa)
+        # Listen to both enter and kill focus event to make sure the text is really updated
+        self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
+        self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
         # For ROA creation process
         self._current_roa_ctrl = None
 
     def _on_text(self, evt):
-        txt = evt.GetString()
-        logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)
-        self.model.name.value = txt
+        txt = self.panel.txt_ctrl.GetValue()
+        current_name = self.model.name.value
+        if txt != current_name:
+            txt = individualize_filename(txt, [project.name.value for project in self._tab_data.projects.value])
+            logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)
+            self.model.name.value = txt
+            self.panel.txt_ctrl.SetValue(txt)
+        evt.Skip()
 
-    def _on_btn_roi(self, _):
+    def _on_btn_roa(self, _):
         # Two-step process: Instantiate FastEM object here, but wait until first ROI is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
@@ -3109,9 +3117,9 @@ class FastEMProjectController(object):
         for roa_ctrl in self.roa_ctrls.values():
             roa_ctrl.overlay.active.value = False
 
-        # Minimum index that has not yet been deleted
+        # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.keys()) + [0], 1) if idx != n)
-        name = "ROI %s" % num
+        name = "ROA %s" % num
         # better guess for parameters after region is selected in _add_roa_ctrl
         roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
         self.roa_ctrls[num] = roa_ctrl
@@ -3149,6 +3157,7 @@ class FastEMProjectController(object):
         # Enable buttons of project bar
         self._project_bar.enable_buttons(True)
 
+    # Should be called from GUI main thread
     def remove_roa_ctrl(self, roa_ctrl):
         # Public function, so it can officially be called from the projectbar controller
         logging.debug("Removing ROA '%s' of project '%s'.", roa_ctrl.model.name.value, self.model.name.value)
@@ -3172,12 +3181,13 @@ class FastEMProjectController(object):
         """
         Given coordinates coords, find the closest scintillator.
         coordinates (float, float, float, float): l, t, r, b coordinates in m
+        return (int): name (key) of closest scintillator in ._tab_data.scintillator_positions dict
         """
         roi_x, roi_y = (coordinates[2] + coordinates[0]) / 2, (coordinates[1] + coordinates[3]) / 2
         mindist = 1  # distances always lower 1
         closest = None
         for num, (sc_x, sc_y) in self._tab_data.scintillator_positions.items():
-            # scintillators are quadratic, use maximum instead of euclidean distance
+            # scintillators are rectangular, use maximum instead of euclidean distance
             dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
             if dist < mindist:
                 mindist = dist
@@ -3223,10 +3233,11 @@ class FastEMROAController(object):
         logging.debug("Creating panel for ROA %s.", self.model.name.value)
         self.panel = FastEMROAPanel(self._project_panel, self.model.name.value,
                                     ["Calibration %s" % c for c in self._tab_data.scintillator_positions])
-        self._project_panel.add_roi_panel(self.panel)
+        self._project_panel.add_roa_panel(self.panel)
 
         self.panel.calibration_ctrl.Bind(wx.EVT_COMBOBOX, self._on_combobox)
-        self.panel.txt_ctrl.Bind(wx.EVT_TEXT, self._on_text)
+        self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
+        self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
     def _on_overlay_active(self, active):
         if self.panel:
@@ -3253,9 +3264,15 @@ class FastEMROAController(object):
         logging.debug("ROA calibration changed to %s.", self.model.roc.value.name.value)
 
     def _on_text(self, evt):
-        txt = evt.GetString()
-        logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
-        self.model.name.value = txt
+        txt = self.panel.txt_ctrl.GetValue()
+        current_name = self.model.name.value
+        all_roas = [roa.name.value for project in self._tab_data.projects.value for roa in project.roas.value]
+        if txt != current_name:
+            txt = individualize_filename(txt, all_roas)
+            logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
+            self.model.name.value = txt
+            self.panel.txt_ctrl.SetValue(txt)
+        evt.Skip()
 
 
 class FastEMCalibrationController(object):
@@ -3295,7 +3312,7 @@ class FastEMCalibrationController(object):
         else:
             # Zoom to existing calibration region
             roc_ctrl = self.roc_ctrls[num]
-        roc_ctrl.zoom_in()
+        roc_ctrl.fit_view_to_bbox()
 
 
 class FastEMROCController(object):
@@ -3331,7 +3348,7 @@ class FastEMROCController(object):
         # Add overlay
         self.overlay = view_ctrl.viewports[0].canvas.add_calibration_overlay(self.model.coordinates, number)
 
-    def zoom_in(self):
+    def fit_view_to_bbox(self):
         """
         Zoom in to calibration region. Calibration region is in the center and takes up 1/100 of viewport area.
         """

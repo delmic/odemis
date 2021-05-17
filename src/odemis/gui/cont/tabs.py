@@ -1669,7 +1669,7 @@ class FastEMAcquisitionTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
-        if main_data.role in ("fast-em",):
+        if main_data.role in ("mbsem",):
             return 1
         else:
             return None
@@ -3276,7 +3276,7 @@ class AnalysisTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         # Don't display tab for FastEM
-        if main_data.role in ("fast-em",):
+        if main_data.role in ("mbsem",):
             return None
         else:
             return 0

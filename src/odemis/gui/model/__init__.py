@@ -1048,12 +1048,13 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
     GUI model for the FastEM acquisition tab. It contains references the user-selected acquisition and
     calibration regions, overview images, and information on the sample carrier positions.
     """
-    # Fixed center position in m of the scintillators according to technical drawing of the sample carrier
+    # Parameters of the scintillators according to the technical drawing of the sample carrier
     # (positions are given relative to top left of sample carrier)
     # Scintillator arrangement on the sample carrier (9 is top left, 1 is bottom right):
     # 9 8 7
     # 6 5 4
     # 3 2 1
+    # The format looks like YAML, because eventually it should be possible to pass it in the microscope (YAML) file.
     SAMPLE_CARRIER_3x3 = {
         "dims": (120e-3, 120e-3),  # m
         "layout": [[9, 8, 7],
@@ -1083,7 +1084,7 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         if model.MD_POS_ACTIVE_RANGE not in md:
             raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
-        tlx, tly = float(carrier_range["tl"][0]), float(carrier_range["tl"][1])  # top left carrier position in m
+        tlx, tly = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
 
         # TODO: in the future, there could be an additional argument in the configuration file to specify
         #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.

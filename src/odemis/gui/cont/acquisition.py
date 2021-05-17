@@ -990,7 +990,7 @@ class FastEMAcquiController(object):
             if roa not in self.roa_subscribers:
                 roa.roc.subscribe(self._on_roc)
                 self.roa_subscribers.append(roa)
-        self.update_roa_count()
+        self._update_roa_count()
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
@@ -1006,10 +1006,10 @@ class FastEMAcquiController(object):
         lvl = None  # icon status shown
         if self.roa_count == 0:
             lvl = logging.WARN
-            txt = "No region of interest selected."
+            txt = "No region of acquisition selected."
         elif self._get_undefined_calibrations():
             lvl = logging.WARN
-            txt = "Calibration regions %s missing." % (self._get_undefined_calibrations(),)
+            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations()),)
         else:
             # Don't update estimated time if acquisition is running (as we are
             # sharing the label with the estimated time-to-completion).
@@ -1037,7 +1037,7 @@ class FastEMAcquiController(object):
                     undefined.add(roc.name.value)
         return sorted(undefined)
 
-    def update_roa_count(self):
+    def _update_roa_count(self):
         roas = [roa for p in self._tab_data_model.projects.value for roa in p.roas.value]
         self.txt_num_rois.SetValue("%s" % len(roas))
         self.roa_count = len(roas)

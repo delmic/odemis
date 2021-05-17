@@ -198,6 +198,27 @@ def create_filename(path, ptn, ext, count="001"):
 
     return os.path.join(path, fn + ext)
 
+def individualize_filename(fn, names):
+    """
+    Creates a filename based on the input filename which is unique in a list of filenames by adding a counter.
+    input
+        fn (str): proposed filename
+        names (list of str): list of existing filenames
+    returns
+        fn (str): unique filename
+    """
+    # Filename not in names, just return
+    if fn not in names:
+        return fn
+
+    # TODO: Detect if filename has counter already
+
+    # Add counter and count up until unique filename is found
+    cnt = 1
+    while fn + "-%s" % cnt in names:
+        cnt += 1
+
+    return fn + "-%s" % cnt
 
 def update_counter(old_count):
     """
