@@ -28,6 +28,7 @@ import os
 import time
 import unittest
 
+import numpy
 from odemis import model
 
 from odemis.driver import xt_client
@@ -981,7 +982,10 @@ class TestFIBScanner(unittest.TestCase):
     def test_acquire(self):
         """Test acquiring an image from the FIB/ion2 channel."""
         image = self.detector.data.get()
-        self.assertEqual(len(image.shape), 2)
+        self.assertEqual(image.ndim, 2)
+        # Check that image size is at least 200*200 pixels
+        self.assertGreaterEqual(image.shape[0], 200)
+        self.assertGreaterEqual(image.shape[1], 200)
 
 
 class TestDualModeMicroscope(unittest.TestCase):
@@ -1016,28 +1020,55 @@ class TestDualModeMicroscope(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
+    def _callback_counter(self, dataflow, image):
+        self.assertEqual(image.ndim, 2)
+        # Check that image size is at least 200*200 pixels
+        self.assertGreaterEqual(image.shape[0], 200)
+        self.assertGreaterEqual(image.shape[1], 200)
+        self.images_received += 1
+
     def test_scanner_VA(self):
-        scanner_modi = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
+        scanner_modes = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
+        self.assertEqual(set(self.detector.scanner.choices), set(scanner_modes))
+
         for _ in range(2):
-            for scanner_mode in scanner_modi:
+            for scanner_mode in scanner_modes:
                 # Switch active scanner mode
                 self.detector.scanner.value = scanner_mode
                 self.assertEqual(self.detector.scanner.value, scanner_mode)
-                self.assertIsInstance(self.detector._scanner, type(scanner_modi[scanner_mode]))
 
         # Check if mode remains unchanged if any non existing mode is tried to be set
         with self.assertRaises(IndexError):
             self.detector.scanner.value = "non existing mode"
         # The mode should be equal to the last set correct mode.
         self.assertEqual(self.detector.scanner.value, scanner_mode)
-        self.assertIsInstance(self.detector._scanner, type(scanner_modi[scanner_mode]))
+
+    def test_subscribing_while_changing_scanner(self):
+        self.images_received = 0
+        self.detector.data.subscribe(self._callback_counter)
+
+        scanner_modes = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
+        repeating_scan_modes = 2
+        for _ in range(repeating_scan_modes):
+            for scanner_mode in scanner_modes:
+                # Switch active scanner mode
+                self.detector.scanner.value = scanner_mode
+                # Set image counter to zero to check that new images are received after switching
+                self.images_received = 0
+                self.assertEqual(self.detector.scanner.value, scanner_mode)
+                self.assertIsInstance(self.detector._scanner, type(scanner_modes[scanner_mode]))
+                time.sleep(2)
+                self.assertGreaterEqual(self.images_received, 1)
 
     def test_acquire_FIB_image(self):
         """Test acquiring an image from the FIB/ion channel."""
         # Switch to ion mode
         self.detector.scanner.value = self.fib_scanner.name
         image = self.detector.data.get()
-        self.assertEqual(len(image.shape), 2)
+        self.assertEqual(image.ndim, 2)
+        # Check that image size is at least 200*200 pixels
+        self.assertGreaterEqual(image.shape[0],200)
+        self.assertGreaterEqual(image.shape[1], 200)
 
     def test_acquire_ebeam_image(self):
         """Test acquiring an image using the Detector."""
@@ -1049,11 +1080,15 @@ class TestDualModeMicroscope(unittest.TestCase):
         start = time.time()
         im = self.detector.data.get()
         duration = time.time() - start
-        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        # self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         self.assertGreaterEqual(duration, expected_duration,
                                 "Error execution took %f s, less than exposure time %d." % (
                                     duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        self.assertEqual(im.metadata[model.MD_DWELL_TIME], self.scanner.dwellTime.value)
+        expected_pixel_size = numpy.array(self.scanner.pixelSize.value) * numpy.array(self.scanner.scale.value)
+        self.assertEqual(im.metadata[model.MD_PIXEL_SIZE][0], expected_pixel_size[0])
+        self.assertEqual(im.metadata[model.MD_PIXEL_SIZE][1], expected_pixel_size[1])
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
 

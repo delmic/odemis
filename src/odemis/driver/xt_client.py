@@ -107,9 +107,7 @@ class SEM(model.HwComponent):
                 raise NotImplementedError("The combination of both an multi beam scanner and single beam scanner at "
                                           "the same time is not supported")
             kwargs = children["mb-scanner"]
-            if "xttoolkit" in self._swVersion.lower():
-                self.xt_type = "xttoolkit"
-            else:
+            if "xttoolkit" not in self._swVersion.lower():
                 raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
             self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._scanner)
@@ -129,7 +127,6 @@ class SEM(model.HwComponent):
         if "detector" in children:
             ckwargs = children["detector"]
             if "xttoolkit" in self._swVersion.lower():
-                self.xt_type = "xttoolkit"
                 self._detector = XTTKDetector(parent=self, daemon=daemon, address=address, **ckwargs)
             else:
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
@@ -1342,13 +1339,14 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
 
     @isasync
-    def applyAutoContrastBrightness(self):
+    def applyAutoContrastBrightness(self, detector):
         """
         Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
         automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
         contrast brightness functionality works best if there is a feature visible in the image. This call is
         non-blocking.
 
+        :param detector (str): Role of the detector.
         :return: Future object
 
         """
@@ -1465,6 +1463,7 @@ class FibScanner(model.Emitter):
 
         self.channel = channel  # Name of the ion channel used.
 
+        # Fictional values for the interface. Xtlib doesn't support reading/controlling these values
         self._shape = (4096, 4096)
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
@@ -1492,6 +1491,7 @@ class Detector(model.Detector):
         if hasattr(self.parent, "_scanner") and hasattr(self.parent, "_fib_scanner"):
             self.scanner = StringEnumerated(self.parent._scanner.name,
                         choices={self.parent._scanner.name, self.parent._fib_scanner.name}, setter=self._set_scanner)
+            self._set_scanner(self.parent._scanner.name)  # Call setter to instantiate ._scanner attribute
         elif hasattr(self.parent, "_scanner"):
             self._scanner = self.parent._scanner
         elif hasattr(self.parent, "_fib_scanner"):
@@ -1538,6 +1538,8 @@ class Detector(model.Detector):
                         break
                     self.parent.set_channel_state(self._scanner.channel, True)
                     if hasattr(self._scanner, "blanker"):
+                        # TODO In case of switching the scanner type the previous scanner should be blanked.
+                        #  Currently this kind of blanker handling isn't supported by XT.
                         if self._scanner.blanker.value is None:
                             self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
@@ -1559,15 +1561,15 @@ class Detector(model.Detector):
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
-                    try:
-                        if self._acq_wait_data(est_acq_time + 20):
-                            logging.debug("Stopping measurement early")
-                            self.stop_acquisition()
-                            break
-                    except TimeoutError as err:
-                        logging.error(err)
-                        self.stop_acquisition()
-                        break
+                    # try:
+                    #     if self._acq_wait_data(est_acq_time + 20):
+                    #         logging.debug("Stopping measurement early")
+                    #         self.stop_acquisition()
+                    #         break
+                    # except TimeoutError as err:
+                    #     logging.error(err)
+                    #     self.stop_acquisition()
+                    #     break
 
                     # Retrieve the image
                     image = self.parent.get_latest_image(self._scanner.channel)
@@ -1969,13 +1971,15 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def applyAutofocus(self):
+    def applyAutofocus(self, detector):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
         the beam must be turned on and unblanked. Also a a reasonable manual focus is needed. When the image is too far
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
+        :param detector (str): Role of the detector.
+        :param state (str):  "run", or "stop"
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
