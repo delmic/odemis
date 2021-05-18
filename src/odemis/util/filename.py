@@ -198,7 +198,7 @@ def create_filename(path, ptn, ext, count="001"):
 
     return os.path.join(path, fn + ext)
 
-def individualize_filename(fn, names):
+def add_counter_to_fn(fn, names):
     """
     Creates a filename based on the input filename which is unique in a list of filenames by adding a counter.
     input
@@ -211,10 +211,19 @@ def individualize_filename(fn, names):
     if fn not in names:
         return fn
 
-    # TODO: Detect if filename has counter already
+    # Detect if filename has counter already, otherwise use 1
+    cnt_ptn = r'-\d{1,5}'
+    cnt_m = None
+    for m in re.finditer(cnt_ptn, fn):
+        cnt_m = m
+    # if multiple numbers are present, use last
+    if cnt_m:
+        cnt = int(cnt_m.group()[1:])
+        fn = fn[:cnt_m.start()]
+    else:
+        cnt = 1  # will be used in case cnt pattern is added afterwards
 
-    # Add counter and count up until unique filename is found
-    cnt = 1
+    # Count up until unique filename is found
     while fn + "-%s" % cnt in names:
         cnt += 1
 

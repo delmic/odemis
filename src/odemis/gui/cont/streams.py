@@ -49,7 +49,7 @@ from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
-from odemis.util.filename import individualize_filename
+from odemis.util.filename import add_counter_to_fn
 from odemis.util.fluo import to_readable_band, get_one_center
 from odemis.util.units import readable_str
 import time
@@ -3101,7 +3101,7 @@ class FastEMProjectController(object):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
         if txt != current_name:
-            txt = individualize_filename(txt, [project.name.value for project in self._tab_data.projects.value])
+            txt = add_counter_to_fn(txt, [project.name.value for project in self._tab_data.projects.value])
             logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)
             self.model.name.value = txt
             self.panel.txt_ctrl.SetValue(txt)
@@ -3268,7 +3268,7 @@ class FastEMROAController(object):
         current_name = self.model.name.value
         all_roas = [roa.name.value for project in self._tab_data.projects.value for roa in project.roas.value]
         if txt != current_name:
-            txt = individualize_filename(txt, all_roas)
+            txt = add_counter_to_fn(txt, all_roas)
             logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
             self.model.name.value = txt
             self.panel.txt_ctrl.SetValue(txt)
