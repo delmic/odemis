@@ -69,7 +69,6 @@ def calibrate(dev, channels):
 
 DISTANCE_CODED_MARK_POSITIONER = 304
 
-
 def set_positioner_type(dev, channels, ptype):
     """
     Set the type of positioner that is connected to the device channels. The positioner type implicitly gives the
@@ -84,36 +83,27 @@ def set_positioner_type(dev, channels, ptype):
                             ptype)
 
 
-def set_reference_autozero(dev, channels):
-    if not channels:
-        return
-    # Set auto-zero referencing mode
+def set_reference_autozero(dev, channel, autozero):
+    logging.info(f"Setting the reference autozero mode to {autozero} for channel {channel}")
+    ref_opt = dev.GetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS, channel)
+    if autozero:
+        ref_opt |= smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO
+    else:
+        ref_opt &= ~smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO
+
+def reference(dev, channels, autozero=False):
     for channel in channels:
-        logging.info(f"Setting auto-zero mode for channel {channel}")
-        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
-                            channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO)  # auto zero
-
-    reference(dev, channels)
-
-
-def set_reference_normal(dev, channels):
-    if not channels:
-        return
-    # Set normal referencing mode
-    for channel in channels:
-        logging.info(f"Setting the reference mode to normal for channel {channel}")
-        dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
-                            channel, smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)  # normal
-
-
-def reference(dev, channels):
+        set_reference_autozero(dev, channel, autozero)
     # Run the referencing
     logging.info("Starting reference...")
-    dev.reference(axes=set([str(ch) for ch in channels])).result()
-    time.sleep(0.1)
-    logging.info("Referencing complete.")
-    # Always set reference to normal after referencing
-    set_reference_normal(dev, channels)
+    try:
+        dev.reference(axes=set(str(ch) for ch in channels)).result()
+        time.sleep(0.1)
+        logging.info("Referencing complete.")
+    finally:
+        # Always set reference to normal after referencing
+        for channel in channels:
+            set_reference_autozero(dev, channel, False)
 
 
 def set_zero(dev, channels):
@@ -148,7 +138,7 @@ def main(args):
                         help="Run the calibration command. Specify the channel to calibrate (0, 1, 2)")
 
     parser.add_argument('--postype', metavar='N', type=int, nargs='+', default=[],
-                        help="Set positioner type to distance coded mark. Specify the channel to calibrate (0, 1, 2)")
+                        help="Set positioner type to distance coded mark. Specify the channel to change (0, 1, 2)")
 
     parser.add_argument('--autozero', metavar='N', type=int, nargs='+', default=[],
                         help="Run referencing with autozero reference mode. Specify the channel to calibrate (0, 1, 2)")
@@ -170,7 +160,7 @@ def main(args):
     logging.getLogger().setLevel(loglev)
 
     locator = options.locator
-    channels = set(options.calibrate + options.autozero + options.reference + options.setzero)
+    channels = set(options.calibrate + options.autozero + options.reference + options.setzero + options.postype)
     axes = {str(c): {"range": [-1, 1], "unit": "m", "channel": c} for c in channels}
 
     dev = smaract.MCS2(locator=locator, axes=axes, **CONFIG_3DOF)
@@ -180,7 +170,7 @@ def main(args):
     elif options.postype:
         set_positioner_type(dev, options.postype, DISTANCE_CODED_MARK_POSITIONER)
     elif options.autozero:
-        set_reference_autozero(dev, options.autozero)
+        reference(dev, options.autozero, autozero=True)
     elif options.reference:
         reference(dev, options.reference)
     elif options.setzero:
