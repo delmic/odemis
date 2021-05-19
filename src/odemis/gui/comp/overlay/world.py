@@ -2732,10 +2732,7 @@ class FastEMROAOverlay(FastEMSelectOverlay):
         else:
             # Activate/deactivate region
             self._view_to_phys()
-            # .get_physical_sel() normalizes the rectangles, i.e. swaps top and bottom coordinates.
-            # That doesn't work here, the top coordinate needs to be larger than the bottom coordinate,
-            # so use .p_start_pos and .p_end_pos instead.
-            rect = self.p_start_pos + self.p_end_pos
+            rect = self.get_physical_sel()
             pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
             self.active.value = True if util.is_point_in_rect(pos, rect) else False
 
@@ -2802,7 +2799,7 @@ class FastEMROCOverlay(FastEMSelectOverlay):
         # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
         # the rectangle if the selection is near (based on mpp value, so independent of scale).
         margin = self.cnvs.view.mpp.value * 20
-        self.active.value = True if util.is_point_in_rect(pos, util.expand_rect(rect, margin)) else False
+        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin))
 
         # Get new ROC coordinates
         if self.active.value:

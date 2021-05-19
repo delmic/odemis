@@ -354,27 +354,24 @@ def is_point_in_rect(p, rect):
     """
     Check if a point is inside in a rectangle.
 
-    p (tuple of 2 floats): x, y coordinates of point in m
-    rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
+    p (tuple of 2 floats): x, y coordinates of point
+    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
     return (bool): True if point is in rectangle, False otherwise
     """
-    l, t, r, b = rect
-    if l <= p[0] <= r and b <= p[1] <= t:
-        return True
-    else:
-        return False
+    minx, miny, maxx, maxy = rect
+    return minx <= p[0] <= maxx and miny <= p[1] <= maxy
 
 
 def expand_rect(rect, margin):
     """
     Expand a rectangle by a fixed margin.
 
-    rect (tuple of 4 floats): l, t, r, b positions of rectangle in m
-    margin (float): margin to increase rectangle by in m
-    return (tuple of 4 floats): l, t, r, b positions of adjusted rectangle in m
+    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
+    margin (float): margin to increase rectangle by
+    return (tuple of 4 floats): minx, miny, maxx, maxy positions of adjusted rectangle
     """
-    l, t, r, b = rect
-    return l - margin, t + margin, r + margin, b - margin
+    minx, miny, maxx, maxy = rect
+    return minx - margin, miny - margin, maxx + margin, maxy + margin
 
 
 def find_plot_content(xd, yd):

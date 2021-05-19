@@ -2,17 +2,15 @@
 FASTEM-sim: {
     class: Microscope,
     role: mbsem,
-    children: ["SEM", "EBeam Scanner", "EBeam Focus", "SED",
+    children: ["EBeam Scanner", "EBeam Focus", "SED",
                "Sample Stage"],
 }
 
 "SEM": {
     class: simsem.SimSEM,
-    # TODO remove role when children components are implemented (chamber camera, chamber and sed)
-    role: sem,
+    role: null,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
-           drift_period: 5, # sec
     },
     children: {scanner: "EBeam Scanner",
                focus: "EBeam Focus",
@@ -61,4 +59,5 @@ FASTEM-sim: {
     metadata: {
         POS_ACTIVE_RANGE: {"x": [-60e-3, 60e-3], "y": [-60e-3, 60e-3]},
     },
+    affects: ["EBeam Scanner"],
 }
