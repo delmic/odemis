@@ -185,6 +185,7 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
+        "settle_time": 1,  # s
         "pos_deactive_after_ref": True,  # Not actually used as there is no MD_FAV_POS_DEACTIVE
         "inverted": ['z'],
         "axes": {
@@ -382,6 +383,27 @@ class Test5DOF(unittest.TestCase):
             self.assertTrue(i)
 
         test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+
+    def test_move_and_settle(self):
+        pos1 = {'x': 0, 'y': 0}
+        pos2 = {'x': 1e-3, 'y': 1e-5}
+
+        # Check that it's faster to move 2x in a raw, than waiting after the move,
+        # because the settle time takes extra time between each move.
+        self.dev.moveAbs(pos1).result()
+        start_t = time.time()
+        self.dev.moveAbs(pos2).result()
+        self.dev.moveAbs(pos1).result()
+        dur_serial = time.time() - start_t
+
+        self.dev.moveAbs(pos1).result()
+        start_t = time.time()
+        self.dev.moveAbs(pos2)
+        self.dev.moveAbs(pos1).result()
+        dur_same_time = time.time() - start_t
+
+        # Serialized move should take 1s more. To take into account "flux", we check it's at least 0.5s.
+        self.assertGreater(dur_serial, dur_same_time + 0.5)
 
 
 CONFIG_3DOF = {"name": "3DOF",

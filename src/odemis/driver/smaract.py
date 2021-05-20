@@ -1149,7 +1149,8 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), pos_deactive_after_ref=False, **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), settle_time=0,
+                 pos_deactive_after_ref=False, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1168,9 +1169,11 @@ class MC_5DOF(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
-        hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
+        hold_time (float>=0): the hold time, in seconds, for the actuator after the target position is reached.
             Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
             Is set to the same value for all channels.
+        settle_time (float>=0): extra waiting time after a move, to ensure that
+          vibrations are entirely stopped on the sample.
         linear_speed: (double) the default speed (in m/s) of the linear actuators
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
@@ -1259,6 +1262,10 @@ class MC_5DOF(model.Actuator):
 
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
+
+        if settle_time < 0:
+            raise ValueError("settle_time should be >= 0, but got %s" % (settle_time,))
+        self._settle_time = settle_time
 
         referenced = self._is_referenced()
         # define the referenced VA from the query
@@ -1518,7 +1525,7 @@ class MC_5DOF(model.Actuator):
         """
         f = CancellableFuture()
         f._moving_lock = threading.RLock()  # taken while moving
-        f._must_stop = False  # cancel of the current future requested
+        f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelCurrentMove
         return f
 
@@ -1542,7 +1549,7 @@ class MC_5DOF(model.Actuator):
         """
         try:
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
 
                 # Reset reference so that if it fails, it states the axes are not
@@ -1554,7 +1561,7 @@ class MC_5DOF(model.Actuator):
                 self.Reference()
 
             # wait till reference completes
-            while not future._must_stop:
+            while not future._must_stop.is_set():
                 ev = self.WaitForEvent(100)  # large timeout
                 # check if move is done
                 if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
@@ -1586,7 +1593,7 @@ class MC_5DOF(model.Actuator):
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
                 logging.info("Referencing stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 raise CancelledError()
             else:
                 logging.error("Referencing failed: %s", ex)
@@ -1656,12 +1663,12 @@ class MC_5DOF(model.Actuator):
             # take up to 1s before the first position update happens.
             self.update_position_timer.period = 0.05
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 self.Move(pos)
 
             # Wait until the move is done
-            while not future._must_stop:
+            while not future._must_stop.is_set():
                 ev = self.WaitForEvent(max_dur)
                 # check if move is done
                 if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
@@ -1679,15 +1686,31 @@ class MC_5DOF(model.Actuator):
                     raise TimeoutError("Move is not over after %g s, while "
                                        "expected it takes only %g s" %
                                        (max_dur, dur))
+
             else:
                 raise CancelledError()
+
+            # Extra settling time, typically to wait for the sample (connected to the hardware) to stop vibrating
+            if self._settle_time:
+                if self._executor.get_next_future(future) is not None:
+                    # Another move queued means that the user wants to keep
+                    # moving. So no need to wait extra time to ensure the
+                    # sample is perfectly still, and immediately finish that
+                    # move, which will then wait the settle time.
+                    logging.debug("Not waiting for axis settling as another move is queued")
+                else:
+                    logging.debug("Waiting %g s for settling of the axis", self._settle_time)
+                    # TODO: if there is a new move coming while waiting, stop early
+                    # Use the Event, so that a cancellation can stop it
+                    if future._must_stop.wait(self._settle_time):
+                        raise CancelledError()
 
         except SA_MCError as ex:
             # This occurs if a stop command interrupts moves
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
                 logging.debug("Movement stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 raise CancelledError()
             elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT:
                 logging.error("Move timed out after %g s: %s", max_dur, ex)
@@ -1719,7 +1742,7 @@ class MC_5DOF(model.Actuator):
         #  * the task is finishing (about to say that it finished successfully)
         logging.debug("Canceling current move")
 
-        future._must_stop = True  # tell the thread taking care of the move it's over
+        future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
             self.Stop()
 

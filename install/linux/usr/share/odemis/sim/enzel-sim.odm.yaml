@@ -330,6 +330,7 @@ ENZEL-Sim: {
         locator: "fake",
         ref_on_init: False, # TODO: needs to happen *after* the optical stage has been referenced and moved down
         hold_time: 1,  # s, default = infinite (.inf)
+        settle_time: 1,  # s, extra time for the sample to stop vibrating after movement
         linear_speed: 0.003,  # m/s
         rotary_speed: 0.087,  # rad/s = 5 deg/s
         pos_deactive_after_ref: False,  # Set to True to automatically go to DEACTIVE position after succesful referencing
