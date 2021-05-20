@@ -1102,6 +1102,7 @@ class Scanner(model.Emitter):
             unit=scanning_size_info["unit"],
             range=scanning_size_info["range"]["x"],
             setter=self._setHorizontalFoV)
+        self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         mag = self._hfw_nomag / fov
         mag_range_max = self._hfw_nomag / scanning_size_info["range"]["x"][0]
@@ -1124,8 +1125,11 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
+        # TODO: for now, this is not how it's actually implemented: it always does
+        # full frame, so the scale doesn't really matter. In addition, the full
+        # frame only accepts a pre-defined set of resolutions, so it might fail
+        # when starting the acquisition. => use RoI acquisition?
         resolution = self.parent.get_resolution()
-
         self.resolution = model.ResolutionVA(tuple(resolution),
                                              ((rng["x"][0], rng["y"][0]),
                                               (rng["x"][1], rng["y"][1])),
@@ -1136,8 +1140,9 @@ class Scanner(model.Emitter):
         # it basically works the same as binning, but can be float
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
+        max_scale = self._shape[0] / rng["x"][0], self._shape[1] / rng["y"][0],
         self.scale = model.TupleContinuous(self._scale,
-                                           [(1, 1), self._shape],
+                                           [(1, 1), max_scale],
                                            unit="",
                                            cls=(int, float),  # int; when setting scale the GUI returns a tuple of ints.
                                            setter=self._setScale)
@@ -1289,9 +1294,11 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / fov
         self.magnification._value = mag
         self.magnification.notify(mag)
+        return fov
+
+    def _onHorizontalFoV(self, fov):
         self._updateDepthOfField()
         self._updatePixelSize()
-        return fov
 
     def _updateDepthOfField(self):
         fov = self.horizontalFoV.value
