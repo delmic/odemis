@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2018 Éric Piel, Rinze de Laat, Delmic
+:copyright: © 2012-2020 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -32,15 +32,13 @@ import math
 from odemis.gui import conf
 from odemis.util.filename import create_filename
 from odemis import model
-from odemis.acq import path, leech, acqmng
+from odemis.acq import path, acqmng, fastem
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
-    ARPolarimetryProjection
+from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProjection
 from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
-from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 from odemis.gui.log import observe_comp_state
 import os
 import threading
@@ -184,7 +182,7 @@ class MainGUIData(object):
         "tc-od-filter": "tc_od_filter",
         "tc-filter": "tc_filter",
         "slit-in-big": "slit_in_big",
-        "sample-thermostat": "sample_thermostat"
+        "sample-thermostat": "sample_thermostat",
     }
 
     def __init__(self, microscope):
@@ -1043,6 +1041,87 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # Update without calling the setter
         self.polePositionPhysical._value = posphy
         self.polePositionPhysical.notify(posphy)
+
+
+class FastEMAcquisitionGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM acquisition tab. It contains references the user-selected acquisition and
+    calibration regions, overview images, and information on the sample carrier positions.
+    """
+    # Parameters of the scintillators according to the technical drawing of the sample carrier
+    # (positions are given relative to top left of sample carrier)
+    # Scintillator arrangement on the sample carrier (9 is top left, 1 is bottom right):
+    # 9 8 7
+    # 6 5 4
+    # 3 2 1
+    # The format looks like YAML, because eventually it should be possible to pass it in the microscope (YAML) file.
+    SAMPLE_CARRIER_3x3 = {
+        "dims": (120e-3, 120e-3),  # m
+        "layout": [[9, 8, 7],
+                   [6, 5, 4],
+                   [3, 2, 1]],  # grid positions of scintillators
+        "scintillator_offsets": {
+            1: (78e-3, -78e-3), 2: (60e-3, -78e-3), 3: (42e-3, -78e-3),
+            4: (78e-3, -60e-3), 5: (60e-3, -60e-3), 6: (42e-3, -60e-3),
+            7: (78e-3, -42e-3), 8: (60e-3, -42e-3), 9: (42e-3, -42e-3),
+        },  # center position of the scintillators relative to top left of sample carrier
+        "scintillator_size": (14e-3, 14e-3),
+        "background": [(0, 120e-3, 0, -35e-3), (0, 120e-3, -49e-3, -53e-3), (0, 120e-3, -67e-3, -71e-3),
+                       (0, 120e-3, -85e-3, -120e-3),
+                       (0, 35e-3, 0, -120e-3), (49e-3, 53e-3, 0, -120e-3), (67e-3, 71e-3, 0, -120e-3),
+                       (85e-3, 120e-3, 0, -120e-3)]  # ltrb positions of rectangles for background, from top left
+    }
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super(FastEMAcquisitionGUIData, self).__init__(main)
+
+        # Make sure we have a stage with the range metadata (this metadata is required to map user-selected
+        # screen positions to stage positions for the acquisition)
+        if self.main.stage is None:
+            raise KeyError("No stage found in the microscope.")
+        md = self.main.stage.getMetadata()
+        if model.MD_POS_ACTIVE_RANGE not in md:
+            raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
+        carrier_range = md[model.MD_POS_ACTIVE_RANGE]
+        tlx, tly = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
+
+        # TODO: in the future, there could be an additional argument in the configuration file to specify
+        #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
+        carrier_params = self.SAMPLE_CARRIER_3x3
+
+        # VAs
+        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        for i in carrier_params["scintillator_offsets"]:
+            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.overview_streams = model.ListVA([])  # list of FastEMOverviewStream
+        self.projects = model.ListVA([])  # list of FastEMProject
+
+        # Initialize attributes related to the sample carrier
+        #  * .scintillator_size (float, float): size of one scintillator in m
+        #  * .scintillator_positions (dict: 1 <= int <= 9 --> (float, float)): positions in stage coordinates
+        #  * .scintillator_layout (list of list of int): 2D layout of scintillator grid
+        #  * .background (list of ltrb tuples): coordinates for background overlay,
+        #    rectangles can be displayed in world overlay as grey bars, e.g. for simulating a sample carrier
+        self.scintillator_size = carrier_params["scintillator_size"]
+        self.scintillator_positions = {}  # dict: 1 <= int <= 9 --> (float, float)
+        for num, offset in carrier_params["scintillator_offsets"].items():
+            offset_x = carrier_params["scintillator_offsets"][num][0]
+            offset_y = carrier_params["scintillator_offsets"][num][1]
+            self.scintillator_positions[num] = (tlx + offset_x, tly + offset_y)
+        self.scintillator_layout = carrier_params["layout"]
+        self.background = []
+        for rect in carrier_params["background"]:
+            self.background.append((tlx + rect[0], tlx + rect[1], tly + rect[2], tly + rect[3]))
+
+
+class FastEMProject(object):
+    """ Representation of a FastEM project. """
+
+    def __init__(self, name):
+        self.name = model.StringVA(name)
+        self.roas = model.ListVA([])  # list of acq.fastem.FastEMROA
 
 
 class FileInfo(object):

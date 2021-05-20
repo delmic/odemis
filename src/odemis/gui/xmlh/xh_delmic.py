@@ -223,6 +223,63 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
+class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMProjectBar')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMProjectBar':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMProjectBar(parent,
+                                      self.GetID(),
+                                      self.GetPosition(),
+                                      self.GetSize(),
+                                      self.GetStyle(),
+                                      add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            # 'Dirty' fix for the hard coded 'add stream' child button
+            if self.GetBool('add_button'):
+                w.btn_add_project.SetBackgroundColour(w.GetBackgroundColour())
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMProjectBarXmlHandler)
+
+
+class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMCalibrationBar')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMCalibrationBar':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMCalibrationBar(parent,
+                                          self.GetID(),
+                                          self.GetPosition(),
+                                          self.GetSize(),
+                                          self.GetStyle(),
+                                          add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
+
+
 class _ImageButtonHandler(xrc.XmlResourceHandler):
 
     klass = None
@@ -573,6 +630,14 @@ class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
 
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
+
+class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FastEMAcquisitionViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FastEMAcquisitionViewport")
+HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
 
 
 ##################################

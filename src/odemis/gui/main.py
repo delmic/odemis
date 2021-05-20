@@ -213,6 +213,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_sparc_acqui
                 },
                 {
+                    "name": "fastem_acqui",
+                    "controller": tabs.FastEMAcquisitionTab,
+                    "button": self.main_frame.btn_tab_sparc_acqui,
+                    "panel": main_xrc.xrcpnl_tab_fastem_acqui
+                },
+                {
                     "name": "sparc_chamber",
                     "controller": tabs.ChamberTab,
                     "button": self.main_frame.btn_tab_sparc_chamber,

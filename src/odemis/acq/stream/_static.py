@@ -909,3 +909,9 @@ class RGBUpdatableStream(StaticStream):
 
         self.raw = self._clean_raw(raw)
         self._shouldUpdateImage()
+
+
+class FastEMOverviewStream(StaticStream):
+    # For now just a StaticStream with a different name, so the canvas can automatically select the right
+    # blending option ("blend screen" on non-overlapping positions = simple pasting without blending)
+    pass

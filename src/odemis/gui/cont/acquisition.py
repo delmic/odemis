@@ -2,9 +2,9 @@
 """
 Created on 22 Aug 2012
 
-@author: Éric Piel
+@author: Éric Piel, Philip Winkler
 
-Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
+Copyright © 2012-2021 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -35,7 +35,7 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio
-from odemis.acq import align, acqmng, stream
+from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
 from odemis.gui import conf
@@ -58,6 +58,7 @@ import subprocess
 import threading
 import time
 import wx
+from datetime import datetime
 
 import odemis.gui.model as guimod
 
@@ -925,6 +926,203 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Acquisition failed (see log panel).",
                                         level=logging.WARNING,
                                         keep_filename=(not data))
+
+
+class FastEMAcquiController(object):
+    """
+    Takes care of the acquisition button and process in the FastEM acquisition tab.
+    """
+
+    def __init__(self, tab_data, tab_panel, projectbar_ctrl, calibration_ctrl):
+        """
+        tab_data (FastEMGUIData): the representation of the microscope GUI
+        tab_panel: (wx.Frame): the frame which contains the viewport
+        projectbar_ctrl (FastEMProjectBarController): project bar controller
+        calibration_ctrl (FastEMCalibrationController): calibration controller
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+        self._projectbar_ctrl = projectbar_ctrl
+        self._calibration_ctrl = calibration_ctrl
+
+        # Path to the acquisition
+        # <External storage>/<date>/<project name>/<roa name>
+        # TODO: display proper path to external storage (if mounted)
+        self.path = datetime.today().strftime('%Y-%m-%d')
+        self._tab_panel.txt_destination.SetValue("<External Storage>/%s" % self.path)
+
+        # ROA count
+        self.roa_count = 0
+        self._tab_panel.txt_num_rois.SetValue("0")
+
+        # For acquisition
+        self.btn_acquire = self._tab_panel.btn_sparc_acquire
+        self.btn_cancel = self._tab_panel.btn_sparc_cancel
+        self.gauge_acq = self._tab_panel.gauge_sparc_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.txt_num_rois = self._tab_panel.txt_num_rois
+        self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
+        self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+
+        # Link buttons
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        # Hide gauge, disable acquisition button
+        self.gauge_acq.Hide()
+        self._tab_panel.Parent.Layout()
+        self.btn_acquire.Enable(False)
+
+        # Update text controls when projects/roas/rocs are changed
+        self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
+        tab_data.projects.subscribe(self._on_projects, init=True)
+        for roc in self._tab_data_model.calibration_regions.value.values():
+            roc.coordinates.subscribe(self._on_roc)
+
+    def _on_projects(self, projects):
+        for p in projects:
+            p.roas.subscribe(self._on_roas)
+
+    def _on_roas(self, roas):
+        # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
+        for roa in roas:
+            if roa not in self.roa_subscribers:
+                roa.roc.subscribe(self._on_roc)
+                self.roa_subscribers.append(roa)
+        self._update_roa_count()
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def _on_roc(self, _):
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def check_acquire_button(self):
+        self.btn_acquire.Enable(self.roa_count and not self._get_undefined_calibrations())
+
+    @wxlimit_invocation(1)  # max 1/s
+    def update_acquisition_time(self):
+        lvl = None  # icon status shown
+        if self.roa_count == 0:
+            lvl = logging.WARN
+            txt = "No region of acquisition selected."
+        elif self._get_undefined_calibrations():
+            lvl = logging.WARN
+            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations()),)
+        else:
+            # Don't update estimated time if acquisition is running (as we are
+            # sharing the label with the estimated time-to-completion).
+            if self._main_data_model.is_acquiring.value:
+                return
+            # Display acquisition time
+            projects = self._tab_data_model.projects.value
+            acq_time = fastem.estimateTime([roa for p in projects for roa in p.roas.value])
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = u"Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
+
+    def _get_undefined_calibrations(self):
+        """
+        returns (list of str): names of ROCs which are undefined
+        """
+        undefined = set()
+        for p in self._tab_data_model.projects.value:
+            for roa in p.roas.value:
+                roc = roa.roc.value
+                if roc.coordinates.value == stream.UNDEFINED_ROI:
+                    undefined.add(roc.name.value)
+        return sorted(undefined)
+
+    def _update_roa_count(self):
+        roas = [roa for p in self._tab_data_model.projects.value for roa in p.roas.value]
+        self.txt_num_rois.SetValue("%s" % len(roas))
+        self.roa_count = len(roas)
+
+    def _show_status_icons(self, lvl):
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.Layout()
+
+    def _reset_acquisition_gui(self, text=None, level=None):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self._tab_panel.Layout()
+
+        if text is not None:
+            self.lbl_acqestimate.SetLabel(text)
+            self._show_status_icons(level)
+        else:
+            self.update_acquisition_time()
+
+    def on_acquisition(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        self._main_data_model.is_acquiring.value = True
+        self.btn_acquire.Enable(False)
+        self.btn_cancel.Enable(True)
+        self.btn_cancel.Show()
+        self.gauge_acq.Show()
+        self._show_status_icons(None)
+
+        self.gauge_acq.Range = self.roa_count
+        self.gauge_acq.Value = 0
+
+        # Acquire ROAs for all projects
+        for p in self._tab_data_model.projects.value:
+            ppath = os.path.join(self.path, p.name.value)
+            for roa in p.roas.value:
+                fn = os.path.join(ppath, roa.name.value)
+                f = fastem.acquire(roa, fn)
+                f.add_done_callback(self.increase_acq_progress)
+
+        f.add_done_callback(self.on_acquisition_done)
+
+    def increase_acq_progress(self, f):
+        # TODO: improve progress estimation
+        self.gauge_acq.Value += 1
+
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        fastem._executor.cancel()
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_in_wx_main
+    def on_acquisition_done(self, future):
+        """
+        Callback called when the acquisition is finished (either successfully or
+        cancelled)
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self._tab_panel.Layout()
+        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._main_data_model.is_acquiring.value = False
+        try:
+            future.result()
+        except CancelledError:
+            self._reset_acquisition_gui()
+            return
+        except Exception as exp:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
+            return
 
 
 # TODO: merge with AutoCenterController because they share too many GUI elements
