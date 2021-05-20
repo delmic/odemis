@@ -19,17 +19,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-import copy
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
 from concurrent.futures import CancelledError, TimeoutError
+from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
+import copy
 import logging
 import math
 import numpy
 from odemis import model, dataio
 from odemis.acq import acqmng
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
+from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stitching._simple import register, weave
-from odemis.acq.stitching._constants import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
@@ -41,6 +41,7 @@ import psutil
 import threading
 import time
 
+
 # TODO: Find a value that works fine with cryo-secom
 # Percentage of the allowed difference of tile focus from good focus
 FOCUS_FIDELITY = 0.3
@@ -49,12 +50,16 @@ FOCUS_RANGE_MARGIN = 100e-6
 # Indicate the number of tiles to skip during focus adjustment
 SKIP_TILES = 3
 
+MOVE_SPEED_DEFAULT = 100e-6  # m/s
+
+
 class TiledAcquisitionTask(object):
     """
     The goal of this task is to acquire a set of tiles then stitch them together
     """
 
-    def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None):
+    def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN):
         """
         :param streams: (Stream) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -65,6 +70,8 @@ class TiledAcquisitionTask(object):
         :param log_path: (string) directory and filename pattern to save acquired images for debugging
         :param future: (ProgressiveFuture or None) future to track progress, pass None for estimation only
         :param zlevels: (list(float) or None) focus z positions required zstack acquisition
+        :param registrar: (REGISTER_*) type of registration method
+        :param weaver: (WEAVER_*) type of weaving method
         """
         self._future = future
         self._streams = streams
@@ -106,6 +113,15 @@ class TiledAcquisitionTask(object):
             self._focus_rng = (max(focus_rng[0], focuser_range[0]), min((focus_rng[1], focuser_range[1])))
             logging.debug("Calculated focus range ={}".format(self._focus_rng))
 
+        # Rough estimate of the stage movement speed, for estimating the extra
+        # duration due to movements
+        self._move_speed = MOVE_SPEED_DEFAULT
+        if model.hasVA(stage, "speed"):
+            try:
+                self._move_speed = (stage.speed.value["x"] + stage.speed.value["y"]) / 2
+            except Exception as ex:
+                logging.warning("Failed to read the stage speed: %s", ex)
+
         # TODO: allow to change the stage movement pattern
         self._settings_obs = settings_obs
 
@@ -124,6 +140,9 @@ class TiledAcquisitionTask(object):
             self._zlevels = zlevels
         else:
             self._zlevels = []
+
+        self._registrar = registrar
+        self._weaver = weaver
 
     def _getFov(self, sd):
         """
@@ -235,10 +254,11 @@ class TiledAcquisitionTask(object):
         logging.debug("Moving to tile %s at %s m", idx, m)
         self._future.running_subf = self._stage.moveAbs(m)
         try:
-            speed = min(self._stage.speed.value.values()) if model.hasVA(self._stage, "speed") else 10e-6
-            # add 1 to make sure it doesn't time out in case of a very small move
+            # Don't wait forever for the stage to move: guess the time it should
+            # take and then give a large margin
             t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
-                           abs(idx_change[1]) * tile_size[1] * overlap) / speed + 1
+                           abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
+            t = 5 * t + 1  # s
             self._future.running_subf.result(t)
             # FIXME: instead of sleeping, handle vibration effects
             time.sleep(1)
@@ -386,7 +406,6 @@ class TiledAcquisitionTask(object):
         return mem_sufficient, mem_est
 
     STITCH_SPEED = 1e8  # px/s
-    MOVE_SPEED = 100e-6  # m/s
 
     def estimateTime(self, remaining=None):
         """
@@ -415,7 +434,7 @@ class TiledAcquisitionTask(object):
 
         stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / self.STITCH_SPEED
         try:
-            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self.MOVE_SPEED
+            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed
             # current tile is part of remaining, so no need to move there
         except ValueError:  # no current streams
             move_time = 0.5
@@ -622,23 +641,22 @@ class TiledAcquisitionTask(object):
 
         # TODO: Do this registration step in a separate thread while acquiring
         try:
-            das_registered = register(da_list, method=REGISTER_GLOBAL_SHIFT)
+            das_registered = register(da_list, method=self._registrar)
         except ValueError as exp:
-            logging.warning("Registration with global_shift failed %s. Retrying with identity registrar." % exp)
+            logging.warning("Registration with %s failed %s. Retrying with identity registrar.", self._registrar, exp)
             das_registered = register(da_list, method=REGISTER_IDENTITY)
 
-        weaving_method = WEAVER_COLLAGE_REVERSE  # Method used for SECOM
-        logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
+        logging.info("Using weaving method %s.", self._weaver)
         # Weave every stream
         if isinstance(das_registered[0], tuple):
             for s in range(len(das_registered[0])):
                 streams = []
                 for da in das_registered:
                     streams.append(da[s])
-                da = weave(streams, weaving_method)
+                da = weave(streams, self._weaver)
                 st_data.append(da)
         else:
-            da = weave(das_registered, weaving_method)
+            da = weave(das_registered, self._weaver)
             st_data.append(da)
         return st_data
 
@@ -685,27 +703,30 @@ class TiledAcquisitionTask(object):
         return st_data
 
 
-def estimateTiledAcquisitionTime(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
+def estimateTiledAcquisitionTime(*args, **kwargs):
     """
     Estimate the time required to complete a tiled acquisition task
+    Parameters are the same as acquireTiledArea()
     :returns: (float) estimated required time
     """
     # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None, zlevels=zlevels)
+    task = TiledAcquisitionTask(*args, **kwargs)
     return task.estimateTime()
 
 
-def estimateTiledAcquisitionMemory(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
+def estimateTiledAcquisitionMemory(*args, **kwargs):
     """
     Estimate the amount of memory required to complete a tiled acquisition task
+    Parameters are the same as acquireTiledArea()
     :returns (bool) True if sufficient memory available, (float) estimated memory
     """
     # Create a tiled acquisition task with future = None
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=None, zlevels=zlevels)
+    task = TiledAcquisitionTask(*args, **kwargs)
     return task.estimateMemory()
 
 
-def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None):
+def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
+                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -729,7 +750,8 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future.running_subf = model.InstantaneousFuture()
     future._task_lock = threading.Lock()
     # Create a tiled acquisition task
-    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels)
+    task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
+                                registrar=registrar, weaver=weaver)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
