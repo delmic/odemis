@@ -80,7 +80,7 @@ class OrsayComponent(model.HwComponent):
         self._stop_connection_monitor = threading.Event()
         self._stop_connection_monitor.clear()
         self._connection_monitor_thread = threading.Thread(target=self._connection_monitor,
-                                                           name="Orsay server connection check",
+                                                           name="Orsay server connection monitor",
                                                            daemon=True)
         self._connection_monitor_thread.start()
 
@@ -159,20 +159,20 @@ class OrsayComponent(model.HwComponent):
                         for child in self.children.value:
                             child.on_connect()
                         self.state._set_value(model.ST_RUNNING, force_write=True)
-                    except Exception as ex:
-                        logging.exception("Trying to reconnect to Orsay server: %s." % ex)
+                    except Exception:
+                        logging.exception("Trying to reconnect to Orsay server.")
                 else:
                     try:
                         self.update_VAs()
                         for child in self.children.value:
                             child.update_VAs()
-                    except Exception as e:
-                        logging.exception(e)
+                    except Exception:
+                        logging.exception("Failure while updating VAs.")
                 self._stop_connection_monitor.wait(5)
-        except Exception as e:
-            logging.exception(e)
+        except Exception:
+            logging.exception("Failure in connection monitor thread.")
         finally:
-            logging.debug("Orsay server connection check thread finished.")
+            logging.debug("Orsay server connection monitor thread finished.")
             self._stop_connection_monitor.clear()
 
     def _updateProcessInfo(self, parameter=None, attributeName="Actual"):
