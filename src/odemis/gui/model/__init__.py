@@ -29,7 +29,10 @@ from abc import ABCMeta
 import collections
 import logging
 import math
+
+from odemis.acq.feature import CryoFeature, new_feature_name
 from odemis.gui import conf
+from odemis.gui.cont.tabs import DEFAULT_MILLING_ANGLE
 from odemis.util.filename import create_filename
 from odemis import model
 from odemis.acq import path, acqmng, fastem
@@ -75,6 +78,7 @@ TOOL_SPOT = 9  # Activate spot mode on the SEM
 TOOL_RO_ANCHOR = 10  # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
 TOOL_AUTO_FOCUS = 11  # Run auto focus procedure on the (active) stream
+TOOL_FEATURE = 12  # Create new feature or move selected one
 
 
 ALL_TOOL_MODES = {
@@ -596,7 +600,34 @@ class LiveViewGUIData(MicroscopyGUIData):
         self.autofocus_active = BooleanVA(False)
 
 
-class LocalizationGUIData(MicroscopyGUIData):
+class CryoGUIData(MicroscopyGUIData):
+    """
+    Represents an interface for handling cryo microscopes.
+    It's meant to be subclassed from the cryo tabs, to share data between all the tabs (like features)
+    """
+    def __init__(self, main):
+        if "cryo" not in main.role:
+            raise ValueError(
+                "Expected a cryo microscope role but found it to be %s." % main.role)
+        MicroscopyGUIData.__init__(self, main)
+        # List VA contains all the CryoFeatures (for the current project).
+        self.features = model.ListVA([])
+
+    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=None):
+        """
+        Create a new feature and add it to the features list
+        """
+        if not f_name:
+            f_name = new_feature_name(len(self.features.value))
+        if not pos_z:
+            pos_z = self.main.focus.position.value['z']
+        if not milling_angle:
+            milling_angle = DEFAULT_MILLING_ANGLE
+        feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
+        self.features.value.append(feature)
+
+
+class LocalizationGUIData(CryoGUIData):
     """ Represent an interface used to only show the current data from the microscope.
 
     It it used for handling CryoSECOM systems.
@@ -607,10 +638,10 @@ class LocalizationGUIData(MicroscopyGUIData):
         if main.role != "cryo-secom":
             raise ValueError(
                 "Microscope role was found to be %s, while expected 'cryo-secom'" % main.role)
-        MicroscopyGUIData.__init__(self, main)
+        CryoGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
         # VA for autofocus procedure mode
@@ -708,10 +739,10 @@ class ChamberGUIData(MicroscopyGUIData):
 #         self.autofocus_active = BooleanVA(False)
 
 
-class CryoChamberGUIData(MicroscopyGUIData):
+class CryoChamberGUIData(CryoGUIData):
 
     def __init__(self, main):
-        MicroscopyGUIData.__init__(self, main)
+        CryoGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         self._conf = get_acqui_conf()
