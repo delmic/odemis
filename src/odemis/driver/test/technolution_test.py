@@ -39,8 +39,8 @@ import unittest
 from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
-from openapi_server.models import CalibrationLoopParameters
-from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
+from technolution_asm.models import CalibrationLoopParameters
+from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
 
 from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, DATA_CONTENT_TO_ASM
 
