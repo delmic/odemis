@@ -33,7 +33,7 @@ from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
 from odemis.gui.comp.overlay.view import CrossHairOverlay
-from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE
+from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
@@ -44,6 +44,7 @@ import odemis.gui as gui
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 import odemis.util.conversion as conversion
 import odemis.util.units as units
+import odemis.gui.img as guiimg
 
 class CurrentPosCrossHairOverlay(WorldOverlay):
     """ Render a static cross hair to the current position of the stage"""
@@ -110,6 +111,170 @@ class StagePointSelectOverlay(WorldOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         pass
+
+
+MODE_EDIT_FEATURES = 1
+MODE_SHOW_FEATURES = 2
+FEATURE_DIAMETER = 30  # pixels
+
+class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
+    """ Overlay for handling showing interesting features of cryo projects """
+    def __init__(self, cnvs, features_va, tool_va=None):
+        """
+        :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
+        :param features_va: (ListVA of CryoFeature) list of the interesting cryo features in the project
+        :param tool_va: (IntEnumerated or None) the feature tool if found
+        """
+        StagePointSelectOverlay.__init__(self, cnvs)
+        DragMixin.__init__(self)
+        self._mode = MODE_SHOW_TOOLS
+
+        self._selected_tool_va = tool_va
+        if self._selected_tool_va:
+            self._selected_tool_va.subscribe(self._on_tool, init=True)
+
+        # TODO: Find a better icon
+        self._feature_icon = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_icon.png').name)
+        self._icon_w_adjust = self._feature_icon.get_width() / 2
+        self._icon_h_adjust = self._feature_icon.get_height() / 2
+
+        if features_va:
+            self._features_va = features_va
+            features_va.subscribe(self._on_features_changes, init=True)
+        self._selected_feature = None
+        self._hover_feature = None
+
+    def _on_tool(self, selected_tool):
+        """ Update the feature mode (show or edit) when the overlay is active and tools change"""
+        if self.active:
+            if selected_tool == TOOL_FEATURE:
+                self._mode = MODE_EDIT_FEATURES
+            else:
+                self._mode = MODE_SHOW_FEATURES
+
+    def _on_features_changes(self, _):
+        # refresh the canvas on _features_va list change
+        self.cnvs.update_drawing()
+
+    def on_dbl_click(self, evt):
+        """
+        Handle double click:
+        If it's under a feature: move the stage to the feature position,
+        otherwise, move the stage to the selected position
+        """
+        if self.active:
+            v_pos = evt.Position
+            feature = self._detect_point_inside_feature(v_pos)
+            if feature:
+                pos = feature.pos.value
+                self.cnvs.view.moveStageTo((pos[0], pos[1]))
+            else:
+                # Move to selected point
+                StagePointSelectOverlay.on_dbl_click(self, evt)
+        else:
+            WorldOverlay.on_dbl_click(self, evt)
+
+    def on_left_down(self, evt):
+        """
+        Handle mouse left click down: Create/Move feature if feature tool is toggled,
+        otherwise let the canvas handle the event (for proper dragging)
+        """
+        if self.active:
+            v_pos = evt.Position
+            if self._mode == MODE_EDIT_FEATURES:
+                feature = self._detect_point_inside_feature(v_pos)
+                if feature:
+                    # move/drag the selected feature
+                    self._selected_feature = feature
+                    DragMixin._on_left_down(self, evt)
+                else:
+                    # create new feature based on the physical position then disable the feature tool
+                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    self.cnvs.on_new_feature_pos(p_pos)
+                    self._selected_tool_va.value = TOOL_NONE
+            else:
+                self.cnvs.on_left_down(evt)
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        """
+        Handle mouse click left up: Move the selected feature to the designated point,
+        otherwise let the canvas handle the event when the overlay is active.
+        """
+        if self.active:
+            if self.left_dragging:
+                if self._selected_feature:
+                    v_pos = evt.Position
+                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+                    self._selected_feature = None
+                    self._selected_tool_va.value = TOOL_NONE
+                    self.cnvs.update_drawing()
+                DragMixin._on_left_up(self, evt)
+            else:
+                self.cnvs.on_left_up(evt)
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def _detect_point_inside_feature(self, v_pos):
+        """
+        Detect if a given point is over a feature
+        :param v_pos: (int, int) Point in pixels
+        :return: (CryoFeature or None) Found feature, None if not found
+        """
+        def in_radius(c_x, c_y, r, x, y):
+            return math.hypot(c_x - x, c_y - y) <= r
+
+        offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
+        for feature in self._features_va.value:
+            pos = feature.pos.value
+            fvsp = self.cnvs.phys_to_view(pos, offset)
+            if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
+                return feature
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise change cursor based on feature detection/mode """
+        if self.active:
+            v_pos = evt.Position
+            if self.dragging:
+                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+                self.cnvs.update_drawing()
+                return
+            feature = self._detect_point_inside_feature(v_pos)
+            if feature:
+                self._hover_feature = feature
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
+                self.cnvs.update_drawing()
+            else:
+                if self._mode == MODE_EDIT_FEATURES:
+                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
+                else:
+                    self.cnvs.reset_dynamic_cursor()
+                self._hover_feature = None
+                WorldOverlay.on_motion(self, evt)
+                self.cnvs.update_drawing()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        self.clear_labels()
+        # Show each feature icon and label if applicable
+        for feature in self._features_va.value:
+            pos = feature.pos.value
+            half_size_offset = self.cnvs.get_half_buffer_size()
+
+            # convert physical position to buffer 'world' coordinates
+            bpos = self.cnvs.phys_to_buffer_pos((pos[0], pos[1]), self.cnvs.p_buffer_center, self.cnvs.scale,
+                                                offset=half_size_offset)
+            ctx.set_source_surface(self._feature_icon, bpos[0] - self._icon_w_adjust, bpos[1] - self._icon_h_adjust)
+            ctx.paint()
+
+            if feature == self._hover_feature:
+                # show feature name on hover
+                self.add_label(feature.name.value, (bpos[0], bpos[1]))
+                self._write_labels(ctx)
+
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 

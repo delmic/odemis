@@ -39,7 +39,7 @@ from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
-from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, StagePointSelectOverlay
+from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, CryoFeatureOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
@@ -769,7 +769,7 @@ class LiveViewport(MicroscopeViewport):
 
 class FeatureOverviewViewport(LiveViewport):
     """
-    LiveViewport dedicated to show overview map area with bookmarked features.
+    LiveViewport dedicated to show overview map area with bookmarked features
     Never allow to move the stage while dragging
     """
     def __init__(self, *args, **kwargs):
@@ -785,7 +785,7 @@ class FeatureOverviewViewport(LiveViewport):
         cpol = CurrentPosCrossHairOverlay(self.canvas)
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
-        slol = StagePointSelectOverlay(self.canvas)
+        slol = CryoFeatureOverlay(self.canvas, tab_data.features)
         slol.active.value = True
         self.canvas.add_world_overlay(slol)
 
