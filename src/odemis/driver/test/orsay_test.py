@@ -50,6 +50,18 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                              "gis-reservoir": CONFIG_GISRES}
                 }
 
+CONFIG_TEST = {"name": "test", "role": "test"}
+
+CONFIG_ORSAY_TEST = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
+                     "children": {"pneumatic-suspension": CONFIG_PSUS,
+                                  "pressure": CONFIG_PRESSURE,
+                                  "pumping-system": CONFIG_PSYS,
+                                  "ups": CONFIG_UPS,
+                                  "gis": CONFIG_GIS,
+                                  "gis-reservoir": CONFIG_GISRES,
+                                  "test": CONFIG_TEST}
+                     }
+
 
 class TestOrsayStatic(unittest.TestCase):
     """
@@ -1027,6 +1039,162 @@ class TestGISReservoir(unittest.TestCase):
         self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
 
         self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
+
+
+class TestTestDevice(unittest.TestCase):
+    """
+    Tests for the test device
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY_TEST)
+
+        cls.datamodel = cls.oserver.datamodel
+
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_TEST["name"]:
+                cls.test_dev = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_OrsayBooleanVA(self):
+        """
+        Test the boolean VA TurboPump1.IsOn
+        """
+        self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Target = False
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
+        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+
+        self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Target = True
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
+        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+
+        self.test_dev.testBooleanVA.value = False
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
+        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+
+        self.test_dev.testBooleanVA.value = True
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
+        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+
+    def test_OrsayFloatVA(self):
+        """
+        Test the float VA Manometer1.Pressure
+        """
+        self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Target = 0.1
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
+        print("VA: %s" % str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+
+        self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Target = 0.2
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
+        print("VA: %s" % str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+
+        self.test_dev.testFloatVA.value = 0.1
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
+        print("VA: %s" % str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+
+        self.test_dev.testFloatVA.value = 0.2
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
+        print("VA: %s" % str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+
+    def test_OrsayIntVA(self):
+        """
+        Test the int VA HVPSFloatingIon.HeaterState
+        """
+        self.datamodel.HVPSFloatingIon.HeaterState.Target = 0
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
+        print("VA: %s" % str(self.test_dev.testIntVA.value))
+        self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
+
+        self.datamodel.HVPSFloatingIon.HeaterState.Target = 1
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
+        print("VA: %s" % str(self.test_dev.testIntVA.value))
+        self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
+
+        self.test_dev.testIntVA.value = 0
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
+        print("VA: %s" % str(self.test_dev.testIntVA.value))
+        self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
+
+        self.test_dev.testIntVA.value = 1
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
+        print("VA: %s" % str(self.test_dev.testIntVA.value))
+        self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
+
+    def test_OrsayTupleVA(self):
+        """
+        Test the tuple VA IonColumnMCS.CondensorSteerer1StigmatorX and IonColumnMCS.CondensorSteerer1StigmatorY
+        """
+        self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Target = 0.3
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+
+        self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Target = 0.4
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+
+        self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.3
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+
+        self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.4
+        sleep(1)
+        print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+
+        self.test_dev.testTupleVA.value = (0.5, 0.6)
+        sleep(1)
+        print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
+        print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+
+        self.test_dev.testTupleVA.value = (0.7, 0.8)
+        sleep(1)
+        print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
+        print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
+        print("VA: %s" % str(self.test_dev.testTupleVA.value))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
 
 
 if __name__ == '__main__':

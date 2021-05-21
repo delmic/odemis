@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+from odemis.util.weak import WeakMethod
+from odemis.model._vattributes import NotSettableError
 from ConsoleClient.Communication.Connection import Connection
 
 import threading
@@ -145,6 +147,15 @@ class OrsayComponent(model.HwComponent):
         else:
             self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis_reservoir)
+
+        # create the test child
+        try:
+            kwargs = children["test"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'test' child")
+        else:
+            self._test_device = TestDevice(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._test_device)
 
     def on_connect(self):
         """
@@ -1262,3 +1273,211 @@ class GISReservoir(model.HwComponent):
             self._gis.PrecursorType.Unsubscribe(self._updatePrecursorType)
             self._temperaturePar = None
             self._gis = None
+
+
+class OrsayAttribute:
+    """
+    Attribute that is connected to a VA and a parameter on the Orsay server.
+    If VA is readonly, the VA will be kept up to date of the changes of the Orsay parameter, but force writing to the VA
+    will not update the Orsay parameter.
+    If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
+    """
+
+    def __init__(self, va, parameter, attributeName="Actual"):
+        """
+        va is the vigilant attribute this Orsay attribute should be connected to. This VA should not have a setter yet.
+        The setter will be overwritten
+        parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
+        equal length
+        attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
+        """
+        self._parameters = None
+        self._attributeName = None
+        self._va = None
+        self._va_type_name = None
+        self._va_is_tuple = False
+        self._va_value_type = None
+        self.connect(va, parameter, attributeName)
+
+    def connect(self, va, parameter, attributeName="Actual"):
+        """
+        va is the vigilant attribute this Orsay attribute should be connected to. This VA should not have a setter yet.
+        The setter will be overwritten
+        parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
+        equal length
+        attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
+
+        Subscribes the VA to the parameter
+        """
+        if self._parameters is not None and None not in {self._attributeName, self._va, self._va_type_name}:
+            logging.warning("OrsayAttribute is already connected to an Orsay parameter. It is better to call "
+                            "disconnect before reconnecting to something else.")
+
+        if type(parameter) in {set, list, tuple}:
+            self._parameters = list(parameter)
+        else:
+            self._parameters = [parameter]
+        self._attributeName = attributeName
+        self._va = va
+        self._va_type_name = va.__class__.__name__
+        if self._va_type_name.startswith("Tuple"):
+            self._va_is_tuple = True
+            self._va_value_type = type(self._va.value[0])
+        else:
+            self._va_is_tuple = False
+            self._va_value_type = type(self._va.value)
+        if not self._va.readonly:
+            self._va._setter = WeakMethod(self._update_parameter)
+        if self._va_is_tuple and not len(self._parameters) == len(self._va.value):
+            raise ValueError("Length of Tuple VA does not match number of parameters passed.")
+        if len(self._parameters) > 1 and not self._va_is_tuple:
+            raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
+
+        for p in self._parameters:
+            p.Subscribe(self.update_VA)
+
+        self.update_VA()
+
+    def disconnect(self):
+        """
+        Unsubscribes the VA from the parameter
+        """
+        if self._va is not None and self._parameters is not None:
+            for p in self._parameters:
+                p.Unsubscribe(self.update_VA)
+            self._parameters = None
+            self._attributeName = None
+            self._va._setter = WeakMethod(self._va.__default_setter)
+            self._va = None
+            self._va_type_name = None
+
+    def update_VA(self, parameter=None, attributeName=None):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server that calls this callback
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Copies the value of the parameter to the VA
+        """
+        if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
+            raise AttributeError("OrsayAttribute is not connected to an Orsay parameter. Call this object's connect "
+                                 "method before calling update.")
+
+        if attributeName is None:
+            attributeName = self._attributeName
+        if not attributeName == self._attributeName:
+            return
+
+        names = [(p.Name + ", ") for p in self._parameters]
+        namesstring = ""
+        namesstring = namesstring.join(names)[:-2]
+        if parameter is not None and parameter not in self._parameters:
+            raise ValueError("Incorrect parameter passed. Excpected: %s. Received: %s."
+                             % (namesstring, parameter.Name))
+
+        new_values = []
+        for p in self._parameters:
+            new_entry = getattr(p, attributeName)
+            if self._va_value_type == float:
+                new_entry = float(new_entry)
+            elif self._va_value_type == int:
+                new_entry = int(new_entry)
+            elif self._va_value_type == bool:
+                new_entry = new_entry in {True, "True", "true", 1, "1"}
+            else:
+                raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayAttribute."
+                                          % self._va_type_name)
+            new_values.append(new_entry)
+
+        if self._va_is_tuple:
+            new_value = tuple(new_values)
+        else:
+            new_value = new_values[0]
+
+        logging.debug("[%s].%s changed to %s." % (namesstring, attributeName, str(new_value)))
+        self._va._value = new_value  # to not call the setter
+        self._va.notify(new_value)
+
+    def _update_parameter(self, goal):
+        """
+        setter of the non-read-only VA. Sets goal to the Orsay parameter's Target and returns goal to set it to the VA
+        """
+        if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
+            raise AttributeError("OrsayAttribute is not connected to an Orsay parameter. Call this object's connect "
+                                 "method before setting a value to its VA.")
+
+        if self._va.readonly:
+            raise NotSettableError("Value is read-only")
+
+        if type(goal) in {list, tuple, set}:
+            target = list(goal)
+        else:
+            target = [goal]
+
+        if self._va_value_type == bool:
+            for i in range(len(target)):
+                if self._parameters[i].Actual in {1, "1", 0, "0"}:
+                    target[i] = int(target[i])
+                elif self._parameters[i].Actual in {"ON", "OFF"}:
+                    if target[i]:
+                        target[i] = "ON"
+                    else:
+                        target[i] = "OFF"
+
+        for i in range(len(self._parameters)):
+            self._parameters[i].Target = target[i]
+
+        return goal
+
+
+class TestDevice(model.HwComponent):
+    """
+    This represents the Device that needs a VA communicating with an Orsay parameter
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • temperatureTarget: FloatContinuous, unit="°C", range=(-273.15, 10^3), setter=_setTemperatureTarget
+        """
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self.testBooleanVA = model.BooleanVA(True)
+        self.OrsayBooleanVA = None
+        self.testFloatVA = model.FloatVA(0.0, unit="Pa")
+        self.OrsayFloatVA = None
+        self.testIntVA = model.IntVA(0)
+        self.OrsayIntVA = None
+        self.testTupleVA = model.TupleVA((0.1, 0.2))
+        self.OrsayTupleVA = None
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+        self.OrsayBooleanVA = OrsayAttribute(self.testBooleanVA, self.parent.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn)
+        self.OrsayFloatVA = OrsayAttribute(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
+        self.OrsayIntVA = OrsayAttribute(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
+        self.OrsayTupleVA = OrsayAttribute(self.testTupleVA, [self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX, self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        self.OrsayBooleanVA.update_VA()
+        self.OrsayFloatVA.update_VA()
+        self.OrsayIntVA.update_VA()
+        self.OrsayTupleVA.update_VA()
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        self.OrsayBooleanVA.disconnect()
+        self.OrsayFloatVA.disconnect()
+        self.OrsayIntVA.disconnect()
+        self.OrsayTupleVA.disconnect()
+
