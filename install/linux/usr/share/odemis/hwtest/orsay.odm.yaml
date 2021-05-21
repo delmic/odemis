@@ -1,0 +1,40 @@
+# Allows to control an Orsay from Odemis (and nothing else)
+Orsay: {
+    class: Microscope,
+    role: orsaymic,
+    children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS"]
+}
+
+# Connection to the Orsay server
+"OrsayServer": {
+    class: orsay.OrsayComponent,
+    role: null,
+    init: {
+           host: "192.168.56.101"
+    },
+    children: { pneumatic-suspension: "Pneumatic Suspension",
+                pressure: "Chamber",
+                pumping-system: "Pumping System",
+                ups: "UPS"
+    }
+}
+
+"Pneumatic Suspension": {
+    role: pneumatic-suspension,
+    init: {}
+}
+
+"Chamber": {
+    role: chamber,
+    init: {}
+}
+
+"Pumping System": {
+    role: pumping-system,
+    init: {}
+}
+
+"UPS": {
+    role: ups,
+    init: {}
+}
