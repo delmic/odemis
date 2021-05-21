@@ -35,7 +35,6 @@ import time
 from PIL import Image
 from io import BytesIO
 from urllib.parse import urlparse, urlunparse
-
 from requests import Session
 from scipy import signal
 
@@ -1032,9 +1031,7 @@ class MPPC(model.Detector):
         # Acquisition queue with commands of actions that need to be executed. The queue should hold "(str,
         # *)" containing "(command, data corresponding to the call)".
         self.acq_queue = queue.Queue()
-        self._acq_thread = threading.Thread(target=self._acquire, name="acquisition thread")
-        self._acq_thread.deamon = True
-        self._acq_thread.start()
+        self._acq_thread = None
 
         self.data = ASMDataFlow(self)
 
@@ -1051,8 +1048,9 @@ class MPPC(model.Detector):
             except queue.Empty:
                 break
 
-        self.acq_queue.put(("terminate", ))
-        self._acq_thread.join(5)
+        if self._acq_thread:
+            self.acq_queue.put(("terminate", ))
+            self._acq_thread.join(5)
 
     def _assembleMegafieldMetadata(self):
         """
@@ -1195,32 +1193,39 @@ class MPPC(model.Detector):
             self.parent.asmApiPostCall("/scan/finish_mega_field", 204)
             logging.debug("Acquisition thread ended")
 
+    def _ensure_acquisition_thread(self):
+        """
+        Make sure that the acquisition thread is running. If not, it (re)starts it.
+        """
+        if self._acq_thread and self._acq_thread.is_alive():
+            return
+
+        logging.info('Starting acquisition thread and clearing remainder of the old queue')
+
+        # Clear the queue
+        while True:
+            try:
+                self.acq_queue.get(block=False)
+            except queue.Empty:
+                break
+
+        self._acq_thread = threading.Thread(target=self._acquire,
+                                            name="acquisition thread")
+        self._acq_thread.deamon = True
+        self._acq_thread.start()
+
     def startAcquisition(self):
         """
         Put a the command 'start' mega field scan on the queue with the appropriate MegaFieldMetaData Model of the mega
         field image to be scanned. The MegaFieldMetaData is used to setup the HW accordingly, for each field image
         additional field image related metadata is provided.
         """
-        if not self._acq_thread or not self._acq_thread.is_alive():
-            logging.info('Starting acquisition thread and clearing remainder of the old queue')
-
-            # Clear the queue
-            while True:
-                try:
-                    self.acq_queue.get(block=False)
-                except queue.Empty:
-                    break
-
-            self._acq_thread = threading.Thread(target=self._acquire,
-                                                name="acquisition thread")
-            self._acq_thread.deamon = True
-            self._acq_thread.start()
-
+        self._ensure_acquisition_thread()
         megafield_metadata = self._assembleMegafieldMetadata()
         self.acq_queue.put(("start", megafield_metadata))
 
     def getNextField(self, field_num):
-        '''
+        """
         Puts the command 'next' field image scan on the queue with the appropriate field meta data model of the field
         image to be scanned. Can only be executed if it preceded by a 'start' mega field scan command on the queue.
         The acquisition thread returns the acquired image to the provided notifier function added in the acquisition queue
@@ -1228,7 +1233,13 @@ class MPPC(model.Detector):
         returned to the dataflow.notify which will provide the new data to all the subscribers of the dataflow.
 
         :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
-        '''
+        """
+        # Note that this means we don't support numpy ints for now.
+        # That's actually correct, as they'd fail in the JSON encoding (which
+        # could be worked around too, of course, for instance with the JsonExtraEncoder).
+        if len(field_num) != 2 or not all(v >= 0 and isinstance(v, int) for v in field_num):
+            raise ValueError("field_num must be 2 ints >= 0, but got %s" % (field_num,))
+
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
         self.acq_queue.put(("next", field_data, self.dataContent.value, self.data.notify))
 
@@ -1282,6 +1293,8 @@ class MPPC(model.Detector):
 
         return_queue = queue.Queue()  # queue which allows to return images and be blocked when waiting on images
         mega_field_data = self._assembleMegafieldMetadata()
+
+        self._ensure_acquisition_thread()
 
         self.acq_queue.put(("start", mega_field_data))
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
