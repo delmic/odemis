@@ -783,10 +783,10 @@ class FeatureOverviewViewport(LiveViewport):
         self.canvas.enable_drag()
         # Add needed feature bookmarking overlays
         cpol = CurrentPosCrossHairOverlay(self.canvas)
-        cpol.activate()
+        cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
         slol = StagePointSelectOverlay(self.canvas)
-        slol.activate()
+        slol.active.value = True
         self.canvas.add_world_overlay(slol)
 
 

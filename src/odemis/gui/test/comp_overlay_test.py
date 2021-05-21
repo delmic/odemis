@@ -271,7 +271,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.view.show_crosshair.value = False
 
         slol = wol.CurrentPosCrossHairOverlay(cnvs)
-        slol.activate()
+        slol.active.value = True
         cnvs.add_world_overlay(slol)
         # stage start at 0,0 (cross hair at center) -> move bt 1mm, 1mm -> then back to 0,0
         stage.moveAbs({'x': 1e-3, 'y': 1e-3}).result()
@@ -450,7 +450,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(fview, tab_mod)
 
         slol = wol.StagePointSelectOverlay(cnvs)
-        slol.activate()
+        slol.active.value = True
         cnvs.add_world_overlay(slol)
 
         initial_pos = copy.deepcopy(stage.position.value)
