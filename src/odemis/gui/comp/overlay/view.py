@@ -61,13 +61,14 @@ class CrossHairOverlay(base.ViewOverlay):
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
 
-    def draw(self, ctx):
-        """ Draw a cross hair to the Cairo context """
-
-        center = self.cnvs.get_half_view_size()
-
-        tl = (center[0] - self.size, center[1] - self.size)
-        br = (center[0] + self.size, center[1] + self.size)
+    @staticmethod
+    def draw_crosshair(ctx, center, size, colour):
+        """
+        Draw cross hair given Cairo context and center position
+        The method is static to be used from other classes
+        """
+        tl = (center[0] - size, center[1] - size)
+        br = (center[0] + size, center[1] + size)
 
         ctx.set_line_width(1)
 
@@ -80,12 +81,17 @@ class CrossHairOverlay(base.ViewOverlay):
         ctx.stroke()
 
         # Draw cross hair
-        ctx.set_source_rgba(*self.colour)
+        ctx.set_source_rgba(*colour)
         ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
         ctx.line_to(br[0] + 0.5, center[1] + 0.5)
         ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
         ctx.line_to(center[0] + 0.5, br[1] + 0.5)
         ctx.stroke()
+
+    def draw(self, ctx):
+        """ Draw a cross hair to the Cairo context """
+        center = self.cnvs.get_half_view_size()
+        self.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
 
 
 class PlayIconOverlay(base.ViewOverlay):
@@ -1463,7 +1469,6 @@ class PointSelectOverlay(base.ViewOverlay):
 
     def draw(self, ctx):
         pass
-
 
 class HistoryOverlay(base.ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """

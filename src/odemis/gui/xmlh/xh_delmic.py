@@ -498,9 +498,9 @@ class CameraViewportXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(CameraViewportXmlHandler)
 
 
-class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
+class FixedOverviewViewportXmlHandler(xrc.XmlResourceHandler):
 
-    klass = vport.OverviewViewport
+    klass = vport.FixedOverviewViewport
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -510,7 +510,7 @@ class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "OverviewViewport")
+        return self.IsOfClass(node, "FixedOverviewViewport")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -523,7 +523,7 @@ class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
                            style=self.GetStyle())
         self.SetupWindow(panel)
         return panel
-HANDLER_CLASS_LIST.append(OverviewViewportXmlHandler)
+HANDLER_CLASS_LIST.append(FixedOverviewViewportXmlHandler)
 
 
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
@@ -565,6 +565,15 @@ class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "LiveViewport")
 HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
+
+
+class FeatureOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FeatureOverviewViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FeatureOverviewViewport")
+HANDLER_CLASS_LIST.append(FeatureOverviewViewportXmlHandler)
 
 
 class ARAcquiViewportXmlHandler(MicroscopeViewportXmlHandler):

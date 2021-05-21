@@ -1759,7 +1759,7 @@ class ContentView(StreamView):
     # is not yet at the place where the move finished.
 
 
-class OverviewView(StreamView):
+class FixedOverviewView(StreamView):
     """
     A large FoV view which is used to display the previous positions reached
     (if possible) on top of an overview image of the sample.
@@ -1773,5 +1773,16 @@ class OverviewView(StreamView):
         self.interpolate_content.value = False
         self.show_pixelvalue.value = False
 
+        self.mpp.value = 10e-6
+        self.mpp.range = (1e-10, 1)
+
+class FeatureOverviewView(StreamView):
+    """
+    A large FoV view which is used to display an overview map with optional bookmarked features
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+
+        self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)

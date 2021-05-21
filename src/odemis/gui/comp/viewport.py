@@ -37,8 +37,9 @@ from odemis.acq.stream import EMStream, SpectrumStream, \
     StaticFluoStream, Stream, DataProjection, POL_POSITIONS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
-from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
+from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, StagePointSelectOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
@@ -667,24 +668,24 @@ class MicroscopeViewport(ViewPort):
             self.canvas.abilities.discard(CAN_FOCUS)
 
 
-class OverviewViewport(MicroscopeViewport):
+class FixedOverviewViewport(MicroscopeViewport):
     """ A Viewport containing a downscaled overview image of the loaded sample """
 
     canvas_class = miccanvas.OverviewCanvas
     bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
-        super(OverviewViewport, self).__init__(*args, **kwargs)
+        super(FixedOverviewViewport, self).__init__(*args, **kwargs)
         self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
-        super(OverviewViewport, self).OnSize(evt)
+        super(FixedOverviewViewport, self).OnSize(evt)
         self.canvas.fit_view_to_content(True)
 
     def setView(self, view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
 
-        super(OverviewViewport, self).setView(view, tab_data)
+        super(FixedOverviewViewport, self).setView(view, tab_data)
 
         self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
         # Only allow moving when chamber is under vacuum
@@ -765,6 +766,28 @@ class LiveViewport(MicroscopeViewport):
             self.canvas.abilities.add(CAN_FOCUS)
         else:
             self.canvas.abilities.discard(CAN_FOCUS)
+
+class FeatureOverviewViewport(LiveViewport):
+    """
+    LiveViewport dedicated to show overview map area with bookmarked features.
+    Never allow to move the stage while dragging
+    """
+    def __init__(self, *args, **kwargs):
+        super(FeatureOverviewViewport, self).__init__(*args, **kwargs)
+
+        # By default, cannot move stage while dragging
+        self.canvas.abilities.discard(CAN_MOVE_STAGE)
+
+    def setView(self, view, tab_data):
+        super(FeatureOverviewViewport, self).setView(view, tab_data)
+        self.canvas.enable_drag()
+        # Add needed feature bookmarking overlays
+        cpol = CurrentPosCrossHairOverlay(self.canvas)
+        cpol.active.value = True
+        self.canvas.add_world_overlay(cpol)
+        slol = StagePointSelectOverlay(self.canvas)
+        slol.active.value = True
+        self.canvas.add_world_overlay(slol)
 
 
 class ARLiveViewport(LiveViewport):

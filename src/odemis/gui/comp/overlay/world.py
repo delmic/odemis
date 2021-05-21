@@ -32,7 +32,9 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
+from odemis.gui.comp.overlay.view import CrossHairOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
 import wx
@@ -43,6 +45,71 @@ from odemis.util.comp import compute_scanner_fov, get_fov_rect
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
+class CurrentPosCrossHairOverlay(WorldOverlay):
+    """ Render a static cross hair to the current position of the stage"""
+
+    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
+        WorldOverlay.__init__(self, cnvs)
+
+        if not hasattr(cnvs.view, "stage_pos"):
+            raise ValueError("CurrentPosCrossHairOverlay requires stage_pos VA on the view to function properly.")
+        cnvs.view.stage_pos.subscribe(self._current_pos_updated, init=True)
+
+        self.colour = conversion.hex_to_frgba(colour)
+        self.size = size
+
+    @call_in_wx_main
+    def _current_pos_updated(self, _):
+        """
+        Called when current stage position updated
+        """
+        # Directly refresh the canvas (so the overlay draw is called with proper context)
+        self.cnvs.update_drawing()
+
+    def _get_current_stage_buffer_pos(self):
+        """
+        Get the buffer position of the current stage physical position
+        :return: (float, float) buffer coordinates of current position
+        """
+        pos = self.cnvs.view.stage_pos.value
+        half_size_offset = self.cnvs.get_half_buffer_size()
+        # convert physical position to buffer 'world' coordinates
+        bpos = self.cnvs.phys_to_buffer_pos((pos['x'], pos['y']), self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
+        return bpos
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw a cross hair to the Cairo context """
+        center = self._get_current_stage_buffer_pos()
+        CrossHairOverlay.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
+
+class StagePointSelectOverlay(WorldOverlay):
+    """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
+
+    def on_dbl_click(self, evt):
+        if self.active:
+            v_pos = evt.Position
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            # directly move the stage to the selected physical position
+            self.cnvs.view.moveStageTo(p_pos)
+        else:
+            WorldOverlay.on_dbl_click(self, evt)
+
+    def on_left_down(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_down(evt)
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_up(evt)
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        pass
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 

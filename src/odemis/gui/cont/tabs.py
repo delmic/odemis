@@ -44,6 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
+from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
@@ -471,8 +472,11 @@ class LocalizationTab(Tab):
         logging.info("Creating combined SEM/Optical viewport layout")
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
-             {"name": "Overview",
-              "stream_classes": StaticStream,
+             {
+                 "cls": guimod.FeatureOverviewView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
               }),
             (viewports[1],
              {"name": "Acquired",
@@ -481,12 +485,12 @@ class LocalizationTab(Tab):
             (viewports[2],
              {"name": "Live 1",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream),
+              "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream)
+              "stream_classes": LiveStream,
               }),
         ])
 
@@ -517,9 +521,23 @@ class LocalizationTab(Tab):
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
+            # Display the same acquired data in the chamber tab view
+            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+            chamber_tab.load_overview_data(streams)
+
+    def _load_overview_data(self, stream):
+        """
+        Add the given stream to the overview view and stream panel
+        """
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        scont = self._overview_stream_controller.addStream(stream, add_to_view=overview_view)
+        scont.stream_panel.show_remove_btn(True)
+
     def clear_live_streams(self):
         """
         Clear the content of the live streams
+
+
         """
         live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
         for stream in live_streams:
@@ -951,7 +969,7 @@ class SecomStreamsTab(Tab):
         if len(viewports) == 6:
             logging.debug("Inserting Overview viewport")
             vpv[viewports[5]] = {
-                "cls": guimod.OverviewView,
+                "cls": guimod.FixedOverviewView,
                 "name": "Overview",
                 "stage": main_data.stage,
                 "stream_classes": (RGBUpdatableStream, RGBCameraStream, BrightfieldStream),
@@ -2058,7 +2076,17 @@ class CryoChamberTab(Tab):
 
         # future to handle the move
         self._move_future = model.CancellableFuture()
+        # create the tiled area view and its controller to show on the chamber tab
+        vpv = collections.OrderedDict([
+            (panel.vp_overview_map,
+             {
+                 "cls": guimod.FeatureOverviewView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
+             }), ])
 
+        self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
@@ -2154,6 +2182,24 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+
+    def load_overview_data(self, streams):
+        """
+        Load the overview view with the given list of acquired static streams
+        :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
+        """
+        # Replace the old streams with the newly acquired ones in the view
+
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        if not overview_view:
+            logging.warning("Could not find view of type FeatureOverviewView.")
+            return
+        existing_streams = overview_view.getStreams()
+        for stream in streams:
+            ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
+            if ex_st:
+                overview_view.removeStream(ex_st)
+            overview_view.addStream(stream)
 
     def _on_change_project_folder(self, evt):
         """
@@ -3829,7 +3875,7 @@ class SecomAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
-        
+
     def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
