@@ -2554,6 +2554,13 @@ class MCS2(model.Actuator):
             self._set_accel(channel, accel)
             self._set_hold_time(channel, hold_time)
 
+            # Log referencing mode, and warn if it's not normal (autozero)
+            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE, channel)
+            log_lvl = logging.INFO
+            if ref_mode & SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO:
+                log_lvl = logging.WARNING
+            logging.log(log_lvl, "Current referencing mode = {}.".format(ref_mode))
+
         self.position = model.VigilantAttribute({}, readonly=True)
 
         # Indicates moving to a deactive position after referencing.
@@ -3088,9 +3095,6 @@ class MCS2(model.Actuator):
                     channel = self._axis_map[a]
                     moving_channels.add(channel)
                     self.referenced._value[a] = False
-                    # set property key for normal referencing.
-                    self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
-                            channel, SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)
                     self.Reference(channel)  # search for the negative limit signal to set an origin
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)  # block until it's over
@@ -3161,6 +3165,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
+            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE: [0, 0, 0],
         }
 
         # Specify ranges
