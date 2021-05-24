@@ -31,7 +31,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
     images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
-    chronogram_to_export_data
+    chronogram_to_export_data, angular_spectrum_to_export_data, theta_to_export_data
 from odemis.util.dataio import splitext
 import os
 import time
@@ -48,6 +48,7 @@ EXPORTERS = {"spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
              "spectrum": (("PNG", "TIFF"), ("CSV",)),
              "spectrum-line": (("PNG", "TIFF"), ("CSV",)),
              "spectrum-temporal": (("PNG", "TIFF"), ("CSV",)),
+             "spectrum-angular": (("PNG", "TIFF"), ("CSV",)),
              "spectrum-time": (("PNG", "TIFF"), ("CSV",)),
              }
 
@@ -267,6 +268,10 @@ class ExportController(object):
             export_type = 'spectrum-line'
         elif view_name == 'Temporal spectrum':
             export_type = 'spectrum-temporal'
+        elif view_name == 'AR spectrum':
+            export_type = 'spectrum-angular'
+        elif view_name == 'Theta':
+            export_type = 'spectrum-angle'
         elif view_name == 'Chronograph':
             export_type = 'spectrum-time'
         else:
@@ -278,7 +283,7 @@ class ExportController(object):
         Returns the data to be exported with respect to the settings and options.
 
         :param export_type (string): spatial, AR, spectrum, spectrum-temporal,
-            spectrum-time, or spectrum-line
+            spectrum-time, or spectrum-line, spectrum-angular
         :param raw (boolean): raw data format if True
         :param interpolate_data (boolean): apply interpolation on data if True
 
@@ -298,8 +303,12 @@ class ExportController(object):
             exported_data = line_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-temporal':
             exported_data = temporal_spectrum_to_export_data(streams[0], raw)
+        elif export_type == 'spectrum-angular':
+            exported_data = angular_spectrum_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-time':
             exported_data = chronogram_to_export_data(streams[0], raw, vp)
+        elif export_type == 'spectrum-angle':
+            exported_data = theta_to_export_data(streams[0], raw, vp)
         else:
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value

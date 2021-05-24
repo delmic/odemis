@@ -608,3 +608,77 @@ def _figure2data(figure):
 
     return image
 
+
+def ExtractThetaList(data):
+    """
+    Extracts the list of theta values given the mirror parameters. More specifically, given that
+    the slit is closed and focused on the center of the mirror and based on the mirror geometry,
+    the detector plane is calculated and the list of angles is derived.
+
+    : param data (model.DataArray): The data array containing the image that was projected on the
+    detector after being reflected in the parabolic mirror and passing the grating. Shape is (x, y).
+
+    Returns: the list of angles (in radians) with length equal to data.shape[0]. A mask, calculated from
+    the parameters of the mirror, is applied on the data to place NaN values in the positions outside of
+    the detector plane. The angle list should be within the range [-90, 90] in degrees, approximately
+    [-1.6, 1.6] in radians. Theoretically, the values are within the range [90, 90] (degrees) for φ = 90°
+    and φ = 180°, given that the slit is close and focused on the center of the mirror.
+    For displaying reasons, we display the angles from negative values to positive values.
+    """
+    try:
+        pixel_size = data.metadata[model.MD_PIXEL_SIZE]
+        pole_x, pole_y = data.metadata[model.MD_AR_POLE]
+    except KeyError:
+        raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE")
+
+    focus_dist = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
+    x_max = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)  # optical axis
+    parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
+
+    # Calculates the maximum y coordinate in the 2D xy coordinate system describing the detector plane
+    ymax = 2 * numpy.sqrt(x_max * parabola_f) / pixel_size[1]
+
+    # list of pixel indices
+    y_indices = numpy.linspace(0, data.shape[0] - 1, data.shape[0])
+    # Corrects y coordinates to be 0 at the hole position
+    y_pos = (y_indices - pole_y) + (2 * parabola_f) / pixel_size[1]  # y coordinates of the pixels (vertical)
+
+    # Creates mask in Cartesian coordinates. Purpose of the mask is to place NaN in the positions that
+    # cannot be read from the detector.
+    mask = numpy.ones(data.shape[0], dtype=bool)
+
+    # Creates the mask: everything below the cut off of the mirror (< focus_distance)
+    # or above the maximum y coordinate (> ymax) is set to 0
+    focus_distance = focus_dist / pixel_size[1]
+    mask[(y_pos < focus_distance)] = 0
+    mask[(y_pos > ymax)] = 0
+
+    # The detector is imaging the xy plane. In EK imaging, where the slit is close and focused on the
+    # center of the mirror, x=0 and we are interested for the y coordinates.
+    y = y_pos * pixel_size[1]
+
+    r2 = y ** 2  # r = x ** 2 + y ** 2, where x=0
+    xfocus = (1 / (4 * parabola_f)) * r2 - parabola_f
+    xfocus2plusr2 = xfocus ** 2 + r2
+    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
+
+    # Calculates the theta array for each pixel in the detector
+    theta = numpy.arccos(y / sqrtxfocus2plusr2)
+
+    # The argmin theta value corresponds to the hole position of the mirror.
+    holeval = numpy.argmin(theta)
+
+    # Uses the hole position to update the theta data to be within the range [-90, 90] after applying the mask.
+    # Theoretically, the values are within the range [90, 90] for φ = 90° and φ = 180°, given that the slit is
+    # close and focused on the center of the mirror. For displaying reasons, we display the angles from
+    # negative (for φ = 180°) to positive (for φ = 90°) angle values.
+    theta_neg = numpy.negative(theta[:holeval])
+    theta_pos = theta[holeval::]
+    theta = numpy.concatenate((theta_neg, theta_pos), axis=0)
+
+    # Uses the precomputed mask to set NaN to the positions that cannot be read from the detector.
+    theta_data_masked = numpy.where(mask, theta, numpy.nan)
+    # Converts the array to a list (to be saved in MD_THETA_LIST)
+    theta_data = theta_data_masked.tolist()
+
+    return theta_data

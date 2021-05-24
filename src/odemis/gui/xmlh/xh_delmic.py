@@ -603,6 +603,15 @@ class ChronographViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(ChronographViewportXmlHandler)
 
 
+class ThetaViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.ThetaViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "ThetaViewport")
+HANDLER_CLASS_LIST.append(ThetaViewportXmlHandler)
+
+
 class ARLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.ARLiveViewport
@@ -648,6 +657,16 @@ class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "FastEMAcquisitionViewport")
 HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
 
+
+class AngularSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.AngularSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "AngularSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(AngularSpectrumViewportXmlHandler)
 
 ##################################
 # Sliders

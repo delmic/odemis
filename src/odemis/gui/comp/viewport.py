@@ -1667,6 +1667,71 @@ class ChronographViewport(NavigablePlotViewport):
         self.Refresh()
 
 
+class ThetaViewport(NavigablePlotViewport):
+    """
+    Shows the angle graph of a OD detector reading -> bar plot + legend
+    Legends are angle/intensity.
+    Intensity is between min/max of data.
+    """
+
+    def setView(self, view, tab_data):
+        super(ThetaViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Angle")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+    def _connect_projection(self, proj):
+        super(ThetaViewport, self)._connect_projection(proj)
+        if proj:
+            # Show "count / angle" if we know the data is normalized
+            im = proj.image.value
+            if im is not None and im.metadata.get(model.MD_DET_TYPE) == model.MD_DT_NORMAL:
+                wx.CallAfter(self.left_legend.SetToolTip, "Count per angle")
+            else:
+                wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+            # If there is a known period, lock the horizontal range by default
+            # and use the period as initial range
+            if hasattr(self._stream, "windowPeriod"):
+                self.hrange_lock.value = True
+                self.hrange.value = (-self._stream.windowPeriod.value, 0)
+
+    def _on_new_data(self, data):
+        if data is not None and data.size:
+            angle_range, _ = spectrum.get_angle_range(data)
+            unit_x = "°"
+            # Converts radians to degrees & removes NaN values
+            angles = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]
+
+            range_x = min(angles), max(angles)
+            if not self.hrange_lock.value or self.hrange.value is None:
+                display_xrange = util.find_plot_content(angles, data)
+            else:
+                display_xrange = self.hrange.value
+
+            range_y = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                # Put the data axis with -5% of min and +5% of max:
+                # the margin hints the user the display is not clipped
+                data_width = range_y[1] - range_y[0]
+                if data_width == 0:
+                    display_yrange = (0, range_y[1] * 1.05)
+                else:
+                    display_yrange = (max(0, range_y[0] - data_width * 0.05),
+                               range_y[1] + data_width * 0.05)
+            else:
+                display_yrange = self.vrange.value
+
+            self.canvas.set_1d_data(angles, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
+            self.bottom_legend.unit = unit_x
+
+        else:
+            self.clear()
+        self.Refresh()
+
+
 # TODO: share some code with PlotViewPort
 class TwoDViewPort(ViewPort):
     """
@@ -1847,6 +1912,62 @@ class TemporalSpectrumViewport(TwoDViewPort):
             self.left_legend.unit = unit_y
             self.bottom_legend.range = wl  # the list of wavelengths
             self.left_legend.range = times[::-1]   # inverted, to show 0 at the top
+        else:
+            self.clear()
+        self.Refresh()
+
+
+class AngularSpectrumViewport(TwoDViewPort):
+    """
+    Shows an angular spectrum image from a 2D cdd camera with angle in the vertical axis and
+    wavelength in the horizontal axis.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AngularSpectrumViewport, self).__init__(*args, **kwargs)
+        self.canvas.markline_overlay.val.subscribe(self._on_overlay_selection)
+
+    def _on_overlay_selection(self, pos):
+        """
+        Called whenever the markline position of the overlay changes, to set
+        the selected wavelength & angle in the stream (so that the SinglePoint
+        projections are updated).
+        """
+        if self._stream:
+            if hasattr(self._stream, "selected_wavelength"):
+                self._stream.selected_wavelength.value = pos[0]
+            if hasattr(self._stream, "selected_angle"):
+                self._stream.selected_angle.value = pos[1]
+
+    def setView(self, view, tab_data):
+        super(AngularSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Angle")
+
+    def connect_stream(self, projs):
+        super(AngularSpectrumViewport, self).connect_stream(projs)
+        stream, proj = self._stream, self._projection
+
+        if hasattr(stream, "selected_angle") and hasattr(stream, "selected_wavelength"):
+            pos = self.canvas.markline_overlay.val
+            pos.value = (stream.selected_wavelength.value, stream.selected_angle.value)
+
+    def _on_new_data(self, data):
+        if data is not None and data.size:
+            wl, unit_x = spectrum.get_spectrum_range(data)
+            spectrum_range = (min(wl), max(wl))
+
+            angles, _ = spectrum.get_angle_range(data)
+            unit_y = "°"
+            angles = [math.degrees(angle) for angle in angles if not math.isnan(angle)]  # Converts radians to degrees
+
+            angle_range = (max(angles), min(angles))  # inverted, to show the highest value at the bottom
+            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, angle_range)
+
+            self.bottom_legend.unit = unit_x
+            self.left_legend.unit = unit_y
+            self.bottom_legend.range = wl
+            self.left_legend.range = angle_range
         else:
             self.clear()
         self.Refresh()

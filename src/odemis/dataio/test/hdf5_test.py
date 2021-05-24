@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import math
+
 import h5py
 import logging
 import numpy
@@ -680,6 +682,105 @@ class TestHDF5IO(unittest.TestCase):
                 # but we know that hdf5 returns a list of list
                 cot = md[model.MD_EBEAM_CURRENT_TIME]
                 self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT_TIME], cot)
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
+    def testReadAndSaveMDAngularSpec(self):
+        """
+        Checks that we can save and read back the metadata of an angular spectrum image
+        """
+        # Creates 2 simple greyscale images (SEM overview, angularSpec): XY, XYZAC (XY ebeam pos scanned,
+        # AC anglularSpec image)
+        sizes = [(512, 256), (100, 110, 1, 50, 60)]  # different sizes to ensure different acquisitions
+
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test angular spectrum",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
+                     },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake angular spec",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_THETA_LIST: [math.degrees(i) for i in range(sizes[1][-2])],
+                     model.MD_OUT_WL: "pass-through",
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_INTEGRATION_COUNT: 1,
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_AR_POLE: (253.1, 65.1),
+                     model.MD_AR_XMAX: 12e-3,
+                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+                     model.MD_AR_PARABOLA_F: 2e-3,
+                     },
+                    ]
+        # create 2 simple greyscale images
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        for i, s in enumerate(sizes):
+            a = model.DataArray(numpy.random.randint(0, 200, s[::-1], dtype), metadata[i])
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
+            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+            if model.MD_LENS_MAG in md:
+                self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_AR_POLE in md:
+                self.assertEqual(im.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
+            if model.MD_AR_XMAX in md:
+                self.assertEqual(im.metadata[model.MD_AR_XMAX], md[model.MD_AR_XMAX])
+            if model.MD_AR_FOCUS_DISTANCE in md:
+                self.assertEqual(im.metadata[model.MD_AR_FOCUS_DISTANCE], md[model.MD_AR_FOCUS_DISTANCE])
+            if model.MD_AR_PARABOLA_F in md:
+                self.assertEqual(im.metadata[model.MD_AR_PARABOLA_F], md[model.MD_AR_PARABOLA_F])
+
+            # None of the images are using light => no MD_IN_WL
+            self.assertFalse(model.MD_IN_WL in im.metadata,
+                             "Reporting excitation wavelength while there is none")
+
+            if model.MD_WL_LIST in md:
+                wl = md[model.MD_WL_LIST]
+                self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+            if model.MD_THETA_LIST in md:
+                thetal = md[model.MD_THETA_LIST]
+                self.assertListEqual(im.metadata[model.MD_THETA_LIST], thetal)
+            if model.MD_INTEGRATION_COUNT in md:
+                self.assertEqual(im.metadata[model.MD_INTEGRATION_COUNT], md[model.MD_INTEGRATION_COUNT])
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

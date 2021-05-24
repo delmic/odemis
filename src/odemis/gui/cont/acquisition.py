@@ -37,7 +37,8 @@ import math
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
+    TemporalSpectrumSettingsStream, AngularSpectrumSettingsStream
 from odemis.gui import conf
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
@@ -788,7 +789,8 @@ class SparcAcquiController(object):
         for s in self._tab_data_model.streams.value:
             if (isinstance(s, ScannedTemporalSettingsStream) or
                 isinstance(s, ScannedTCSettingsStream) or
-                isinstance(s, TemporalSpectrumSettingsStream)):
+                isinstance(s, TemporalSpectrumSettingsStream) or
+                isinstance(s, AngularSpectrumSettingsStream)):
                 has_temporal = True
 
         #  ADD the the overlay (live_update) in the SEM window which displays the SEM measurements of the current

@@ -178,6 +178,7 @@ class GeneralConfig(Config):
         self.default.set("calibration", "spec_file", u"")
         self.default.set("calibration", "spec_bck_file", u"")
         self.default.set("calibration", "temporalspec_bck_file", u"")
+        self.default.set("calibration", "angularspec_bck_file", "u")
 
         # Section for Odemis/Delphi viewer config
         self.default.add_section("viewer")

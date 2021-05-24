@@ -704,3 +704,39 @@ def bindFuture(future, fn, args=(), kwargs=None):
             future.set_exception(e)
     else:
         future.set_result(result)
+
+
+def sum_within_circle(data, i, j, radius):
+    """
+    Assumption: The user selects a "big pixel" of the spectrum data. We treat the width of this "big pixel"
+    as the diameter of a circle.
+    Given that the circle consists of pixels of width 1, we scan the square around the circle and pick
+    only the points in the circle. The mean is calculated by getting the sum of spectrum data corresponding to
+    these points divided by the total number of them.
+
+    param:
+        data (model.DataArray): the data belonging to the selected "big pixel".
+        i: the x coordinate of the selected "big pixel", which consists of pixels.
+        j: the y coordinate of the selected "big pixel", which consists of pixels.
+        radius: the radius of the circle which contains the center of the pixels to be
+        taken into account.
+
+    returns:
+        the mean of the sum of spectrum data that corresponds to points in the circle.
+    """
+    n = 0
+
+    datasum = numpy.zeros(data.shape[0], dtype=numpy.float64)
+
+    # Scan the square around the circle, and only pick the points in the circle
+    for px in range(max(0, int(i - radius)),
+                    min(int(i + radius) + 1, data.shape[-1])):
+        for py in range(max(0, int(j - radius)),
+                        min(int(j + radius) + 1, data.shape[-2])):
+            if math.hypot(i - px, j - py) <= radius:
+                n += 1
+                datasum += data[:, py, px]
+
+    mean = datasum / n
+
+    return mean

@@ -454,6 +454,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
         self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
         self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
+        self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
@@ -562,6 +563,8 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
         self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
         self.vp_angular_pol = xrc.XRCCTRL(self, "vp_angular_pol")
+        self.vp_angularspec = xrc.XRCCTRL(self, "vp_angularspec")
+        self.vp_thetaspec = xrc.XRCCTRL(self, "vp_thetaspec")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -4827,6 +4830,11 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="AngularSpectrumViewport" name="vp_sparc_as">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -5659,6 +5667,18 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="AngularResolvedViewport" name="vp_angular_pol">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_angularspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ThetaViewport" name="vp_thetaspec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>

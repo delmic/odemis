@@ -132,6 +132,26 @@ def export(filename, data):
             csv_writer.writerow(headers)
             csv_writer.writerows(rows)
 
+    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_EK:
+        logging.debug("Exporting angular spectrum data to CSV")
+
+        spectrum_range, unit_c = spectrum.get_spectrum_range(data)
+        if unit_c == "m":
+            spectrum_range = [s * 1e9 for s in spectrum_range]
+            unit_c = "nm"
+
+        angle_range, _ = spectrum.get_angle_range(data)
+        unit_a = "°"
+        angles = [math.degrees(theta) for theta in angle_range if not math.isnan(theta)]  # Convert radians to degrees
+
+        headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
+        rows = [(t,) + tuple(d) for t, d in zip(angles, data)]
+
+        with open(filename, 'w') as fd:
+            csv_writer = csv.writer(fd)
+            csv_writer.writerow(headers)
+            csv_writer.writerows(rows)
+
     elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_AR:
         logging.debug("Exporting AR data to CSV")
         # Data should be in the form of (Y+1, X+1), with the first row and column the angles

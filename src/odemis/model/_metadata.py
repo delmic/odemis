@@ -81,6 +81,7 @@ MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
+MD_THETA_LIST = "Theta list"  # rad (array) containing the theta values
 
 # Deprecrated: use MD_TIME_LIST
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
@@ -98,6 +99,7 @@ MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
 MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
+MD_AT_EK = "AR Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 

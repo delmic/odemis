@@ -40,7 +40,7 @@ import odemis.acq.stream as acqstream
 from odemis.util import spectrum
 import odemis.gui.img as guiimg
 from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
-    SinglePointTemporalProjection, DataProjection
+    SinglePointTemporalProjection, SinglePointAngularProjection, DataProjection
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
 
@@ -1419,6 +1419,101 @@ def chronogram_to_export_data(proj, raw, vp=None):
                               tick_spacing, text_colour, "cts", font_size, None,
                               mirror=True)
 
+        # Extend y scale bar to fit the height of the bar pl
+        # ot with the x scale bars attached
+        scale_y_draw = numpy.append(scale_y_draw, extend[:, :SMALL_SCALE_WIDTH], axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(data_with_legend, scale_y_draw, axis=1)
+
+        spec_plot = model.DataArray(data_with_legend)
+        spec_plot.metadata[model.MD_DIMS] = 'YXC'
+        return spec_plot
+
+
+def theta_to_export_data(proj, raw, vp=None):
+    """
+    Creates either the raw or the representation as shown in the viewport in the GUI of the theta data plot for export.
+    :param proj: (SinglePointAngularProjection) A theta projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :param vp: (Viewport or None) The viewport selected for export to get the data displayed
+               in the viewport.
+    :returns: (model.DataArray) The data array to export.
+    """
+    if not isinstance(proj, SinglePointAngularProjection):
+        raise ValueError("Trying to export an angle spectrum of an invalid projection")
+
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick a theta")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EK
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick a theta")
+        angle_range, _ = spectrum.get_angle_range(spec)
+        unit = "°"
+        angles = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]  # Converts radians to degrees
+
+        # Draw spectrum bar plot
+        fill_colour = BAR_PLOT_COLOUR
+        client_size = (SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
+        data_to_draw = numpy.full((client_size[1], client_size[0], 4), 255, dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            data_to_draw, cairo.FORMAT_ARGB32, client_size[0], client_size[1])
+        ctx = cairo.Context(surface)
+
+        if vp is not None:
+            # Limit to the displayed ranges
+            range_x = vp.hrange.value
+            range_y = vp.vrange.value
+            angles, spec = clip_data_window(range_x, range_y, angles, spec)
+        else:
+            # calculate data characteristics
+            min_x = min(angles)
+            max_x = max(angles)
+            min_y = min(spec)
+            max_y = max(spec)
+            range_x = (min_x, max_x)
+            range_y = (min_y, max_y)
+
+        data = list(zip(angles, spec))
+        bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
+
+        # Differentiate the scale bar colour so the user later on
+        # can easily change the bar plot or the scale bar colour
+        text_colour = (0, 0, 0)
+
+        # Draw bottom horizontal scale legend
+        tick_spacing = client_size[0] // 4
+        font_size = client_size[0] * SPEC_FONT_SIZE
+        scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
+                              tick_spacing, text_colour, unit, font_size, "Angle")
+        data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
+
+        # Draw top horizontal scale legend
+        scale_x_draw = draw_scale(range_x, (client_size[0], SMALL_SCALE_WIDTH), wx.HORIZONTAL,
+                              tick_spacing, text_colour, unit, font_size, None,
+                              mirror=True)
+        data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
+
+        # Draw left vertical scale legend
+        tick_spacing = client_size[1] // 6
+        scale_y_draw = draw_scale(range_y, (SPEC_SCALE_WIDTH, client_size[1]), wx.VERTICAL,
+                              tick_spacing, text_colour, "cts", font_size, "Intensity")
+
+        # Extend y scale bar to fit the height of the bar plot with the x scale bars attached
+        extend = numpy.full((SPEC_SCALE_HEIGHT, SPEC_SCALE_WIDTH, 4), 255, dtype=numpy.uint8)
+        scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
+
+        # Draw right vertical scale legend
+        scale_y_draw = draw_scale(range_y, (SMALL_SCALE_WIDTH, client_size[1]), wx.VERTICAL,
+                              tick_spacing, text_colour, "cts", font_size, None,
+                              mirror=True)
+
         # Extend y scale bar to fit the height of the bar plot with the x scale bars attached
         scale_y_draw = numpy.append(scale_y_draw, extend[:, :SMALL_SCALE_WIDTH], axis=0)
         scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
@@ -1491,6 +1586,40 @@ def temporal_spectrum_to_export_data(proj, raw):
                                  yrange=time_range[::-1],  # 0 at the top
                                  yunit=t_unit,
                                  ytitle="Time",
+                                 )
+
+
+def angular_spectrum_to_export_data(proj, raw):
+    """
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    of the angular spectrum data for export.
+    :param proj: (RGBSpatialSpectrumProjection) An angular spectrum projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :returns: (model.DataArray) The data array to export.
+    """
+    if raw:  # csv0
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick an angular-spectrum")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EK
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick an angular-spectrum")
+        spectrum_range, wl_unit = spectrum.get_spectrum_range(spec)
+        angle_range, _ = spectrum.get_angle_range(spec)
+        angle_unit = "°"
+        angle_range = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]  # Convert radians to degrees
+
+        return _draw_image_graph(spec,
+                                 size=(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE),
+                                 xrange=spectrum_range,
+                                 xunit=wl_unit,
+                                 xtitle="Wavelength",
+                                 yrange=angle_range,
+                                 yunit=angle_unit,
+                                 ytitle="Angle",
                                  )
 
 

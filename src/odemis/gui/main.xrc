@@ -4033,6 +4033,11 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="AngularSpectrumViewport" name="vp_sparc_as">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -4865,6 +4870,18 @@
             </XRCED>
           </object>
           <object class="AngularResolvedViewport" name="vp_angular_pol">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_angularspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ThetaViewport" name="vp_thetaspec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>

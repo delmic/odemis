@@ -89,7 +89,7 @@ SPARC_MODES = {'ar': ("ccd",
 # guessing methods to know which detector is optical.
 SPARC2_MODES = {
             'ar': (r"ccd.*",
-                {'lens-switch': {'x': 'on'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
@@ -98,8 +98,19 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
+            'ek': (r"ccd.*",
+                {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'off'},  # closed
+                 'spectrograph': {'grating': 'mirror'},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'spec-det-selector': {'rx': 0},
+                 'chamber-light': {'power': 'off'},
+                 # 'pol-analyzer': {'pol': 'pass-through'},
+                }),
             'cli': ("cl-detector",
-                {'lens-switch': {'x': 'on'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'on'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
@@ -108,7 +119,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spectral': (r"spectrometer.*",
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  # TODO: leave the grating as-is, if the user wants to acquire with
@@ -121,14 +132,14 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'streak-align': ("streak-ccd",  # alignment tab
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'streak-focus': ("streak-ccd",  # manual focus in alignment tab
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
@@ -137,7 +148,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
@@ -145,7 +156,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                  }),
             'monochromator': ("monochromator",
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  # 'cl-det-selector': {'x': 'off'},
@@ -157,13 +168,13 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'time-correlator': ("time-correlator",
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'mirror-align': (r"ccd.*",  # Also used for lens alignment
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': 'pass-through'},
@@ -175,7 +186,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
-                {'lens-switch': {'x': 'on'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': 'pass-through'},
@@ -188,7 +199,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
@@ -200,7 +211,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'fiber-align': ("fiber-aligner",
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -211,7 +222,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
-                {'lens-switch': {'x': 'off'},
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # In the current convention, only the spectrograph-dedicated
@@ -557,6 +568,19 @@ class OpticalPathManager(object):
                     continue
                 if not hasattr(comp, "axes") or not isinstance(comp.axes, dict):
                     continue
+                if isinstance(pos, tuple):  # lens-switch
+                    for position in pos:
+                        if isinstance(position, str) and position.startswith("MD:"):
+                            try:
+                                pos = self.mdToValue(comp, position[3:])[axis]
+                                break
+                            except KeyError:
+                                pass
+                        else:
+                            pos = position
+                            break
+                    else:
+                        logging.warning("Failed to find any correct position for component %s in %s", comp.name in pos)
                 if isinstance(pos, str) and pos.startswith("MD:"):
                     pos = self.mdToValue(comp, pos[3:])[axis]
                 if axis in comp.axes:
@@ -766,6 +790,10 @@ class OpticalPathManager(object):
                     return self.guessMode(st)
                 except LookupError:
                     pass
+        elif isinstance(guess_stream, stream.AngularSpectrumStream):
+            return "ek"
+        elif isinstance(guess_stream, stream.ARStream):
+            return "ar"
         elif isinstance(guess_stream, stream.OverlayStream):
             return "overlay"
         else:

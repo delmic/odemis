@@ -560,6 +560,7 @@ class AnalysisSettingsController(SettingsBarController):
         self.setter_ar_file = None
         self.setter_spec_bck_file = None
         self.setter_temporalspec_bck_file = None
+        self.setter_angularspec_bck_file = None
         self.setter_spec_file = None
 
     def _create_controls(self):
@@ -568,8 +569,8 @@ class AnalysisSettingsController(SettingsBarController):
         We create a Panel for each group of controls that we need to be able
         to show and hide separately.
 
-        ** AR background and spectrum background, temporal spectrum background and
-        spectrum efficiency compensation **
+        ** AR background and spectrum background, temporal spectrum background,
+        angular spectrum background and spectrum efficiency compensation **
 
         These two controls are linked using VAs in the tab_data model.
 
@@ -597,7 +598,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._ar_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
-        # Display for spectrum/temporal spectrum background + efficiency compensation file information
+        # Display for spectrum/temporal spectrum/angular spectrum background + efficiency compensation file information
         # They are displayed only if there are spectrum streams or temporal spectrum streams
         self._spec_bckfile_entry = self._pnl_calibration.add_file_button(
             "Spectrum background",
@@ -616,6 +617,15 @@ class AnalysisSettingsController(SettingsBarController):
         self._temporalspec_bckfile_entry.value_ctrl.Show(False)
         self._temporalspec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_temporalspec_bck_file_select)
         self.tab_data.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal, init=True)
+
+        self._angularspec_bckfile_entry = self._pnl_calibration.add_file_button(
+            "Angular spectrum background",
+            tooltip="Angular spectrum background acquisition file",
+            clearlabel="None", wildcard=wildcards)
+        self._angularspec_bckfile_entry.lbl_ctrl.Show(False)
+        self._angularspec_bckfile_entry.value_ctrl.Show(False)
+        self._angularspec_bckfile_entry.value_ctrl.Bind(EVT_FILE_SELECT, self._on_angularspec_bck_file_select)
+        self.tab_data.angularspec_bck_cal.subscribe(self._on_angularspec_bck_cal, init=True)
 
         self._specfile_entry = self._pnl_calibration.add_file_button(
             "Spectrum correction",
@@ -656,7 +666,8 @@ class AnalysisSettingsController(SettingsBarController):
 
             # Change default dir for the calibration files
             for file_entry in (self._ar_bckfile_entry, self._spec_bckfile_entry,
-                               self._temporalspec_bckfile_entry, self._specfile_entry):
+                               self._temporalspec_bckfile_entry, self._angularspec_bckfile_entry,
+                               self._specfile_entry):
                 file_entry.value_ctrl.default_dir = file_info.file_path
 
         self._pnl_acqfile.Refresh()
@@ -716,6 +727,24 @@ class AnalysisSettingsController(SettingsBarController):
 
         self.tab_data.temporalspec_bck_cal.value = fn
 
+    def _on_angularspec_bck_file_select(self, evt):
+        """ Pass the selected spec background file on to the VA """
+        logging.debug("Angular spectrum background file selected by user")
+        fn = evt.selected_file or u""
+        if self.setter_angularspec_bck_file:
+            try:
+                fn = self.setter_angularspec_bck_file(fn)
+            except ValueError:
+                logging.debug(u"Setter refused the file '%s'", fn)
+                # Put back old file name
+                self._angularspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.angularspec_bck_cal.value)
+                return
+            except Exception:
+                self._angularspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.angularspec_bck_cal.value)
+                raise
+
+        self.tab_data.angularspec_bck_cal.value = fn
+
     def _on_spec_file_select(self, evt):
         """ Pass the selected efficiency compensation file on to the VA """
         logging.debug("Efficiency compensation file selected by user")
@@ -743,10 +772,13 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_temporalspec_bck_cal(self, val):
         self._temporalspec_bckfile_entry.value_ctrl.SetValue(val)
 
+    def _on_angularspec_bck_cal(self, val):
+        self._angularspec_bckfile_entry.value_ctrl.SetValue(val)
+
     def _on_spec_cal(self, val):
         self._specfile_entry.value_ctrl.SetValue(val)
 
-    def show_calibration_panel(self, ar, spectrum, temporalspectrum):
+    def show_calibration_panel(self, ar, spectrum, temporalspectrum, angularspectrum):
         """ Show/hide the the angle resolved/spectrum/temporal spectrum panel
         (background or efficiency corrections).
         :param ar: (boolean) Show, hide or don't change angle resolved calib panel.
@@ -759,9 +791,11 @@ class AnalysisSettingsController(SettingsBarController):
         self._spec_bckfile_entry.lbl_ctrl.Show(spectrum)
         self._spec_bckfile_entry.value_ctrl.Show(spectrum)
         self._temporalspec_bckfile_entry.lbl_ctrl.Show(temporalspectrum)
+        self._angularspec_bckfile_entry.lbl_ctrl.Show(angularspectrum)
+        self._angularspec_bckfile_entry.value_ctrl.Show(angularspectrum)
         self._temporalspec_bckfile_entry.value_ctrl.Show(temporalspectrum)
-        self._specfile_entry.lbl_ctrl.Show(spectrum or temporalspectrum)
-        self._specfile_entry.value_ctrl.Show(spectrum or temporalspectrum)
+        self._specfile_entry.lbl_ctrl.Show(spectrum or temporalspectrum or angularspectrum)
+        self._specfile_entry.value_ctrl.Show(spectrum or temporalspectrum or angularspectrum)
 
         self._pnl_calibration.Refresh()
         self.tab_panel.Layout()

@@ -28,7 +28,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
+import math
+
+import numpy
+
 from odemis import model
 from builtins import range
 
@@ -54,8 +57,8 @@ def get_wavelength_per_pixel(da):
     dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
     if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB?
         # This is a hack to handle RGB projections of CX (ie, line spectrum)
-        # and CT (temporal spectrum) data. In theory the MD_DIMS should be
-        # XCR and TCR (where the R is about the RGB channels). However,
+        # and CT (temporal spectrum) and CA (angular spectrum) data. In theory the MD_DIMS should be
+        # XCR and TCR and ACR (where the R is about the RGB channels). However,
         # this is confusing, and the GUI would not know how to display it.
         ci = 1
     else:
@@ -174,6 +177,75 @@ def get_time_range(data):
         max_t = data.shape[ti] // 2  # Typically, a TC array
         min_t = (max_t - data.shape[ti]) + 1
         return list(range(min_t, max_t + 1)), "px"
+
+
+def get_angle_range(data):
+    """ Returns the list of theta values, if exists, in radians.
+
+    :param data: (model.DataArray of shape A...): the DataArray with metadata
+        MD_THETA_LIST
+
+    :return: (list of numbers or None), unit string:
+    """
+
+    try:
+        return get_angle_per_pixel(data), "rad"
+    except (ValueError, KeyError):
+        dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
+
+        if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
+            # This is a hack that works the same way as in get_wavelength_per_pixel
+            thetai = 0
+        else:
+            try:
+                thetai = dims.index("A")  # get index of dimension A
+            except ValueError:
+                raise ValueError("Dimension 'A' not in dimensions, so skip computing angle list.")
+
+        # Shows pixels values (ex: 0 -> +50 px), if theta list is not present
+        max_t = data.shape[thetai] // 2  # array of shape AC
+        min_t = (max_t - data.shape[thetai]) + 1
+        return list(range(min_t, max_t + 1)), "px"
+
+
+def get_angle_per_pixel(da):
+    """
+    Computes the angle list for each pixel along the A dimension.
+
+    :param da: (model.DataArray of shape A): the DataArray with metadata MD_THETA_LIST
+    :return: (list of float of length A): the theta values (in radians) for each pixel in A
+    Note that the theta list consists of NaN values, that later are to be removed for display
+    and the radians will be converted to degrees.
+
+    :raises:
+        AttributeError: if no metadata is present
+        KeyError: if MD_THETA_LIST is not available
+        ValueError: if the metadata doesn't provide enough information
+    """
+
+    if not hasattr(da, 'metadata'):
+        raise AttributeError("No metadata found in data array")
+
+    if model.MD_THETA_LIST in da.metadata:
+        thetal = da.metadata[model.MD_THETA_LIST]
+
+        # check available dimension of data
+        dims = da.metadata.get(model.MD_DIMS, "CAZYX"[-da.ndim:])
+
+        if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB data
+            thetai = 0
+        else:
+            try:
+                thetai = dims.index("A")  # get index of dimension A
+            except ValueError:
+                raise ValueError("Dimension 'A' not in dimensions, so skip computing theta list.")
+
+        if len(thetal) != da.shape[thetai]:
+            raise ValueError("Length of theta list does not match length of theta data.")
+
+        return thetal
+
+    raise KeyError("No MD_THETA_LIST metadata available")
 
 
 def coefficients_to_dataarray(coef):

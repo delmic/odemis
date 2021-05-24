@@ -547,10 +547,11 @@ class StaticARStream(StaticStream):
 class StaticSpectrumStream(StaticStream):
     """
     A stream which displays only one static image/data. The data can be of type
-    spectrum (C11YX), temporal spectrum (CT1YX) or time correlator (1T1YX).
+    spectrum (C11YX), temporal spectrum (CT1YX), time correlator (1T1YX) or
+    angular spectrum (CA1YX) in case of ek imaging.
     The main difference from the normal streams is that the data is 3D or 4D.
-    The metadata should can have a MD_WL_LIST or MD_TIME_LIST.
-    When saving, the data will be converted to CTZYX.
+    The metadata should have a MD_WL_LIST or MD_TIME_LIST or MD_THETA_LIST.
+    When saving, the data will be converted to CTZYX or CAZYX.
 
     The histogram corresponds to the data after calibration, and selected via
     the spectrumBandwidth VA.
@@ -561,11 +562,12 @@ class StaticSpectrumStream(StaticStream):
     def __init__(self, name, image, *args, **kwargs):
         """
         name (string)
-        image (model.DataArray(Shadow) of shape (CYX), (C11YX), (CTYX), (CT1YX), (1T1YX)).
+        image (model.DataArray(Shadow) of shape (CYX), (C11YX), (CTYX), (CT1YX), (1T1YX), (CAYX), (CA1YX)).
         The metadata MD_WL_LIST can be included in order to associate the C to a wavelength.
         The metadata MD_TIME_LIST can be included to associate the T to a timestamp.
+        The metadata MD_THETA_LIST can be included to associate the A to a theta stamp.
 
-        .background is a DataArray of shape (CT111), where C & T have the same length as in the data.
+        .background is a DataArray of shape (CT111/CA111), where C & T/A have the same length as in the data.
         .efficiencyCompensation is always DataArray of shape C1111.
 
         """
@@ -584,7 +586,7 @@ class StaticSpectrumStream(StaticStream):
             # force 5D for CYX
             image = image[:, numpy.newaxis, numpy.newaxis, :, :]
         elif len(image.shape) == 4:
-            # force 5D for CTYX
+            # force 5D for CTYX/CAYX
             image = image[:, :, numpy.newaxis, :, :]
         elif len(image.shape) != 5 or image.shape[2] != 1:
             logging.error("Cannot handle data of shape %s", image.shape)
@@ -607,19 +609,33 @@ class StaticSpectrumStream(StaticStream):
                                                        unit=unit_bw,
                                                        setter=self._setWavelength)
 
-        # Is there time data?
+        # Is there time or theta data?
         if image.shape[1] > 1:
             # cached list of timestamps for each position in the time dimension
-            tl, unit_t = spectrum.get_time_range(image)
-            self._tl_px_values = numpy.array(tl, copy=False)  # Force it to be a numpy array
-            min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
+            if model.MD_TIME_LIST in image.metadata:
+                tl, unit_t = spectrum.get_time_range(image)
+                self._tl_px_values = numpy.array(tl, copy=False)  # Force it to be a numpy array
+                min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
 
-            # Allow the select the time as any value within the range, and the
-            # setter will automatically "snap" it to the closest existing timestamp
-            self.selected_time = model.FloatContinuous(self._tl_px_values[0],
-                                                   range=(min_t, max_t),
-                                                   unit=unit_t,
-                                                   setter=self._setTime)
+                # Allow the select the time as any value within the range, and the
+                # setter will automatically "snap" it to the closest existing timestamp
+                self.selected_time = model.FloatContinuous(self._tl_px_values[0],
+                                                           range=(min_t, max_t),
+                                                           unit=unit_t,
+                                                           setter=self._setTime)
+            else:  # MD_THETA_LIST is present
+                # cached list of theta stamps for each position in the theta dimension
+                theta_list, unit_theta = spectrum.get_angle_range(image)
+                # Converts radians to degrees and removes NaN values from the theta list
+                self._thetal_px_values = [math.degrees(theta) for theta in theta_list]
+                min_theta, max_theta = min(self._thetal_px_values), max(self._thetal_px_values)
+
+                # Allows the selection of theta as any value within the range, and the
+                # setter will automatically "snap" it to the closest existing theta stamp
+                self.selected_angle = model.FloatContinuous(self._thetal_px_values[0],
+                                                            range=(min_theta, max_theta),
+                                                            unit=unit_theta,
+                                                            setter=self._setAngle)
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
@@ -661,13 +677,16 @@ class StaticSpectrumStream(StaticStream):
 
         if "acq_type" not in kwargs:
             if image.shape[0] > 1 and image.shape[1] > 1:
-                kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
+                if model.MD_TIME_LIST in image.metadata:
+                    kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
+                else:  # MD_THETA_LIST is present
+                    kwargs["acq_type"] = model.MD_AT_EK
             elif image.shape[0] > 1:
                 kwargs["acq_type"] = model.MD_AT_SPECTRUM
             elif image.shape[1] > 1:
                 kwargs["acq_type"] = model.MD_AT_TEMPORAL
             else:
-                logging.warning("SpectrumStream data has no spectrum or time dimension, shape = %s",
+                logging.warning("SpectrumStream data has no spectrum or time/theta dimension, shape = %s",
                                 image.shape)
 
         super(StaticSpectrumStream, self).__init__(name, [image], *args, **kwargs)
@@ -717,6 +736,9 @@ class StaticSpectrumStream(StaticStream):
 
     def _setTime(self, value):
         return find_closest(value, self._tl_px_values)
+
+    def _setAngle(self, value):
+        return find_closest(value, self._thetal_px_values)
 
     def _setWavelength(self, value):
         return find_closest(value, self._wl_px_values)

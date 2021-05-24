@@ -21,6 +21,8 @@ from __future__ import division
 
 import csv
 import logging
+import math
+
 import numpy
 from odemis import model
 from odemis.util import spectrum, img, find_closest, almost_equal
@@ -250,7 +252,8 @@ def get_spectrum_efficiency(das):
 def apply_spectrum_corrections(data, bckg=None, coef=None):
     """
     Apply the background correction and the spectrum efficiency compensation
-    factors to the given data if applicable.
+    factors to the given data if applicable. In case the MD_THETA_LIST is present,
+    remove nan values before applying the above factors.
     If the wavelength of the calibration doesn't cover the whole data wavelength,
     the missing wavelength is filled by the same value as the border. Wavelength
     in-between points is linearly interpolated.
@@ -296,6 +299,11 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
             if data.metadata[model.MD_STREAK_TIMERANGE] != bckg.metadata[model.MD_STREAK_TIMERANGE]:
                 raise ValueError("Background should have the same time range as the data, but got %s != %s" %
                                  (bckg.metadata[model.MD_STREAK_TIMERANGE], data.metadata[model.MD_STREAK_TIMERANGE]))
+
+        # Remove nan values from the theta list, if exists, and update the calibrated data to have the same length
+        if model.MD_THETA_LIST in data.metadata:
+            angle_range, unit_x = spectrum.get_angle_range(data)
+            angles, data = remove_nan(angle_range, data)
 
         # Check if we have any wavelength information.
         if model.MD_WL_LIST not in data.metadata:
@@ -356,6 +364,12 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
         data = data * calib_fitted  # will keep metadata from data
 
     return data
+
+
+def remove_nan(x, y):
+    """Removes NaN values from the angle list and updates the spectrum to have the same length"""
+    filtered = [(xv, yv) for xv, yv in zip(x, y) if not math.isnan(xv)]
+    return [math.degrees(f[0]) for f in filtered], [math.degrees(f[1]) for f in filtered]
 
 
 def write_trigger_delay_csv(filename, trig_delays):

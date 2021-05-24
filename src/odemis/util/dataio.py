@@ -27,7 +27,7 @@ import numpy
 from odemis import dataio
 from odemis import model
 from odemis.acq import stream
-from odemis.model import MD_WL_LIST, MD_TIME_LIST
+from odemis.model import MD_WL_LIST, MD_TIME_LIST, MD_THETA_LIST
 import os
 
 
@@ -57,9 +57,15 @@ def data_to_static_streams(data):
         if acqtype == model.MD_AT_ANCHOR or d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
             continue
 
-        dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        if MD_TIME_LIST in d.metadata:
+            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+            ti = dims.find("T")  # -1 if not found
+            thetai = -1
+        else:
+            dims = d.metadata.get(model.MD_DIMS, "CAZYX"[-d.ndim::])
+            thetai = dims.find("A")  # -1 if not found
+            ti = -1
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
-        ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
         if ((MD_WL_LIST in d.metadata and (ci >= 0 and d.shape[ci] > 1)) or
             (ci >= 0 and d.shape[ci] >= 5)  # No metadata, but looks like a spectrum
@@ -67,6 +73,9 @@ def data_to_static_streams(data):
             if MD_TIME_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
+                klass = stream.StaticSpectrumStream
+            elif MD_THETA_LIST in d.metadata and (thetai >= 0 and d.shape[thetai] > 1):
+                name = d.metadata.get(model.MD_DESCRIPTION, "AR Spectrum")
                 klass = stream.StaticSpectrumStream
             else:
                 # Spectrum: either it's obvious according to metadata, or no metadata

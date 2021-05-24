@@ -39,7 +39,7 @@ except ImportError:
     pass  # The projection using this module should never be instantiated then.
 
 from odemis import model
-from odemis.util import img, angleres
+from odemis.util import img, angleres, sum_within_circle
 from scipy import ndimage
 from odemis.model import MD_PIXEL_SIZE, MD_POL_EPHI, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_DS0, \
     MD_POL_S0, MD_POL_DOP, MD_POL_DOLP, MD_POL_UP
@@ -1200,9 +1200,9 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream.calibrated.value
             raw_md = self.stream.calibrated.value.metadata
-            md = {k: raw_md[k] for k in (model.MD_PIXEL_SIZE, model.MD_POS) if k in raw_md}
+            md = {k: raw_md[k] for k in (model.MD_PIXEL_SIZE, model.MD_POS, model.MD_THETA_LIST) if k in raw_md}
 
-            # Average time values if they exist.
+            # Average time/theta values if they exist.
             if data.shape[1] > 1:
                 t = data.shape[1] - 1
                 data = numpy.mean(data[0:t], axis=1)
@@ -1353,6 +1353,8 @@ class LineSpectrumProjection(RGBProjection):
 
         if model.hasVA(self.stream, "selected_time"):
             self.stream.selected_time.subscribe(self._on_selected_time)
+        if model.hasVA(self.stream, "selected_angle"):
+            self.stream.selected_angle.subscribe(self._on_selected_angle)
         self.stream.selectionWidth.subscribe(self._on_selected_width)
         self.stream.selected_line.subscribe(self._on_selected_line)
         self.stream.calibrated.subscribe(self._on_new_data)
@@ -1368,6 +1370,9 @@ class LineSpectrumProjection(RGBProjection):
         self._shouldUpdateImage()
 
     def _on_selected_time(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_angle(self, _):
         self._shouldUpdateImage()
 
     def _find_metadata(self, md):
@@ -1388,6 +1393,8 @@ class LineSpectrumProjection(RGBProjection):
 
         if model.hasVA(self.stream, "selected_time"):
             t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
+        elif model.hasVA(self.stream, "selected_angle"):
+            t = numpy.searchsorted(self.stream._thetal_px_values, self.stream.selected_angle.value)
         else:
             t = 0
 
@@ -1558,25 +1565,9 @@ class PixelTemporalSpectrumProjection(RGBProjection):
             data = numpy.swapaxes(data, 0, 1)
             return model.DataArray(data, md)
 
-        # There are various ways to do it with numpy. As typically the spectrum
-        # dimension is big, and the number of pixels to sum is small, it seems
-        # the easiest way is to just do some kind of "clever" mean. Using a
-        # masked array would also work, but that'd imply having a huge mask.
         radius = width / 2
-        n = 0
-        # TODO: use same cleverness as mean() for dtype?
-        datasum = numpy.zeros((spec2d.shape[0], spec2d.shape[1]), dtype=numpy.float64)
-        # Scan the square around the point, and only pick the points in the circle
-        for px in range(max(0, int(x - radius)),
-                        min(int(x + radius) + 1, spec2d.shape[-1])):
-            for py in range(max(0, int(y - radius)),
-                            min(int(y + radius) + 1, spec2d.shape[-2])):
-                if math.hypot(x - px, y - py) <= radius:
-                    n += 1
-                    datasum += spec2d[:, :, py, px]
+        mean = sum_within_circle(spec2d, x, y, radius)
 
-        mean = datasum / n
-        mean = numpy.swapaxes(mean, 0, 1)
         return model.DataArray(mean.astype(spec2d.dtype), md)
 
     def projectAsRaw(self):
@@ -1599,6 +1590,86 @@ class PixelTemporalSpectrumProjection(RGBProjection):
             else:
                 self.image.value = None
 
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
+
+
+class PixelAngularSpectrumProjection(RGBProjection):
+    """
+    Projects an angular spectrum as a 2D RGB image of angle vs wavelength, for a given "selected_pixel".
+    """
+
+    def __init__(self, stream):
+
+        super(PixelAngularSpectrumProjection, self).__init__(stream)
+        self.stream.selectionWidth.subscribe(self._on_selection_width)
+        self.stream.selected_pixel.subscribe(self._on_selected_pixel)
+        self.stream.calibrated.subscribe(self._on_new_data)
+
+        self._shouldUpdateImage()
+
+    def _on_new_data(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selection_width(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_pixel(self, _):
+        self._shouldUpdateImage()
+
+    def _find_metadata(self, md):
+        return md
+
+    def _computeSpec(self):
+        """
+        Computes the angular spectrum data array for a given pixel. Updates the metadata MD_DIMS with the
+        new shape of the DataArray (AC) where, A represents the angle in ek imaging and C is the channel.
+        Returns: DataArray (of shape AC, or None) after calibration with metadata.
+
+        """
+        data = self.stream.calibrated.value
+
+        if (self.stream.selected_pixel.value == (None, None) or
+                (data.shape[1] == 1 or data.shape[0] == 1)):
+            return None
+
+        x, y = self.stream.selected_pixel.value
+
+        spec2d = self.stream.calibrated.value[:, :, 0, :, :]  # same data but remove useless dims
+        md = dict(data.metadata)
+        md[model.MD_DIMS] = "AC"
+
+        # Width represents the diameter of the circle of the pixels,
+        # whose centers are to be taken into account
+        width = self.stream.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            data = spec2d[:, :, y, x]
+            data = numpy.swapaxes(data, 0, 1)
+            return model.DataArray(data, md)
+
+        radius = width / 2
+        mean = sum_within_circle(spec2d, x, y, radius)
+
+        mean = numpy.swapaxes(mean, 0, 1)
+        return model.DataArray(mean.astype(spec2d.dtype), md)
+
+    def projectAsRaw(self):
+        """
+        Returns the raw data for the current selected_pixel
+        """
+        return self._computeSpec()
+
+    def _updateImage(self):
+        """
+        Recomputes the image with all the raw data available
+        Updates the image with the angular spectrum DataArray for the given .selected_pixel
+        """
+        try:
+            data = self._computeSpec()
+            if data is not None:
+                self.image.value = self._project2RGB(data, self.stream.tint.value)
+            else:
+                self.image.value = None
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
@@ -1639,7 +1710,8 @@ class MeanSpectrumProjection(DataProjection):
 
 class SinglePointSpectrumProjection(DataProjection):
     """
-    Project the (0D) spectrum belonging to the selected pixel.
+    Projects the (0D) spectrum belonging to the selected pixel. Displays the spectrum intensity for
+    a single value of time (TemporalSpectrum is present) or angle (AngularSpectrum is present).
     """
 
     def __init__(self, stream):
@@ -1649,6 +1721,8 @@ class SinglePointSpectrumProjection(DataProjection):
         self.stream.selectionWidth.subscribe(self._on_selected_width)
         if model.hasVA(self.stream, "selected_time"):
             self.stream.selected_time.subscribe(self._on_selected_time)
+        if model.hasVA(self.stream, "selected_angle"):
+            self.stream.selected_angle.subscribe(self._on_selected_angle)
         self.stream.calibrated.subscribe(self._on_new_spec_data, init=True)
 
     def _on_new_spec_data(self, _):
@@ -1661,6 +1735,9 @@ class SinglePointSpectrumProjection(DataProjection):
         self._shouldUpdateImage()
 
     def _on_selected_time(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_angle(self, _):
         self._shouldUpdateImage()
 
     def _computeSpec(self):
@@ -1676,8 +1753,11 @@ class SinglePointSpectrumProjection(DataProjection):
             return None
 
         x, y = self.stream.selected_pixel.value
+        # t represents either the selected time or selected angle pixel value
         if model.hasVA(self.stream, "selected_time"):
             t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
+        elif model.hasVA(self.stream, "selected_angle"):
+            t = numpy.searchsorted(self.stream._thetal_px_values, self.stream.selected_angle.value)
         else:
             t = 0
         spec2d = self.stream.calibrated.value[:, t, 0, :, :]  # same data but remove useless dims
@@ -1692,24 +1772,8 @@ class SinglePointSpectrumProjection(DataProjection):
             data = spec2d[:, y, x]
             return model.DataArray(data, md)
 
-        # There are various ways to do it with numpy. As typically the spectrum
-        # dimension is big, and the number of pixels to sum is small, it seems
-        # the easiest way is to just do some kind of "clever" mean. Using a
-        # masked array would also work, but that'd imply having a huge mask.
         radius = width / 2
-        n = 0
-        # TODO: use same cleverness as mean() for dtype?
-        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
-        # Scan the square around the point, and only pick the points in the circle
-        for px in range(max(0, int(x - radius)),
-                        min(int(x + radius) + 1, spec2d.shape[-1])):
-            for py in range(max(0, int(y - radius)),
-                            min(int(y + radius) + 1, spec2d.shape[-2])):
-                if math.hypot(x - px, y - py) <= radius:
-                    n += 1
-                    datasum += spec2d[:, py, px]
-
-        mean = datasum / n
+        mean = sum_within_circle(spec2d, x, y, radius)
 
         return model.DataArray(mean, md)
 
@@ -1779,25 +1843,83 @@ class SinglePointTemporalProjection(DataProjection):
             data = chrono2d[:, y, x]
             return model.DataArray(data, md)
 
-        # There are various ways to do it with numpy. As typically the spectrum
-        # dimension is big, and the number of pixels to sum is small, it seems
-        # the easiest way is to just do some kind of "clever" mean. Using a
-        # masked array would also work, but that'd imply having a huge mask.
         radius = width / 2
-        n = 0
-        # TODO: use same cleverness as mean() for dtype?
-        datasum = numpy.zeros(chrono2d.shape[0], dtype=numpy.float64)
-        # Scan the square around the point, and only pick the points in the circle
-        for px in range(max(0, int(x - radius)),
-                        min(int(x + radius) + 1, chrono2d.shape[-1])):
-            for py in range(max(0, int(y - radius)),
-                            min(int(y + radius) + 1, chrono2d.shape[-2])):
-                if math.hypot(x - px, y - py) <= radius:
-                    n += 1
-                    datasum += chrono2d[:, py, px]
+        mean = sum_within_circle(chrono2d, x, y, radius)
 
-        mean = datasum / n
         return model.DataArray(mean.astype(chrono2d.dtype), md)
+
+    def projectAsRaw(self):
+        return self._computeSpec()
+
+    def _updateImage(self):
+        """
+        Recomputes the image with all the raw data available
+
+        Updates .image with None or a DataArray with 1 dimension: the spectrum of the given
+         pixel or None if no spectrum is selected.
+        """
+        try:
+            self.image.value = self._computeSpec()
+
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
+
+
+class SinglePointAngularProjection(DataProjection):
+    """
+    Projects the (0D) angular data belonging to the selected pixel. Displays the angular data for a
+    selected wavelength or a mean of wavelengths (depending on the width value)
+    """
+
+    def __init__(self, stream):
+
+        super(SinglePointAngularProjection, self).__init__(stream)
+        self.stream.selected_pixel.subscribe(self._on_selected_pixel)
+        self.stream.selectionWidth.subscribe(self._on_selected_width)
+        if model.hasVA(self.stream, "selected_wavelength"):
+            self.stream.selected_wavelength.subscribe(self._on_selected_wl)
+            self.stream.calibrated.subscribe(self._on_new_spec_data)
+        self._shouldUpdateImage()
+
+    def _on_new_spec_data(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_pixel(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_width(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_wl(self, _):
+        self._shouldUpdateImage()
+
+    def _computeSpec(self):
+
+        if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[1] == 1:
+            return None
+
+        x, y = self.stream.selected_pixel.value
+        if model.hasVA(self.stream, "selected_wavelength"):
+            c = numpy.searchsorted(self.stream._wl_px_values, self.stream.selected_wavelength.value)
+        else:
+            c = 0
+        angle2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
+
+        md = {model.MD_DIMS: "A"}
+        if model.MD_THETA_LIST in angle2d.metadata:
+            md[model.MD_THETA_LIST] = angle2d.metadata[model.MD_THETA_LIST]
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.stream.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            data = angle2d[:, y, x]
+            return model.DataArray(data, md)
+
+        radius = width / 2
+        mean = sum_within_circle(angle2d, x, y, radius)
+
+        return model.DataArray(mean.astype(angle2d.dtype), md)
 
     def projectAsRaw(self):
         return self._computeSpec()

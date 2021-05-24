@@ -67,12 +67,12 @@ from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, \
-    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
+    ARStream, AngularSpectrumStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
     RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
-    PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
-    ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
+    PixelTemporalSpectrumProjection, PixelAngularSpectrumProjection, SinglePointTemporalProjection, \
+    ScannedTemporalSettingsStream, SinglePointAngularProjection, \
+    ARRawProjection, ARPolarimetryProjection, StaticStream, FluoStream, StaticFluoStream
 from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -80,7 +80,8 @@ from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport,\
+    AngularSpectrumViewport, ThetaViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
@@ -1298,6 +1299,9 @@ class SparcAcquisitionTab(Tab):
         tab_data.streams.value.append(spot_stream)
 
         viewports = panel.pnl_sparc_grid.viewports
+
+        tab_data.streams.subscribe(self._arrangeViewports, init=True)
+
         for vp in viewports[:4]:
             assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
 
@@ -1325,13 +1329,19 @@ class SparcAcquisitionTab(Tab):
         # Note: for now either streak camera HW or monochromator HW is added as a viewport
         # TODO: for now only time correlator HW or streak cam HW handled
         # So far there is no system having both HW available
-        if main_data.streak_ccd:
+
+        if main_data.streak_ccd or self.viewport is TemporalSpectrumViewport:
             if main_data.monochromator:
                 logging.warning("Streak camera and monochromator HW present, but"
                                 "only streak camera viewport will be displayed.")
             vpv[viewports[3]] = {
                 "name": "Temporal Spectrum",
                 "stream_classes": TemporalSpectrumStream,
+            }
+        elif main_data.ccd or self.viewport is AngularSpectrumViewport:
+            vpv[viewports[5]] = {
+                "name": "AR Spectrum",
+                "stream_classes": AngularSpectrumStream,
             }
 
         else:
@@ -1367,8 +1377,10 @@ class SparcAcquisitionTab(Tab):
         ])
 
         # overwrite the view buttons
-        if main_data.streak_ccd:
+        if main_data.streak_ccd or self.viewport is TemporalSpectrumViewport:
             buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
+        if main_data.ccd or self.viewport is AngularSpectrumViewport:
+            buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_as, panel.lbl_sparc_view_br)
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
@@ -1482,6 +1494,27 @@ class SparcAcquisitionTab(Tab):
     @property
     def acquisition_controller(self):
         return self._acquisition_controller
+
+    def _arrangeViewports(self, streams):
+        """
+        Called when the .streams is updated, when a new stream is playing. The .streams is reordered every
+        time a new stream is playing. Playing stream becomes the first in the list.
+        It picks the last playing stream between the TemporalSpectrumStream and the AngularSpectrumStream.
+        """
+
+        def updateViewport(streams):
+            """ Return the last playing stream between Temporal Spectrum and Angular Spectrum"""
+            for s in streams:
+                if isinstance(s, TemporalSpectrumStream):
+                    return TemporalSpectrumViewport
+                elif isinstance(s, AngularSpectrumStream):
+                    return AngularSpectrumViewport
+                # in case neither Temporal Spectrum or Angular Spectrum is present
+                if streams.index(s) == len(streams) - 1:
+                    return None
+
+        self.viewport = updateViewport(streams)
+
 
     def on_tool_change(self, tool):
         """ Ensure spot position is always defined when using the spot """
@@ -2670,7 +2703,9 @@ class AnalysisTab(Tab):
         assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
         assert(isinstance(viewports[8], ChronographViewport))
-        assert(isinstance(viewports[9], AngularResolvedViewport))
+        assert (isinstance(viewports[9], AngularResolvedViewport))
+        assert (isinstance(viewports[10], AngularSpectrumViewport))
+        assert(isinstance(viewports[11], ThetaViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
@@ -2722,6 +2757,16 @@ class AnalysisTab(Tab):
              {"name": "Polarimetry",  # polarimetry analysis (if ar with polarization)
               "stream_classes": ARStream,
               "projection_class": ARPolarimetryProjection,
+              }),
+            (viewports[10],
+             {"name": "AR Spectrum",
+              "stream_classes": (SpectrumStream,),
+              "projection_class": PixelAngularSpectrumProjection,
+              }),
+            (viewports[11],
+             {"name": "Theta",
+              "stream_classes": (SpectrumStream,),
+              "projection_class": SinglePointAngularProjection,
               }),
         ])
 
@@ -2786,6 +2831,7 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_ar_file = self.set_ar_background
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_temporalspec_bck_file = self.set_temporalspec_background
+        self._settings_controller.setter_angularspec_bck_file = self.set_temporalspec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
         if main_data.role is None:
@@ -2862,22 +2908,23 @@ class AnalysisTab(Tab):
 
     def _get_time_spectrum_streams(self, spec_streams):
         """
-        Sort spectrum streams into the substreams according to types spectrum, temporal spectrum
-        and time corrrelator streams.
+        Sort spectrum streams into the substreams according to types spectrum, temporal spectrum,
+        angular spectrum and time correlator streams.
         :param spec_streams: (list of streams) Streams to separate.
-        :returns: (3 lists of streams) spectrum, temporal spectrum and time corrrelator
+        :returns: (4 lists of streams) spectrum, temporal spectrum, angular spectrum and time correlator
         """
         spectrum = [s for s in spec_streams
-                    if hasattr(s, "selected_wavelength") and not hasattr(s, "selected_time")]
+                    if hasattr(s, "selected_wavelength") and not hasattr(s, "selected_time") and not hasattr(s, "selected_angle")]
         temporalspectrum = [s for s in spec_streams
                             if hasattr(s, "selected_wavelength") and hasattr(s, "selected_time")]
         timecorrelator = [s for s in spec_streams
                           if not hasattr(s, "selected_wavelength") and hasattr(s, "selected_time")]
-
+        angularspectrum = [s for s in spec_streams
+                          if hasattr(s, "selected_wavelength") and hasattr(s, "selected_angle")]
         # TODO currently "selected_wavelength" is always created, so all timecorrelator streams
         # are considered temporal spectrum streams -> adapt StaticSpectrumStream
 
-        return spectrum, temporalspectrum, timecorrelator
+        return spectrum, temporalspectrum, timecorrelator, angularspectrum
 
     @call_in_wx_main
     def display_new_data(self, filename, data, extend=False):
@@ -2902,7 +2949,9 @@ class AnalysisTab(Tab):
             self.panel.vp_inspection_plot.clear()
             self.panel.vp_linespec.clear()
             self.panel.vp_temporalspec.clear()
+            self.panel.vp_angularspec.clear()
             self.panel.vp_timespec.clear()
+            self.panel.vp_thetaspec.clear()
             self.panel.vp_angular.clear()
             self.panel.vp_angular_pol.clear()
 
@@ -2932,7 +2981,7 @@ class AnalysisTab(Tab):
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
 
-        # all spectrum streams including spectrum, temporal spectrum and time correlator (chronograph)
+        # all spectrum streams including spectrum, temporal spectrum and time correlator (chronograph), angular spectrum
         spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
         ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
 
@@ -3004,6 +3053,11 @@ class AnalysisTab(Tab):
                 new_visible_views[1] = self.panel.vp_timespec.view
                 new_visible_views[2] = self.panel.vp_inspection_plot.view
                 new_visible_views[3] = self.panel.vp_temporalspec.view
+            elif hasattr(spec_stream, "selected_angle"):
+                new_visible_views[0] = self._def_views[2]  # Combined
+                new_visible_views[1] = self.panel.vp_thetaspec.view
+                new_visible_views[2] = self.panel.vp_inspection_plot.view
+                new_visible_views[3] = self.panel.vp_angularspec.view
             else:
                 new_visible_views[0:2] = self._def_views[2:4]  # Combined
                 new_visible_views[2] = self.panel.vp_linespec.view
@@ -3052,10 +3106,10 @@ class AnalysisTab(Tab):
             self.tb.enable_button(TOOL_LINE, False)
 
         # Only show the panels that fit the current streams
-        spectrum, temporalspectrum, chronograph = self._get_time_spectrum_streams(spec_streams)
+        spectrum, temporalspectrum, chronograph, angularspectrum = self._get_time_spectrum_streams(spec_streams)
         # TODO extend in case of bg support for time correlator data
         self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spectrum) > 0,
-                                                         len(temporalspectrum) > 0)
+                                                         len(temporalspectrum) > 0, len(angularspectrum) > 0)
 
         self.tab_data_model.visible_views.value = new_visible_views
 
@@ -3082,7 +3136,15 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.temporalspec_bck_cal.value)
                 self.tab_data_model.temporalspec_bck_cal.value = u""  # remove the calibration
 
-        if spectrum or temporalspectrum:
+        if angularspectrum:
+            try:
+                self.set_temporalspec_background(self.tab_data_model.angularspec_bck_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.angularspec_bck_cal.value)
+                self.tab_data_model.angularspec_bck_cal.value = u""  # remove the calibration
+
+        if spectrum or temporalspectrum or angularspectrum:
             try:
                 self.set_spec_comp(self.tab_data_model.spec_cal.value)
             except ValueError:
@@ -3137,7 +3199,7 @@ class AnalysisTab(Tab):
                 pass
             elif not same_projections:
                 same_projections = view_projections
-            elif  not projection_list_eq(same_projections, view_projections):
+            elif not projection_list_eq(same_projections, view_projections):
                 break  # At least two views are different => leave the display as-is.
 
         else:  # All views are identical (or empty)
@@ -3238,7 +3300,7 @@ class AnalysisTab(Tab):
 
     def set_temporalspec_background(self, fn):
         """
-        Load the data from a temporal spectrum (background) file and apply to streams.
+        Load the data from a temporal or angular spectrum (background) file and apply to streams.
         :param fn: (str) The file name for the background image.
         :return: (unicode) The filename as it has been accepted.
         :raise: ValueError, if the file is not correct or calibration cannot be applied.
@@ -3258,8 +3320,12 @@ class AnalysisTab(Tab):
             spec_strms = [s for s in self.tab_data_model.streams.value
                         if isinstance(s, acqstream.StaticSpectrumStream)]
             temporalspectrum = self._get_time_spectrum_streams(spec_strms)[1]
+            angularspectrum = self._get_time_spectrum_streams(spec_strms)[3]
 
             for strm in temporalspectrum:
+                strm.background.value = cdata
+
+            for strm in angularspectrum:
                 strm.background.value = cdata
 
         except Exception as err:
