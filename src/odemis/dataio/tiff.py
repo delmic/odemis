@@ -867,6 +867,16 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
+        try:
+            mpta = float(ardata.attrib["MirrorPosTopOffset"])
+            mptb = float(ardata.attrib["MirrorPosTopSlope"])
+            md[model.MD_AR_MIRROR_TOP] = (mpta, mptb)
+            mpba = float(ardata.attrib["MirrorPosBottomOffset"])
+            mpbb = float(ardata.attrib["MirrorPosBottomSlope"])
+            md[model.MD_AR_MIRROR_BOTTOM] = (mpba, mpbb)
+        except (AttributeError, KeyError, ValueError):
+            pass
+
         # polarization analyzer
         poldata = ime.find("POLData")  # there must be only one per Image
         try:
@@ -1558,7 +1568,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     if any(rd in globalMD for rd in [model.MD_AR_XMAX,
                                      model.MD_AR_HOLE_DIAMETER,
                                      model.MD_AR_FOCUS_DISTANCE,
-                                     model.MD_AR_PARABOLA_F]):
+                                     model.MD_AR_PARABOLA_F,
+                                     model.MD_AR_MIRROR_TOP,
+                                     model.MD_AR_MIRROR_BOTTOM
+                                     ]):
 
         ardata = ET.SubElement(ime, "ARData")
         if model.MD_AR_XMAX in globalMD:
@@ -1569,6 +1582,15 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             ardata.attrib["FocusDistance"] = "%.15f" % globalMD[model.MD_AR_FOCUS_DISTANCE]
         if model.MD_AR_PARABOLA_F in globalMD:
             ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
+
+        if model.MD_AR_MIRROR_TOP in globalMD:
+            mt = globalMD[model.MD_AR_MIRROR_TOP]
+            ardata.attrib["MirrorPosTopOffset"] = "%.15f" % mt[0]
+            ardata.attrib["MirrorPosTopSlope"] = "%.15f" % mt[1]
+        if model.MD_AR_MIRROR_BOTTOM in globalMD:
+            mb = globalMD[model.MD_AR_MIRROR_BOTTOM]
+            ardata.attrib["MirrorPosBottomOffset"] = "%.15f" % mb[0]
+            ardata.attrib["MirrorPosBottomSlope"] = "%.15f" % mb[1]
 
     # Store polarization analyzer MD data if any
     if any(rd in globalMD for rd in [model.MD_POL_MODE,

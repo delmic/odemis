@@ -360,7 +360,11 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.resolution.value = res
         res = self.spectrometer.resolution.value # actual value
 
-        # read calibration
+        # read calibration. Note that typically it's up to the MD updater to take
+        # care of it. But if the calibration is the wrong size (eg, the binning
+        # has just been changed), then it'll be directly computed from the CompositedSpectrometer.
+        # So we put wrong metadata on purpose, to force the computation.
+        self.spectrometer.updateMetadata({model.MD_WL_LIST: [0]})
         data = self.spectrometer.data.get()
         wl = data.metadata[model.MD_WL_LIST]
         self.assertEqual(len(wl), res[0])
@@ -531,6 +535,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
                    self.spectrometer.binning.range[1][1]]
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
+        self.spectrometer.updateMetadata({model.MD_WL_LIST: [0]})
 
         self._data = queue.Queue()
 
@@ -580,10 +585,10 @@ class TestCompositedSpectrometer(unittest.TestCase):
 
     def receive_spec_data(self, df, d):
         self._data.put(d)
-        wl = d.metadata[model.MD_WL_LIST]
+        wl = d.metadata.get(model.MD_WL_LIST)
         if d.shape[0] != 1:
             logging.error("Shape is %s", d.shape)
-        if d.shape[1] != len(wl):
+        if wl and d.shape[1] != len(wl):
             logging.error("Shape is %s but wl has len %d", d.shape, len(wl))
 
         logging.debug("Received data of shape %s", d.shape)

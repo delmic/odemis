@@ -673,9 +673,16 @@ class StreamController(object):
                 self._binva = getattr(self.stream, fn)
                 break
         else:
-            logging.warning("Stream has resolution VA but no binning/scale, "
-                            "so it will not be updated.")
-            return
+            if hasattr(self.stream, "spectrum_binning") and hasattr(self.stream, "angular_binning"):
+                # Check if angular(vertical) and spectrum(horizontal) are present.
+                # Update the default binning by assigning the angular binning to it and subscribe to the spectrum
+                # binning to update the resolution. The opposite would also work.
+                self._binva = self.stream.angular_binning
+                self.stream.spectrum_binning.subscribe(self._update_resolution)
+            else:
+                logging.warning("Stream has resolution VA but no binning/scale, "
+                                "so it will not be updated.")
+                return
 
         self._binva.subscribe(self._update_resolution)
         self._resva.subscribe(self._on_resolution)
@@ -683,6 +690,8 @@ class StreamController(object):
     def _unlink_resolution(self):
         if self._binva:
             self._binva.unsubscribe(self._update_resolution)
+            if hasattr(self.stream, "spectrum_binning"):
+                self.stream.spectrum_binning.unsubscribe(self._update_resolution)
         if self._resva:
             self._resva.subscribe(self._on_resolution)
 
@@ -694,6 +703,8 @@ class StreamController(object):
         # if the stream is not playing, the hardware should take care of it
         if self.stream.is_active.value:
             return
+        if hasattr(self.stream, "spectrum_binning"):
+            scale = (self.stream.spectrum_binning.value, self.stream.angular_binning.value)
         newres = (int((self._resmx[0] * crop) // scale[0]),
                   int((self._resmx[1] * crop) // scale[1]))
         newres = self._resva.clip(newres)
@@ -704,7 +715,10 @@ class StreamController(object):
         # if the stream is not playing, the hardware should take care of it
         if self.stream.is_active.value:
             return
-        scale = self._binva.value
+        if hasattr(self.stream, "spectrum_binning") and hasattr(self.stream, "angular_binning"):
+            scale = (self.stream.spectrum_binning.value, self.stream.angular_binning.value)
+        else:
+            scale = self._binva.value
         maxres = (int((self._resmx[0] * crop) // scale[0]),
                   int((self._resmx[1] * crop) // scale[1]))
         maxres = self._resva.clip(maxres)
@@ -1447,6 +1461,7 @@ class StreamBarController(object):
                                acqstream.ScannedTCSettingsStream,
                                acqstream.ScannedTemporalSettingsStream,
                                acqstream.TemporalSpectrumSettingsStream,
+                               acqstream.AngularSpectrumSettingsStream,
                                )
         tab_data.tool.subscribe(self.on_tool_change)
 
@@ -2559,7 +2574,7 @@ class SparcStreamsController(StreamBarController):
     """
     Controls the streams for the SPARC acquisition tab
     In addition to the standard controller it:
-     * Knows how to create the special RepeptionStreams
+     * Knows how to create the special RepetitionStreams
      * Updates the .acquisitionStreams when a stream is added/removed
      * Connects tab_data.useScanStage to the streams
 
@@ -2608,6 +2623,9 @@ class SparcStreamsController(StreamBarController):
 
         if main_data.streak_ccd:
             self.add_action("Temporal spectrum", self.addTemporalSpectrum)
+
+        if main_data.isAngularSpectrumSupported():
+            self.add_action("AR Spectrum", self.addAngularSpectrum)
 
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
@@ -2659,6 +2677,23 @@ class SparcStreamsController(StreamBarController):
             # spg should be None, but in case it's an error in the microscope file
             # and actually, there is a spectrograph, then use that one
             return main_data.spectrograph
+
+    def _find_spectrometer(self, detector):
+        """
+        Find a spectrometer which wraps the given detector
+        return (Detector): the spectrometer
+        raise LookupError: if nothing found.
+        """
+        main_data = self._main_data_model
+        for spec in main_data.spectrometers:
+            # Check by name as the components are actually Pyro proxies, which
+            # might not be equal even if they point to the same component.
+            if (model.hasVA(spec, "dependencies") and
+                    detector.name in (d.name for d in spec.dependencies.value)
+            ):
+                return spec
+
+        raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def addEBIC(self, **kwargs):
         # Need to use add_to_view=True to force only showing on the right
@@ -2786,7 +2821,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
-            main_data.pol_analyzer,
+            analyzer=main_data.pol_analyzer,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             axis_map=axes,
@@ -2908,6 +2943,53 @@ class SparcStreamsController(StreamBarController):
                                                         [sem_stream, spec_stream])
 
         return self._addRepStream(spec_stream, sem_spec_stream)
+
+    def addAngularSpectrum(self):
+        """
+        Creates an angular spectrum stream and adds to all compatible viewports
+        """
+        main_data = self._main_data_model
+
+        detvas = get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config)
+        # For ek acquisition we use a horizontal and a vertical binning
+        # which are instantiated in the AngularSpectrumSettingsStream.
+        # Removes binning from local (GUI) VAs to use a vertical and horizontal binning
+        detvas.remove('binning')
+
+        if main_data.ccd.exposureTime.range[1] < 3600:  # 1h
+            # Removes exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
+            detvas.remove("exposureTime")
+
+        spectrograph = self._getAffectingSpectrograph(main_data.ccd)
+        spectrometer = self._find_spectrometer(main_data.ccd)
+
+        axes = {"wavelength": ("wavelength", spectrograph),
+                "grating": ("grating", spectrograph),
+                "slit-in": ("slit-in", spectrograph),
+                "filter": ("band", main_data.light_filter),
+                }
+        axes = self._filter_axes(axes)
+
+        as_stream = acqstream.AngularSpectrumSettingsStream(
+            "AR Spectrum",
+            main_data.ccd,
+            main_data.ccd.data,
+            main_data.ebeam,
+            spectrometer,
+            spectrograph,
+            analyzer=main_data.pol_analyzer,
+            sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm,
+            axis_map=axes,
+            detvas=detvas,
+        )
+        self._set_default_spectrum_axes(as_stream)
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_as_stream = acqstream.SEMAngularSpectrumMDStream("SEM AngularSpectrum", [sem_stream, as_stream])
+
+        return self._addRepStream(as_stream, sem_as_stream)
 
     def addTemporalSpectrum(self):
         """

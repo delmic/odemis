@@ -47,8 +47,9 @@ from odemis import model, dataio
 from odemis.acq import align, acqmng, stream
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
-    TemporalSpectrumSettingsStream, FluoStream, StaticStream, BrightfieldStream
-from odemis.gui import conf
+    TemporalSpectrumSettingsStream, FluoStream, StaticStream, BrightfieldStream, \
+    AngularSpectrumSettingsStream
+from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -63,7 +64,9 @@ from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDia
 from odemis.model import DataArrayShadow
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
+from odemis.util.dataio import open_acquisition, data_to_static_streams
 from odemis.util.filename import guess_pattern, create_filename, update_counter
+
 
 # black list of VAs name which are known to not affect the acquisition time
 VAS_NO_ACQUISITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
@@ -1465,7 +1468,8 @@ class SparcAcquiController(object):
         for s in self._tab_data_model.streams.value:
             if (isinstance(s, ScannedTemporalSettingsStream) or
                 isinstance(s, ScannedTCSettingsStream) or
-                isinstance(s, TemporalSpectrumSettingsStream)):
+                isinstance(s, TemporalSpectrumSettingsStream) or
+                isinstance(s, AngularSpectrumSettingsStream)):
                 has_temporal = True
 
         #  ADD the overlay (live_update) in the SEM window which displays the SEM measurements of the current

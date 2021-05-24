@@ -106,6 +106,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._crosshair_ol = None
         self._spotmode_ol = None
         self.mirror_ol = None
+        self.ek_ol = None
         self._fps_ol = None
         self._last_frame_update = None
         self._focus_overlay = None
@@ -1120,8 +1121,6 @@ class SparcARCanvas(DblMicroscopeCanvas):
         # same as flip argument of set_images(): int with wx.VERTICAL and/or wx.HORIZONTAL or just use MD_FLIP
         self.flip = 0
 
-        self.mirror_ol = world_overlay.MirrorArcOverlay(self)
-
     def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
@@ -1481,8 +1480,8 @@ class TwoDPlotCanvas(BitmapCanvas):
 
         self.unit_x = None
         self.unit_y = None
-        self.range_x = None
-        self.range_y = None
+        self.range_x = None  # list of floats, from left to right (at least two)
+        self.range_y = None  # list of floats, from top to bottom (at least two)
 
         self._crosshair_ol = None
         self._pixelvalue_ol = None
@@ -1627,56 +1626,25 @@ class TwoDPlotCanvas(BitmapCanvas):
         :return: (int, int)
         """
         size = self.ClientSize
-        data_width = max(self.range_x) - min(self.range_x)
-        x = min(max(min(self.range_x), val[0]), max(self.range_x))
-        if self.range_x[1] > self.range_x[0]:
-            perc_x = (x - self.range_x[0]) / data_width
-        else:
-            perc_x = 1 - (x - self.range_x[1]) / data_width
-        pos_x = perc_x * size[0]
+        x = min(max(min(self.range_x), val[0]), max(self.range_x))  # clip withing range
+        pos_x_new = img.value_to_pixel(x, size[0], self.range_x, wx.HORIZONTAL)
 
-        data_height = max(self.range_y) - min(self.range_y)
-        y = min(max(min(self.range_y), val[1]), max(self.range_y))
+        y = min(max(min(self.range_y), val[1]), max(self.range_y))  # clip
+        pos_y_new = img.value_to_pixel(y, size[1], self.range_y, wx.VERTICAL)
 
-        if self.range_y[1] > self.range_y[0]:
-            perc_y = (self.range_y[1] - y) / data_height
-        else:
-            perc_y = 1 - (self.range_y[0] - y) / data_height
+        return pos_x_new, pos_y_new
 
-        pos_y = perc_y * size[1]
-
-        return pos_x, pos_y
-
-    def pos_to_val(self, pos, snap=False):
+    def pos_to_val(self, pos):
         """ Map the given pixel position to a value in the data range
-
-        If snap is True, the closest snap from `self._data` will be returned, otherwise
-        interpolation will occur.
         """
         size = self.ClientSize
-        perc_x = pos[0] / size[0]
-        data_width = max(self.range_x) - min(self.range_x)
-        if self.range_x[1] > self.range_x[0]:
-            val_x = self.range_x[0] + perc_x * data_width
-        else:
-            val_x = self.range_x[1] - perc_x * data_width
+        pos_x = min(max(0, pos[0]), size[0] - 1)  # clip
+        val_x_new = img.pixel_to_value(pos_x, size[0], self.range_x, wx.HORIZONTAL)
 
-        perc_y = pos[1] / size[1]
-        data_height = max(self.range_y) - min(self.range_y)
-        if self.range_y[1] > self.range_y[0]:
-            val_y = self.range_y[1] - perc_y * data_height
-        else:
-            val_y = self.range_y[1] + perc_y * data_height
+        pos_y = min(max(0, pos[1]), size[1] - 1)  # clip
+        val_y_new = img.pixel_to_value(pos_y, size[1], self.range_y, wx.VERTICAL)
 
-        if snap:
-            # TODO: should be just a matter of rounding down to the size of a pixel
-            raise NotImplementedError("Doesn't know how to snap to value")
-        else:
-            # Clip the value
-            val_x = max(min(self.range_x), min(val_x, max(self.range_x)))
-            val_y = max(min(self.range_y), min(val_y, max(self.range_y)))
-
-        return val_x, val_y
+        return val_x_new, val_y_new
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):

@@ -30,12 +30,13 @@ import numpy
 from odemis import model
 import scipy.ndimage
 import cv2
-import copy 
+import copy
 from odemis.model import DataArray
-
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import get_best_dtype_for_acc
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
+from typing import Tuple
+
 import matplotlib.colors as colors
 from matplotlib import cm
 
@@ -787,6 +788,37 @@ def Average(images, rect, mpp, merge=0.5):
     raise NotImplementedError()
 
 # TODO: add operator Screen
+
+
+def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radius: float) -> model.DataArray:
+    """
+    Compute the mean value of the points within a circle.
+    It only keeps the pixels whose center is within the circle. It can handle
+    data with more than 2 dimensions.
+
+    data (DataArray of shape ..., Y, X): the data where to compute the mean.
+       All the extra dimensions are kept in the result
+    center: the x, y coordinates of the center of the circle.
+    radius: the radius of the circle which contains the center of the pixels to be
+      taken into account.
+
+    returns (DataArray of type float):
+        the mean of data that corresponds to points in the circle.
+    """
+    n = 0
+    datasum = numpy.zeros(data.shape[0], dtype=numpy.float64)
+
+    # Scan the square around the circle, and only pick the points in the circle
+    for px in range(max(0, int(center[0] - radius)),
+                    min(int(center[0] + radius) + 1, data.shape[-1])):
+        for py in range(max(0, int(center[1] - radius)),
+                        min(int(center[1] + radius) + 1, data.shape[-2])):
+            if math.hypot(center[0] - px, center[1] - py) <= radius:
+                n += 1
+                datasum += data[:, py, px]
+
+    mean = datasum / n
+    return mean
 
 
 def mergeMetadata(current, correction=None):

@@ -665,6 +665,15 @@ class ChronographViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(ChronographViewportXmlHandler)
 
 
+class ThetaViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.ThetaViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "ThetaViewport")
+HANDLER_CLASS_LIST.append(ThetaViewportXmlHandler)
+
+
 class ARLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.ARLiveViewport
@@ -672,6 +681,15 @@ class ARLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "ARLiveViewport")
 HANDLER_CLASS_LIST.append(ARLiveViewportXmlHandler)
+
+
+class EKLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.EKLiveViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "EKLiveViewport")
+HANDLER_CLASS_LIST.append(EKLiveViewportXmlHandler)
 
 
 class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
@@ -717,6 +735,16 @@ class FastEMOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "FastEMOverviewViewport")
 HANDLER_CLASS_LIST.append(FastEMOverviewViewportXmlHandler)
+
+class AngularSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.AngularSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "AngularSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(AngularSpectrumViewportXmlHandler)
 
 ##################################
 # Sliders

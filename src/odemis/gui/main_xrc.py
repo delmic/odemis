@@ -329,6 +329,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
+        self.btn_align_lens2 = xrc.XRCCTRL(self, "btn_align_lens2")
+        self.btn_align_ek = xrc.XRCCTRL(self, "btn_align_ek")
         self.btn_align_streakcam = xrc.XRCCTRL(self, "btn_align_streakcam")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
@@ -345,6 +347,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.lbl_m_lens = xrc.XRCCTRL(self, "lbl_m_lens")
         self.btn_m_lens_mover_x = xrc.XRCCTRL(self, "btn_m_lens_mover_x")
         self.btn_p_lens_mover_x = xrc.XRCCTRL(self, "btn_p_lens_mover_x")
+        self.pnl_lens_switch = xrc.XRCCTRL(self, "pnl_lens_switch")
+        self.slider_lens_switch = xrc.XRCCTRL(self, "slider_lens_switch")
+        self.lbl_p_lens2 = xrc.XRCCTRL(self, "lbl_p_lens2")
+        self.lbl_m_lens2 = xrc.XRCCTRL(self, "lbl_m_lens2")
+        self.btn_m_lens_switch_x = xrc.XRCCTRL(self, "btn_m_lens_switch_x")
+        self.btn_p_lens_switch_x = xrc.XRCCTRL(self, "btn_p_lens_switch_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
         self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
@@ -377,6 +385,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
+        self.vp_align_ek = xrc.XRCCTRL(self, "vp_align_ek")
         self.vp_align_streak = xrc.XRCCTRL(self, "vp_align_streak")
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -533,6 +542,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
         self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
         self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
+        self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
@@ -735,6 +745,8 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
         self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
         self.vp_angular_pol = xrc.XRCCTRL(self, "vp_angular_pol")
+        self.vp_angularspec = xrc.XRCCTRL(self, "vp_angularspec")
+        self.vp_thetaspec = xrc.XRCCTRL(self, "vp_thetaspec")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -1026,7 +1038,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = u'''\
-<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -3691,6 +3703,7 @@ def __init_resources():
   <object class="wxPanel" name="pnl_tab_sparc2_align">
     <object class="wxBoxSizer">
       <object class="sizeritem">
+        <minsize>460,-1</minsize>
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
@@ -3760,6 +3773,46 @@ def __init_resources():
                         <cellpos>5,2</cellpos>
                       </object>
                       <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_lens2">
+                          <icon>img_icon_ico_lens_ek_png</icon>
+                          <icon_on>img_icon_ico_lens_green_ek_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>EK LENS</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_ek">
+                          <icon>img_icon_ico_ang_ek_png</icon>
+                          <icon_on>img_icon_ico_ang_green_ek_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>EK CENTERING</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_streakcam">
                           <icon>img_icon_ico_fib_png</icon>
                           <icon_on>img_icon_ico_fib_green_png</icon_on>
@@ -3777,7 +3830,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>5,3</cellpos>
+                        <cellpos>5,5</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">
@@ -3797,7 +3850,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>5,4</cellpos>
+                        <cellpos>5,6</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
@@ -3969,7 +4022,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens</label>
+                      <label>Lens1</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -4061,6 +4114,138 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_p_lens_mover_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_lens_switch">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Lens2</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_lens_switch">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_lens2">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_lens2">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_lens_switch_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_lens_switch_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -4656,6 +4841,12 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="ARLiveViewport" name="vp_align_center">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="EKLiveViewport" name="vp_align_ek">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
@@ -5915,12 +6106,17 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
+           <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
           <object class="ChronographViewport" name="vp_sparc_br">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_sparc_as">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -7413,6 +7609,18 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="AngularResolvedViewport" name="vp_angular_pol">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_angularspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ThetaViewport" name="vp_thetaspec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
@@ -11159,6 +11367,277 @@ Yp\x9a@n\xf7\xb9\xff;\x004o7\x9f\xb3c\xfb*5\x09\x09%\x8f\xb4\xba\xadk\xbd\
 \xa9@&\xe5u\x95\xc0SGe<C\x9di\x97.\x9aw"\xe1f\x9db\xd1\x82\x10\xa4]\x1e\
 (\xee%~\x16\x9e\xed\xfd\x0fD4\x91e\x18&\xe6l\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_icon_ico_lens_ek_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00&\x08\x06\x00\x00\x005\
+0\xe0&\x00\x00\x00\xd3IDATX\xc3\xed\xd6\xbf
+\x830\x10\x06p\xa1]\xda\xd7\xe8\xd8U\x1c\x82\x88\x1a\xff\x0b\xea\xa6F\x10\
+\x1ct\xe8\xd0\x17)\xf4\xa5\xba\xf79\xfa\x16_\x13\xe7"\x05\x9b\x96\xc2\x0d\
+\xdf\x12.\xf7\xcbrG\x0c\x00\xc6\xb7b\x10F\xd8`\x96e\xc1\xb6m\xb8\xae;g\
+m\xdd"\xa6\x1aTU\x85\xb6m\xe7\xac\xad[\xc4\xd4+\xd5\xe5i\x9a\xe6\xac\xad\
+#\x8c0\xc2\xdeob\x9a&\x93[C\xc8\xec\xb4b\x9e\xe7\x9d\x18c\xe0\x9c#\x0c\xc3\
+\xbb\xe38\x1b\xdf\xf7\xf5`\x12\xb8\xc5q\x8c\xba\xae\xd1u\x1d\xca\xb2<\xa6\
+i
+!\xc4\xe7\xb1$I.j\x0f\x0e\xc3\x80q\x1c\x1fM\xd3\xec\x8b\xa2\xd0\x83EQ\xb4\
+\xcd\xb2\xec,\x9b_\xfb\xbe?\xa8\xb3<\xcf\xf5`\xaf\x12\x04\x01\xcd\x19a\x84\
+\x11F}\xc2~\x89=\x01v\x04\x18(\xb7B\xf4\xd4\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_lens_green_ek_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00&\x08\x06\x00\x00\x005\
+0\xe0&\x00\x00\x02\x8cIDATX\xc3\xedW\xc1\x8e\xd30\x10\xf58\x93\x86v\xbb\
+\xa0
+\xa1\xbd\xc0\x89\x13\xe2#\xf6\x808\xf1\x27\x9c\xf8$\xbe\x01q\xe2\x03\xf6\
+\x1fV\x82;\x12PU\xe4\xd0n\x12\xdb8];\xbcL\x9d\xa4\x88\xee\x8a\x03\x96FN\
+\x9b\xf1\xbc\x99\xf1\x8c\xf3\xcc\xca)9h\xe0\xb9\x1d\x87\xda\xd3z\xdd3\x8b\
+\x05\x1af-\x8c8X\xe8`\x0d\x0d\xe8\xd9 \xf1\xb7cX\x94\x05a1\x93Xl\x13\x0e\
+J\xbd\xc6\x8b\x81\xd9 X\\\x90{)\xbc\xcc\xc23\x87wh\xc4Bd\x1a\x9c\x8cz\xad\
+\xe1\xdaK\x05\xd2E\x16\xbd\xe3\x00\xb4\x08s\x11\x00\x09\x8c4\x10\x1d\xae\
+c\xa1\xd7\x02\xec\x84\x03\x16#k\x0d?\xf02\x0f"\xc10=S`yx\xa7\xc2\x9a6R\x83\
+\x91E\xb0E\x00\x9b\x09#\x16\xf3/\xf6K\xee\x19\xfe\x8e)\xadcd\xb8_]
+W\x9fW\x9f(\xa7\xdb\xb7~\xac\x9f\xae_\x27\xf6L\x27\xf4^\x05\x9d&8\xbd\x07\
+\x97{\x96Cad\xad\x01zH\xb7\xd0\xbf\x9d"\x88l\xbfv@\xafg+\x82a\xe93T\x16\
+\xed\x9f\xbc\x01Ztm\xa4\x13\xcd\xac\x07\xf42\xd8O\x8dM\xad\x01D\x27\x1a\
+U\xf6\x95\x1b\xd1Q`\x07\xa5K#\x8d\x9c\x1cCG\xd3\x98\x8eJ\xd8#y\\\xd1\x84\
+\xc7\xea\x0f\x80\x0e\xec\xf1\xc8\x19w\xf2\xc1\xea\x1e\xc7\xb0\xde\x98\xff\
+\x98\xbf\xd0\x8d\xbe\xd8>\xde^Y\xb6\xd5\x9d\x81\x9d?\xc3%\xbf\xa5\x82\
+\xd4l=\xfb\xb2y\xb2yw\xd0\xea\xa7\x02c\xc3\x97\xedIAK/\x19=/\xaa\xe2Y\xf7\
+m85\x98\xc9\xcduN\xf9\xcb62\x97\xb9M\xa5\xaa\xafg\xd9\xd9\xddDV\xae\xca\
+\xf7\xcb\x9f\xcbo\xda\xe8\x8b\x9d\xde}\xb4\xda\xde8\xeb|`tz0G\xce\x94\x8f\
+\xca\x0f\xbd?\xeb\xfb,}3B\xf2\xfe\x85>s\xc7\xf9\xf7\xf7`\xee\xc4\x80NH\x07\
+\x86\x0c\x16\x15h\xc4\xd01\x9f\x1a\x09\xe802+(\xf3\x94\x81\xb1\x8f\xa8K\
+\xb1h\x04\x93tY\x0f\x18\xb1\x92\xf0$\xf4\x90\xf6u,\x9a\xa1x\xe3\x8b\x06\
+IJ\xa2\xc8\xed\x11\x1c\xc4\x009m\x90\xebGo#\x99\xbc\x19\x00\x8a\xed+y\xa3\
+\x1d\xd0\x8b<\xbfN\x81E~\x9e\xc5Tx\xb2y\x09\xdec\x9a{\x8cX\xe85`k\x1b\x9c\
+od\x1a\xeb\xc4e \x17F\xa6.\x16\x12l\x87\xd9`\xd8\xd0&x\x81\xe0,\xc0SW&N\
+\\\x99*\x00\xacd\x1aQ\x09\x813\xf0\xd8B\x81(\xc1\xa4u"\xddX \xc9\xd2\xc7\
+\xcb\\&*\xce%z0\xc55\xed\x80\xf4\x9a\x1a\x1b1\xc5|\xa7\x8e1\x1a9\xfa\xf6\
+\xf3/bY2\x9e\xa1M\x0f\x0e\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_ang_ek_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\
+\x9c\x18\x00\x00\x0c\x98iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpac\
+ket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xml\
+ns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 6.0-c002 79.164460, 2020/\
+05/12-16:04:17        "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/\
+22-rdf-syntax-ns#"> <rdf:Description rdf:about="" xmlns:xmp="http://ns.\
+adobe.com/xap/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:x\
+mpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stEvt="http://ns.adobe.com\
+/xap/1.0/sType/ResourceEvent#" xmlns:stRef="http://ns.adobe.com/xap/1.0\
+/sType/ResourceRef#" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0\
+/" xmlns:tiff="http://ns.adobe.com/tiff/1.0/" xmlns:exif="http://ns.ado\
+be.com/exif/1.0/" xmp:CreatorTool="Adobe Photoshop 21.2 (Windows)" xmp:\
+CreateDate="2021-01-15T16:34:35+01:00" xmp:MetadataDate="2021-07-12T15:\
+42:32+02:00" xmp:ModifyDate="2021-07-12T15:42:32+02:00" dc:format="imag\
+e/png" xmpMM:InstanceID="xmp.iid:b10eb118-7c38-344a-80de-c8466fcde0d2" \
+xmpMM:DocumentID="adobe:docid:photoshop:13a379c3-9930-754a-821b-4fe0348\
+7fef1" xmpMM:OriginalDocumentID="xmp.did:a3c7f09e-43a1-fa42-b57b-7e43a7\
+03824d" photoshop:ColorMode="3" photoshop:ICCProfile="sRGB IEC61966-2.1\
+" tiff:Orientation="1" tiff:XResolution="720000/10000" tiff:YResolution\
+="720000/10000" tiff:ResolutionUnit="2" exif:ColorSpace="1" exif:PixelX\
+Dimension="38" exif:PixelYDimension="43"> <xmpMM:History> <rdf:Seq> <rd\
+f:li stEvt:action="created" stEvt:instanceID="xmp.iid:a3c7f09e-43a1-fa4\
+2-b57b-7e43a703824d" stEvt:when="2021-01-15T16:34:35+01:00" stEvt:softw\
+areAgent="Adobe Photoshop 21.2 (Windows)"/> <rdf:li stEvt:action="saved\
+" stEvt:instanceID="xmp.iid:9669aee5-fe31-6a45-be15-b5de57b0ce1d" stEvt\
+:when="2021-01-15T16:35:59+01:00" stEvt:softwareAgent="Adobe Photoshop \
+21.2 (Windows)" stEvt:changed="/"/> <rdf:li stEvt:action="saved" stEvt:\
+instanceID="xmp.iid:02fcad6a-8bc9-3244-8ac1-36e3fc3d919d" stEvt:when="2\
+021-07-12T15:42:32+02:00" stEvt:softwareAgent="Adobe Photoshop 21.2 (Wi\
+ndows)" stEvt:changed="/"/> <rdf:li stEvt:action="converted" stEvt:para\
+meters="from application/vnd.adobe.photoshop to image/png"/> <rdf:li st\
+Evt:action="derived" stEvt:parameters="converted from application/vnd.a\
+dobe.photoshop to image/png"/> <rdf:li stEvt:action="saved" stEvt:insta\
+nceID="xmp.iid:b10eb118-7c38-344a-80de-c8466fcde0d2" stEvt:when="2021-0\
+7-12T15:42:32+02:00" stEvt:softwareAgent="Adobe Photoshop 21.2 (Windows\
+)" stEvt:changed="/"/> </rdf:Seq> </xmpMM:History> <xmpMM:DerivedFrom s\
+tRef:instanceID="xmp.iid:02fcad6a-8bc9-3244-8ac1-36e3fc3d919d" stRef:do\
+cumentID="adobe:docid:photoshop:faf7e0f5-5afd-0f4b-915e-4bc0d2230218" s\
+tRef:originalDocumentID="xmp.did:a3c7f09e-43a1-fa42-b57b-7e43a703824d"/\
+> <photoshop:DocumentAncestors> <rdf:Bag> <rdf:li>adobe:docid:photoshop\
+:6f9d1365-85f3-4742-a71e-0abb81ebbeef</rdf:li> <rdf:li>xmp.did:41DD285C\
+7D57E51190A3874F9418F7A7</rdf:li> <rdf:li>xmp.did:5D6EBB449BEAE311AEC6D\
+F151E584167</rdf:li> <rdf:li>xmp.did:7ba63fb0-3897-2746-bba3-f6bab6794f\
+01</rdf:li> <rdf:li>xmp.did:9F530C4BDCBFE111B84581E05B512626</rdf:li> <\
+rdf:li>xmp.did:E03CB601552AE2118277FCA4B464CB4F</rdf:li> <rdf:li>xmp.di\
+d:fb39040c-884b-4145-ad57-cd285223c2b4</rdf:li> </rdf:Bag> </photoshop:\
+DocumentAncestors> </rdf:Description> </rdf:RDF> </x:xmpmeta> <?xpacket\
+ end="r"?>
+\xb0\xf0\x1f\x00\x00\x04rIDATX\x85\xed\x98\xcfk\x1ce\x18\xc7?;\xf3\xce\
+l\xe6\xc7\xbeSC\x82J\x11z((T\x85B\xb1\x82\xb1&M\x11\x04/\x1eE\xafz\xf1\x0f\
+\xd0?A\xef\x82(\xf4$x\xf0$x\x10%\xed\xae6\x85Z
+\x85\xd8\x16BS\x1a\xda$4\xa4lK6\xdd\xcd\xcc\xbc\xefL\x0f;\xbb\x9dlw7;\xa1\
+\xc5\x1e\xf6\x0b\x033\xf3\xfe\xfa\xbc\xcf\xf3\xbe\xcf\xfb\xcc\x94\xd24\xe5\
+E\x94\xf1\x03\x0c\xd2\x18\xac\xa8\xc6`E5\x06+\xaa\x17\x16L\x0c+\x9c\x99\
+\x99!\x0cCL\xd3\xec^\xadV\xab{/\x84\xa0\xd9l\xeey\xce\x97\x0f\xa8\xd44\
+\xcdy\xd34\xe7\x80\xd9\xc5\xc5\xc5W
+\x83=#\x1d\x01f\x81y`.\x08\x82\xc3\xb6mc\xdb6J\xa9\x81\x8d\x9e\x07\xd8\
+a`\xae\x03#\xa5<b\xdb6\xe5r\x19\xdb\xb6\xb1,k\x8f\xb5\x9f\x27\xd84O,2+\xa5\
+|\xbdc\x91r\xb9\x8c\x10\x02!D\xd7\x9d\xa5R\x894M7\x93$\xa9)\xa5\xce?K\xb0\
+I\xe0\x14m\xab\xccK)\x8f\xf5Z\xa4\x0fH=I\x92j\x14E5\xadu\xd5q\x9c\xeb\xfb\
+\x0d2
+X\x05\xf8\x80\xb6U\xe6\xa4\x94\xc7m\xdb.u\xacb\xdb\xf6S \xc0\xb6\xd6\xfa\
+B\x1c\xc7\x0bJ\xa9\x9aRj\xc9\xf3\xbc\xa4\xc8\xec\xf7\x03\xbb$\xa5<aY\x96\
+\xd9\xcf"B\x88\x0e\xc8#\xad\xf5b\x1c\xc75\xad\xf5B\x1c\xc7W=\xcf\xd3\x83\
+:]ZZ\xcaO\xa28\xd8\xe4\xe4\xe4I\xdf\xf7\xf7X\xc40\x0c\x80Pk}1\x8e\xe3\xaa\
+\xd6\xba\xa6\x94\xfa\xd7u\xdd\xb8_\x1f\xcb\xcb\xcb{\x00\x86\xc1\x8c\x0c\
+\xe6y\x1e\xbe\xef\x03\xc4I\x92\\\xd6Z\x9f\x0b\xc3\xb0\xaa\x94\xba\xe4\xba\
+\xee\xee\xb0\xb67n\xdc\x18V|\x02\xf8\x08\xf8\x188Y\x18L)\xf5]\xab\xd5:\xa7\
+\x94\xba\xe8y\xde\xe0\xbd\x9d\x81\x08!\xe8\x93\x11\x9b\xc0q\xa0\x05\\\xcf\
+&\xfa\x87\xeb\xbaSI2x\xd9\xed\xb7\xc6\xbe\xe9\xf7\xf2\xd6\xad[{\\\x92\xb9\
+\xb7\x9f>\xf5<\xef\xaci\x9a\x8eR\xea\x17\xe0\xb3 \x08\x00<)%\xadV\xeb\xc0\
+`\x00\xdc\xbcy\x13\x80\x89\x89\x89a\xd5\xbe\x00>\xa1m\x9dW+\x95
+\xc0|\x10\x04\x8e\x10\x82F\xa3\xe1\x02\xd8\xb6\x0dP\x17Bh\xe0\xaf\x03\x81\
+mll D\xdf*Gi\x87\x8fk\xb4w.\xc0\x0f\x9e\xe7\x99q\x1c\xa7\xf0\xc4\x8a\xbe\
+\xefS*\x95\xd8\xdd\xdd\xbd\x06t\xac\xf4\x86\xef\xfb;\xc3\xc6\x1e5\xc0N\x02\
+\xf5\xec\xfe{)\xe5W\xa6i\x12\x86\xe1\xd9\x1c\x98!\xa5\xa4\xd9l&\x00\x8d\
+F\x03\xe0\xa70\x0ckI\x92\xd4\x80\xb5\\C\xa1F\x01\xfb\x198\xe38N\x02\x1c\
+\xce\xdc\xf3f\x10\x04\x94J%\xb6\xb7\xb7\x010M\x13`=M\xd3+J\xa9\xdfr\xed\
+/g\x17\x00\x9b\x9b\x9b\xdd\x0c\xe4\xde\xbd{\x07\x8fc\x87\x0e\x1d\xfa\xdc\
+\xf3<\xc20l\x01\x1d\xb76]\xd7%I\x92\x1d\xc30\xf2k\xe4\xb5|\xdb\xad\xad-\
+\xa6\xa7\xa7\x81\xf6f1\x0c\xa33\x81\x9144Q\xf4}\x1f)%\x8e\xe3<r\x1c\x87\
+(\x8a\x88\xa2\xe8\xebf\xb3\xf9\xd6\xce\xce\x8e\x04~\xed\x0c\x9c\xd7\xea\
+\xea*\x00\xf5z\x9d\xbbw\xef\xf6\xeb\xda\x05>\x04\xbe\x1d4\xf6~\xae\xbc\x10\
+\xc7\xf1\xefQ\x14\xfd\x99{\xf7_\xbe\xc2\x83\x07\x0f\x00\xb8}\xfbv\xf7t\xe8\
+\xa3\x09\xe0]\xe04p\xbaR\xa9\xbcc\xdb\xb6\x95\xc5\xb1\xbe!i?\xb0S\xf9\x87\
+\xfb\xf7\xef355\xc5\xca\xca
+\x86a`\x18\xc6\xa0]k\xd1\x8e\xe8\xb3\xc0\\\xa5Ry\xcf\xb2\xacr\xefy\xbb\
+\xbb;\xf8\xf0\x189\xedY[[\xc34M\x1e>|\xd8\xaf\xb8\x13\xdd\xcf\x00\xb3\xbe\
+\xef\xcf\xd8\xb6\xed\xf5f \x9d37\x0b%Z)u\xe5@`w\xee\xdc\xe9f\x11=2\x80\xb7\
+i[\xe4\x8c\xef\xfb\xef[\x96%;\x16\xe9M\x852\xf7\xa6I\x92\\\xd5ZW\xa3(\xaa\
+)\xa5\xfe\x06\x1a\x07\x02\xeb\xd11\xb2\x94\xd9\xf7\xfd\xd3\x96e\xbd\xd4\
+I\x10-\xcb\xea\xa6\xcc\xf9u\x96\xa6\xe9u\xa5\xd4\xb98\x8e\xabJ\xa9\\\xd7\
+\xad\x0f\x1d\xa1\x00\xd8\x97\xb4\x17\xecl\x10\x04/\xe73\xd5\xde\x949\x03\
+Y\xd6Z\xd7\xc20<\xaf\x94\xaa\xba\xae\xbbU`\xe2\xa3\x83I)t]\xf7\xa9\x8f\
+\x08\xc30:)\xf3j\x96
+\xd52\x90\xf5\x83\x82\x14\x05CJ\x99\x07Y\xd7Z\xd7\xa2(ZPJ\xd5\\\xd7]}V\
+ \x85\xc0\x84\x10\x9b@-\xfb\x88Xp\x1cg\xe5y\x81\xf4\xaa4\xfe\xd5YPc\xb0\
+\xa2\x1a\x83\x15\xd5\x18\xac\xa8\x1e\x03x \xb8\xba-\xe7\x92\xd8\x00\x00\
+\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_ang_green_ek_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\
+\x9c\x18\x00\x00\x0c\x98iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpac\
+ket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xml\
+ns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 6.0-c002 79.164460, 2020/\
+05/12-16:04:17        "> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/\
+22-rdf-syntax-ns#"> <rdf:Description rdf:about="" xmlns:xmp="http://ns.\
+adobe.com/xap/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:x\
+mpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stEvt="http://ns.adobe.com\
+/xap/1.0/sType/ResourceEvent#" xmlns:stRef="http://ns.adobe.com/xap/1.0\
+/sType/ResourceRef#" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0\
+/" xmlns:tiff="http://ns.adobe.com/tiff/1.0/" xmlns:exif="http://ns.ado\
+be.com/exif/1.0/" xmp:CreatorTool="Adobe Photoshop 21.2 (Windows)" xmp:\
+CreateDate="2021-01-15T16:34:35+01:00" xmp:MetadataDate="2021-07-12T15:\
+42:43+02:00" xmp:ModifyDate="2021-07-12T15:42:43+02:00" dc:format="imag\
+e/png" xmpMM:InstanceID="xmp.iid:35932af9-888c-5646-89b5-3d971f8fe1b2" \
+xmpMM:DocumentID="adobe:docid:photoshop:0543ae0a-c492-cb41-8fc2-75df710\
+a8263" xmpMM:OriginalDocumentID="xmp.did:a3c7f09e-43a1-fa42-b57b-7e43a7\
+03824d" photoshop:ColorMode="3" photoshop:ICCProfile="sRGB IEC61966-2.1\
+" tiff:Orientation="1" tiff:XResolution="720000/10000" tiff:YResolution\
+="720000/10000" tiff:ResolutionUnit="2" exif:ColorSpace="1" exif:PixelX\
+Dimension="38" exif:PixelYDimension="43"> <xmpMM:History> <rdf:Seq> <rd\
+f:li stEvt:action="created" stEvt:instanceID="xmp.iid:a3c7f09e-43a1-fa4\
+2-b57b-7e43a703824d" stEvt:when="2021-01-15T16:34:35+01:00" stEvt:softw\
+areAgent="Adobe Photoshop 21.2 (Windows)"/> <rdf:li stEvt:action="saved\
+" stEvt:instanceID="xmp.iid:9669aee5-fe31-6a45-be15-b5de57b0ce1d" stEvt\
+:when="2021-01-15T16:35:59+01:00" stEvt:softwareAgent="Adobe Photoshop \
+21.2 (Windows)" stEvt:changed="/"/> <rdf:li stEvt:action="saved" stEvt:\
+instanceID="xmp.iid:8ddb0684-7a89-cb4c-b01b-4bf3c944d5d7" stEvt:when="2\
+021-07-12T15:42:43+02:00" stEvt:softwareAgent="Adobe Photoshop 21.2 (Wi\
+ndows)" stEvt:changed="/"/> <rdf:li stEvt:action="converted" stEvt:para\
+meters="from application/vnd.adobe.photoshop to image/png"/> <rdf:li st\
+Evt:action="derived" stEvt:parameters="converted from application/vnd.a\
+dobe.photoshop to image/png"/> <rdf:li stEvt:action="saved" stEvt:insta\
+nceID="xmp.iid:35932af9-888c-5646-89b5-3d971f8fe1b2" stEvt:when="2021-0\
+7-12T15:42:43+02:00" stEvt:softwareAgent="Adobe Photoshop 21.2 (Windows\
+)" stEvt:changed="/"/> </rdf:Seq> </xmpMM:History> <xmpMM:DerivedFrom s\
+tRef:instanceID="xmp.iid:8ddb0684-7a89-cb4c-b01b-4bf3c944d5d7" stRef:do\
+cumentID="adobe:docid:photoshop:faf7e0f5-5afd-0f4b-915e-4bc0d2230218" s\
+tRef:originalDocumentID="xmp.did:a3c7f09e-43a1-fa42-b57b-7e43a703824d"/\
+> <photoshop:DocumentAncestors> <rdf:Bag> <rdf:li>adobe:docid:photoshop\
+:6f9d1365-85f3-4742-a71e-0abb81ebbeef</rdf:li> <rdf:li>xmp.did:41DD285C\
+7D57E51190A3874F9418F7A7</rdf:li> <rdf:li>xmp.did:5D6EBB449BEAE311AEC6D\
+F151E584167</rdf:li> <rdf:li>xmp.did:7ba63fb0-3897-2746-bba3-f6bab6794f\
+01</rdf:li> <rdf:li>xmp.did:9F530C4BDCBFE111B84581E05B512626</rdf:li> <\
+rdf:li>xmp.did:E03CB601552AE2118277FCA4B464CB4F</rdf:li> <rdf:li>xmp.di\
+d:fb39040c-884b-4145-ad57-cd285223c2b4</rdf:li> </rdf:Bag> </photoshop:\
+DocumentAncestors> </rdf:Description> </rdf:RDF> </x:xmpmeta> <?xpacket\
+ end="r"?>\xb9\x14\xe5\x85\x00\x00\x06\x15IDATX\x85\xed\x99I\x8f\x1c5\x14\
+\xc7\xff\xcfv-\xd3\xdd\xc9L\xc8!\x02\x01\xc3\x9a\xb0Mw"\x84\x84\xc4\x89\
+\x03\x97 q\x85\x03B\xe2\x8e\x00q\xe6\x9e\x0f\x00\x9cP\xee|\x02\xc4\x89#\
+\x82\x03\xc9t\x8f\x08\x9a H\x865\x11d\xba{&Im^8t\xb9\xda\xe5\xaa\xeeL \x04\
+\x0eXz\xea\x1aW\xd9\xf5\xf3\xdf\xcf\xf6{5d\x8c\xc1\xb1\xb0\x1b`Q\xa1#\
+\xdbG\xee\xda\xcb\xc6\xc7\xc7\xb4\xe0Vc\xda\xc4]\x80\xa0\x16\xf3\xa1\xb4\
+sm\x00\x98;\x06\xd6\x02\xc2J\xe3\x8e1\x07\xcc\x02)\xcf\xf4\xdf\x02;\x00\
+\x88(-(}0\x0d@\x02\xc8\x1d\xa3\xb2\xee\xe0`\x01$p\xae-\x98\x0b\xa5K\x98\
+\xcc\xb9W\xa9\xb8\x14\xac\x84\xf1A,\xcc"\x08\x17\xc6\x02\xb9P\x16L\x95\xf7\
+\x99S\x27K\xa3\x1a\x98\xa7\xca2E\x96\xa9\xe2N\x9b5\xdf\xe1-\x98UI\x01(\x1c\
+\xd09X\x09\xd5\xa6H\xe8\x00\xb8\xe6\xaa\xe1:\xb7\x05i]\x89\xe1~xox#\x1c\
+p\xc9\xfbL\xb1\xc1x}|\x1aM?\x9cm\x17%\x94\xed\xdc\xc2D\x8e\x85h*\xe3:\xf3\
+B\x98\xf0zx,\xb8\x11l\x08)N2\xc3\xfa\xc4\xe9(\x04@1\xcdtj\x0e\x08\x15\x98\
+s#\x00\x10\x97\xb6RZ\xd42\xa26\x10\x00\xa0\xe0Fp4\xbc\x1e\xf6\xb9\xe4}n\
+\xf8\x80\x18\x1dC\x00P\x97\xaaa\x11#\x80\x03&\xad\xf6\xd5\xc6\xc6+\x1c\x07\
+\x17\x8eR\x9d\xd2\xe2\xb2\xce\xce\xbdu\xe2
+D$b5\xda\x8f6x\xc1Or\xcd7\x88\xd3\xfd\x10\x00uh6\x1c\x0e\x10\xa7\x9a\xbe\
+\xc6\x98\x89\xd6z\xa8\x98:\x07gS\x85s\x02X\xc5\xecT\x06\xde\x14Z\xb5\xaa\
+nE*\x0e\x85\xfb\xe13"\x173E\x88\xd6\x11\x94 V\x11N\xf5a\x18\xeck\xadGR\xc9\
+\xad\x9c\xf2a\xca\xd3\xcb\xe0PXA\x81\xf9\xd6Q;\x96\xdc\xa9\xb4\x0e\x1f:\
+&x\xce{\xd14\x1a8 \x8f@\x80h\x85\xaa\x09\xae@\xac\x19\xdc\xd4Z\xa3\x94\
+:\x9f!\xdb\xcaDv\xc9p\xe3+\xd3\xaaT\x9bb.\x9c\x00\xc0\xd7~\\\xfb\x90qv\x1c\
+\x02\xcc\x05\x01\xf3`\x0cR\xad\xf5\x05\xa5\xd5(\xd7\xf9f*\xd2\xef\x0d7\xda\
+{\x97\x0b\xa1q\x000\xef\xb2\xd7\xe0]\xfe\x04V0\xf7\x93\xf9\xba),H\xa1\x8b\
+\xad\x84\x27\xdb\x86\x1b\xe9A\xb4A-\x02l\x14\xe7\xaf7\x8e\x01Z!\x00\x90\
+\xda\xe8\x8bZ\xeba\x8e|\x98\xf2t[s\x9d\x1f\x10\xc4\xaf3\xf1n\xfcx\x90\x06\
+\xcf\xf1\x82??Y\x9f\xbc\xe1<S-,\xd12\x12\xeb\x8cZB~"\x95\x1c&<\xf9V3\x9d\
+\x97z\xba\xd1\xc1-\xa1H\x13\x8b&\xd1c\x86\x994[\xcb.\x03@\x27\xed\x9c\xa1\
+\x88VMPkZ\xdb\x88\xdb\xce\xca
+n\xda\x9d~\x8cfT\xb0L\x95Z}\xf7j\xf7\xc5(\x8f\xde\x03C\xa4I\x9e\xadeg\
+\x00\x18\xeaRL\x1d\x9a\x1d\xdf\xb7\xd8.\xda:\xb6\x80\xac\xfc\xb5#2-\xcf\
+\xa2w\xa5w\x9a\x17\xfc\x05\xa6\xd9\xa3\xe3\xf5\xf1\xab\x00 \x988Ek\x14\x81\
+\x01\xc8\x10U\x8d\x84\xd9\x07\xc7T3\xfdU\xcb M\x1b\xd8\xa2U\xe3\xde\xa7\
+p/\xbc/\xbc\x19\x0eT\xa8.%\xf7$\x17\x00P\x88\xf0m:D\x0c\xca\x99\xc6\x90\
+\xac\x8f\xc2h\xb3c\xab\xa7\xf1\xf4M\xc5\xd4utP\xb4\xf4\xdf\xaa\x18y\x0f\
+\xcd\xc2\xdcT\x1c\x96\xb1\xdc\x07\x80\xc3\xbf\x1c~K\x90x\x05\x0cP\x99\xfa\
+,Ar\x01\x00\xa8KD\x1d\x82I\x8d\xb1\xfddA\xf6\xa9Rj\x94\x89l\x94\x1f\xca\
+\xb7\xf5\x8a\xab\x14\xf5p\xaay$\xa1\xbe]\xd4\x1cp\xf5\xa7\xd5\xf79\xf8\
+\xb3\xc6\x183~p\xfc\x1a\x00\xf0\x98?dU(}\x84\x00\xc00s\xcd\xc0\\,X\xf1\x85\
+\xed\x27\xe9$\x17\x01|\xe7\xf5\x0f\xcc]\x83y\xf550\xbfT\x80<\xe6/QL\xa0\
+\x82\xb2\xea^\x80\x8c"\x024\x12\xa5\xd5\xd7\xb6\xd3\xdd\xee\xee\xeb\x00\
+f\xc7~{\xe2\xe1\xaefV\xfe.\x84[\x1a\xc1Rg\xe6#&1Vz$ar\x16\x06g\xd3 \xdd\
+APu\xde:\xea\x05u`\x05\x8b\xe2i\xfc\xa4HD\xef\x81\xbd\x0f\xda\xe0\\\xb0\
+\x86\xb3\x1b\x98\x91T\xf2\xcbLd\xe7l\xc34Nw\x9c6n\xc2\xbc(g\x04\x93,\x8c\
+\xa6\xd1\x09\x91\x89\x81Pb@\x8c\x8eC@ \x00\x00|\xd460w\x83\xf5G\xcav\xbb\
+\xbb\xef\xa2\xbe\x8f\xd5B\x9eE \xa4I\xc4\x93\xf8\x84\xc8\xc4\x06W\xbc\xcf\
+\xc0\x9e\x82@@\x11\xd5#\xbb|Q\x0f\xb7\xf01\xcfj\xe7h\xad\x81!\x16M\xa2G\
+\x83$8\xc9u\x05\x12SX\x07\xb1\x01b\xd9\x83\xd6Joc\x9eKV9\xe520W\xa1fBa@\
+\xf14~X$bC(q\x8a\x81=\x0d\x81\x0eB\x80\x02/R\xb5\xad\x01c\x8c\xf9A\x19\xb5\
+)\xb5\x1c&,9\xaf:j\x82Y\x12\x92\x97\xbf\x12K\x12\xde6 \x8a\xa6\xd1z\x90\
+\x04}.\xf9\x06\x07\x1f\x80\xa3W\x0b\x10\xdd\x08\xc4F\xaa\xda\xec(\xa3\x86\
+R\xc9a\xca\xd2-\xc9\xe4\x9e\xa3\x8e\x05\xcaJs\xc1j\x8a5\xa6\xaf\xf7[\xef\
+e\xae\xf8)\x0e\xde\x07\xc7\x1a\x822\x89\x08\x16\x82\xfc\xac\x8d\xde\x92\
+Jn\xa6,\x1d\x15\xac\x98\xa0\x19\x1c\xd8\xdc1\x07\x90\x02HJ\xb0\x1c\xde\x27\
+\x02\xaf\x99g8\x14\xbeC\xbdf\x12\xe1\xc4\xeeW\xb5\xd6C\xa9\xe4(\xa3l\x98\
+\xf3\xfc\x0f4\x8f5\x0b\xa4<(\x0b\x96:`\x12\x8e\x8f-
+{\x0cui6Us\x90ke\xec\xbe\x99Q6\xcay~\x05|)\x88\xf2\x80
+g
+s\xd4\xfdK\xb9\xef\x16\x0e\x94?*\x09\x86\xb1F\xa5\xc8f\xc6\xb3_\xc1[\x07\
+\xe1\xc3\xb8 .P\xe1\xd5\xd7`\x1c\x03\xc1\x800\xcf\x8e:\x8e\xd9\x9c\xb2J\
+\xdb\xbdA\xb4\x81,\x83\xf0A\xdc\xb0za2\xe2\xaf\x14\x0b\xa2=\xb06e\x17\xa9\
+b\x9fq!\xdc\x0ftK\x8b\xf51\xfba\xc3~\xa3\xb2\x87\xa8\xa9\xb1\xf5.\x88\
+\xabV\xed\xe3\xdb\xed\x80\xb4\x81\xb9/\xb4\xd7\x12\xb3\x95bW\xad\xaf\x96\
+\x85\xbbc ~\xa1\xb2\x0b\xff\xe8q7X[\x1a\xab\xd6\xb3;Z\xc8\xeb\xb2-~r\xc1\
+\xda\xae\xff\x91B\xff\xff\x03\xe26\xcb\x9f\xbb\xbc"\xa5;a;\x89\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
     img_icon_ico_meteorimaging_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -11965,6 +12444,10 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_green_png', bytearray(img_icon_ico_lens_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_png', bytearray(img_icon_ico_mirror_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_green_png', bytearray(img_icon_ico_mirror_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_ek_png', bytearray(img_icon_ico_lens_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_green_ek_png', bytearray(img_icon_ico_lens_green_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_ek_png', bytearray(img_icon_ico_ang_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_green_ek_png', bytearray(img_icon_ico_ang_green_ek_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_meteorimaging_png', bytearray(img_icon_ico_meteorimaging_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_meteorimaging_green_png', bytearray(img_icon_ico_meteorimaging_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_meteorgrid_png', bytearray(img_icon_ico_meteorgrid_png))

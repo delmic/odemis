@@ -36,8 +36,12 @@ CAN_SAVE_PYRAMID = False
 def export(filename, data):
     '''
     Write a CSV file:
-        - If the given data is AR data then just dump the phi/data array
-        - If the given data is spectrum data write it as series of wavelength/intensity
+        - If the given data is spectrum data write it as series of wavelength->intensity
+        - If the given data is time data write it as series of time->intensity
+        - If the given data is a line spectrum data then write it as distance/wavelength array
+        - If the given data is AR data then just dump the theta/phi array
+        - If the given data is temporal spectrum data then dump the time/wavelength array
+        - If the given data is EK data then dump the angle/wavelength array
     filename (unicode): filename of the file to create (including path).
     data (model.DataArray): the data to export.
        Metadata is taken directly from the DA object.
@@ -128,6 +132,28 @@ def export(filename, data):
         rows = [(t,) + tuple(d) for t, d in zip(time_range, data)]
 
         with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+            csv_writer.writerow(headers)
+            csv_writer.writerows(rows)
+
+    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_EK:
+        logging.debug("Exporting angular spectrum data to CSV")
+
+        spectrum_range, unit_c = spectrum.get_spectrum_range(data)
+        if unit_c == "m":
+            spectrum_range = [s * 1e9 for s in spectrum_range]
+            unit_c = "nm"
+
+        angle_range, unit_a = spectrum.get_angle_range(data)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(theta) for theta in angle_range]  # Convert radians to degrees
+            assert len(angle_range) == len(data)
+
+            headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
+            rows = [(t,) + tuple(d) for t, d in zip(angle_range, data)]
+
+        with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
             csv_writer.writerow(headers)
             csv_writer.writerows(rows)

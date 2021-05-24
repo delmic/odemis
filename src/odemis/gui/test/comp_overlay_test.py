@@ -23,9 +23,8 @@
 """
 from __future__ import division, print_function
 
-import copy
-import time
 from builtins import range
+import copy
 import logging
 import math
 import numpy
@@ -38,9 +37,11 @@ from odemis.gui.comp.overlay import world as wol
 from odemis.gui.comp.overlay.view import HORIZONTAL_LINE, VERTICAL_LINE, CROSSHAIR
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
 from odemis.gui.util.img import wxImage2NDImage
+from odemis.util import mock
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
 from odemis.util.test import assert_array_not_equal, assert_pos_not_almost_equal
+import time
 import unittest
 import wx
 
@@ -49,6 +50,7 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
+from odemis.gui.comp.overlay.world import EKOverlay
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -1139,6 +1141,53 @@ class OverlayTestCase(test.GuiTestCase):
 
         # point = model.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
         # pol.set_point(point)
+
+    def test_ek_overlay(self):
+        """
+        Test EKOverlay is created and display without error
+        """
+        cnvs = miccanvas.SparcARCanvas(self.panel)
+        cnvs.scale = 200000  # Scale that works for the given mirror lines
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        # Create a CCD (the role matters)
+        img = model.DataArray(numpy.zeros((512, 768), dtype=numpy.uint16))
+        img[:, 768 // 2] = 10000
+        img.metadata = {
+            model.MD_WL_LIST: [],
+            model.MD_PIXEL_SIZE: (5e-6, 5e-6)
+        }
+        ccd = mock.FakeCCD(img)  # role is always "ccd"
+
+        class FakeTabData():
+            def __init__(self):
+                self.mirrorPositionTopPhys = model.TupleContinuous((100e-6, 0),
+                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                           cls=(int, float))
+                self.mirrorPositionBottomPhys = model.TupleContinuous((-100e-6, 0),
+                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                           cls=(int, float)
+                                           )
+
+        fake_tab_data = FakeTabData()
+
+        # Note: for now, as the image is not shown in the canvas (would need a live stream)
+        ek_ol = EKOverlay(cnvs)
+        cnvs.add_world_overlay(ek_ol)
+        ek_ol.active.value = True
+        ek_ol.create_ek_mask(ccd, fake_tab_data)
+        # ek_ol.set_mirror_dimensions(lens.parabolaF.value,
+        #                             lens.xMax.value,
+        #                             lens.focusDistance.value)
+
+        # First, no wavelength, so a warning at the center
+        cnvs.request_drawing_update()
+        test.gui_loop(1.0)
+
+        # Add the wavelength => the lines should be shown
+        ccd.updateMetadata({model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(img.shape[-1])]})
+        cnvs.request_drawing_update()
+        test.gui_loop()
 
     def test_mirror_arc_overlay(self):
         cnvs = miccanvas.SparcARCanvas(self.panel)

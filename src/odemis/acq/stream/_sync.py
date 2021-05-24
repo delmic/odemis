@@ -40,9 +40,9 @@ from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS
+    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST
 from odemis.model import hasVA
-from odemis.util import units, executeAsyncTask, almost_equal, img
+from odemis.util import units, executeAsyncTask, almost_equal, img, angleres
 import queue
 import threading
 import time
@@ -2434,6 +2434,68 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         if 0.1 < tc_dwell_time / dc_period < 1:
             nDC = 1
         return nDC
+
+
+class SEMAngularSpectrumMDStream(SEMCCDMDStream):
+    """
+    Multiple detector stream made of SEM & angular spectrum.
+    Data format: SEM (2D=XY) + AngularSpectrum(4D=CA1YX).
+    """
+
+    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+        """
+        :param n: (int) number of the current stream
+        :param raw_data: acquired data of stream
+        :param px_idx: (tuple of int) pixel index: y, x
+        :param rep: (tuple of int) repetition frame
+        :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
+         Update the ._live_data structure with the last acquired data. So that it is suitable to display in the
+         live update overlay and can be converted by _assembleFinalData into the final ._raw.
+        """
+        if n != self._ccd_idx:
+            return super(SEMAngularSpectrumMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+
+        # Raw data format is AC
+        # Final data format is CAZYX with spec_res, angle_res, 1 , X , Y with X, Y = 1 at one ebeam position
+        spec_res = raw_data.shape[-1]
+        angle_res = raw_data.shape[-2]
+
+        # the whole data array is calculated once, when we receive the very first image
+        if pol_idx > len(self._live_data[n]) - 1:
+            # New polarization => new DataArray
+            md = raw_data.metadata.copy()
+            # Computes metadata based on SEM metadata
+            semmd = self._live_data[0][pol_idx].metadata
+            # Handles sub-pixels (aka fuzzing)
+            md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
+                                 semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
+            # Saves metadata
+            md[MD_POS] = semmd[MD_POS]
+            md[MD_DIMS] = "CAZYX"
+            # Note that the THETA_LIST is only correct for the center wavelength
+            # In theory, we can reconstruct it from the mirror metadata (and for
+            # all wavelengths). However, for now it's also used to indicate that
+            # the angle dimension is present when saving the DataArray to a file.
+            md[MD_THETA_LIST] = angleres.ExtractThetaList(raw_data)
+
+            if spec_res != len(md[MD_WL_LIST]):
+                logging.error("MD_WL_LIST is length %s, while spectrum res is %s",
+                              len(md[MD_WL_LIST]), spec_res)
+            if angle_res != len(md[MD_THETA_LIST]):
+                logging.error("MD_THETA_LIST is length %s, while angle res is %s",
+                              len(md[MD_THETA_LIST]), angle_res)
+
+            md[MD_DESCRIPTION] = self._streams[n].name.value
+
+            # Shape of spectrum data = CA1YX
+            da = numpy.zeros(shape=(spec_res, angle_res, 1, rep[1], rep[0]), dtype=raw_data.dtype)
+            self._live_data[n].append(model.DataArray(da, md))
+
+        # Detector image has a shape of (angle, lambda)
+        raw_data = raw_data.T  # transpose to (lambda, angle)
+        if self._sccd.wl_inverted:  # Flip the wavelength axis if needed
+            raw_data = raw_data[::-1, ...]  # invert C
+        self._live_data[n][pol_idx][:,:, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, angle_res)
 
 
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):

@@ -32,7 +32,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
-from odemis.util import img, almost_equal, get_best_dtype_for_acc
+from odemis.util import img, almost_equal, get_best_dtype_for_acc, angleres
 import time
 
 from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
@@ -999,26 +999,17 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self._shouldUpdateImage()
 
 
-class ARSettingsStream(CCDSettingsStream):
+class PolarizedCCDSettingsStream(CCDSettingsStream):
     """
-    An angular-resolved stream, for a set of points (on the SEM).
-
-    The live view is just the raw CCD image.
-
-    See StaticARStream for displaying a stream with polar projection.
+    A mixin class that is used from ARSettingsStream and AngularSpectrumSettingsStream
+    to display a stream with porarization analyzer.
     """
     def __init__(self, name, detector, dataflow, emitter, analyzer=None, **kwargs):
+        """
+        analyzer (None or Actuator): polarization analyser with a "pol" axis
+        """
 
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_AR
-
-        super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
-
-        # Fuzzing doesn't make much sense as it would mostly blur the image
-        del self.fuzzing
-
-        # For SPARC: typical user wants density much lower than SEM
-        self.pixelSize.value *= 30
+        super(PolarizedCCDSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         # The attributes are used in SEMCCDMDStream (_sync.py)
         self.analyzer = analyzer
@@ -1042,7 +1033,7 @@ class ARSettingsStream(CCDSettingsStream):
         Subscribe polarization VA: link VA to hardware axis.
         Synchronized with stream. Waits until movement is completed.
         """
-        super(ARSettingsStream, self)._linkHwAxes()
+        super(PolarizedCCDSettingsStream, self)._linkHwAxes()
 
         if self.analyzer:
             try:
@@ -1057,7 +1048,7 @@ class ARSettingsStream(CCDSettingsStream):
 
     def _unlinkHwAxes(self):
         """"Unsubscribe polarization VA: unlink VA from hardware axis."""
-        super(ARSettingsStream, self)._unlinkHwAxes()
+        super(PolarizedCCDSettingsStream, self)._unlinkHwAxes()
 
         if self.analyzer:
             self.polarization.unsubscribe(self._onPolarization)
@@ -1079,6 +1070,216 @@ class ARSettingsStream(CCDSettingsStream):
             f.result()
         except Exception:
             logging.exception("Failed to move polarization analyzer.")
+
+
+class ARSettingsStream(PolarizedCCDSettingsStream):
+    """
+    An angular-resolved stream, for a set of points (on the SEM).
+    The live view is just the raw CCD image.
+    See StaticARStream for displaying a stream with polar projection.
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_AR
+
+        super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        # Fuzzing doesn't make much sense as it would mostly blur the image
+        del self.fuzzing
+
+        # For SPARC: the typical user wants much less pixels than the SEM survey
+        # (due to the long exposure time). So make the default pixel size bigger.
+        self.pixelSize.value *= 30
+
+
+class AngularSpectrumSettingsStream(PolarizedCCDSettingsStream):
+    """
+    An angular-resolved spectrum stream that allows to translate the detector plane to the theta values
+    at a given wavelength. This stream is supported by the dimension A in CAZYX.
+
+    The stream uses 2 binnings, a horizontal and a vertical one. They are linked to the camera resolution.
+
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, spectrometer, spectrograph, **kwargs):
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EK
+
+        super(AngularSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        # Fuzzing is not needed for EK imaging as it would mostly blur the image
+        del self.fuzzing
+
+        self.spectrometer = spectrometer
+        self.spectrograph = spectrograph
+
+        # For SPARC: typical user wants density much lower than SEM
+        self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
+
+        # Instantiates horizontal(spectrum) and vertical(angular) binning
+        try:
+            hw_choices = detector.binning.choices
+            h_choices = {b for b in {1, 2, 4, 8, 16} if any(hb[0] == b for hb in hw_choices)}
+            self.spectrum_binning = model.VAEnumerated(1, choices=h_choices)
+            v_choices = {b for b in {1, 2, 4, 8, 16} if any(hb[1] == b for hb in hw_choices)}
+            self.angular_binning = model.VAEnumerated(1, choices=v_choices)
+        except AttributeError:
+            logging.info("The VA of the detector.binning doesn't support .choices")
+            try:
+                hw_range = detector.binning.range
+                h_choices = {b for b in {1, 2, 4, 8, 16} if hw_range[0][0] <= b <= hw_range[1][0]}
+                self.spectrum_binning = model.VAEnumerated(1, choices=h_choices)
+                v_choices = {b for b in {1, 2, 4, 8, 16} if hw_range[0][1] <= b <= hw_range[1][1]}
+                self.angular_binning = model.VAEnumerated(1, choices=v_choices)
+            except AttributeError:
+                logging.info("The VA of the detector.binning doesn't support .range so instantiate read-only VAs "
+                             "for both horizontal and vertical binning")
+                self.spectrum_binning = model.VigilantAttribute(1, readonly=True)
+                self.angular_binning = model.VigilantAttribute(1, readonly=True)
+
+        self.wl_inverted = False  # variable shows if the wavelength list is inverted
+
+        # This is a little tricky: we don't directly need the spectrometer, the
+        # 1D image of the CCD, as we are interested in the raw image. However,
+        # we care about the wavelengths and the spectrometer might be inverted
+        # in order to make sure the wavelength is in the correct direction (ie,
+        # lowest pixel = lowest wavelength). So we need to do the same on the
+        # raw image. However, there is no "official" way to connect the
+        # spectrometer(s) to their raw CCD. So we rely on the fact that
+        # typically this is a wrapper, so we can check using the .dependencies.
+        try:
+            # check transpose in X (1 or -1), and invert if it's inverted (-1)
+            self.wl_inverted = (self.spectrometer.transpose[0] == -1)
+        except (AttributeError, TypeError) as ex:
+            # A very unlikely case where the spectrometer has no .transpose or it's not a tuple
+            logging.warning("%s: assuming that the wavelengths are not inverted", ex)
+
+    def _onNewData(self, dataflow, data):
+        """
+        Stores the dimension order CAZYX in the metadata MD_DIMS. This convention records the data
+        in such an order where C is the channel, A is the angle and ZYX the standard axes dimensions.
+
+        Saves the list of angles in the new metadata MD_THETA_LIST, used only when EK imaging
+        is applied.
+
+        Calculates the wavelength list and checks whether the highest wavelengths are at the smallest
+        indices. In such a case it swaps the wavelength axis of the CCD.
+        """
+        # Note: we cannot override PIXEL_SIZE as it is needed to compute MD_THETA_LIST
+        # during acquisition => Create a new DataArray with a different metadata.
+        md = data.metadata.copy()
+
+        md[model.MD_DIMS] = "AC"
+        # We compute a basic version of the MD_THETA_LIST corresponding to the
+        # center wavelength. This allows the user to confirm that the
+        # calibration is still correct (at least roughly). The image is not
+        # cropped/corrected (while in the StaticStream only the data with angle
+        # is shown, and eventually it'll also be corrected for the chromatic
+        # aberration).
+        md[model.MD_THETA_LIST] = angleres.ExtractThetaList(data)
+
+        if self.wl_inverted:
+            data = data[:,::-1, ...]  # invert C
+
+        # Sets POS and PIXEL_SIZE from the e-beam (which is in spot mode). Useful when taking snapshots.
+        epxs = self.emitter.pixelSize.value
+        md[model.MD_PIXEL_SIZE] = epxs
+        emd = self.emitter.getMetadata()
+        pos = emd.get(model.MD_POS, (0, 0))
+        trans = self.emitter.translation.value
+        md[model.MD_POS] = (pos[0] + trans[0] * epxs[0],
+                            pos[1] - trans[1] * epxs[1])  # Y is inverted
+
+        data = model.DataArray(data, metadata=md)
+        super(AngularSpectrumSettingsStream, self)._onNewData(dataflow, data)
+
+    def _find_metadata(self, md):
+        """
+        Finds the useful metadata for a 2D spatial projection from the metadata of a raw image.
+        :returns: (dict) Metadata dictionary (MD_* -> value).
+        """
+        simple_md = super(AngularSpectrumSettingsStream, self)._find_metadata(md)
+        if model.MD_THETA_LIST in md:
+            simple_md[model.MD_THETA_LIST] = md[model.MD_THETA_LIST]
+        if model.MD_WL_LIST in md:
+            simple_md[model.MD_WL_LIST] = md[model.MD_WL_LIST]
+        return simple_md
+
+    def _is_active_setter(self, active):
+        """
+        Called when stream is active/playing. Links the angular and spectrum binning VAs to
+        the camera resolution VA and the detector binning depending on whether the stream
+        is active or not.
+        :param active: (boolean) True if stream is playing.
+        :returns: (boolean) If stream is playing or not.
+        """
+        self._active = super(AngularSpectrumSettingsStream, self)._is_active_setter(active)
+
+        if self._active:
+            self._linkBin2CamRes()
+        else:
+            self._unlinkBin2CamRes()
+        return self._active
+
+    def _linkBin2CamRes(self):
+        """
+        Subscribes the detector resolution and binning to the spectrum and angular binning VAs.
+        """
+        self.angular_binning.subscribe(self._onBinning, init=True)
+        self.spectrum_binning.subscribe(self._onBinning, init=True)
+
+    def _unlinkBin2CamRes(self):
+        """
+        Unsubscribes the detector resolution and binning and update the GUI
+        """
+        self.angular_binning.unsubscribe(self._onBinning)
+        self.spectrum_binning.unsubscribe(self._onBinning)
+
+    def _onBinning(self, _=None):
+        """
+        Callback, which updates the binning on the detector and calculates spectral resolution
+        based on the spectrum and angular binning values.
+        Only called when stream is active.
+        """
+        binning = (self.spectrum_binning.value, self.angular_binning.value)
+        try:
+            self._detector.binning.value = binning
+        except Exception:
+            logging.exception("Failed to set the camera binning to %s", binning)
+
+        actual_binning = self._detector.binning.value
+        if actual_binning != binning:
+            logging.warning("Detector accepted binning %s instead of requested %s",
+                            actual_binning, binning)
+
+        try:
+            cam_xres = self._detector.shape[0] // actual_binning[0]
+            cam_yres = self._detector.shape[1] // actual_binning[1]
+            self._detector.resolution.value = (int(cam_xres), int(cam_yres))
+        except Exception:
+            logging.exception("Failed to set camera resolution on detector %s", self._detector)
+
+
+class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
+    """
+    A live stream for EK alignment, which has the same settings as AngularSpectrumSettingsStream
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # No need for the repetition information, as we only do live view
+        del self.pixelSize
+        del self.repetition
+
+    def _onNewData(self, dataflow, data):
+        if self.wl_inverted:
+            data = data[:,::-1, ...]  # invert C
+
+        super(AngularSpectrumSettingsStream, self)._onNewData(dataflow, data)
 
 
 class CLSettingsStream(PMTSettingsStream):

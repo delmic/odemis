@@ -68,6 +68,20 @@ class TestOpticalLens(unittest.TestCase):
             comp.magnification.value = 2.0
         comp.terminate()
 
+    def test_ek_positions(self):
+        """
+        Test mirrorPositionTop and mirrorPositionBottom VAs
+        """
+        comp = static.OpticalLens("test", "lens", 1, pole_pos=(458, 519), focus_dist=0.5e-3,
+                                  mirror_pos_top=[600.5, 0.2], mirror_pos_bottom=(-200, 0.3))
+        self.assertEqual(comp.mirrorPositionTop.value, (600.5, 0.2))
+        with self.assertRaises(TypeError):
+            comp.mirrorPositionTop.value = (1, 2, 3)
+        comp.mirrorPositionTop.value = (1, 0.32)
+        self.assertEqual(comp.mirrorPositionTop.value, (1, 0.32))
+
+        self.assertEqual(comp.mirrorPositionBottom.value, (-200, 0.3))
+
     def test_configurations(self):
         configurations = {"Mirror up": {"pole_pos": (458, 519),  "focus_dist": 0.5e-3},
                           "Mirror down": {"pole_pos": (634, 652),  "focus_dist": -0.5e-3}}

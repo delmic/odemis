@@ -27,21 +27,20 @@ from __future__ import division
 import cairo
 import collections
 import logging
-import math
-
+import numpy
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui import img
-from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.slider import Slider
-from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.buttons import ImageToggleButton
 from odemis.gui.comp.combo import ComboBox
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.comp.scalewindow import ScaleWindow
+from odemis.gui.comp.slider import Slider
 from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
-from odemis.gui.util.img import calculate_ticks
+from odemis.gui.util.img import calculate_ticks, guess_sig_num_rng, find_first_last_finite_indices
 from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
                          MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
-                         MD_AT_EM, MD_AT_HISTORY, MD_AT_SLIT
+                         MD_AT_EM, MD_AT_HISTORY, MD_AT_SLIT, MD_AT_EK
 import wx
 
 import odemis.util.units as units
@@ -66,6 +65,7 @@ class InfoLegend(wx.Panel):
         self._type_to_icon = (
             (MD_AT_AR, img.getBitmap("icon/ico_blending_ang.png")),
             (MD_AT_SPECTRUM, img.getBitmap("icon/ico_blending_spec.png")),
+            (MD_AT_EK, img.getBitmap("icon/ico_blending_spec.png")),
             (MD_AT_EM, img.getBitmap("icon/ico_blending_sem.png")),
             (MD_AT_OVV_TILES, img.getBitmap("icon/ico_blending_map.png")),
             (MD_AT_OVV_FULL, img.getBitmap("icon/ico_blending_navcam.png")),
@@ -299,8 +299,12 @@ class AxisLegend(wx.Panel):
     The axis legend displayed in plots
 
     Properties:
-    .unit: Unit displayed
-    .range: the range of the scale
+    .unit (str): Unit displayed
+    .range (list of floats of len >= 2): the range of the scale.
+       When horizontal, going from left to right.
+       When vertical, going from bottom to top.
+       If more than 2 values are passed, each value is considered to
+       be spread homogeneously from one side to the other side.
     .lo_ellipsis, hi_ellipsis: These properties, when true, show an ellipsis
         on the first and/or last tick marks
         e.g.: ...-10,  -5 , 0, 5, 10...
@@ -425,7 +429,16 @@ class AxisLegend(wx.Panel):
 
     @range.setter
     def range(self, val):
-        if self._value_range != val:
+        """
+        val (list or numpy array)
+        """
+        # Avoid comparing numpy arrays element-wise: just check it's the same object or not
+        if isinstance(val, numpy.ndarray) or isinstance(self._value_range, numpy.ndarray):
+            if val is not self._value_range:
+                self._value_range = val
+                self.Refresh()
+
+        elif self._value_range != val:
             self._value_range = val
             self.Refresh()
 
@@ -435,7 +448,7 @@ class AxisLegend(wx.Panel):
         self.Refresh()
 
     def on_size(self, _=None):
-        if self._value_range:
+        if self._value_range is not None:
             self.Refresh()
 
         if self._orientation == wx.HORIZONTAL:
@@ -466,14 +479,7 @@ class AxisLegend(wx.Panel):
             elif self._orientation == wx.VERTICAL:
                 self._tick_list = [(pos, val) for (pos, val) in self._tick_list if pos > 24]
 
-        # If min and max are very close, we need more significant numbers to
-        # ensure the values displayed are different (ex 17999 -> 18003)
-        rng = self._value_range
-        if rng[0] == rng[1]:
-            sig = None
-        else:
-            ratio_rng = max(abs(v) for v in rng) / (max(rng) - min(rng))
-            sig = max(3, 1 + math.ceil(math.log10(ratio_rng * len(self._tick_list))))
+        sig = guess_sig_num_rng(self._value_range)
 
         # Set Font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -485,8 +491,10 @@ class AxisLegend(wx.Panel):
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
+        i_first, i_last = find_first_last_finite_indices(self._value_range)
+        rng = self._value_range[i_first], self._value_range[i_last]
         max_width = 0
-        if rng[0] < rng[-1] and self._orientation == wx.VERTICAL:
+        if rng[0] < rng[1] and self._orientation == wx.VERTICAL:
             prev_lpos = csize.y  # Vertically, start at the bottom. The case where X is reversed is not supported.
         else:
             prev_lpos = 0

@@ -48,7 +48,7 @@ from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
-from odemis.util.comp import compute_scanner_fov, get_fov_rect
+from odemis.util.comp import compute_scanner_fov, compute_camera_fov, get_fov_rect
 
 
 class CurrentPosCrossHairOverlay(WorldOverlay):
@@ -1196,7 +1196,7 @@ class GadgetToolInterface(with_metaclass(ABCMeta, object)):
         pass
 
     @abstractmethod
-    def draw(self, ctx, selected, canvas=None, font_size=None):
+    def draw(self, ctx, selected=None, canvas=None, font_size=None):
         """
         Draw the tools to given context
         Args:
@@ -1207,6 +1207,13 @@ class GadgetToolInterface(with_metaclass(ABCMeta, object)):
             font_size: fontsize is given in case of print-ready export
         """
         pass
+
+
+LINE_MODE_NONE = 0
+LINE_MODE_MOVE = 1
+LINE_MODE_EDIT_START = 2
+LINE_MODE_EDIT_END = 3
+LINE_MODE_EDIT_TEXT = 4
 
 
 class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
@@ -1231,16 +1238,16 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
 
         self.p_start_pos = p_start_pos  # physical coordinates in meters
         self.p_end_pos = p_end_pos
-        offset = self.cnvs.get_half_buffer_size()
+        offset = cnvs.get_half_buffer_size()
 
         if p_start_pos is not None:
             # offset must be *buffer* coordinates in pixels
-            self.v_start_pos = Vec(self.cnvs.phys_to_view(self.p_start_pos, offset))
+            self.v_start_pos = Vec(cnvs.phys_to_view(self.p_start_pos, offset))
         else:
             self.v_start_pos = None
 
         if p_end_pos is not None:
-            self.v_end_pos = Vec(self.cnvs.phys_to_view(self.p_end_pos, offset))
+            self.v_end_pos = Vec(cnvs.phys_to_view(self.p_end_pos, offset))
         else:
             self.v_end_pos = None
 
@@ -1249,6 +1256,8 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
 
         self.last_shiftscale = None  # previous shift & scale of the canvas to know whether it has changed
         self._edges = {}  # the bound-boxes of the line in view coordinates
+        self._calc_edges()
+        self._mode = LINE_MODE_NONE
 
     def _view_to_phys(self):
         """ Update the physical position to reflect the view position """
@@ -1258,7 +1267,12 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
             self.p_end_pos = self.cnvs.view_to_phys(self.v_end_pos, offset)
             self._calc_edges()
 
-    @abstractmethod
+    def _phys_to_view(self):
+        offset = self.cnvs.get_half_buffer_size()
+        self.v_start_pos = Vec(self.cnvs.phys_to_view(self.p_start_pos, offset))
+        self.v_end_pos = Vec(self.cnvs.phys_to_view(self.p_end_pos, offset))
+        self._calc_edges()
+
     def start_dragging(self, drag, vpos):
         """
         The user can start dragging (creating/editing/moving) the line when the left mouse button is pressed down
@@ -1266,23 +1280,123 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
             drag: hover mode (HOVER_START, HOVER_LINE, HOVER_END)
             vpos: the view coordinates of the mouse cursor once left click mouse event is fired
         """
-        self.drag_v_start_pos = self.drag_v_end_pos = Vec(vpos)
+        self.drag_v_start_pos = Vec(vpos)
         if self.v_start_pos is None:
             self.v_start_pos = self.drag_v_start_pos
         if self.v_end_pos is None:
-            self.v_end_pos = self.drag_v_end_pos
+            self.v_end_pos = self.drag_v_start_pos
 
-    @abstractmethod
-    def on_motion(self, vpos, ctrl_down):
+        if drag == gui.HOVER_START:
+            self._mode = LINE_MODE_EDIT_START
+        elif drag == gui.HOVER_END:
+            self._mode = LINE_MODE_EDIT_END
+        elif drag == gui.HOVER_LINE:
+            self._mode = LINE_MODE_MOVE
+
+        # Other drag modes are allowed, in which case it's up to the child class to handle it
+
+    def on_motion(self, vpos, ctrl_down=False):
         """
         Given that the left mouse button is already pressed down and the mouse cursor is over the line,
         the user can drag (create/edit/move) any tool until the left button is released.
         Args:
             vpos: the view coordinates of the mouse cursor while dragging
-            ctrl_down (boolean): if True, the ctrl key is pressed while dragging and the line
-            is forced to be at one angle multiple of 45 degrees.
+            ctrl_down (boolean): if True, the ctrl key is pressed while dragging
         """
         self.drag_v_end_pos = Vec(vpos)
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+
+        if self._mode == LINE_MODE_MOVE:
+            self._update_moving(current_pos, ctrl_down)
+        elif self._mode == LINE_MODE_EDIT_START:
+            self._update_start_point(current_pos, ctrl_down)
+        elif self._mode == LINE_MODE_EDIT_END:
+            self._update_end_point(current_pos, ctrl_down)
+        else:
+            # Other modes are allowed, in which case it's up to the child class to handle it
+            return
+
+        self._view_to_phys()
+
+    def _update_moving(self, current_pos, _):
+        """ Update view coordinates while moving the line """
+        diff = current_pos - self.drag_v_start_pos
+        self.v_start_pos = self.v_start_pos + diff
+        self.v_end_pos = self.v_end_pos + diff
+        self.drag_v_start_pos = current_pos
+
+    def _update_start_point(self, current_pos, round_angle):
+        """ Update view coordinates while dragging the starting point.
+        round_angle (bool): if True, the ruler is forced to be at one angle multiple of 45 degrees
+        """
+        if round_angle:
+            current_pos = Vec(self._round_pos(self.v_end_pos, current_pos))
+        self.v_start_pos = current_pos
+
+    def _update_end_point(self, current_pos, round_angle):
+        """ Update view coordinates while  dragging the end point.
+        round_angle (bool): if True, the ruler is forced to be at one angle multiple of 45 degrees
+        """
+        if round_angle:
+            current_pos = Vec(self._round_pos(self.v_start_pos, current_pos))
+        self.v_end_pos = current_pos
+
+    def stop_updating_tool(self):
+        """ Stop dragging (moving/editing) the line """
+        super().stop_updating_tool()
+        self._calc_edges()
+        self._mode = LINE_MODE_NONE
+
+    def get_hover(self, vpos):
+        """ Check if the given position is on/near a selection edge or inside the selection.
+        It returns a "gui.HOVER_*" """
+
+        if self._edges:
+            vx, vy = vpos
+
+            # TODO use is_point_in_rect()
+            # if position outside outer box
+            if not (
+                self._edges["o_l"] < vx < self._edges["o_r"] and
+                self._edges["o_t"] < vy < self._edges["o_b"]
+            ):
+                return gui.HOVER_NONE
+
+            # if position inside inner box (to handle cases when the line is small)
+            if (
+                self._edges["i_l"] < vx < self._edges["i_r"] and
+                self._edges["i_t"] < vy < self._edges["i_b"]
+            ):
+                dist = util.perpendicular_distance(self.v_start_pos, self.v_end_pos, vpos)
+                if dist < self.HOVER_MARGIN:
+                    return gui.HOVER_LINE
+
+            if (
+                self._edges["s_l"] < vx < self._edges["s_r"] and
+                self._edges["s_t"] < vy < self._edges["s_b"]
+            ):
+                return gui.HOVER_START
+            elif (
+                self._edges["e_l"] < vx < self._edges["e_r"] and
+                self._edges["e_t"] < vy < self._edges["e_b"]
+            ):
+                return gui.HOVER_END
+            else:
+                dist = util.perpendicular_distance(self.v_start_pos, self.v_end_pos, vpos)
+                if dist < self.HOVER_MARGIN:
+                    return gui.HOVER_LINE
+
+            return gui.HOVER_NONE
+
+    def sync_with_canvas(self, shift=(0, 0), scale=1.0):
+        """ Given that the canvas has been shifted or rescaled, update the view positions of the line """
+        if None in (self.p_start_pos, self.p_end_pos):
+            return
+
+        shiftscale = (shift, scale)
+        if self.last_shiftscale != shiftscale:
+            self._phys_to_view()
+            self.last_shiftscale = shiftscale
 
     @staticmethod
     def _round_pos(v_pos, current_pos):
@@ -1315,6 +1429,15 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
         if self.v_start_pos and self.v_end_pos:
             sx, sy = self.v_start_pos
             ex, ey = self.v_end_pos
+
+            # TODO: use expand_rect
+            # s_bbox = expand_rect((sx, sy, sx, sy), self.HOVER_MARGIN)
+            # TODO: use normalize_rect() to compute global bbox
+            # TODO: the harder part is to handle the corner case where the line is very tiny
+            # In that case, we want don't want to only move the corners, but still
+            # be able to move the line, first if the cursor is near the line.
+            # => inner box which has higher priority over corner bbox, and stays
+            # at the center of the line (or it could just be a circle from the center.
 
             i_l, i_r = sorted([sx, ex])
             i_t, i_b = sorted([sy, ey])
@@ -1399,8 +1522,12 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
             ctx.rectangle(*end_rect)
             ctx.stroke()
 
+    # TODO: rename to rect_view_to_buffer()
     def _edges_to_rect(self, x1, y1, x2, y2):
-        """ Return a rectangle of the form (x, y, w, h) """
+        """
+        Convert from view coordinates to buffer coordinates
+        Return a rectangle of the form (x, y, w, h)
+        """
         x1, y1 = self.cnvs.view_to_buffer((x1, y1))
         x2, y2 = self.cnvs.view_to_buffer((x2, y2))
         return self._points_to_rect(x1, y1, x2, y2)
@@ -1411,15 +1538,9 @@ class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
         return left, top, right - left, bottom - top
 
 
-NONE_RULER_MODE = 0
-MOVE_RULER_MODE = 1
-EDIT_START_RULER_MODE = 2
-EDIT_END_RULER_MODE = 3
-
-
 class RulerGadget(GenericGadgetLine):
     """
-        Represent a "ruler" in the canvas (as a sub-part of the GadgetOverlay). Used to draw the ruler
+    Represent a "ruler" in the canvas (as a sub-part of the GadgetOverlay). Used to draw the ruler
         and also handle the mouse interaction when dragging/moving the ruler.
     """
 
@@ -1437,127 +1558,13 @@ class RulerGadget(GenericGadgetLine):
             deg=None,
             background=None
         )
-        self.mode = NONE_RULER_MODE
-        self.last_shiftscale = None  # previous shift & scale of the canvas to know whether it has changed
 
     def __str__(self):
+        if None in (self.p_start_pos, self.p_end_pos):
+            return "Ruler (uninitialised)"
+
         return "Ruler %g,%g -> %g,%g" % (self.p_start_pos[0], self.p_start_pos[1],
                                          self.p_end_pos[0], self.p_end_pos[1])
-
-    def start_dragging(self, drag, vpos):
-        """ The user can start dragging (creating/editing/moving) the ruler when the left mouse button
-        is pressed down """
-        super(RulerGadget, self).start_dragging(drag, vpos)
-
-        if drag == gui.HOVER_START:
-            self.mode = EDIT_START_RULER_MODE
-        elif drag == gui.HOVER_END:
-            self.mode = EDIT_END_RULER_MODE
-        elif drag == gui.HOVER_LINE:
-            self.mode = MOVE_RULER_MODE
-        else:
-            raise ValueError("No valid hover mode")
-
-        self._view_to_phys()
-
-    def on_motion(self, vpos, ctrl_down):
-        """
-        Given that the left mouse button is already pressed down and the mouse cursor is over the ruler,
-        the user can drag (create/edit/move) the ruler until the left button is released.
-        """
-        super(RulerGadget, self).on_motion(vpos, ctrl_down)
-
-        if self.mode != NONE_RULER_MODE:
-            if self.mode in (EDIT_START_RULER_MODE, EDIT_END_RULER_MODE):
-                self._update_editing(ctrl_down)
-            else:  # self.mode == MOVE_RULER_MODE:
-                self._update_moving()
-            self.cnvs.Refresh()
-            self._view_to_phys()
-
-    def _update_moving(self):
-        """ Update view coordinates while moving the ruler """
-        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-
-        diff = current_pos - self.drag_v_start_pos
-        self.v_start_pos = self.v_start_pos + diff
-        self.v_end_pos = self.v_end_pos + diff
-        self.drag_v_start_pos = current_pos
-
-    def _update_editing(self, round_angle):
-        """ Update view coordinates while editing the ruler. If round_angle(boolean) is True,
-        the ruler is forced to be at one angle multiple of 45 degrees """
-        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-
-        if self.mode == EDIT_START_RULER_MODE:
-            if round_angle:
-                current_pos = Vec(self._round_pos(self.v_end_pos, current_pos))
-            self.v_start_pos = current_pos
-
-        elif self.mode == EDIT_END_RULER_MODE:
-            if round_angle:
-                current_pos = Vec(self._round_pos(self.v_start_pos, current_pos))
-            self.v_end_pos = current_pos
-
-    def get_hover(self, vpos):
-        """ Check if the given position is on/near a selection edge or inside the selection.
-        It returns a "gui.HOVER_*" """
-
-        if self._edges:
-            vx, vy = vpos
-
-            # if position outside outer box
-            if not (
-                self._edges["o_l"] < vx < self._edges["o_r"] and
-                self._edges["o_t"] < vy < self._edges["o_b"]
-            ):
-                return gui.HOVER_NONE
-
-            # if position inside inner box
-            if (
-                self._edges["i_l"] < vx < self._edges["i_r"] and
-                self._edges["i_t"] < vy < self._edges["i_b"]
-            ):
-                dist = util.perpendicular_distance(self.v_start_pos, self.v_end_pos, vpos)
-                if dist < self.HOVER_MARGIN:
-                    return gui.HOVER_LINE
-
-            elif (
-                self._edges["s_l"] < vx < self._edges["s_r"] and
-                self._edges["s_t"] < vy < self._edges["s_b"]
-            ):
-                return gui.HOVER_START
-            elif (
-                self._edges["e_l"] < vx < self._edges["e_r"] and
-                self._edges["e_t"] < vy < self._edges["e_b"]
-            ):
-                return gui.HOVER_END
-            else:
-                dist = util.perpendicular_distance(self.v_start_pos, self.v_end_pos, vpos)
-                if dist < self.HOVER_MARGIN:
-                    return gui.HOVER_LINE
-
-            return gui.HOVER_NONE
-
-    def stop_updating_tool(self):
-        """ Stop dragging (moving/editing) the ruler """
-        super(RulerGadget, self).stop_updating_tool()
-        self._calc_edges()
-        self.mode = NONE_RULER_MODE
-
-    def sync_with_canvas(self, shift=(0, 0), scale=1.0):
-        """ Given that the canvas has been shifted or rescaled, update the view positions of the ruler """
-        shiftscale = (shift, scale)
-        update_view = self.last_shiftscale != shiftscale
-        if update_view:
-            logging.debug("Updating view position of ruler %s", self)
-            offset = self.cnvs.get_half_buffer_size()
-            b_start = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
-            b_end = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
-            self.v_start_pos = Vec(self.cnvs.buffer_to_view(b_start))
-            self.v_end_pos = Vec(self.cnvs.buffer_to_view(b_end))
-            self._calc_edges()
-            self.last_shiftscale = shiftscale
 
     def draw(self, ctx, selected, canvas=None, font_size=None):
         """ Draw a ruler and display the size in meters next to it. If the ruler is selected,
@@ -1644,12 +1651,6 @@ class RulerGadget(GenericGadgetLine):
         # self.debug_edges(ctx)
 
 
-LABEL_MODE_NONE = 0
-LABEL_MODE_EDIT_START = 1
-LABEL_MODE_EDIT_END = 2
-LABEL_MODE_EDIT_TEXT = 3
-
-
 class LabelGadget(GenericGadgetLine):
     """
     Represent a "label" in the canvas (as a sub-part of the GadgetOverlay). Used to draw the label
@@ -1657,20 +1658,17 @@ class LabelGadget(GenericGadgetLine):
     """
 
     def __init__(self, cnvs, p_start_pos, p_end_pos):
-        super(LabelGadget, self).__init__(cnvs, p_start_pos, p_end_pos)
-
         self._label = Label(
             "",
             pos=(0, 0),
             font_size=14,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL,
-            colour=self.colour,
+            colour=(0, 0, 0, 0),  # RGBA
             opacity=1.0,
-            deg=None,
+            deg=None,  # always horizontal
             background=None
         )
-        self._mode = LABEL_MODE_NONE
 
         # Flag used to indicate if the position of the text is being edited or not. When the flag is true, the position
         # of the text (the ending point of line) is being edited without editing the text itself.
@@ -1678,11 +1676,9 @@ class LabelGadget(GenericGadgetLine):
         # Flag used to show if the text is to be entered by the user. It is used when a label is initially created
         # and the user has to type the label text.
         self._ask_user_for_text = True
-        self._label.text = ''
-        # text is always placed horizontal
-        self._label.deg = math.degrees(math.pi)
 
-        self.last_shiftscale = None  # previous shift & scale of the canvas to know whether it has changed
+        super(LabelGadget, self).__init__(cnvs, p_start_pos, p_end_pos)
+        self._label.colour = self.colour
 
     def __str__(self):
         return "Label %g,%g -> %g,%g and label text %s" % (self.p_start_pos[0], self.p_start_pos[1],
@@ -1696,17 +1692,21 @@ class LabelGadget(GenericGadgetLine):
         Left dragging on the ending point of the label allows us to edit the text once no motion of mouse
         cursor occurs. In case the mouse cursor is on motion, editing of the text position gets possible.
         """
-        super(LabelGadget, self).start_dragging(drag, vpos)
+        self.drag_v_start_pos = Vec(vpos)
+        if self.v_start_pos is None:
+            self.v_start_pos = self.drag_v_start_pos
+        if self.v_end_pos is None:
+            self.v_end_pos = self.drag_v_start_pos
 
         if drag == gui.HOVER_START:
-            self._mode = LABEL_MODE_EDIT_START
+            self._mode = LINE_MODE_EDIT_START
         elif drag == gui.HOVER_END:
-            self._mode = LABEL_MODE_EDIT_END
+            self._mode = LINE_MODE_EDIT_END
         elif drag == gui.HOVER_TEXT:
             self._edit_label_end = False
-            self._mode = LABEL_MODE_EDIT_TEXT
+            self._mode = LINE_MODE_EDIT_TEXT
         else:
-            raise ValueError("No valid hover mode")
+            raise ValueError(f"Not a valid hover mode: {drag}")
         self._view_to_phys()
 
     def on_motion(self, vpos, ctrl_down):
@@ -1717,33 +1717,27 @@ class LabelGadget(GenericGadgetLine):
         """
         super(LabelGadget, self).on_motion(vpos, ctrl_down)
 
-        if self._mode != LABEL_MODE_NONE:
-            self._update_editing(ctrl_down)
-            self.cnvs.Refresh()
+        if self._mode == LINE_MODE_EDIT_TEXT:
+            # when the mouse cursor is on motion while the left mouse button is pressed down, the
+            # flag _edit_label_end gets True, representing that only the position of the text is being edited.
+            self._edit_label_end = True
+            current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+            self._update_end_point(current_pos, ctrl_down)
             self._view_to_phys()
 
-    def _update_editing(self, round_angle):
-        """ Update view coordinates while editing the label. If round_angle(boolean) is True,
-        the label is forced to be at one angle multiple of 45 degrees """
-        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+    def _update_end_point(self, current_pos, round_angle):
+        """ Update view coordinates while editing the ruler.
+        round_angle (bool): if True, the ruler is forced to be at one angle multiple of 45 degrees
+        """
+        # For the end point/text move, we don't place the end of the line at the cursor position,
+        # but only shift it by the same amount as it was dragged. This avoids
+        # the line position "jumping" when the drag starts far away
         diff = current_pos - self.drag_v_start_pos
         self.drag_v_start_pos = current_pos
-
-        if self._mode == LABEL_MODE_EDIT_START:
-            new_v_start = self.v_start_pos + diff
-            if round_angle:
-                new_v_start = Vec(self._round_pos(self.v_end_pos, new_v_start))
-            self.v_start_pos = new_v_start
-
-        elif self._mode in (LABEL_MODE_EDIT_END, LABEL_MODE_EDIT_TEXT):
-            if self._mode == LABEL_MODE_EDIT_TEXT:
-                # when the mouse cursor is on motion while the left mouse button is pressed down, the
-                # flag _edit_label_end gets True, representing that only the position of the text is being edited.
-                self._edit_label_end = True
-            new_v_end = self.v_end_pos + diff
-            if round_angle:
-                new_v_end = Vec(self._round_pos(self.v_start_pos, new_v_end))
-            self.v_end_pos = new_v_end
+        new_v_end = self.v_end_pos + diff
+        if round_angle:
+            new_v_end = Vec(self._round_pos(self.v_start_pos, new_v_end))
+        self.v_end_pos = new_v_end
 
     def _edit_text(self):
         """ A dialog box pops up and the user can edit the text """
@@ -1776,14 +1770,12 @@ class LabelGadget(GenericGadgetLine):
 
     def stop_updating_tool(self):
         """ Stop dragging (moving/editing) the label """
-        super(LabelGadget, self).stop_updating_tool()
-
-        if self._mode in (LABEL_MODE_EDIT_END, LABEL_MODE_EDIT_TEXT):
+        if self._mode in (LINE_MODE_EDIT_END, LINE_MODE_EDIT_TEXT):
             if self._ask_user_for_text or not self._edit_label_end:
                 self._edit_text()
                 self._ask_user_for_text = False
-        self._calc_edges()
-        self._mode = LABEL_MODE_NONE
+
+        super().stop_updating_tool()
 
     def get_hover(self, vpos):
         """ Check if the given position is on/near a selection edge or inside the selection.
@@ -1832,20 +1824,6 @@ class LabelGadget(GenericGadgetLine):
             ctx.set_source_rgba(0.6, 1, 0.6, 1)
             ctx.rectangle(*text_rect)
             ctx.stroke()
-
-    def sync_with_canvas(self, shift=(0, 0), scale=1.0):
-        """ Given that the canvas has been shifted or rescaled, update the view positions of the label """
-        shiftscale = (shift, scale)
-        update_view = self.last_shiftscale != shiftscale
-        if update_view:
-            logging.debug("Updating view position of label %s", self)
-            offset = self.cnvs.get_half_buffer_size()
-            b_start = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
-            b_end = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
-            self.v_start_pos = Vec(self.cnvs.buffer_to_view(b_start))
-            self.v_end_pos = Vec(self.cnvs.buffer_to_view(b_end))
-            self._calc_edges()
-            self.last_shiftscale = shiftscale
 
     def draw(self, ctx, selected, canvas=None, font_size=14):
         """ Draw a label by drawing a line and ask for the user to fill in or edit the text at the end of the line.
@@ -2053,11 +2031,7 @@ class GadgetOverlay(WorldOverlay):
                 evt.Skip()
                 return
 
-            if evt.ControlDown():
-                ctrl_down = True
-            else:
-                ctrl_down = False
-            self._selected_tool.on_motion(vpos, ctrl_down)
+            self._selected_tool.on_motion(vpos, evt.ControlDown())
             self.cnvs.request_drawing_update()
         else:
             # Hover-only => only update the cursor based on what could happen
@@ -2969,6 +2943,373 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.line_to(hole_radius_b * 2, hole_pos_b.y)
         # ctx.stroke()
         # END DEBUG Lines Mirror Center
+
+
+class EKLine(GenericGadgetLine):
+
+    def __init__(self, cnvs, ek_ovl, line_va, det_edges):
+        """
+        Args:
+            cnvs: canvas passed by the EKOverlay and used to draw the lines with static x and given y physical
+                coordinates.
+            ek_ovl: must have a .wl_list
+            line_va (VA of 2 floats): position in m of the line from the center, as a linear equation relative to the wl
+            det_edges (float, float): the position of the left and right edges of the detector in physical coordinates (in meters).
+        """
+        self.det_edges = det_edges
+        self._line_va = line_va
+        self._ek_ovl = ek_ovl
+        self._wl_list = ek_ovl.wl_list
+
+        super().__init__(cnvs)
+
+        self._line_va.subscribe(self._onLinePos, init=True)
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+
+    def _onLinePos(self, line):
+        # TODO: This is not called often enough: when the spectrograph wl is changed,
+        # but the canvas hasn't been redrawn (eg, because image is paused, or long exp time).
+        # => listen to the spectrograph.position in the EKOverlay and force redrawing a
+        # little later (after the MD_WL_LIST has been updated by the md_updater)?
+
+        # MD_WL_LIST
+        self._wl_list = self._ek_ovl.wl_list  # cache it, to detect change
+        try:
+            wl_start = self._wl_list[0]
+            wl_end = self._wl_list[-1]
+        except (IndexError, TypeError):
+            logging.debug("No WL_LIST for line")
+            # TODO: disable dragging too
+            self.p_start_pos = None
+            self.p_end_pos = None
+            self.v_start_pos = None
+            self.v_end_pos = None
+            return
+
+        # The X position is fixed: from the very left till the very right
+        # The Y position depends on the wavelength: pos (from the center, in m) =  a + b * wl
+        a, b = line
+        p_start_y =  a + b * wl_start
+        p_end_y = a + b * wl_end
+        self.p_start_pos = self.det_edges[0], p_start_y
+        self.p_end_pos = self.det_edges[1], p_end_y
+
+        # Force an update of the view
+        self._phys_to_view()
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _view_to_phys(self):
+        super()._view_to_phys()
+
+        # Update the VA
+        try:
+            wl_start = self._wl_list[0]
+            wl_end = self._wl_list[-1]
+        except (IndexError, TypeError):
+            return
+
+        # Reverse equation of pos =  a + b * wl
+        b = (self.p_end_pos[1] - self.p_start_pos[1]) / (wl_end - wl_start)
+        logging.debug("%s mm / %s nm", (self.p_end_pos[1] - self.p_start_pos[1]) * 1e3, (wl_end - wl_start) * 1e9)
+        a = self.p_start_pos[1] - b * wl_start
+
+        # This will call _onLinePos() direct, which is fine, as the VA may clip
+        # the value, and hence this will be directly reflected in the display.
+        self._line_va.value = (a, b)
+
+    def _update_moving(self, current_pos, _):
+        """ Update view coordinates while moving the line """
+        # Only move in Y
+        diff = Vec(0, current_pos[1] - self.drag_v_start_pos[1])
+        self.v_start_pos = self.v_start_pos + diff
+        self.v_end_pos = self.v_end_pos + diff
+        self.drag_v_start_pos = current_pos
+
+    def _update_start_point(self, current_pos, _):
+        """ Update view coordinates while dragging the starting point."""
+        # Only change the Y (X stays at the side of the CCD image)
+        self.v_start_pos = Vec(self.v_start_pos[0], current_pos[1])
+
+    def _update_end_point(self, current_pos, round_angle):
+        """ Update view coordinates while dragging the end point."""
+        # Only change the Y (X stays at the side of the CCD image)
+        self.v_end_pos = Vec(self.v_end_pos[0], current_pos[1])
+
+    def draw(self, ctx, **kwargs):
+        """ Draw the line (top or bottom) based on the given physical coordinates """
+        if self._wl_list != self._ek_ovl.wl_list:
+            # WL_LIST has changed => update the physical position
+            self._onLinePos(self._line_va.value)
+
+        # If no valid selection is made, do nothing
+        if None in (self.p_start_pos, self.p_end_pos):
+            return
+
+        offset = self.cnvs.get_half_buffer_size()
+        b_start = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+        b_end = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
+
+        # Draws a black background for the line
+        ctx.set_line_width(3)
+        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.move_to(*b_start)
+        ctx.line_to(*b_end)
+        ctx.stroke()
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.set_line_width(2)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.move_to(*b_start)
+        ctx.line_to(*b_end)
+        ctx.stroke()
+
+        self._calc_edges()
+        # self.debug_edges(ctx)
+
+
+# Default values using the standard mirror size, in m
+PARABOLA_F = 2.5e-3  # focal length of the parabola in m
+XMAX = 13.25e-3
+
+
+class EKOverlay(WorldOverlay):
+    """ Overlay showing the EK mask the user can position over a mirror camera feed. The EK mask
+     consists of 3 lines. The user can edit the top and bottom lines by either moving them or dragging
+     their endpoints. The middle line corresponds to the hole position and is updated based on the
+     position of the top and bottom lines. This line is not draggable."""
+
+    def __init__(self, cnvs):
+        WorldOverlay.__init__(self, cnvs)
+
+        self.cnvs = cnvs
+        self._left_dragging = False  # Indicate whether a mouse drag is in progress
+        self._selected_line = None  # EKLine currently dragged (if any)
+        self._lines = []  # type: List[EKline]
+        self._ccd = None  # type: DigitalCamera
+        self.wl_list = None  # list of floats: pixel number -> wavelength
+
+        # To show an orange warning in the middle if grating is in 0th order (ie, no wavelength)
+        self._warning_label = Label(
+            "Select a wavelength to calibrate the chromatic aberration",
+            pos=(0, 0),  # Will be updated just before drawing
+            font_size=30,
+            flip=False,
+            align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_CENTRE_VERTICAL,
+            colour=conversion.hex_to_frgba(gui.FG_COLOUR_WARNING),
+            opacity=1.0,
+            deg=None,
+            background=None
+        )
+
+        # Default values using the standard mirror size, in m
+        self.parabola_f = 2.5e-3
+        self.focus_dist = 0.5e-3
+        self.x_max = 13.25e-3
+
+    def set_mirror_dimensions(self, parabola_f, x_max, focus_dist):
+        """
+        Updates the dimensions of the mirror
+        parabola_f (float): focal length of the parabola in m.
+         If < 0, the drawing will be flipped (ie, with the circle towards the top)
+        x_max (float): cut off of the parabola from the origin (in m)
+        focus_dist (float): the vertical mirror cutoff, iow the min distance
+          between the mirror and the sample (in m)
+        """
+        # TODO: support x_max negative (when the mirror is inverted)
+        self.parabola_f = parabola_f
+        self.focus_dist = focus_dist
+        self.x_max = x_max
+
+    def create_ek_mask(self, ccd, tab_data):
+        """
+        To be called once, to set up the overlay
+        ccd (DigitalCamera): the CCD component used to show the raw image
+        tab_data (Sparc2AlignGUIData): it should have mirrorPositionTopPhys and mirrorPositionBottomPhys VAs
+          containing tuples of 2 floats
+        """
+        self._ccd = ccd
+        # Calculate the image width which is used for positioning top and bottom lines.
+        fov = compute_camera_fov(ccd)
+        # The center is always at 0,0, so the sides are easy to compute
+        im_width = (-fov[0] / 2, fov[0] / 2)
+
+        # Will be updated before every redraw
+        self.wl_list = ccd.getMetadata().get(model.MD_WL_LIST)
+        
+        # TODO: listen to the spectrograph position to force a redraw?
+        # Or have a separate function to update the wl_list? (which would be called whenever the MD_WL_LIST changes)?
+        # The tricky part is that the MD_WL_LIST is updated after the spectrograph position changes.
+        # So it'd be hard to know if we are reading the old MD_WL_LIST or the brand new one.
+
+        # Create the lines. Beware: the bottom/top names refer to the bottom/top
+        # of the mirror (when installed above the sample). However, the convention
+        # is that the CCD image is upside-down, with the bottom of the mirror at
+        # the top. So the "top" line is always below the bottom line, and this is
+        # ensured by _ensure_top_bottom_order().
+        self._top_line = EKLine(self.cnvs, self, tab_data.mirrorPositionTopPhys, im_width)
+        self._bottom_line = EKLine(self.cnvs, self, tab_data.mirrorPositionBottomPhys, im_width)
+        self._lines = [self._top_line, self._bottom_line]
+
+    def on_left_down(self, evt):
+        if not self.active.value:
+            return super(EKOverlay, self).on_left_down(evt)
+
+        vpos = evt.Position
+        self._selected_line, drag = self._get_tool_below(vpos)
+
+        if drag != gui.HOVER_NONE:
+            self._left_dragging = True
+            self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+
+            self._selected_line.start_dragging(drag, vpos)
+            self.cnvs.request_drawing_update()
+
+            # capture the mouse
+            self.cnvs.SetFocus()
+
+        else:
+            # Nothing to do with tools
+            evt.Skip()
+
+    def _get_tool_below(self, vpos):
+        """
+        Find a tool corresponding to the given mouse position.
+        Args:
+            vpos (int, int): position of the mouse in view coordinate
+        Returns: (tool or None, HOVER_*): the most appropriate tool and the hover mode.
+            If no tool is found, it returns None.
+        """
+        for line in self._lines:
+            hover_mode = line.get_hover(vpos)
+            if hover_mode != gui.HOVER_NONE:
+                return line, hover_mode
+
+        return None, gui.HOVER_NONE
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise call super method so event will propagate """
+        if not self.active.value:
+            return super(EKOverlay, self).on_motion(evt)
+
+        if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
+            # Already being handled by the canvas itself
+            evt.Skip()
+            return
+
+        vpos = evt.Position
+        if self._left_dragging:
+            if not self._selected_line:
+                logging.error("Dragging without selected tool")
+                evt.Skip()
+                return
+
+            self._selected_line.on_motion(vpos)
+            self.cnvs.request_drawing_update()
+        else:
+            # Hover-only => only update the cursor based on what could happen
+            _, drag = self._get_tool_below(vpos)
+            if drag != gui.HOVER_NONE:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+            else:
+                self.cnvs.reset_dynamic_cursor()
+
+            evt.Skip()
+
+    def on_left_up(self, evt):
+        """ Stop drawing a selected tool if the overlay is active """
+        if not self.active.value:
+            return super(EKOverlay, self).on_left_up(evt)
+
+        if self._left_dragging:
+            if self._selected_line:
+                self._selected_line.stop_updating_tool()
+                self.cnvs.request_drawing_update()
+                self._selected_line = None
+
+                # Make sure the lines didn't get over each other
+                self._ensure_top_bottom_order()
+
+            self._left_dragging = False
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+        else:
+            evt.Skip()
+
+    def _ensure_top_bottom_order(self):
+        """
+        Check that the bottom line is *above* the top line, and invert them if that
+        is not the case (because the user dragged a line over the other one).
+        Note: the convention is that the mirror image is received upside-down,
+        hence the bottom of the mirror is shown at the top.
+        """
+        if self.wl_list:
+            wl_mid = self.wl_list[len(self.wl_list) // 2]
+            at, bt = self._top_line._line_va.value
+            p_top_mid = at + bt * wl_mid
+            ab, bb = self._bottom_line._line_va.value
+            p_bottom_mid = ab + bb * wl_mid
+
+            if p_bottom_mid < p_top_mid:
+                logging.info("Switching top (%s m) and bottom (%s) to keep them ordered",
+                             p_bottom_mid, p_top_mid)
+                self._top_line._line_va.value = ab, bb
+                self._bottom_line._line_va.value = at, bt
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        self.wl_list = self._ccd.getMetadata().get(model.MD_WL_LIST)
+
+        if self.wl_list:
+            for line in self._lines:
+                line.draw(ctx)
+                line.sync_with_canvas(shift=shift, scale=scale)
+            self.draw_pole_line(ctx)
+        else:
+            logging.debug("No MD_WL_LIST available")
+            self._warning_label.pos = self.cnvs.get_half_buffer_size()
+            self._warning_label.draw(ctx)
+
+    def draw_pole_line(self, ctx):
+        """
+        Draws the line corresponding to the pole position, between the top and bottom lines,
+        based on the mirror coordinates
+        """
+        p_start_pos_top = Vec(self._top_line.p_start_pos)
+        p_end_pos_top = Vec(self._top_line.p_end_pos)
+        p_start_pos_bot = Vec(self._bottom_line.p_start_pos)
+        p_end_pos_bot = Vec(self._bottom_line.p_end_pos)
+
+        # Computes the position of the mirror hole compared to the top and
+        # bottom of the mirror (theoretically), as a ratio. This allows to place
+        # the pole line at the right position relative to the top and bottom
+        # lines. Be careful with the names! The top of the mirror is shown at the
+        # *bottom*, and conversely, the bottom of the  mirror is shown a the *top*.
+        a = 1 / (4 * self.parabola_f)
+        hole_height = math.sqrt(self.parabola_f / a)
+        bottom_mirror = self.focus_dist  # focus_dist
+        top_mirror = math.sqrt(self.x_max / a)  # x_max
+        pos_ratio = (top_mirror - hole_height) / (top_mirror - bottom_mirror)
+
+        p_start_pos = p_start_pos_top + (p_start_pos_bot - p_start_pos_top) * pos_ratio
+        p_end_pos = p_end_pos_top + (p_end_pos_bot - p_end_pos_top) * pos_ratio
+
+        offset = self.cnvs.get_half_buffer_size()
+        b_start = self.cnvs.phys_to_buffer(p_start_pos, offset)
+        b_end = self.cnvs.phys_to_buffer(p_end_pos, offset)
+
+        # Draws a black background for the line
+        ctx.set_line_width(3)
+        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.move_to(*b_start)
+        ctx.line_to(*b_end)
+        ctx.stroke()
+
+        colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        ctx.set_source_rgba(*colour)
+        ctx.set_line_width(2)
+        ctx.set_dash([50, 10, 10, 10])
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.move_to(*b_start)
+        ctx.line_to(*b_end)
+        ctx.stroke()
 
 
 class FastEMSelectOverlay(WorldSelectOverlay):

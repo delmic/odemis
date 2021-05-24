@@ -728,10 +728,16 @@ class BufferedCanvas(wx.Panel):
 
     # Utility methods
 
-    def clip_to_viewport(self, pos):
+    def clip_to_viewport(self, pos, coord=None):
         """ Clip the given tuple of 2 floats to the current view size """
-        return (max(1, min(pos[0], self.ClientSize.x - 1)),
-                max(1, min(pos[1], self.ClientSize.y - 1)))
+        if isinstance(pos, tuple):
+            return (max(1, min(pos[0], self.ClientSize.x - 1)),
+                    max(1, min(pos[1], self.ClientSize.y - 1)))
+        else:
+            if coord=='x':
+                return max(1, min(pos, self.ClientSize.x - 1))
+            else:
+                return max(1, min(pos, self.ClientSize.y - 1))
 
     def clip_to_buffer(self, pos):
         """ Clip the given tuple of 2 floats to the current buffer size """

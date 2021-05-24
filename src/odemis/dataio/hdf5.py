@@ -232,7 +232,12 @@ def _add_image_info(group, dataset, image):
 
     # Dimensions
     l = image.ndim
-    dims = image.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
+
+    # check dimension of data
+    if model.MD_THETA_LIST in image.metadata:
+        dims = image.metadata.get(model.MD_DIMS, "CAZYX"[-l::])
+    else:
+        dims = image.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
 
     for i, d in enumerate(dataset.dims):
         d.label = dims[i]
@@ -373,6 +378,24 @@ def _add_image_info(group, dataset, image):
                 dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
             except Exception as ex:
                 logging.warning("Failed to record time information, "
+                                "it will not be saved: %s", ex)
+
+        # TODO: save an empty DimensionScaleA if A is in dims, but no MD_THETA_LIST?
+        # Technically, the MD_THETA_LIST can be recreated from the other metadata,
+        # so it's not absolutely required. However, for now we rely on it to know
+        # that the A dimension is present.
+        if "A" in dims and model.MD_THETA_LIST in image.metadata:
+            try:
+                apos = dims.index("A")
+                # A list of values in radians, for each pixel in the A dim
+                group["DimensionScaleA"] = image.metadata[model.MD_THETA_LIST]
+                group["DimensionScaleA"].attrs["UNIT"] = "rad"
+                dataset.dims.create_scale(group["DimensionScaleA"], "A")
+                # pass state as a numpy.uint, to force it being a single value (instead of a list)
+                _h5svi_set_state(group["DimensionScaleA"], numpy.uint(ST_REPORTED))
+                dataset.dims[apos].attach_scale(group["DimensionScaleA"])
+            except Exception as ex:
+                logging.warning("Failed to record angle information, "
                                 "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
@@ -516,6 +539,24 @@ def _read_image_info(group):
 
     except Exception:
         logging.warning("Failed to parse T dimension.", exc_info=True)
+
+    # Theta dimensions: If the data has an A dimension larger than 1, it has a list of
+    # theta stamps (one per pixel).
+    try:
+        for i, dim in enumerate(dataset.dims):
+            if dim.label == "A" and dim:
+                state = _h5svi_get_state(dim[0])
+                # The metadata was recorded with one state per value, in such case,
+                # let's assume it's interesting metadata.
+                if not isinstance(state, list) and state != ST_REPORTED:
+                    # Only set as real metadata if it was actual information
+                    break
+
+                # add theta list to metadata, containing info on theta stamp per px if available
+                if dim[0].shape == (dataset.shape[i],):
+                    md[model.MD_THETA_LIST] = dim[0][...].tolist()
+    except Exception:
+        logging.warning("Failed to parse A dimension.", exc_info=True)
 
     # Color dimension: If the data has a C dimension larger than 1, it has a list of
     # wavelength values (one per pixel).
@@ -704,6 +745,8 @@ def _parse_physical_data(pdgroup, da):
 
         # angle resolved
         read_metadata(pdgroup, i, md, "PolePosition", model.MD_AR_POLE, converter=tuple)
+        read_metadata(pdgroup, i, md, "MirrorPositionTop", model.MD_AR_MIRROR_TOP, converter=tuple)
+        read_metadata(pdgroup, i, md, "MirrorPositionBottom", model.MD_AR_MIRROR_BOTTOM, converter=tuple)
         read_metadata(pdgroup, i, md, "XMax", model.MD_AR_XMAX, converter=float)
         read_metadata(pdgroup, i, md, "HoleDiameter", model.MD_AR_HOLE_DIAMETER, converter=float)
         read_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE, converter=float)
@@ -1033,6 +1076,10 @@ def _add_image_metadata(group, image, mds):
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
+    # MirrorPositionTop + MirrorPositionBottom: tuple of float representing the
+    # top and bottom position of the mirror in EK acquisitions (SPARC only)
+    mpt, st_mpt = [], []
+    mpb, st_mpb = [], []
     # XMax: distance (in meters) between the parabola origin and the cutoff position
     # (only meaningful for AR/SPARC)
     xm, st_xm = [], []
@@ -1080,6 +1127,8 @@ def _add_image_metadata(group, image, mds):
         append_metadata(st_itc, itc, md, model.MD_INTEGRATION_COUNT, default_value=0)
         # angle resolved
         append_metadata(st_pp, pp, md, model.MD_AR_POLE, default_value=(0, 0))
+        append_metadata(st_mpt, mpt, md, model.MD_AR_MIRROR_TOP)
+        append_metadata(st_mpb, mpb, md, model.MD_AR_MIRROR_BOTTOM)
         append_metadata(st_xm, xm, md, model.MD_AR_XMAX, default_value=0)
         append_metadata(st_hd, hd, md, model.MD_AR_HOLE_DIAMETER, default_value=0)
         append_metadata(st_fd, fd, md, model.MD_AR_FOCUS_DISTANCE, default_value=0)
@@ -1105,6 +1154,8 @@ def _add_image_metadata(group, image, mds):
     set_metadata(gp, "IntegrationCount", st_itc, itc)
     # angle resolved
     set_metadata(gp, "PolePosition", st_pp, pp)
+    set_metadata(gp, "MirrorPositionTop", st_mpt, mpt)
+    set_metadata(gp, "MirrorPositionBottom", st_mpb, mpb)
     set_metadata(gp, "XMax", st_xm, xm)
     set_metadata(gp, "HoleDiameter", st_hd, hd)
     set_metadata(gp, "FocusDistance", st_fd, fd)
@@ -1199,6 +1250,7 @@ def _findImageGroups(das):
     Find groups of images which should be considered part of the same acquisition
     (be a channel of an Image in HDF5 SVI).
     das (list of DataArray): all the images, with dimensions ordered C(TZ)YX
+    or C(AZ)YX
     returns (list of list of DataArray): a list of "groups", each group is a list
      of DataArrays
     Note: it's a slightly different function from tiff._findImageGroups()
@@ -1246,7 +1298,7 @@ def _findImageGroups(das):
 
 def _adjustDimensions(da):
     """
-    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5
+    Ensure the DataArray has 5 dimensions ordered CTZXY or CAZYX (as dictated by the HDF5
     SVI convention). If it seems to contain RGB data, an exception is made to
     return just CYX data.
     da (DataArray)
@@ -1254,12 +1306,17 @@ def _adjustDimensions(da):
     """
     md = dict(da.metadata)
 
-    # Dimension names (default to CTZYX)
     l = da.ndim
-    dims = md.get(model.MD_DIMS, "CTZYX"[-l::])
+    if model.MD_THETA_LIST in md:
+        dims = md.get(model.MD_DIMS, "CAZYX"[-l::])
+    else:
+        dims = md.get(model.MD_DIMS, "CTZYX"[-l::])
     if len(dims) != l:
         logging.warning("MD_DIMS contains %s, but the data has shape %s, will discard it", dims, da.shape)
-        dims = "CTZYX"[-l::]
+        if model.MD_THETA_LIST in md:
+            dims = "CAZYX"[-l::]
+        else:
+            dims = "CTZYX"[-l::]
 
     # Special cases for RGB
     if dims == "YXC":
@@ -1272,7 +1329,10 @@ def _adjustDimensions(da):
         da = model.DataArray(da, md)
         return da
 
-    dim_goal = "CTZYX"
+    if model.MD_THETA_LIST in md:
+        dim_goal = "CAZYX"
+    else:
+        dim_goal = "CTZYX"
     # Extend the missing dimensions to 1
     if l < 5:
         shape5d = (1,) * (5 - l) + da.shape
@@ -1304,7 +1364,7 @@ def _groupImages(das):
     """
     Group images into larger ndarray, to follow the HDF5 SVI flavour.
     In practice, this only consists in merging data for multiple channels into
-    one, and ordering/extending the shape to CTZYX.
+    one, and ordering/extending the shape to CTZYX or CAZYX.
     das (list of DataArray): all the images
     returns :
       acq (list of DataArrays): each group of data, with the (general) metadata 

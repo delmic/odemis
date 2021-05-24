@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-import csv
 import logging
 import numpy
+import math
 from odemis import model, dataio
 from odemis.acq import calibration
 from odemis.acq.stream import POL_POSITIONS
@@ -26,6 +26,7 @@ from odemis.util import img
 import os
 import time
 import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -388,6 +389,38 @@ class TestSpectrum(unittest.TestCase):
         for vo, vc, wl in zip(spec[..., 3, 3], compensated[..., 3, 3], wld):
             if wl <= wl_calib[0]:
                 self.assertEqual(vo * dcalib[0], vc)
+
+    def test_theta_list_nan(self):
+        """Check that all the NaNs of MD_THETA_LIST are removed"""
+        # AR Spectrum (aka EK1) data
+        data = numpy.ones((256, 128, 1, 2, 3), dtype="uint16")
+        wld = numpy.linspace(333e-9, 511e-9, data.shape[0])
+        angles = numpy.linspace(-1.1, 1.5, data.shape[1])
+        # set a few angles as NaN, and mark them in the data with a different value
+        for i in [0, 1, -1]:
+            angles[i] = math.nan
+            data[:, i,:,:,:] = 2
+
+        md = {model.MD_WL_LIST: wld.tolist(),
+              model.MD_THETA_LIST: angles.tolist(),
+              model.MD_DIMS: "CAZYX",
+        }
+        arspec = model.DataArray(data, md)
+        orig_arspec = data.copy()
+        orig_md = md.copy()
+
+        calibrated = calibration.apply_spectrum_corrections(arspec)
+
+        # NaNs should be gone
+        angles_cal = calibrated.metadata[model.MD_THETA_LIST]
+        self.assertEqual(len(angles_cal), len(angles) - 3)
+        self.assertFalse(any(math.isnan(x) for x in angles_cal))
+        self.assertEqual(calibrated.shape, (256, 128 - 3 , 1, 2, 3))
+        numpy.testing.assert_array_equal(calibrated, 1)
+        
+        # The original data shouldn't have been changed
+        numpy.testing.assert_array_equal(arspec, orig_arspec)
+        self.assertEqual(arspec.metadata, orig_md)
 
 
 TIME_RANGE_TO_DELAY_EX = {1e-09: 7.99e-09,

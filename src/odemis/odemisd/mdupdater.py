@@ -225,41 +225,52 @@ class MetadataUpdater(model.Component):
             binva.subscribe(updatePixelDensity)
             self._onTerminate.append((binva.unsubscribe, (updatePixelDensity,)))
 
-        # update pole position (if available), taking into account the binning
-        if model.hasVA(lens, "polePosition"):
-            def updatePolePos(unused, lens=lens, comp_affected=comp_affected):
-                # unused: because it might be polePos or binning
-
-                # the formula is: Pole = Pole_no_binning / binning
-                try:
-                    binning = comp_affected.binning.value
-                except AttributeError:
-                    binning = 1, 1
-                pole_pos = lens.polePosition.value
-                pp = (pole_pos[0] / binning[0], pole_pos[1] / binning[1])
-                md = {model.MD_AR_POLE: pp}
-                comp_affected.updateMetadata(md)
-
-            lens.polePosition.subscribe(updatePolePos, init=True)
-            self._onTerminate.append((lens.polePosition.unsubscribe, (updatePolePos,)))
-            try:
-                comp_affected.binning.subscribe(updatePolePos)
-                self._onTerminate.append((comp_affected.binning.unsubscribe, (updatePolePos,)))
-            except AttributeError:
-                pass
-
         # update metadata for VAs which can be directly copied
         for va_name, md_key in md_va_list.items():
             if model.hasVA(lens, va_name):
 
-                def updateMDFromVA(val, md_key=md_key, comp_affected=comp_affected):
+                # Create a different function for each metadata & component
+                def updateMDFromVABin(val, md_key=md_key, comp_affected=comp_affected):
                     md = {md_key: val}
                     comp_affected.updateMetadata(md)
 
                 logging.debug("Listening to VA %s.%s -> MD %s", lens.name, va_name, md_key)
                 va = getattr(lens, va_name)
-                va.subscribe(updateMDFromVA, init=True)
-                self._onTerminate.append((va.unsubscribe, (updateMDFromVA,)))
+                va.subscribe(updateMDFromVABin, init=True)
+                self._onTerminate.append((va.unsubscribe, (updateMDFromVABin,)))
+
+        # List of VA -> MD mapping when the VA values have to be divided by the binning
+        # VA name -> (MD name, binning index)
+        md_va_binning_list = {
+            "polePosition": (model.MD_AR_POLE, (0, 1)),
+            "mirrorPositionTop": (model.MD_AR_MIRROR_TOP, (1, 1)),  # Use Y for both a & b values
+            "mirrorPositionBottom": (model.MD_AR_MIRROR_BOTTOM, (1, 1)),  # Use Y for both a & b values
+        }
+
+        # update metadata for VAs which has to be divided by binning
+        for va_name, (md_key, bin_idx) in md_va_binning_list.items():
+            if model.hasVA(lens, va_name):
+                va = getattr(lens, va_name)
+
+                def updateMDFromVABin(_, va=va, md_key=md_key, bin_idx=bin_idx, comp_affected=comp_affected):
+                    # the formula is: Pole = Pole_no_binning / binning
+                    try:
+                        binning = comp_affected.binning.value
+                    except AttributeError:  # No binning VA => it means it's "1x1"
+                        binning = 1, 1
+                    val = va.value
+                    val_bin = tuple(v / binning[bi] for v, bi in zip(val, bin_idx))
+                    md = {md_key: val_bin}
+                    comp_affected.updateMetadata(md)
+
+                logging.debug("Listening to VA %s.%s -> MD %s", lens.name, va_name, md_key)
+                va.subscribe(updateMDFromVABin, init=True)
+                self._onTerminate.append((va.unsubscribe, (updateMDFromVABin,)))
+                try:
+                    comp_affected.binning.subscribe(updateMDFromVABin)
+                    self._onTerminate.append((comp_affected.binning.unsubscribe, (updateMDFromVABin,)))
+                except AttributeError:  # No binning VA => just don't subscribe to it
+                    pass
 
         return True
 
@@ -287,26 +298,53 @@ class MetadataUpdater(model.Component):
         return True
 
     def observeSpectrograph(self, spectrograph, comp_affected):
-        if comp_affected.role != "monochromator":
-            return False
 
-        if 'slit-monochromator' not in spectrograph.axes:
-            logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
+        if comp_affected.role == "monochromator":
+            # For monochomators, we need to know the minimum and maximum wavelength
+            # detected based on the spectrograph settings. => Update MD_OUT_WL
+            if 'slit-monochromator' not in spectrograph.axes:
+                logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
 
-            def updateOutWLRange(pos, comp_affected=comp_affected):
-                wl = pos["wavelength"]
-                md = {model.MD_OUT_WL: (wl, wl)}
-                comp_affected.updateMetadata(md)
+                def updateOutWLRange(pos, comp_affected=comp_affected):
+                    wl = pos["wavelength"]
+                    md = {model.MD_OUT_WL: (wl, wl)}
+                    comp_affected.updateMetadata(md)
 
+            else:
+                def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
+                    width = pos['slit-monochromator']
+                    bandwidth = sp.getOpeningToWavelength(width)
+                    md = {model.MD_OUT_WL: bandwidth}
+                    comp_affected.updateMetadata(md)
+
+            spectrograph.position.subscribe(updateOutWLRange, init=True)
+            self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
+
+        elif any(comp_affected.role.startswith(r) for r in ("ccd", "sp-ccd", "spectrometer")):
+            # Is the affected component CCD or Spectrometer? => needs to get the
+            # wavelength list from the spectrograph.
+            # Every time any of these changes, we need to recompute MD_WL_LIST:
+            # * ccd.resolution
+            # * ccd.binning
+            # * spectrograph.position (wavelength or grating)
+
+            # Use default arguments to store the content of spectrograph and
+            # comp_affected as they are *right now*.
+            def updateWavelengthList(_, sp=spectrograph, det=comp_affected):
+                npixels = det.resolution.value[0]
+                pxs = det.pixelSize.value[0] * det.binning.value[0]
+                wll = sp.getPixelToWavelength(npixels, pxs)
+                md = {model.MD_WL_LIST: wll}
+                det.updateMetadata(md)
+
+            comp_affected.resolution.subscribe(updateWavelengthList)
+            self._onTerminate.append((comp_affected.resolution.unsubscribe, (updateWavelengthList,)))
+            comp_affected.binning.subscribe(updateWavelengthList)
+            self._onTerminate.append((comp_affected.binning.unsubscribe, (updateWavelengthList,)))
+            spectrograph.position.subscribe(updateWavelengthList, init=True)
+            self._onTerminate.append((spectrograph.position.unsubscribe, (updateWavelengthList,)))
         else:
-            def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
-                width = pos['slit-monochromator']
-                bandwidth = sp.getOpeningToWavelength(width)
-                md = {model.MD_OUT_WL: bandwidth}
-                comp_affected.updateMetadata(md)
-
-        spectrograph.position.subscribe(updateOutWLRange, init=True)
-        self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
+            False
 
         return True
 
