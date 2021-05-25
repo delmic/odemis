@@ -2066,8 +2066,6 @@ class ChamberTab(Tab):
 
         return None
 
-DEFAULT_MILLING_ANGLE = math.radians(10)
-MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
 
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -2120,13 +2118,14 @@ class CryoChamberTab(Tab):
             milling_range = [-(self.ion_to_sample - a) for a in rx_range]
             # sort milling range in case ion_to_sample made range values flip
             actual_rng = sorted(milling_range)
-            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
-            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
-                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+            ctrl_rng = max(actual_rng[0], guimod.MILLING_ANGLE_RANGE[0]), min(actual_rng[1], guimod.MILLING_ANGLE_RANGE[1])
+            if not ctrl_rng[0] <= guimod.DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (
+                guimod.DEFAULT_MILLING_ANGLE, ctrl_rng))
             panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
             # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
-            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
+            self._prev_milling_angle = guimod.DEFAULT_MILLING_ANGLE
+            self.panel.ctrl_milling.Value = readable_str(math.degrees(guimod.DEFAULT_MILLING_ANGLE), unit="°", sig=3)
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
