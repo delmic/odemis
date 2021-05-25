@@ -42,10 +42,10 @@ from odemis import model
 from odemis.model import HwError
 from odemis.util import almost_equal
 
-from openapi_server.models.field_meta_data import FieldMetaData
-from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
-from openapi_server.models.cell_parameters import CellParameters
-from openapi_server.models.calibration_loop_parameters import CalibrationLoopParameters
+from technolution_asm.models.field_meta_data import FieldMetaData
+from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
+from technolution_asm.models.cell_parameters import CellParameters
+from technolution_asm.models.calibration_loop_parameters import CalibrationLoopParameters
 
 VOLT_RANGE = (-10, 10)
 DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
