@@ -76,6 +76,7 @@ class TestPMD401OpenLoop(unittest.TestCase):
 
         self.stage.moveAbsSync({'x': 0.01})
         self.stage.moveAbsSync({'x': 0})
+        # don't check .position in open loop (always 0 if no encoder is connected?)
 
         self.stage.moveRelSync({'x': 0.01})
         self.stage.moveRelSync({'x': -0.01})

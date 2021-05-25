@@ -1053,6 +1053,8 @@ class PMDSimulator(object):
                 else:
                     raise ValueError()
             elif cmd == "J":
+                # TODO: check hardware behaviour in open loop. What does the E command return if no encoder is
+                #  connected? Probably 0, so don't update .current_pos here.
                 if not args:
                     if self.is_moving:
                         self._output_buf += ":222"
