@@ -1072,29 +1072,29 @@ class TestTestDevice(unittest.TestCase):
         """
         Test the boolean VA TurboPump1.IsOn
         """
-        self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Target = False
+        self.datamodel.Scanner.OperatingMode.Target = 0
         sleep(1)
-        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
-        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+        print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
+        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
 
-        self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Target = True
+        self.datamodel.Scanner.OperatingMode.Target = 1
         sleep(1)
-        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
-        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+        print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
+        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
 
         self.test_dev.testBooleanVA.value = False
         sleep(1)
-        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
-        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+        print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
+        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
 
         self.test_dev.testBooleanVA.value = True
         sleep(1)
-        print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual)
-        print("VA: %s" % str(self.test_dev.testBooleanVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn.Actual, str(self.test_dev.testBooleanVA.value))
+        print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
+        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
 
     def test_OrsayFloatConnector(self):
         """

@@ -1283,13 +1283,15 @@ class OrsayParameterConnector:
     If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
     """
 
-    def __init__(self, va, parameter, attributeName="Actual"):
+    def __init__(self, va, parameter, attributeName="Actual", conversion=None):
         """
         va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
         setter yet. The setter will be overwritten.
         parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
         equal length.
         attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
+        conversion is a dict mapping values of the VA (dict keys) to values of the parameter (dict values). If None is
+        supplied, no special conversion will be performed.
         """
         self._parameters = None
         self._attributeName = None
@@ -1297,6 +1299,7 @@ class OrsayParameterConnector:
         self._va_type_name = None
         self._va_is_tuple = False
         self._va_value_type = None
+        self._conversion = conversion
         self.connect(va, parameter, attributeName)
 
     def connect(self, va, parameter, attributeName="Actual"):
@@ -1350,6 +1353,7 @@ class OrsayParameterConnector:
             self._va._setter = WeakMethod(self._va.__default_setter)
             self._va = None
             self._va_type_name = None
+            self._conversion = None
 
     def update_VA(self, parameter=None, attributeName=None):
         """
@@ -1374,24 +1378,14 @@ class OrsayParameterConnector:
             raise ValueError("Incorrect parameter passed. Excpected: %s. Received: %s."
                              % (namesstring, parameter.Name))
 
-        new_values = []
-        for p in self._parameters:
-            new_entry = getattr(p, attributeName)
-            if self._va_value_type == float:
-                new_entry = float(new_entry)
-            elif self._va_value_type == int:
-                new_entry = int(new_entry)
-            elif self._va_value_type == bool:
-                new_entry = new_entry in {True, "True", "true", 1, "1"}
-            else:
-                raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
-                                          % self._va_type_name)
-            new_values.append(new_entry)
-
         if self._va_is_tuple:
+            new_values = []
+            for p in self._parameters:
+                new_entry = self._parameter_to_VA_value(getattr(p, attributeName))
+                new_values.append(new_entry)
             new_value = tuple(new_values)
         else:
-            new_value = new_values[0]
+            new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attributeName))
 
         logging.debug("[%s].%s changed to %s." % (namesstring, attributeName, str(new_value)))
         self._va._value = new_value  # to not call the setter
@@ -1408,25 +1402,48 @@ class OrsayParameterConnector:
         if self._va.readonly:
             raise NotSettableError("Value is read-only")
 
-        if type(goal) in {list, tuple, set}:
-            target = list(goal)
+        if self._va_is_tuple:
+            for i in range(len(self._parameters)):
+                self._parameters[i].Target = self._VA_to_parameter_value(goal[i])
         else:
-            target = [goal]
-
-        if self._va_value_type == bool:
-            for i in range(len(target)):
-                if self._parameters[i].Actual in {1, "1", 0, "0"}:
-                    target[i] = int(target[i])
-                elif self._parameters[i].Actual in {"ON", "OFF"}:
-                    if target[i]:
-                        target[i] = "ON"
-                    else:
-                        target[i] = "OFF"
-
-        for i in range(len(self._parameters)):
-            self._parameters[i].Target = target[i]
+            self._parameters[0].Target = self._VA_to_parameter_value(goal)
 
         return goal
+
+    def _VA_to_parameter_value(self, va_value):
+        """
+        Converts a value of the VA to its corresponding value for the parameter
+        va_value is the value of the VA
+        returns the corresponding value of the parameter
+        """
+        if self._conversion is not None:  # if a conversion dict is supplied
+            try:
+                return self._conversion[va_value]
+            except KeyError:
+                logging.debug("Conversion dictionary does not contain key %s. Sticking to value %s" %
+                              (str(va_value), str(va_value)))
+        return va_value
+
+    def _parameter_to_VA_value(self, par_value):
+        """
+        Converts a value of the parameter to its corresponding value for the VA
+        par_value is the value of the parameter
+        returns the corresponding value of the VA
+        """
+        if self._conversion is not None:  # if a conversion dict is supplied
+            for key, value in self._conversion.items():
+                if value == par_value:
+                    return key
+
+        if self._va_value_type == float:
+            return float(par_value)
+        elif self._va_value_type == int:
+            return int(par_value)
+        elif self._va_value_type == bool:
+            return par_value in {True, "True", "true", 1, "1", "ON"}
+        else:
+            raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
+                                      % self._va_type_name)
 
 
 class TestDevice(model.HwComponent):
@@ -1456,7 +1473,7 @@ class TestDevice(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA, self.parent.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn)
+        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA, self.parent.datamodel.Scanner.OperatingMode, conversion={True: 1, False: 0})
         self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
         self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
         self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX, self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
