@@ -1275,7 +1275,7 @@ class GISReservoir(model.HwComponent):
             self._gis = None
 
 
-class OrsayAttribute:
+class OrsayParameterConnector:
     """
     Attribute that is connected to a VA and a parameter on the Orsay server.
     If VA is readonly, the VA will be kept up to date of the changes of the Orsay parameter, but force writing to the VA
@@ -1285,10 +1285,10 @@ class OrsayAttribute:
 
     def __init__(self, va, parameter, attributeName="Actual"):
         """
-        va is the vigilant attribute this Orsay attribute should be connected to. This VA should not have a setter yet.
-        The setter will be overwritten
+        va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
+        setter yet. The setter will be overwritten.
         parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
-        equal length
+        equal length.
         attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
         """
         self._parameters = None
@@ -1301,16 +1301,16 @@ class OrsayAttribute:
 
     def connect(self, va, parameter, attributeName="Actual"):
         """
-        va is the vigilant attribute this Orsay attribute should be connected to. This VA should not have a setter yet.
-        The setter will be overwritten
+        va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
+        setter yet. The setter will be overwritten.
         parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
-        equal length
+        equal length.
         attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
 
         Subscribes the VA to the parameter
         """
         if self._parameters is not None and None not in {self._attributeName, self._va, self._va_type_name}:
-            logging.warning("OrsayAttribute is already connected to an Orsay parameter. It is better to call "
+            logging.warning("OrsayParameterConnector is already connected to an Orsay parameter. It is better to call "
                             "disconnect before reconnecting to something else.")
 
         if type(parameter) in {set, list, tuple}:
@@ -1359,8 +1359,8 @@ class OrsayAttribute:
         Copies the value of the parameter to the VA
         """
         if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
-            raise AttributeError("OrsayAttribute is not connected to an Orsay parameter. Call this object's connect "
-                                 "method before calling update.")
+            raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
+                                 "Call this object's connect method before calling update.")
 
         if attributeName is None:
             attributeName = self._attributeName
@@ -1384,7 +1384,7 @@ class OrsayAttribute:
             elif self._va_value_type == bool:
                 new_entry = new_entry in {True, "True", "true", 1, "1"}
             else:
-                raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayAttribute."
+                raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
                                           % self._va_type_name)
             new_values.append(new_entry)
 
@@ -1402,8 +1402,8 @@ class OrsayAttribute:
         setter of the non-read-only VA. Sets goal to the Orsay parameter's Target and returns goal to set it to the VA
         """
         if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
-            raise AttributeError("OrsayAttribute is not connected to an Orsay parameter. Call this object's connect "
-                                 "method before setting a value to its VA.")
+            raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
+                                 "Call this object's connect method before setting a value to its VA.")
 
         if self._va.readonly:
             raise NotSettableError("Value is read-only")
@@ -1436,20 +1436,18 @@ class TestDevice(model.HwComponent):
 
     def __init__(self, name, role, parent, **kwargs):
         """
-        Defines the following VA's and links them to the callbacks from the Orsay server:
-        • temperatureTarget: FloatContinuous, unit="°C", range=(-273.15, 10^3), setter=_setTemperatureTarget
         """
 
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
         self.testBooleanVA = model.BooleanVA(True)
-        self.OrsayBooleanVA = None
+        self.OrsayBooleanConnector = None
         self.testFloatVA = model.FloatVA(0.0, unit="Pa")
-        self.OrsayFloatVA = None
+        self.OrsayFloatConnector = None
         self.testIntVA = model.IntVA(0)
-        self.OrsayIntVA = None
+        self.OrsayIntConnector = None
         self.testTupleVA = model.TupleVA((0.1, 0.2))
-        self.OrsayTupleVA = None
+        self.OrsayTupleConnector = None
 
         self.on_connect()
 
@@ -1458,26 +1456,26 @@ class TestDevice(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        self.OrsayBooleanVA = OrsayAttribute(self.testBooleanVA, self.parent.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn)
-        self.OrsayFloatVA = OrsayAttribute(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
-        self.OrsayIntVA = OrsayAttribute(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
-        self.OrsayTupleVA = OrsayAttribute(self.testTupleVA, [self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX, self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
+        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA, self.parent.datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn)
+        self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
+        self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
+        self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX, self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
 
     def update_VAs(self):
         """
         Update the VA's. Should be called after reconnection to the server
         """
-        self.OrsayBooleanVA.update_VA()
-        self.OrsayFloatVA.update_VA()
-        self.OrsayIntVA.update_VA()
-        self.OrsayTupleVA.update_VA()
+        self.OrsayBooleanConnector.update_VA()
+        self.OrsayFloatConnector.update_VA()
+        self.OrsayIntConnector.update_VA()
+        self.OrsayTupleConnector.update_VA()
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        self.OrsayBooleanVA.disconnect()
-        self.OrsayFloatVA.disconnect()
-        self.OrsayIntVA.disconnect()
-        self.OrsayTupleVA.disconnect()
+        self.OrsayBooleanConnector.disconnect()
+        self.OrsayFloatConnector.disconnect()
+        self.OrsayIntConnector.disconnect()
+        self.OrsayTupleConnector.disconnect()
 
