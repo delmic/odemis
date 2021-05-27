@@ -29,6 +29,8 @@ from ConsoleClient.Communication.Connection import Connection
 import threading
 import time
 import logging
+import inspect
+import gc
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -52,6 +54,8 @@ STR_PARK = "PARK"
 STR_WORK = "WORK"
 
 NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
+
+INTERLOCK_DETECTED_STR = "Interlock event detected"
 
 
 class OrsayComponent(model.HwComponent):
@@ -1473,10 +1477,14 @@ class TestDevice(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA, self.parent.datamodel.Scanner.OperatingMode, conversion={True: 1, False: 0})
+        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA,
+                                                             self.parent.datamodel.Scanner.OperatingMode,
+                                                             conversion={True: 1, False: 0})
         self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
         self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
-        self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX, self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
+        self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
 
     def update_VAs(self):
         """
@@ -1496,3 +1504,220 @@ class TestDevice(model.HwComponent):
         self.OrsayIntConnector.disconnect()
         self.OrsayTupleConnector.disconnect()
 
+
+class FIB_source(model.HwComponent):
+    """
+    Represents the source of the Focused Ion Beam (FIB) from Orsay Physics
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • interlockTriggered: BooleanVA
+        • gunOn: BooleanVA
+        • gunPumpOn: BooleanVA
+        • columnPumpOn: BooleanVA
+        • gunPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
+        • columnPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
+        • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
+        • currentRegulation: BooleanVA
+        • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is true)
+        • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is false)
+        • heatingCurrent: FloatContinuous, unit="A", range=(0, 5)
+        • heaterState: IntContinuous, range=(0, 10)
+        • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
+        • energyLink: BooleanVA
+        • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
+        • mvaPosition: TupleContinuous Float, unit="m", range=(0, 10) (mva = multiple variable apperture)
+        • mvaStepSize: FloatEnumerated, unit="m", choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4}
+        • apertureSize: FloatEnumerated, unit="m", TODO: This is not implemented yet, since it might still be refactored
+                        choices={1e-5, 2e-5, 3e-5, 4e-5, 6e-5, 8e-5, 1e-4, 13e-5, 2e-4, 3e-4, 4e-4, 6e-4, 8e-4, 95e-5}
+        """
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._hvps = None
+        self._ionColumn = None
+        self._gunPump = None
+        self._columnPump = None
+        self._errorParameters = None
+        self._interlockHVPS = None
+        self._interlockChamber = None
+
+        self.interlockTriggered = model.BooleanVA(False, setter=self._resetInterlocks)
+        self.gunOn = model.BooleanVA(False)
+        self.gunOnConnector = None
+        self.gunPumpOn = model.BooleanVA(False)
+        self.gunPumpOnConnector = None
+        self.columnPumpOn = model.BooleanVA(False)
+        self.columnPumpOnConnector = None
+        self.gunPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
+        self.gunPressureConnector = None
+        self.columnPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
+        self.columnPressureConnector = None
+        self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
+        self.lifetimeConnector = None
+        self.currentRegulation = model.BooleanVA(False)
+        self.currentRegulationConnector = None
+        self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
+        self.sourceCurrentConnector = None
+        self.suppressorVoltage = model.FloatContinuous(0, unit="V", range=(-2e3, 2e3))
+        self.suppressorVoltageConnector = None
+        self.heatingCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
+        self.heatingCurrentConnector = None
+        self.heaterState = model.IntContinuous(0, range=(0, 10))
+        self.heaterStateConnector = None
+        self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
+        self.acceleratorVoltageConnector = None
+        self.energyLink = model.BooleanVA(False)
+        self.energyLinkConnector = None
+        self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
+        self.extractorVoltageConnector = None
+        self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=(0, 10))
+        self.mvaPositionConnector = None
+        self.mvaStepSize = model.FloatEnumerated(1e-6, unit="m",
+                                                 choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4})
+        self.mvaStepSizeConnector = None
+
+        self._connectorList = []
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+
+        self._hvps = self.parent.datamodel.HVPSFloatingIon
+        self._ionColumn = self.parent.datamodel.IonColumnMCS
+        self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
+        self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
+        self._interlockHVPS = self.parent.datamodel.HybridInterlockOutHVPS
+        self._interlockChamber = self.parent.datamodel.HybridInterlockInChamberVac
+        self._errorParameters = (self.parent.datamodel.HybridGaugeCompressedAir.ErrorState,
+                                 self._interlockChamber.ErrorState,
+                                 self._interlockHVPS.ErrorState,
+                                 self._gunPump.ErrorState,
+                                 self._columnPump.ErrorState,
+                                 self.parent.datamodel.HybridValveFIB.ErrorState)
+
+        self._interlockHVPS.ErrorState.Subscribe(self._updateInterlockTriggered)
+        self._interlockChamber.ErrorState.Subscribe(self._updateInterlockTriggered)
+        for p in self._errorParameters:
+            p.Subscribe(self._updateErrorState)
+
+        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState)
+        self.gunPumpOnConnector = OrsayParameterConnector(self.gunPumpOn, self._gunPump.IsOn)
+        self.columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
+        self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
+        self.columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
+        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
+        self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
+                                                                  self._hvps.BeamCurrent_Enabled)
+        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
+        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
+        self.heatingCurrentConnector = OrsayParameterConnector(self.heatingCurrent, self._hvps.Heater)
+        self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
+        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
+        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink)
+        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
+        self.mvaPositionConnector = OrsayParameterConnector(self.mvaPosition,
+                                                            [self._ionColumn.MCSProbe_X, self._ionColumn.MCSProbe_Y])
+        self.mvaStepSizeConnector = OrsayParameterConnector(self.mvaStepSize, self._ionColumn.MCSProbe_Step)
+
+        self._connectorList = [x for (x, _) in  # save only the names of the returned members
+                               inspect.getmembers(self,  # get all members of this FIB_source object
+                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
+                                                  # OrsayParameterConnectors from all members of this FIB_source object
+                                                  )
+                               ]
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        self._updateErrorState()
+        self._updateInterlockTriggered()
+        for obj_name in self._connectorList:
+            getattr(self, obj_name).update_VA()
+
+    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the error state from the Orsay server and saves it in the state VA
+        """
+        if parameter is not None and parameter not in self._errorParameters:
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or in %s. "
+                             "Parameter passed is %s"
+                             % (str(self._errorParameters), parameter.Name))
+        if attributeName != "Actual":
+            return
+
+        eState = ""
+        for ep in self._errorParameters:
+            this_state = ep.Actual
+            if this_state not in NO_ERROR_VALUES:
+                if not eState == "":
+                    eState += ", "
+                eState += "%s error: %s" % (
+                    gc.get_referrers(ep)[0]['name'],  # TODO: check that this actually always works and pretify
+                    this_state)
+
+        if eState == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(eState), force_write=True)
+
+    def _updateInterlockTriggered(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the state of the FIB related interlocks from the Orsay server and saves it in the interlockTriggered VA
+        """
+        if parameter is not None and parameter not in (
+                self._interlockHVPS.ErrorState, self._interlockChamber.ErrorState):
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or in %s. "
+                             "Parameter passed is %s"
+                             % (str((self._interlockHVPS.ErrorState, self._interlockChamber.ErrorState)),
+                                parameter.Name))
+        if attributeName != "Actual":
+            return
+
+        new_value = INTERLOCK_DETECTED_STR in self._interlockHVPS.ErrorState.Actual + self._interlockChamber.ErrorState.Actual
+
+        self.interlockTriggered._value = new_value  # to not call the setter
+        self.interlockTriggered.notify(new_value)
+
+    def _resetInterlocks(self, value):
+        """
+        setter for interlockTriggered VA
+        value is the value set to the VA
+        returns the same value
+
+        Call with value=True to attempt to reset the FIB related interlocks.
+        If the reset is successful, _updateInterlockTriggered will be called and the VA will be updated by that.
+        """
+        if value:
+            self._interlockHVPS.Reset.Target = ""
+            self._interlockChamber.Reset.Target = ""
+        return False
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        if self._hvps is not None:
+            for obj_name in self._connectorList:
+                getattr(self, obj_name).disconnect()
+            self._connectorList = []
+            self._hvps = None
+            self._ionColumn = None
+            self._gunPump = None
+            self._columnPump = None
+            self._errorParameters = None
+            self._interlockHVPS = None
+            self._interlockChamber = None
