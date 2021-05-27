@@ -1008,7 +1008,7 @@ class TestMBScanner(unittest.TestCase):
         self.assertEqual(test_delta_pitch, self.microscope.get_delta_pitch() * 1e-6)
 
         # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_delta_pitch(0.5 * self.scanner.deltaPitch.range[1])
+        self.microscope.set_delta_pitch(0.5 * self.scanner.deltaPitch.range[1] * 1e6)
         time.sleep(6)
         self.assertEqual(0.5 * self.scanner.deltaPitch.range[1], self.scanner.deltaPitch.value)
 
