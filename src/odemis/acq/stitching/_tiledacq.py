@@ -240,8 +240,6 @@ class TiledAcquisitionTask(object):
             t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
                            abs(idx_change[1]) * tile_size[1] * overlap) / speed + 1
             self._future.running_subf.result(t)
-            # FIXME: instead of sleeping, handle vibration effects
-            time.sleep(1)
         except TimeoutError:
             logging.warning("Failed to move to tile %s within %s s", idx, t)
             self._future.running_subf.cancel()
