@@ -4125,6 +4125,11 @@ class Sparc2AlignTab(Tab):
         stream.should_update.value = True
         stream.is_active.value = True
 
+        # Move the optical path selectors for the detector (spec-det-selector in particular)
+        # The moves will happen in the background.
+        opm = self.tab_data_model.main.opm
+        opm.selectorsToPath(stream.detector.name)
+
     def add_combobox_control(self, label_text, value=None, conf=None):
         """ Add a combo box to the focus panel
         # Note: this is a hack. It must be named so, to look like a StreamPanel
