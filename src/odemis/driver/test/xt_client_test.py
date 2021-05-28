@@ -1120,6 +1120,19 @@ class TestMBScanner(unittest.TestCase):
         self.assertEqual(current_value, self.microscope.get_beamlet_index())
         self.assertEqual(current_value, self.scanner.beamletIndex.value)
 
+    def test_immersion_VA(self):
+        current_value = self.scanner.immersion.value  # type: bool
+
+        # Set current_value as last, so that it goes back to current value after the test
+        for new_val in (not current_value, current_value):
+            # Test if directly changing it via the VA works
+            self.scanner.immersion.value = new_val
+            self.assertEqual(self.scanner.immersion.value, new_val)
+
+            # Check it's still correct after updating the settings
+            time.sleep(6)
+            self.assertEqual(self.scanner.immersion.value, new_val)
+
     def test_multiprobe_mode_VA(self):
         current_beam_mode = self.scanner.multiBeamMode.value
         current_aperture_index = self.scanner.apertureIndex.value
