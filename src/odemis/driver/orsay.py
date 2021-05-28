@@ -161,6 +161,15 @@ class OrsayComponent(model.HwComponent):
             self._test_device = TestDevice(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._test_device)
 
+        # create the FIB source child
+        try:
+            kwargs = children["fib-source"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'fib-source' child")
+        else:
+            self._fib_source = FIBSource(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_source)
+
     def on_connect(self):
         """
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
@@ -1324,6 +1333,8 @@ class OrsayParameterConnector:
             self._parameters = list(parameter)
         else:
             self._parameters = [parameter]
+        if len(self._parameters) == 0:
+            raise ValueError("No parameters passed")
         self._attributeName = attributeName
         self._va = va
         self._va_type_name = va.__class__.__name__
@@ -1354,7 +1365,7 @@ class OrsayParameterConnector:
                 p.Unsubscribe(self.update_VA)
             self._parameters = None
             self._attributeName = None
-            self._va._setter = WeakMethod(self._va.__default_setter)
+            self._va._setter = WeakMethod(self._va._VigilantAttribute__default_setter)
             self._va = None
             self._va_type_name = None
             self._conversion = None
@@ -1480,8 +1491,10 @@ class TestDevice(model.HwComponent):
         self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA,
                                                              self.parent.datamodel.Scanner.OperatingMode,
                                                              conversion={True: 1, False: 0})
-        self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA, self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
-        self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA, self.parent.datamodel.HVPSFloatingIon.HeaterState)
+        self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA,
+                                                           self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
+        self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA,
+                                                         self.parent.datamodel.HVPSFloatingIon.HeaterState)
         self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [
             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
@@ -1505,13 +1518,20 @@ class TestDevice(model.HwComponent):
         self.OrsayTupleConnector.disconnect()
 
 
-class FIB_source(model.HwComponent):
+class FIBSource(model.HwComponent):
     """
     Represents the source of the Focused Ion Beam (FIB) from Orsay Physics
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
+        TODO: Once we better understand what each parameter does, for each VA:
+                - Check whether we actually need to communicate with this parameter, or if we can take it out of the driver
+                - Check if it can/should be set as readonly and change this in the unittest too
+                - Check that the values it sets to the Orsay server make sense and are correct
+                - Check in its unittest that the testvalues are safe and make sense
+                - Check that its unittest is hardware safe and this is set correctly
+                - Check in its unittest that the settletime is set to an appropriate value
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • interlockTriggered: BooleanVA
         • gunOn: BooleanVA
@@ -1524,11 +1544,12 @@ class FIB_source(model.HwComponent):
         • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is true)
         • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is false)
         • heatingCurrent: FloatContinuous, unit="A", range=(0, 5)
-        • heaterState: IntContinuous, range=(0, 10)
+        • heaterState: IntContinuous, range=(0, 10)  TODO: presumably this is not an int at all. What is this?
         • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
         • energyLink: BooleanVA
         • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
-        • mvaPosition: TupleContinuous Float, unit="m", range=(0, 10) (mva = multiple variable apperture)
+        TODO: MOVE THE BELOW THREE VA'S TO THE DRIVER FOR THE FIB OPTICS
+        • mvaPosition: TupleContinuous Float, unit="m", range=[(0, 0), (10, 10)] (mva = multiple variable apperture)
         • mvaStepSize: FloatEnumerated, unit="m", choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4}
         • apertureSize: FloatEnumerated, unit="m", TODO: This is not implemented yet, since it might still be refactored
                         choices={1e-5, 2e-5, 3e-5, 4e-5, 6e-5, 8e-5, 1e-4, 13e-5, 2e-4, 3e-4, 4e-4, 6e-4, 8e-4, 95e-5}
@@ -1565,15 +1586,15 @@ class FIB_source(model.HwComponent):
         self.suppressorVoltageConnector = None
         self.heatingCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
         self.heatingCurrentConnector = None
-        self.heaterState = model.IntContinuous(0, range=(0, 10))
-        self.heaterStateConnector = None
+        # self.heaterState = model.IntContinuous(0, range=(0, 10))
+        # self.heaterStateConnector = None
         self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
         self.acceleratorVoltageConnector = None
         self.energyLink = model.BooleanVA(False)
         self.energyLinkConnector = None
         self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
         self.extractorVoltageConnector = None
-        self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=(0, 10))
+        self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=[(0, 0), (10, 10)])
         self.mvaPositionConnector = None
         self.mvaStepSize = model.FloatEnumerated(1e-6, unit="m",
                                                  choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4})
@@ -1607,7 +1628,8 @@ class FIB_source(model.HwComponent):
         for p in self._errorParameters:
             p.Subscribe(self._updateErrorState)
 
-        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState)
+        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
+                                                      conversion={True: "ON", False: "OFF"})
         self.gunPumpOnConnector = OrsayParameterConnector(self.gunPumpOn, self._gunPump.IsOn)
         self.columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
         self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
@@ -1618,9 +1640,10 @@ class FIB_source(model.HwComponent):
         self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
         self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
         self.heatingCurrentConnector = OrsayParameterConnector(self.heatingCurrent, self._hvps.Heater)
-        self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
+        # self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
         self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
-        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink)
+        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
+                                                           conversion={True: "ON", False: "OFF"})
         self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
         self.mvaPositionConnector = OrsayParameterConnector(self.mvaPosition,
                                                             [self._ionColumn.MCSProbe_X, self._ionColumn.MCSProbe_Y])
@@ -1650,9 +1673,9 @@ class FIB_source(model.HwComponent):
         Reads the error state from the Orsay server and saves it in the state VA
         """
         if parameter is not None and parameter not in self._errorParameters:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or in %s. "
-                             "Parameter passed is %s"
-                             % (str(self._errorParameters), parameter.Name))
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or a FIB "
+                             "related ErrorState parameter. Parameter passed is %s"
+                             % parameter.Name)
         if attributeName != "Actual":
             return
 
@@ -1663,7 +1686,7 @@ class FIB_source(model.HwComponent):
                 if not eState == "":
                     eState += ", "
                 eState += "%s error: %s" % (
-                    gc.get_referrers(ep)[0]['name'],  # TODO: check that this actually always works and pretify
+                    gc.get_referrers(ep)[-1]['name'],  # TODO: check that this actually always works and pretify
                     this_state)
 
         if eState == "":
@@ -1680,14 +1703,18 @@ class FIB_source(model.HwComponent):
         """
         if parameter is not None and parameter not in (
                 self._interlockHVPS.ErrorState, self._interlockChamber.ErrorState):
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or in %s. "
-                             "Parameter passed is %s"
-                             % (str((self._interlockHVPS.ErrorState, self._interlockChamber.ErrorState)),
-                                parameter.Name))
+            raise ValueError("Incorrect parameter passed to _updateInterlockTriggered. Parameter should be None or an "
+                             "interlock ErrorState parameter. Parameter passed is %s"
+                             % parameter.Name)
         if attributeName != "Actual":
             return
 
-        new_value = INTERLOCK_DETECTED_STR in self._interlockHVPS.ErrorState.Actual + self._interlockChamber.ErrorState.Actual
+        new_value = False
+        if (self._interlockHVPS.ErrorState.Actual not in NO_ERROR_VALUES and
+            INTERLOCK_DETECTED_STR in self._interlockHVPS.ErrorState.Actual) or \
+                (self._interlockChamber.ErrorState.Actual not in NO_ERROR_VALUES and
+                 INTERLOCK_DETECTED_STR in self._interlockChamber.ErrorState.Actual):
+            new_value = True
 
         self.interlockTriggered._value = new_value  # to not call the setter
         self.interlockTriggered.notify(new_value)

@@ -23,6 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import os
 import unittest
+import typing
+
 from time import sleep
 from odemis.driver import orsay
 from odemis.model import HwError
@@ -32,12 +34,15 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
+TEST_NOHW = "sim"  # TODO: DELETE THIS LINE
+
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
 CONFIG_UPS = {"name": "ups", "role": "ups"}
 CONFIG_GIS = {"name": "gis", "role": "gis"}
 CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
+CONFIG_FIBSOURCE = {"name": "fib-source", "role": "fib-source"}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -47,7 +52,8 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                              "pumping-system": CONFIG_PSYS,
                              "ups": CONFIG_UPS,
                              "gis": CONFIG_GIS,
-                             "gis-reservoir": CONFIG_GISRES}
+                             "gis-reservoir": CONFIG_GISRES,
+                             "fib-source": CONFIG_FIBSOURCE}
                 }
 
 CONFIG_TEST = {"name": "test", "role": "test"}
@@ -59,6 +65,7 @@ CONFIG_ORSAY_TEST = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                                   "ups": CONFIG_UPS,
                                   "gis": CONFIG_GIS,
                                   "gis-reservoir": CONFIG_GISRES,
+                                  "fib-source": CONFIG_FIBSOURCE,
                                   "test": CONFIG_TEST}
                      }
 
@@ -1075,26 +1082,38 @@ class TestTestDevice(unittest.TestCase):
         self.datamodel.Scanner.OperatingMode.Target = 0
         sleep(1)
         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        print("VA: %s" % str(
+            self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
+                         str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
+                             self.test_dev.testBooleanVA.value)))
 
         self.datamodel.Scanner.OperatingMode.Target = 1
         sleep(1)
         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        print("VA: %s" % str(
+            self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
+                         str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
+                             self.test_dev.testBooleanVA.value)))
 
         self.test_dev.testBooleanVA.value = False
         sleep(1)
         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        print("VA: %s" % str(
+            self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
+                         str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
+                             self.test_dev.testBooleanVA.value)))
 
         self.test_dev.testBooleanVA.value = True
         sleep(1)
         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-        print("VA: %s" % str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual, str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        print("VA: %s" % str(
+            self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
+        self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
+                         str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
+                             self.test_dev.testBooleanVA.value)))
 
     def test_OrsayFloatConnector(self):
         """
@@ -1104,25 +1123,29 @@ class TestTestDevice(unittest.TestCase):
         sleep(1)
         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
+                         str(self.test_dev.testFloatVA.value))
 
         self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Target = 0.2
         sleep(1)
         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
+                         str(self.test_dev.testFloatVA.value))
 
         self.test_dev.testFloatVA.value = 0.1
         sleep(1)
         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
+                         str(self.test_dev.testFloatVA.value))
 
         self.test_dev.testFloatVA.value = 0.2
         sleep(1)
         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual, str(self.test_dev.testFloatVA.value))
+        self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
+                         str(self.test_dev.testFloatVA.value))
 
     def test_OrsayIntConnector(self):
         """
@@ -1160,41 +1183,321 @@ class TestTestDevice(unittest.TestCase):
         sleep(1)
         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
+                         str(self.test_dev.testTupleVA.value[0]))
 
         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Target = 0.4
         sleep(1)
         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
+                         str(self.test_dev.testTupleVA.value[0]))
 
         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.3
         sleep(1)
         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
+                         str(self.test_dev.testTupleVA.value[1]))
 
         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.4
         sleep(1)
         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
+                         str(self.test_dev.testTupleVA.value[1]))
 
         self.test_dev.testTupleVA.value = (0.5, 0.6)
         sleep(1)
         print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
         print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
+                         str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
+                         str(self.test_dev.testTupleVA.value[1]))
 
         self.test_dev.testTupleVA.value = (0.7, 0.8)
         sleep(1)
         print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
         print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
         print("VA: %s" % str(self.test_dev.testTupleVA.value))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual, str(self.test_dev.testTupleVA.value[0]))
-        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual, str(self.test_dev.testTupleVA.value[1]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
+                         str(self.test_dev.testTupleVA.value[0]))
+        self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
+                         str(self.test_dev.testTupleVA.value[1]))
+
+
+class TestOrsayParameterConnector(unittest.TestCase):
+    """
+    Tests for the OrsayParameterConnector, to check if it properly raises exceptions when it should
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_not_enough_parameters(self):
+        with self.assertRaises(ValueError):  # no parameters passed
+            orsay.OrsayParameterConnector(model.TupleVA((0, 0)), [])
+        with self.assertRaises(ValueError):  # Length of Tuple VA does not match number of parameters passed
+            orsay.OrsayParameterConnector(model.TupleVA((0, 0)), self.datamodel.HybridValveFIB.ErrorState)
+
+    def test_no_tuple_va(self):
+        with self.assertRaises(ValueError):  # Multiple parameters are passed, but VA is not of a tuple type
+            orsay.OrsayParameterConnector(model.IntVA(0), [self.datamodel.HybridValveFIB.ErrorState,
+                                                           self.datamodel.HybridIonPumpGunFIB.ErrorState])
+
+    def test_not_connected(self):
+        connector = orsay.OrsayParameterConnector(model.FloatVA(0.0), self.datamodel.HybridIonPumpGunFIB.Pressure)
+        connector.disconnect()
+        with self.assertRaises(AttributeError):  # OrsayParameterConnector is not connected to an Orsay parameter
+            connector.update_VA()
+        with self.assertRaises(AttributeError):  # OrsayParameterConnector is not connected to an Orsay parameter
+            connector._update_parameter(1.0)
+
+    def test_incorrect_parameter(self):
+        connector = orsay.OrsayParameterConnector(model.FloatVA(0.0), self.datamodel.HybridIonPumpGunFIB.Pressure)
+        with self.assertRaises(ValueError):  # Incorrect parameter passed
+            connector.update_VA(parameter=self.datamodel.HybridIonPumpGunFIB.ErrorState)
+
+    def test_readonly(self):
+        connector = orsay.OrsayParameterConnector(model.FloatVA(0.0, readonly=True),
+                                                  self.datamodel.HybridIonPumpGunFIB.Pressure)
+        with self.assertRaises(model.NotSettableError):  # Value is read-only
+            connector._update_parameter(1.0)
+
+
+class TestFIBSource(unittest.TestCase):
+    """
+    Tests for the Focused Ion Beam (FIB) Source
+    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_FIBSOURCE["name"]:
+                cls.fib_source = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_errorstate(self):
+        """Check that any text in an ErrorState parameter results in that text in the state VA"""
+        with self.assertRaises(ValueError):
+            self.fib_source._updateErrorState(self.datamodel.HybridPlatform.Cancel)
+
+        if not TEST_NOHW == "sim":
+            self.skipTest("This test is not hardware safe.")
+
+        test_string = "This thing broke"
+
+        self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridGaugeCompressedAir", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = ""
+
+        self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridInterlockInChamberVac", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = ""
+
+        self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridInterlockOutHVPS", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = ""
+
+        self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridIonPumpColumnFIB", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = ""
+
+        self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridIonPumpGunFIB", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = ""
+
+        self.datamodel.HybridValveFIB.ErrorState.Actual = test_string
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("HybridValveFIB", str(self.fib_source.state.value))
+        self.assertIn(test_string, str(self.fib_source.state.value))
+        self.datamodel.HybridValveFIB.ErrorState.Actual = ""
+
+        sleep(1)
+        self.assertEqual(self.fib_source.state.value, model.ST_RUNNING)
+
+    def test_interlockTriggered(self):
+        """Check that the interlockTriggered VA is updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fib_source._updateInterlockTriggered(self.datamodel.HybridPlatform.Cancel)
+
+        connector_test(self, self.fib_source.interlockTriggered, self.fib_source._interlockHVPS.ErrorState,
+                       [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
+                       readonly=True)
+        connector_test(self, self.fib_source.interlockTriggered, self.fib_source._interlockChamber.ErrorState,
+                       [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
+                       readonly=True)
+
+    def test_gunPumpOn(self):
+        """Check that the gunPumpOn VA is updated correctly"""
+        connector_test(self, self.fib_source.gunPumpOn, self.fib_source._gunPump.IsOn,
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_columnPumpOn(self):
+        """Check that the columnPumpOn VA is updated correctly"""
+        connector_test(self, self.fib_source.columnPumpOn, self.fib_source._columnPump.IsOn,
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_gunOn(self):
+        """Check that the gunOn VA is updated correctly"""
+        self.fib_source.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
+        self.fib_source.columnPumpOn.value = True
+        connector_test(self, self.fib_source.gunOn, self.fib_source._hvps.GunState,
+                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+        self.fib_source.gunPumpOn.value = False
+        self.fib_source.columnPumpOn.value = False
+
+    def test_gunPressure(self):
+        """Check that the gunPressure VA is updated correctly"""
+        connector_test(self, self.fib_source.gunPressure, self.fib_source._gunPump.Pressure,
+                       [(1e-3, 1e-3), (2e-3, 2e-3)], readonly=True)
+
+    def test_columnPressure(self):
+        """Check that the columnPressure VA is updated correctly"""
+        connector_test(self, self.fib_source.columnPressure, self.fib_source._columnPump.Pressure,
+                       [(1e-3, 1e-3), (2e-3, 2e-3)], readonly=True)
+
+    def test_lifetime(self):
+        """Check that the lifetime VA is updated correctly"""
+        connector_test(self, self.fib_source.lifetime, self.fib_source._hvps.SourceLifeTime,
+                       [(0.1, 0.1), (0.2, 0.2)], readonly=True)
+
+    def test_currentRegulation(self):
+        """Check that the currentRegulation VA is updated correctly"""
+        connector_test(self, self.fib_source.currentRegulation, self.fib_source._hvps.BeamCurrent_Enabled,
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_sourceCurrent(self):
+        """Check that the sourceCurrent VA is updated correctly"""
+        connector_test(self, self.fib_source.sourceCurrent, self.fib_source._hvps.BeamCurrent,
+                       [(1e-5, 1e-5), (0, 0)], readonly=True)
+
+    def test_suppressorVoltage(self):
+        """Check that the suppressorVoltage VA is updated correctly"""
+        connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_heatingCurrent(self):
+        """Check that the heatingCurrent VA is updated correctly"""
+        connector_test(self, self.fib_source.heatingCurrent, self.fib_source._hvps.Heater,
+                       [(1, 1), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    # def test_heaterState(self):
+    #     """Check that the heaterState VA is updated correctly"""
+    #     connector_test(self, self.fib_source.heaterState, self.fib_source._hvps.HeaterState,
+    #                    [(1, 1), (0, 0)], hw_safe=True)
+
+    def test_acceleratorVoltage(self):
+        """Check that the heaterState VA is updated correctly"""
+        connector_test(self, self.fib_source.acceleratorVoltage, self.fib_source._hvps.Energy,
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_energyLink(self):
+        """Check that the energyLink VA is updated correctly"""
+        connector_test(self, self.fib_source.energyLink, self.fib_source._hvps.EnergyLink,
+                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_extractorVoltage(self):
+        """Check that the extractorVoltage VA is updated correctly"""
+        connector_test(self, self.fib_source.extractorVoltage, self.fib_source._hvps.Extractor,
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+
+def connector_test(test_case, va, parameter, valuepairs, readonly=False, hw_safe=False, settletime=1):
+    """
+    Standard test for testing an OrsayParameterConnector.
+    :param test_case: is the TestCase class this test is a part of
+    :param va: is the VA to test with.
+    :param parameter: is the parameter that should be connected to the va.
+    :param valuepairs: is a list of tuples. Each tuple should contain two values. The first is a value the va could
+        have, the second is the corresponding value of the parameter. For a good test, supply at least two pairs.
+    :param readonly: tells the test if the va is readonly or can be written to. If readonly is True, only communication
+        from the Orsay server to the va is tested. Otherwise two way communication is tested. If readonly is True, the
+        test will not be performed on the real hardware, because we cannot write to the parameter's Actual value, as
+        we'd want to test the reading. Defaults to False.
+    :param hw_safe: tells the test if this it is safe to perform this test on the real hardware. Defaults to False.
+    :param settletime: is the time the test will wait between setting the Target of the Orsay parameter and checking if
+        the Actual value of the Orsay parameter matches the VA's value. In simulation, this value is overwritten by 1.
+        Defaults to 1.
+    :returns: Nothing
+    """
+    if TEST_NOHW == 1:
+        test_case.skipTest("TEST_NOHW is set. No server to contact.")
+
+    if not TEST_NOHW == "sim" and not hw_safe:
+        test_case.skipTest("This test is not hardware safe.")
+
+    if len(valuepairs) < 2:
+        logging.warning("Less than 2 value pairs supplied for testing. Test may return a false positive.")
+
+    attribute = "Target"
+    if TEST_NOHW == "sim":
+        attribute = "Actual"
+        settletime = 1
+
+    for (va_value, par_value) in valuepairs:
+        setattr(parameter, attribute, par_value)
+        sleep(settletime)
+        test_case.assertEqual(va.value, va_value)
+
+    if not readonly:
+        for (va_value, par_value) in valuepairs:  # loop twice to assure value pairs are alternated
+            va.value = va_value
+            sleep(1)
+            target = type(par_value)(parameter.Target)  # needed since many parameter values are strings
+            test_case.assertEqual(target, par_value)
 
 
 if __name__ == '__main__':
