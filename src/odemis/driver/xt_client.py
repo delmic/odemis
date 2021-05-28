@@ -53,6 +53,9 @@ DETECTOR2CHANNELNAME = {
     "se-detector": "electron1",
 }
 
+# Value to use on the FASTEM to activate the immersion mode
+COMPOUND_LENS_FOCUS_IMMERSION = 2.0
+
 
 class SEM(model.HwComponent):
     """
@@ -994,7 +997,7 @@ class SEM(model.HwComponent):
     def set_compound_lens_focusing_mode(self, mode):
         """
         Set the compound lens focus mode. Used to adjust the immersion mode.
-        :param mode (0<= float <= 10): focusing mode
+        :param mode (0<= float <= 10): focusing mode (0 means no immersion)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1004,7 +1007,8 @@ class SEM(model.HwComponent):
         """
         Get the min/max values of the compound lens focus mode.
 
-        :return (dict str -> list (of length 2)): The range of the focusing mode for the keyword "range".
+        :return (dict str -> Any): The range of the focusing mode for the key "range"
+           (as a tuple min/max). The unit for key "unit", as a string or None. 
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -2093,10 +2097,6 @@ class Focus(model.Actuator):
             logging.exception("Unexpected failure when updating position")
 
 
-# Value to use on the FASTEM to activate the immersion mode
-COMPOUND_LENS_FOCUS_IMMERSION = 2.0
-
-
 class MultiBeamScanner(Scanner):
     """
     This class extends  behaviour of the xt_client.Scanner class with XTtoolkit functionality.
@@ -2172,10 +2172,11 @@ class MultiBeamScanner(Scanner):
             setter=self._setBeamletIndex
         )
 
-        # The compound lens focusing mode allows to switch between immersion mode or not.
+        # The compound lens focusing mode accepts value between 0 and 10. However,
+        # in practice, we use it to switch between immersion mode or not.
         # So instead of passing a float, we just provide a boolean, with the immersion
-        # mode always set to the same (hard-coded) value. When reading, anything above
-        # 0 is considered in immersion.
+        # mode always set to the same (hard-coded, TFS approved) value.
+        # When reading, anything above 0 is considered in immersion.
         focusing_mode_info = self.parent.compound_lens_focusing_mode_info()
         focusing_mode_range = focusing_mode_info["range"]
         assert focusing_mode_range[0] <= COMPOUND_LENS_FOCUS_IMMERSION <= focusing_mode_range[1]
@@ -2277,7 +2278,9 @@ class MultiBeamScanner(Scanner):
         new_beamlet_index = self.parent.get_beamlet_index()
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
 
-    def _setImmersion(self, immersion):
+    def _setImmersion(self, immersion: bool):
+        # immersion disabled -> focusing mode = 0
+        # immersion enabled -> focusing mode = COMPOUND_LENS_FOCUS_IMMERSION
         self.parent.set_compound_lens_focusing_mode(COMPOUND_LENS_FOCUS_IMMERSION if immersion else 0)
         return self.parent.get_compound_lens_focusing_mode() > 0
 
