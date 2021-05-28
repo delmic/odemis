@@ -44,6 +44,9 @@ RE_MSG_BE_FAILURE = "Failed to instantiate the model due to component"
 RE_MSG_BE_TRACEBACK = "Full traceback of the error follows"
 RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+\t\S+\t\S+:"
 
+# String as returned by xprop WM_CLASS
+GUI_WM_CLASS = "Odemis"
+
 
 def _add_var_config(config, var, content):
     """ Add one variable to the config, handling substitution
@@ -555,6 +558,25 @@ class BackendStarter(object):
         log_frame.ShowModal()
 
 
+def find_window(wm_class):
+    """
+    wm_class (str): the WM_CLASS to match (eg, as reported by xprop)
+    return (bool): True if at least one window is found with this class
+    """
+    # Ask xprop for the window (but without actually reading the properties    )
+    try:
+        found = subprocess.call(["/usr/bin/xprop", "-name", wm_class],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as ex:
+        # In case xprop is not installed (unlikely)
+        logging.warning("Failed to search for %s: %s", wm_class, ex)
+        return False
+
+    # Found -> 0
+    # Not found -> error number (1)
+    return found == 0
+
+
 def show_error_box(caption, message):
     """
     Shows an error message in a graphical window.
@@ -645,13 +667,6 @@ def main(args):
     # pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 
     try:
-        # TODO: just bring the focus?
-        # Kill GUI if an instance is already there
-        # TODO: use psutil.process_iter() for this
-        gui_killed = subprocess.call(["/usr/bin/pkill", "-f", odemis_config["GUI"]])
-        if gui_killed == 0:
-            logging.info("Found the GUI still running, killing it first...")
-
         status = driver.get_backend_status()
         if status != driver.BACKEND_RUNNING:
             starter = BackendStarter(odemis_config, options.nogui)
@@ -706,9 +721,14 @@ def main(args):
             logging.debug("Back-end already started, so not starting again")
 
         if not options.nogui:
-            # Return when the GUI is done
-            logging.info("Starting the GUI...")
-            subprocess.check_call(["odemis-gui", "--log-level", odemis_config["LOGLEVEL"]])
+            if status == driver.BACKEND_RUNNING and find_window(GUI_WM_CLASS):
+                # TODO: bring window to focus? Unminimize if it is minimized
+                # (see wmctrl or xdotool)
+                logging.info("GUI already started, so not starting again")
+            else:
+                # Return when the GUI is done
+                logging.info("Starting the GUI...")
+                subprocess.check_call(["odemis-gui", "--log-level", odemis_config["LOGLEVEL"]])
 
     except ValueError as exp:
         logging.error("%s", exp)
