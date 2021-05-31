@@ -1386,9 +1386,8 @@ class OrsayParameterConnector:
         if not attributeName == self._attributeName:
             return
 
-        names = [(p.Name + ", ") for p in self._parameters]
         namesstring = ""
-        namesstring = namesstring.join(names)[:-2]
+        namesstring = namesstring.join([(p.Name + ", ") for p in self._parameters])[:-2]
         if parameter is not None and parameter not in self._parameters:
             raise ValueError("Incorrect parameter passed. Excpected: %s. Received: %s."
                              % (namesstring, parameter.Name))
@@ -1402,7 +1401,15 @@ class OrsayParameterConnector:
         else:
             new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attributeName))
 
-        logging.debug("[%s].%s changed to %s." % (namesstring, attributeName, str(new_value)))
+        namesstring = "("
+        for p in self._parameters:
+            namesstring += p.Name + "." + attributeName + ", "
+        if self._va_is_tuple:
+            namesstring = namesstring[:-2] + ")"
+        else:
+            namesstring = namesstring[1:-2]
+
+        logging.debug("%s's VA changed to %s." % (namesstring, str(new_value)))
         self._va._value = new_value  # to not call the setter
         self._va.notify(new_value)
 
@@ -1561,11 +1568,19 @@ class FIBSource(model.HwComponent):
         self._ionColumn = None
         self._gunPump = None
         self._columnPump = None
-        self._devices_with_errorstates = None
         self._interlockHVPS = None
         self._interlockChamber = None
+        self._valve = None
+
+        self._devices_with_errorstates = ("HybridGaugeCompressedAir",
+                                          "HybridInterlockOutHVPS",
+                                          "HybridInterlockInChamberVac",
+                                          "HybridIonPumpGunFIB",
+                                          "HybridIonPumpColumnFIB",
+                                          "HybridValveFIB")
 
         self.interlockTriggered = model.BooleanVA(False, setter=self._resetInterlocks)
+        self.valveOpen = model.BooleanVA(False, setter=self._changeValveOpen)
         self.gunOn = model.BooleanVA(False)
         self.gunOnConnector = None
         self.gunPumpOn = model.BooleanVA(False)
@@ -1578,6 +1593,8 @@ class FIBSource(model.HwComponent):
         self.columnPressureConnector = None
         self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
         self.lifetimeConnector = None
+        self.compressedAirPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=COMP_AIR_PRESSURE_RNG)
+        self.compAirPressureConnector = None
         self.currentRegulation = model.BooleanVA(False)
         self.currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
@@ -1594,11 +1611,11 @@ class FIBSource(model.HwComponent):
         self.energyLinkConnector = None
         self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
         self.extractorVoltageConnector = None
-        self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=[(0, 0), (10, 10)])
-        self.mvaPositionConnector = None
-        self.mvaStepSize = model.FloatEnumerated(1e-6, unit="m",
-                                                 choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4})
-        self.mvaStepSizeConnector = None
+        # self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=[(0, 0), (10, 10)])
+        # self.mvaPositionConnector = None
+        # self.mvaStepSize = model.FloatEnumerated(1e-6, unit="m",
+        #                                          choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4})
+        # self.mvaStepSizeConnector = None
 
         self._connectorList = []
 
@@ -1616,15 +1633,12 @@ class FIBSource(model.HwComponent):
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._interlockHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockChamber = self.parent.datamodel.HybridInterlockInChamberVac
-        self._devices_with_errorstates = ("HybridGaugeCompressedAir",
-                                          "HybridInterlockOutHVPS",
-                                          "HybridInterlockInChamberVac",
-                                          "HybridIonPumpGunFIB",
-                                          "HybridIonPumpColumnFIB",
-                                          "HybridValveFIB")
+        self._valve = self.parent.datamodel.HybridValveFIB
 
         self._interlockHVPS.ErrorState.Subscribe(self._updateInterlockTriggered)
         self._interlockChamber.ErrorState.Subscribe(self._updateInterlockTriggered)
+        self._valve.IsOpen.Subscribe(self._updateErrorState)
+        self._valve.IsOpen.Subscribe(self._updateValveOpen)
         for device in self._devices_with_errorstates:
             p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
@@ -1636,6 +1650,8 @@ class FIBSource(model.HwComponent):
         self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
         self.columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
         self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
+        self.compAirPressureConnector = OrsayParameterConnector(self.compressedAirPressure,
+                                                                self.parent.datamodel.HybridGaugeCompressedAir.Pressure)
         self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
                                                                   self._hvps.BeamCurrent_Enabled)
         self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
@@ -1646,9 +1662,9 @@ class FIBSource(model.HwComponent):
         self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
                                                            conversion={True: "ON", False: "OFF"})
         self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
-        self.mvaPositionConnector = OrsayParameterConnector(self.mvaPosition,
-                                                            [self._ionColumn.MCSProbe_X, self._ionColumn.MCSProbe_Y])
-        self.mvaStepSizeConnector = OrsayParameterConnector(self.mvaStepSize, self._ionColumn.MCSProbe_Step)
+        # self.mvaPositionConnector = OrsayParameterConnector(self.mvaPosition,
+        #                                                     [self._ionColumn.MCSProbe_X, self._ionColumn.MCSProbe_Y])
+        # self.mvaStepSizeConnector = OrsayParameterConnector(self.mvaStepSize, self._ionColumn.MCSProbe_Step)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -1717,6 +1733,8 @@ class FIBSource(model.HwComponent):
                  INTERLOCK_DETECTED_STR in self._interlockChamber.ErrorState.Actual):
             new_value = True
 
+        logging.debug("%s set to %s." % ("interlockTriggered", str(new_value)))
+
         self.interlockTriggered._value = new_value  # to not call the setter
         self.interlockTriggered.notify(new_value)
 
@@ -1732,6 +1750,7 @@ class FIBSource(model.HwComponent):
         if value:
             self._interlockHVPS.Reset.Target = ""
             self._interlockChamber.Reset.Target = ""
+            logging.debug("Attempting to reset interlocks.")
         return False
 
     def terminate(self):

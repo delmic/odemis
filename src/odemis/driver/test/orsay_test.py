@@ -1365,6 +1365,16 @@ class TestFIBSource(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_source.state.value))
         self.datamodel.HybridValveFIB.ErrorState.Actual = ""
 
+        self.fib_source._valve.IsOpen.Target = 3
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("ValveFIB is in error", str(self.fib_source.state.value))
+        self.fib_source._valve.IsOpen.Target = -1
+        sleep(1)
+        self.assertIsInstance(self.fib_source.state.value, HwError)
+        self.assertIn("ValveFIB could not be contacted", str(self.fib_source.state.value))
+        self.fib_source._valve.IsOpen.Target = orsay.VALVE_OPEN
+
         sleep(1)
         self.assertEqual(self.fib_source.state.value, model.ST_RUNNING)
 
@@ -1379,6 +1389,13 @@ class TestFIBSource(unittest.TestCase):
         connector_test(self, self.fib_source.interlockTriggered, self.fib_source._interlockChamber.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
                        readonly=True)
+
+    def test_valve(self):
+        """Test for controlling the valve in between the FIB column and the analysis chamber"""
+        if not TEST_NOHW == "sim":
+            self.skipTest("This test is generally not hardware safe. Be very sure it is safe before running this test.")
+        connector_test(self, self.fib_source.valveOpen, self.fib_source._valve.IsOpen,
+                       [(True, orsay.VALVE_OPEN), (False, orsay.VALVE_CLOSED)], hw_safe=False)
 
     def test_gunPumpOn(self):
         """Check that the gunPumpOn VA is updated correctly"""
@@ -1413,6 +1430,11 @@ class TestFIBSource(unittest.TestCase):
         """Check that the lifetime VA is updated correctly"""
         connector_test(self, self.fib_source.lifetime, self.fib_source._hvps.SourceLifeTime,
                        [(0.1, 0.1), (0.2, 0.2)], readonly=True)
+
+    def test_compressedAirPressure(self):
+        """Check that the compressedAirPressure VA is updated correctly"""
+        connector_test(self, self.fib_source.compressedAirPressure, self.datamodel.HybridGaugeCompressedAir.Pressure,
+                       [(1e5, 1e5), (0, 0)], readonly=True)
 
     def test_currentRegulation(self):
         """Check that the currentRegulation VA is updated correctly"""
