@@ -2752,8 +2752,7 @@ class Scanner(model.Emitter):
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = (self.HFWNoMag / (self._shape[0] * mag),
-               self.HFWNoMag / (self._shape[1] * mag))
+        pxs = (self.HFWNoMag / (self._shape[0] * mag),) * 2
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
