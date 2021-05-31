@@ -30,7 +30,7 @@ import threading
 import time
 import logging
 import inspect
-import gc
+from varname import nameof
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -1561,7 +1561,7 @@ class FIBSource(model.HwComponent):
         self._ionColumn = None
         self._gunPump = None
         self._columnPump = None
-        self._errorParameters = None
+        self._devices_with_errorstates = None
         self._interlockHVPS = None
         self._interlockChamber = None
 
@@ -1616,16 +1616,17 @@ class FIBSource(model.HwComponent):
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._interlockHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockChamber = self.parent.datamodel.HybridInterlockInChamberVac
-        self._errorParameters = (self.parent.datamodel.HybridGaugeCompressedAir.ErrorState,
-                                 self._interlockChamber.ErrorState,
-                                 self._interlockHVPS.ErrorState,
-                                 self._gunPump.ErrorState,
-                                 self._columnPump.ErrorState,
-                                 self.parent.datamodel.HybridValveFIB.ErrorState)
+        self._devices_with_errorstates = ("HybridGaugeCompressedAir",
+                                          "HybridInterlockOutHVPS",
+                                          "HybridInterlockInChamberVac",
+                                          "HybridIonPumpGunFIB",
+                                          "HybridIonPumpColumnFIB",
+                                          "HybridValveFIB")
 
         self._interlockHVPS.ErrorState.Subscribe(self._updateInterlockTriggered)
         self._interlockChamber.ErrorState.Subscribe(self._updateInterlockTriggered)
-        for p in self._errorParameters:
+        for device in self._devices_with_errorstates:
+            p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
         self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
@@ -1672,7 +1673,9 @@ class FIBSource(model.HwComponent):
 
         Reads the error state from the Orsay server and saves it in the state VA
         """
-        if parameter is not None and parameter not in self._errorParameters:
+        errorParameters = (getattr(self.parent.datamodel, device).ErrorState
+                           for device in self._devices_with_errorstates)
+        if parameter is not None and parameter not in errorParameters:
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or a FIB "
                              "related ErrorState parameter. Parameter passed is %s"
                              % parameter.Name)
@@ -1680,14 +1683,12 @@ class FIBSource(model.HwComponent):
             return
 
         eState = ""
-        for ep in self._errorParameters:
-            this_state = ep.Actual
+        for device in self._devices_with_errorstates:
+            this_state = getattr(self.parent.datamodel, device).ErrorState.Actual
             if this_state not in NO_ERROR_VALUES:
                 if not eState == "":
                     eState += ", "
-                eState += "%s error: %s" % (
-                    gc.get_referrers(ep)[-1]['name'],  # TODO: check that this actually always works and pretify
-                    this_state)
+                eState += "%s error: %s" % (device, this_state)
 
         if eState == "":
             self.state._set_value(model.ST_RUNNING, force_write=True)
@@ -1745,6 +1746,6 @@ class FIBSource(model.HwComponent):
             self._ionColumn = None
             self._gunPump = None
             self._columnPump = None
-            self._errorParameters = None
+            self._devices_with_errorstates = None
             self._interlockHVPS = None
             self._interlockChamber = None
