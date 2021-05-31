@@ -104,7 +104,7 @@ class SEM(model.HwComponent):
 
         if "mb-scanner" in children:
             if "scanner" in children:
-                raise NotImplementedError("The combination of both an multi beam scanner and single beam scanner at "
+                raise NotImplementedError("The combination of both an multi-beam scanner and single beam scanner at "
                                           "the same time is not supported")
             kwargs = children["mb-scanner"]
             if "xttoolkit" not in self._swVersion.lower():
@@ -1047,6 +1047,9 @@ class Scanner(model.Emitter):
     """
 
     def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
+        """
+        :param channel (str): Name of one of the electron channels.
+        """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self.channel = channel  # Name of the electron channel used.
@@ -1454,11 +1457,21 @@ class Scanner(model.Emitter):
 
 class FibScanner(model.Emitter):
     """
-    This is an extension of the model.Emitter class for controlling the FIB. Currently via XTLib only minimal control
-    of the FIB is possible.
+    This is an extension of the model.Emitter class for controlling the FIB (focused ion beam). Currently via XTLib
+    only minimal control of the FIB is possible.
     """
 
     def __init__(self, name, role, parent, channel="ion2", **kwargs):
+        """
+
+        :param name (str):
+        :param role (str):
+        :param parent (SEM object):
+        :param channel (str): Specifies the type of scanner (alphabetic part) and the quadrant it is displayed in (
+        nummerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope control window
+        of TFS. The quadrants are numbered 1 (top left) - 4 (right bottom).
+        ion2 is set as default since the top left quadrant is used as default for the ebeam (electron1)
+        """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self.channel = channel  # Name of the ion channel used.
@@ -1490,7 +1503,8 @@ class Detector(model.Detector):
 
         if hasattr(self.parent, "_scanner") and hasattr(self.parent, "_fib_scanner"):
             self.scanner = StringEnumerated(self.parent._scanner.name,
-                        choices={self.parent._scanner.name, self.parent._fib_scanner.name}, setter=self._set_scanner)
+                                            choices={self.parent._scanner.name, self.parent._fib_scanner.name},
+                                            setter=self._set_scanner)
             self._set_scanner(self.parent._scanner.name)  # Call setter to instantiate ._scanner attribute
         elif hasattr(self.parent, "_scanner"):
             self._scanner = self.parent._scanner
@@ -1538,8 +1552,9 @@ class Detector(model.Detector):
                         break
                     self.parent.set_channel_state(self._scanner.channel, True)
                     if hasattr(self._scanner, "blanker"):
-                        # TODO In case of switching the scanner type the previous scanner should be blanked.
-                        #  Currently this kind of blanker handling isn't supported by XT.
+                        # TODO: When the acquisition ends, if blanker is set to automatic (None), we need to activate
+                        #  the blanker again. That should also happen when switching e-beam <--> FIB, but currently
+                        #  the FIB blanker is not support via the XT interface.
                         if self._scanner.blanker.value is None:
                             self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
@@ -1552,24 +1567,23 @@ class Detector(model.Detector):
                         est_acq_time = self._scanner.dwellTime.value * n_pixels
                         md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
                     else:
-                        # Estimated acquisition time used the timeout if not all info about this acquisition time is
-                        # known.
-                        est_acq_time = 60
+                        # Acquisition time is unknown => assume it will be long
+                        est_acq_time = 5 * 60  # 5 minutes
 
                     if hasattr(self._scanner, "rotation"):
                         md[model.MD_ROTATION] = self._scanner.rotation.value
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
-                    # try:
-                    #     if self._acq_wait_data(est_acq_time + 20):
-                    #         logging.debug("Stopping measurement early")
-                    #         self.stop_acquisition()
-                    #         break
-                    # except TimeoutError as err:
-                    #     logging.error(err)
-                    #     self.stop_acquisition()
-                    #     break
+                    try:
+                        if self._acq_wait_data(est_acq_time + 20):
+                            logging.debug("Stopping measurement early")
+                            self.stop_acquisition()
+                            break
+                    except TimeoutError as err:
+                        logging.error(err)
+                        self.stop_acquisition()
+                        break
 
                     # Retrieve the image
                     image = self.parent.get_latest_image(self._scanner.channel)
@@ -1677,18 +1691,19 @@ class Detector(model.Detector):
             logging.warning("Acq received unexpected message %s", msg)
         return msg
 
-    def _set_scanner(self, scan_mode):
+    def _set_scanner(self, scanner_name):
         """
-        Setter for changing the current active scanner type. The correct scanner object is also updated in ._scanner.
-        :param scan_mode (string): contains mode, can be either 'Scanner' or 'FibScanner'
+        Setter for changing the scanner which will be used. The correct scanner object is also updated in
+        ._scanner.
+        :param scanner_name (string): contains mode, can be either 'scanner' or 'fib-scanner'
         :return (string): The set mode
         """
-        if scan_mode == self.parent._scanner.name:
+        if scanner_name == self.parent._scanner.name:
             self._scanner = self.parent._scanner
-        elif scan_mode == self.parent._fib_scanner.name:
+        elif scanner_name == self.parent._fib_scanner.name:
             self._scanner = self.parent._fib_scanner
 
-        return scan_mode
+        return scanner_name
 
 
 class TerminationRequested(Exception):
@@ -1708,7 +1723,6 @@ class SEMDataFlow(model.DataFlow):
     def __init__(self, detector):
         """
         detector (model.Detector): the detector that the dataflow corresponds to
-        sem (model.Emitter): the SEM
         """
         model.DataFlow.__init__(self)
         self._detector = detector
@@ -1966,6 +1980,11 @@ class Focus(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
+        if not hasattr(self.parent, "_scanner"):
+            if not hasattr(self.parent, "_mb-scanner"):
+                    raise ValueError("Required scanner child was not provided."
+                                     "An ebeam or multi-beam scanner is a required child component for the Focus class")
+
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
@@ -1989,7 +2008,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f._channel_name = self._scanner.channel
+        f._channel_name = self.parent._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):

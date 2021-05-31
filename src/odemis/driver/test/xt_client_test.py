@@ -57,7 +57,6 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
 CONFIG_FIB_SCANNER = {"name": "fib-scanner", "role": "ion", "channel": "ion2"}
 CONFIG_FIB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
                   "children": {"fib-scanner": CONFIG_FIB_SCANNER,
-                               "focus": CONFIG_FOCUS,
                                "stage": CONFIG_STAGE,
                                "detector": CONFIG_DETECTOR,
                                }
@@ -977,7 +976,6 @@ class TestFIBScanner(unittest.TestCase):
             self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
-        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def test_acquire(self):
         """Test acquiring an image from the FIB/ion2 channel."""
@@ -1011,7 +1009,6 @@ class TestDualModeMicroscope(unittest.TestCase):
             self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
-        self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
     def _compute_expected_duration(self):
         """Computes the expected duration of a single image acquisition."""
@@ -1028,9 +1025,11 @@ class TestDualModeMicroscope(unittest.TestCase):
         self.images_received += 1
 
     def test_scanner_VA(self):
+        """Tests the scanner VA and its corresponding setter"""
         scanner_modes = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
         self.assertEqual(set(self.detector.scanner.choices), set(scanner_modes))
 
+        # Loop over scan modes twice to make sure also the switch from fib to ebeam work properly
         for _ in range(2):
             for scanner_mode in scanner_modes:
                 # Switch active scanner mode
@@ -1044,12 +1043,18 @@ class TestDualModeMicroscope(unittest.TestCase):
         self.assertEqual(self.detector.scanner.value, scanner_mode)
 
     def test_subscribing_while_changing_scanner(self):
+        """
+        Subscribes to the dataflow then switches between both scanner types and then checks if an image is received
+        while subscribing to that type of scanner (FIB <--> ebeam)
+        """
         self.images_received = 0
         self.detector.data.subscribe(self._callback_counter)
 
-        scanner_modes = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}
-        repeating_scan_modes = 2
-        for _ in range(repeating_scan_modes):
+        scanner_modes = {self.scanner.name: self.scanner,
+                         self.fib_scanner.name: self.fib_scanner}
+
+        # Loop over scan modes twice to make sure also the switch from fib to ebeam work properly.
+        for _ in range(2):
             for scanner_mode in scanner_modes:
                 # Switch active scanner mode
                 self.detector.scanner.value = scanner_mode
@@ -1060,6 +1065,8 @@ class TestDualModeMicroscope(unittest.TestCase):
                 time.sleep(2)
                 self.assertGreaterEqual(self.images_received, 1)
 
+        self.detector.data.unsubscribe(self._callback_counter)  # Unsubscribe to stop refreshing the image
+
     def test_acquire_FIB_image(self):
         """Test acquiring an image from the FIB/ion channel."""
         # Switch to ion mode
@@ -1067,7 +1074,7 @@ class TestDualModeMicroscope(unittest.TestCase):
         image = self.detector.data.get()
         self.assertEqual(image.ndim, 2)
         # Check that image size is at least 200*200 pixels
-        self.assertGreaterEqual(image.shape[0],200)
+        self.assertGreaterEqual(image.shape[0], 200)
         self.assertGreaterEqual(image.shape[1], 200)
 
     def test_acquire_ebeam_image(self):
@@ -1080,15 +1087,15 @@ class TestDualModeMicroscope(unittest.TestCase):
         start = time.time()
         im = self.detector.data.get()
         duration = time.time() - start
-        # self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
+        self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         self.assertGreaterEqual(duration, expected_duration,
                                 "Error execution took %f s, less than exposure time %d." % (
                                     duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
         self.assertEqual(im.metadata[model.MD_DWELL_TIME], self.scanner.dwellTime.value)
         expected_pixel_size = numpy.array(self.scanner.pixelSize.value) * numpy.array(self.scanner.scale.value)
-        self.assertEqual(im.metadata[model.MD_PIXEL_SIZE][0], expected_pixel_size[0])
-        self.assertEqual(im.metadata[model.MD_PIXEL_SIZE][1], expected_pixel_size[1])
+        self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], expected_pixel_size[0])
+        self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], expected_pixel_size[1])
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
 
