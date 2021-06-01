@@ -1113,13 +1113,18 @@ class TestMBScanner(unittest.TestCase):
 
         # Set current_value as last, so that it goes back to current value after the test
         for new_val in (not current_value, current_value):
+            fov_range_prev = self.scanner.horizontalFoV.range[1]
+
             # Test if directly changing it via the VA works
             self.scanner.immersion.value = new_val
             self.assertEqual(self.scanner.immersion.value, new_val)
+            # FoV should change
+            self.assertNotEqual(fov_range_prev, self.scanner.horizontalFoV.range[1])
 
             # Check it's still correct after updating the settings
             time.sleep(6)
             self.assertEqual(self.scanner.immersion.value, new_val)
+            self.assertNotEqual(fov_range_prev, self.scanner.horizontalFoV.range[1])
 
     def test_multiprobe_mode_VA(self):
         current_beam_mode = self.scanner.multiBeamMode.value

@@ -2163,6 +2163,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self)._updateSettings()
         # Polling XTtoolkit settings
         try:
+            self._updateHFWRange()
             delta_pitch = self.parent.get_delta_pitch() * 1e-6
             if delta_pitch != self.deltaPitch.value:
                 self.deltaPitch._value = delta_pitch
@@ -2231,7 +2232,30 @@ class MultiBeamScanner(Scanner):
         # immersion disabled -> focusing mode = 0
         # immersion enabled -> focusing mode = COMPOUND_LENS_FOCUS_IMMERSION
         self.parent.set_compound_lens_focusing_mode(COMPOUND_LENS_FOCUS_IMMERSION if immersion else 0)
+        # The immersion mode affects the HFW maximum
+        # Note: if the HFW is set to a value which is out of range in the new settings,
+        # the XT server takes care of adjusting the HFW to a value within range.
+        self._updateHFWRange()
         return self.parent.get_compound_lens_focusing_mode() > 0
+
+    def _updateHFWRange(self):
+        """
+        To be called when the field of view range might have changed.
+        This can happen when some settings are changed.
+        If the range is changed, the VA subscribers will be updated.
+        """
+        hfov_range = tuple(self.parent.scanning_size_info()["range"]["x"])
+        if self.horizontalFoV.range != hfov_range:
+            logging.debug("horizontalFoV range changed to %s", hfov_range)
+
+            fov = self.parent.get_scanning_size()[0]
+            self.horizontalFoV._value = fov
+            self.horizontalFoV.range = hfov_range  # Does the notification
+
+            self.magnification._value = self._hfw_nomag / fov
+            mag_range_max = self._hfw_nomag / hfov_range[0]
+            mag_range_min = self._hfw_nomag / hfov_range[1]
+            self.magnification.range = (mag_range_min, mag_range_max)
 
     def _setMultiBeamMode(self, multi_beam_mode):
         # TODO: When changing the beam mode of the microscope changes we don't want to also change the aperture and
