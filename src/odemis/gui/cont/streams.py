@@ -3277,7 +3277,7 @@ class FastEMROAController(object):
         current_name = self.model.name.value
         all_roas = [roa.name.value for project in self._tab_data.projects.value for roa in project.roas.value]
         if txt != current_name:
-            txt = add_counter_to_fn(txt, all_roas)
+            txt = make_unique_name(txt, all_roas)
             logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
             self.model.name.value = txt
             self.panel.txt_ctrl.SetValue(txt)
