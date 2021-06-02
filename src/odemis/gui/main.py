@@ -133,7 +133,10 @@ class OdemisGUIApp(wx.App):
         # TODO: if microscope.ghost is not empty => wait and/or display a special
         # "hardware status" tab.
 
-        self.main_data = guimodel.MainGUIData(microscope)
+        if microscope.role == "mbsem":
+            self.main_data = guimodel.FastEMMainGUIData(microscope)
+        else:
+            self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
@@ -213,9 +216,15 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_sparc_acqui
                 },
                 {
+                    "name": "fastem_overview",
+                    "controller": tabs.FastEMOverviewTab,
+                    "button": self.main_frame.btn_tab_fastem_overview,
+                    "panel": main_xrc.xrcpnl_tab_fastem_overview
+                },
+                {
                     "name": "fastem_acqui",
                     "controller": tabs.FastEMAcquisitionTab,
-                    "button": self.main_frame.btn_tab_sparc_acqui,
+                    "button": self.main_frame.btn_tab_fastem_acqui,
                     "panel": main_xrc.xrcpnl_tab_fastem_acqui
                 },
                 {

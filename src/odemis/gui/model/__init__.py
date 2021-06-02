@@ -1043,10 +1043,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.polePositionPhysical.notify(posphy)
 
 
-class FastEMAcquisitionGUIData(MicroscopyGUIData):
+class FastEMMainGUIData(MainGUIData):
     """
-    GUI model for the FastEM acquisition tab. It contains references the user-selected acquisition and
-    calibration regions, overview images, and information on the sample carrier positions.
+    Data common to all FastEM tabs.
     """
     # Parameters of the scintillators according to the technical drawing of the sample carrier
     # (positions are given relative to top left of sample carrier)
@@ -1071,15 +1070,14 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
                        # minx, miny, maxx, maxy positions of rectangles for background, from bottom left
     }
 
-    def __init__(self, main):
-        assert main.microscope is not None
-        super(FastEMAcquisitionGUIData, self).__init__(main)
+    def __init__(self, microscope):
+        super(FastEMMainGUIData, self).__init__(microscope)
 
         # Make sure we have a stage with the range metadata (this metadata is required to map user-selected
         # screen positions to stage positions for the acquisition)
-        if self.main.stage is None:
+        if self.stage is None:
             raise KeyError("No stage found in the microscope.")
-        md = self.main.stage.getMetadata()
+        md = self.stage.getMetadata()
         if model.MD_POS_ACTIVE_RANGE not in md:
             raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
@@ -1088,14 +1086,6 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         # TODO: in the future, there could be an additional argument in the configuration file to specify
         #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
         carrier_params = self.SAMPLE_CARRIER_3x3
-
-        # VAs
-        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
-        for i in carrier_params["scintillator_offsets"]:
-            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
-        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
-        self.overview_streams = model.ListVA([])  # list of FastEMOverviewStream
-        self.projects = model.ListVA([])  # list of FastEMProject
 
         # Initialize attributes related to the sample carrier
         #  * .scintillator_size (float, float): size of one scintillator in m
@@ -1111,6 +1101,39 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.background = []
         for rect in carrier_params["background"]:
             self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
+
+        # Overview streams
+        self.overview_streams = model.VigilantAttribute({})  # dict: int --> stream or None
+
+
+class FastEMAcquisitionGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM acquisition tab. It contains the user-selected acquisition and
+    calibration regions.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super(FastEMAcquisitionGUIData, self).__init__(main)
+
+        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        for i in main.scintillator_positions:
+            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.projects = model.ListVA([])  # list of FastEMProject
+
+
+class FastEMOverviewGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM overview tab.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super(FastEMOverviewGUIData, self).__init__(main)
+
+        self.acq_selection = set()  # set of ints, overview images to be acquired
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
 
 
 class FastEMProject(object):

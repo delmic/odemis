@@ -911,7 +911,7 @@ class RGBUpdatableStream(StaticStream):
         self._shouldUpdateImage()
 
 
-class FastEMOverviewStream(StaticStream):
+class FastEMOverviewStream(StaticSEMStream):
     # For now just a StaticStream with a different name, so the canvas can automatically select the right
     # blending option ("blend screen" on non-overlapping positions = simple pasting without blending)
     pass
