@@ -563,7 +563,7 @@ def find_window(wm_class):
     wm_class (str): the WM_CLASS to match (eg, as reported by xprop)
     return (bool): True if at least one window is found with this class
     """
-    # Ask xprop for the window (but without actually reading the properties    )
+    # Ask xprop for the window (but without actually reading the properties)
     try:
         found = subprocess.call(["/usr/bin/xprop", "-name", wm_class],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
