@@ -152,14 +152,23 @@ class OrsayComponent(model.HwComponent):
             self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis_reservoir)
 
-        # create the test child
+        # # create the test child
+        # try:
+        #     kwargs = children["test"]
+        # except (KeyError, TypeError):
+        #     logging.info("Orsay was not given a 'test' child")
+        # else:
+        #     self._test_device = TestDevice(parent=self, daemon=daemon, **kwargs)
+        #     self.children.value.add(self._test_device)
+
+        # create the FIB device child
         try:
-            kwargs = children["test"]
+            kwargs = children["fib-device"]
         except (KeyError, TypeError):
-            logging.info("Orsay was not given a 'test' child")
+            logging.info("Orsay was not given a 'fib-device' child")
         else:
-            self._test_device = TestDevice(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._test_device)
+            self._fib_device = FIBDevice(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_device)
 
         # create the FIB source child
         try:
@@ -169,6 +178,15 @@ class OrsayComponent(model.HwComponent):
         else:
             self._fib_source = FIBSource(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_source)
+
+        # create the FIB beam child
+        try:
+            kwargs = children["fib-beam"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'fib-beam' child")
+        else:
+            self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_beam)
 
     def on_connect(self):
         """
@@ -1351,6 +1369,12 @@ class OrsayParameterConnector:
         if len(self._parameters) > 1 and not self._va_is_tuple:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
 
+        # if not self._va_is_tuple:
+        #     p = self._parameters[0]
+        #     lowerbound = p.Min
+        #     upperbound = p.Max
+        #     self._va.range((lowerbound, upperbound))
+
         for p in self._parameters:
             p.Subscribe(self.update_VA)
 
@@ -1468,104 +1492,139 @@ class OrsayParameterConnector:
                                       % self._va_type_name)
 
 
-class TestDevice(model.HwComponent):
+# class TestDevice(model.HwComponent):
+#     """
+#     This represents the Device that needs a VA communicating with an Orsay parameter
+#     """
+#
+#     def __init__(self, name, role, parent, **kwargs):
+#         """
+#         """
+#
+#         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+#
+#         self.testBooleanVA = model.BooleanVA(True)
+#         self.OrsayBooleanConnector = None
+#         self.testFloatVA = model.FloatVA(0.0, unit="Pa")
+#         self.OrsayFloatConnector = None
+#         self.testIntVA = model.IntVA(0)
+#         self.OrsayIntConnector = None
+#         self.testTupleVA = model.TupleVA((0.1, 0.2))
+#         self.OrsayTupleConnector = None
+#
+#         self.on_connect()
+#
+#     def on_connect(self):
+#         """
+#         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+#         Needs to be called after connection and reconnection to the server.
+#         """
+#         self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA,
+#                                                              self.parent.datamodel.Scanner.OperatingMode,
+#                                                              conversion={True: 1, False: 0})
+#         self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA,
+#                                                            self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
+#         self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA,
+#                                                          self.parent.datamodel.HVPSFloatingIon.HeaterState)
+#         self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [
+#             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
+#             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
+#
+#     def update_VAs(self):
+#         """
+#         Update the VA's. Should be called after reconnection to the server
+#         """
+#         self.OrsayBooleanConnector.update_VA()
+#         self.OrsayFloatConnector.update_VA()
+#         self.OrsayIntConnector.update_VA()
+#         self.OrsayTupleConnector.update_VA()
+#
+#     def terminate(self):
+#         """
+#         Called when Odemis is closed
+#         """
+#         self.OrsayBooleanConnector.disconnect()
+#         self.OrsayFloatConnector.disconnect()
+#         self.OrsayIntConnector.disconnect()
+#         self.OrsayTupleConnector.disconnect()
+
+
+# Bare Orsay device
+# class FIBDevice(model.HwComponent):
+#     """
+#     Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
+#     """
+#
+#     def __init__(self, name, role, parent, **kwargs):
+#         """
+#         Defines the following VA's and links them to the callbacks from the Orsay server:
+#         • ...
+#
+#         """
+#
+#         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+#
+#         # TODO: Define shortcut reference attributes here as None
+#
+#         # TODO: Define VA's and Connector attributes (as None) here
+#
+#         self._connectorList = []
+#
+#         self.on_connect()
+#
+#     def on_connect(self):
+#         """
+#         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+#         Needs to be called after connection and reconnection to the server.
+#         """
+#         # TODO: Define shortcut references here
+#
+#         # TODO: Define OrsayParameterConnectors here
+#
+#         self._connectorList = [x for (x, _) in  # save only the names of the returned members
+#                                inspect.getmembers(self,  # get all members of this FIB_source object
+#                                                   lambda obj: type(obj) == OrsayParameterConnector  # get only the
+#                                                   # OrsayParameterConnectors from all members of this FIB_source object
+#                                                   )
+#                                ]
+#
+#     def update_VAs(self):
+#         """
+#         Update the VA's. Should be called after reconnection to the server
+#         """
+#         for obj_name in self._connectorList:
+#             getattr(self, obj_name).update_VA()
+#
+#     def terminate(self):
+#         """
+#         Called when Odemis is closed
+#         """
+#         if self._hvps is not None:  # TODO: Choose a shortcut reference to test here
+#             for obj_name in self._connectorList:
+#                 getattr(self, obj_name).disconnect()
+#             self._connectorList = []
+#             # TODO: Set all shortcut reference attributes to None
+
+
+class FIBDevice(model.HwComponent):
     """
-    This represents the Device that needs a VA communicating with an Orsay parameter
+    Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
-        """
-
-        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
-
-        self.testBooleanVA = model.BooleanVA(True)
-        self.OrsayBooleanConnector = None
-        self.testFloatVA = model.FloatVA(0.0, unit="Pa")
-        self.OrsayFloatConnector = None
-        self.testIntVA = model.IntVA(0)
-        self.OrsayIntConnector = None
-        self.testTupleVA = model.TupleVA((0.1, 0.2))
-        self.OrsayTupleConnector = None
-
-        self.on_connect()
-
-    def on_connect(self):
-        """
-        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
-        Needs to be called after connection and reconnection to the server.
-        """
-        self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA,
-                                                             self.parent.datamodel.Scanner.OperatingMode,
-                                                             conversion={True: 1, False: 0})
-        self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA,
-                                                           self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
-        self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA,
-                                                         self.parent.datamodel.HVPSFloatingIon.HeaterState)
-        self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [
-            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
-            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
-
-    def update_VAs(self):
-        """
-        Update the VA's. Should be called after reconnection to the server
-        """
-        self.OrsayBooleanConnector.update_VA()
-        self.OrsayFloatConnector.update_VA()
-        self.OrsayIntConnector.update_VA()
-        self.OrsayTupleConnector.update_VA()
-
-    def terminate(self):
-        """
-        Called when Odemis is closed
-        """
-        self.OrsayBooleanConnector.disconnect()
-        self.OrsayFloatConnector.disconnect()
-        self.OrsayIntConnector.disconnect()
-        self.OrsayTupleConnector.disconnect()
-
-
-class FIBSource(model.HwComponent):
-    """
-    Represents the source of the Focused Ion Beam (FIB) from Orsay Physics
-    """
-
-    def __init__(self, name, role, parent, **kwargs):
-        """
-        TODO: Once we better understand what each parameter does, for each VA:
-                - Check whether we actually need to communicate with this parameter, or if we can take it out of the driver
-                - Check if it can/should be set as readonly and change this in the unittest too
-                - Check that the values it sets to the Orsay server make sense and are correct
-                - Check in its unittest that the testvalues are safe and make sense
-                - Check that its unittest is hardware safe and this is set correctly
-                - Check in its unittest that the settletime is set to an appropriate value
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • interlockTriggered: BooleanVA
-        • gunOn: BooleanVA
+        • valveOpen: BooleanVA
         • gunPumpOn: BooleanVA
         • columnPumpOn: BooleanVA
         • gunPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
         • columnPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
-        • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
-        • currentRegulation: BooleanVA
-        • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is true)
-        • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is false)
-        • heatingCurrent: FloatContinuous, unit="A", range=(0, 5)
-        • heaterState: IntContinuous, range=(0, 10)  TODO: presumably this is not an int at all. What is this?
-        • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
-        • energyLink: BooleanVA
-        • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
-        TODO: MOVE THE BELOW THREE VA'S TO THE DRIVER FOR THE FIB OPTICS
-        • mvaPosition: TupleContinuous Float, unit="m", range=[(0, 0), (10, 10)] (mva = multiple variable apperture)
-        • mvaStepSize: FloatEnumerated, unit="m", choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4}
-        • apertureSize: FloatEnumerated, unit="m", TODO: This is not implemented yet, since it might still be refactored
-                        choices={1e-5, 2e-5, 3e-5, 4e-5, 6e-5, 8e-5, 1e-4, 13e-5, 2e-4, 3e-4, 4e-4, 6e-4, 8e-4, 95e-5}
+        • compressedAirPressure: FloatContinuous, readonly, unit="Pa", range=(0, 5e6)
         """
 
         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
-        self._hvps = None
-        self._ionColumn = None
         self._gunPump = None
         self._columnPump = None
         self._interlockHVPS = None
@@ -1581,8 +1640,6 @@ class FIBSource(model.HwComponent):
 
         self.interlockTriggered = model.BooleanVA(False, setter=self._resetInterlocks)
         self.valveOpen = model.BooleanVA(False, setter=self._changeValveOpen)
-        self.gunOn = model.BooleanVA(False)
-        self.gunOnConnector = None
         self.gunPumpOn = model.BooleanVA(False)
         self.gunPumpOnConnector = None
         self.columnPumpOn = model.BooleanVA(False)
@@ -1591,31 +1648,8 @@ class FIBSource(model.HwComponent):
         self.gunPressureConnector = None
         self.columnPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
         self.columnPressureConnector = None
-        self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
-        self.lifetimeConnector = None
         self.compressedAirPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=COMP_AIR_PRESSURE_RNG)
         self.compAirPressureConnector = None
-        self.currentRegulation = model.BooleanVA(False)
-        self.currentRegulationConnector = None
-        self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
-        self.sourceCurrentConnector = None
-        self.suppressorVoltage = model.FloatContinuous(0, unit="V", range=(-2e3, 2e3))
-        self.suppressorVoltageConnector = None
-        self.heatingCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
-        self.heatingCurrentConnector = None
-        # self.heaterState = model.IntContinuous(0, range=(0, 10))
-        # self.heaterStateConnector = None
-        self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
-        self.acceleratorVoltageConnector = None
-        self.energyLink = model.BooleanVA(False)
-        self.energyLinkConnector = None
-        self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
-        self.extractorVoltageConnector = None
-        # self.mvaPosition = model.TupleContinuous((0.0, 0.0), unit="m", range=[(0, 0), (10, 10)])
-        # self.mvaPositionConnector = None
-        # self.mvaStepSize = model.FloatEnumerated(1e-6, unit="m",
-        #                                          choices={2e-7, 5e-7, 1e-6, 5e-6, 1e-5, 2e-5, 1e-4, 5e-4, 2e-3, 25e-4})
-        # self.mvaStepSizeConnector = None
 
         self._connectorList = []
 
@@ -1627,8 +1661,6 @@ class FIBSource(model.HwComponent):
         Needs to be called after connection and reconnection to the server.
         """
 
-        self._hvps = self.parent.datamodel.HVPSFloatingIon
-        self._ionColumn = self.parent.datamodel.IonColumnMCS
         self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._interlockHVPS = self.parent.datamodel.HybridInterlockOutHVPS
@@ -1643,28 +1675,12 @@ class FIBSource(model.HwComponent):
             p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
-        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
-                                                      conversion={True: "ON", False: "OFF"})
         self.gunPumpOnConnector = OrsayParameterConnector(self.gunPumpOn, self._gunPump.IsOn)
         self.columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
         self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
         self.columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
-        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
         self.compAirPressureConnector = OrsayParameterConnector(self.compressedAirPressure,
                                                                 self.parent.datamodel.HybridGaugeCompressedAir.Pressure)
-        self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
-                                                                  self._hvps.BeamCurrent_Enabled)
-        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
-        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
-        self.heatingCurrentConnector = OrsayParameterConnector(self.heatingCurrent, self._hvps.Heater)
-        # self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
-        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
-        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
-                                                           conversion={True: "ON", False: "OFF"})
-        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
-        # self.mvaPositionConnector = OrsayParameterConnector(self.mvaPosition,
-        #                                                     [self._ionColumn.MCSProbe_X, self._ionColumn.MCSProbe_Y])
-        # self.mvaStepSizeConnector = OrsayParameterConnector(self.mvaStepSize, self._ionColumn.MCSProbe_Step)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -1757,14 +1773,169 @@ class FIBSource(model.HwComponent):
         """
         Called when Odemis is closed
         """
+        if self._valve is not None:
+            for obj_name in self._connectorList:
+                getattr(self, obj_name).disconnect()
+            self._connectorList = []
+            self._gunPump = None
+            self._columnPump = None
+            self._devices_with_errorstates = None
+            self._interlockHVPS = None
+            self._interlockChamber = None
+
+
+class FIBSource(model.HwComponent):
+    """
+    Represents the source of the Focused Ion Beam (FIB) from Orsay Physics.
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        TODO: Once we better understand what each parameter does, for each VA:
+                - Check whether we actually need to communicate with this parameter, or if we can take it out of the driver
+                - Check if it can/should be set as readonly and change this in the unittest too
+                - Check that the values it sets to the Orsay server make sense and are correct
+                - Check in its unittest that the testvalues are safe and make sense
+                - Check that its unittest is hardware safe and this is set correctly
+                - Check in its unittest that the settletime is set to an appropriate value
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • gunOn: BooleanVA
+        • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
+        • currentRegulation: BooleanVA, should generally be False, since sourceCurrent's Target cannot be set
+        • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is True)
+        • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
+        • heatingCurrent: FloatContinuous, unit="A", range=(0, 5)
+        • heaterState: IntContinuous, range=(0, 10)  TODO: presumably this is not an int at all. What is this?
+        • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
+        • energyLink: BooleanVA
+        • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
+        """
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._hvps = None
+        self._ionColumn = None
+
+        self.gunOn = model.BooleanVA(False)
+        self.gunOnConnector = None
+        self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
+        self.lifetimeConnector = None
+        self.currentRegulation = model.BooleanVA(False)
+        self.currentRegulationConnector = None
+        self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
+        self.sourceCurrentConnector = None
+        self.suppressorVoltage = model.FloatContinuous(0, unit="V", range=(-2e3, 2e3))
+        self.suppressorVoltageConnector = None
+        self.heatingCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
+        self.heatingCurrentConnector = None
+        # self.heaterState = model.IntContinuous(0, range=(0, 10))
+        # self.heaterStateConnector = None
+        self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
+        self.acceleratorVoltageConnector = None
+        self.energyLink = model.BooleanVA(False)
+        self.energyLinkConnector = None
+        self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
+        self.extractorVoltageConnector = None
+
+        self._connectorList = []
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+
+        self._hvps = self.parent.datamodel.HVPSFloatingIon
+        self._ionColumn = self.parent.datamodel.IonColumnMCS
+
+        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
+                                                      conversion={True: "ON", False: "OFF"})
+        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
+        self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
+                                                                  self._hvps.BeamCurrent_Enabled)
+        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
+        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
+        self.heatingCurrentConnector = OrsayParameterConnector(self.heatingCurrent, self._hvps.Heater)
+        # self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
+        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
+        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
+                                                           conversion={True: "ON", False: "OFF"})
+        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
+
+        self._connectorList = [x for (x, _) in  # save only the names of the returned members
+                               inspect.getmembers(self,  # get all members of this FIB_source object
+                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
+                                                  # OrsayParameterConnectors from all members of this FIB_source object
+                                                  )
+                               ]
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        for obj_name in self._connectorList:
+            getattr(self, obj_name).update_VA()
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
         if self._hvps is not None:
             for obj_name in self._connectorList:
                 getattr(self, obj_name).disconnect()
             self._connectorList = []
             self._hvps = None
             self._ionColumn = None
-            self._gunPump = None
-            self._columnPump = None
-            self._devices_with_errorstates = None
-            self._interlockHVPS = None
-            self._interlockChamber = None
+
+
+class FIBBeam(model.HwComponent):
+    """
+    Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics. Contains mainly optics settings
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • ...
+        """
+
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._ionColumn = None
+
+        self._connectorList = []
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+        self._ionColumn = self.parent.datamodel.IonColumnMCS
+
+        self._connectorList = [x for (x, _) in  # save only the names of the returned members
+                               inspect.getmembers(self,  # get all members of this FIB_source object
+                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
+                                                  # OrsayParameterConnectors from all members of this FIB_source object
+                                                  )
+                               ]
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        for obj_name in self._connectorList:
+            getattr(self, obj_name).update_VA()
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        if self._ionColumn is not None:
+            for obj_name in self._connectorList:
+                getattr(self, obj_name).disconnect()
+            self._connectorList = []
+            self._ionColumn = None
