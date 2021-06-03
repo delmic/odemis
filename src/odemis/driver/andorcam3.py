@@ -179,6 +179,9 @@ LENGTH_FIELD_SIZE = 4
 CID_FIELD_SIZE = 4
 CID_TIMESTAMP = 1
 
+TEMP_NO_COOLING = 25  # °C, fake target temperature indicating that cooling should be disabled
+
+
 class AndorCam3(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
@@ -509,8 +512,8 @@ class AndorCam3(model.DigitalCamera):
                 sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
                 for p in sn_paths:
                     try:
-                        f = open(p)
-                        snp = f.read().strip()
+                        with open(p) as f:
+                            snp = f.read().strip()
                     except (IOError, UnicodeDecodeError):
                         logging.debug("Failed to read %s, skipping device", p)
                     if snp == sn:
@@ -520,8 +523,8 @@ class AndorCam3(model.DigitalCamera):
                     return
                 # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
                 sys_path = os.path.dirname(p)
-                f = open(sys_path + "/version")
-                usbv = float(f.read().strip())
+                with open(sys_path + "/version") as f:
+                    usbv = float(f.read().strip())
             except Exception:
                 logging.info("Failed to check USB version for device %s", self.name, exc_info=True)
                 return
@@ -818,23 +821,20 @@ class AndorCam3(model.DigitalCamera):
         return (tuple of 2 floats): min/max values for temperature
         raise NotImplementedError: if not possible to change the temperature
         """
-        # The real camera supports the "TemperatureControl" attribute while the
-        # simulator supports the old  "TargetSensorTemperature"
-        # TargetSensorTemperature is the old API (only for the simulator now),
-        # and TemperatureControl is the new API. The former one accepts any
-        # value but it's not calibrated. The Zylas don't support temperature
-        # control per se, but allow to activate cooling or not.
-        # => map this to 0°C/25°C.
+        # All the real cameras now support the "TemperatureControl" attribute while the
+        # simulator supports only the old "TargetSensorTemperature".
+        # The new interface only allow a set of (calibrated) temperatures.
+        # On water-cooled Zylas, typically, there is only one or two temperatures supported,
+        # but we also map disabling the cooling to 25°C, so that's a third value.
         try:
             if self.isImplemented(u"TemperatureControl"):
                 tmps_str = self.GetEnumStringImplemented(u"TemperatureControl")
                 tmps = [float(t) for t in tmps_str if tmps_str is not None]
-                if not self.isWritable(u"TemperatureControl"):
-                    # Still allow 25°C to disable the cooling
-                    return min(tmps), 25
-                else:
-                    # TODO: just return a set
-                    return min(tmps), max(tmps)
+                if max(tmps) >= TEMP_NO_COOLING:
+                    logging.warning("Largest temperature (%f°C) is hotter than cooling disable (%f°C)",
+                                    max(tmps), TEMP_NO_COOLING)
+                # TODO: just return the set of temperatures?
+                return min(tmps), TEMP_NO_COOLING
             elif self.isWritable(u"TargetSensorTemperature"):
                 return self.GetFloatRanges(u"TargetSensorTemperature")
             else:
@@ -858,15 +858,25 @@ class AndorCam3(model.DigitalCamera):
             tmps_str = self.GetEnumStringImplemented(u"TemperatureControl")
             tmps = [float(t) if t is not None else 1e100 for t in tmps_str]
             if self.isWritable(u"TemperatureControl"):
-                tmp_idx = util.index_closest(temp, tmps)
+                logging.debug("Matching %f°C among: %s + %f", temp, tmps_str, TEMP_NO_COOLING)
+                tmp_idx = util.index_closest(temp, tmps + [TEMP_NO_COOLING])
                 self.SetEnumIndex(u"TemperatureControl", tmp_idx)
                 temp = tmps[tmp_idx]
             else:
-                temp = util.find_closest(temp, (min(tmps), 25))
-        elif self.isWritable(u"TargetSensorTemperature"):
-            self.SetFloat(u"TargetSensorTemperature", temp)
+                if not util.almost_equal(temp, TEMP_NO_COOLING):
+                    # Just read-back the current (fixed) temperature
+                    temp = float(self.GetEnumStringByIndex(u"TemperatureControl", self.GetEnumIndex(u"TemperatureControl")))
 
-        if temp >= 20:
+                logging.warning("Temperature cannot be controlled, using %g °C", temp)
+        else:  # Fallback to old (deprecated) property
+            if self.isWritable(u"TargetSensorTemperature"):
+                self.SetFloat(u"TargetSensorTemperature", temp)
+            else:
+                if not util.almost_equal(temp, TEMP_NO_COOLING):
+                    temp = self.GetFloat(u"TargetSensorTemperature")
+                logging.warning("Temperature cannot be controlled, using %g °C", temp)
+
+        if util.almost_equal(temp, TEMP_NO_COOLING):
             self.SetBool(u"SensorCooling", False)
         else:
             self.SetBool(u"SensorCooling", True)
@@ -886,7 +896,13 @@ class AndorCam3(model.DigitalCamera):
             temp = self.GetFloat(u"SensorTemperature")
             self._metadata[model.MD_SENSOR_TEMP] = temp
             self.temperature._set_value(temp, force_write=True)
-            logging.debug(u"Temp is %f°C", temp)
+
+            if self.isImplemented(u"TemperatureStatus"):
+                status = self.GetEnumStringByIndex(u"TemperatureStatus", self.GetEnumIndex(u"TemperatureStatus"))
+                status_str = " (%s)" % (status,)
+            else:
+                status_str = ""
+            logging.debug(u"Temp is %.2f°C%s", temp, status_str)
         except ATError as exp:
             # This is a known error if the camera is turned off or disconnected.
             # We don't do anything, but at least we can hint the user something
