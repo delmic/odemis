@@ -143,6 +143,28 @@ def estimateMoveDuration(distance, speed, accel):
         return t1 + t2
 
 
+DEFAULT_SPEED = 10e-6 # m/s
+DEFAULT_ACCELERATION = 0.01 
+
+def estimate_focuser_move_duration(focuser, zstep, accel=DEFAULT_ACCELERATION):
+    """
+    focuser (Actuator): focuser object of a fluorescence stream (FM)
+    zstep (float): the moving distance for which the time to be estimated  
+    return (float > 0): estimated time (in s) that it takes to move the focus actuator
+        by one step.
+
+    Note: This function is wrapped around the function
+        deriver.estimateMoveDuration()
+    """
+    speed = None
+    if focuser is not None:
+        if model.hasVA(focuser, "speed"):
+            speed = focuser.speed.value.get("z", None)
+    if speed is None:
+        speed = DEFAULT_SPEED  
+    return estimateMoveDuration(zstep, DEFAULT_SPEED, accel) 
+
+
 def checkLightBand(band):
     """
     Check that the given object looks like a light band. It should either be

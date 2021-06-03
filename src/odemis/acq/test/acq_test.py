@@ -36,7 +36,7 @@ from unittest.case import skip
 from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
-from odemis.acq.acqmng import SettingsObserver
+from odemis.acq.acqmng import SettingsObserver, acquireZStack
 from odemis.driver.tmcm import TMCLController
 from odemis.util.comp import generate_zlevels
 
@@ -506,29 +506,9 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.light_filter = model.getComponent(role="filter")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
-        cls.FM_focuser = TMCLController(
-            name="test_FM_focus",
-            role="focus",
-            port="/dev/fake3",
-            axes=["", "", "z"],
-            ustepsize=[0, 0, 1e-6],
-            rng=[
-                [-3000e-6, 3000e-6],
-            ],
-            refproc="Standard",
-        )
+        cls.SEM_focuser = model.getComponent(role="ebeam-focus")
+        cls.FM_focuser = model.getComponent(role="focus")
 
-        cls.SEM_focuser = TMCLController(
-            name="test_SEM_focus",
-            role="focus",
-            port="/dev/fake3",
-            axes=["", "", "z"],
-            ustepsize=[0, 0, 0.5e-4],
-            rng=[
-                [-0.5, 0.5],
-            ],
-            refproc="Standard",
-        )
         cls.FM_focus_pos = 0.5e-6  # arbitrary current focus position
         cls.SEM_focus_pos = 0.1  # arbitrary current position
 
@@ -536,6 +516,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.light
         test.stop_backend()
 
     def setUp(self):
@@ -545,8 +526,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self._nb_updates = 0
         self.streams = []
 
-        self.FM_focuser.position.value["z"] = self.FM_focus_pos
-        self.SEM_focuser.position.value["z"] = self.SEM_focus_pos
+        self.FM_focuser.moveAbs({"z": self.FM_focus_pos}).result()
+        self.SEM_focuser.moveAbs({"z": self.SEM_focus_pos}).result()
 
     @unittest.skip("Only zstack")
     def test_only_FM_streams_without_zstack(self):
@@ -780,6 +761,29 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # 2 streams, 2 updates per stream, so >= 2 updates
         self.assertGreaterEqual(self._nb_updates, 2)
 
+    def test_settings_observer_metadata_with_zstack(self):
+        settings_observer = SettingsObserver(model.getComponents())
+        vas = {"exposureTime"}
+        s1 = stream.FluoStream(
+            "FM", self.ccd, self.ccd.data, self.light, self.light_filter, detvas=vas)
+        s1._focuser = self.FM_focuser
+        s1.detExposureTime.value = 0.023  # 23 ms
+
+        zlevels_list = generate_zlevels(self.FM_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels = {s1: list(zlevels_list)}
+
+        f = acquireZStack([s1], zlevels, settings_observer)
+        # get the data
+        data, exp = f.result()
+        self.assertIsNone(exp)
+        for d in data:
+            self.assertTrue(model.MD_EXTRA_SETTINGS in d.metadata)
+            # if zstack, so the center has 3 components
+            self.assertEqual(len(d.metadata[model.MD_POS]), 3)
+            # if zstack, so the pixel size has 3 components
+            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 3)
+        self.assertEqual(data[0].metadata[model.MD_EXTRA_SETTINGS]
+                         ["Camera"]["exposureTime"], [0.023, "s"])
 
 if __name__ == "__main__":
     unittest.main()

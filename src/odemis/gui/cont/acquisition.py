@@ -54,6 +54,7 @@ from odemis.model import DataArrayShadow
 from odemis.util.dataio import open_acquisition, data_to_static_streams
 from odemis.util import driver, units
 from odemis.util.comp import generate_zlevels
+from odemis.util.driver import estimate_focuser_move_duration
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -462,6 +463,9 @@ ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
 
+# constants for the focus actuator 
+DEFAULT_SPEED = 10e-6
+DEFAULT_ACCELERATION = 0.01 
 
 class CryoAcquiController(object):
     """
@@ -506,6 +510,10 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
+        # for the z parameters widgets 
+        self._panel.param_Zmin.Bind(wx.EVT_CHAR, self._panel.param_Zmin.on_char)
+        self._panel.param_Zmax.Bind(wx.EVT_CHAR, self._panel.param_Zmax.on_char)
+        self._panel.param_Zstep.Bind(wx.EVT_CHAR, self._panel.param_Zstep.on_char)
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -762,44 +770,15 @@ class CryoAcquiController(object):
         """
         if not self._zStackActive.value: # if no zstack 
             acq_time = acqmng.estimateTime(self._acquiStreams.value)
-            acq_time = math.ceil(acq_time)  # round a bit pessimistic
-        
+            acq_time = math.ceil(acq_time)  
+
         else: # if zstack 
-            acq_time = 0
-            nr_FM_streams = 0
-            for s in self._acquiStreams.value:
-                acq_time += s.estimateAcquisitionTime() * len(self._zlevels[s])  
-                acq_time = math.ceil(acq_time)              
-                if isinstance(s, FluoStream):
-                    nr_FM_streams += 1
-
-            z_pos = next((l for l in self._zlevels.values() if len(l) > 1), None)
-            if z_pos:
-                zstep = abs(z_pos[0]-z_pos[1])
-                tot_zstep_time = (len(z_pos) - 1) * nr_FM_streams * self._estimate_zstep_duration(zstep)
-                acq_time += tot_zstep_time
-                acq_time = math.ceil(acq_time)
-
+            acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
+            acq_time = math.ceil(acq_time)
+        
         # display the time on the GUI 
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
-
-    def _estimate_zstep_duration(self, zstep):
-        """
-        return (float > 0): estimated time (in s) that it takes to move the focus actuator
-          by one step.
-        """
-        # get the focuser of any of the FM streams
-        focuser = next(
-            (s.focuser for s in self._acquiStreams.value if isinstance(s, FluoStream)), None
-        )
-        speed = None
-        if focuser is not None:
-            if model.hasVA(focuser, "speed"):
-                speed = focuser.speed.value.get("z", None)
-        if speed is None:
-            speed = 10e-6  # m/s, pessimistic
-        return driver.estimateMoveDuration(abs(zstep), speed, 0.01)
 
     @call_in_wx_main
     def _on_stream_wavelength(self, _=None):
@@ -857,12 +836,16 @@ class CryoAcquiController(object):
         self._zlevels = {}
         for s in self._acquiStreams.value:
             if isinstance(s, FluoStream):
+                if not self._tab_data.main.focus:
+                    raise LookupError("Focuser was not found in the tab data")
                 levels = generate_zlevels(
                     self._tab_data.main.focus,
                     [self._tab_data.zMin.value, self._tab_data.zMax.value],
                     self._tab_data.zStep.value)
                 self._zlevels[s] = list(levels)
             elif isinstance(s, EMStream):
+                if not s.focuser:
+                    raise LookupError("The stream %s does not have SEM focuser object", s)
                 self._zlevels[s] = [s.focuser.position.value["z"]]
 
         # update the time, taking the zstack into account 
