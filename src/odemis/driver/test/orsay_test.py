@@ -44,7 +44,7 @@ CONFIG_GIS = {"name": "gis", "role": "gis"}
 CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 CONFIG_FIBDEVICE = {"name": "fib-device", "role": "fib-device"}
 CONFIG_FIBSOURCE = {"name": "fib-source", "role": "fib-source"}
-CONFIG_FIBBEAM = {"name": "fib-beam", "role": "fib-beam"}
+CONFIG_SCANNER = {"name": "scanner", "role": "scanner"}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -57,8 +57,9 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                              "gis-reservoir": CONFIG_GISRES,
                              "fib-device": CONFIG_FIBDEVICE,
                              "fib-source": CONFIG_FIBSOURCE,
-                             "fib-beam": CONFIG_FIBBEAM}
+                             "scanner": CONFIG_SCANNER}
                 }
+
 
 # CONFIG_TEST = {"name": "test", "role": "test"}
 #
@@ -1498,7 +1499,7 @@ class TestFIBSource(unittest.TestCase):
     # def test_heaterState(self):
     #     """Check that the heaterState VA is updated correctly"""
     #     connector_test(self, self.fib_source.heaterState, self.fib_source._hvps.HeaterState,
-    #                    [(1, 1), (0, 0)], hw_safe=True)
+    #                    [(1, 1), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
 
     def test_acceleratorVoltage(self):
         """Check that the heaterState VA is updated correctly"""
@@ -1516,14 +1517,160 @@ class TestFIBSource(unittest.TestCase):
                        [(10, 10), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
 
 
-def connector_test(test_case, va, parameter, valuepairs, readonly=False, hw_safe=False, settletime=1):
+class TestScanner(unittest.TestCase):
+    """
+    Tests for the Focused Ion Beam (FIB) Scanner
+    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_power(self):
+        """Check that the power VA is updated correctly"""
+        # Beam on means blanking off and vice versa  TODO: Tune the settle time
+        connector_test(self, self.scanner.power, self.scanner._ionColumn.BlankingState,
+                       [(1, "OFF"), (0, "LOCAL")], hw_safe=True, settletime=1)
+        self.scanner.power.value = 1  # Also test connection between power VA and blanker VA
+        self.assertFalse(self.scanner.blanker.value)
+        self.scanner.power.value = 0
+        self.assertTrue(self.scanner.blanker.value)
+
+    def test_blanker(self):
+        """Check that the blanker VA is updated correctly"""
+        connector_test(self, self.scanner.blanker, self.scanner._ionColumn.BlankingState,
+                       [(True, "LOCAL"), (False, "OFF"), (None, "SOURCE")], hw_safe=True,
+                       settletime=1)  # TODO: Tune the settle time
+        self.scanner.blanker.value = True  # Also test connection between blanker VA and power VA
+        self.assertEqual(self.scanner.power.value, 0)
+        self.scanner.blanker.value = False
+        self.assertEqual(self.scanner.power.value, 1)
+        self.scanner.blanker.value = None
+        self.assertEqual(self.scanner.power.value, 0)
+
+    def test_blankerVoltage(self):
+        """Check that the blankerVoltage VA is updated correctly"""
+        connector_test(self, self.scanner.blankerVoltage, self.scanner._ionColumn.BlankingVoltage,
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_condenserVoltage(self):
+        """Check that the condenserVoltage VA is updated correctly"""
+        connector_test(self, self.scanner.condenserVoltage, self.scanner._hvps.CondensorVoltage,
+                       [(100, 100), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_objectiveStigmator(self):
+        """Check that the objectiveStigmator VA is updated correctly"""
+        connector_test(self, self.scanner.objectiveStigmator, [self.scanner._ionColumn.ObjectiveStigmatorX,
+                                                               self.scanner._ionColumn.ObjectiveStigmatorY],
+                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_steererStigmator(self):
+        """Check that the steererStigmator VA is updated correctly"""
+        connector_test(self, self.scanner.steererStigmator, [self.scanner._ionColumn.CondensorSteerer1StigmatorX,
+                                                             self.scanner._ionColumn.CondensorSteerer1StigmatorY],
+                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_steererShift(self):
+        """Check that the steererShift VA is updated correctly"""
+        connector_test(self, self.scanner.steererShift, [self.scanner._ionColumn.CondensorSteerer1ShiftX,
+                                                         self.scanner._ionColumn.CondensorSteerer1ShiftY],
+                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_steererTilt(self):
+        """Check that the steererTilt VA is updated correctly"""
+        connector_test(self, self.scanner.steererTilt, [self.scanner._ionColumn.CondensorSteerer1TiltX,
+                                                        self.scanner._ionColumn.CondensorSteerer1TiltY],
+                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_orthogonality(self):
+        """Check that the orthogonality VA is updated correctly"""
+        connector_test(self, self.scanner.orthogonality, self.scanner._ionColumn.ObjectiveOrthogonality,
+                       [(0.000174, 0.000174), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_objectiveRotationOffset(self):
+        """Check that the objectiveRotationOffset VA is updated correctly"""
+        connector_test(self, self.scanner.objectiveRotationOffset, self.scanner._ionColumn.ObjectiveRotationOffset,
+                       [(0.1, 0.1), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_objectiveStageRotationOffset(self):
+        """Check that the objectiveStageRotationOffset VA is updated correctly"""
+        connector_test(self, self.scanner.objectiveStageRotationOffset,
+                       self.scanner._ionColumn.ObjectiveStageRotationOffset,
+                       [(0.1, 0.1), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_tilt(self):
+        """Check that the tilt VA is updated correctly"""
+        connector_test(self, self.scanner.tilt, [self.scanner._ionColumn.ObjectivePhi,
+                                                 self.scanner._ionColumn.ObjectiveTeta],
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_xyRatio(self):
+        """Check that the xyRatio VA is updated correctly"""
+        connector_test(self, self.scanner.xyRatio, self.scanner._ionColumn.ObjectiveXYRatio,
+                       [(0.5, 0.5), (1.0, 1.0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_mirror(self):
+        """Check that the mirror VA is updated correctly"""
+        connector_test(self, self.scanner.mirror, self.scanner._ionColumn.Mirror,
+                       [(True, -1), (False, 1)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_imageFromSteerers(self):
+        """Check that the imageFromSteerers VA is updated correctly"""
+        connector_test(self, self.scanner.imageFromSteerers, self.scanner._ionColumn.ObjectiveScanSteerer,
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_objectiveVoltage(self):
+        """Check that the objectiveVoltage VA is updated correctly"""
+        connector_test(self, self.scanner.objectiveVoltage, self.scanner._hvps.ObjectiveVoltage,
+                       [(100, 100), (0, 0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_beamShift(self):
+        """Check that the beamShift VA is updated correctly"""
+        connector_test(self, self.scanner.beamShift, [self.scanner._ionColumn.ObjectiveShiftX,
+                                                      self.scanner._ionColumn.ObjectiveShiftY],
+                       [((1e-5, -1e-5), (1e-5, -1e-5)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+    def test_horizontalFOV(self):
+        """Check that the horizontalFOV VA is updated correctly"""
+        connector_test(self, self.scanner.horizontalFOV, self.scanner._ionColumn.ObjectiveFieldSize,
+                       [(1e-4, 1e-4), (5e-4, 5e-4)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+
+
+def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=1):
     """
     Standard test for testing an OrsayParameterConnector.
     :param test_case: is the TestCase class this test is a part of
     :param va: is the VA to test with.
-    :param parameter: is the parameter that should be connected to the va.
-    :param valuepairs: is a list of tuples. Each tuple should contain two values. The first is a value the va could
-        have, the second is the corresponding value of the parameter. For a good test, supply at least two pairs.
+    :param parameters: is the parameter that should be connected to the VA or a list of parameters for a Tuple VA.
+    :param valuepairs: is a list of tuples. Each tuple should contain two values. The first is a value the VA could
+        have, the second is the corresponding value (or list of values for Tuple VA's) of the parameter. For a good
+        test, supply at least two pairs.
     :param readonly: tells the test if the va is readonly or can be written to. If readonly is True, only communication
         from the Orsay server to the va is tested. Otherwise two way communication is tested. If readonly is True, the
         test will not be performed on the real hardware, because we cannot write to the parameter's Actual value, as
@@ -1548,17 +1695,27 @@ def connector_test(test_case, va, parameter, valuepairs, readonly=False, hw_safe
         attribute = "Actual"
         settletime = 1
 
+    # loop twice to assure value pairs are alternated
     for (va_value, par_value) in valuepairs:
-        setattr(parameter, attribute, par_value)
+        try:  # for Tuple VA's
+            for i in range(len(parameters)):
+                setattr(parameters[i], attribute, par_value[i])
+        except TypeError:  # if a single parameter is passed
+            setattr(parameters, attribute, par_value)
         sleep(settletime)
         test_case.assertEqual(va.value, va_value)
 
     if not readonly:
-        for (va_value, par_value) in valuepairs:  # loop twice to assure value pairs are alternated
+        for (va_value, par_value) in valuepairs:
             va.value = va_value
             sleep(1)
-            target = type(par_value)(parameter.Target)  # needed since many parameter values are strings
-            test_case.assertEqual(target, par_value)
+            try:  # for Tuple VA's
+                for i in range(len(parameters)):
+                    target = type(par_value[i])(parameters[i].Target)  # needed since many parameter values are strings
+                    test_case.assertEqual(target, par_value[i])
+            except TypeError:  # if a single parameter is passed
+                target = type(par_value)(parameters.Target)  # needed since many parameter values are strings
+                test_case.assertEqual(target, par_value)
 
 
 if __name__ == '__main__':

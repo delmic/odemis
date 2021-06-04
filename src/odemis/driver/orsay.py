@@ -30,7 +30,9 @@ import threading
 import time
 import logging
 import inspect
-from varname import nameof
+from math import pi
+
+# from varname import nameof
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -181,12 +183,12 @@ class OrsayComponent(model.HwComponent):
 
         # create the FIB beam child
         try:
-            kwargs = children["fib-beam"]
+            kwargs = children["scanner"]
         except (KeyError, TypeError):
-            logging.info("Orsay was not given a 'fib-beam' child")
+            logging.info("Orsay was not given a 'scanner' child")
         else:
-            self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._fib_beam)
+            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._scanner)
 
     def on_connect(self):
         """
@@ -1478,7 +1480,7 @@ class OrsayParameterConnector:
         """
         if self._conversion is not None:  # if a conversion dict is supplied
             for key, value in self._conversion.items():
-                if value == par_value:
+                if value == type(value)(par_value):
                     return key
 
         if self._va_value_type == float:
@@ -1890,20 +1892,84 @@ class FIBSource(model.HwComponent):
             self._ionColumn = None
 
 
-class FIBBeam(model.HwComponent):
+class Scanner(model.Emitter):
     """
-    Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics. Contains mainly optics settings
+    Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics.
+    This is an extension of the model.Emitter class. It contains Vigilant
+    Attributes and setters for magnification, pixel size, translation, resolution,
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
+    to update the pixel size.
+    It also contains many beam optics settings.
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • ...
+        • power: IntEnumerated, choices={0: "off", 1: "on"}
+        • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
+        • blankerVoltage: FloatContinuous, unit="V", range=(0, 145)
+        • condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
+        • objectiveStigmator: TupleContinuous Float, unit="V", range=[(-2.0, -2.0), (2.0, 2.0)]
+        • steererStigmator: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
+        • steererShift: TupleContinuous Float, unit="V", range=[(-100.0, -100.0), (100.0, 100.0)]
+        • steererTilt: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
+        • orthogonality: FloatContinuous, unit="rad", range=(-0.01/180*pi, 0.01/180*pi)  TODO: this range seems rather small, but this is what the Client offers
+        • objectiveRotationOffset: FloatContinuous, unit="rad", range=(0, 2*pi)
+        • objectiveStageRotationOffset: FloatContinuous, unit="rad", range=(-pi, pi)
+        • tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
+        • xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
+        • mirror: BooleanVA
+        • imageFromSteerers: BooleanVA True to image from Steerers, False to image from Octopoles
+        • objectiveVoltage: IntContinuous, unit="V", range=(0, 2e4)
+        • beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
+        • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)  TODO: find a more realistic maximum (Client can go to 0.35m on Source current of 1V)
+        • FaradayCurrent: FloatContinuous, readonly, unit="A", range=(???, ???) TODO: implement
         """
 
-        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self._ionColumn = None
+        self._hvps = None
+
+        self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
+        self.blankerConnector = None
+        self.power = model.IntEnumerated(0, choices={0: "off", 1: "on"}, setter=self._power_setter)
+        self.blanker.subscribe(self._blanker_to_power)
+        self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 145))
+        self.blankerVoltageConnector = None
+        self.condenserVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 3e4))
+        self.condenserVoltageConnector = None
+        self.objectiveStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-2.0, -2.0), (2.0, 2.0)])
+        self.objectiveStigmatorConnector = None
+        self.steererStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
+        self.steererStigmatorConnector = None
+        self.steererShift = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-100.0, -100.0), (100.0, 100.0)])
+        self.steererShiftConnector = None
+        self.steererTilt = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
+        self.steererTiltConnector = None
+        self.orthogonality = model.FloatContinuous(0.0, unit="rad", range=(-0.01 / 180 * pi, 0.01 / 180 * pi))
+        self.orthogonalityConnector = None
+        self.objectiveRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
+        self.objectiveRotationOffsetConnector = None
+        self.objectiveStageRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
+        self.objectiveStageRotationOffsetConnector = None
+        self.tilt = model.TupleContinuous((0.0, 0.0), unit="rad", range=[(-pi, -pi), (pi, pi)])
+        self.tiltConnector = None
+        self.xyRatio = model.FloatContinuous(1.0, unit="rad", range=(0.0, 2.0))
+        self.xyRatioConnector = None
+        self.mirror = model.BooleanVA(False)
+        self.mirrorConnector = None
+        self.imageFromSteerers = model.BooleanVA(False)
+        self.imageFromSteerersConnector = None
+        self.objectiveVoltage = model.IntContinuous(0, unit="V", range=(0, 2e4))
+        self.objectiveVoltageConnector = None
+        self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
+        self.beamShiftConnector = None
+        self.horizontalFOV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
+        self.horizontalFOVConnector = None
 
         self._connectorList = []
 
@@ -1915,6 +1981,42 @@ class FIBBeam(model.HwComponent):
         Needs to be called after connection and reconnection to the server.
         """
         self._ionColumn = self.parent.datamodel.IonColumnMCS
+        self._hvps = self.parent.datamodel.HVPSFloatingIon
+
+        self.blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
+                                                        conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
+        self.blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage)
+        self.condenserVoltageConnector = OrsayParameterConnector(self.condenserVoltage, self._hvps.CondensorVoltage)
+        self.objectiveStigmatorConnector = OrsayParameterConnector(self.objectiveStigmator,
+                                                                   [self._ionColumn.ObjectiveStigmatorX,
+                                                                    self._ionColumn.ObjectiveStigmatorY])
+        self.steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
+                                                                 [self._ionColumn.CondensorSteerer1StigmatorX,
+                                                                  self._ionColumn.CondensorSteerer1StigmatorY])
+        self.steererShiftConnector = OrsayParameterConnector(self.steererShift,
+                                                             [self._ionColumn.CondensorSteerer1ShiftX,
+                                                              self._ionColumn.CondensorSteerer1ShiftY])
+        self.steererTiltConnector = OrsayParameterConnector(self.steererTilt,
+                                                            [self._ionColumn.CondensorSteerer1TiltX,
+                                                             self._ionColumn.CondensorSteerer1TiltY])
+        self.orthogonalityConnector = OrsayParameterConnector(self.orthogonality,
+                                                              self._ionColumn.ObjectiveOrthogonality)
+        self.objectiveRotationOffsetConnector = OrsayParameterConnector(self.objectiveRotationOffset,
+                                                                        self._ionColumn.ObjectiveRotationOffset)
+        self.objectiveStageRotationOffsetConnector = OrsayParameterConnector(self.objectiveStageRotationOffset,
+                                                                             self._ionColumn.ObjectiveStageRotationOffset)
+        self.tiltConnector = OrsayParameterConnector(self.tilt, [self._ionColumn.ObjectivePhi,
+                                                                 self._ionColumn.ObjectiveTeta])
+        self.xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio)
+        self.mirrorConnector = OrsayParameterConnector(self.mirror, self._ionColumn.Mirror,
+                                                       conversion={True: -1, False: 1})
+        self.imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
+                                                                  self._ionColumn.ObjectiveScanSteerer,
+                                                                  conversion={True: 1, False: 0})
+        self.objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage)
+        self.beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
+                                                                           self._ionColumn.ObjectiveShiftY])
+        self.horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -1930,6 +2032,25 @@ class FIBBeam(model.HwComponent):
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
 
+    def _power_setter(self, value):
+        """
+        Setter of the power VA. Sets the blanker VA to the corresponding value
+        """
+        new_value = (not value)
+        logging.debug("Power set to %d, setting blanker to %s." % (value, str(new_value)))
+        self.blanker.value = new_value
+
+    def _blanker_to_power(self, value):
+        """
+        Takes the value of blanker VA and puts a corresponding value in power VA
+        """
+        if value is None:  # if blanking when imager needs it
+            value = True  # treat it as blanking is on
+        new_value = int(not value)
+        logging.debug("Blanker set to %s, setting power to %d." % (str(value), new_value))
+        self.power._value = new_value  # to not call the setter
+        self.power.notify(new_value)
+
     def terminate(self):
         """
         Called when Odemis is closed
@@ -1939,3 +2060,4 @@ class FIBBeam(model.HwComponent):
                 getattr(self, obj_name).disconnect()
             self._connectorList = []
             self._ionColumn = None
+            self._hvps = None
