@@ -603,6 +603,25 @@ class LiveViewGUIData(MicroscopyGUIData):
         self.autofocus_active = BooleanVA(False)
 
 
+class FeaturesListVA(model.ListVA):
+    """
+    A singleton class to share the feature list on all cryo tabs
+    """
+    __instance = None
+
+    def __init__(self, value=None, *args, **kwargs):
+        # Copy already connected listeners as it will be emptied on VA init
+        listeners = set()
+        if hasattr(self, "_listeners"):
+            listeners = self._listeners
+        model.ListVA.__init__(self, value, *args, **kwargs)
+        self._listeners = listeners
+
+    def __new__(cls):
+        if FeaturesListVA.__instance is None:
+            FeaturesListVA.__instance = object.__new__(cls)
+        return FeaturesListVA.__instance
+
 class CryoGUIData(MicroscopyGUIData):
     """
     Represents an interface for handling cryo microscopes.
@@ -614,7 +633,10 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a cryo microscope role but found it to be %s." % main.role)
         MicroscopyGUIData.__init__(self, main)
         # List VA contains all the CryoFeatures (for the current project).
-        self.features = model.ListVA([])
+        self.features = FeaturesListVA()
+        # VA for the currently selected feature
+        # TODO: Make it also a singleton
+        self.currentFeature = model.VigilantAttribute(None)
 
     def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=None):
         """
