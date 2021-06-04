@@ -785,7 +785,8 @@ class FeatureOverviewViewport(LiveViewport):
         cpol = CurrentPosCrossHairOverlay(self.canvas)
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
-        slol = CryoFeatureOverlay(self.canvas, tab_data.features)
+
+        slol = CryoFeatureOverlay(self.canvas, tab_data.features, tab_data.currentFeature)
         slol.active.value = True
         self.canvas.add_world_overlay(slol)
 

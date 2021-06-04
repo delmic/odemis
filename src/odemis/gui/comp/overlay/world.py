@@ -119,15 +119,16 @@ FEATURE_DIAMETER = 30  # pixels
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     """ Overlay for handling showing interesting features of cryo projects """
-    def __init__(self, cnvs, features_va, tool_va=None):
+    def __init__(self, cnvs, features_va, current_feature_va, tool_va=None):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
         :param features_va: (ListVA of CryoFeature) list of the interesting cryo features in the project
+        :param current_feature_va: (VigilantAttribute of CryoFeature) currently selected feature VA
         :param tool_va: (IntEnumerated or None) the feature tool if found
         """
         StagePointSelectOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
-        self._mode = MODE_SHOW_TOOLS
+        self._mode = MODE_SHOW_FEATURES
 
         self._selected_tool_va = tool_va
         if self._selected_tool_va:
@@ -141,6 +142,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if features_va:
             self._features_va = features_va
             features_va.subscribe(self._on_features_changes, init=True)
+        if current_feature_va:
+            self._current_feature_va = current_feature_va
+            current_feature_va.subscribe(self._on_current_feature_va, init=True)
         self._selected_feature = None
         self._hover_feature = None
 
@@ -152,7 +156,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             else:
                 self._mode = MODE_SHOW_FEATURES
 
+    def _on_current_feature_va(self, _):
+        # refresh the canvas on _on_current_feature_va change
+        self.cnvs.update_drawing()
+
     def _on_features_changes(self, _):
+
         # refresh the canvas on _features_va list change
         self.cnvs.update_drawing()
 
@@ -181,8 +190,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         """
         if self.active:
             v_pos = evt.Position
+            feature = self._detect_point_inside_feature(v_pos)
             if self._mode == MODE_EDIT_FEATURES:
-                feature = self._detect_point_inside_feature(v_pos)
                 if feature:
                     # move/drag the selected feature
                     self._selected_feature = feature
@@ -193,6 +202,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self.cnvs.on_new_feature_pos(p_pos)
                     self._selected_tool_va.value = TOOL_NONE
             else:
+                if feature:
+                    self._current_feature_va.value = feature
                 self.cnvs.on_left_down(evt)
         else:
             WorldOverlay.on_left_down(self, evt)
