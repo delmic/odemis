@@ -44,6 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
+from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.util.filename import guess_pattern, create_projectname
@@ -407,6 +408,9 @@ class LocalizationTab(Tab):
             static=True,
         )
 
+        self._overview_stream_controller.add_overview_action(self._on_acquire)
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+
         # Toolbar
         self.tb = panel.secom_toolbar
         for t in TOOL_ORDER:
@@ -676,7 +680,7 @@ class LocalizationTab(Tab):
     def display_acquired_data(self, data):
         """
         Displays the acquired streams on the top right view
-        data (DataArray): the images/data acquired 
+        data (DataArray): the images/data acquired
         """
         # TODO adjust this code to fit the feature behavior
         # get the top right view port
