@@ -3,7 +3,8 @@ from numpy import long
 from odemis import model
 
 # The current state of the feature
-FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE = 0, 1, 2
+FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE = "Active", "Milled", "Discarded"
+
 
 class CryoFeature(object):
     """
@@ -27,7 +28,7 @@ class CryoFeature(object):
             raise ValueError(f"Milling should be > 0, but got {milling_angle}")
         self.milling_angle = model.FloatVA(milling_angle)
         # TODO: Get the existing feature status
-        self.status = model.IntEnumerated(FEATURE_ACTIVE, choices={FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE})
+        self.status = model.StringVA(FEATURE_ACTIVE, )
         self.streams = streams if streams is not None else model.ListVA()
 
 
