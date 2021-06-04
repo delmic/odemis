@@ -298,7 +298,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_scanning_size(x - 1e-18)  # Necessary because it doesn't accept the max of the range
+            self.server.set_scanning_size(x)
 
     def get_scanning_size(self):
         """
