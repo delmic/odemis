@@ -31,13 +31,25 @@ import unittest
 from odemis import model
 
 from odemis.driver import xt_client
-from odemis.driver.xt_client import DETECTOR2CHANNELNAME, XTTKDetector
+from odemis.driver.xt_client import DETECTOR2CHANNELNAME
 from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
 logging.basicConfig(level=logging.INFO)
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)
+# Accept three values for TEST_NOHW
+# * TEST_NOHW = 1: not connected to anything => skip most of the tests
+# * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
+# * TEST_NOHW = 0 (or anything else): connected to the real hardware
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+if TEST_NOHW == "sim":
+    pass
+elif TEST_NOHW == "0":
+    TEST_NOHW = False
+elif TEST_NOHW == "1":
+    TEST_NOHW = True
+else:
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s", (TEST_NOHW,))
 
 # arguments used for the creation of basic components
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
@@ -62,6 +74,10 @@ CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.1
                               }
                  }
 
+if TEST_NOHW == "sim":
+    CONFIG_SEM["address"] = "PYRO:Microscope@localhost:4242"
+    CONFIG_MB_SEM["address"] = "PYRO:Microscope@localhost:4242"
+
 
 class TestMicroscope(unittest.TestCase):
     """
@@ -70,6 +86,8 @@ class TestMicroscope(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_SEM)
 
@@ -88,18 +106,15 @@ class TestMicroscope(unittest.TestCase):
         cls.detector.terminate()
 
     def setUp(self):
-        if TEST_NOHW:
-            self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
+    @unittest.skipIf(not TEST_NOHW, "Microscope stage not tested, too dangerous.")
     def test_move_stage(self):
         """
         Test that moving the microscope stage to a certain x, y, z position moves it to that position.
         """
-        if self.xt_type == 'xttoolkit':
-            self.skipTest("Microscope stage not tested, too dangerous.")
         init_pos = self.stage.position.value.copy()
         f = self.stage.moveRel({"x": 2e-6, "y": 3e-6})
         f.result()
@@ -136,12 +151,11 @@ class TestMicroscope(unittest.TestCase):
         # Move stage back to initial position
         self.stage.moveAbs(init_pos)
 
+    @unittest.skipIf(not TEST_NOHW, "Microscope stage not tested, too dangerous.")
     def test_move_stage_rot_tilt(self):
         """
         Test that moving the microscope stage to a certain t, r position moves it to that position.
         """
-        if self.xt_type == 'xttoolkit':
-            self.skipTest("Microscope stage not tested, too dangerous.")
         init_pos = self.stage.position.value.copy()
         # Test absolute movement
         abs_pos = {"y": 2e-6, "rz": 0.5, "rx": 0.2}
@@ -171,7 +185,7 @@ class TestMicroscope(unittest.TestCase):
 
         ebeam.horizontalFoV.value = orig_fov / 2
         self.assertAlmostEqual(orig_mag * 2, ebeam.magnification.value)
-        self.assertAlmostEqual(orig_fov / 2, ebeam.horizontalFoV.value)
+        self.assertAlmostEqual(orig_fov / 2, ebeam.horizontalFoV.value, places=10)
 
         # Test setting the min and max
         fov_min = ebeam.horizontalFoV.range[0]
@@ -181,10 +195,14 @@ class TestMicroscope(unittest.TestCase):
 
         ebeam.horizontalFoV.value = fov_max
         self.assertAlmostEqual(fov_max, ebeam.horizontalFoV.value)
+        self.assertAlmostEqual(fov_min, ebeam.horizontalFoV.value, places=10)
+
+        ebeam.horizontalFoV.value = fov_max
+        self.assertAlmostEqual(fov_max, ebeam.horizontalFoV.value, places=10)
 
         # Reset
         ebeam.horizontalFoV.value = orig_fov
-        self.assertAlmostEqual(orig_fov, ebeam.horizontalFoV.value)
+        self.assertAlmostEqual(orig_fov, ebeam.horizontalFoV.value, places=10)
 
     def test_set_ebeam_spotsize(self):
         """Setting the ebeam spot size."""
@@ -206,15 +224,15 @@ class TestMicroscope(unittest.TestCase):
         dwell_time_range = self.scanner.dwellTime.range
         new_dwell_time = dwell_time_range[0] + 1.5e-6
         self.scanner.dwellTime.value = new_dwell_time
-        self.assertAlmostEqual(new_dwell_time, self.scanner.dwellTime.value)
+        self.assertAlmostEqual(new_dwell_time, self.scanner.dwellTime.value, places=10)
         # Test it still works for different values.
         new_dwell_time = dwell_time_range[1] - 1.5e-6
         self.scanner.dwellTime.value = new_dwell_time
-        self.assertAlmostEqual(new_dwell_time, self.scanner.dwellTime.value)
+        self.assertAlmostEqual(new_dwell_time, self.scanner.dwellTime.value, places=10)
         # set dwellTime back to initial value
         self.scanner.dwellTime.value = init_dwell_time
 
-    @unittest.skip("Do not test setting voltage on the hardware.")
+    @unittest.skipIf(not TEST_NOHW, "Do not test setting voltage on the hardware.")
     def test_set_ht_voltage(self):
         """Setting the HT Voltage."""
         init_voltage = self.scanner.accelVoltage.value
@@ -374,6 +392,8 @@ class TestMicroscopeInternal(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_SEM)
 
@@ -386,8 +406,6 @@ class TestMicroscopeInternal(unittest.TestCase):
                 cls.stage = child
 
     def setUp(self):
-        if TEST_NOHW:
-            self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
@@ -419,11 +437,11 @@ class TestMicroscopeInternal(unittest.TestCase):
         init_scan_size = self.microscope.get_scanning_size()[0]
         new_scanfield_x = scanfield_range['x'][1]
         self.microscope.set_scanning_size(new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        self.assertAlmostEqual(self.microscope.get_scanning_size()[0], new_scanfield_x, places=10)
         # Test it still works for different values.
         new_scanfield_x = scanfield_range['x'][0]
         self.microscope.set_scanning_size(new_scanfield_x)
-        self.assertEqual(self.microscope.get_scanning_size()[0], new_scanfield_x)
+        self.assertAlmostEqual(self.microscope.get_scanning_size()[0], new_scanfield_x, places=10)
         # set value out of range
         x = 1000000  # [m]
         with self.assertRaises(Exception):
@@ -441,7 +459,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(start_pos + size, (x, y, w, h))
         # set value out of range
         size = (20000, 200)
-        with self.assertRaises(Exception):
+        with self.assertRaises((OSError, ValueError)):
             self.microscope.set_selected_area(start_pos, size)
         self.microscope.reset_selected_area()
 
@@ -460,10 +478,9 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.microscope.pump()
         self.assertEqual(self.microscope.get_vacuum_state(), 'vacuum')
 
+    @unittest.skipIf(not TEST_NOHW, "Microscope stage not tested, too dangerous.")
     def test_home_stage(self):
         """Test that the stage is homed after home_stage is called."""
-        if self.xt_type == 'xttoolkit':
-            self.skipTest("Microscope stage not tested, too dangerous.")
         self.microscope.home_stage()
         tstart = time.time()
         while self.microscope.stage_is_moving() and time.time() < tstart + 5:
@@ -514,7 +531,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         # set beamShift back to initial value
         self.scanner.beamShift.value = init_beam_shift
 
-    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    @unittest.skipIf(not TEST_NOHW, "Before running this test make sure it is safe to turn on the beam.")
     def test_beam_power(self):
         """Test turning the beam on and off."""
         if self.xt_type != 'xttoolkit':
@@ -526,7 +543,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         beam_on = self.microscope.get_beam_is_on()
         self.assertFalse(beam_on)
 
-    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    @unittest.skipIf(not TEST_NOHW, "Before running this test make sure it is safe to turn on the beam.")
     def test_autofocus(self):
         """Test running and stopping autofocus."""
         if self.xt_type != 'xttoolkit':
@@ -550,7 +567,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertFalse(self.microscope.is_autofocusing("electron1"))
         self.microscope.set_beam_power(False)
 
-    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    @unittest.skipIf(not TEST_NOHW, "Before running this test make sure it is safe to turn on the beam.")
     def test_auto_contrast_brightness(self):
         """Test running and stopping auto contrast brightness."""
         if self.xt_type != 'xttoolkit':
@@ -632,7 +649,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(OSError):
+        with self.assertRaises((OSError, ValueError)):
             self.microscope.set_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         self.assertEqual(self.microscope.get_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_stigmator()[1], stig_y)
@@ -653,7 +670,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(OSError):
+        with self.assertRaises((OSError, ValueError)):
             self.microscope.set_secondary_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         self.assertEqual(self.microscope.get_secondary_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_secondary_stigmator()[1], stig_y)
@@ -674,7 +691,7 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(self.microscope.get_pattern_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_pattern_stigmator()[1], stig_y)
         # Try to set value outside of range
-        with self.assertRaises(OSError):
+        with self.assertRaises((OSError, ValueError)):
             self.microscope.set_pattern_stigmator(stig_range['x'][1] + 1e-3, stig_range['y'][1] + 1e-3)
         self.assertEqual(self.microscope.get_pattern_stigmator()[0], stig_x)
         self.assertEqual(self.microscope.get_pattern_stigmator()[1], stig_y)
@@ -935,6 +952,8 @@ class TestMBScanner(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_MB_SEM)
 
@@ -945,9 +964,6 @@ class TestMBScanner(unittest.TestCase):
                 cls.efocus = child
 
     def setUp(self):
-        if TEST_NOHW:
-            self.skipTest("No hardware available.")
-
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
 
@@ -1128,7 +1144,7 @@ class TestMBScanner(unittest.TestCase):
 
         self.scanner.multiBeamMode.value = current_beam_mode
 
-    @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
+    @unittest.skipIf(not TEST_NOHW, "Before running this test make sure it is safe to turn on the beam.")
     def test_beam_powerVA(self):
         """Test getting and setting the beam power through the VA."""
         init_beam_power = self.scanner.power.value
