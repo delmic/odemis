@@ -53,6 +53,11 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
 VAS_COMPS = {"alive", "dependencies"}
 VAS_HIDDEN = {"children", "affects"}
 
+# Command line arguments which can have "--" omitted
+ACTION_NAMES = ("kill", "check", "list", "list-prop", "set-attr", "update-metadata",
+                "move", "position", "stop", "reference", "acquire", "live", "scan",
+                "version", "help")
+
 
 # small object that can be remotely executed for scanning
 class Scanner(model.Component):
@@ -861,6 +866,15 @@ def main(args):
     # arguments handling
     parser = argparse.ArgumentParser(prog="odemis-cli",
                                      description=odemis.__fullname__)
+
+    # argparse doesn't allow optional arguments without dash. So to support
+    # action-like arguments, we add "--" on the fly.
+    for i, arg in enumerate(args):
+        if arg in ACTION_NAMES:
+            args[i] = "--" + arg
+            # Only do it on the first match, as a "safety" in case an argument
+            # (eg, component role) would be matching action too.
+            break
 
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
