@@ -56,6 +56,23 @@ DETECTOR2CHANNELNAME = {
 # Value to use on the FASTEM to activate the immersion mode
 COMPOUND_LENS_FOCUS_IMMERSION = 2.0
 
+# List of known supported resolutions.
+# Although the API only provide the min/max of resolution in X/Y, not every value
+# or combination works. Actually, setting X always changes Y to the corresponding
+# value. Note that they are not all the same aspect ratio. "Legacy" resolutions
+# are ~8/7 while the new ones are 3/2. The "legacy" resolutions end up with a
+# larger vertical field of view.
+RESOLUTIONS = (
+    (512, 442),
+    (1024, 884),
+    (2048, 1768),
+    (4096, 3536),
+    (768, 512),
+    (1536, 1024),
+    (3072, 2048),
+    (6144, 4096),
+)
+
 
 class SEM(model.HwComponent):
     """
@@ -93,6 +110,8 @@ class SEM(model.HwComponent):
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
 
+        has_detector = "detector" in children
+
         # create the scanner child
         try:
             if "mb-scanner" in children:
@@ -106,9 +125,9 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("SEM was not given a 'scanner' or 'mb-scanner' child")
         if "mb-scanner" in children:
-            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
+            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
         else:
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+            self._scanner = Scanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
         self.children.value.add(self._scanner)
 
         # create the stage child, if requested
@@ -663,7 +682,7 @@ class SEM(model.HwComponent):
         """Returns the resolution of the image as (width, height)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_resolution()
+            return tuple(self.server.get_resolution())
 
     def resolution_info(self):
         """Returns the unit and range of the resolution of the image."""
@@ -1075,13 +1094,18 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, has_detector=False, **kwargs):
+        """
+        has_detector (bool): True if a Detector is also controlled. In this case,
+          the .resolution, .scale and associated VAs will be provided too.
+        """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         # will take care of executing auto contrast/brightness and auto stigmator asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self._hfw_nomag = hfw_nomag
+        self._has_detector = has_detector
 
         dwell_time_info = self.parent.dwell_time_info()
         self.dwellTime = model.FloatContinuous(
@@ -1147,42 +1171,38 @@ class Scanner(model.Emitter):
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
-        rng = self.parent.resolution_info()["range"]
-        self._shape = (rng["x"][1], rng["y"][1])
-        # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
-        # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[0] * mag))
-        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        # .resolution is the number of pixels actually scanned. If it's less than
-        # the whole possible area, it's centered.
-        # TODO: for now, this is not how it's actually implemented: it always does
-        # full frame, so the scale doesn't really matter. In addition, the full
-        # frame only accepts a pre-defined set of resolutions, so it might fail
-        # when starting the acquisition. => use RoI acquisition?
-        resolution = self.parent.get_resolution()
-        self.resolution = model.ResolutionVA(tuple(resolution),
-                                             ((rng["x"][0], rng["y"][0]),
-                                              (rng["x"][1], rng["y"][1])),
-                                             setter=self._setResolution)
-        self._resolution = resolution
+        if has_detector:
+            rng = self.parent.resolution_info()["range"]
+            self._shape = (rng["x"][1], rng["y"][1])
+            # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
+            # == smallest size/ between two different ebeam positions
+            pxs = (self._hfw_nomag / (self._shape[0] * mag),
+                   self._hfw_nomag / (self._shape[0] * mag))
+            self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        # (float, float) as a ratio => how big is a pixel, compared to pixelSize
-        # it basically works the same as binning, but can be float
-        # (Default to scan the whole area)
-        self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        max_scale = self._shape[0] / rng["x"][0], self._shape[1] / rng["y"][0],
-        self.scale = model.TupleContinuous(self._scale,
-                                           [(1, 1), max_scale],
-                                           unit="",
-                                           cls=(int, float),  # int; when setting scale the GUI returns a tuple of ints.
-                                           setter=self._setScale)
-        self.scale.subscribe(self._onScale, init=True)  # to update metadata
+            # .resolution is the number of pixels actually scanned. It's almost
+            # fixed to full frame, with the exceptions of the resolutions which
+            # are a different aspect ratio from the shape are "more than full frame".
+            # So it's read-only and updated when the scale is updated.
+            resolution = tuple(self.parent.get_resolution())
+            res_choices = set(r for r in RESOLUTIONS
+                              if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
+                             )
+            self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
+            self._resolution = resolution
 
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+            # (float, float) as a ratio => how big is a pixel, compared to pixelSize
+            # it basically works the same as binning, but can be float.
+            # Defined as the scale to match the allowed resolutions, with pixels
+            # always square (ie, scale is always the same in X and Y).
+            scale = (self._shape[0] / resolution[0],) * 2
+            scale_choices = set((self._shape[0] / r[0],) * 2 for r in res_choices)
+            self.scale = model.VAEnumerated(scale, scale_choices, unit="", setter=self._setScale)
+            self.scale.subscribe(self._onScale, init=True)  # to update metadata
+
+            # Just to make some code happy
+            self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
 
         emode = self._isExternal()
         self.external = model.BooleanVA(emode, setter=self._setExternal)
@@ -1237,30 +1257,44 @@ class Scanner(model.Emitter):
             if external != self.external.value:
                 self.external._value = external
                 self.external.notify(external)
+            if self._has_detector:
+                self._updateResolution()
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
-            the original pixel size. It will adapt the translation and resolution to
+            the original pixel size. It will adapt the resolution to
             have the same ROI (just different amount of pixels scanned)
         return the actual value used
         """
-        prev_scale = self._scale
-        self._scale = value
+        # Pick the resolution which matches the scale in X
+        res_x = int(round(self._shape[0] / value[0]))
+        res = next(r for r in self.resolution.choices if r[0] == res_x)
 
-        # adapt resolution so that the ROI stays the same
-        change = (prev_scale[0] / self._scale[0],
-                  prev_scale[1] / self._scale[1])
-        old_resolution = self.resolution.value
-        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
-                          max(int(round(old_resolution[1] * change[1])), 1))
-        self.resolution.value = new_resolution
+        # TODO: instead of setting both X and Y, only set X, and read back Y?
+        # This would be slightly more flexible in case the XT lib supports other
+        # resolutions than the hard-coded ones. For now we assume the hard-coded
+        # ones are all the possibles ones.
+        self.parent.set_resolution(res)
+        self.resolution._set_value(res, force_write=True)
+
         return value
 
     def _onScale(self, s):
         self._updatePixelSize()
+
+    def _updateResolution(self):
+        """
+        To be called to read the server resolution and update the corresponding VAs
+        """
+        resolution = tuple(self.parent.get_resolution())
+        if resolution != self.resolution.value:
+            scale = (self._shape[0] / resolution[0],) * 2
+            self.scale._value = scale  # To not call the setter
+            self.resolution._set_value(resolution, force_write=True)
+            self.scale.notify(scale)
 
     def _updatePixelSize(self):
         """
@@ -1330,7 +1364,8 @@ class Scanner(model.Emitter):
 
     def _onHorizontalFoV(self, fov):
         self._updateDepthOfField()
-        self._updatePixelSize()
+        if self._has_detector:
+            self._updatePixelSize()
 
     def _updateDepthOfField(self):
         fov = self.horizontalFoV.value
@@ -1338,23 +1373,6 @@ class Scanner(model.Emitter):
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
-
-    def _setResolution(self, value):
-        """
-        value (0<int, 0<int): defines the size of the resolution. If the requested
-            resolution is not possible, it will pick the most fitting one.
-        returns the actual value used
-        """
-        max_size = self.resolution.range[1]
-
-        # At least one pixel, and at most the whole area.
-        size = (max(min(value[0], max_size[0]), 1),
-                max(min(value[1], max_size[1]), 1))
-        self._resolution = size
-        self.parent.set_resolution(size)
-
-        self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
-        return value
 
     def _isExternal(self):
         """
