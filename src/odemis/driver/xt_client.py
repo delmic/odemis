@@ -1373,6 +1373,17 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
 
     @isasync
+    def applyAutostigmationFlash(self):
+        """
+        Wrapper for autostigmation flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+        return f
+
+    @isasync
     def applyAutoContrastBrightness(self, detector):
         """
         Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
@@ -1957,6 +1968,17 @@ class Focus(model.Actuator):
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
+
+    @isasync
+    def applyAutofocusFlash(self):
+        """
+        Wrapper for autofocus flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
+        return f
 
     @isasync
     def applyAutofocus(self, detector):
