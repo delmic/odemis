@@ -678,54 +678,6 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(use_case, "SingleBeamlet")
         self.microscope.set_use_case(init_use_case)
 
-    @unittest.skip("Currently the auto stigmator functionality is not supported by the XT client and the code is "
-                   "commented out")
-    # TODO Update test_apply_autostigmator code and make test work on XT client when auto stigmator functionality
-    #  works again.
-    def test_apply_autostigmator(self):
-        """
-        Test for the auto stigmation functionality.
-        """
-        detector = 'se-detector'  # autostigmator only works for the se-detector with channel=electron1
-        channel = DETECTOR2CHANNELNAME[detector]
-
-        # Start auto stigmation and check if it is running.
-        autostigmator_future = self.scanner.applyAutoStigmator(detector)
-        time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
-        self.assertEqual(autostigmator_state, True)
-        self.assertIsInstance(autostigmator_future, ProgressiveFuture)
-
-        # Stop auto stigmation and check if it stopped running.
-        autostigmator_future.cancel()
-        time.sleep(5.0)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
-        self.assertEqual(autostigmator_state, False)
-
-        max_execution_time = 30  # Approximately 3 times the normal expected execution time (s)
-        for i in range(0, 5):
-            starting_time = time.time()
-            autostigmator_future = self.scanner.applyAutoStigmator(detector)
-            time.sleep(0.5)  # Give microscope/simulator the time to update the state
-            autostigmator_state = self.microscope.is_autostigmating(channel)
-            self.assertEqual(autostigmator_state, True)
-            self.assertIsInstance(autostigmator_future, ProgressiveFuture)
-
-            autostigmator_future.result(timeout=max_execution_time)
-
-            # Check if the time to perform the auto stigmation is not too long
-            self.assertLess(time.time() - starting_time, 30,
-                            "Execution of auto stigmation was stopped because it took more than %s seconds." %
-                            max_execution_time)
-            # Line to inspect the execution time to update the expected time
-            print("Execution time was %s seconds " % (time.time() - starting_time))
-
-        # Test if an error is raised when an invalid detector name is provided
-        with self.assertRaises(KeyError):
-            self.scanner.applyAutoStigmator("error_expected")
-        time.sleep(2.5)  # Give microscope/simulator the time to update the state
-        autostigmator_state = self.microscope.is_autostigmating(channel)
-        self.assertEqual(autostigmator_state, False)  # Check if state remained unchanged
 
     def test_apply_auto_contrast_brightness(self):
         """
@@ -1169,6 +1121,52 @@ class TestMBScanner(unittest.TestCase):
         time.sleep(6)
         self.assertTrue(self.scanner.power.value)
         self.scanner.power.value = init_beam_power
+
+    def test_apply_autostigmator(self):
+        """
+        Test for the auto stigmation functionality.
+        """
+        detector = 'se-detector'  # autostigmator only works for the se-detector with channel=electron1
+        channel = DETECTOR2CHANNELNAME[detector]
+
+        # Start auto stigmation and check if it is running.
+        autostigmator_future = self.scanner.applyAutoStigmator(detector)
+        time.sleep(2.5)  # Give microscope/simulator the time to update the state
+        autostigmator_state = self.microscope.is_autostigmating(channel)
+        self.assertEqual(autostigmator_state, True)
+        self.assertIsInstance(autostigmator_future, ProgressiveFuture)
+
+        # Commented out, because cancelling is not an option for now.
+        # # Stop auto stigmation and check if it stopped running.
+        # autostigmator_future.cancel()
+        # time.sleep(5.0)  # Give microscope/simulator the time to update the state
+        # autostigmator_state = self.microscope.is_autostigmating(channel)
+        # self.assertEqual(autostigmator_state, False)
+
+        max_execution_time = 30  # Approximately 3 times the normal expected execution time (s)
+        for i in range(0, 5):
+            starting_time = time.time()
+            autostigmator_future = self.scanner.applyAutoStigmator(detector)
+            time.sleep(0.5)  # Give microscope/simulator the time to update the state
+            autostigmator_state = self.microscope.is_autostigmating(channel)
+            self.assertEqual(autostigmator_state, True)
+            self.assertIsInstance(autostigmator_future, ProgressiveFuture)
+
+            autostigmator_future.result(timeout=max_execution_time)
+
+            # Check if the time to perform the auto stigmation is not too long
+            self.assertLess(time.time() - starting_time, 30,
+                            "Execution of auto stigmation was stopped because it took more than %s seconds." %
+                            max_execution_time)
+            # Line to inspect the execution time to update the expected time
+            print("Execution time was %s seconds " % (time.time() - starting_time))
+
+        # Test if an error is raised when an invalid detector name is provided
+        with self.assertRaises(KeyError):
+            self.scanner.applyAutoStigmator("error_expected")
+        time.sleep(2.5)  # Give microscope/simulator the time to update the state
+        autostigmator_state = self.microscope.is_autostigmating(channel)
+        self.assertEqual(autostigmator_state, False)  # Check if state remained unchanged
 
 
 if __name__ == '__main__':
