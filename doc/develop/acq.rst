@@ -372,3 +372,77 @@ SPARC alignment:
 In mirror alignment mode, during background acquisition, the SEM is stopped to
 automatically activate the blanker (which will happen only if it's in the automatic setting).
 
+Optical Path Manager
+====================
+The goal of the Optical Path Manager is to the position actuators affecting the
+light path such that they are in the right configuration for a given acquisition type.
+It is found in ``acq.path.OpticalPathManager`` and is typically used as a singleton.
+The GUI takes care of instantiating it at init, and then it can be accessed via
+``MainGUIData.opm``. In practice, this is almost exclusively used on the SPARC.
+
+
+It has one important method:
+
+.. py:method:: setPath(mode, detector=None)
+
+   Sets all the necessary components of the optical path to the positions
+   required to achieve the requested mode.
+
+   :param path: The stream or the optical path mode
+   :type path: stream.Stream or str
+   :param detector:
+      When the `path` is a str, this allows defining which detector will be targeted on this path.
+      That is useful in case the mode can be used with multiple detectors (eg,
+      ``fiber-align`` on a SPARC with multiple spectrometers). When path is a
+      Stream, the ``Stream.detector`` is always used.
+   :type detector: Component or None
+   :return: a Future allowing to follow the status of the path update.
+   :rtype: Future
+   :raise: ValueError if the given mode does not exist
+           IOError if a detector is missing
+
+The list of supported `paths` (ie, optical modes) can be found in the ``acq.path`` module
+in the ``SPARC_MODES`` and ``SPARC2_MODES`` dictionaries.
+At runtime, they are limited by the microscope type and the available components.
+
+Currently, in Odemis, the Optical Path Manager is called from two places:
+
+ * In ``Stream.prepare()``. This function is in charge of preparing all the
+   microscope components prior to the stream acquisition.
+   In Odemis, it is called explicitly in some cases. It is also called implicitly,
+   every time a stream is about to start acquiring data.
+ * In the SPARC alignment tab, whenever the alignment mode is changed.
+
+In terms of implementation, for each optical mode, there are two types of actuators:
+
+ * The path selectors which, typically, are mirrors with 2 positions. The position
+   of each selector is derived from the "affects" property of all the components
+   in the microscope. The "affects" are defined in the
+   microscope file. Each "affects" point towards the next component along the optical
+   path. This forms a directed graph going from the actuators to the detectors. 
+   By traversing the graph backwards, the optical path manager
+   can find out for a given detector which selector must move, and to which position.   
+ * The acquisition type actuators which configure how the light can be seen. For
+   instance in AR mode, the lens 2 needs to be activated, while it should be removed
+   during spectrum mode.
+
+
+CCD fan control
+---------------
+As an extra function, the Optical Path Manager also takes care of disabling the
+fan of the CCDs during an SEM acquisition on the SECOM and DELPHI platforms.
+This ensures that there is no vibration during a high quality SEM image acquisition.
+To allow this feature, the manager has this extra method:
+
+.. py:method:: setAcqQuality(quality)
+
+   Updates the acquisition quality required during the following acquisitions.
+
+   :param quality: the acquisition quality
+   :type quality: ACQ_QUALITY_FAST or ACQ_QUALITY_BEST
+
+In ``ACQ_QUALITY_FAST``, the CCD fan is always on. Which ensures the camera is cooled
+down sufficiently.
+In ``ACQ_QUALITY_BEST``, before an optical acquisition, the CCD fan is turned on, and
+it is ensured that the CCD temperature is at the target. Before an SEM acquisition,
+the CCD fan is turned off, to avoid the vibrations.
