@@ -99,16 +99,18 @@ class SEM(model.HwComponent):
                 kwargs = children["mb-scanner"]
                 if "xttoolkit" in self._swVersion.lower():
                     self.xt_type = "xttoolkit"
+                    self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
                 else:
                     raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
             else:
                 kwargs = children["scanner"]
+                if "xttoolkit" in self._swVersion.lower():
+                    self.xt_type = "xttoolkit"
+                    self._scanner = XTTKScanner(parent=self, daemon=daemon, **kwargs)
+                else:
+                    self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         except (KeyError, TypeError):
             raise KeyError("SEM was not given a 'scanner' or 'mb-scanner' child")
-        if "mb-scanner" in children:
-            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
-        else:
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._scanner)
 
         # create the stage child, if requested
@@ -120,7 +122,11 @@ class SEM(model.HwComponent):
         # create a focuser, if requested
         if "focus" in children:
             ckwargs = children["focus"]
-            self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
+            if "xttoolkit" in self._swVersion.lower():
+                self.xt_type = "xttoolkit"
+                self._focus = XTTKFocus(parent=self, daemon=daemon, **ckwargs)
+            else:
+                self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
         if "detector" in children:
@@ -1373,17 +1379,6 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
 
     @isasync
-    def applyAutostigmationFlash(self):
-        """
-        Wrapper for autostigmation flash function, non-blocking.
-        """
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
-        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
-        return f
-
-    @isasync
     def applyAutoContrastBrightness(self, detector):
         """
         Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
@@ -1970,17 +1965,6 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def applyAutofocusFlash(self):
-        """
-        Wrapper for autofocus flash function, non-blocking.
-        """
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
-        f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
-        return f
-
-    @isasync
     def applyAutofocus(self, detector):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
@@ -2119,9 +2103,26 @@ class Focus(model.Actuator):
             logging.exception("Unexpected failure when updating position")
 
 
-class MultiBeamScanner(Scanner):
+class XTTKScanner(Scanner):
     """
-    This class extends  behaviour of the xt_client.Scanner class with XTtoolkit functionality.
+    This is an extension of xt_client.Scanner class. It uses the flash function for autostigmation.
+    """
+
+    @isasync
+    def applyAutostigmation(self):
+        """
+        Wrapper for autostigmation flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+        return f
+
+
+class MultiBeamScanner(XTTKScanner):
+    """
+    This class extends  behaviour of the xt_client.XTTKScanner class with XTtoolkit functionality.
     xt_client.Scanner contains Vigilant Attributes for magnification, accel voltage, blanking, spotsize, beam shift,
     rotation and dwell time. This class adds XTtoolkit functionality via the Vigilant Attributes for the delta pitch,
     beam stigmator, pattern stigmator, the beam shift transformation matrix (read-only),
@@ -2414,3 +2415,21 @@ class XTTKDetector(Detector):
             logging.exception("Failure in acquisition thread: %s", err)
         finally:
             self._generator = None
+
+
+class XTTKFocus(Focus):
+    """
+    This is an extension of xt_client.Focus class. It overwrites the autofocus function to use the one
+    provided by the flash script.
+    """
+
+    @isasync
+    def applyAutofocus(self):
+        """
+        Wrapper for autofocus flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
+        return f
