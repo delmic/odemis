@@ -2207,7 +2207,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self).__init__(name, role, parent, hfw_nomag, **kwargs)
 
     @isasync
-    def applyAutostigmator(self):
+    def applyAutoStigmator(self, detector):
         """
         Wrapper for autostigmation flash function, non-blocking.
         """
