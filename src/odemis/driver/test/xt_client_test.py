@@ -262,6 +262,36 @@ class TestMicroscope(unittest.TestCase):
         # set the value back to its initial value.
         self.scanner.external.value = init_external
 
+    def test_scale(self):
+        scale_orig = self.scanner.scale.value
+
+        # Pixel size should always be square
+        pxs = self.scanner.pixelSize.value
+        self.assertEqual(pxs[0], pxs[1])
+
+        # scale * n => res / n
+        self.scanner.scale.value = (1, 1)
+        res_1 = self.scanner.resolution.value
+        for s in self.scanner.scale.choices:
+            self.assertEqual(s[0], s[1])
+            self.scanner.scale.value = s
+            self.assertEqual(self.scanner.scale.value, s)
+            self.assertAlmostEqual(res_1[0] / s[0], self.scanner.resolution.value[0])
+            self.assertIn(self.scanner.resolution.value, self.scanner.resolution.choices)
+
+        # Check that if the server has the resolution changed, the resolution and scale VAs are updated
+        self.scanner.scale.value = (1, 1)
+        res_2 = tuple(r // 2 for r in res_1)
+        self.microscope.set_resolution(res_2)
+        time.sleep(6)  # Long enough for the settings to be updated
+        self.assertEqual(res_2, self.scanner.resolution.value)
+        self.assertEqual((2, 2), self.scanner.scale.value)
+
+        with self.assertRaises(IndexError):
+            self.scanner.scale.value = (1.123, 1.234)
+
+        self.scanner.scale.value = scale_orig
+
     def _compute_expected_duration(self):
         """Computes the expected duration of a single image acquisition."""
         dwell = self.scanner.dwellTime.value
@@ -285,43 +315,54 @@ class TestMicroscope(unittest.TestCase):
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
 
+    def _get_scale(self, res):
+        """
+        return (float, float): the scale needed to get the given resolution
+        """
+        max_res = self.scanner.shape
+        return (max_res[0] / res[0],) * 2
+
     def test_stop_acquisition(self):
         """Test stopping the acquisition of an image using the Detector."""
         init_dwell_time = self.scanner.dwellTime.value
-        init_resolution = self.scanner.resolution.value
+        init_scale = self.scanner.scale.value
         self.scanner.dwellTime.value = 25e-9  # s
         # Set resolution to a high value for a long acquisition that will be stopped.
-        self.scanner.resolution.value = (3072, 2048)  # px
+        self.scanner.scale.value = self._get_scale((3072, 2048))
+        self.assertEqual(self.scanner.resolution.value, (3072, 2048))
         self.detector.data.subscribe(self.receive_data)
         self.detector.data.unsubscribe(self.receive_data)
         # Set resolution to a low value for a quick acquisition.
-        self.scanner.resolution.value = (768, 512)  # px
+        self.scanner.scale.value = self._get_scale((768, 512))
+        self.assertEqual(self.scanner.resolution.value, (768, 512))
         im = self.detector.data.get()
         # Check that the acquired image has the last set resolution.
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
-        # Set back resolution and dwell time to initial values
+        # Set back scale/resolution and dwell time to initial values
         self.scanner.dwellTime.value = init_dwell_time
-        self.scanner.resolution.value = init_resolution
+        self.scanner.scale.value = init_scale
 
     def test_live_change(self):
         """Test changing the resolution while the acquisition is running."""
         init_dwell_time = self.scanner.dwellTime.value
-        init_resolution = self.scanner.resolution.value
+        init_scale = self.scanner.scale.value
         self.scanner.dwellTime.value = 25e-9  # s
         # Set resolution, acquire an image and check it has the correct resolution.
-        self.scanner.resolution.value = (1536, 1024)  # px
+        self.scanner.scale.value = self._get_scale((1536, 1024))
+        self.assertEqual(self.scanner.resolution.value, (1536, 1024))
         self.detector.data.subscribe(self.receive_data)
         im = self.detector.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         # Change resolution and check if the acquired image has the new resolution.
-        self.scanner.resolution.value = (768, 512)  # px
+        self.scanner.scale.value = self._get_scale((768, 512))
+        self.assertEqual(self.scanner.resolution.value, (768, 512))
         im = self.detector.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
         self.detector.data.unsubscribe(self.receive_data)
-        # Set back resolution and dwell time to initial values
+        # Set back scale/resolution and dwell time to initial values
         self.scanner.dwellTime.value = init_dwell_time
-        self.scanner.resolution.value = init_resolution
+        self.scanner.scale.value = init_scale
 
     def receive_data(self, dataflow, image):
         """Callback for dataflow of acquisition tests."""
@@ -829,17 +870,14 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertEqual(autofocus_state, False)
 
     def test_set_resolution(self):
-        """Setting the beam shift."""
-        init_resolution = self.scanner.resolution.value
-        res = (768, 512)
-        self.scanner.resolution.value = res
-        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
-        # Test it still works for different values.
-        res = (1536, 1024)
-        self.scanner.resolution.value = res
-        test.assert_tuple_almost_equal(res, self.scanner.resolution.value)
+        """Test changing the scale and resolution"""
+        init_resolution = self.microscope.get_resolution()
+        for res in self.scanner.resolution.choices:
+            self.microscope.set_resolution(res)
+            self.assertEqual(res, self.microscope.get_resolution())
+
         # set resolution back to initial value
-        self.scanner.resolution.value = init_resolution
+        self.microscope.set_resolution(init_resolution)
 
     def test_get_mpp_orientation(self):
         """

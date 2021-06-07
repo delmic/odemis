@@ -299,8 +299,11 @@ class SEMStream(LiveStream):
         res, trans = self._computeROISettings(self.roi.value)
 
         # always in this order
-        self._emitter.resolution.value = res
-        self._emitter.translation.value = trans
+        if not self._emitter.resolution.readonly:
+            self._emitter.resolution.value = res
+
+        if not self._emitter.translation.readonly:
+            self._emitter.translation.value = trans
 
     def _onROI(self, roi):
         """

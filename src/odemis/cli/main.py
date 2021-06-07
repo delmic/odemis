@@ -478,6 +478,9 @@ def set_attr(comp_name, attr_val_str):
         elif new_val == "None" and not isinstance(attr.value, basestring):
             new_val = None
             logging.debug("Adjusting value to %s (null)", new_val)
+        elif isinstance(new_val, list) and isinstance(attr.value, tuple):
+            new_val = tuple(new_val)
+            logging.debug("Adjusting value from list to tuple: %s", new_val)
 
         try:
             attr.value = new_val
