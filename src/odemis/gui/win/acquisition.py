@@ -52,6 +52,7 @@ import os.path
 import wx
 
 import odemis.gui.model as guimodel
+from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -943,7 +944,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename_tiles, zlevels=zlevels)
+                                                     log_path=self.filename_tiles, zlevels=zlevels,
+                                                     weaver=WEAVER_COLLAGE_REVERSE)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)

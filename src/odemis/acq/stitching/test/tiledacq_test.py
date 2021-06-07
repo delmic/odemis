@@ -20,22 +20,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
-import os
-import time
-import unittest
 from concurrent.futures._base import CancelledError, FINISHED
-
+import logging
 import numpy
-
 import odemis
 import odemis.acq.stream as stream
 from odemis import model
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask, acquireTiledArea
 from odemis.util import test
-from odemis.util.comp import compute_camera_fov
+from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 from odemis.util.test import assert_pos_almost_equal
+from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
+    WEAVER_MEAN
+import os
+import time
+import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -227,7 +228,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, fm_fov[0] * 4, fm_fov[1] * 4)  # left, top, right, bottom
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap, settings_obs=settings_obs)
+        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+                                  settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE)
         data = future.result()
         self.assertEqual(future._state, FINISHED)
         self.assertEqual(len(data), 2)
@@ -238,6 +240,20 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, 0.00001, 0.00001)
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap)
+        data = future.result()
+        self.assertEqual(future._state, FINISHED)
+        self.assertEqual(len(data), 1)
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data[0].shape), 2)
+
+    def test_registrar_weaver(self):
+
+        overlap = 0.05  # Little overlap, no registration
+        sem_fov = compute_scanner_fov(self.ebeam)
+        area = (0, 0, sem_fov[0], sem_fov[1])
+        self.stage.moveAbs({'x': 0, 'y': 0}).result()
+        future = acquireTiledArea(self.sem_streams, self.stage, area=area,
+                                  overlap=overlap, registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN)
         data = future.result()
         self.assertEqual(future._state, FINISHED)
         self.assertEqual(len(data), 1)
