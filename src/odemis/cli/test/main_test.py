@@ -164,6 +164,22 @@ class TestWithBackend(unittest.TestCase):
         self.assertTrue(b"Light Engine" in output)
         self.assertTrue(b"Camera" in output)
 
+    def test_list_no_dash(self):
+        try:
+            # change the stdout
+            out = BytesIO()
+            sys.stdout = out
+
+            cmdline = "cli --log-level 1 list"
+            ret = main.main(cmdline.split())
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        output = out.getvalue()
+        self.assertTrue(b"Light Engine" in output)
+        self.assertTrue(b"Camera" in output)
+
     def test_check(self):
         try:
             cmdline = "cli --check"
