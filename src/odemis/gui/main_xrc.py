@@ -6595,6 +6595,7 @@ def __init_resources():
 									  <object class="sizeritem">
 										<object class="ImageTextButton" name="btn_create_move_feature">
 										  <height>24</height>
+										    <bg>#000000</bg>
 										  <label>Create/Move</label>
 										  <style>wxALIGN_CENTRE</style>
 										</object>
@@ -6616,7 +6617,7 @@ def __init_resources():
 										</object>
 										<object class="sizeritem">
 												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
-												  <size>-1,16</size>
+												  <size>110,16</size>
 												  <fg>#2FA7D4</fg>
 												  <bg>#4D4D4D</bg>
 												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
@@ -6629,12 +6630,13 @@ def __init_resources():
 												  <height>24</height>
 												  <label>Go to feature</label>
 												  <style>wxALIGN_CENTRE</style>
+												    <bg>#000000</bg>
 												  <XRCED>
 													<assign_var>1</assign_var>
 												  </XRCED>
 												</object>
 												<flag>wxLEFT</flag>
-												<border>70</border>
+												<border>65</border>
 											</object>
 									<orient>wxHORIZONTAL</orient>
 								</object>
@@ -6654,7 +6656,7 @@ def __init_resources():
 												<size>-1,20</size>
 												<accuracy>4</accuracy>
 												<key_step>0.001</key_step>
-												
+												  <bg>#000000</bg>
 												<scale>linear</scale>
 												<accuracy>2</accuracy>
 											</object>
@@ -6664,6 +6666,7 @@ def __init_resources():
 										 <object class="sizeritem">
 											<object class="ImageTextButton" name="btn_use_current_z">
 											  <height>24</height>
+											    <bg>#000000</bg>
 											  <label>Use Current Z</label>
 											  <style>wxALIGN_CENTRE</style>
 											</object>

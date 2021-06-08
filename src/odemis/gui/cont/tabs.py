@@ -2092,12 +2092,11 @@ class CryoChamberTab(Tab):
              }), ])
 
         self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
-        self.btn_change_folder = self._tab_panel.btn_change_folder
+        self.btn_change_folder = self.panel.btn_change_folder
         self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
-        self.txt_projectpath = self._tab_panel.txt_projectpath
+        self.txt_projectpath = self.panel.txt_projectpath
 
         # Create new project directory on starting the GUI
         self._create_new_dir()
@@ -2227,7 +2226,7 @@ class CryoChamberTab(Tab):
         # Generate suggestion for the new project name to show it on the file dialog
         root_dir = os.path.dirname(self.conf.pj_last_path)
         np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
-        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        new_dir = ShowChamberFileDialog(self.panel, np)
         if new_dir is None: # Cancelled
             return
 

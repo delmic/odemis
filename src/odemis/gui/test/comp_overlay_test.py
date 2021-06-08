@@ -459,11 +459,11 @@ class OverlayTestCase(test.GuiTestCase):
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         buffer_clear = wxImage2NDImage(img)
 
-        cryofeature_overlay = wol.CryoFeatureOverlay(cnvs, tab_mod._features_va, tab_mod.tool)
+        cryofeature_overlay = wol.CryoFeatureOverlay(cnvs, tab_mod.features, tab_mod.currentFeature, tab_mod.tool)
         cnvs.add_world_overlay(cryofeature_overlay)
         cryofeature_overlay.active.value = True
 
-        # Add _features_va to the tab's _features_va list
+        # Add features to the tab's features list
         tab_mod.add_new_feature(0, 0)
         tab_mod.add_new_feature(0.001, 0.001)
 
