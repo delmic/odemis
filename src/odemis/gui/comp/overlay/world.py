@@ -28,6 +28,7 @@ import cairo
 import logging
 import math
 from odemis import model, util
+from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
@@ -135,9 +136,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
         # TODO: Find a better icon
-        self._feature_icon = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_icon.png').name)
-        self._icon_w_adjust = self._feature_icon.get_width() / 2
-        self._icon_h_adjust = self._feature_icon.get_height() / 2
+        self._feature_icon_active = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_active.png').name)
+        self._feature_icon_current = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_current.png').name)
+        self._feature_icon_milled = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_milled.png').name)
+        self._feature_icon_discarded = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_discarded.png').name)
+        self._icon_w_adjust = self._feature_icon_active.get_width() / 2
+        self._icon_h_adjust = self._feature_icon_active.get_height() / 2
 
         if features_va:
             self._features_va = features_va
@@ -278,7 +282,20 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             # convert physical position to buffer 'world' coordinates
             bpos = self.cnvs.phys_to_buffer_pos((pos[0], pos[1]), self.cnvs.p_buffer_center, self.cnvs.scale,
                                                 offset=half_size_offset)
-            ctx.set_source_surface(self._feature_icon, bpos[0] - self._icon_w_adjust, bpos[1] - self._icon_h_adjust)
+
+            def set_icon(feature_icon):
+                ctx.set_source_surface(feature_icon, bpos[0] - self._icon_w_adjust, bpos[1] - self._icon_h_adjust)
+
+            # Show proper feature icon based on selected feature + status
+            if feature == self._current_feature_va.value:
+                set_icon(self._feature_icon_current)
+            elif feature.status.value == FEATURE_ACTIVE:
+                set_icon(self._feature_icon_active)
+            elif feature.status.value == FEATURE_MILLED:
+                set_icon(self._feature_icon_milled)
+            elif feature.status.value == FEATURE_DEACTIVE:
+                set_icon(self._feature_icon_discarded)
+
             ctx.paint()
 
             if feature == self._hover_feature:
