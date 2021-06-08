@@ -786,7 +786,6 @@ class Scanner(model.Emitter):
         return self.parent.GetAccelerationVoltage()
 
     def _onHorizontalFoV(self, fov):
-        self._setHorizontalFoV(fov)
         self._updateDepthOfField()
 
     def _updateDepthOfField(self):
