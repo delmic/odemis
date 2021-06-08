@@ -256,8 +256,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _on_tool(self, tool_mode):
         """ Set the right mode and active overlays when a tool is selected """
 
-        if not self.allowed_modes:
-            return
         # A weird situation which should not happen
         if self.dragging:
             logging.error("Changing to mode (%s) while dragging is not supported!", tool_mode)
