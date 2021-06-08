@@ -30,12 +30,3 @@ class CryoFeature(object):
         # TODO: Get the existing feature status
         self.status = model.StringVA(FEATURE_ACTIVE, )
         self.streams = streams if streams is not None else model.ListVA()
-
-
-def new_feature_name(length):
-    """
-    Create new feature name based on the feature list length
-    :param length: current len() of feature list
-    :return: (string) feature new name
-    """
-    return f"Feature {length + 1}"

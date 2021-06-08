@@ -30,9 +30,9 @@ import collections
 import logging
 import math
 
-from odemis.acq.feature import CryoFeature, new_feature_name
+from odemis.acq.feature import CryoFeature
 from odemis.gui import conf
-from odemis.util.filename import create_filename
+from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
 from odemis.acq import path, acqmng, fastem
 import odemis.acq.stream as acqstream
@@ -343,6 +343,9 @@ class MainGUIData(object):
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
 
+            if "cryo" in microscope.role:
+                self.features = model.ListVA()
+                self.currentFeature = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
             self.settings_obs = acqmng.SettingsObserver(comps_with_role)
@@ -602,30 +605,9 @@ class LiveViewGUIData(MicroscopyGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
-
-class FeaturesListVA(model.ListVA):
-    """
-    A singleton class to share the feature list on all cryo tabs
-    """
-    __instance = None
-
-    def __init__(self, value=None, *args, **kwargs):
-        # Copy already connected listeners as it will be emptied on VA init
-        listeners = set()
-        if hasattr(self, "_listeners"):
-            listeners = self._listeners
-        model.ListVA.__init__(self, value, *args, **kwargs)
-        self._listeners = listeners
-
-    def __new__(cls):
-        if FeaturesListVA.__instance is None:
-            FeaturesListVA.__instance = object.__new__(cls)
-        return FeaturesListVA.__instance
-
 class CryoGUIData(MicroscopyGUIData):
     """
     Represents an interface for handling cryo microscopes.
-    It's meant to be subclassed from the cryo tabs, to share data between all the tabs (like features)
     """
     def __init__(self, main):
         if "cryo" not in main.role:
@@ -633,17 +615,17 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a cryo microscope role but found it to be %s." % main.role)
         MicroscopyGUIData.__init__(self, main)
         # List VA contains all the CryoFeatures (for the current project).
-        self.features = FeaturesListVA()
+        self.features = main.features
         # VA for the currently selected feature
-        # TODO: Make it also a singleton
-        self.currentFeature = model.VigilantAttribute(None)
+        self.currentFeature = main.currentFeature
 
     def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=None):
         """
         Create a new feature and add it to the features list
         """
         if not f_name:
-            f_name = new_feature_name(len(self.features.value))
+            existing_names = [f.name.value for f in self.features.value]
+            f_name = make_unique_name("Feature-1", existing_names)
         if not pos_z:
             pos_z = self.main.focus.position.value['z']
         if not milling_angle:
