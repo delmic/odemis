@@ -3241,7 +3241,7 @@ class FastEMROAController(object):
         """
         logging.debug("Creating panel for ROA %s.", self.model.name.value)
         self.panel = FastEMROAPanel(self._project_panel, self.model.name.value,
-                                    ["Calibration %s" % c for c in self._tab_data.scintillator_positions])
+                                    ["Calibration %s" % c for c in sorted(self._tab_data.scintillator_positions)])
         self._project_panel.add_roa_panel(self.panel)
 
         self.panel.calibration_ctrl.Bind(wx.EVT_COMBOBOX, self._on_combobox)

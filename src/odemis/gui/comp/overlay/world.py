@@ -2938,8 +2938,8 @@ class FastEMBackgroundOverlay(WorldOverlay):
         """ Draw the background image by displaying all rectangles in grey. """
         for r in self.rectangles:
             offset = self.cnvs.get_half_buffer_size()
-            b_start_pos = self.cnvs.phys_to_buffer((r[0], r[2]), offset)
-            b_end_pos = self.cnvs.phys_to_buffer((r[1], r[3]), offset)
+            b_start_pos = self.cnvs.phys_to_buffer((r[0], r[1]), offset)
+            b_end_pos = self.cnvs.phys_to_buffer((r[2], r[3]), offset)
             rect = (b_start_pos[0],
                     b_start_pos[1],
                     b_end_pos[0] - b_start_pos[0],

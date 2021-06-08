@@ -1050,26 +1050,25 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
     """
     # Parameters of the scintillators according to the technical drawing of the sample carrier
     # (positions are given relative to top left of sample carrier)
-    # Scintillator arrangement on the sample carrier (9 is top left, 1 is bottom right):
-    # 9 8 7
-    # 6 5 4
-    # 3 2 1
+    # Scintillator arrangement on the sample carrier:
+    # 3 6 9
+    # 2 5 8
+    # 1 4 7
     # The format looks like YAML, because eventually it should be possible to pass it in the microscope (YAML) file.
     SAMPLE_CARRIER_3x3 = {
         "dims": (120e-3, 120e-3),  # m
-        "layout": [[9, 8, 7],
-                   [6, 5, 4],
-                   [3, 2, 1]],  # grid positions of scintillators
+        "layout": [[3, 6, 9],
+                   [2, 5, 8],
+                   [1, 4, 7]],  # grid positions of scintillators
         "scintillator_offsets": {
-            1: (78e-3, -78e-3), 2: (60e-3, -78e-3), 3: (42e-3, -78e-3),
-            4: (78e-3, -60e-3), 5: (60e-3, -60e-3), 6: (42e-3, -60e-3),
-            7: (78e-3, -42e-3), 8: (60e-3, -42e-3), 9: (42e-3, -42e-3),
-        },  # center position of the scintillators relative to top left of sample carrier
+            1: (42e-3, 42e-3), 4: (60e-3, 42e-3), 7: (78e-3, 42e-3),
+            2: (42e-3, 60e-3), 5: (60e-3, 60e-3), 8: (78e-3, 60e-3),
+            3: (42e-3, 78e-3), 6: (60e-3, 78e-3), 9: (78e-3, 78e-3),
+        },  # center position of the scintillators relative to bottom left (physical coordinates) of sample carrier
         "scintillator_size": (14e-3, 14e-3),
-        "background": [(0, 120e-3, 0, -35e-3), (0, 120e-3, -49e-3, -53e-3), (0, 120e-3, -67e-3, -71e-3),
-                       (0, 120e-3, -85e-3, -120e-3),
-                       (0, 35e-3, 0, -120e-3), (49e-3, 53e-3, 0, -120e-3), (67e-3, 71e-3, 0, -120e-3),
-                       (85e-3, 120e-3, 0, -120e-3)]  # ltrb positions of rectangles for background, from top left
+        "background": [(0, 0, 35e-3, 120e-3), (49e-3, 0, 53e-3, 120e-3), (67e-3, 0, 71e-3, 120e-3), (85e-3, 0, 120e-3, 120e-3),
+                       (0, 0, 120e-3, 35e-3), (0, 49e-3, 120e-3, 53e-3), (0, 67e-3, 120e-3, 71e-3), (0, 85e-3, 120e-3, 120e-3)]
+                       # minx, miny, maxx, maxy positions of rectangles for background, from bottom left
     }
 
     def __init__(self, main):
@@ -1084,7 +1083,7 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         if model.MD_POS_ACTIVE_RANGE not in md:
             raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
-        tlx, tly = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
+        minx, miny = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
 
         # TODO: in the future, there could be an additional argument in the configuration file to specify
         #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
@@ -1107,13 +1106,11 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.scintillator_size = carrier_params["scintillator_size"]
         self.scintillator_positions = {}  # dict: 1 <= int <= 9 --> (float, float)
         for num, offset in carrier_params["scintillator_offsets"].items():
-            offset_x = carrier_params["scintillator_offsets"][num][0]
-            offset_y = carrier_params["scintillator_offsets"][num][1]
-            self.scintillator_positions[num] = (tlx + offset_x, tly + offset_y)
+            self.scintillator_positions[num] = (minx + offset[0], miny + offset[1])
         self.scintillator_layout = carrier_params["layout"]
         self.background = []
         for rect in carrier_params["background"]:
-            self.background.append((tlx + rect[0], tlx + rect[1], tly + rect[2], tly + rect[3]))
+            self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
 
 
 class FastEMProject(object):
