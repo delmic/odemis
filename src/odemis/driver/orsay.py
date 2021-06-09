@@ -55,6 +55,12 @@ STR_CLOSED = "CLOSED"
 STR_PARK = "PARK"
 STR_WORK = "WORK"
 
+HEATER_ON = "ON"
+HEATER_OFF = "OFF"
+HEATER_RISING = "UP"
+HEATER_FALLING = "DOWN"
+HEATER_ERROR = "EOFF"
+
 NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
 INTERLOCK_DETECTED_STR = "Interlock event detected"
@@ -183,6 +189,15 @@ class OrsayComponent(model.HwComponent):
 
         # create the FIB beam child
         try:
+            kwargs = children["fib-beam"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'fib-beam' child")
+        else:
+            self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_beam)
+
+        # create the FIB beam child
+        try:
             kwargs = children["scanner"]
         except (KeyError, TypeError):
             logging.info("Orsay was not given a 'scanner' child")
@@ -227,7 +242,10 @@ class OrsayComponent(model.HwComponent):
                         time.sleep(1)
                         self.on_connect()
                         for child in self.children.value:
-                            child.on_connect()
+                            try:
+                                child.on_connect()
+                            except AttributeError:  # if the child does not have an on_connect() method
+                                pass  # no need to do anything
                         self.state._set_value(model.ST_RUNNING, force_write=True)
                     except Exception:
                         logging.exception("Trying to reconnect to Orsay server.")
@@ -235,7 +253,10 @@ class OrsayComponent(model.HwComponent):
                     try:
                         self.update_VAs()
                         for child in self.children.value:
-                            child.update_VAs()
+                            try:
+                                child.update_VAs()
+                            except AttributeError:  # if the child does not have an update_VAs() method
+                                pass  # no need to do anything
                     except Exception:
                         logging.exception("Failure while updating VAs.")
                 self._stop_connection_monitor.wait(5)
@@ -1771,6 +1792,41 @@ class FIBDevice(model.HwComponent):
             logging.debug("Attempting to reset interlocks.")
         return False
 
+    def _updateValveOpen(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads if the valve between the FIB column and analysis chamber is open from the Orsay server and saves it in
+        the valveOpen VA
+        """
+        if parameter is None:
+            parameter = self._valve.IsOpen
+        if parameter is not self._valve.IsOpen:
+            raise ValueError("Incorrect parameter passed to _updateValveOpen. Parameter should be "
+                             "datamodel.HybridValveFIB.IsOpen. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        valve_state = int(parameter.Actual)
+        logging.debug("FIB valve state is: %s." % valve_state)
+        if valve_state in (VALVE_OPEN, VALVE_CLOSED):  # alternative values: VALVE_UNDEF, VALVE_ERROR, VALVE_TRANSIT
+            new_value = valve_state == VALVE_OPEN
+            self.valveOpen._value = new_value  # to not call the setter
+            self.valveOpen.notify(new_value)
+
+    def _changeValveOpen(self, goal):
+        """
+        goal (bool): goal position of the valve: (True: "open", False: "closed")
+        return (bool): goal position of the gate as set to the server: (True: "open", False: "closed")
+
+        Opens the valve between the FIB column and analysis chamber on the Orsay server if argument goal is True.
+        Closes it otherwise.
+        """
+        logging.debug("Setting FIB valve to %s." % ("open" if goal else "closed"))
+        self._valve.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
+        return self._valve.IsOpen.Target == VALVE_OPEN
+
     def terminate(self):
         """
         Called when Odemis is closed
@@ -1806,8 +1862,8 @@ class FIBSource(model.HwComponent):
         • currentRegulation: BooleanVA, should generally be False, since sourceCurrent's Target cannot be set
         • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is True)
         • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
-        • heatingCurrent: FloatContinuous, unit="A", range=(0, 5)
-        • heaterState: IntContinuous, range=(0, 10)  TODO: presumably this is not an int at all. What is this?
+        • heaterCurrent: FloatContinuous, unit="A", range=(0, 5)
+        • heater: BooleanVA
         • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
         • energyLink: BooleanVA
         • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
@@ -1828,10 +1884,9 @@ class FIBSource(model.HwComponent):
         self.sourceCurrentConnector = None
         self.suppressorVoltage = model.FloatContinuous(0, unit="V", range=(-2e3, 2e3))
         self.suppressorVoltageConnector = None
-        self.heatingCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
-        self.heatingCurrentConnector = None
-        # self.heaterState = model.IntContinuous(0, range=(0, 10))
-        # self.heaterStateConnector = None
+        self.heaterCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
+        self.heaterCurrentConnector = None
+        self.heater = model.BooleanVA(False, setter=self._changeHeater)
         self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
         self.acceleratorVoltageConnector = None
         self.energyLink = model.BooleanVA(False)
@@ -1852,6 +1907,9 @@ class FIBSource(model.HwComponent):
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._ionColumn = self.parent.datamodel.IonColumnMCS
 
+        self._hvps.HeaterState.Subscribe(self._updateHeater)
+        self._hvps.HeaterState.Subscribe(self._updateErrorState)
+
         self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
                                                       conversion={True: "ON", False: "OFF"})
         self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
@@ -1859,8 +1917,7 @@ class FIBSource(model.HwComponent):
                                                                   self._hvps.BeamCurrent_Enabled)
         self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
         self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
-        self.heatingCurrentConnector = OrsayParameterConnector(self.heatingCurrent, self._hvps.Heater)
-        # self.heaterStateConnector = OrsayParameterConnector(self.heaterState, self._hvps.HeaterState)
+        self.heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater)
         self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
         self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
                                                            conversion={True: "ON", False: "OFF"})
@@ -1877,8 +1934,69 @@ class FIBSource(model.HwComponent):
         """
         Update the VA's. Should be called after reconnection to the server
         """
+        self._updateHeater()
+        self._updateErrorState()
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
+
+    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the error state from the Orsay server and saves it in the state VA
+        """
+        if parameter is not None and not parameter == self._hvps.HeaterState:
+            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or the"
+                             "HVPSFloatingIon.HeaterState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+
+        eState = ""
+
+        heater_state = self._hvps.HeaterState.Actual
+        if heater_state == HEATER_ERROR:  # in case of heater error
+            eState += "FIB source forced to shut down"
+
+        if eState == "":
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        else:
+            self.state._set_value(HwError(eState), force_write=True)
+
+    def _updateHeater(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA
+        """
+        if parameter is None:
+            parameter = self._hvps.HeaterState
+        if parameter is not self._hvps.HeaterState:
+            raise ValueError("Incorrect parameter passed to _updateHeater. Parameter should be "
+                             "datamodel.HVPSFloatingIon.HeaterState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        heater_state = self._hvps.HeaterState.Actual
+        new_value = False
+        logging.debug("FIB source heater state is: %s." % heater_state)
+        if heater_state in (HEATER_ON, HEATER_RISING, HEATER_FALLING):  # alternative values: HEATER_OFF, HEATER_ERROR
+            new_value = True
+        self.heater._value = new_value  # to not call the setter
+        self.heater.notify(new_value)
+
+    def _changeHeater(self, goal):
+        """
+        goal (bool): goal state of the heater: (True: "ON", False: "OFF")
+        return (bool): goal state of the heater as set to the server: (True: "ON", False: "OFF")
+
+        Turns on the FIB source heater on the Orsay server if argument goal is True. Turns it off otherwise.
+        """
+        logging.debug("Setting FIB source heater to %s." % (HEATER_ON if goal else HEATER_OFF))
+        self._hvps.HeaterState.Target = HEATER_ON if goal else HEATER_OFF
+        return self._hvps.HeaterState.Target == HEATER_ON
 
     def terminate(self):
         """
@@ -1892,23 +2010,14 @@ class FIBSource(model.HwComponent):
             self._ionColumn = None
 
 
-class Scanner(model.Emitter):
+class FIBBeam(model.HwComponent):
     """
-    Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics.
-    This is an extension of the model.Emitter class. It contains Vigilant
-    Attributes and setters for magnification, pixel size, translation, resolution,
-    scale, rotation and dwell time. Whenever one of these attributes is changed,
-    its setter also updates another value if needed e.g. when scale is changed,
-    resolution is updated, when resolution is changed, the translation is recentered
-    etc. Similarly it subscribes to the VAs of scale and magnification in order
-    to update the pixel size.
-    It also contains many beam optics settings.
+    Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics. It contains many beam optics settings.
     """
 
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • power: IntEnumerated, choices={0: "off", 1: "on"}
         • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
         • blankerVoltage: FloatContinuous, unit="V", range=(0, 145)
         • condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
@@ -1925,19 +2034,18 @@ class Scanner(model.Emitter):
         • imageFromSteerers: BooleanVA True to image from Steerers, False to image from Octopoles
         • objectiveVoltage: IntContinuous, unit="V", range=(0, 2e4)
         • beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
-        • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)  TODO: find a more realistic maximum (Client can go to 0.35m on Source current of 1V)
-        • FaradayCurrent: FloatContinuous, readonly, unit="A", range=(???, ???) TODO: implement
+        • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
+        • measuringCurrent: BooleanVA
+        • current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
         """
 
-        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
 
         self._ionColumn = None
         self._hvps = None
 
         self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
         self.blankerConnector = None
-        self.power = model.IntEnumerated(0, choices={0: "off", 1: "on"}, setter=self._power_setter)
-        self.blanker.subscribe(self._blanker_to_power)
         self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 145))
         self.blankerVoltageConnector = None
         self.condenserVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 3e4))
@@ -1970,6 +2078,10 @@ class Scanner(model.Emitter):
         self.beamShiftConnector = None
         self.horizontalFOV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
         self.horizontalFOVConnector = None
+        self.measuringCurrent = model.BooleanVA(False)
+        self.measuringCurrentConnector = None
+        self.current = model.FloatContinuous(0.0, readonly=True, unit="A", range=(0.0, 1.0e-5))
+        self.currentConnector = None
 
         self._connectorList = []
 
@@ -2017,6 +2129,9 @@ class Scanner(model.Emitter):
         self.beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
                                                                            self._ionColumn.ObjectiveShiftY])
         self.horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize)
+        self.measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
+                                                                 conversion={True: 1, False: 0})
+        self.currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -2032,13 +2147,72 @@ class Scanner(model.Emitter):
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
 
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        if self._ionColumn is not None:
+            for obj_name in self._connectorList:
+                getattr(self, obj_name).disconnect()
+            self._connectorList = []
+            self._ionColumn = None
+            self._hvps = None
+
+
+class Scanner(model.Emitter):
+    """
+    Represents the Focused Ion Beam (FIB) from Orsay Physics.
+    This is an extension of the model.Emitter class. It contains Vigilant
+    Attributes and setters for magnification, pixel size, translation, resolution,
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
+    to update the pixel size.
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • power: IntEnumerated, choices={0: "off", 1: "on"}
+        • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
+        """
+
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        self.fibbeam = self.parent._fib_beam  # reference to the FIBBeam object
+
+        self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"},
+                                          setter=self._blanker_setter)
+        self.fibbeam.blanker.subscribe(self._set_blanker)
+        self.power = model.IntEnumerated(0, choices={0: "off", 1: "on"}, setter=self._power_setter)
+        self.blanker.subscribe(self._blanker_to_power)
+
+    def _blanker_setter(self, value):
+        """
+        Setter of the blanker VA. Copies the value to the FIBBeam component
+        """
+        logging.debug("Blanker got set to %s." % str(value))
+        self.fibbeam.blanker.value = value
+        return value
+
+    def _set_blanker(self, value):
+        """
+        Sets the blanker VA to value
+        """
+        logging.debug("Setting blanker to %s." % str(value))
+        self.blanker._value = value  # to not call the setter
+        self.blanker.notify(value)
+        return value
+
     def _power_setter(self, value):
         """
         Setter of the power VA. Sets the blanker VA to the corresponding value
         """
-        new_value = (not value)
-        logging.debug("Power set to %d, setting blanker to %s." % (value, str(new_value)))
-        self.blanker.value = new_value
+        blanker_value = (not value)
+        logging.debug("Power set to %d, setting blanker to %s." % (value, str(blanker_value)))
+        self.blanker.value = blanker_value
+        return value
 
     def _blanker_to_power(self, value):
         """
@@ -2055,9 +2229,4 @@ class Scanner(model.Emitter):
         """
         Called when Odemis is closed
         """
-        if self._ionColumn is not None:
-            for obj_name in self._connectorList:
-                getattr(self, obj_name).disconnect()
-            self._connectorList = []
-            self._ionColumn = None
-            self._hvps = None
+        pass
