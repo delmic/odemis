@@ -1392,11 +1392,26 @@ class OrsayParameterConnector:
         if len(self._parameters) > 1 and not self._va_is_tuple:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
 
-        # if not self._va_is_tuple:
-        #     p = self._parameters[0]
-        #     lowerbound = p.Min
-        #     upperbound = p.Max
-        #     self._va.range((lowerbound, upperbound))
+        if hasattr(self._va, "range"):
+            if self._va_is_tuple:
+                new_range = [list(self._va.range[0]), list(self._va.range[1])]
+            else:
+                new_range = [[self._va.range[0]], [self._va.range[1]]]
+            for i in range(len(self._parameters)):
+                p = self._parameters[i]
+                lowerbound = p.Min
+                if lowerbound is not None:  # if a lowerbound is defined in the server
+                    new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
+                upperbound = p.Max
+                if upperbound is not None:  # if an upperbound is defined in the server
+                    new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
+            if len(new_range[0]) == 1:
+                new_range = (new_range[0][0], new_range[1][0])
+            else:
+                new_range = (tuple(new_range[0]), tuple(new_range[1]))
+            self._va._value = new_range[0]
+            self._va.range = new_range
+            self._va.notify(new_range[0])
 
         for p in self._parameters:
             p.Subscribe(self.update_VA)

@@ -23,8 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import os
 import unittest
-# import typing
 
+from math import pi
 from time import sleep
 from odemis.driver import orsay
 from odemis.model import HwError
@@ -1289,6 +1289,35 @@ class TestOrsayParameterConnector(unittest.TestCase):
                                                   self.datamodel.HybridIonPumpGunFIB.Pressure)
         with self.assertRaises(model.NotSettableError):  # Value is read-only
             connector._update_parameter(1.0)
+
+    def test_parameter_update(self):
+        va = model.FloatVA(0.0)
+        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        test_value = 1.0
+        va.value = test_value
+        sleep(1)
+        self.assertEqual(test_value, float(self.datamodel.IonColumnMCS.ObjectivePhi.Actual))
+
+    def test_va_update(self):
+        va = model.FloatVA(0.0)
+        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        test_value = 1.0
+        self.datamodel.IonColumnMCS.ObjectivePhi.Target = test_value
+        sleep(1)
+        self.assertEqual(test_value, va.value)
+
+    def test_range(self):
+        va = model.FloatContinuous(0.0, range=(-1, 1))
+        test_max = pi
+        test_min = -pi
+        self.datamodel.IonColumnMCS.ObjectivePhi.Max = test_max
+        self.datamodel.IonColumnMCS.ObjectivePhi.Min = test_min
+        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        sleep(1)
+        self.assertEqual(va.range[0], test_min)
+        self.assertEqual(va.range[1], test_max)
+
+
 
 
 class TestFIBDevice(unittest.TestCase):
