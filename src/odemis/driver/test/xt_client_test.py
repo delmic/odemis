@@ -512,21 +512,6 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertFalse(self.microscope.is_autofocusing("electron1"))
         self.microscope.set_beam_power(False)
 
-    @unittest.skip("Autostigmation not working. And: Before running this test "
-                   "make sure it is safe to turn on the beam.")
-    def test_autostigmator(self):
-        """Test running and stopping autostigmator."""
-        if self.xt_type != 'xttoolkit':
-            self.skipTest("This test needs XTToolkit to run.")
-        self.microscope.set_beam_power(True)
-        self.microscope.unblank_beam()
-        self.microscope.set_scan_mode("full_frame")
-        self.microscope.set_autostigmator("electron1", "run")
-        self.assertTrue(self.microscope.is_autostigmating("electron1"))
-        self.microscope.set_autostigmator("electron1", "stop")
-        self.assertFalse(self.microscope.is_autostigmating("electron1"))
-        self.microscope.set_beam_power(False)
-
     @unittest.skip("Before running this test make sure it is safe to turn on the beam.")
     def test_auto_contrast_brightness(self):
         """Test running and stopping auto contrast brightness."""
@@ -1126,45 +1111,9 @@ class TestMBScanner(unittest.TestCase):
         """
         Test for the auto stigmation functionality.
         """
-        detector = 'se-detector'  # autostigmator only works for the se-detector with channel=electron1
-        channel = DETECTOR2CHANNELNAME[detector]
-
-        # Run autostigmator flash script
-        autostigmator_future = self.scanner.applyAutoStigmator(detector)
-        # Don't check .is_autostigmating, function uses the same lock as .applyAutoStigmator, so it's only
-        # ever called after the autoStigmator function finished. TODO: is that intended?
+        autostigmator_future = self.scanner.applyAutoStigmator()
         self.assertIsInstance(autostigmator_future, ProgressiveFuture)
         autostigmator_future.result()
-        autostigmator_state = self.microscope.is_autostigmating(channel)
-        self.assertEqual(autostigmator_state, False)
-
-        # TODO: Commented out, because cancelling is not an option for now.
-        # # Stop auto stigmation and check if it stopped running.
-        # autostigmator_future.cancel()
-        # time.sleep(5.0)  # Give microscope/simulator the time to update the state
-        # autostigmator_state = self.microscope.is_autostigmating(channel)
-        # self.assertEqual(autostigmator_state, False)
-
-        max_execution_time = 30  # Approximately 3 times the normal expected execution time (s)
-        for i in range(0, 5):
-            starting_time = time.time()
-            autostigmator_future = self.scanner.applyAutoStigmator(detector)
-            self.assertIsInstance(autostigmator_future, ProgressiveFuture)
-            autostigmator_future.result(timeout=max_execution_time)
-
-            # Check if the time to perform the auto stigmation is not too long
-            self.assertLess(time.time() - starting_time, 30,
-                            "Execution of auto stigmation was stopped because it took more than %s seconds." %
-                            max_execution_time)
-            # Line to inspect the execution time to update the expected time
-            print("Execution time was %s seconds " % (time.time() - starting_time))
-
-        # TODO: flash script doesn't care about the channel at the moment
-        # Test if an error is raised when an invalid detector name is provided
-        # with self.assertRaises(KeyError):
-        #     self.scanner.applyAutoStigmator("error_expected")
-        autostigmator_state = self.microscope.is_autostigmating(channel)
-        self.assertEqual(autostigmator_state, False)  # Check if state remained unchanged
 
 
 if __name__ == '__main__':

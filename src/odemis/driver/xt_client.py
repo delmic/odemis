@@ -694,34 +694,6 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_beam_is_on()
 
-    def is_autostigmating(self, channel_name):
-        """
-        Parameters
-        ----------
-            channel_name (str): Holds the channels name on which the state is checked.
-
-        Returns True if autostigmator is running and False if autostigmator is not running.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.is_autostigmating(channel_name)
-
-    def set_autostigmator(self, channel_name, state):
-        """
-        Set the state of autostigmator, beam must be turned on. This is non-blocking.
-
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the electron channels, the channel must be running.
-        state: XT_RUN or XT_STOP
-            State is start, starts the autostigmator. States cancel and stop both stop the autostigmator, some
-            microscopes might need stop, while others need cancel.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.set_autostigmator(channel_name, state)
-
     def get_delta_pitch(self):
         """
         Get the delta pitch. The pitch is the distance between two neighboring beams within the multiprobe pattern
@@ -1432,62 +1404,6 @@ class Scanner(model.Emitter):
             except OSError as error_msg:
                 logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
                 return False
-
-    # TODO Commented out code because it is currently not supported by XT. An update or another implementation may be
-    # made later
-
-    # @isasync
-    # def applyAutoStigmator(self, detector):
-    #     """
-    #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-    #     the beam must be turned on and unblanked. This call is non-blocking.
-    #
-    #     :param detector (str): Role of the detector.
-    #     :return: Future object
-    #     """
-    #     # Create ProgressiveFuture and update its state
-    #     est_start = time.time() + 0.1
-    #     f = ProgressiveFuture(start=est_start,
-    #                           end=est_start + 8)  # rough time estimation
-    #     f._auto_stigmator_lock = threading.Lock()
-    #     f._must_stop = threading.Event()  # cancel of the current future requested
-    #     f.task_canceller = self._cancelAutoStigmator
-    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
-    #         # Auto stigmation is only supported on channel electron1, not on the other channels
-    #         raise KeyError("This detector is not supported for auto stigmation")
-    #     f.c = DETECTOR2CHANNELNAME[detector]
-    #     return self._executor.submitf(f, self._applyAutoStigmator, f)
-    #
-    # def _applyAutoStigmator(self, future):
-    #     """
-    #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
-    #     :param future (Future): the future to start running.
-    #     """
-    #     channel_name = future._channel_name
-    #     with future._auto_stigmator_lock:
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #         self.parent.set_autostigmator(channel_name, XT_RUN)
-    #         time.sleep(0.5)  # Wait for the auto stigmator to start
-    #
-    #     # Wait until the microscope is no longer applying auto stigmator
-    #     while self.parent.is_autostigmating(channel_name):
-    #         future._must_stop.wait(0.1)
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #
-    # def _cancelAutoStigmator(self, future):
-    #     """
-    #     Cancels the auto stigmator. Non-blocking.
-    #     :param future (Future): the future to stop.
-    #     :return (bool): True if it successfully cancelled (stopped) the move.
-    #     """
-    #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
-    #
-    #     with future._auto_stigmator_lock:
-    #         logging.debug("Cancelling auto stigmator")
-    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
-    #         return True
 
 
 class Detector(model.Detector):
@@ -2207,7 +2123,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self).__init__(name, role, parent, hfw_nomag, **kwargs)
 
     @isasync
-    def applyAutoStigmator(self, detector):
+    def applyAutoStigmator(self):
         """
         Wrapper for autostigmation flash function, non-blocking.
         """
@@ -2416,7 +2332,7 @@ class XTTKFocus(Focus):
     """
 
     @isasync
-    def applyAutofocus(self):
+    def applyAutofocus(self, detector):
         """
         Wrapper for autofocus flash function, non-blocking.
         """
