@@ -170,19 +170,16 @@ class TestMicroscope(unittest.TestCase):
         orig_fov = ebeam.horizontalFoV.value
 
         ebeam.horizontalFoV.value = orig_fov / 2
-        # time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_mag * 2, ebeam.magnification.value)
         self.assertAlmostEqual(orig_fov / 2, ebeam.horizontalFoV.value)
 
         # Test setting the min and max
-        fov_min = ebeam._hfw_nomag / ebeam.magnification.range[1]
-        fov_max = ebeam._hfw_nomag / ebeam.magnification.range[0]
+        fov_min = ebeam.horizontalFoV.range[0]
+        fov_max = ebeam.horizontalFoV.range[1]
         ebeam.horizontalFoV.value = fov_min
-        # time.sleep(6)
         self.assertAlmostEqual(fov_min, ebeam.horizontalFoV.value)
 
         ebeam.horizontalFoV.value = fov_max
-        # time.sleep(6)
         self.assertAlmostEqual(fov_max, ebeam.horizontalFoV.value)
 
         # Reset
@@ -302,7 +299,7 @@ class TestMicroscope(unittest.TestCase):
     def test_acquire(self):
         """Test acquiring an image using the Detector."""
         init_dwell_time = self.scanner.dwellTime.value
-        self.scanner.dwellTime.value = 25e-9  # s
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         expected_duration = self._compute_expected_duration()
         start = time.time()
         im = self.detector.data.get()
@@ -326,7 +323,7 @@ class TestMicroscope(unittest.TestCase):
         """Test stopping the acquisition of an image using the Detector."""
         init_dwell_time = self.scanner.dwellTime.value
         init_scale = self.scanner.scale.value
-        self.scanner.dwellTime.value = 25e-9  # s
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         # Set resolution to a high value for a long acquisition that will be stopped.
         self.scanner.scale.value = self._get_scale((3072, 2048))
         self.assertEqual(self.scanner.resolution.value, (3072, 2048))
@@ -347,7 +344,7 @@ class TestMicroscope(unittest.TestCase):
         """Test changing the resolution while the acquisition is running."""
         init_dwell_time = self.scanner.dwellTime.value
         init_scale = self.scanner.scale.value
-        self.scanner.dwellTime.value = 25e-9  # s
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         # Set resolution, acquire an image and check it has the correct resolution.
         self.scanner.scale.value = self._get_scale((1536, 1024))
         self.assertEqual(self.scanner.resolution.value, (1536, 1024))
