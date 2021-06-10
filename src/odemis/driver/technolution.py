@@ -1145,6 +1145,13 @@ class MPPC(model.Detector):
                     dataContent = args[1]  # Specifies the type of image to return (empty, thumbnail or full)
                     notifier_func = args[2]  # Return function (usually, dataflow.notify or acquire_single_field queue)
 
+                    # FIXME: Hack: The current ASM HW does not scan the very first field image correctly. This issue
+                    #  needs to be fixed in HW. However, until this is done, we need to "through away" the first field
+                    #  image and scan it a second time to receive a good first field image. To do so, just always scan
+                    #  the first image twice.
+                    if field_data.position_x == 0 and field_data.position_y == 0:
+                        self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
+
                     self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
 
                     if DATA_CONTENT_TO_ASM[dataContent] is None:
