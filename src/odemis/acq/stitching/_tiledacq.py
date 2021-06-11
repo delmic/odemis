@@ -700,9 +700,6 @@ class TiledAcquisitionTask(object):
         try:
             # Acquire the needed tiles
             da_list = self._acquireTiles()
-            # Move stage to original position
-            sub_f = self._stage.moveAbs(self._starting_pos)
-            sub_f.result()
 
             if not da_list or not da_list[0]:
                 logging.warning("No stream acquired that can be used for stitching.")
