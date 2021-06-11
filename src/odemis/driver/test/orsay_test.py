@@ -1748,6 +1748,9 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_imageFormat(self):
         """Check that the imageFormat VA is updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fibbeam._updateImageFormat(self.datamodel.HybridPlatform.Cancel)
+
         connector_test(self, self.fibbeam.imageFormat, self.fibbeam._ionColumn.ImageSize,
                        [((1024, 1024), "1024 1024"), ((512, 512), "512 512"),
                         ((640, 480), "640 480"), ((800, 600), "800 600")],
@@ -1764,6 +1767,10 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fibbeam._updateTranslation(self.datamodel.HybridPlatform.Cancel)
+        with self.assertRaises(ValueError):
+            self.fibbeam._updateResolution(self.datamodel.HybridPlatform.Cancel)
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 1024 1024"
         sleep(0.5)
