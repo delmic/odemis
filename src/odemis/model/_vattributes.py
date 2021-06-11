@@ -880,6 +880,7 @@ class Continuous(object):
         else:
             value = self.value
             start, end = new_range
+            tvalue = value
             if not isinstance(value, collections.Iterable):
                 tvalue = (value,)
                 start, end = (start,), (end,)
