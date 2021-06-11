@@ -27,6 +27,7 @@ import os
 import time
 import unittest
 from odemis.driver import smaract
+from odemis.driver.smaract import SA_MCError
 from odemis.util import test
 import odemis.model as model
 
@@ -189,15 +190,15 @@ CONFIG_5DOF = {"name": "5DOF",
         "inverted": ['z'],
         "axes": {
             'x': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.6e-2, 1.6e-2],
                 'unit': 'm',
             },
             'y': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.5e-2, 1.5e-2],
                 'unit': 'm',
             },
             'z': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.e-2, 0.002],
                 'unit': 'm',
             },
             'rx': {
@@ -273,6 +274,23 @@ class Test5DOF(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.dev.moveAbs(pos).result()
 
+    def test_unreachable_position_error(self):
+        edge_move = {'x': 1.6e-2, 'y': 1.5e-2, 'z': -0.002, 'rx': 0, 'rz': 0}
+        rot_move = {'rx': 0.001, 'rz': 0.001}
+        zero_move = {'x': 0, 'y': 0, 'z': 0}
+
+        # move the stage to the maximum range
+        self.dev.moveAbs(edge_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, edge_move, match_all=False)
+        # moving rx/rz would throw unreachable move exception
+        with self.assertRaises(IndexError):
+            self.dev.moveAbs(rot_move).result()
+        # moving all linear axes from range then moving rx/rz would be fine
+        self.dev.moveAbs(zero_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, zero_move, match_all=False)
+        self.dev.moveAbs(rot_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, rot_move, match_all=False)
+
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'rz': 0.001}
         pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'rz':0}
@@ -297,7 +315,7 @@ class Test5DOF(unittest.TestCase):
         Test to make sure the system updates the position as it moves
         """
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
-        pos2 = {'x': 3e-3, 'y': 3e-3, 'z': 3e-3, 'rx': 3e-4, 'rz':-1e-4}
+        pos2 = {'x': 2e-3, 'y': 2e-3, 'z': 2e-3, 'rx': 3e-4, 'rz':-1e-4}
         self.dev.moveAbs(pos1).result()
         time.sleep(0.1)
         f = self.dev.moveAbs(pos2)

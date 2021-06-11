@@ -36,7 +36,7 @@ import threading
 
 from odemis import model
 from odemis import util
-from odemis.util import driver, RepeatingTimer
+from odemis.util import driver, RepeatingTimer, almost_equal
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute
 
 
@@ -1229,7 +1229,6 @@ class MC_5DOF(model.Actuator):
             raise
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
         # Add metadata
         self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
                                                    self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
@@ -1692,6 +1691,8 @@ class MC_5DOF(model.Actuator):
             elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT:
                 logging.error("Move timed out after %g s: %s", max_dur, ex)
                 raise TimeoutError("Move timed out after %g s" % (max_dur,))
+            elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE:
+                raise IndexError(str(ex))
             else:
                 logging.error("Move failed: %s", ex)
                 raise
@@ -1766,13 +1767,14 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = SA_MC_Vec3()
 
         # Specify ranges
+        # Mirroring actual ranges
         self._range = {}
-        self._range['x'] = (-1, 1)
-        self._range['y'] = (-1, 1)
-        self._range['z'] = (-1, 1)
-        self._range['rx'] = (-45, 45)
+        self._range['x'] = (-1.6e-2, 1.6e-2)
+        self._range['y'] = (-1.5e-2, 1.5e-2)
+        self._range['z'] = (-1.e-2, 0.002)
+        self._range['rx'] = (-28, 28)
         self._range['ry'] = (0, 0)
-        self._range['rz'] = (-45, 45)
+        self._range['rz'] = (-28, 28)
 
         self.stopping = threading.Event()
 
@@ -1853,10 +1855,32 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = _deref(p_piv, SA_MC_Vec3)
         logging.debug("sim MC5DOF: Setting pivot to (%f, %f, %f)" % (self._pivot.x, self._pivot.y, self._pivot.z))
 
+    ATOL_LINEAR_POS = 100e-6
+
+    def _check_reachable_position(self, current_pos, target_pos):
+        """
+        Check that the target position is unreachable from the current stage position. This would happen if one the
+        stage axes is near to the maximum range, and the target movement is not done on all linear axes.
+        N.B.: This is to simulate the actual behaviour of the stage.
+        :param current_pos: (dict) current position of the stage.
+        :param target_pos: (target) target position to move the stage to.
+        :raises: (SA_MCError) if the target move is unreachable
+        """
+        linear_axes = {'x', 'y', 'z'}
+        rot_axes = {'rx', 'rz'}
+        edge_axes = {a for a in linear_axes
+                     if any(almost_equal(r, current_pos[a], self.ATOL_LINEAR_POS) for r in self._range[a])}
+
+        # Simulate unreachable move when all linear axes near the range and the target move is rotational
+        if edge_axes == linear_axes and any(target_pos.get(a, 0) != current_pos[a] for a in rot_axes):
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "Unreachable target position, please move "
+                                                                           "all x,y,z axes at the same time.")
+
     def SA_MC_Move(self, id, p_pose):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
+            self._check_reachable_position(self.pose.asdict(), pose.asdict())
             self.target.x = pose.x
             self.target.y = pose.y
             self.target.z = pose.z
@@ -1880,7 +1904,7 @@ class FakeMC_5DOF_DLL(object):
             self._last_time = time.time()
             logging.debug("sim MC5DOF: moving to target: %s duration %f s" % (self.target, dur))
         else:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "Position not in range error.")
 
     def SA_MC_GetPose(self, id, p_pose):
         if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
