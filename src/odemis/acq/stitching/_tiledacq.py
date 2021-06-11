@@ -80,25 +80,25 @@ class TiledAcquisitionTask(object):
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
             logging.warning("Acquisition area {} rearranged into {}".format(area, normalized_area))
-        self._starting_pos = {'x': normalized_area[0], 'y': normalized_area[3]}  # left, top
 
+        self._area = normalized_area
         height = normalized_area[3] - normalized_area[1]
         width = normalized_area[2] - normalized_area[0]
-        self._total_area = (width, height)
+        self._area_size = (width, height)
+        self._overlap = overlap
 
         if future:
             # Change the SEM stream horizontalFoV VA to the max if it's found
             for stream in self._streams:
                 if model.hasVA(stream, "horizontalFoV"):
-                    # Take the max. of either width or height
-                    stream.horizontalFoV.value = max(stream.horizontalFoV.range)
                     # Clip horizontal fov to total area in case it's smaller than max. value
-                    stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._total_area))
+                    stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
+
         # Get the smallest field of view
         self._sfov = self._guessSmallestFov(streams)
+        logging.debug("Smallest FoV: %s", self._sfov)
 
-        self._overlap = overlap
-        self._nx, self._ny = self._getNumberOfTiles()
+        (self._nx, self._ny), self._starting_pos = self._getNumberOfTiles()
 
         # To use in re-focusing acquired images in case they fell out of focus
         # TODO: make adjust focus optional
@@ -188,12 +188,34 @@ class TiledAcquisitionTask(object):
 
     def _getNumberOfTiles(self):
         """
-        Calculate needed number of tiles (horizontal and vertical) to cover the whole area
+        Calculate needed number of tiles (horizontal and vertical) to cover the whole area,
+        and the adjusted position of the first tile.
+        return:
+            nb (int, int): number of tile in X, Y
+            starting_position (float, float): center of the first tile (at the top-left)
         """
-        nx = math.ceil(abs(self._total_area[0] / ((1 - self._overlap) * self._sfov[0])))
-        ny = math.ceil(abs(self._total_area[1] / ((1 - self._overlap) * self._sfov[1])))
+        # The size of the smallest tile, non-including the overlap, which will be
+        # lost (and also indirectly represents the precision of the stage)
+        reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
+
+        nx = math.ceil(abs(self._area_size[0] / reliable_fov[0]))
+        ny = math.ceil(abs(self._area_size[1] / reliable_fov[1]))
         logging.debug("Calculated number of tiles nx= %s, ny= %s" % (nx, ny))
-        return nx, ny
+
+        # We have a little bit more tiles than needed, we then have two choices
+        # on how to spread them:
+        # 1. Increase the total area acquired (and keep the overlap)
+        # 2. Increase the overlap (and keep the total area)
+        # We pick alternative 1 (no real reason)
+        center = (self._area[0] + self._area[2]) / 2, (self._area[1] + self._area[3]) / 2
+        total_size = nx * reliable_fov[0], ny * reliable_fov[1]
+
+        # Compute the top-left of the "bigger" area, and from it, shift by half
+        # the size of the smallest tile.
+        starting_pos = {'x': center[0] - total_size[0] / 2 + reliable_fov[0] / 2,  # left
+                        'y': center[1] + total_size[1] / 2 - reliable_fov[1] / 2}  # top
+
+        return (nx, ny), starting_pos
 
     def _cancelAcquisition(self, future):
         """
@@ -258,7 +280,7 @@ class TiledAcquisitionTask(object):
             # take and then give a large margin
             t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
                            abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
-            t = 5 * t + 1  # s
+            t = 5 * t + 3  # s
             self._future.running_subf.result(t)
         except TimeoutError:
             logging.warning("Failed to move to tile %s within %s s", idx, t)
@@ -567,6 +589,7 @@ class TiledAcquisitionTask(object):
         prev_idx = [0, 0]
         i = 0
         # Make sure to begin from starting position
+        logging.debug("Moving to tile (0, 0) at %s m", self._starting_pos)
         self._future.running_subf = self._stage.moveAbs(self._starting_pos)
         self._future.running_subf.result()
 
@@ -608,6 +631,9 @@ class TiledAcquisitionTask(object):
             # Use initial optical focus level to be compared to next tiles
             # TODO: instead of using the first image, use the best 10% images (excluding outliers)
             self._good_focus_level = current_focus_level
+
+        # TODO: handle the case of _good_focus_level == 0
+        logging.debug("Current focus level: %s (good = %s)", current_focus_level, self._good_focus_level)
         # Run autofocus if current focus got worse than permitted deviation
         if abs(current_focus_level - self._good_focus_level) / self._good_focus_level > FOCUS_FIDELITY:
             try:

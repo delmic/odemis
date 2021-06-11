@@ -24,15 +24,15 @@ from concurrent.futures._base import CancelledError, FINISHED
 import logging
 import numpy
 import odemis
-import odemis.acq.stream as stream
 from odemis import model
+from odemis.acq import stream
 from odemis.acq.acqmng import SettingsObserver
-from odemis.acq.stitching._tiledacq import TiledAcquisitionTask, acquireTiledArea
-from odemis.util import test
+from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
+    WEAVER_MEAN, acquireTiledArea
+from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
+from odemis.util import test, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 from odemis.util.test import assert_pos_almost_equal
-from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
-    WEAVER_MEAN
 import os
 import time
 import unittest
@@ -77,6 +77,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         ss1 = stream.SEMStream("sem1", cls.sed, cls.sed.data, cls.ebeam,
                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
 
+        cls.ccd.exposureTime.value = cls.ccd.exposureTime.range[0]  # go fast
         fs1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
                                 cls.light, cls.light_filter, focuser=cls.focus)
         fs1.excitation.value = sorted(fs1.excitation.choices)[0]
@@ -102,21 +103,34 @@ class CRYOSECOMTestCase(unittest.TestCase):
         Test get number of tiles using different values of total area, fov and overlap
         :return:
         """
-        overlap = 0.2
-        area = (-0.001, -0.001, 0.001, 0.001)
+        fov = compute_camera_fov(self.ccd)
+
+        # use area as multiples of fov (in case simulator parameters changed)
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
-        fov = tiled_acq_task._sfov
-        # use total area as multiples of fov (in case simulator parameters changed)
-        tiled_acq_task._total_area = (2 * fov[0], 2 * fov[1])
-        num_tiles = tiled_acq_task._getNumberOfTiles()
+                                              area=(0, 0, 2 * fov[0], 2 * fov[1]),
+                                              overlap=0.2, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
         self.assertEqual(num_tiles, (3, 3))
-        tiled_acq_task._overlap = 0
-        num_tiles = tiled_acq_task._getNumberOfTiles()
+
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, 2 * fov[0], 2 * fov[1]),
+                                              overlap=0, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
         self.assertEqual(num_tiles, (2, 2))
-        tiled_acq_task._total_area = (10 ** -6, 10 ** -6)  # smaller than fov
-        num_tiles = tiled_acq_task._getNumberOfTiles()
+
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, fov[0] / 2, fov[1] / 2),  # smaller than fov
+                                              overlap=0, future=model.InstantaneousFuture())
+
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
         self.assertEqual(num_tiles, (1, 1))
+
+        # Precisely 1 x 2 FoV => should give 1 x 2 tiles
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, fov[0], 2 * fov[1]),
+                                              overlap=0, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (1, 2))
 
     def test_generate_indices(self):
         """
@@ -149,25 +163,31 @@ class CRYOSECOMTestCase(unittest.TestCase):
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture())
-        fov = (10 ** -5, 10 ** -5)
+        fov = compute_camera_fov(self.ccd)
+        exp_shift = fov[0] * (1 - overlap), fov[1] * (1 - overlap)
         # move to starting position (left, top)
-        self.stage.moveAbs({'x': -0.001, 'y': 0.001}).result()
+        starting_pos = tiled_acq_task._starting_pos
+        self.stage.moveAbs(starting_pos).result()
+        logging.debug("Starting position: %s", starting_pos)
         # no change in movement
         tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
-        exp_pos = {'x': -0.001, 'y': 0.001}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
+        assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
 
+        # Note that we cannot predict precisely, as the algorithm may choose to spread
+        # more or less the tiles to fit within the area.
         tiled_acq_task._moveToTile((1, 0), (0, 0), fov)  # move right on x
-        exp_pos = {'x': -0.000992}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
+        exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2}
+        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
         tiled_acq_task._moveToTile((1, 1), (1, 0), fov)  # move down on y
-        exp_pos = {'x': -0.000992, 'y': 0.000992}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
+        exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2,
+                   'y': starting_pos["y"] - exp_shift[1] / 2}
+        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
         tiled_acq_task._moveToTile((0, 1), (1, 1), fov)  # move back on x
-        exp_pos = {'x': -0.001, 'y': 0.000992}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=100e-9, match_all=False)
+        exp_pos = {'x': starting_pos["x"],
+                   'y': starting_pos["y"] - exp_shift[1] / 2}
+        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
     def test_get_fov(self):
         """
@@ -194,6 +214,39 @@ class CRYOSECOMTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             tiled_acq_task._getFov(None)
 
+    def test_area(self):
+        """
+        Test the acquired area matches the requested area
+        """
+        fm_fov = compute_camera_fov(self.ccd)
+        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
+        area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 3)  # left, bottom, right, top
+        overlap = 0.2
+
+        # No focuser, to make it faster, and it doesn't affect the FoV
+        fs = stream.FluoStream("fluo1", self.ccd, self.ccd.data, self.light, self.light_filter)
+        future = acquireTiledArea([fs], self.stage, area=area, overlap=overlap,
+                                  registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN)
+        data = future.result()
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data[0].shape), 2)
+
+        # The center should be almost precisely at the center of the request RoA,
+        # modulo the stage precision (which is very good on the simulator).
+        # The size can be a little bit bigger (but never smaller), as it's
+        # rounded up to a tile.
+        bbox = img.getBoundingBox(data[0])
+        data_center = data[0].metadata[model.MD_POS]
+        area_center = (area[0] + area[2]) / 2, (area[1] + area[3]) / 2
+        logging.debug("Expected area: %s %s, actual area: %s %s", area, area_center, bbox, data_center)
+        self.assertAlmostEqual(data_center[0], area_center[0], delta=1e-6)  # +- 1µm
+        self.assertAlmostEqual(data_center[1], area_center[1], delta=1e-6)  # +- 1µm
+
+        self.assertTrue(area[0] - fm_fov[0] / 2 <= bbox[0] <= area[0])
+        self.assertTrue(area[1] - fm_fov[1] / 2 <= bbox[1] <= area[1])
+        self.assertTrue(area[2] <= bbox[2] <= area[2] + fm_fov[0] / 2)
+        self.assertTrue(area[3] <= bbox[3] <= area[3] + fm_fov[1] / 2)
+
     def test_compressed_stack(self):
         """
        Test the whole procedure (acquire compressed zstack + stitch) of acquireTiledArea function
@@ -213,7 +266,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         data = future.result()
         self.assertTrue(future.done())
         self.assertEqual(len(data), 2)
-        self.assertIsInstance(data[0], odemis.model.DataArray)
+        self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data[0].shape), 2)
 
     def test_whole_procedure(self):
@@ -225,7 +278,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         fm_fov = compute_camera_fov(self.ccd)
         # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
-        area = (0, 0, fm_fov[0] * 4, fm_fov[1] * 4)  # left, top, right, bottom
+        area = (0, 0, fm_fov[0] * 4, fm_fov[1] * 4)  # left, bottom, right, top
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
@@ -233,7 +286,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         data = future.result()
         self.assertEqual(future._state, FINISHED)
         self.assertEqual(len(data), 2)
-        self.assertIsInstance(data[0], odemis.model.DataArray)
+        self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data[0].shape), 2)
 
         # With sem stream
