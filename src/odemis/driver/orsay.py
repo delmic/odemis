@@ -31,6 +31,7 @@ import time
 import logging
 import inspect
 from math import pi
+import math
 
 # from varname import nameof
 
@@ -60,6 +61,8 @@ HEATER_OFF = "OFF"
 HEATER_RISING = "UP"
 HEATER_FALLING = "DOWN"
 HEATER_ERROR = "EOFF"
+
+IMAGEFORMAT_OPTIONS = ((512, 512), (640, 480), (800, 600), (1024, 1024))
 
 NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
@@ -1337,7 +1340,7 @@ class OrsayParameterConnector:
     If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
     """
 
-    def __init__(self, va, parameter, attributeName="Actual", conversion=None):
+    def __init__(self, va, parameter, attributeName="Actual", conversion=None, factor=None, minpar=None, maxpar=None):
         """
         va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
         setter yet. The setter will be overwritten.
@@ -1345,7 +1348,11 @@ class OrsayParameterConnector:
         equal length.
         attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
         conversion is a dict mapping values of the VA (dict keys) to values of the parameter (dict values). If None is
-        supplied, no special conversion will be performed.
+        supplied, factor can be used. factor specifies a conversion factor between the value of the parameter and the
+        value of the va, such that VA = factor * Parameter. factor is only used for float type va's. If neither
+        conversion nor factor is supplied, no special conversion is performed.
+        minpar and maxpar supply the possibility to explicitly pass a seperate parameter which contains the minimal and
+        maximal value of the parameter respectively.
         """
         self._parameters = None
         self._attributeName = None
@@ -1354,6 +1361,9 @@ class OrsayParameterConnector:
         self._va_is_tuple = False
         self._va_value_type = None
         self._conversion = conversion
+        self._factor = factor
+        self._minpar = minpar
+        self._maxpar = maxpar
         self.connect(va, parameter, attributeName)
 
     def connect(self, va, parameter, attributeName="Actual"):
@@ -1397,18 +1407,46 @@ class OrsayParameterConnector:
                 new_range = [list(self._va.range[0]), list(self._va.range[1])]
             else:
                 new_range = [[self._va.range[0]], [self._va.range[1]]]
+
             for i in range(len(self._parameters)):
                 p = self._parameters[i]
-                lowerbound = p.Min
+
+                lowerbound = None
+                if self._minpar is not None:  # in case a minimum parameter is supplied
+                    if self._minpar.Actual is not None:
+                        lowerbound = self._minpar.Actual
+                    else:
+                        lowerbound = self._minpar.Target
+                if lowerbound is None:
+                    lowerbound = p.Min
+                else:
+                    if p.Min is not None and not p.Min == lowerbound:
+                        raise AssertionError("%s.Min and %s contain different, non-None values."
+                                             "Contact Orsay Physics about this!" % (p.Name, self._minpar.Name))
+
                 if lowerbound is not None:  # if a lowerbound is defined in the server
                     new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
-                upperbound = p.Max
+
+                upperbound = None
+                if self._maxpar is not None:  # in case a minimum parameter is supplied
+                    if self._maxpar.Actual is not None:
+                        upperbound = self._maxpar.Actual
+                    else:
+                        upperbound = self._maxpar.Target
+                if upperbound is None:
+                    upperbound = p.Max
+                else:
+                    if p.Max is not None and not p.Max == upperbound:
+                        raise AssertionError("%s.Max and %s contain different, non-None values."
+                                             "Contact Orsay Physics about this!" % (p.Name, self._maxpar.Name))
                 if upperbound is not None:  # if an upperbound is defined in the server
                     new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
+
             if len(new_range[0]) == 1:
                 new_range = (new_range[0][0], new_range[1][0])
             else:
                 new_range = (tuple(new_range[0]), tuple(new_range[1]))
+
             self._va._value = new_range[0]
             self._va.range = new_range
             self._va.notify(new_range[0])
@@ -1506,6 +1544,8 @@ class OrsayParameterConnector:
             except KeyError:
                 logging.debug("Conversion dictionary does not contain key %s. Sticking to value %s" %
                               (str(va_value), str(va_value)))
+        elif self._factor is not None and self._va_value_type == float:
+            return va_value / self._factor
         return va_value
 
     def _parameter_to_VA_value(self, par_value):
@@ -1520,7 +1560,10 @@ class OrsayParameterConnector:
                     return key
 
         if self._va_value_type == float:
-            return float(par_value)
+            new_value = float(par_value)
+            if self._factor is not None:
+                new_value *= self._factor
+            return new_value
         elif self._va_value_type == int:
             return int(par_value)
         elif self._va_value_type == bool:
@@ -2046,18 +2089,31 @@ class FIBBeam(model.HwComponent):
         • tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
         • xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
         • mirror: BooleanVA
-        • imageFromSteerers: BooleanVA True to image from Steerers, False to image from Octopoles
+        • imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
         • objectiveVoltage: IntContinuous, unit="V", range=(0, 2e4)
         • beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
         • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
         • measuringCurrent: BooleanVA
         • current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
+        • videoDelay: FloatContinuous, unit="s", range=(0, 1e-3)
+        • flybackTime: FloatContinuous, unit="s", range=(0, 1e-3)
+        • blankingDelay:  FloatContinuous, unit="s", range=(0, 1e-3)
+        • rotation: FloatContinuous, unit="rad", range=(-pi, pi)
+        • dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
+        • contrast: FloatContinuous, unit="", range=(0, 1)
+        • brightness: FloatContinuous, unit="", range=(0, 1)
+        • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512),
+                       (640, 480), (800, 600) or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
+        • translation: TupleContinuous Int, unit="px", range=[(0, 0), (1023, 1023)]
+        • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
 
-        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+        # model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         self._ionColumn = None
         self._hvps = None
+        self._sed = None
 
         self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
         self.blankerConnector = None
@@ -2097,6 +2153,27 @@ class FIBBeam(model.HwComponent):
         self.measuringCurrentConnector = None
         self.current = model.FloatContinuous(0.0, readonly=True, unit="A", range=(0.0, 1.0e-5))
         self.currentConnector = None
+        self.videoDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.videoDelayConnector = None
+        self.flybackTime = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.flybackTimeConnector = None
+        self.blankingDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.blankingDelayConnector = None
+        self.rotation = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
+        self.rotationConnector = None
+        self.dwellTime = model.FloatEnumerated(1e-7, unit="s",
+                                               choices={1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7})
+        self.dwellTimeConnector = None
+        self.contrast = model.FloatContinuous(1.0, unit="", range=(0, 1))
+        self.contrastConnector = None
+        self.brightness = model.FloatContinuous(1.0, unit="", range=(0, 1))
+        self.brightnessConnector = None
+        self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(480, 480), (1024, 1024)],
+                                                 setter=self._imageFormat_setter)
+        self.translation = model.TupleContinuous((512, 512), unit="px", range=[(1, 1), (1024, 1024)],
+                                                 setter=self._translation_setter)
+        self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
+                                                setter=self._resolution_setter)
 
         self._connectorList = []
 
@@ -2109,6 +2186,7 @@ class FIBBeam(model.HwComponent):
         """
         self._ionColumn = self.parent.datamodel.IonColumnMCS
         self._hvps = self.parent.datamodel.HVPSFloatingIon
+        self._sed = self.parent.datamodel.Sed
 
         self.blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
                                                         conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
@@ -2147,6 +2225,17 @@ class FIBBeam(model.HwComponent):
         self.measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
                                                                  conversion={True: 1, False: 0})
         self.currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent)
+        self.videoDelayConnector = OrsayParameterConnector(self.videoDelay, self._ionColumn.VideoDelay)
+        self.flybackTimeConnector = OrsayParameterConnector(self.flybackTime, self._ionColumn.FlybackTime)
+        self.blankingDelayConnector = OrsayParameterConnector(self.blankingDelay, self._ionColumn.BlankingDelay)
+        self.rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle)
+        self.dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime)
+        self.contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
+        self.brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
+
+        self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
+        self._ionColumn.ImageArea.Subscribe(self._updateTranslation)
+        self._ionColumn.ImageArea.Subscribe(self._updateResolution)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -2159,8 +2248,172 @@ class FIBBeam(model.HwComponent):
         """
         Update the VA's. Should be called after reconnection to the server
         """
+        self._updateImageFormat()
+        self._updateTranslation()
+        self._updateResolution()
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
+
+    def _imageFormat_setter(self, value):
+        """
+        Setter of the imageFormat VA
+        """
+        if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
+            value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
+        self.translation._value = (1, 1)
+        self.resolution._value = value
+        self.translation.range = [(1, 1), value]
+        self.resolution.range = [(1, 1), value]
+        self.translation.notify((1, 1))
+        self.resolution.notify(value)
+        self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])
+        logging.debug("Updating imageFormat to %s and updating translation and resolution and their ranges accordingly."
+                      % str(value))
+        return value
+
+    def _updateImageFormat(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the image format from the Orsay server and saves it in the imageFormat VA
+        """
+        if parameter is None:
+            parameter = self._ionColumn.ImageSize
+        if parameter is not self._ionColumn.ImageSize:
+            raise ValueError("Incorrect parameter passed to _updateImageFormat. Parameter should be "
+                             "datamodel.IonColumnMCS.ImageSize. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        state = self._ionColumn.ImageSize.Actual
+        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
+        new_value = tuple(map(int, state.split(" ")))
+        self.imageFormat._value = new_value  # to not call the setter
+        self.imageFormat.notify(new_value)
+        self.translation._value = (1, 1)
+        self.resolution._value = new_value
+        self.translation.range = [(1, 1), new_value]
+        self.resolution.range = [(1, 1), new_value]
+        self.translation.notify((1, 1))
+        self.resolution.notify(new_value)
+
+    def _translation_setter(self, value):
+        """
+        Setter of the translation VA. The translation VA marks the centre of the image area (if the geometric centre is
+        in between pixels, translation marks the pixel to the top left of the geometric centre). This setter transforms
+        the coordinates of the centre of the image area to the coordinates of the top left corner of the image area,
+        which is the format the Orsay server takes. The setter also adjusts the size of the image area (resolution VA)
+        to prevent the new translation from placing part of the image area outside of the image format.
+        """
+        new_translation = list(value)
+        # Assure that the position is within the image format
+        if value[0] > self.imageFormat.value[0]:
+            new_translation[0] = self.imageFormat.value[0]
+        if value[1] > self.imageFormat.value[1]:
+            new_translation[1] = self.imageFormat.value[1]
+
+        current_area = self._ionColumn.ImageArea.Actual
+        current_area = list(map(int, current_area.split(" ")))
+
+        if new_translation[0] * 2 <= self.imageFormat.value[0]:
+            max_width = new_translation[0] * 2
+        else:  # if new_translation[0] * 2 > self.imageFormat.value[0]:
+            max_width = (self.imageFormat.value[0] - new_translation[0]) * 2 + 1
+        if new_translation[1] * 2 <= self.imageFormat.value[1]:
+            max_height = new_translation[0] * 2
+        else:  # if new_translation[1] * 2 > self.imageFormat.value[1]:
+            max_height = (self.imageFormat.value[1] - new_translation[1]) * 2 + 1
+        new_resolution = [min(current_area[2], max_width), min(current_area[3], max_height)]
+
+        target_translation = [0, 0]
+        target_translation[0] = new_translation[0] - math.ceil(new_resolution[0] / 2)  # move new_translation from the centre
+        target_translation[1] = new_translation[1] - math.ceil(new_resolution[1] / 2)  # to the upper left corner
+
+        target = map(str, target_translation + new_resolution)
+        target = " ".join(target)
+        self._ionColumn.ImageArea.Target = target
+
+        logging.debug("Updating imageArea to %s." % target)
+        return tuple(new_translation)
+
+    def _updateTranslation(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the position of the currently imaged area from the Orsay server and saves it in the translation VA
+        """
+        if parameter is None:
+            parameter = self._ionColumn.ImageArea
+        if parameter is not self._ionColumn.ImageArea:
+            raise ValueError("Incorrect parameter passed to _updateTranslation. Parameter should be "
+                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        area = self._ionColumn.ImageArea.Actual
+        logging.debug("Image area is: %s." % area)
+        area = list(map(int, area.split(" ")))
+        new_translation = area[:2]
+        new_translation[0] += math.ceil(area[2] / 2)  # move new_translation from the upper left corner to the centre
+        new_translation[1] += math.ceil(area[3] / 2)
+
+        new_translation = tuple(new_translation)
+        self.translation._value = new_translation  # to not call the setter
+        self.translation.notify(new_translation)
+
+    def _resolution_setter(self, value):
+        """
+        Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
+        the centre of the image area stays where it is.
+        """
+        new_value = list(value)
+        # Assure that the resolution is within the image format
+
+        if self.translation.value[0] * 2 <= self.imageFormat.value[0]:
+            max_width = self.translation.value[0] * 2
+        else:  # if self.translation.value[0] * 2 > self.imageFormat.value[0]:
+            max_width = (self.imageFormat.value[0] - self.translation.value[0]) * 2 + 1
+
+        if self.translation.value[1] * 2 <= self.imageFormat.value[1]:
+            max_height = self.translation.value[0] * 2
+        else:  # if self.translation.value[1] * 2 > self.imageFormat.value[1]:
+            max_height = (self.imageFormat.value[1] - self.translation.value[1]) * 2 + 1
+
+        new_value[0] = min(value[0], max_width)
+        new_value[1] = min(value[1], max_height)
+        target_translation = list(self.translation.value)  # keep the centre where it was
+        target_translation[0] -= math.ceil(new_value[0] / 2)  # move new_translation from the centre
+        target_translation[1] -= math.ceil(new_value[1] / 2)  # to the upper left corner
+
+        target = map(str, target_translation + new_value)
+        target = " ".join(target)
+        self._ionColumn.ImageArea.Target = target
+
+        logging.debug("Updating imageArea to %s." % target)
+        return tuple(new_value)
+
+    def _updateResolution(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the size of the currently imaged area from the Orsay server and saves it in the resolution VA
+        """
+        if parameter is None:
+            parameter = self._ionColumn.ImageArea
+        if parameter is not self._ionColumn.ImageArea:
+            raise ValueError("Incorrect parameter passed to _updateResolution. Parameter should be "
+                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        area = self._ionColumn.ImageArea.Actual
+        logging.debug("Image area is: %s." % area)
+        new_value = tuple(map(int, area.split(" ")[2:4]))
+        self.resolution._value = new_value  # to not call the setter
+        self.resolution.notify(new_value)
 
     def terminate(self):
         """
