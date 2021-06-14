@@ -1153,8 +1153,8 @@ class Scanner(model.Emitter):
             self._shape = (rng["x"][1], rng["y"][1])
             # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
             # == smallest size/ between two different ebeam positions
-            pxs = (self._hfw_nomag / (self._shape[0] * mag),
-                   self._hfw_nomag / (self._shape[0] * mag))
+            pxs = (fov / self._shape[0],
+                   fov / self._shape[0])
             self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
             # .resolution is the number of pixels actually scanned. It's almost
