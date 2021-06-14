@@ -1113,7 +1113,7 @@ class TestMBScanner(unittest.TestCase):
         """
         autostigmator_future = self.scanner.applyAutoStigmator()
         self.assertIsInstance(autostigmator_future, ProgressiveFuture)
-        autostigmator_future.result()
+        autostigmator_future.result(timeout=30)
 
 
 if __name__ == '__main__':
