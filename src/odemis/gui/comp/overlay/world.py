@@ -273,6 +273,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self.cnvs.update_drawing()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
+        if not self.show:
+            return
+
         self.clear_labels()
         # Show each feature icon and label if applicable
         for feature in self._features_va.value:

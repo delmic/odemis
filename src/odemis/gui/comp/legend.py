@@ -285,6 +285,7 @@ class AxisLegend(wx.Panel):
         self._lo_ellipsis = False
         self._hi_ellipsis = False
         self._lock_va = None
+        self._feature_toggle_va = None
 
         # Explicitly set the min size
         if self._orientation == wx.HORIZONTAL:
@@ -307,6 +308,16 @@ class AxisLegend(wx.Panel):
         self.lockBtn.bmpSelected = bmpa
         self.lockBtn.bmpHover = bmph
         self.lockBtn.Hide()
+
+        # Todo: replace with actual icons
+        bmp = img.getBitmap("menu/btn_view_pick.png")
+        bmpa = img.getBitmap("menu/btn_view_pick_a.png")
+        bmph = img.getBitmap("menu/btn_view_pick_h.png")
+
+        self.featureBtn = ImageToggleButton(self, pos=(0, 0), bitmap=bmp, size=(24, 24))
+        self.featureBtn.bmpSelected = bmpa
+        self.featureBtn.bmpHover = bmph
+        self.featureBtn.Show(False)
 
         self.on_size()  # Force a refresh
 
@@ -373,6 +384,36 @@ class AxisLegend(wx.Panel):
     @call_in_wx_main
     def _on_lock_va_change(self, new_value):
         self.lockBtn.SetToggle(new_value)
+
+    @property
+    def feature_toggle_va(self):
+        return self._feature_toggle_va
+
+    @lock_va.setter
+    def feature_toggle_va(self, va):
+        """
+        Note: The caller must run in the main GUI Thread
+        """
+        if self._feature_toggle_va != va:
+            if self._feature_toggle_va is not None:
+                self._feature_toggle_va.unsubscribe(self._feature_toggle_change)
+
+            # Show the feature toggle button
+            self.featureBtn.Show()
+            self.featureBtn.SetToggle(va.value)
+            self._feature_toggle_va = va
+
+            self.featureBtn.Bind(wx.EVT_BUTTON, self._feature_toggle_click)
+            self._feature_toggle_va.subscribe(self._feature_toggle_change)
+
+            self.Refresh()
+
+    def _feature_toggle_click(self, evt):
+        self._feature_toggle_va.value = evt.isDown
+
+    @call_in_wx_main
+    def _feature_toggle_change(self, new_value):
+        self.featureBtn.SetToggle(new_value)
 
     @property
     def range(self):

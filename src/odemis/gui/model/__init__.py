@@ -1821,3 +1821,4 @@ class FeatureOverviewView(StreamView):
         self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
+        self.showFeatures = model.BooleanVA(True)

@@ -772,6 +772,9 @@ class FeatureOverviewViewport(LiveViewport):
     LiveViewport dedicated to show overview map area with bookmarked features
     Never allow to move the stage while dragging
     """
+
+    left_legend_class = AxisLegend
+
     def __init__(self, *args, **kwargs):
         super(FeatureOverviewViewport, self).__init__(*args, **kwargs)
 
@@ -791,6 +794,18 @@ class FeatureOverviewViewport(LiveViewport):
             slol = CryoFeatureOverlay(self.canvas, tab_data.features, tab_data.currentFeature)
             slol.active.value = True
             self.canvas.add_world_overlay(slol)
+
+        if hasattr(view, "showFeatures"):
+            view.showFeatures.subscribe(self._show_hide_feature_overlay)
+            self.left_legend.feature_toggle_va = view.showFeatures
+
+    def _show_hide_feature_overlay(self, va_val):
+        # show/hide feature overlay based on the legend toggle button
+        foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
+        if foverlay:
+            foverlay.show = va_val
+            self.canvas.update_drawing()
+
 
 
 class ARLiveViewport(LiveViewport):
