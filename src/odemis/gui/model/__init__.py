@@ -1238,7 +1238,7 @@ class StreamView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
-        
+
         self._projection_klass = projection_class
 
         # Two variations on adapting the content based on what the view shows.
@@ -1453,7 +1453,7 @@ class StreamView(View):
         # FIXME: "stop all axes" should also clear the queue
 
         # If streams have a z-level, we calculate the shift differently.
-        
+
         if hasattr(self, "zPos"):
 
             # Multiplier found by testing based on the range of zPos
@@ -1521,7 +1521,25 @@ class StreamView(View):
             return
 
         move = {"x": shift[0], "y": shift[1]}
-        logging.debug("Requesting stage to move by %s m", move)
+
+        # If the range of the stage which is used for imaging is defined restrict the user to this part of the stage.
+        current_pos = self._stage.position.value
+        abs_pos = [current_pos["x"] + shift[0], current_pos["y"] + shift[1]]
+        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
+            POS_ACTIVE_RANGE = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            # Check if within limits of x range
+            if not POS_ACTIVE_RANGE["x"][0] <= abs_pos[0] <= POS_ACTIVE_RANGE["x"][1]:
+                move["x"] = max(POS_ACTIVE_RANGE["x"][0], min(abs_pos[0], POS_ACTIVE_RANGE["x"][1])) - current_pos["x"]
+                # TODO K.K. change logging type to info
+                logging.error("Restricting relative move in x direction to %g mm to keep the stage within the area "
+                              "which can be used for imaging" % (move["x"] * 1e3))
+
+            # Check if within limits of y range
+            if not POS_ACTIVE_RANGE["y"][0] <= abs_pos[1] <= POS_ACTIVE_RANGE["y"][1]:
+                move["y"] = max(POS_ACTIVE_RANGE["y"][0], min(abs_pos[1], POS_ACTIVE_RANGE["y"][1])) - current_pos["y"]
+                # TODO K.K. change logging type to info
+                logging.error("Restricting relative move in y direction to %g mm to keep the stage within the area "
+                              "which can be used for imaging" % (move["y"] * 1e3))
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
@@ -1530,6 +1548,7 @@ class StreamView(View):
         if self._stage.axes["x"].canUpdate and self._stage.axes["y"].canUpdate:
             kwargs["update"] = True
 
+        logging.debug("Requesting stage to move by %s m", move)
         f = self._stage.moveRel(move, **kwargs)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
@@ -1572,6 +1591,23 @@ class StreamView(View):
                 move[ax] = p
                 logging.info("Restricting stage axis %s move to %g mm due to stage limit",
                              ax, p * 1e3)
+
+        # If the range of the stage which is used for imaging is defined restrict the user to this part of the stage.
+        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
+            POS_ACTIVE_RANGE = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            # Check if within limits of x range
+            if not POS_ACTIVE_RANGE["x"][0] <= pos[0] <= POS_ACTIVE_RANGE["x"][1]:
+                move["x"] = max(POS_ACTIVE_RANGE["x"][0], min(pos[0], POS_ACTIVE_RANGE["x"][1]))
+                # TODO K.K. change logging type to info
+                logging.error("Restricting move in x direction to %g mm to keep the stage within the area which can "
+                              "be used for imaging" % (move["x"] * 1e3))
+
+            # Check if within limits of y range
+            if not POS_ACTIVE_RANGE["y"][0] <= pos[1] <= POS_ACTIVE_RANGE["y"][1]:
+                move["y"] = max(POS_ACTIVE_RANGE["y"][0], min(pos[1], POS_ACTIVE_RANGE["y"][1]))
+                # TODO K.K. change logging type to info
+                logging.error("Restricting move in y direction to %g mm to keep the stage within the area which can "
+                              "be used for imaging" % (move["y"] * 1e3))
 
         logging.debug("Requesting stage to move to %s m", move)
         f = self._stage.moveAbs(move)
