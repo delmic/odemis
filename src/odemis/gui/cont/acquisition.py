@@ -694,7 +694,7 @@ class CryoAcquiController(object):
         """
         # removing a stream 
         # for every entry in the list, is it also present in the .streams?
-        for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
+        for i in range(self._panel.streams_chk_list.GetCount() - 1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
             if item_stream not in streams:
                 self._panel.streams_chk_list.Delete(i)
@@ -711,12 +711,12 @@ class CryoAcquiController(object):
 
         # adding a stream 
         # for every stream in .streams, is it already present in the list?
-        item_stream = [
+        item_streams = [
             self._panel.streams_chk_list.GetClientData(i)
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
         for i, s in enumerate(streams):
-            if s not in item_stream and not isinstance(s, StaticStream):
+            if s not in item_streams and not isinstance(s, StaticStream):
                 self._panel.streams_chk_list.Insert(s.name.value, i, s)
                 self._panel.streams_chk_list.Check(i)
                 self._acquiStreams.value.append(s)
@@ -730,11 +730,11 @@ class CryoAcquiController(object):
                 self._update_acquisition_time()
 
         # sort streams after addition or removal
-        item_stream = [
+        item_streams = [
             self._panel.streams_chk_list.GetClientData(i)
             for i in range(self._panel.streams_chk_list.GetCount())
         ]
-        self._sort_streams(item_stream)
+        self._sort_streams(item_streams)
 
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
