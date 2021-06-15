@@ -92,7 +92,7 @@ class TestOrsayStatic(unittest.TestCase):
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         except Exception as e:
             self.fail(e)
-        self.assertEqual(len(oserver.children.value), 6)
+        self.assertEqual(len(oserver.children.value), 10)
 
         oserver.terminate()
 
@@ -1526,6 +1526,7 @@ class TestFIBSource(unittest.TestCase):
 
     def test_suppressorVoltage(self):
         """Check that the suppressorVoltage VA is updated correctly"""
+        self.fib_source.currentRegulation.value = False  # needed for suppressorVoltage to be used
         connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
                        [(10, 10), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
@@ -1649,18 +1650,18 @@ class TestFIBBeam(unittest.TestCase):
     def test_orthogonality(self):
         """Check that the orthogonality VA is updated correctly"""
         connector_test(self, self.fibbeam.orthogonality, self.fibbeam._ionColumn.ObjectiveOrthogonality,
-                       [(0.000174, 0.000174), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(-1.0, 1.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_objectiveRotationOffset(self):
         """Check that the objectiveRotationOffset VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveRotationOffset, self.fibbeam._ionColumn.ObjectiveRotationOffset,
-                       [(0.1, 0.1), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_objectiveStageRotationOffset(self):
         """Check that the objectiveStageRotationOffset VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveStageRotationOffset,
                        self.fibbeam._ionColumn.ObjectiveStageRotationOffset,
-                       [(0.1, 0.1), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_tilt(self):
         """Check that the tilt VA is updated correctly"""
@@ -1760,10 +1761,6 @@ class TestFIBBeam(unittest.TestCase):
         sleep(0.5)
         self.assertEqual(self.fibbeam.imageFormat.value, (1024, 1024))
         self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "1024 1024")
-        self.fibbeam.imageFormat.value = (512, 512)
-        sleep(0.5)
-        self.assertEqual(self.fibbeam.imageFormat.value, (512, 512))
-        self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "512 512")
 
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""

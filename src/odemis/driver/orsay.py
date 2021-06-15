@@ -1630,63 +1630,6 @@ class OrsayParameterConnector:
 #         self.OrsayTupleConnector.disconnect()
 
 
-# Bare Orsay device
-# class FIBDevice(model.HwComponent):
-#     """
-#     Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
-#     """
-#
-#     def __init__(self, name, role, parent, **kwargs):
-#         """
-#         Defines the following VA's and links them to the callbacks from the Orsay server:
-#         • ...
-#
-#         """
-#
-#         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
-#
-#         # TODO: Define shortcut reference attributes here as None
-#
-#         # TODO: Define VA's and Connector attributes (as None) here
-#
-#         self._connectorList = []
-#
-#         self.on_connect()
-#
-#     def on_connect(self):
-#         """
-#         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
-#         Needs to be called after connection and reconnection to the server.
-#         """
-#         # TODO: Define shortcut references here
-#
-#         # TODO: Define OrsayParameterConnectors here
-#
-#         self._connectorList = [x for (x, _) in  # save only the names of the returned members
-#                                inspect.getmembers(self,  # get all members of this FIB_source object
-#                                                   lambda obj: type(obj) == OrsayParameterConnector  # get only the
-#                                                   # OrsayParameterConnectors from all members of this FIB_source object
-#                                                   )
-#                                ]
-#
-#     def update_VAs(self):
-#         """
-#         Update the VA's. Should be called after reconnection to the server
-#         """
-#         for obj_name in self._connectorList:
-#             getattr(self, obj_name).update_VA()
-#
-#     def terminate(self):
-#         """
-#         Called when Odemis is closed
-#         """
-#         if self._hvps is not None:  # TODO: Choose a shortcut reference to test here
-#             for obj_name in self._connectorList:
-#                 getattr(self, obj_name).disconnect()
-#             self._connectorList = []
-#             # TODO: Set all shortcut reference attributes to None
-
-
 class FIBDevice(model.HwComponent):
     """
     Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
@@ -1907,13 +1850,6 @@ class FIBSource(model.HwComponent):
 
     def __init__(self, name, role, parent, **kwargs):
         """
-        TODO: Once we better understand what each parameter does, for each VA:
-                - Check whether we actually need to communicate with this parameter, or if we can take it out of the driver
-                - Check if it can/should be set as readonly and change this in the unittest too
-                - Check that the values it sets to the Orsay server make sense and are correct
-                - Check in its unittest that the testvalues are safe and make sense
-                - Check that its unittest is hardware safe and this is set correctly
-                - Check in its unittest that the settletime is set to an appropriate value
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • gunOn: BooleanVA
         • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
@@ -2083,7 +2019,7 @@ class FIBBeam(model.HwComponent):
         • steererStigmator: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
         • steererShift: TupleContinuous Float, unit="V", range=[(-100.0, -100.0), (100.0, 100.0)]
         • steererTilt: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
-        • orthogonality: FloatContinuous, unit="rad", range=(-0.01/180*pi, 0.01/180*pi)  TODO: this range seems rather small, but this is what the Client offers
+        • orthogonality: FloatContinuous, unit="rad", range=(-pi, pi)
         • objectiveRotationOffset: FloatContinuous, unit="rad", range=(0, 2*pi)
         • objectiveStageRotationOffset: FloatContinuous, unit="rad", range=(-pi, pi)
         • tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
@@ -2104,7 +2040,7 @@ class FIBBeam(model.HwComponent):
         • brightness: FloatContinuous, unit="", range=(0, 1)
         • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512),
                        (640, 480), (800, 600) or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
-        • translation: TupleContinuous Int, unit="px", range=[(0, 0), (1023, 1023)]
+        • translation: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
 
@@ -2129,7 +2065,7 @@ class FIBBeam(model.HwComponent):
         self.steererShiftConnector = None
         self.steererTilt = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
         self.steererTiltConnector = None
-        self.orthogonality = model.FloatContinuous(0.0, unit="rad", range=(-0.01 / 180 * pi, 0.01 / 180 * pi))
+        self.orthogonality = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
         self.orthogonalityConnector = None
         self.objectiveRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
         self.objectiveRotationOffsetConnector = None
@@ -2327,8 +2263,8 @@ class FIBBeam(model.HwComponent):
         new_resolution = [min(current_area[2], max_width), min(current_area[3], max_height)]
 
         target_translation = [0, 0]
-        target_translation[0] = new_translation[0] - math.ceil(new_resolution[0] / 2)  # move new_translation from the centre
-        target_translation[1] = new_translation[1] - math.ceil(new_resolution[1] / 2)  # to the upper left corner
+        target_translation[0] = new_translation[0] - math.ceil(new_resolution[0] / 2)  # move new_translation from the
+        target_translation[1] = new_translation[1] - math.ceil(new_resolution[1] / 2)  # centre to the upper left corner
 
         target = map(str, target_translation + new_resolution)
         target = " ".join(target)
