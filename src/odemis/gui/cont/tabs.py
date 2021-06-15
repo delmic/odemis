@@ -679,6 +679,7 @@ class LocalizationTab(Tab):
         Displays the acquired streams on the top right view
         data (DataArray): the images/data acquired 
         """
+        # TODO adjust this code to fit the feature behavior
         # get the top right view port
         view = self.tab_data_model.views.value[1]
         for s in data_to_static_streams(data):

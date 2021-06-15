@@ -643,7 +643,7 @@ class CryoAcquiController(object):
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
         else:
-            raise ValueError("The acquisition future state was not found")
+            raise ValueError("The acquisition future state %s is unknown", state)
 
     def _display_acquired_data(self, data):
         """
@@ -694,7 +694,12 @@ class CryoAcquiController(object):
         """
         # removing a stream 
         # for every entry in the list, is it also present in the .streams?
-        for i in range(self._panel.streams_chk_list.GetCount() - 1):
+        # Note: the reverse order is needed in case 2 or more streams are deleted 
+        # at the same time. Because, when an entry in array is deleted, the other
+        # entries shift leftwards. So iterating from left to right would lead to skipping
+        # some entires required to delete, and deleting other entires. Therefore,
+        # iterating from right to left is chosen. 
+        for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
             if item_stream not in streams:
                 self._panel.streams_chk_list.Delete(i)
@@ -862,12 +867,14 @@ class CryoAcquiController(object):
             self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
-    def _get_wavelength_vas(self, stream_item):
+    def _get_wavelength_vas(self, st):
         """
         Gets the excitation and emission VAs of a stream.
+        st (Stream): the stream of which the excitation and emission wavelengths 
+            are to be returned
         return (set of VAs)
         """
-        nvas = model.getVAs(stream_item)  # name -> va
+        nvas = model.getVAs(st)  # name -> va
         vas = set()
         # only add the name, emission and excitation VA's
         for n, va in nvas.items():
