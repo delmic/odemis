@@ -1,20 +1,37 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on 16 Dec 2020
+
+@author: Kornee Kleijwegt
+
+Copyright © 2019-2021 Kornee Kleijwegt, Delmic
+
+This file is part of Delmic Acquisition Software.
+
+Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your
+option) any later version.
+
+Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+
+You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see
+http://www.gnu.org/licenses/.
+"""
 import unittest
 import yaml
 
-from odemis.odemisd.modelgen import SafeLoader
+from odemis.odemisd.modelgen import SafeLoader, ParseError
 
 
 class SafeLoader_extensions_test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        SafeLoader.add_constructor('!include', SafeLoader.include)
-        # Overwrite construct_yaml_map with custom mapper
-        SafeLoader.yaml_constructors['tag:yaml.org,2002:map'] = SafeLoader.construct_yaml_map
-        cls.SafeLoader = SafeLoader
-
         with open("yaml-merger-combination-include-extend-expected-result.yaml", "r") as f:
-            cls.expected_full_result = yaml.load(f, cls.SafeLoader)
+            cls.expected_full_result = yaml.load(f, SafeLoader)
 
     def test_include(self):
         """
@@ -22,7 +39,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         """
         # __init__ of the CL-detector
         with open("yaml-merger-include-complete-init-CL-Detector-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = self.expected_full_result["CL Detector"]["init"]
@@ -30,7 +47,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         # Full CL-detector component
         with open("yaml-merger-include-full-CL-Detector-component-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"CL Detector": self.expected_full_result["CL Detector"]}
@@ -38,7 +55,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         # __init__ contains a setting which is overwritten of the CL-detector
         with open("yaml-merger-include-complete-overwrite-init-CL-Detector-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = self.expected_full_result["CL Detector"]["init"].copy()  # Copy because a value is adjusted
@@ -49,7 +66,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         with open(
             "yaml-merger-relative-path-test/yaml-merger-include-complete-init-relative-path-CL-Detector-test.odm.yaml",
                 "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = self.expected_full_result["CL Detector"]["init"]
@@ -59,7 +76,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         with open(
             "yaml-merger-relative-path-test/yaml-merger-include-complete-init-relative-path-CL-Detector-test.odm.yaml",
                 "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = self.expected_full_result["CL Detector"]["init"]
@@ -67,11 +84,11 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         with self.assertRaises(FileNotFoundError):
             with open("yaml-merger-include-error-non-exist-file-in-init-CL-Detector-test.odm.yaml", 'r') as f:
-                data_found = yaml.load(f, self.SafeLoader)
+                data_found = yaml.load(f, SafeLoader)
 
-        with self.assertRaises(SyntaxError):
+        with self.assertRaises(ParseError):
             with open("yaml-merger-include-error-reference-to-typo-in-init-CL-Detector-test.odm.yaml", 'r') as f:
-                data_found = yaml.load(f, self.SafeLoader)
+                data_found = yaml.load(f, SafeLoader)
 
     def test_extend(self):
         """
@@ -79,7 +96,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         """
         # __init__ of the SEM Scan Interface
         with open("yaml-merger-extend-complete-init-SEM-Scan-Interface-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"init": self.expected_full_result["SEM Scan Interface"]["init"]}
@@ -87,7 +104,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         # Full SEM Scan Interface component
         with open("yaml-merger-extend-full-SEM-Scan-Interface-component-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"SEM Scan Interface": self.expected_full_result["SEM Scan Interface"]}
@@ -95,7 +112,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         # __init__ contains a entries which are overwritten of the CL-detector
         with open("yaml-merger-extend-complete-init-overwrite-SEM-Scan-Interface-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"init": self.expected_full_result["SEM Scan Interface"]["init"].copy()}
@@ -106,7 +123,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         # __init__ of the SEM Scan Interface using a relative reference in the !include
         with open("yaml-merger-relative-path-test/" +
                   "yaml-merger-extend-complete-init-relative-path-SEM-Scan-Interface-test.odm.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"init": self.expected_full_result["SEM Scan Interface"]["init"]}
@@ -114,11 +131,11 @@ class SafeLoader_extensions_test(unittest.TestCase):
 
         with self.assertRaises(FileNotFoundError):
             with open("yaml-merger-extend-error-non-exist-file-in-init-SEM-Scan-interface-test.odm.yaml", 'r') as f:
-                data_found = yaml.load(f, self.SafeLoader)
+                data_found = yaml.load(f, SafeLoader)
 
-        with self.assertRaises(SyntaxError):
+        with self.assertRaises(ParseError):
             with open("yaml-merger-extend-error-reference-to-typo-in-init-SEM-Scan-Interface.odm.yaml", 'r') as f:
-                data_found = yaml.load(f, self.SafeLoader)
+                data_found = yaml.load(f, SafeLoader)
 
     def test_combination_include_extend_two_components_dict(self):
         """
@@ -126,7 +143,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         """
         # CL Detector and SEM Scan Interface component
         with open("yaml-merger-combination-two-components.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         expected_result = {"SEM Scan Interface": self.expected_full_result["SEM Scan Interface"],
@@ -139,7 +156,7 @@ class SafeLoader_extensions_test(unittest.TestCase):
         """
         # Full startup setting defined in yaml-merger-combination-include-extend-expected-result.yaml
         with open("yaml-merger-combination-realistic-startup-file.yaml", "r") as f:
-            data_found = yaml.load(f, self.SafeLoader)
+            data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
         self.assertEqual(self.expected_full_result, data_found)

@@ -13,14 +13,11 @@ SPARC2: {
 "CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
-    init: {
-        # Add via !inlcude
-        settle_time: [0.1, 1, 3],
-        test_input: "a"
-    },
+    init: !include yaml-merger-include-complete-init-CL-Detector-test.odm.yaml,
     dependencies: {
        "detector": "CL PMT",
-       "pmt-control": "CL PMT control unit",
+       # A relative path reference:
+       !extend yaml-merger-relative-path-test/yaml-merger-combination-extend-CL-dep-pmt-control.yaml,
     },
 }
 
@@ -44,8 +41,6 @@ SPARC2: {
     }
 }
 
-# Combination input
-# add via extend
 "SEM E-beam": {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
@@ -56,12 +51,10 @@ SPARC2: {
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
     },
-    # Create via !include full property list
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    # Add via !extend affects list
     affects: ["CL PMT", "CL Detector", "SEM Scan Interface"] # affects the CCD in case of cathodoluminescence
 }

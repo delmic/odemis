@@ -45,7 +45,7 @@ from yaml.nodes import MappingNode
 
 class SafeLoader(yaml.SafeLoader):
     def __init__(self, stream):
-        self._root = os.path.split(stream.name)[0]
+        self._root = os.path.dirname(stream.name)  # Directory containing the YAML file
         super(SafeLoader, self).__init__(stream)
 
     def construct_mapping(self, node, deep=False):
@@ -82,21 +82,21 @@ class SafeLoader(yaml.SafeLoader):
     def include(self, node):
         """
         Method for including values defined in a yaml file into another yaml file. This can be used to add values to
-        a specified keyword in a dict or outside a dict (e.g. to define the content of a a component definition).
+        a specified key in a dict or outside a dict (e.g. to define the content of a component definition).
 
-        :param node (yaml.nodes.ScalarNode): Contains both the tag which indicated to including another file, and the
+        :param node (yaml.nodes.ScalarNode): Contains both the key which indicated to including another file, and the
         path to the file.
         :return: Data which from external file which needs to be included.
         """
         try:
             filename = os.path.join(self._root, self.construct_scalar(node))  # For supporting relative paths
             with open(filename, 'r') as f:
-                logging.info("Loading file '%s' via the !include tag" % filename)
+                logging.info("Loading file '%s' via the !include key", filename)
                 return yaml.load(f, SafeLoader)
 
         except FileNotFoundError as error:
             # Informing the user in case the user forgot a comma and maybe received an unclear error as result
-            if any([filename.find(i) > -1 for i in ("!", "\n", "\\", "/", " ", ":", "<")]):
+            if any(c in filename for c in ("!", "\n", "\\", "/", " ", ":", "<")):
                 logging.error("File not found, probably because an invalid character is used or a comma is forgotten "
                               "when using include in a dict.")
             raise FileNotFoundError(error)
@@ -104,28 +104,29 @@ class SafeLoader(yaml.SafeLoader):
     def construct_yaml_map(self, node):
         """
         Method overwriting the original "construct_yaml_map" which adds the functionality to extend/update a dict in a
-        yaml file with an external yaml file via the use of the keyword "!extend"
-        For double defined keywords the values contained in the last "!extend" tag/keyword will be used.
+        yaml file with an external yaml file via the use of the key "!extend"
+        For double defined keys the values contained in the last "!extend" key will be used.
         :param node (Mapping node):
         """
         data = {}
         yield data
 
-        # Check all nodes for the "!extend" keywords.
+        # Check all nodes for the "!extend" key
         for idx, (key_node, value_node) in enumerate(node.value):
             if key_node.tag == "!extend":
                 filename = os.path.join(self._root, key_node.value)  # For supporting relative paths
-                logging.info("Loading file '%s' via the !extend tag" % filename)
+                logging.info("Loading file '%s' via the !extend key", filename)
                 try:
                     with open(filename, 'r') as f:
                         try:
                             node_new = SafeLoader(f).get_single_node()  # Get the data from the external file.
                         except yaml.parser.ParserError as error:
-                            raise SyntaxError("Parsing of file '%s' via the !extend tag failed." % key_node.value)
+                            raise ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
+                                             % (key_node.value, error))
                 except FileNotFoundError as error:
-                    if any([filename.find(i) > -1 for i in ("!", "\n", "\\", "/", " ", ":", "<")]):
+                    if any(c in filename for c in ("!", "\n", "\\", "/", " ", ":", "<")):
                         logging.error("File not found, probably because an invalid character is used"
-                                      "or a comma is forgotten when using the '!include' tag in a dict.")
+                                      "or a comma is forgotten when using the '!include' key in a dict.")
 
                     raise FileNotFoundError(error)
 
@@ -140,22 +141,26 @@ class SafeLoader(yaml.SafeLoader):
                 for (key_node, value_node) in node.value:
                     if key_node.tag == "!include" or value_node.tag == "!include":
                         filename = value_node.value if value_node.tag == "!include" else key_node.value
-                        error_msgs = SyntaxError("Parsing of file '%s' using the '!include' tag failed." % filename)
+                        error = ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
+                                           % (filename, error))
                         break
                     if key_node.tag == "!extend" or value_node.tag == "!extend":
                         filename = value_node.value if value_node.tag == "!extend" else key_node.value
-                        error_msgs = SyntaxError("Parsing of file '%s' using the '!extend' tag failed." % filename)
+                        error = ParseError("Parsing of file '%s' using the '!extend' key failed with the error:\n%s"
+                                           % (filename, error))
                         break
-                else:
-                    # When the tags don't cause the error, raise the default error.
-                    error_msgs = SyntaxError("Parsing of the input file failed.")
             except:
-                error_msgs = SyntaxError("Parsing of the input file failed.")  # Default error
-
-            logging.error("Parsing failed with the following traceback: \n %s" % error)
-            raise error_msgs
+                pass
+            logging.error("Parsing of the input file failed with the following traceback: \n%s", error)
+            raise error
 
         data.update(value)
+
+# Add yaml merger features to the SafeLoader class to combine multiple yaml files into one
+# Add the key '!include' by adding a constructor which allows to include external yaml files
+SafeLoader.add_constructor('!include', SafeLoader.include)
+# Overwrite construct_yaml_map with custom mapper which adds support for the "!extend" key to extend a dictionary
+SafeLoader.yaml_constructors['tag:yaml.org,2002:map'] = SafeLoader.construct_yaml_map
 
 class ParseError(Exception):
     pass
@@ -475,11 +480,6 @@ class Instantiator(object):
         """
         try:
             # The standard PyYAML loader is dangerous as it can create any python object
-
-            # Allow to include external yaml files via the keyword '!include' by adding a constructor.
-            SafeLoader.add_constructor('!include', SafeLoader.include)
-            # Overwrite construct_yaml_map with custom mapper
-            SafeLoader.yaml_constructors['tag:yaml.org,2002:map'] = SafeLoader.construct_yaml_map
             data = yaml.load(inst_file, SafeLoader)
         except yaml.YAMLError as exc:
             logging.error("Syntax error in microscope file: %s", exc)
