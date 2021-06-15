@@ -398,16 +398,15 @@ class LocalizationTab(Tab):
             view_ctrl=self.view_controller
         )
 
-        self._acquisition_controller = acqcont.OverviewStreamAcquiController(tab_data, self)
+        self._acquisition_controller = acqcont.CryoAcquiController(
+            tab_data, panel, self)
 
         self._overview_stream_controller = streamcont.StreamBarController(
             tab_data,
-            panel.pnl_overview_streams,
+            panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
-
-        self._overview_stream_controller.add_overview_action(self._on_acquire)
 
         # Toolbar
         self.tb = panel.secom_toolbar
@@ -502,15 +501,6 @@ class LocalizationTab(Tab):
                     vp.canvas.fit_view_to_next_image = False
 
         return vpv
-
-    def _on_acquire(self, _):
-        """
-        Called when ADD OVERVIEW is pressed
-        (second unused argument is an event object)
-        """
-        das = self._acquisition_controller.open_acquisition_dialog()
-        if das:
-            self.load_data(das)
 
     def load_data(self, data):
         # Create streams from data
@@ -682,6 +672,20 @@ class LocalizationTab(Tab):
             return 2
         else:
             return None
+
+    @call_in_wx_main
+    def display_acquired_data(self, data):
+        """
+        Displays the acquired streams on the top right view
+        data (DataArray): the images/data acquired 
+        """
+        # TODO adjust this code to fit the feature behavior
+        # get the top right view port
+        view = self.tab_data_model.views.value[1]
+        for s in data_to_static_streams(data):
+            stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, s, self.tab_data_model,
+                                           show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
+            stream_cont.stream_panel.collapse(True)
 
 
 class SecomStreamsTab(Tab):
@@ -5755,4 +5759,3 @@ class TabBarController(object):
             logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
 
         evt.Skip()
-

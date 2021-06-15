@@ -239,6 +239,15 @@ def _weight_stream(stream):
         return 0
 
 
+def sortStreams(streams):
+    """
+    Sorts a list of streams based on the order they will be acquired 
+    streams (acq.stream.Stream): a list of streams to be sorted 
+    returns (acq.stream.Stream): a list of sorted streams 
+    """
+    return sorted(streams, key=_weight_stream, reverse=True)
+
+
 class AcquisitionTask(object):
 
     def __init__(self, streams, future, settings_obs=None):

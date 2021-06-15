@@ -631,7 +631,7 @@ class LocalizationGUIData(MicroscopyGUIData):
         # for the filename 
         config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
-            config.last_path, config.fn_ptn,
+            config.pj_last_path, config.fn_ptn,
             config.last_extension,
             config.fn_count))
 
