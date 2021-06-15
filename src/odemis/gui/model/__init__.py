@@ -1520,26 +1520,21 @@ class StreamView(View):
             logging.debug("skipping move request of almost 0")
             return
 
-        move = {"x": shift[0], "y": shift[1]}
-
-        # If the range of the stage which is used for imaging is defined restrict the user to this part of the stage.
+        rel_move = {"x": shift[0], "y": shift[1]}
         current_pos = self._stage.position.value
-        abs_pos = [current_pos["x"] + shift[0], current_pos["y"] + shift[1]]
-        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
-            POS_ACTIVE_RANGE = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-            # Check if within limits of x range
-            if "x" in POS_ACTIVE_RANGE and not POS_ACTIVE_RANGE["x"][0] <= abs_pos[0] <= POS_ACTIVE_RANGE["x"][1]:
-                    move["x"] = max(POS_ACTIVE_RANGE["x"][0], min(abs_pos[0], POS_ACTIVE_RANGE["x"][1])) - current_pos["x"]
-                    # TODO K.K. change logging type to info
-                    logging.warning("Restricting relative move in x direction to %g mm to keep the stage within the "
-                                   "area which can be used for imaging" % (move["x"] * 1e3))
+        req_abs_move = {"x": current_pos["x"] + shift[0], "y": current_pos["y"] + shift[1]}  # Requested absolute move
 
-            # Check if within limits of y range
-            if "y" in POS_ACTIVE_RANGE and not POS_ACTIVE_RANGE["y"][0] <= abs_pos[1] <= POS_ACTIVE_RANGE["y"][1]:
-                move["y"] = max(POS_ACTIVE_RANGE["y"][0], min(abs_pos[1], POS_ACTIVE_RANGE["y"][1])) - current_pos["y"]
-                # TODO K.K. change logging type to info
-                logging.warning("Restricting relative move in y direction to %g mm to keep the stage within the area "
-                                "which can be used for imaging" % (move["y"] * 1e3))
+        # If needed clip current movements in x/y direction to the maximum allowed stage limits
+        stage_limits = self._getStageLimitsXY()
+        if "x" in stage_limits and not stage_limits["x"][0] <= req_abs_move["x"] <= stage_limits["x"][1]:
+            rel_move["x"] = max(stage_limits["x"][0], min(req_abs_move["x"], stage_limits["x"][1])) - current_pos["x"]
+            logging.info("Movements of the stage in x direction are limited by the stage limit, the movement is "
+                         "restricted to %s mm." % (rel_move["x"] * 1e3))
+
+        if "y" in stage_limits and not stage_limits["y"][0] <= req_abs_move["y"] <= stage_limits["y"][1]:
+            rel_move["y"] = max(stage_limits["y"][0], min(req_abs_move["y"], stage_limits["y"][1])) - current_pos["y"]
+            logging.info("Movements of the stage in y direction are limited by the stage limit, the movement is "
+                         "restricted to %s mm." % (rel_move["y"] * 1e3))
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
@@ -1548,8 +1543,8 @@ class StreamView(View):
         if self._stage.axes["x"].canUpdate and self._stage.axes["y"].canUpdate:
             kwargs["update"] = True
 
-        logging.debug("Requesting stage to move by %s m", move)
-        f = self._stage.moveRel(move, **kwargs)
+        logging.debug("Requesting stage to move by %s m", rel_move)
+        f = self._stage.moveRel(rel_move, **kwargs)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f
@@ -1573,6 +1568,7 @@ class StreamView(View):
     def moveStageTo(self, pos):
         """
         Request an absolute move of the stage to a given position
+
         pos (tuple of 2 float): X, Y absolute coordinates
         :return (None or Future): a future (that allows to know when the move is finished)
         """
@@ -1581,55 +1577,17 @@ class StreamView(View):
 
         move = {"x": pos[0], "y": pos[1]}
 
-        stage_limits = {}
+        # If needed clip current movements in x/y direction to the maximum allowed stage limits
+        stage_limits = self._getStageLimitsXY()
+        if "x" in stage_limits and not stage_limits["x"][0] <= move["x"] <= stage_limits["x"][1]:
+            move["x"] = max(stage_limits["x"][0], min(move["x"], stage_limits["x"][1]))
+            logging.info("Movements of the stage in x direction are limited by the stage limit, the movement is "
+                         "restricted to %s mm." % (move["x"] * 1e3))
 
-        # Include physical stage limits x and y
-        if "x" in self._stage.axes and hasattr(self._stage.axes["x"].range):
-            stage_limits.update({"x": [self._stage.axes["x"][0], self._stage.axes["x"][1]]})
-        if "y" in self._stage.axes and hasattr(self._stage.axes["y"].range):
-            stage_limits.update({"y": [self._stage.axes["y"][0], self._stage.axes["y"][1]]})
-
-        # Include stage limits to restrict the stage to the area which can be used for imaging
-        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
-            POS_ACTIVE_RANGE = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-
-            if "x" in POS_ACTIVE_RANGE and "x" in stage_limits:
-                 stage_limits = self._updateStageLimits(stage_limits, POS_ACTIVE_RANGE["x"], "x")
-
-            if "y" in POS_ACTIVE_RANGE and "y" in stage_limits:
-                stage_limits = self._updateStageLimits(stage_limits, POS_ACTIVE_RANGE["y"], "y")
-
-        if "x" in stage_limits and not stage_limits["x"][0] <= move["x"][0] <= stage_limits["x"][1]:
-            move["x"] = max(stage_limits["x"][0], min(move["x"][0], stage_limits["x"][1]))
-
-        if "y" in stage_limits and not stage_limits["y"][0] <= move["y"][0] <= stage_limits["y"][1]:
-            move["y"] = max(stage_limits["y"][0], min(move["y"][0], stage_limits["y"][1]))
-
-        # clip to the range of the axes
-        for ax, p in move.items():
-            axis_def = self._stage.axes[ax]
-            if (hasattr(axis_def, "range") and
-                not axis_def.range[0] <= p <= axis_def.range[1]
-               ):
-                p = max(axis_def.range[0], min(p, axis_def.range[1]))
-                move[ax] = p
-                logging.info("Restricting stage axis %s move to %g mm due to stage limit",
-                             ax, p * 1e3)
-
-        # If the range of the stage which is used for imaging is defined restrict the user to this part of the stage.
-        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
-            POS_ACTIVE_RANGE = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-            # Check if within limits of x range
-            if "x" in POS_ACTIVE_RANGE and not POS_ACTIVE_RANGE["x"][0] <= pos[0] <= POS_ACTIVE_RANGE["x"][1]:
-                move["x"] = max(POS_ACTIVE_RANGE["x"][0], min(pos[0], POS_ACTIVE_RANGE["x"][1]))
-                logging.warning("Restricting move in x direction to %g mm to keep the stage within the area which can "
-                              "be used for imaging" % (move["x"] * 1e3))
-
-            # Check if within limits of y range
-            if "y" in POS_ACTIVE_RANGE and not POS_ACTIVE_RANGE["y"][0] <= pos[1] <= POS_ACTIVE_RANGE["y"][1]:
-                move["y"] = max(POS_ACTIVE_RANGE["y"][0], min(pos[1], POS_ACTIVE_RANGE["y"][1]))
-                logging.warning("Restricting move in y direction to %g mm to keep the stage within the area which can "
-                              "be used for imaging" % (move["y"] * 1e3))
+        if "y" in stage_limits and not stage_limits["y"][0] <= move["y"] <= stage_limits["y"][1]:
+            move["y"] = max(stage_limits["y"][0], min(move["y"], stage_limits["y"][1]))
+            logging.info("Movements of the stage in y direction are limited by the stage limit, the movement is "
+                         "restricted to %s mm." % (move["y"] * 1e3))
 
         logging.debug("Requesting stage to move to %s m", move)
         f = self._stage.moveAbs(move)
@@ -1637,14 +1595,49 @@ class StreamView(View):
         f.add_done_callback(self._on_stage_move_done)
         return f
 
-    def _updateStageLimits(self, stage_limits, new_limits, corresponding_axis):
-        # TODO Or is key in new_limits?
-        key = corresponding_axis
-        if key in stage_limits and key in stage_limits:
-            stage_limits.update({key: [max(stage_limits[key][0], new_limits[key][0]),
-                                       min(stage_limits[key][1], new_limits[key][1])]})
-        else:
-            stage_limits.update({key: [stage_limits[key][0], new_limits[key][1]]})
+    def _getStageLimitsXY(self):
+        """
+        Based on the physical stage limit and the area of the image used for imaging the stage limits are return in
+        a dict. (MD_POS_ACTIVE_RANGE defines the area which can be used for imaging)
+        If no stage limits are defined an empty dict is returned.
+
+        :return (dictionary): dict which contains the stage limits in x and y direction
+        """
+        stage_limits = {}
+        # Physical stage limits
+        if "x" in self._stage.axes and hasattr(self._stage.axes["x"], "range"):
+            stage_limits.update({"x": [self._stage.axes["x"].range[0], self._stage.axes["x"].range[1]]})
+        if "y" in self._stage.axes and hasattr(self._stage.axes["y"], "range"):
+            stage_limits.update({"y": [self._stage.axes["y"].range[0], self._stage.axes["y"].range[1]]})
+
+        # Area which can be used for imaging
+        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
+            pos_active_range = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            if "x" in pos_active_range and "x" in stage_limits:
+                stage_limits = self._updateStageLimits(stage_limits, {"x": pos_active_range["x"]})
+            if "y" in pos_active_range and "y" in stage_limits:
+                stage_limits = self._updateStageLimits(stage_limits, {"y": pos_active_range["y"]})
+
+        if not stage_limits:
+            logging.info("No stage limits defined")
+        return stage_limits
+
+    def _updateStageLimits(self, stage_limits, new_limits):
+        """
+        Updates the stage limits dictionary with the intersection of both the existing and new limits. So that the 
+        updated limits comply with both defined limits.
+
+        :param stage_limits (dict): Contains the limits for each axis of the stage which is limited.
+        :param new_limits (dict): Contains new limits for the stage for one or multiple axis
+        :return (dict): Contains the updated stage limits
+        """
+        for key in new_limits:
+            if key in stage_limits:
+                # Update the stage limits with the intersection of both the existing and new limits.
+                stage_limits.update({key: [max(stage_limits[key][0], new_limits[key][0]),
+                                           min(stage_limits[key][1], new_limits[key][1])]})
+            else:
+                stage_limits.update({key: [stage_limits[key][0], new_limits[key][1]]})
 
         return stage_limits
 
