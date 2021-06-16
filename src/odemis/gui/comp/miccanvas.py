@@ -29,7 +29,7 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import DataProjection, FastEMOverviewStream
+from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
@@ -1867,19 +1867,3 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
     def setView(self, view, tab_data):
         super(FastEMAcquisitionCanvas, self).setView(view, tab_data)
         view.show_crosshair.value = False
-        self._tab_data_model.main.overview_streams.subscribe(self._on_overview_streams)
-
-    def _on_overview_streams(self, _):
-        ovv_streams = self._tab_data_model.main.overview_streams.value.values()
-        tab_streams = self._tab_data_model.streams.value
-        # Remove old streams from view
-        for s in tab_streams:
-            if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
-                tab_streams.remove(s)
-                self.view.removeStream(s)
-
-        # Add stream to view if it's not already there
-        for s in ovv_streams:
-            if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
-                tab_streams.append(s)
-                self.view.addStream(s)

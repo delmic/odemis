@@ -1155,6 +1155,19 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
+    def add_run_btn(self, label_text):
+        """
+        Add a generic run button and the corresponding side label to the gridbag sizer.
+        :param label_text: (str) label text to display
+        :returns: (wx.StaticText, ImageTextButton) side label and run button
+        """
+        lbl_ctrl = self._add_side_label(label_text)
+        run_btn = ImageTextButton(self._panel, label="Run...", height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(run_btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return lbl_ctrl, run_btn
+
+    @control_bookkeeper
     def add_divider(self):
         """ Add a dividing line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
@@ -1350,19 +1363,6 @@ class StreamPanel(wx.Panel):
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL)
 
         return lbl_selection_width, sld_selection_width
-
-    @control_bookkeeper
-    def add_run_btn(self, label):
-        """
-        Add a generic run button and the corresponding side label to the gridbag sizer.
-        :param label: (str) side label describing button functionality
-        :returns: (wx.StaticText, ImageTextButton) side label and run button
-        """
-        lbl_ctrl = self._add_side_label(label)
-        metadata_btn = ImageTextButton(self._panel, label="Run...", height=16, style=wx.ALIGN_CENTER)
-        self.gb_sizer.Add(metadata_btn, (self.num_rows, 2), span=(1, 1),
-                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
-        return lbl_ctrl, metadata_btn
 
 
 class StreamBar(wx.Panel):
@@ -2146,7 +2146,7 @@ class FastEMOverviewSelectionPanel(wx.Panel):
 
     def create_controls(self, layout):
         nrows = len(layout)
-        ncols = max([len(row) for row in layout])
+        ncols = max(len(row) for row in layout)
         calgrid_sz = wx.GridBagSizer(nrows, ncols)
         for row_idx, row in enumerate(layout):
             for col_idx, elem in enumerate(row):

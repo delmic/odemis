@@ -47,7 +47,7 @@ from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
-    wxlimit_invocation
+    wxlimit_invocation, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator, VigilantAttributeConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
@@ -1689,7 +1689,7 @@ class FastEMOverviewAcquiController(object):
             center = self._tab_data_model.main.scintillator_positions[num]
             sz = self._tab_data_model.main.scintillator_size
             coords = (center[0] - sz[0], center[1] - sz[1], center[0] + sz[0], center[1] + sz[1])
-            f = fastem.acquire_overview(coords, self._tab_data_model.streams.value[0])
+            f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
 
             def acq_done(future, num=num):
                 return self.on_acquisition_done(future, num)

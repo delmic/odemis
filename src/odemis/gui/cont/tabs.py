@@ -1658,6 +1658,13 @@ class FastEMAcquisitionTab(Tab):
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
+        # Streams controller
+        self._streams_controller = streamcont.FastEMStreamsController(tab_data,
+                                                                      panel.pnl_fastem_projects,
+                                                                      ignore_view=True,
+                                                                      view_ctrl=self.view_controller,
+                                                                      )
+
         # Project bar controller
         self._projectbar_controller = streamcont.FastEMProjectBarController(
             tab_data,
@@ -1680,6 +1687,10 @@ class FastEMAcquisitionTab(Tab):
             self._calibrationbar_controller
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def streams_controller(self):
+        return self._streams_controller
 
     @property
     def projectbar_controller(self):
@@ -1744,8 +1755,7 @@ class FastEMOverviewTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Single-beam SEM stream
-        vanames = ("resolution", "dwellTime", "horizontalFoV", "pixelSize")
-        main_data.hw_settings_config["e-beam"]["pixelSize"]["control_type"] = odemis.gui.CONTROL_READONLY
+        vanames = ("resolution", "dwellTime", "horizontalFoV")
         hwemtvas = set()
         for vaname in getVAs(main_data.ebeam):
             if vaname in vanames:
@@ -1760,7 +1770,7 @@ class FastEMOverviewTab(Tab):
         )
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
-        self._stream_controller = streamcont.StreamBarController(
+        self._stream_controller = streamcont.FastEMStreamsController(
             tab_data,
             panel.pnl_fastem_overview_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport
@@ -1800,7 +1810,7 @@ class FastEMOverviewTab(Tab):
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
-            return 1
+            return 2
         else:
             return None
 

@@ -35,7 +35,7 @@ import numpy
 
 import odemis.acq.fastem
 from odemis import model, util
-from odemis.acq.stream import MeanSpectrumProjection
+from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -217,7 +217,7 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
-        if self.stream.emitter and hasattr(self.stream.emitter, "applyAutoStigmator"):
+        if tab_data_model.main.role == "mbsem":
             # It's a FastEM
             self._add_fastem_ctrls()
 
@@ -3038,6 +3038,33 @@ class SparcStreamsController(StreamBarController):
         for s in self._tab_data_model.streams.value:
             if model.hasVA(s, "useScanStage"):
                 s.useScanStage.value = use
+
+
+class FastEMStreamsController(StreamBarController):
+    """
+    StreamBarController with additional functionality for overview streams (add/remove overview streams from
+    view if main data .overview_streams VA changes).
+    """
+
+    def __init__(self, tab_data, *args, **kwargs):
+        super().__init__(tab_data, *args, **kwargs)
+        tab_data.main.overview_streams.subscribe(self._on_overview_streams)
+
+    def _on_overview_streams(self, _):
+        ovv_streams = self._tab_data_model.main.overview_streams.value.values()
+        tab_streams = self._tab_data_model.streams.value
+        canvas = self._view_controller.viewports[0].canvas
+        # Remove old streams from view
+        for s in tab_streams:
+            if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
+                tab_streams.remove(s)
+                canvas.view.removeStream(s)
+
+        # Add stream to view if it's not already there
+        for s in ovv_streams:
+            if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
+                tab_streams.append(s)
+                canvas.view.addStream(s)
 
 
 # Blue, red, green, cyan, yellow, purple, magenta

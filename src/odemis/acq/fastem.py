@@ -80,18 +80,13 @@ def estimateTime(roas):
 
 
 # Overview acquisition
-def acquire_overview(coords, sem_stream):
-    """
-    :param coords: (float, float, float, float) minx, miny, maxx, maxy coordinates of overview region
-    :param sem_stream (SEMStream):
-    :returns: (ProgressiveFuture): acquisition future
-    """
+def acquireTiledArea(stream, stage, area, live_stream=None):
     f = model.ProgressiveFuture()
-    _executor.submitf(f, _run_fake_overview_acquisition, coords, sem_stream)
+    _executor.submitf(f, _run_fake_overview_acquisition, stream, stage, area, live_stream)
     return f
 
 
-def _run_fake_overview_acquisition(coords, semstream):
+def _run_fake_overview_acquisition(stream, stage, area, live_stream):
     """
     :param coords: (float, float, float, float) minx, miny, maxx, maxy coordinates of overview region
     :param sem_stream (SEMStream):
