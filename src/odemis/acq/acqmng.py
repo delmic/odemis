@@ -42,6 +42,7 @@ import copy
 from odemis.model import prepare_to_listen_to_more_vas
 from concurrent.futures._base import CANCELLED, FINISHED
 from odemis.util.driver import estimate_focuser_move_duration 
+from odemis.gui.util.img import assemble_z_cube
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
@@ -162,35 +163,6 @@ class ZStackAcquisitionTask(object):
         """
         return estimateZStackAcquisitionTime(self._streams, self._zlevels)
 
-    def _construct_zcube(self, data_arrays):
-        """
-        Create 3D data array from the 2D acquired data arrays 
-        data_arrays (list of DataArray): a list of acquired images at different z levels.
-        return (DataArray): a data array embedding all the data acquired at all z levels.
-        """
-        # pixel size along z axis
-        metadata = data_arrays[0].metadata
-        px, py = metadata[model.MD_PIXEL_SIZE]
-        pz = abs(self._zpos[-1] - self._zpos[0]) / (len(self._zpos) - 1)
-
-        # upgrade the metadata with the z pixel size
-        metadata[model.MD_PIXEL_SIZE] = (px, py, round(pz, ndigits=7))
-
-        # in case the zlevels are ordered from positive to negative,
-        # flip the acquired data so that they are always ordered from
-        # lowest zlevel to highest zlevel 
-        if self._zpos:
-            if self._zpos[-1] < self._zpos[0]:
-                data_arrays = flipud(data_arrays)
-
-        # z coordinate of center
-        cx, cy = metadata[model.MD_POS]
-        cz = (self._zpos[0] + self._zpos[-1]) / 2
-        # upgrade the metadata with the z center position
-        metadata[model.MD_POS] = (cx, cy, round(cz, ndigits=5))
-
-        return model.DataArray(data_arrays, metadata)
-
     def run(self):
         """
         The main function of the task class, which will be called by the future asynchronously
@@ -228,14 +200,12 @@ class ZStackAcquisitionTask(object):
 
                     # check on the acquired data
                     if not data:
-                        logging.warning(
-                            "The acquired data array for stream %s is empty", stream
-                        )
+                        logging.warning("The acquired data array for stream %s is empty", stream)
                     else:
                         logging.info("The acquisition for stream %s is done", stream)
 
                 except CancelledError:
-                    logging.exception("The acquisition was canceled")
+                    raise CancelledError()
                 except Exception:
                     logging.exception("The acquisition failed")
                 finally:
@@ -245,7 +215,7 @@ class ZStackAcquisitionTask(object):
                     self._main_future.set_end_time(time.time() + remaining_t)
 
             if isinstance(stream, FluoStream):
-                zcube = self._construct_zcube(zstack)
+                zcube = assemble_z_cube(zstack, self._zpos)
                 acquired_data.append(zcube)
             elif isinstance(stream, EMStream):
                 acquired_data.append(zstack[0])
