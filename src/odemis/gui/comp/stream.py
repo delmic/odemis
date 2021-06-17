@@ -1234,24 +1234,6 @@ class StreamPanel(wx.Panel):
     # END Setting Control Addition Methods
 
     @control_bookkeeper
-    def add_rgbfit_ctrl(self):
-        """ Add an 'rgb fit' button to the stream panel
-
-        :return: (ImageTextToggleButton)
-
-        """
-
-        btn_fit_rgb = buttons.ImageTextToggleButton(self._panel, height=24,
-                                                    icon=img.getBitmap("icon/ico_bgr.png"),
-                                                    label="RGB")
-        btn_fit_rgb.SetToolTip("Toggle sub-bandwidths to Blue/Green/Red display")
-
-        self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP | wx.BOTTOM,
-                          border=5)
-
-        return btn_fit_rgb
-
-    @control_bookkeeper
     def add_specbw_ctrls(self):
         """ Add controls to manipulate the spectrum data bandwidth
 
