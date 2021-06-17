@@ -1,6 +1,6 @@
 # bash completion for odemis-convert
 
-have odemis-convert &&
+_have odemis-convert &&
 _odemis_convert()
 {
     local cur prev
@@ -22,8 +22,9 @@ _odemis_convert()
     esac
 
     return 0
-} &&
-complete -F _odemis_convert odemis-convert -o filenames
+}
+
+_have odemis-convert && complete -F _odemis_convert odemis-convert -o filenames
 
 # Local variables:
 # mode: shell-script

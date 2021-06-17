@@ -1,5 +1,4 @@
 etc/sudoers.d
 etc/logrotate.d
-etc/bash_completion.d
+usr/share/bash-completion/completions
 usr/lib/odemis/plugins
-usr/lib/odemis/python2
