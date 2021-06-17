@@ -463,10 +463,6 @@ ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
 
-# constants for the focus actuator 
-DEFAULT_SPEED = 10e-6
-DEFAULT_ACCELERATION = 0.01 
-
 class CryoAcquiController(object):
     """
     Controller to handle the acquisitions of the cryo-secom
@@ -511,9 +507,9 @@ class CryoAcquiController(object):
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
         # for the z parameters widgets 
-        self._panel.param_Zmin.Bind(wx.EVT_CHAR, self._panel.param_Zmin.on_char)
-        self._panel.param_Zmax.Bind(wx.EVT_CHAR, self._panel.param_Zmax.on_char)
-        self._panel.param_Zstep.Bind(wx.EVT_CHAR, self._panel.param_Zstep.on_char)
+        self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
+        self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
+        self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -770,12 +766,11 @@ class CryoAcquiController(object):
         """
         if not self._zStackActive.value: # if no zstack 
             acq_time = acqmng.estimateTime(self._acquiStreams.value)
-            acq_time = math.ceil(acq_time)  
 
         else: # if zstack 
             acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
-            acq_time = math.ceil(acq_time)
-        
+
+        acq_time = math.ceil(acq_time)
         # display the time on the GUI 
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
