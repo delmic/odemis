@@ -219,7 +219,6 @@ class PixelValueOverlay(ViewOverlay):
         )
 
         self._label.text = ""
-        self._left_dragging = False
 
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
@@ -235,18 +234,16 @@ class PixelValueOverlay(ViewOverlay):
         if not self.active.value:
             return super(ViewOverlay, self).on_motion(evt)
 
+        # Whatever happens, we don't keep the event, but pass it to any other interested listener.
+        evt.Skip()
+
+        # If the canvas is being dragged, the image position cannot be directly queried,
+        # and anyway the cursor is above the same pixel all the time, so no update.
         if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
-            # Already being handled by the canvas itself
-            evt.Skip()
             return
 
-        if self._left_dragging:
-            evt.Skip()
-
-        else:
-            vpos = evt.Position
-            self._v_pos = Vec(vpos)
-            self.cnvs.request_drawing_update()
+        self._v_pos = Vec(evt.Position)
+        self.cnvs.request_drawing_update()
 
     def _draw_legend(self, stream):
         """ Get the pixel coordinates and the raw pixel value given a projection """
