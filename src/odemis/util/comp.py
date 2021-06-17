@@ -125,7 +125,7 @@ def generate_zlevels(focuser, zrange, zstep):
     if zrange[0] == zrange[1] == 0:
         raise ValueError("'zmax' and 'zmin' can not be both zeros")
     if "z" not in focuser.axes.keys():
-        raise KeyError("The focus actuator %s does not have z axis", focuser)
+        raise KeyError("The focus actuator %s does not have z axis" %focuser)
 
     focuser_pos = focuser.position.value["z"]
     focuser_rng = focuser.axes["z"].range
