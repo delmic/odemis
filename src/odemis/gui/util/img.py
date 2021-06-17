@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Some helper functions to convert/manipulate images
 
 from __future__ import division
-
 from past.builtins import basestring
 import threading
 import cairo
@@ -2657,4 +2656,3 @@ def merge_screen(ima, imb):
     format_bgra_to_rgb(out, inplace=True)
     out.metadata = md
     return out
-

@@ -36,6 +36,7 @@ from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream,
 from odemis.model import DataArray
 from odemis.util import dataio as udataio
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov
+from odemis.util.img import assembleZCube
 import os
 import psutil
 import threading
@@ -456,40 +457,6 @@ class TiledAcquisitionTask(object):
         # Run in a separate thread
         threading.Thread(target=save_tile, args=(ix, iy, das, stream_cube_id), ).start()
 
-    def _assembleZCube(self, images, zlevels):
-        """
-        Construct xyz cube from a  z stack of images
-        :param images:  (list of DataArray of shape YX) list of z ordered images
-        :param zlevels:  (list of float) list of focus positions
-        :return: (DataArray of shape ZYX) the data array of the xyz cube
-        """
-        # images is a list of 3 dim data arrays.
-        # Will fail on purpose if the images contain more than 2 dimensions
-        ret = numpy.array([im.reshape(im.shape[-2:]) for im in images])
-
-        # Add back metadata
-        metadata3d = copy.copy(images[0].metadata)
-        # Extend pixel size to 3D
-        ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
-        ps_z = (zlevels[-1] - zlevels[0]) / (len(zlevels) - 1) if len(zlevels) > 1 else 1e-6
-
-        # Compute cube centre
-        c_x, c_y = metadata3d[model.MD_POS]
-        c_z = (zlevels[0] + zlevels[-1]) / 2  # Assuming zlevels are ordered
-        metadata3d[model.MD_POS] = (c_x, c_y, c_z)
-
-        # For a negative pixel size, convert to a positive and flip the z axis
-        if ps_z < 0:
-            ret = numpy.flipud(ret)
-            ps_z = -ps_z
-
-        metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
-        metadata3d[model.MD_DIMS] = "ZYX"
-
-        ret = DataArray(ret, metadata3d)
-
-        return ret
-
     def _acquireStreamCompressedZStack(self, i, ix, iy, stream):
         """
         Acquire a compressed zstack image for the given stream.
@@ -511,7 +478,7 @@ class TiledAcquisitionTask(object):
             raise CancelledError()
         logging.debug(f"Zstack acquisition for tile {ix}x{iy}, stream {stream.name} finished, compressing data into a single image.")
         # Convert zstack into a cube
-        fm_cube = self._assembleZCube(zstack, self._zlevels)
+        fm_cube = assembleZCube(zstack, self._zlevels)
         # Save the cube on disk if a log path exists
         if self._log_path:
             self._save_tiles(ix, iy, fm_cube, stream_cube_id=self._streams.index(stream))
