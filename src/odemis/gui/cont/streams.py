@@ -504,7 +504,7 @@ class StreamController(object):
         # zstart is the *center* position of the first pixel, so we need
         # len(zIndexes) - 1 ==  zIndex.range[1]
         zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
-        self.tab_data_model.zPos.value = zstart + zstep * zIndex
+        self.tab_data_model.zPos.value = self.tab_data_model.zPos.clip(zstart + zstep * zIndex)
 
         self.tab_data_model.zPos.subscribe(self._on_z_pos)
 
