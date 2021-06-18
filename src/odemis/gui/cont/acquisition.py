@@ -565,6 +565,9 @@ class CryoAcquiController(object):
         self._tab.streambar_controller.pause()
         self._panel.Layout()
 
+        # store the focuser position 
+        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+
         # acquire the data 
         if self._zStackActive.value: # if zstack 
             self._acq_future = acqmng.acquireZStack(
@@ -595,6 +598,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
+        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
 
         # try to get the acquisition data
         try:
