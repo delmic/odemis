@@ -1131,9 +1131,17 @@ class MPPC(model.Detector):
                         logging.warning("ASM acquisition already had the '%s', received this command again." % command)
                         continue
 
-                    acquisition_in_progress = True
                     megafield_metadata = args[0]
-                    self.parent.asmApiPostCall("/scan/start_mega_field", 204, megafield_metadata.to_dict())
+                    notifier_func = args[1]  # Return function (usually, dataflow.notify or acquire_single_field queue)
+                    try:
+                        self.parent.asmApiPostCall("/scan/start_mega_field", 204, megafield_metadata.to_dict())
+                        notifier_func(None)  # return None if all went fine
+                    except Exception as ex:
+                        logging.error("During the start of the acquisition an error has occurred: %s." % ex)
+                        notifier_func(ex)
+                        continue  # let the caller decide on what to do next
+
+                    acquisition_in_progress = True  # acquisition was successfully started
 
                 elif command == "next":
                     if not acquisition_in_progress:
@@ -1145,23 +1153,29 @@ class MPPC(model.Detector):
                     dataContent = args[1]  # Specifies the type of image to return (empty, thumbnail or full)
                     notifier_func = args[2]  # Return function (usually, dataflow.notify or acquire_single_field queue)
 
-                    self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
+                    try:
+                        self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
 
-                    if DATA_CONTENT_TO_ASM[dataContent] is None:
-                        da = model.DataArray(numpy.array([[0]], dtype=numpy.uint8), metadata=self._metadata)
-                    else:
-                        # TODO remove time.sleep if the function "waitOnFieldImage" exists. Otherwise the image is
-                        #  not yet loaded on the ASM when trying to retrieve it.
-                        time.sleep(0.5)
-                        resp = self.parent.asmApiGetCall(
-                                "/scan/field?x=%d&y=%d&thumbnail=%s" %
-                                (field_data.position_x, field_data.position_y,
-                                 str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
-                                200, raw_response=True, stream=True)
-                        resp.raw.decode_content = True  # handle spurious Content-Encoding
-                        img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
+                        if DATA_CONTENT_TO_ASM[dataContent] is None:
+                            da = model.DataArray(numpy.array([[0]], dtype=numpy.uint8), metadata=self._metadata)
+                        else:
+                            # TODO remove time.sleep if the function "waitOnFieldImage" exists. Otherwise the image is
+                            #  not yet loaded on the ASM when trying to retrieve it.
+                            time.sleep(0.5)
+                            resp = self.parent.asmApiGetCall(
+                                    "/scan/field?x=%d&y=%d&thumbnail=%s" %
+                                    (field_data.position_x, field_data.position_y,
+                                     str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
+                                    200, raw_response=True, stream=True)
+                            resp.raw.decode_content = True  # handle spurious Content-Encoding
+                            img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
 
-                        da = model.DataArray(img, metadata=self._metadata)
+                            da = model.DataArray(img, metadata=self._metadata)
+                    except Exception as ex:
+                        logging.error("During the acquisition of field %s an error has occurred: %s.",
+                                      (field_data.position_x, field_data.position_y), ex)
+                        notifier_func(ex)
+                        continue  # let the caller decide on what to do next
 
                     # Send DA to the function to be notified
                     notifier_func(da)
@@ -1216,13 +1230,24 @@ class MPPC(model.Detector):
 
     def startAcquisition(self):
         """
-        Put a the command 'start' mega field scan on the queue with the appropriate MegaFieldMetaData Model of the mega
-        field image to be scanned. The MegaFieldMetaData is used to setup the HW accordingly, for each field image
+        Put the command 'start' mega field scan on the queue with the appropriate MegaFieldMetaData model of the mega
+        field image to be scanned. The MegaFieldMetaData is used to setup the HW accordingly. For each field image
         additional field image related metadata is provided.
+        :raise: (Exception) Raise exception if start of megafield acquisition failed.
+                (queue.Empty) Raise if return queue did not receive either an Exception or None within time.
         """
         self._ensure_acquisition_thread()
+        return_queue = queue.Queue()  # queue which allows to return error messages or None (if all was fine)
         megafield_metadata = self._assembleMegafieldMetadata()
-        self.acq_queue.put(("start", megafield_metadata))
+        self.acq_queue.put(("start", megafield_metadata, return_queue.put))
+        try:
+            status_start = return_queue.get(timeout=5)
+        except queue.Empty:
+            logging.error("Start of acquisition timed out.")
+            raise TimeoutError("Start of the megafield acquisition timed out after 5s.")
+        if isinstance(status_start, Exception):
+            logging.debug("Received an exception from the acquisition thread.")
+            raise status_start
 
     def getNextField(self, field_num):
         """
@@ -1232,7 +1257,7 @@ class MPPC(model.Detector):
         with the "next" command. As notifier function the dataflow.notify is send. The returned image will be
         returned to the dataflow.notify which will provide the new data to all the subscribers of the dataflow.
 
-        :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
+        :param field_num: (int, int) x,y coordinates of the field number.
         """
         # Note that this means we don't support numpy ints for now.
         # That's actually correct, as they'd fail in the JSON encoding (which
@@ -1245,17 +1270,17 @@ class MPPC(model.Detector):
 
     def stopAcquisition(self):
         """
-        Puts a 'stop' field image scan on the queue, after this call, no fields can be scanned anymore. A new mega
-        field can be started. The call triggers the post processing process to generate and offload additional zoom
-        levels.
+        Puts the command 'stop' field image scan on the queue. After this call, no fields can be scanned anymore.
+        A new mega field can be started. The call triggers the post processing process to generate and offload
+        additional zoom levels.
         """
-        self.acq_queue.put(("stop",))
+        self.acq_queue.put(("stop", ))
 
     def cancelAcquistion(self, execution_wait=0.2):
         """
-        Clears the entire queue and finished the current acquisition. Does not terminate acquisition thread.
+        Clears the entire queue and finishes the current acquisition. Does not terminate the acquisition thread.
         """
-        time.sleep(0.3)  # Wait to make sure noting is being loaded on the queue
+        time.sleep(0.3)  # Wait to make sure nothing is still being put on the queue
         # Clear the queue
         while True:
             try:
@@ -1266,25 +1291,27 @@ class MPPC(model.Detector):
         self.acq_queue.put(("stop", ))
 
         if execution_wait > 30:
-            logging.error("Failed to cancel the acquisition. mppc is terminated.")
+            logging.error("Failed to cancel the acquisition. MPPC detector is terminated.")
             self.terminate()
-            raise ConnectionError("Connection quality was to low to cancel the acquisition. mppc is terminated.")
+            raise ConnectionError("Connection quality was too poor to cancel the acquisition. MPPC is terminated.")
 
-        time.sleep(execution_wait)  # Wait until finish command is executed
+        time.sleep(execution_wait)  # Wait until command executed is finished
 
         if not self.acq_queue.empty():
-            self.cancelAcquistion(execution_wait=execution_wait * 2)  # Let the waiting time increase
+            self.cancelAcquistion(execution_wait=execution_wait * 2)  # Increase the waiting time
 
     def acquireSingleField(self, dataContent="thumbnail", field_num=(0, 0)):
         """
-        Scans a single field image via the acquire thread and the acquisition queue with the appropriate metadata models.
-        The function returns this image by providing a return_queue to the acquisition thread. The use of this queue
-        allows the use of the timeout functionality of a queue to prevent waiting to long on a return image (
-        timeout=600 seconds).
+        Scans a single field image via the acquire thread and the acquisition queue with the appropriate metadata
+        models. The function returns the image by providing a return_queue to the acquisition thread. Making use of
+        the timeout functionality of the queue prevents waiting too long for an image (timeout=600 seconds).
 
-        :param dataContent (string): Can be either: "empty", "thumbnail", "full"
-        :param field_num (tuple): x,y integer number, location of the field number with the metadata provided.
-        :return: DA of the single field image
+        :param dataContent: (str) Can be either: "empty", "thumbnail", "full".
+        :param field_num: (int, int) x,y location of the field.
+        :return: (DataArray) The single field image.
+        :raise: (queue.Emtpy) The acquisition did not return anything on the queue in time.
+                (Exception) Exception raised during the single field acquisition.
+
         """
         if dataContent not in DATA_CONTENT_TO_ASM:
             logging.warning("Incorrect dataContent provided for acquiring a single image, thumbnail is used as default "
@@ -1296,17 +1323,40 @@ class MPPC(model.Detector):
 
         self._ensure_acquisition_thread()
 
-        self.acq_queue.put(("start", mega_field_data))
+        # request to start the acquisition
+        self.acq_queue.put(("start", mega_field_data, return_queue.put))
+        try:
+            status_start = return_queue.get(timeout=5)
+        except queue.Empty:
+            logging.error("Start of the single field acquisition timed out.")
+            raise TimeoutError("Start of the single field image acquisition timed out after 5s.")
+        if isinstance(status_start, Exception):
+            logging.debug("Received an exception from the acquisition thread.")
+            raise status_start
+
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
 
+        # request to scan a single field image
         self.acq_queue.put(("next", field_data, dataContent, return_queue.put))
+        try:
+            status_next = return_queue.get(timeout=600)
+        except queue.Empty:
+            logging.error("Acquisition of the single field image timed out.")
+            raise TimeoutError("Acquisition of the single field image timed out after 600s.")
+
+        if isinstance(status_next, Exception):
+            logging.debug("Received an exception from the acquisition thread.")
+            raise status_next
+        elif not isinstance(status_next, model.DataArray):
+            raise ValueError("Did not receive image data but the following: %s." % status_next)  # should never happen
+
+        # request to stop the acquisition
         self.acq_queue.put(("stop",))
 
-        return return_queue.get(timeout=600)
+        return status_next  # return the image data
 
     def convertFieldNum2Pixels(self, field_num):
         """
-
         :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
         :return: field number (tuple of ints)
         """
@@ -1505,7 +1555,7 @@ class MPPC(model.Detector):
 
 class ASMDataFlow(model.DataFlow):
     """
-    Represents the acquisition on the ASM
+    Represents the acquisition on the ASM.
     """
 
     def __init__(self, mppc):
@@ -1516,39 +1566,53 @@ class ASMDataFlow(model.DataFlow):
 
     def start_generate(self):
         """
-        Start the dataflow using the provided function. The appropriate settings are retrieved via the VA's of the
-        each component
+        Start the dataflow.
         """
         self._mppc.startAcquisition()
 
     def next(self, field_num):
         """
-        Acquire the next field image using the provided function.
-        :param field_num (tuple): tuple with x,y coordinates in integers of the field number.
+        Acquire the next field image if at least one subscriber on the dataflow is present.
+        :param field_num: (int, int) x,y coordinates of the field number.
+        :raise: (ValueError) Raise if there is no listener on the dataflow.
         """
+        if self._count_listeners() == 0:
+            raise ValueError("There is no listener subscribed to the dataflow yet.")
+
         self._mppc.getNextField(field_num)
+
+    def notify(self, data):
+        """
+        Call this method to share the data with all the listeners or return in case an exception was raised. Note, that
+        in the later case, the listeners are not notified and are not aware that an exception has occurred.
+        :param data: (DataArray or Exception) Either the image data to be sent to the listeners or an Exception that
+            was raised during image acquisition.
+        """
+        if isinstance(data, Exception):
+            logging.error("During image data acquisition, an exception has occurred: %s", data)
+            return  # makes sure that the acquisition thread does not fail
+        super().notify(data)  # if image data received, notify the listeners
 
     def stop_generate(self):
         """
-        Stop the dataflow using the provided function.
+        Stop the dataflow.
         """
         self._mppc.stopAcquisition()
 
     def get(self, *args, **kwargs):
         """
-        Acquire a single field, can only be called if no other acquisition is active.
-        :return: (DataArray)
+        Acquire a single field image. Can only be called if no other acquisition is active.
+        :return: (DataArray or Exception) The acquired single field image.
+        :raise (ValueError) Raise if there is already a listener on the dataflow.
         """
         if self._count_listeners() < 1:
             # Acquire and return received image
             image = self._mppc.acquireSingleField(*args, **kwargs)
             return image
-
         else:
-            logging.error("There is already an acquisition on going with %s listeners subscribed, first cancel/stop "
-                          "current running acquisition to acquire a single field-image" % self._count_listeners())
-            raise Exception("There is already an acquisition on going with %s listeners subscribed, first cancel/stop "
-                            "current running acquisition to acquire a single field-image" % self._count_listeners())
+            raise ValueError("There is already an acquisition ongoing with %s listeners subscribed. First cancel/stop "
+                             "the current running acquisition before acquiring a single field-image."
+                             % self._count_listeners())
 
 
 class AsmApiException(Exception):
