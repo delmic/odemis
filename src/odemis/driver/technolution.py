@@ -1146,7 +1146,7 @@ class MPPC(model.Detector):
                     notifier_func = args[2]  # Return function (usually, dataflow.notify or acquire_single_field queue)
 
                     # FIXME: Hack: The current ASM HW does not scan the very first field image correctly. This issue
-                    #  needs to be fixed in HW. However, until this is done, we need to "through away" the first field
+                    #  needs to be fixed in HW. However, until this is done, we need to "throw away" the first field
                     #  image and scan it a second time to receive a good first field image. To do so, just always scan
                     #  the first image twice.
                     if field_data.position_x == 0 and field_data.position_y == 0:
