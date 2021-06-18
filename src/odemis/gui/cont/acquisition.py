@@ -842,10 +842,6 @@ class CryoAcquiController(object):
                     [self._tab_data.zMin.value, self._tab_data.zMax.value],
                     self._tab_data.zStep.value)
                 self._zlevels[s] = list(levels)
-            elif isinstance(s, EMStream):
-                if not s.focuser:
-                    raise LookupError("The stream %s does not have SEM focuser object", s)
-                self._zlevels[s] = [s.focuser.position.value["z"]]
 
         # update the time, taking the zstack into account 
         self._update_acquisition_time()

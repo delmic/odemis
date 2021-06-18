@@ -129,13 +129,9 @@ class ZStackAcquisitionTask(object):
         self._single_acqui_f = None 
         self._future_state = None
         self._streams = sortStreams(streams)
-        self._zpos = None 
-        for l in zlevels.values():
-            if len(l) > 1:
-                self._zpos = l
-                break
         self._zlevels = zlevels
         self._settings_obs = settings_obs
+        self._zpos = list(zlevels.values())[0]
         zstep = abs(self._zpos[0]-self._zpos[1]) if self._zpos else 0
         # get the focuser object of any of the FM streams
         focuser = next((s.focuser for s in self._streams if isinstance(s, FluoStream)), None)
@@ -172,22 +168,7 @@ class ZStackAcquisitionTask(object):
         # iterate through streams
         for stream in self._streams:
             zstack = []
-            # for each stream, iterate through zlevels (if exist)
-            for i, z in enumerate(self._zlevels[stream]):
-                # move the focuser
-                self._actuator_f = stream.focuser.moveAbs({"z": z})
-                self._actuator_f.result()
-
-                # check if cancellation happened while the actuator future is working
-                if self._future_state == CANCELLED:
-                    raise CancelledError()
-
-                # if FM stream, then subtract one zstep time
-                if isinstance(stream, FluoStream):
-                    if i != len(self._zpos) - 1:
-                        remaining_t -= self._zstep_duration
-                        self._main_future.set_end_time(time.time() + remaining_t)
-
+            if stream not in self._zlevels.keys(): # stream can't be zstack imaged 
                 try:
                     # acquire this single stream, and get the data
                     self._single_acqui_f = acquire([stream], self._settings_obs)
@@ -205,21 +186,66 @@ class ZStackAcquisitionTask(object):
 
                 except CancelledError:
                     raise CancelledError()
-                except Exception:
-                    logging.exception("The acquisition failed")
+                except Exception as e:
+                    logging.exception("The acquisition failed because of %s" %e)
+                    # return what was acquired so far  
+                    return acquired_data, e
                 finally:
-                    zstack.append(data[0])
+                    acquired_data.append(data[0])
                     # update the remaining time
                     remaining_t -= stream.estimateAcquisitionTime()
                     self._main_future.set_end_time(time.time() + remaining_t)
 
-            if isinstance(stream, FluoStream):
+            else: # stream can be zstack imaged 
+                # for each stream, iterate through zlevels (if exist)
+                for i, z in enumerate(self._zpos):
+                    # move the focuser
+                    self._actuator_f = stream.focuser.moveAbs({"z": z})
+                    self._actuator_f.result()
+
+                    # check if cancellation happened while the actuator future is working
+                    if self._future_state == CANCELLED:
+                        raise CancelledError()
+
+                    # subtract one zstep time
+                    if i != len(self._zpos) - 1:
+                        remaining_t -= self._zstep_duration
+                        self._main_future.set_end_time(time.time() + remaining_t)
+
+                    try:
+                        # acquire this single stream, and get the data
+                        self._single_acqui_f = acquire([stream], self._settings_obs)
+                        data, exp = self._single_acqui_f.result()
+
+                        # check if cancellation happened while the acquiring future is working
+                        if self._future_state == CANCELLED:
+                            raise CancelledError()
+
+                        # check on the acquired data
+                        if not data:
+                            logging.warning("The acquired data array for stream %s is empty", stream)
+                        else:
+                            logging.info("The acquisition for stream %s is done", stream)
+
+                    except CancelledError:
+                        raise CancelledError()
+                    except Exception as exp:
+                        logging.exception("The acquisition failed at the %s-th zlevel of streams %s because of %s" %(i+1, stream, exp))
+                        # assemble what was acquired so far, and return 
+                        zcube = assemble_z_cube(zstack, self._zpos)
+                        acquired_data.append(zcube)
+                        return acquired_data, exp
+                    finally:
+                        zstack.append(data[0])
+                        # update the remaining time
+                        remaining_t -= stream.estimateAcquisitionTime()
+                        self._main_future.set_end_time(time.time() + remaining_t)
+
                 zcube = assemble_z_cube(zstack, self._zpos)
                 acquired_data.append(zcube)
-            elif isinstance(stream, EMStream):
-                acquired_data.append(zstack[0])
-            # state that the future has finished 
-            self._future_state = FINISHED
+
+        # state that the future has finished 
+        self._future_state = FINISHED
 
         return acquired_data, exp
 
@@ -234,18 +260,18 @@ def estimateZStackAcquisitionTime(streams, zlevels):
     return (float): total estimated time of acquisition of streams and zsteps 
     """
     acq_time = 0
-    nr_FM_streams = 0
     for s in streams:
-        acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
-        if isinstance(s, FluoStream):
-            nr_FM_streams += 1
+        if s in zlevels.keys():
+            acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
+        else:
+            acq_time += s.estimateAcquisitionTime() 
     # find the zstep, if applicable
     z_pos = next((l for l in zlevels.values() if len(l) > 1), None)
     if z_pos:
         zstep = abs(z_pos[0]-z_pos[1])
         # get the focuser of any of the FM streams
         focuser = next((s.focuser for s in streams if isinstance(s, FluoStream)), None)
-        tot_zstep_time = (len(z_pos) - 1) * nr_FM_streams * \
+        tot_zstep_time = (len(z_pos) - 1) * len(zlevels) * \
             estimate_focuser_move_duration(focuser, zstep)
         acq_time += tot_zstep_time
 
