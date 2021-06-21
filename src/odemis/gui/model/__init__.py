@@ -1119,7 +1119,6 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
         for i in main.scintillator_positions:
             self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
-        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
         self.projects = model.ListVA([])  # list of FastEMProject
 
 
@@ -1132,8 +1131,7 @@ class FastEMOverviewGUIData(MicroscopyGUIData):
         assert main.microscope is not None
         super(FastEMOverviewGUIData, self).__init__(main)
 
-        self.acq_selection = set()  # set of ints, overview images to be acquired
-        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
 
 
 class FastEMProject(object):

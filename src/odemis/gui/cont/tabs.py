@@ -1653,7 +1653,6 @@ class FastEMAcquisitionTab(Tab):
              {"name": "Acquisition",
               "cls": guimod.StreamView,
               "stream_classes": EMStream,
-              "zPos": self.tab_data_model.zPos,
               }),
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
@@ -1749,7 +1748,6 @@ class FastEMOverviewTab(Tab):
               "stage": main_data.stage,
               "cls": guimod.StreamView,
               "stream_classes": EMStream,
-              "zPos": self.tab_data_model.zPos,
               }),
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
@@ -1802,9 +1800,6 @@ class FastEMOverviewTab(Tab):
         else:
             self._stream_controller.resume()
             self._stream_controller.enable(True)
-
-    def Show(self, show=True):
-        super(FastEMOverviewTab, self).Show(show)
 
     @classmethod
     def get_display_priority(cls, main_data):

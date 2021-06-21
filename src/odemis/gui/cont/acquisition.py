@@ -40,7 +40,7 @@ from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream, FastEMOverviewStream
-from odemis.gui import conf
+from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -1615,30 +1615,32 @@ class FastEMOverviewAcquiController(object):
         self.update_acquisition_time()
 
     def _on_selection_button(self, evt):
-        # add/remove scintillator number to/from acq_selection set and toggle button colour
+        # add/remove scintillator number to/from selected_scintillators set and toggle button colour
         btn = evt.GetEventObject()
         num = [num for num, b in self.selection_panel.buttons.items() if b == btn][0]
         if btn.GetValue():
-            self._tab_data_model.acq_selection.add(num)
+            if num not in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.append(num)
             btn.SetBackgroundColour(wx.GREEN)
         else:
-            self._tab_data_model.acq_selection.remove(num)
+            if num in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.remove(num)
             btn.SetBackgroundColour(FG_COLOUR_BUTTON)
         self.update_acquisition_time()
         self.check_acquire_button()
 
     @call_in_wx_main
     def check_acquire_button(self):
-        self.btn_acquire.Enable(True if self._tab_data_model.acq_selection else False)
+        self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if not self._tab_data_model.acq_selection:
+        if not self._tab_data_model.selected_scintillators.value:
             lvl = logging.WARN
             txt = "No scintillator selected for overview acquisition."
         else:
-            acq_time = len(self._tab_data_model.acq_selection) * 2
+            acq_time = len(self._tab_data_model.selected_scintillators.value) * 2
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -1681,11 +1683,11 @@ class FastEMOverviewAcquiController(object):
         self.gauge_acq.Show()
         self._show_status_icons(None)
 
-        self.gauge_acq.Range = len(self._tab_data_model.acq_selection)
+        self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
         self.gauge_acq.Value = 0
 
         # Acquire ROAs for all projects
-        for num in self._tab_data_model.acq_selection:
+        for num in self._tab_data_model.selected_scintillators.value:
             center = self._tab_data_model.main.scintillator_positions[num]
             sz = self._tab_data_model.main.scintillator_size
             coords = (center[0] - sz[0], center[1] - sz[1], center[0] + sz[0], center[1] + sz[1])
@@ -1725,7 +1727,7 @@ class FastEMOverviewAcquiController(object):
             return
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
-        fn = os.path.join(get_home_folder(), "fastem_overview_%s" % num)
+        fn = os.path.join(get_picture_folder(), "fastem_overview_%s.ome.tiff" % num)
         dataio.tiff.export(fn, da, pyramid=True)
         da = open_acquisition(fn)
         sz = self._tab_data_model.main.scintillator_size
