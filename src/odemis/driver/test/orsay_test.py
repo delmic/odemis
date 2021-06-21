@@ -34,8 +34,6 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
-TEST_NOHW = "sim"  # TODO: DELETE THIS LINE
-
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
@@ -45,7 +43,6 @@ CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 CONFIG_FIBDEVICE = {"name": "fib-device", "role": "fib-device"}
 CONFIG_FIBSOURCE = {"name": "fib-source", "role": "fib-source"}
 CONFIG_FIBBEAM = {"name": "fib-beam", "role": "fib-beam"}
-CONFIG_SCANNER = {"name": "scanner", "role": "scanner"}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -58,8 +55,7 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                              "gis-reservoir": CONFIG_GISRES,
                              "fib-device": CONFIG_FIBDEVICE,
                              "fib-source": CONFIG_FIBSOURCE,
-                             "fib-beam": CONFIG_FIBBEAM,
-                             "scanner": CONFIG_SCANNER}
+                             "fib-beam": CONFIG_FIBBEAM}
                 }
 
 
@@ -92,7 +88,7 @@ class TestOrsayStatic(unittest.TestCase):
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         except Exception as e:
             self.fail(e)
-        self.assertEqual(len(oserver.children.value), 10)
+        self.assertEqual(len(oserver.children.value), 9)
 
         oserver.terminate()
 
@@ -1858,71 +1854,6 @@ class TestFIBBeam(unittest.TestCase):
 
         self.fibbeam.translation = (0.0, 0.0)
         self.fibbeam.resolution = (1024, 1024)
-
-
-class TestScanner(unittest.TestCase):
-    """
-    Tests for the Focused Ion Beam (FIB) Scanner
-    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
-    """
-
-    oserver = None
-
-    @classmethod
-    def setUpClass(cls):
-        """
-        Setup the Orsay client
-        """
-        if TEST_NOHW == 1:
-            raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
-
-        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        cls.datamodel = cls.oserver.datamodel
-        for child in cls.oserver.children.value:
-            if child.name == CONFIG_FIBBEAM["name"]:
-                cls.fibbeam = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.scanner = child
-
-    @classmethod
-    def tearDownClass(cls):
-        """
-        Terminate the Orsay client
-        """
-        cls.oserver.terminate()
-
-    def test_power(self):
-        """
-        Test connection between power VA and blanker VA
-        Beam on means blanking off and vice versa
-        """
-        self.scanner.power.value = 0
-        self.assertTrue(self.scanner.blanker.value)
-        self.scanner.power.value = 1
-        self.assertFalse(self.scanner.blanker.value)
-
-        self.scanner.blanker.value = True
-        self.assertEqual(self.scanner.power.value, 0)
-        self.scanner.blanker.value = False
-        self.assertEqual(self.scanner.power.value, 1)
-        self.scanner.blanker.value = None
-        self.assertEqual(self.scanner.power.value, 0)
-
-    def test_blanker(self):
-        """Test communication between blanker VA's of fibbeam and scanner"""
-        self.fibbeam.blanker.value = True
-        self.assertTrue(self.scanner.blanker.value)
-        self.fibbeam.blanker.value = False
-        self.assertFalse(self.scanner.blanker.value)
-        self.fibbeam.blanker.value = None
-        self.assertIsNone(self.scanner.blanker.value)
-
-        self.scanner.blanker.value = True
-        self.assertTrue(self.fibbeam.blanker.value)
-        self.scanner.blanker.value = False
-        self.assertFalse(self.fibbeam.blanker.value)
-        self.scanner.blanker.value = None
-        self.assertIsNone(self.fibbeam.blanker.value)
 
 
 def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=0.5):

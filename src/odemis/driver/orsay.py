@@ -199,15 +199,6 @@ class OrsayComponent(model.HwComponent):
             self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_beam)
 
-        # create the FIB beam child
-        try:
-            kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            logging.info("Orsay was not given a 'scanner' child")
-        else:
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._scanner)
-
     def on_connect(self):
         """
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
@@ -2355,76 +2346,3 @@ class FIBBeam(model.HwComponent):
             self._connectorList = []
             self._ionColumn = None
             self._hvps = None
-
-
-class Scanner(model.Emitter):
-    """
-    Represents the Focused Ion Beam (FIB) from Orsay Physics.
-    This is an extension of the model.Emitter class. It contains Vigilant
-    Attributes and setters for magnification, pixel size, translation, resolution,
-    scale, rotation and dwell time. Whenever one of these attributes is changed,
-    its setter also updates another value if needed e.g. when scale is changed,
-    resolution is updated, when resolution is changed, the translation is recentered
-    etc. Similarly it subscribes to the VAs of scale and magnification in order
-    to update the pixel size.
-    """
-
-    def __init__(self, name, role, parent, **kwargs):
-        """
-        Defines the following VA's and links them to the callbacks from the Orsay server:
-        • power: IntEnumerated, choices={0: "off", 1: "on"}
-        • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
-        """
-
-        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
-
-        self.fibbeam = self.parent._fib_beam  # reference to the FIBBeam object
-
-        self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"},
-                                          setter=self._blanker_setter)
-        self.fibbeam.blanker.subscribe(self._set_blanker)
-        self.power = model.IntEnumerated(0, choices={0: "off", 1: "on"}, setter=self._power_setter)
-        self.blanker.subscribe(self._blanker_to_power)
-
-    def _blanker_setter(self, value):
-        """
-        Setter of the blanker VA. Copies the value to the FIBBeam component
-        """
-        logging.debug("Blanker got set to %s." % str(value))
-        self.fibbeam.blanker.value = value
-        return value
-
-    def _set_blanker(self, value):
-        """
-        Sets the blanker VA to value
-        """
-        logging.debug("Setting blanker to %s." % str(value))
-        self.blanker._value = value  # to not call the setter
-        self.blanker.notify(value)
-        return value
-
-    def _power_setter(self, value):
-        """
-        Setter of the power VA. Sets the blanker VA to the corresponding value
-        """
-        blanker_value = (not value)
-        logging.debug("Power set to %d, setting blanker to %s." % (value, str(blanker_value)))
-        self.blanker.value = blanker_value
-        return value
-
-    def _blanker_to_power(self, value):
-        """
-        Takes the value of blanker VA and puts a corresponding value in power VA
-        """
-        if value is None:  # if blanking when imager needs it
-            value = True  # treat it as blanking is on
-        new_value = int(not value)
-        logging.debug("Blanker set to %s, setting power to %d." % (str(value), new_value))
-        self.power._value = new_value  # to not call the setter
-        self.power.notify(new_value)
-
-    def terminate(self):
-        """
-        Called when Odemis is closed
-        """
-        pass
