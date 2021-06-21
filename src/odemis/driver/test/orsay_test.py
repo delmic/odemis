@@ -1747,6 +1747,11 @@ class TestFIBBeam(unittest.TestCase):
         connector_test(self, self.fibbeam.brightness, self.fibbeam._sed.Level,
                        [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
+    def test_operatingMode(self):
+        """Check that the operatingMode VA is updated correctly"""
+        connector_test(self, self.fibbeam.operatingMode, self.fibbeam._datamodel.Scanner.OperatingMode,
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+
     def test_imageFormat(self):
         """Check that the imageFormat VA is updated correctly"""
         with self.assertRaises(ValueError):
@@ -1762,64 +1767,97 @@ class TestFIBBeam(unittest.TestCase):
         self.assertEqual(self.fibbeam.imageFormat.value, (1024, 1024))
         self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "1024 1024")
 
+        # test that changing imageFormat has the right effect on resolution and translation
+        self.fibbeam.imageFormat.value = (1024, 1024)
+        self.fibbeam.translation.value = (0.0, 0.0)
+        self.fibbeam.resolution.value = (1024, 1024)
+        sleep(0.5)
+        self.fibbeam.imageFormat.value = (640, 480)
+        sleep(0.5)
+        self.assertEqual(self.fibbeam.translation.value, (0.0, 0.0))
+        self.assertEqual(self.fibbeam.resolution.value, (640, 480))
+        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (640, 480)))
+
+        self.fibbeam.imageFormat.value = (1024, 1024)
+        sleep(0.5)
+        self.assertEqual(self.fibbeam.translation.value, (0.0, 0.0))
+        self.assertEqual(self.fibbeam.resolution.value, (640, 480))
+        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (1024, 1024)))
+
+        self.fibbeam.resolution.value = (1, 1)
+        self.fibbeam.translation.value = (-511.5, 511.5)
+        sleep(0.5)
+        self.fibbeam.imageFormat.value = (512, 512)
+        sleep(0.5)
+        self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
+        self.assertEqual(self.fibbeam.resolution.value, (1, 1))
+        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (512, 512)))
+
+        self.fibbeam.imageFormat.value = (1024, 1024)
+        sleep(0.5)
+        self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
+        self.assertEqual(self.fibbeam.resolution.value, (1, 1))
+        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (1024, 1024)))
+
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""
         with self.assertRaises(ValueError):
-            self.fibbeam._updateTranslation(self.datamodel.HybridPlatform.Cancel)
-        with self.assertRaises(ValueError):
-            self.fibbeam._updateResolution(self.datamodel.HybridPlatform.Cancel)
+            self.fibbeam._updateTranslationResolution(self.datamodel.HybridPlatform.Cancel)
+
+        self.fibbeam.imageFormat.value = (1024, 1024)
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 1024 1024"
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (512, 512))
+        self.assertEqual(self.fibbeam.translation.value, (0, 0))
         self.assertEqual(self.fibbeam.resolution.value, (1024, 1024))
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 1 1"
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (1, 1))
+        self.assertEqual(self.fibbeam.translation.value, (-511.5, 511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 3 3"
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (2, 2))
+        self.assertEqual(self.fibbeam.translation.value, (-510.5, 510.5))
         self.assertEqual(self.fibbeam.resolution.value, (3, 3))
 
         self.fibbeam._ionColumn.ImageArea.Target = "20 50 80 70"
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (60, 85))
+        self.assertEqual(self.fibbeam.translation.value, (-452, 427))
         self.assertEqual(self.fibbeam.resolution.value, (80, 70))
 
         self.fibbeam._ionColumn.ImageArea.Target = "1023 1023 1 1"
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (1024, 1024))
+        self.assertEqual(self.fibbeam.translation.value, (511.5, -511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
-        self.fibbeam.translation.value = (512, 512)
+        self.fibbeam.translation.value = (0.0, 0.0)
         self.fibbeam.resolution.value = (1024, 1024)
         sleep(0.5)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1024 1024")
 
-        self.fibbeam.translation.value = (1, 1)
+        self.fibbeam.resolution.value = (1, 1)
+        self.fibbeam.translation.value = (-511.5, 511.5)
         sleep(0.5)
-        self.assertEqual(self.fibbeam.resolution.value, (2, 2))
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 2 2")
+        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1 1")
 
-        self.fibbeam.translation.value = (2, 2)
         self.fibbeam.resolution.value = (3, 3)
         sleep(0.5)
+        self.assertEqual(self.fibbeam.translation.value, (-510.5, 510.5))
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 3 3")
 
-        self.fibbeam.translation.value = (60, 85)
         self.fibbeam.resolution.value = (80, 70)
+        self.fibbeam.translation.value = (-452.0, 427.0)
         sleep(0.5)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "20 50 80 70")
 
-        self.fibbeam.translation.value = (1024, 1024)
+        self.fibbeam.resolution.value = (1, 1)
+        self.fibbeam.translation.value = (511.5, -511.5)
         sleep(0.5)
-        self.assertEqual(self.fibbeam.resolution.value, (1, 1))
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "1023 1023 1 1")
 
-        self.fibbeam._ionColumn.ImageArea.Target = "0 0 1024 1024"
+        self.fibbeam.translation = (0.0, 0.0)
+        self.fibbeam.resolution = (1024, 1024)
 
 
 class TestScanner(unittest.TestCase):

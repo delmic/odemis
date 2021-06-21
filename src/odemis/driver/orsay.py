@@ -2038,15 +2038,16 @@ class FIBBeam(model.HwComponent):
         • dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
         • contrast: FloatContinuous, unit="", range=(0, 1)
         • brightness: FloatContinuous, unit="", range=(0, 1)
+        • operatingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
         • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512),
                        (640, 480), (800, 600) or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
-        • translation: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
+        • translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
         • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
 
-        # model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
         super().__init__(name, role, parent=parent, **kwargs)
 
+        self._datamodel = None
         self._ionColumn = None
         self._hvps = None
         self._sed = None
@@ -2104,12 +2105,15 @@ class FIBBeam(model.HwComponent):
         self.contrastConnector = None
         self.brightness = model.FloatContinuous(1.0, unit="", range=(0, 1))
         self.brightnessConnector = None
-        self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(480, 480), (1024, 1024)],
+        self.operatingMode = model.BooleanVA(False)
+        self.operatingModeConnector = None
+        self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(512, 480), (1024, 1024)],
                                                  setter=self._imageFormat_setter)
-        self.translation = model.TupleContinuous((512, 512), unit="px", range=[(1, 1), (1024, 1024)],
+        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-0.0, -0.0), (0.0, 0.0)],
                                                  setter=self._translation_setter)
         self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
                                                 setter=self._resolution_setter)
+        self.resolution.clip_on_range = True  # clip the value if it falls outside of the newly set range
 
         self._connectorList = []
 
@@ -2120,6 +2124,7 @@ class FIBBeam(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
+        self._datamodel = self.parent.datamodel
         self._ionColumn = self.parent.datamodel.IonColumnMCS
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._sed = self.parent.datamodel.Sed
@@ -2168,10 +2173,11 @@ class FIBBeam(model.HwComponent):
         self.dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime)
         self.contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
         self.brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
+        self.operatingModeConnector = OrsayParameterConnector(self.operatingMode, self._datamodel.Scanner.OperatingMode,
+                                                              conversion={True: 1, False: 0})
 
         self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
-        self._ionColumn.ImageArea.Subscribe(self._updateTranslation)
-        self._ionColumn.ImageArea.Subscribe(self._updateResolution)
+        self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -2196,12 +2202,6 @@ class FIBBeam(model.HwComponent):
         """
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
-        self.translation._value = (1, 1)
-        self.resolution._value = value
-        self.translation.range = [(1, 1), value]
-        self.resolution.range = [(1, 1), value]
-        self.translation.notify((1, 1))
-        self.resolution.notify(value)
         self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])
         logging.debug("Updating imageFormat to %s and updating translation and resolution and their ranges accordingly."
                       % str(value))
@@ -2227,129 +2227,123 @@ class FIBBeam(model.HwComponent):
         new_value = tuple(map(int, state.split(" ")))
         self.imageFormat._value = new_value  # to not call the setter
         self.imageFormat.notify(new_value)
-        self.translation._value = (1, 1)
-        self.resolution._value = new_value
-        self.translation.range = [(1, 1), new_value]
-        self.resolution.range = [(1, 1), new_value]
-        self.translation.notify((1, 1))
-        self.resolution.notify(new_value)
+
+        # determine new value of resolution
+        new_resolution = list(self.resolution.value)
+        if new_resolution[0] > new_value[0]:
+            new_resolution[0] = new_value[0]
+        if new_resolution[1] > new_value[1]:
+            new_resolution[1] = new_value[1]
+        new_resolution = tuple(new_resolution)
+        self.resolution._value = new_resolution  # set new resolution without calling the setter
+        self.resolution.range = [(1, 1), new_value]  # set the new range
+        self.resolution.notify(new_resolution)
 
     def _translation_setter(self, value):
         """
-        Setter of the translation VA. The translation VA marks the centre of the image area (if the geometric centre is
-        in between pixels, translation marks the pixel to the top left of the geometric centre). This setter transforms
-        the coordinates of the centre of the image area to the coordinates of the top left corner of the image area,
-        which is the format the Orsay server takes. The setter also adjusts the size of the image area (resolution VA)
-        to prevent the new translation from placing part of the image area outside of the image format.
+        Setter of the translation VA. The translation VA marks the centre of the image area with respect to the
+        centre of the field of view. This setter transforms the coordinates of the centre of the image area to the
+        coordinates of the top left corner of the image area, which is the format the Orsay server takes. The setter
+        also adjusts the size of the image area (resolution VA) to prevent the new translation from placing part of
+        the image area outside of the image format.
         """
         new_translation = list(value)
-        # Assure that the position is within the image format
-        if value[0] > self.imageFormat.value[0]:
-            new_translation[0] = self.imageFormat.value[0]
-        if value[1] > self.imageFormat.value[1]:
-            new_translation[1] = self.imageFormat.value[1]
 
-        current_area = self._ionColumn.ImageArea.Actual
-        current_area = list(map(int, current_area.split(" ")))
+        new_translation[0] = math.ceil(new_translation[0])
+        new_translation[1] = math.floor(new_translation[1])
+        if not self.resolution.value[0] % 2 == 0:  # if horizontal resolution is odd
+            new_translation[0] -= 0.5  # prefer adding a pixel to the left
+        if not self.resolution.value[1] % 2 == 0:  # if vertical resolution is odd
+            new_translation[1] += 0.5  # prefer adding a pixel to the top
 
-        if new_translation[0] * 2 <= self.imageFormat.value[0]:
-            max_width = new_translation[0] * 2
-        else:  # if new_translation[0] * 2 > self.imageFormat.value[0]:
-            max_width = (self.imageFormat.value[0] - new_translation[0]) * 2 + 1
-        if new_translation[1] * 2 <= self.imageFormat.value[1]:
-            max_height = new_translation[0] * 2
-        else:  # if new_translation[1] * 2 > self.imageFormat.value[1]:
-            max_height = (self.imageFormat.value[1] - new_translation[1]) * 2 + 1
-        new_resolution = [min(current_area[2], max_width), min(current_area[3], max_height)]
+        target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
+        target_translation[0] = int(self.imageFormat.value[0] / 2 + new_translation[0] - self.resolution.value[0] / 2)
+        target_translation[1] = int(self.imageFormat.value[1] / 2 - new_translation[1] - self.resolution.value[1] / 2)
 
-        target_translation = [0, 0]
-        target_translation[0] = new_translation[0] - math.ceil(new_resolution[0] / 2)  # move new_translation from the
-        target_translation[1] = new_translation[1] - math.ceil(new_resolution[1] / 2)  # centre to the upper left corner
-
-        target = map(str, target_translation + new_resolution)
+        target = map(str, target_translation + list(self.resolution.value))
         target = " ".join(target)
         self._ionColumn.ImageArea.Target = target
 
         logging.debug("Updating imageArea to %s." % target)
         return tuple(new_translation)
 
-    def _updateTranslation(self, parameter=None, attributeName="Actual"):
+    def _updateTranslationResolution(self, parameter=None, attributeName="Actual"):
         """
         parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
         attributeName (str): the name of the attribute of parameter which was changed
 
-        Reads the position of the currently imaged area from the Orsay server and saves it in the translation VA
+        Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
+        and resolution VA's respectively
         """
         if parameter is None:
             parameter = self._ionColumn.ImageArea
         if parameter is not self._ionColumn.ImageArea:
-            raise ValueError("Incorrect parameter passed to _updateTranslation. Parameter should be "
+            raise ValueError("Incorrect parameter passed to _updateTranslationResolution. Parameter should be "
                              "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
                              % parameter.Name)
         if attributeName != "Actual":
             return
+
         area = self._ionColumn.ImageArea.Actual
         logging.debug("Image area is: %s." % area)
         area = list(map(int, area.split(" ")))
-        new_translation = area[:2]
-        new_translation[0] += math.ceil(area[2] / 2)  # move new_translation from the upper left corner to the centre
-        new_translation[1] += math.ceil(area[3] / 2)
 
-        new_translation = tuple(new_translation)
+        new_translation = [0, 0]  # move new_translation from centre to upper left corner
+        new_translation[0] = - self.imageFormat.value[0] / 2 + area[2] / 2 + area[0]
+        new_translation[1] = self.imageFormat.value[1] / 2 - area[3] / 2 - area[1]
+        new_translation = tuple(map(float, new_translation))
+
+        new_resolution = tuple(area[2:4])
+        new_resolution = self.resolution.clip(new_resolution)
+
+        # find the new range for translation
+        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
+        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
+
         self.translation._value = new_translation  # to not call the setter
+        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
+        self.resolution._value = new_resolution  # to not call the setter
         self.translation.notify(new_translation)
+        self.resolution.notify(new_resolution)
 
     def _resolution_setter(self, value):
         """
         Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
-        the centre of the image area stays where it is.
+        the centre of the image area stays where it is and changes the translation range.
         """
-        new_value = list(value)
-        # Assure that the resolution is within the image format
+        new_resolution = list(value)
 
-        if self.translation.value[0] * 2 <= self.imageFormat.value[0]:
-            max_width = self.translation.value[0] * 2
-        else:  # if self.translation.value[0] * 2 > self.imageFormat.value[0]:
-            max_width = (self.imageFormat.value[0] - self.translation.value[0]) * 2 + 1
+        # find the new range for translation
+        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
+        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
 
-        if self.translation.value[1] * 2 <= self.imageFormat.value[1]:
-            max_height = self.translation.value[0] * 2
-        else:  # if self.translation.value[1] * 2 > self.imageFormat.value[1]:
-            max_height = (self.imageFormat.value[1] - self.translation.value[1]) * 2 + 1
+        new_translation = list(self.translation.value)
+        if new_translation[0] < -tran_limit_0:
+            new_translation[0] = -tran_limit_0
+        elif new_translation[0] > tran_limit_0:
+            new_translation[0] = tran_limit_0
+        if new_translation[1] < -tran_limit_1:
+            new_translation[1] = -tran_limit_1
+        elif new_translation[1] > tran_limit_1:
+            new_translation[1] = tran_limit_1
+        new_translation = tuple(new_translation)
+        # this new_translation cannot be outside of the old range, so set value first, then the range
+        self.translation._value = new_translation
+        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
+        self.translation.notify(new_translation)
 
-        new_value[0] = min(value[0], max_width)
-        new_value[1] = min(value[1], max_height)
-        target_translation = list(self.translation.value)  # keep the centre where it was
-        target_translation[0] -= math.ceil(new_value[0] / 2)  # move new_translation from the centre
-        target_translation[1] -= math.ceil(new_value[1] / 2)  # to the upper left corner
+        target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
+        target_translation[0] = int(self.imageFormat.value[0] / 2 +
+                                    math.ceil(new_translation[0]) - math.ceil(new_resolution[0] / 2))
+        target_translation[1] = int(self.imageFormat.value[1] / 2 -
+                                    math.floor(new_translation[1]) - math.ceil(new_resolution[1] / 2))
 
-        target = map(str, target_translation + new_value)
+        target = map(str, target_translation + new_resolution)
         target = " ".join(target)
         self._ionColumn.ImageArea.Target = target
 
         logging.debug("Updating imageArea to %s." % target)
-        return tuple(new_value)
-
-    def _updateResolution(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads the size of the currently imaged area from the Orsay server and saves it in the resolution VA
-        """
-        if parameter is None:
-            parameter = self._ionColumn.ImageArea
-        if parameter is not self._ionColumn.ImageArea:
-            raise ValueError("Incorrect parameter passed to _updateResolution. Parameter should be "
-                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
-                             % parameter.Name)
-        if attributeName != "Actual":
-            return
-        area = self._ionColumn.ImageArea.Actual
-        logging.debug("Image area is: %s." % area)
-        new_value = tuple(map(int, area.split(" ")[2:4]))
-        self.resolution._value = new_value  # to not call the setter
-        self.resolution.notify(new_value)
+        return tuple(new_resolution)
 
     def terminate(self):
         """
