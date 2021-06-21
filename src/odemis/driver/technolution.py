@@ -1150,6 +1150,7 @@ class MPPC(model.Detector):
                     #  image and scan it a second time to receive a good first field image. To do so, just always scan
                     #  the first image twice.
                     if field_data.position_x == 0 and field_data.position_y == 0:
+                        logging.debug("Rescanning first field to workaround hardware limitations.")
                         self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
 
                     self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
