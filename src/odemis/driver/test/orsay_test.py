@@ -59,20 +59,6 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                 }
 
 
-# CONFIG_TEST = {"name": "test", "role": "test"}
-#
-# CONFIG_ORSAY_TEST = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
-#                      "children": {"pneumatic-suspension": CONFIG_PSUS,
-#                                   "pressure": CONFIG_PRESSURE,
-#                                   "pumping-system": CONFIG_PSYS,
-#                                   "ups": CONFIG_UPS,
-#                                   "gis": CONFIG_GIS,
-#                                   "gis-reservoir": CONFIG_GISRES,
-#                                   "fib-source": CONFIG_FIBSOURCE,
-#                                   "test": CONFIG_TEST}
-#                      }
-
-
 class TestOrsayStatic(unittest.TestCase):
     """
     Tests which don't need an Orsay component ready
@@ -1051,186 +1037,6 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
 
 
-# class TestTestDevice(unittest.TestCase):
-#     """
-#     Tests for the test device
-#     """
-#
-#     oserver = None
-#
-#     @classmethod
-#     def setUpClass(cls):
-#         """
-#         Setup the Orsay client
-#         """
-#         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY_TEST)
-#
-#         cls.datamodel = cls.oserver.datamodel
-#
-#         for child in cls.oserver.children.value:
-#             if child.name == CONFIG_TEST["name"]:
-#                 cls.test_dev = child
-#
-#     @classmethod
-#     def tearDownClass(cls):
-#         """
-#         Terminate the Orsay client
-#         """
-#         cls.oserver.terminate()
-#
-#     def test_OrsayBooleanConnector(self):
-#         """
-#         Test the boolean VA TurboPump1.IsOn
-#         """
-#         self.datamodel.Scanner.OperatingMode.Target = 0
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-#         print("VA: %s" % str(
-#             self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-#         self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
-#                          str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
-#                              self.test_dev.testBooleanVA.value)))
-#
-#         self.datamodel.Scanner.OperatingMode.Target = 1
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-#         print("VA: %s" % str(
-#             self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-#         self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
-#                          str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
-#                              self.test_dev.testBooleanVA.value)))
-#
-#         self.test_dev.testBooleanVA.value = False
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-#         print("VA: %s" % str(
-#             self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-#         self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
-#                          str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
-#                              self.test_dev.testBooleanVA.value)))
-#
-#         self.test_dev.testBooleanVA.value = True
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.Scanner.OperatingMode.Actual)
-#         print("VA: %s" % str(
-#             self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(self.test_dev.testBooleanVA.value)))
-#         self.assertEqual(self.datamodel.Scanner.OperatingMode.Actual,
-#                          str(self.test_dev.OrsayBooleanConnector._VA_to_parameter_value(
-#                              self.test_dev.testBooleanVA.value)))
-#
-#     def test_OrsayFloatConnector(self):
-#         """
-#         Test the float VA Manometer1.Pressure
-#         """
-#         self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Target = 0.1
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
-#         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-#         self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
-#                          str(self.test_dev.testFloatVA.value))
-#
-#         self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Target = 0.2
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
-#         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-#         self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
-#                          str(self.test_dev.testFloatVA.value))
-#
-#         self.test_dev.testFloatVA.value = 0.1
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
-#         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-#         self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
-#                          str(self.test_dev.testFloatVA.value))
-#
-#         self.test_dev.testFloatVA.value = 0.2
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual)
-#         print("VA: %s" % str(self.test_dev.testFloatVA.value))
-#         self.assertEqual(self.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure.Actual,
-#                          str(self.test_dev.testFloatVA.value))
-#
-#     def test_OrsayIntConnector(self):
-#         """
-#         Test the int VA HVPSFloatingIon.HeaterState
-#         """
-#         self.datamodel.HVPSFloatingIon.HeaterState.Target = 0
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
-#         print("VA: %s" % str(self.test_dev.testIntVA.value))
-#         self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
-#
-#         self.datamodel.HVPSFloatingIon.HeaterState.Target = 1
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
-#         print("VA: %s" % str(self.test_dev.testIntVA.value))
-#         self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
-#
-#         self.test_dev.testIntVA.value = 0
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
-#         print("VA: %s" % str(self.test_dev.testIntVA.value))
-#         self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
-#
-#         self.test_dev.testIntVA.value = 1
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.HVPSFloatingIon.HeaterState.Actual)
-#         print("VA: %s" % str(self.test_dev.testIntVA.value))
-#         self.assertEqual(self.datamodel.HVPSFloatingIon.HeaterState.Actual, str(self.test_dev.testIntVA.value))
-#
-#     def test_OrsayTupleConnector(self):
-#         """
-#         Test the tuple VA IonColumnMCS.CondensorSteerer1StigmatorX and IonColumnMCS.CondensorSteerer1StigmatorY
-#         """
-#         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Target = 0.3
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
-#                          str(self.test_dev.testTupleVA.value[0]))
-#
-#         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Target = 0.4
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value[0]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
-#                          str(self.test_dev.testTupleVA.value[0]))
-#
-#         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.3
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
-#                          str(self.test_dev.testTupleVA.value[1]))
-#
-#         self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Target = 0.4
-#         sleep(1)
-#         print("Parameter: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value[1]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
-#                          str(self.test_dev.testTupleVA.value[1]))
-#
-#         self.test_dev.testTupleVA.value = (0.5, 0.6)
-#         sleep(1)
-#         print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
-#         print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
-#                          str(self.test_dev.testTupleVA.value[0]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
-#                          str(self.test_dev.testTupleVA.value[1]))
-#
-#         self.test_dev.testTupleVA.value = (0.7, 0.8)
-#         sleep(1)
-#         print("Parameter X: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual)
-#         print("Parameter Y: %s" % self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual)
-#         print("VA: %s" % str(self.test_dev.testTupleVA.value))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX.Actual,
-#                          str(self.test_dev.testTupleVA.value[0]))
-#         self.assertEqual(self.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY.Actual,
-#                          str(self.test_dev.testTupleVA.value[1]))
-
-
 class TestOrsayParameterConnector(unittest.TestCase):
     """
     Tests for the OrsayParameterConnector, to check if it properly raises exceptions when it should
@@ -1288,7 +1094,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
 
     def test_parameter_update(self):
         va = model.FloatVA(0.0)
-        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
         test_value = 1.0
         va.value = test_value
         sleep(0.5)
@@ -1296,7 +1102,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
 
     def test_va_update(self):
         va = model.FloatVA(0.0)
-        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
         test_value = 1.0
         self.datamodel.IonColumnMCS.ObjectivePhi.Target = test_value
         sleep(0.5)
@@ -1316,8 +1122,8 @@ class TestOrsayParameterConnector(unittest.TestCase):
 
         minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
-        connector = orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent,
-                                                  minpar=minpar, maxpar=maxpar)
+        orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent,
+                                      minpar=minpar, maxpar=maxpar)
         sleep(0.5)
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))

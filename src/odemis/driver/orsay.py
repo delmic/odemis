@@ -163,15 +163,6 @@ class OrsayComponent(model.HwComponent):
             self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis_reservoir)
 
-        # # create the test child
-        # try:
-        #     kwargs = children["test"]
-        # except (KeyError, TypeError):
-        #     logging.info("Orsay was not given a 'test' child")
-        # else:
-        #     self._test_device = TestDevice(parent=self, daemon=daemon, **kwargs)
-        #     self.children.value.add(self._test_device)
-
         # create the FIB device child
         try:
             kwargs = children["fib-device"]
@@ -1564,63 +1555,6 @@ class OrsayParameterConnector:
                                       % self._va_type_name)
 
 
-# class TestDevice(model.HwComponent):
-#     """
-#     This represents the Device that needs a VA communicating with an Orsay parameter
-#     """
-#
-#     def __init__(self, name, role, parent, **kwargs):
-#         """
-#         """
-#
-#         model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
-#
-#         self.testBooleanVA = model.BooleanVA(True)
-#         self.OrsayBooleanConnector = None
-#         self.testFloatVA = model.FloatVA(0.0, unit="Pa")
-#         self.OrsayFloatConnector = None
-#         self.testIntVA = model.IntVA(0)
-#         self.OrsayIntConnector = None
-#         self.testTupleVA = model.TupleVA((0.1, 0.2))
-#         self.OrsayTupleConnector = None
-#
-#         self.on_connect()
-#
-#     def on_connect(self):
-#         """
-#         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
-#         Needs to be called after connection and reconnection to the server.
-#         """
-#         self.OrsayBooleanConnector = OrsayParameterConnector(self.testBooleanVA,
-#                                                              self.parent.datamodel.Scanner.OperatingMode,
-#                                                              conversion={True: 1, False: 0})
-#         self.OrsayFloatConnector = OrsayParameterConnector(self.testFloatVA,
-#                                                            self.parent.datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure)
-#         self.OrsayIntConnector = OrsayParameterConnector(self.testIntVA,
-#                                                          self.parent.datamodel.HVPSFloatingIon.HeaterState)
-#         self.OrsayTupleConnector = OrsayParameterConnector(self.testTupleVA, [
-#             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
-#             self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY])
-#
-#     def update_VAs(self):
-#         """
-#         Update the VA's. Should be called after reconnection to the server
-#         """
-#         self.OrsayBooleanConnector.update_VA()
-#         self.OrsayFloatConnector.update_VA()
-#         self.OrsayIntConnector.update_VA()
-#         self.OrsayTupleConnector.update_VA()
-#
-#     def terminate(self):
-#         """
-#         Called when Odemis is closed
-#         """
-#         self.OrsayBooleanConnector.disconnect()
-#         self.OrsayFloatConnector.disconnect()
-#         self.OrsayIntConnector.disconnect()
-#         self.OrsayTupleConnector.disconnect()
-
-
 class FIBDevice(model.HwComponent):
     """
     Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
@@ -1638,7 +1572,7 @@ class FIBDevice(model.HwComponent):
         • compressedAirPressure: FloatContinuous, readonly, unit="Pa", range=(0, 5e6)
         """
 
-        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         self._gunPump = None
         self._columnPump = None
@@ -1854,7 +1788,7 @@ class FIBSource(model.HwComponent):
         • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
         """
 
-        model.HwComponent.__init__(self, name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         self._hvps = None
         self._ionColumn = None
@@ -2182,8 +2116,7 @@ class FIBBeam(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateImageFormat()
-        self._updateTranslation()
-        self._updateResolution()
+        self._updateTranslationResolution()
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
 
@@ -2258,45 +2191,6 @@ class FIBBeam(model.HwComponent):
         logging.debug("Updating imageArea to %s." % target)
         return tuple(new_translation)
 
-    def _updateTranslationResolution(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
-        and resolution VA's respectively
-        """
-        if parameter is None:
-            parameter = self._ionColumn.ImageArea
-        if parameter is not self._ionColumn.ImageArea:
-            raise ValueError("Incorrect parameter passed to _updateTranslationResolution. Parameter should be "
-                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
-                             % parameter.Name)
-        if attributeName != "Actual":
-            return
-
-        area = self._ionColumn.ImageArea.Actual
-        logging.debug("Image area is: %s." % area)
-        area = list(map(int, area.split(" ")))
-
-        new_translation = [0, 0]  # move new_translation from centre to upper left corner
-        new_translation[0] = - self.imageFormat.value[0] / 2 + area[2] / 2 + area[0]
-        new_translation[1] = self.imageFormat.value[1] / 2 - area[3] / 2 - area[1]
-        new_translation = tuple(map(float, new_translation))
-
-        new_resolution = tuple(area[2:4])
-        new_resolution = self.resolution.clip(new_resolution)
-
-        # find the new range for translation
-        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
-        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
-
-        self.translation._value = new_translation  # to not call the setter
-        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
-        self.resolution._value = new_resolution  # to not call the setter
-        self.translation.notify(new_translation)
-        self.resolution.notify(new_resolution)
-
     def _resolution_setter(self, value):
         """
         Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
@@ -2335,6 +2229,45 @@ class FIBBeam(model.HwComponent):
 
         logging.debug("Updating imageArea to %s." % target)
         return tuple(new_resolution)
+
+    def _updateTranslationResolution(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
+        and resolution VA's respectively
+        """
+        if parameter is None:
+            parameter = self._ionColumn.ImageArea
+        if parameter is not self._ionColumn.ImageArea:
+            raise ValueError("Incorrect parameter passed to _updateTranslationResolution. Parameter should be "
+                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+
+        area = self._ionColumn.ImageArea.Actual
+        logging.debug("Image area is: %s." % area)
+        area = list(map(int, area.split(" ")))
+
+        new_translation = [0, 0]  # move new_translation from centre to upper left corner
+        new_translation[0] = - self.imageFormat.value[0] / 2 + area[2] / 2 + area[0]
+        new_translation[1] = self.imageFormat.value[1] / 2 - area[3] / 2 - area[1]
+        new_translation = tuple(map(float, new_translation))
+
+        new_resolution = tuple(area[2:4])
+        new_resolution = self.resolution.clip(new_resolution)
+
+        # find the new range for translation
+        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
+        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
+
+        self.translation._value = new_translation  # to not call the setter
+        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
+        self.resolution._value = new_resolution  # to not call the setter
+        self.translation.notify(new_translation)
+        self.resolution.notify(new_resolution)
 
     def terminate(self):
         """
