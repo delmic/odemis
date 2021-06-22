@@ -33,6 +33,7 @@ import numpy
 from odemis import model
 from odemis.util import almost_equal
 import os
+import pickle
 import threading
 import time
 import unittest
@@ -136,6 +137,23 @@ class TestAcquisitionServer(unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    def test_exception_pickling(self):
+        """
+        Check the exception can be pickled and unpickled (for Pyro4)
+        """
+        # Get an execption by expecting a wrong status
+        try:
+            resp = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 666, raw_response=True)
+        except AsmApiException as e:
+            ex = e
+        else:
+            raise self.fail("Failed to get an exception")
+
+        p = pickle.dumps(ex)
+        ep = pickle.loads(p)
+        self.assertIsInstance(ep, AsmApiException)
+        self.assertEqual(str(ex), str(ep))
 
     def test_get_API_call(self):
         expected_status_code = 200

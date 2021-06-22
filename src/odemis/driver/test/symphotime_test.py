@@ -27,10 +27,11 @@ from __future__ import division
 import logging
 from odemis import model
 from odemis.driver import symphotime
-import threading
-import unittest
 import os
+import pickle
+import threading
 import time
+import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -73,6 +74,20 @@ MD = {
     model.MD_PIXEL_SIZE: (5e-6, 5e-6),
     model.MD_DWELL_TIME: 5e-6
     }
+
+
+class TestStatic(unittest.TestCase):
+
+    def test_exception_pickling(self):
+        """
+        Check the exception can be pickled and unpickled (for Pyro4)
+        """
+        ex = symphotime.SPTError(2)
+        p = pickle.dumps(ex)
+        ep = pickle.loads(p)
+        self.assertIsInstance(ep, symphotime.SPTError)
+        self.assertEqual(str(ex), str(ep))
+
 
 class TestSymphotime(unittest.TestCase):
     @classmethod
