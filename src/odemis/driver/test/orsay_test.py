@@ -34,6 +34,8 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
+TEST_NOHW = "sim"
+
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
@@ -1452,7 +1454,7 @@ class TestFIBBeam(unittest.TestCase):
     def test_orthogonality(self):
         """Check that the orthogonality VA is updated correctly"""
         connector_test(self, self.fibbeam.orthogonality, self.fibbeam._ionColumn.ObjectiveOrthogonality,
-                       [(-1.0, 1.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(-1.0, -1.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_objectiveRotationOffset(self):
         """Check that the objectiveRotationOffset VA is updated correctly"""
@@ -1502,7 +1504,7 @@ class TestFIBBeam(unittest.TestCase):
     def test_horizontalFOV(self):
         """Check that the horizontalFOV VA is updated correctly"""
         connector_test(self, self.fibbeam.horizontalFOV, self.fibbeam._ionColumn.ObjectiveFieldSize,
-                       [(1e-4, 1e-4), (5e-4, 5e-4)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-4, 1e-4), (5e-6, 5e-6)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_measuringCurrent(self):
         """Check that the measuringCurrent VA is updated correctly"""
@@ -1658,8 +1660,8 @@ class TestFIBBeam(unittest.TestCase):
         sleep(0.5)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "1023 1023 1 1")
 
-        self.fibbeam.translation = (0.0, 0.0)
-        self.fibbeam.resolution = (1024, 1024)
+        self.fibbeam.translation.value = (0.0, 0.0)
+        self.fibbeam.resolution.value = (1024, 1024)
 
 
 def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=0.5):

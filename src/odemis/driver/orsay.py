@@ -1334,7 +1334,9 @@ class OrsayParameterConnector:
         value of the va, such that VA = factor * Parameter. factor is only used for float type va's. If neither
         conversion nor factor is supplied, no special conversion is performed.
         minpar and maxpar supply the possibility to explicitly pass a seperate parameter which contains the minimal and
-        maximal value of the parameter respectively.
+        maximal value of the parameter respectively. Can be a list of equal length to the list of parameters for tuple
+        VA's. Then the first parameters in minpar and maxpar dictate the limits of the first parameter in parameters.
+        Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
         """
         self._parameters = None
         self._attributeName = None
@@ -1364,10 +1366,19 @@ class OrsayParameterConnector:
 
         if type(parameter) in {set, list, tuple}:
             self._parameters = list(parameter)
+            if self._minpar is not None and self._maxpar is not None:
+                self._minpar = list(self._minpar)
+                self._maxpar = list(self._maxpar)
         else:
             self._parameters = [parameter]
+            if self._minpar is not None and self._maxpar is not None:
+                self._minpar = [self._minpar]
+                self._maxpar = [self._maxpar]
         if len(self._parameters) == 0:
             raise ValueError("No parameters passed")
+        if self._minpar is not None and self._maxpar is not None:
+            if not len(self._parameters) == len(self._minpar) or not len(self._parameters) == len(self._maxpar):
+                raise ValueError("Number of parameters, minimum parameters and maximum parameters is not equal")
         self._attributeName = attributeName
         self._va = va
         self._va_type_name = va.__class__.__name__
@@ -1395,32 +1406,32 @@ class OrsayParameterConnector:
 
                 lowerbound = None
                 if self._minpar is not None:  # in case a minimum parameter is supplied
-                    if self._minpar.Actual is not None:
-                        lowerbound = self._minpar.Actual
+                    if self._minpar[i].Actual is not None:
+                        lowerbound = self._minpar[i].Actual
                     else:
-                        lowerbound = self._minpar.Target
+                        lowerbound = self._minpar[i].Target
                 if lowerbound is None:
                     lowerbound = p.Min
                 else:
                     if p.Min is not None and not p.Min == lowerbound:
                         raise AssertionError("%s.Min and %s contain different, non-None values."
-                                             "Contact Orsay Physics about this!" % (p.Name, self._minpar.Name))
+                                             "Contact Orsay Physics about this!" % (p.Name, self._minpar[i].Name))
 
                 if lowerbound is not None:  # if a lowerbound is defined in the server
                     new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
 
                 upperbound = None
                 if self._maxpar is not None:  # in case a minimum parameter is supplied
-                    if self._maxpar.Actual is not None:
-                        upperbound = self._maxpar.Actual
+                    if self._maxpar[i].Actual is not None:
+                        upperbound = self._maxpar[i].Actual
                     else:
-                        upperbound = self._maxpar.Target
+                        upperbound = self._maxpar[i].Target
                 if upperbound is None:
                     upperbound = p.Max
                 else:
                     if p.Max is not None and not p.Max == upperbound:
                         raise AssertionError("%s.Max and %s contain different, non-None values."
-                                             "Contact Orsay Physics about this!" % (p.Name, self._maxpar.Name))
+                                             "Contact Orsay Physics about this!" % (p.Name, self._maxpar[i].Name))
                 if upperbound is not None:  # if an upperbound is defined in the server
                     new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
 
@@ -1831,16 +1842,28 @@ class FIBSource(model.HwComponent):
 
         self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
                                                       conversion={True: "ON", False: "OFF"})
-        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime)
+        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
+                                                         minpar=self._hvps.SourceLifeTime_Minvalue,
+                                                         maxpar=self._hvps.SourceLifeTime_Maxvalue)
         self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
                                                                   self._hvps.BeamCurrent_Enabled)
-        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent)
-        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor)
-        self.heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater)
-        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy)
+        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent,
+                                                              minpar=self._hvps.BeamCurrent_Minvalue,
+                                                              maxpar=self._hvps.BeamCurrent_Maxvalue)
+        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor,
+                                                                  minpar=self._hvps.Suppressor_Minvalue,
+                                                                  maxpar=self._hvps.Suppressor_Maxvalue)
+        self.heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
+                                                              minpar=self._hvps.Heater_Minvalue,
+                                                              maxpar=self._hvps.Heater_Maxvalue)
+        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy,
+                                                                   minpar=self._hvps.Energy_Minvalue,
+                                                                   maxpar=self._hvps.Energy_Maxvalue)
         self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
                                                            conversion={True: "ON", False: "OFF"})
-        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor)
+        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
+                                                                 minpar=self._hvps.Extractor_Minvalue,
+                                                                 maxpar=self._hvps.Extractor_Maxvalue)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -2056,46 +2079,82 @@ class FIBBeam(model.HwComponent):
 
         self.blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
                                                         conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
-        self.blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage)
-        self.condenserVoltageConnector = OrsayParameterConnector(self.condenserVoltage, self._hvps.CondensorVoltage)
+        self.blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage,
+                                                               minpar=self._ionColumn.BlankingVoltage_Minvalue,
+                                                               maxpar=self._ionColumn.BlankingVoltage_Maxvalue)
+        self.condenserVoltageConnector = OrsayParameterConnector(self.condenserVoltage, self._hvps.CondensorVoltage,
+                                                                 minpar=self._hvps.CondensorVoltage_Minvalue,
+                                                                 maxpar=self._hvps.CondensorVoltage_Maxvalue)
         self.objectiveStigmatorConnector = OrsayParameterConnector(self.objectiveStigmator,
                                                                    [self._ionColumn.ObjectiveStigmatorX,
-                                                                    self._ionColumn.ObjectiveStigmatorY])
+                                                                    self._ionColumn.ObjectiveStigmatorY],
+                                                                   minpar=[self._ionColumn.ObjectiveStigmatorX_Minvalue,
+                                                                           self._ionColumn.ObjectiveStigmatorY_Minvalue],
+                                                                   maxpar=[self._ionColumn.ObjectiveStigmatorX_Maxvalue,
+                                                                           self._ionColumn.ObjectiveStigmatorY_Maxvalue])
         self.steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
                                                                  [self._ionColumn.CondensorSteerer1StigmatorX,
-                                                                  self._ionColumn.CondensorSteerer1StigmatorY])
+                                                                  self._ionColumn.CondensorSteerer1StigmatorY],
+                                                                 minpar=[self._ionColumn.CondensorSteerer1StigmatorX_Minvalue,
+                                                                         self._ionColumn.CondensorSteerer1StigmatorY_Minvalue],
+                                                                 maxpar=[self._ionColumn.CondensorSteerer1StigmatorX_Maxvalue,
+                                                                         self._ionColumn.CondensorSteerer1StigmatorY_Maxvalue])
         self.steererShiftConnector = OrsayParameterConnector(self.steererShift,
                                                              [self._ionColumn.CondensorSteerer1ShiftX,
-                                                              self._ionColumn.CondensorSteerer1ShiftY])
+                                                              self._ionColumn.CondensorSteerer1ShiftY],
+                                                             minpar=[self._ionColumn.CondensorSteerer1ShiftX_Minvalue,
+                                                                     self._ionColumn.CondensorSteerer1ShiftY_Minvalue],
+                                                             maxpar=[self._ionColumn.CondensorSteerer1ShiftX_Maxvalue,
+                                                                     self._ionColumn.CondensorSteerer1ShiftY_Maxvalue])
         self.steererTiltConnector = OrsayParameterConnector(self.steererTilt,
                                                             [self._ionColumn.CondensorSteerer1TiltX,
-                                                             self._ionColumn.CondensorSteerer1TiltY])
+                                                             self._ionColumn.CondensorSteerer1TiltY],
+                                                            minpar=[self._ionColumn.CondensorSteerer1TiltX_Minvalue,
+                                                                    self._ionColumn.CondensorSteerer1TiltY_Minvalue],
+                                                            maxpar=[self._ionColumn.CondensorSteerer1TiltX_Maxvalue,
+                                                                    self._ionColumn.CondensorSteerer1TiltY_Maxvalue])
         self.orthogonalityConnector = OrsayParameterConnector(self.orthogonality,
                                                               self._ionColumn.ObjectiveOrthogonality)
         self.objectiveRotationOffsetConnector = OrsayParameterConnector(self.objectiveRotationOffset,
                                                                         self._ionColumn.ObjectiveRotationOffset)
         self.objectiveStageRotationOffsetConnector = OrsayParameterConnector(self.objectiveStageRotationOffset,
-                                                                             self._ionColumn.ObjectiveStageRotationOffset)
+                                                                             self._ionColumn.ObjectiveStageRotationOffset,
+                                                                             minpar=self._ionColumn.ObjectiveStageRotationOffset_Minvalue,
+                                                                             maxpar=self._ionColumn.ObjectiveStageRotationOffset_Maxvalue)
         self.tiltConnector = OrsayParameterConnector(self.tilt, [self._ionColumn.ObjectivePhi,
                                                                  self._ionColumn.ObjectiveTeta])
-        self.xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio)
+        self.xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio,
+                                                        minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
+                                                        maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
         self.mirrorConnector = OrsayParameterConnector(self.mirror, self._ionColumn.Mirror,
                                                        conversion={True: -1, False: 1})
         self.imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
                                                                   self._ionColumn.ObjectiveScanSteerer,
                                                                   conversion={True: 1, False: 0})
-        self.objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage)
+        self.objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
+                                                                 minpar=self._hvps.ObjectiveVoltage_Minvalue,
+                                                                 maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
         self.beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
-                                                                           self._ionColumn.ObjectiveShiftY])
-        self.horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize)
+                                                                           self._ionColumn.ObjectiveShiftY],
+                                                          minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
+                                                                  self._ionColumn.ObjectiveShiftY_Minvalue],
+                                                          maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
+                                                                  self._ionColumn.ObjectiveShiftY_Maxvalue])
+        self.horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize,
+                                                              minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
+                                                              maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
         self.measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
                                                                  conversion={True: 1, False: 0})
-        self.currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent)
+        self.currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent,
+                                                        minpar=self._ionColumn.FaradayCurrent_Minvalue,
+                                                        maxpar=self._ionColumn.FaradayCurrent_Maxvalue)
         self.videoDelayConnector = OrsayParameterConnector(self.videoDelay, self._ionColumn.VideoDelay)
         self.flybackTimeConnector = OrsayParameterConnector(self.flybackTime, self._ionColumn.FlybackTime)
         self.blankingDelayConnector = OrsayParameterConnector(self.blankingDelay, self._ionColumn.BlankingDelay)
         self.rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle)
-        self.dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime)
+        self.dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime,
+                                                          minpar=self._ionColumn.PixelTime_Minvalue,
+                                                          maxpar=self._ionColumn.PixelTime_Maxvalue)
         self.contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
         self.brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
         self.operatingModeConnector = OrsayParameterConnector(self.operatingMode, self._datamodel.Scanner.OperatingMode,
