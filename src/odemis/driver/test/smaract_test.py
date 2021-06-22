@@ -22,11 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-import os
-import time
-import unittest
 from odemis.driver import smaract
 from odemis.util import test
+import os
+import pickle
+import time
+import unittest
+
 import odemis.model as model
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -90,6 +92,15 @@ class TestSmarPod(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
+
+    def test_exception_pickling(self):
+        """
+        Check the exception can be pickled and unpickled (for Pyro4)
+        """
+        ex = smaract.SmarPodError(3)
+        p = pickle.dumps(ex)
+        ep = pickle.loads(p)
+        self.assertIsInstance(ep, smaract.SmarPodError)
 
     def test_reference_cancel(self):
         # Test canceling referencing

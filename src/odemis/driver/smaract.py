@@ -277,9 +277,15 @@ class SmarPodError(Exception):
     """
     SmarPod Exception
     """
-    def __init__(self, error_code):
-        self.errno = error_code
-        super(SmarPodError, self).__init__("Error %d. %s" % (error_code, SmarPodDLL.err_code.get(error_code, "")))
+
+    def __init__(self, errno, *args, **kwargs):
+        # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
+        super(SmarPodError, self).__init__(errno, *args, **kwargs)
+        self.errno = errno
+        self.strerror = "Error %d. %s" % (errno, SmarPodDLL.err_code.get(errno, ""))
+
+    def __str__(self):
+        return self.strerror
 
 
 class SmarPod(model.Actuator):

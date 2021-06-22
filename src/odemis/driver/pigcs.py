@@ -136,10 +136,13 @@ class PIGCSError(Exception):
 
     def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
-        desc = self._errordict.get(errno, "Unknown error")
-        strerror = "PIGCS error %d: %s" % (errno, desc)
-        Exception.__init__(self, strerror, *args, **kwargs)
+        super(PIGCSError, self).__init__(errno, *args, **kwargs)
         self.errno = errno
+        desc = self._errordict.get(errno, "Unknown error")
+        self.strerror = "PIGCS error %d: %s" % (errno, desc)
+
+    def __str__(self):
+        return self.strerror
 
     _errordict = {
         0: "No error",
