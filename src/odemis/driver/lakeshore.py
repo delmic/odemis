@@ -274,7 +274,8 @@ class Lakeshore(model.HwComponent):
                 errors.append(STATUS_BYTE[err])
 
         if errors:
-            raise LakeshoreError(status_byte, "Error %s (Status byte: 0x%X)" % (", ".join(errors), status_byte))
+            error_msg = "Error %s (Status byte: 0x%X)" % (", ".join(errors), status_byte)
+            raise LakeshoreError(status_byte, error_msg)
 
     def GetIdentifier(self):
         """
