@@ -3,7 +3,7 @@ Orsay: {
     class: Microscope,
     role: orsaymic,
     children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS", "GIS", "GIS-reservoir", "FIB-device",
-               "FIB-source", "FIB-beam", "Scanner"]
+               "FIB-source", "FIB-beam"]
 }
 
 # Connection to the Orsay server
@@ -23,8 +23,7 @@ Orsay: {
                 gis-reservoir: "GIS-reservoir",
                 fib-device: "FIB-device",
                 fib-source: "FIB-source",
-                fib-beam: "FIB-beam",
-                scanner: "Scanner"
+                fib-beam: "FIB-beam"
     }
 }
 
@@ -70,10 +69,5 @@ Orsay: {
 
 "FIB-beam": {
     role: fib-beam,
-    init: {}
-}
-
-"Scanner": {
-    role: scanner,
     init: {}
 }
