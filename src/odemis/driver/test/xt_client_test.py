@@ -49,7 +49,7 @@ elif TEST_NOHW == "0":
 elif TEST_NOHW == "1":
     TEST_NOHW = True
 else:
-    raise ValueError("Unknown value of environment variable TEST_NOHW=%s", (TEST_NOHW,))
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
 
 # arguments used for the creation of basic components
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
