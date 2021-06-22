@@ -1560,8 +1560,7 @@ class TestFIBBeam(unittest.TestCase):
             self.fibbeam._updateImageFormat(self.datamodel.HybridPlatform.Cancel)
 
         connector_test(self, self.fibbeam.imageFormat, self.fibbeam._ionColumn.ImageSize,
-                       [((1024, 1024), "1024 1024"), ((512, 512), "512 512"),
-                        ((640, 480), "640 480"), ((800, 600), "800 600")],
+                       [((1024, 1024), "1024 1024"), ((512, 512), "512 512")],
                        hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
         # test that setting the VA to a value close to a valid value, yields the closest valid value
         self.fibbeam.imageFormat.value = (1000, 1000)
@@ -1571,35 +1570,35 @@ class TestFIBBeam(unittest.TestCase):
 
         # test that changing imageFormat has the right effect on resolution and translation
         self.fibbeam.imageFormat.value = (1024, 1024)
-        self.fibbeam.translation.value = (0.0, 0.0)
-        self.fibbeam.resolution.value = (1024, 1024)
+        self.fibbeam.resolution.value = (200, 200)
+        self.fibbeam.translation.value = (10.0, 10.0)
         sleep(0.5)
-        self.fibbeam.imageFormat.value = (640, 480)
+        self.fibbeam.imageFormat.value = (512, 512)
+        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (0.0, 0.0))
-        self.assertEqual(self.fibbeam.resolution.value, (640, 480))
-        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (640, 480)))
+        self.assertEqual(self.fibbeam.translation.value, (5.0, 5.0))
+        self.assertEqual(self.fibbeam.resolution.value, (100, 100))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
+        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (0.0, 0.0))
-        self.assertEqual(self.fibbeam.resolution.value, (640, 480))
-        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (1024, 1024)))
+        self.assertEqual(self.fibbeam.translation.value, (10.0, 10.0))
+        self.assertEqual(self.fibbeam.resolution.value, (200, 200))
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (-511.5, 511.5)
         sleep(0.5)
         self.fibbeam.imageFormat.value = (512, 512)
+        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
         sleep(0.5)
         self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
-        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (512, 512)))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
+        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
         sleep(0.5)
-        self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
-        self.assertEqual(self.fibbeam.resolution.value, (1, 1))
-        self.assertEqual(self.fibbeam.resolution.range, ((1, 1), (1024, 1024)))
+        self.assertEqual(self.fibbeam.translation.value, (-511.0, 511.0))
+        self.assertEqual(self.fibbeam.resolution.value, (2, 2))
 
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""

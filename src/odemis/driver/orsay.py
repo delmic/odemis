@@ -62,7 +62,7 @@ HEATER_RISING = "UP"
 HEATER_FALLING = "DOWN"
 HEATER_ERROR = "EOFF"
 
-IMAGEFORMAT_OPTIONS = ((512, 512), (640, 480), (800, 600), (1024, 1024))
+IMAGEFORMAT_OPTIONS = ((512, 512), (1024, 1024))  # TODO: add support for rectangular options (640, 480) and (800, 600)
 
 NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
@@ -1987,8 +1987,8 @@ class FIBBeam(model.HwComponent):
         • contrast: FloatContinuous, unit="", range=(0, 1)
         • brightness: FloatContinuous, unit="", range=(0, 1)
         • operatingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
-        • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512),
-                       (640, 480), (800, 600) or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
+        • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512)
+                       or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
         • translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
         • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
@@ -2057,11 +2057,12 @@ class FIBBeam(model.HwComponent):
         self.operatingModeConnector = None
         self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(512, 480), (1024, 1024)],
                                                  setter=self._imageFormat_setter)
-        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-0.0, -0.0), (0.0, 0.0)],
+        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-511.5, -511.5), (511.5, 511.5)],
                                                  setter=self._translation_setter)
         self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
                                                 setter=self._resolution_setter)
-        self.resolution.clip_on_range = True  # clip the value if it falls outside of the newly set range
+        self.imageFormatUpdated = threading.Event()
+        self.imageFormatUpdated.set()
 
         self._connectorList = []
 
@@ -2095,10 +2096,12 @@ class FIBBeam(model.HwComponent):
         self.steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
                                                                  [self._ionColumn.CondensorSteerer1StigmatorX,
                                                                   self._ionColumn.CondensorSteerer1StigmatorY],
-                                                                 minpar=[self._ionColumn.CondensorSteerer1StigmatorX_Minvalue,
-                                                                         self._ionColumn.CondensorSteerer1StigmatorY_Minvalue],
-                                                                 maxpar=[self._ionColumn.CondensorSteerer1StigmatorX_Maxvalue,
-                                                                         self._ionColumn.CondensorSteerer1StigmatorY_Maxvalue])
+                                                                 minpar=[
+                                                                     self._ionColumn.CondensorSteerer1StigmatorX_Minvalue,
+                                                                     self._ionColumn.CondensorSteerer1StigmatorY_Minvalue],
+                                                                 maxpar=[
+                                                                     self._ionColumn.CondensorSteerer1StigmatorX_Maxvalue,
+                                                                     self._ionColumn.CondensorSteerer1StigmatorY_Maxvalue])
         self.steererShiftConnector = OrsayParameterConnector(self.steererShift,
                                                              [self._ionColumn.CondensorSteerer1ShiftX,
                                                               self._ionColumn.CondensorSteerer1ShiftY],
@@ -2185,7 +2188,46 @@ class FIBBeam(model.HwComponent):
         """
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
-        self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])
+        self.imageFormatUpdated.clear()  # let it be known that image format is updating
+
+        # get the old image format and determine the scale change
+        state = self._ionColumn.ImageSize.Actual
+        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
+        old_value = tuple(map(int, state.split(" ")))
+        scale = value[0] / old_value[0]  # determine by how much the x axis is scaled
+
+        self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])  # write the new image format to the server
+
+        # determine new value of resolution
+        new_resolution = [int(k * scale) for k in self.resolution.value]
+        for i in range(len(new_resolution)):  # clip so new_resolution cannot contain values outside of range, like 0
+            if new_resolution[i] < self.resolution.range[0][i]:
+                new_resolution[i] = self.resolution.range[0][i]
+            elif new_resolution[i] > self.resolution.range[1][i]:
+                new_resolution[i] = self.resolution.range[1][i]
+        new_resolution = tuple(new_resolution)
+
+        # determine new value of translation
+        new_translation = list(self.translation.value)
+        if scale < 1:
+            new_translation[0] = math.ceil(new_translation[0])
+            new_translation[1] = math.floor(new_translation[1])
+        new_translation = [float(k * scale) for k in new_translation]
+        if scale < 1:
+            if not new_resolution[0] % 2 == 0:  # if horizontal resolution is odd
+                new_translation[0] -= 0.5  # prefer adding a pixel to the left
+            if not new_resolution[1] % 2 == 0:  # if vertical resolution is odd
+                new_translation[1] += 0.5  # prefer adding a pixel to the top
+        new_translation = tuple(new_translation)
+
+        self.imageFormatUpdated.wait(60)  # wait until the image format callback was received
+        # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
+        # resolution equal to the new image format. We don't want that. We want to keep the resolution and translation
+        # as they were (except for appropriate scaling).
+
+        self.resolution.value = new_resolution  # set new resolution with calling the setter
+        self.translation.value = new_translation  # set new translation with calling the setter
+
         logging.debug("Updating imageFormat to %s and updating translation and resolution and their ranges accordingly."
                       % str(value))
         return value
@@ -2209,18 +2251,8 @@ class FIBBeam(model.HwComponent):
         logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
         new_value = tuple(map(int, state.split(" ")))
         self.imageFormat._value = new_value  # to not call the setter
+        self.imageFormatUpdated.set()
         self.imageFormat.notify(new_value)
-
-        # determine new value of resolution
-        new_resolution = list(self.resolution.value)
-        if new_resolution[0] > new_value[0]:
-            new_resolution[0] = new_value[0]
-        if new_resolution[1] > new_value[1]:
-            new_resolution[1] = new_value[1]
-        new_resolution = tuple(new_resolution)
-        self.resolution._value = new_resolution  # set new resolution without calling the setter
-        self.resolution.range = [(1, 1), new_value]  # set the new range
-        self.resolution.notify(new_resolution)
 
     def _translation_setter(self, value):
         """
@@ -2239,6 +2271,18 @@ class FIBBeam(model.HwComponent):
         if not self.resolution.value[1] % 2 == 0:  # if vertical resolution is odd
             new_translation[1] += 0.5  # prefer adding a pixel to the top
 
+        # find the current limits for translation and clip the new value
+        tran_limit_0 = float(self.imageFormat.value[0] / 2 - self.resolution.value[0] / 2)
+        tran_limit_1 = float(self.imageFormat.value[1] / 2 - self.resolution.value[1] / 2)
+        if new_translation[0] < -tran_limit_0:
+            new_translation[0] = -tran_limit_0
+        elif new_translation[0] > tran_limit_0:
+            new_translation[0] = tran_limit_0
+        if new_translation[1] < -tran_limit_1:
+            new_translation[1] = -tran_limit_1
+        elif new_translation[1] > tran_limit_1:
+            new_translation[1] = tran_limit_1
+
         target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
         target_translation[0] = int(self.imageFormat.value[0] / 2 + new_translation[0] - self.resolution.value[0] / 2)
         target_translation[1] = int(self.imageFormat.value[1] / 2 - new_translation[1] - self.resolution.value[1] / 2)
@@ -2253,7 +2297,7 @@ class FIBBeam(model.HwComponent):
     def _resolution_setter(self, value):
         """
         Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
-        the centre of the image area stays where it is and changes the translation range.
+        the centre of the image area stays where it is.
         """
         new_resolution = list(value)
 
@@ -2271,9 +2315,7 @@ class FIBBeam(model.HwComponent):
         elif new_translation[1] > tran_limit_1:
             new_translation[1] = tran_limit_1
         new_translation = tuple(new_translation)
-        # this new_translation cannot be outside of the old range, so set value first, then the range
         self.translation._value = new_translation
-        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
         self.translation.notify(new_translation)
 
         target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
@@ -2306,6 +2348,10 @@ class FIBBeam(model.HwComponent):
         if attributeName != "Actual":
             return
 
+        if not self.imageFormatUpdated.is_set():
+            return  # don't update yet if image format is updating. The update for translation and resolution will be
+            # handled by _updateImageFormat
+
         area = self._ionColumn.ImageArea.Actual
         logging.debug("Image area is: %s." % area)
         area = list(map(int, area.split(" ")))
@@ -2316,14 +2362,8 @@ class FIBBeam(model.HwComponent):
         new_translation = tuple(map(float, new_translation))
 
         new_resolution = tuple(area[2:4])
-        new_resolution = self.resolution.clip(new_resolution)
-
-        # find the new range for translation
-        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
-        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
 
         self.translation._value = new_translation  # to not call the setter
-        self.translation.range = ((-tran_limit_0, -tran_limit_1), (tran_limit_0, tran_limit_1))
         self.resolution._value = new_resolution  # to not call the setter
         self.translation.notify(new_translation)
         self.resolution.notify(new_resolution)
