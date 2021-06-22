@@ -307,6 +307,22 @@ class MainGUIData(object):
             if self.spectrometer is None and self.spectrometers:
                 self.spectrometer = self.spectrometers[0]
 
+            # Check for the most known microscope types that the basics are there
+            required_roles = []
+            if self.role in ("secom", "delphi", "cryo-secom"):
+                required_roles += ["e-beam", "light", "stage", "focus"]
+                if self.role == "secom":
+                    required_roles += ["align", "se-detector"]
+            elif self.role in ("sparc", "sparc2"):
+                required_roles += ["e-beam", "mirror", "lens"]
+            elif self.role == "mbsem":
+                required_roles += ["e-beam", "stage"]
+
+            for crole in required_roles:
+                attrname = self._ROLE_TO_ATTR[crole]
+                if getattr(self, attrname) is None:
+                    raise KeyError("Microscope (%s) is missing the '%s' component" % (self.role, crole))
+
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 

@@ -1,0 +1,168 @@
+# Special version of the SECOM simulator with a stage missing, for testing
+SimSECOM: {
+    class: Microscope,
+    role: secom,
+    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
+    detectors: ["Camera", "SEM Detector"],
+    actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "EBeam Focus"],
+}
+
+"Light Engine": {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
+                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+                 }
+        },
+    affects: ["Camera"],
+}
+
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # s, comment out to disable drift
+    },
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector",
+               focus: "EBeam Focus",
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+       mag: 100.0, # ratio, (actually of the complete light path)
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"]
+}
+
+#"Optical Emission Filter": {
+#    class: static.LightFilter,
+#    role: filter,
+#    init: {band: [[420.e-9, 460.e-9],
+#                  [510.e-9, 532.e-9], 
+#                  [590.e-9, 624.e-9],
+#                  [677.e-9, 723.e-9]]}, # m,m
+#    affects: ["Camera"]
+#}
+
+# Thorlabs FW102C with 6 filters
+"Optical Emission Filter": {
+    class: tlfw.FakeFW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: [553.e-9, 577.e-9],
+                   4: [582.e-9, 636.e-9],
+                   5: [635.e-9, 675.e-9],
+                   6: [633.e-9, 1200.e-9]}, 
+           },
+    affects: ["Camera"]
+}
+
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: andorcam2.FakeAndorCam2,
+    role: ccd,
+    init: {device: 0,
+           transp: [2, -1], # rotated 90° clockwise
+           # Look-up table for recommended EMCCD Real Gain
+           # readout rate, gain, real gain (integer)
+           emgains: [[10.e+6, 1, 50],
+                     [1.e+6, 1, 150],
+                    ],
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+    },
+    properties: {
+        targetTemperature: -75, # °C
+    }
+}
+
+# Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
+
+# Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
+"Sample Stage": {
+    class: actuator.MultiplexActuator,
+    role: not-a-stage,   # Wrong role
+    affects: ["Camera", "SEM E-beam"],
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+        inverted: ["x"],
+    },
+}
+
+"Objective Stage": {
+    class: actuator.MultiplexActuator,
+    role: align,
+    affects: ["Camera"],
+    dependencies: {"a": "Stage Actuators", "b": "Stage Actuators"},
+    init: {
+        axes_map: {"a": "a", "b": "b"},
+        inverted: ["a", "b"]
+    },
+}
+
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)    
+"Optical Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: ["Camera"],
+    dependencies: {"z": "Stage Actuators"},
+    init: {
+        axes_map: {"z": "z"}
+    },
+}
+
+"Stage Actuators": {
+    class: pigcs.FakeBus,
+    role: null,
+    init: {
+        port: "/dev/ttyPIGCS",
+        # axis -> controller, channel, closed-loop?
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]},
+    },
+}
+
+
