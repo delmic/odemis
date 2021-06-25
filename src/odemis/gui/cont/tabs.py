@@ -346,7 +346,7 @@ class LocalizationTab(Tab):
         :type main_data: odemis.gui.model.MainGUIData
         """
 
-        tab_data = guimod.LocalizationGUIData(main_data)
+        tab_data = guimod.CryoLocalizationGUIData(main_data)
         super(LocalizationTab, self).__init__(
             name, button, panel, main_frame, tab_data)
         self.set_label("LOCALIZATION")
@@ -401,15 +401,17 @@ class LocalizationTab(Tab):
         self._acquisition_controller = acqcont.CryoAcquiController(
             tab_data, panel, self)
 
-        self._overview_stream_controller = streamcont.StreamBarController(
+        self._acquired_stream_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
 
-        self._overview_stream_controller.add_overview_action(self._on_acquire)
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self.tab_data_model.currentFeature.subscribe(self._on_current_feature_changes)
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.conf = conf.get_acqui_conf()
 
         # Toolbar
         self.tb = panel.secom_toolbar
@@ -424,7 +426,6 @@ class LocalizationTab(Tab):
         self.tb.enable_button(TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
-
         self._streambar_controller.addFluo(add_to_view=True, play=False)
 
         # Will create SEM stream with all settings local
@@ -505,26 +506,23 @@ class LocalizationTab(Tab):
 
         return vpv
 
-    def load_data(self, data):
+    def load_overivew_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
 
+        view = self.tab_data_model.views.value[0]  # overview map view
         for s in streams:
+            s.name.value = "Overview" + " " + s.name.value
             self.clear_overview_streams(s.name.value)
-            scont = self._overview_stream_controller.addStream(s, add_to_view=True)
-            scont.stream_panel.show_remove_btn(True)
+            self._show_acquired_stream(s, view)
+            # Add the static stream to the streams list of the model and also to the tiledAreaStreams to easily
+            # distinguish between it and other acquired streams
+            self.tab_data_model.tiledAreaStreams.value.append(s)
+            self.tab_data_model.streams.value.insert(0, s)
 
             # Display the same acquired data in the chamber tab view
             chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-            chamber_tab.load_overview_data(streams)
-
-    def _load_overview_data(self, stream):
-        """
-        Add the given stream to the overview view and stream panel
-        """
-        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
-        scont = self._overview_stream_controller.addStream(stream, add_to_view=overview_view)
-        scont.stream_panel.show_remove_btn(True)
+            chamber_tab.load_overview_streams(streams)
 
     def clear_live_streams(self):
         """
@@ -545,11 +543,10 @@ class LocalizationTab(Tab):
         Remove overview map (Static) streams and clear them from view and panel.
         @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
         """
-        static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
-        for stream in static_streams:
+        for stream in self.tab_data_model.tiledAreaStreams.value:
             if filter_stream_name and stream.name.value != filter_stream_name:
                 continue
-            self._overview_stream_controller.removeStreamPanel(stream)
+            self._acquired_stream_controller.removeStreamPanel(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -634,7 +631,6 @@ class LocalizationTab(Tab):
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
-
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -669,27 +665,83 @@ class LocalizationTab(Tab):
         if not show:
             self._streambar_controller.pauseStreams()
 
+    def _show_acquired_stream(self, acquired_stream, selected_view):
+        """
+        Create a stream controller for the given stream and view and add it to the stream bar controller list of stream controllers
+        :param acquired_stream: the static stream to show
+        :param selected_view: the view to show it on
+        """
+        stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, acquired_stream, self.tab_data_model,
+                                       show_panel=True, view=selected_view, sb_ctrl=self._acquired_stream_controller)
+        selected_view.addStream(acquired_stream)
+
+        stream_cont.stream_panel.set_visible(True)
+        stream_cont.stream_panel.show_remove_btn(True)
+        self._acquired_stream_controller.stream_controllers.append(stream_cont)
+
+    def _on_current_feature_changes(self, feature):
+        """
+        Handle switching the acquired streams appropriate to the current feature
+        :param feature: (CryoFeature or None) the newly selected current feature
+        """
+        self._acquired_stream_controller.clear_panel()
+        # show the feature streams on the acquired view
+        view = self.tab_data_model.views.value[1]
+        acquired_streams = feature.streams.value if feature else []
+        for stream in acquired_streams:
+            self._show_acquired_stream(stream, view)
+
+        # show the overview maps (if any) on the overview view
+        view = self.tab_data_model.views.value[0]
+        for stream in self.tab_data_model.tiledAreaStreams.value:
+            self._show_acquired_stream(stream, view)
+
+    def _on_acquired_streams(self, streams):
+        """
+        Filter out deleted acquired streams (features and overview) from their respective origin
+        :param streams: list(Stream) updated list of tab streams
+        """
+        # Get all acquired streams from features list and overview streams
+        acquired_streams = set()
+        for feature in self.tab_data_model.features.value:
+            [acquired_streams.add(s) for s in feature.streams.value]
+        [acquired_streams.add(s) for s in self.tab_data_model.tiledAreaStreams.value]
+
+        filter_streams = acquired_streams.difference(set(streams))
+
+        for st in filter_streams:
+            if st in self.tab_data_model.tiledAreaStreams.value:
+                self.tab_data_model.tiledAreaStreams.value.remove(st)
+                # Remove from chamber tab too
+                chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab.remove_overview_stream(st)
+            else:
+                feature = next((f for f in self.tab_data_model.features.value if st in f.streams.value), None)
+                if feature:
+                    feature.streams.value.remove(st)
+
+    @call_in_wx_main
+    def display_acquired_data(self, data):
+        """
+        Display the acquired streams on the top right view
+        data (DataArray): the images/data acquired
+        """
+        # get the top right view port
+        view = self.tab_data_model.views.value[1]
+        self.tab_data_model.select_current_position_feature()
+        for s in data_to_static_streams(data):
+            if self.tab_data_model.currentFeature.value:
+                s.name.value = self.tab_data_model.currentFeature.value.name.value + " - " + s.name.value
+                self.tab_data_model.currentFeature.value.streams.value.append(s)
+            self.tab_data_model.streams.value.insert(0, s)
+            self._show_acquired_stream(s, view)
+
     @classmethod
     def get_display_priority(cls, main_data):
         if main_data.role in ("cryo-secom",):
             return 2
         else:
             return None
-
-    @call_in_wx_main
-    def display_acquired_data(self, data):
-        """
-        Displays the acquired streams on the top right view
-        data (DataArray): the images/data acquired
-        """
-        # TODO adjust this code to fit the feature behavior
-        # get the top right view port
-        view = self.tab_data_model.views.value[1]
-        for s in data_to_static_streams(data):
-            stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, s, self.tab_data_model,
-                                           show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
-            stream_cont.stream_panel.collapse(True)
-
 
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -2188,23 +2240,41 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-    def load_overview_data(self, streams):
+    def _get_overview_view(self):
+        overview_view = next(
+            (view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        if not overview_view:
+            logging.warning("Could not find view of type FeatureOverviewView.")
+
+        return overview_view
+
+    def remove_overview_stream(self, overview_stream):
+        """
+       Remove the overview static stream from the view
+       :param overview_stream: (StaticStream) overview static stream to remove from view
+       """
+        try:
+            overview_view = self._get_overview_view()
+            overview_view.removeStream(overview_stream)
+        except AttributeError:
+            pass
+
+    def load_overview_streams(self, streams):
         """
         Load the overview view with the given list of acquired static streams
         :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
         """
-        # Replace the old streams with the newly acquired ones in the view
-
-        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
-        if not overview_view:
-            logging.warning("Could not find view of type FeatureOverviewView.")
-            return
-        existing_streams = overview_view.getStreams()
-        for stream in streams:
-            ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
-            if ex_st:
-                overview_view.removeStream(ex_st)
-            overview_view.addStream(stream)
+        try:
+            # Replace the old streams with the newly acquired ones in the view
+            overview_view = self._get_overview_view()
+            existing_streams = overview_view.getStreams()
+            for stream in streams:
+                ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
+                if ex_st:
+                    self.remove_overview_stream(ex_st)
+                overview_view.addStream(stream)
+        except AttributeError:
+            pass
 
     def _on_change_project_folder(self, evt):
         """

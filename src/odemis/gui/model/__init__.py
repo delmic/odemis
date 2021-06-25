@@ -632,9 +632,30 @@ class CryoGUIData(MicroscopyGUIData):
             milling_angle = DEFAULT_MILLING_ANGLE
         feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
         self.features.value.append(feature)
+        return feature
 
+    # Todo: find the right margin
+    ATOL_FEATURE_POS = 0.1e-3  # m
 
-class LocalizationGUIData(CryoGUIData):
+    def select_current_position_feature(self):
+        """
+        Given current stage position, either select one of the features closest to the position or create a new one with the position
+        :return: (CryoFeature) the feature selected for the current position
+        """
+        current_position = self.main.stage.position.value
+        for feature in self.features.value:
+            feature_dist = math.hypot(feature.pos.value[0] - current_position["x"],
+                                      feature.pos.value[1] - current_position["y"])
+            if feature_dist <= self.ATOL_FEATURE_POS:
+                self.currentFeature.value = feature
+                break
+        else:
+            # create new feature if no close feature found
+            feature = self.add_new_feature(current_position["x"], current_position["y"],
+                                                          self.main.focus.position.value)
+            self.currentFeature.value = feature
+
+class CryoLocalizationGUIData(CryoGUIData):
     """ Represent an interface used to only show the current data from the microscope.
 
     It it used for handling CryoSECOM systems.
@@ -666,7 +687,9 @@ class LocalizationGUIData(CryoGUIData):
         self.zStackActive = model.BooleanVA(value=False)
         # the streams to acquire among all streams in .streams
         self.acquisitionStreams = model.ListVA()
-        # for the filename 
+        # the static overview map streams
+        self.tiledAreaStreams = model.ListVA()
+        # for the filename
         config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
             config.pj_last_path, config.fn_ptn,

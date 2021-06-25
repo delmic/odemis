@@ -844,7 +844,7 @@ class CryoAcquiController(object):
         """
         das = self.overview_acqui_controller.open_acquisition_dialog()
         if das:
-            self._tab.load_data(das)
+            self._tab.load_overivew_data(das)
 
     @call_in_wx_main
     def _on_filename(self, name):
