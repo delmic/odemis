@@ -3,7 +3,7 @@ from numpy import long
 from odemis import model
 
 # The current state of the feature
-FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE = "Active", "Milled", "Discarded"
+FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = "Active", "Rough Milled", "Polished", "Discarded"
 
 
 class CryoFeature(object):
@@ -17,7 +17,8 @@ class CryoFeature(object):
         :param x: (float) the X axis of the feature position
         :param y: (float) the Y axis of the feature position
         :param z: (float) the Z axis of the feature position
-        :param milling_angle: (float)  angle used for milling (angle between the sample and the ion-beam, similar to the one in the chamber tab, not the actual Rx)
+        :param milling_angle: (float)  angle used for milling (angle between the sample and the ion-beam, similar to the
+        one in the chamber tab, not the actual Rx)
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
@@ -27,6 +28,5 @@ class CryoFeature(object):
         if milling_angle <= 0:
             raise ValueError(f"Milling should be > 0, but got {milling_angle}")
         self.milling_angle = model.FloatVA(milling_angle)
-        # TODO: Get the existing feature status
         self.status = model.StringVA(FEATURE_ACTIVE, )
         self.streams = streams if streams is not None else model.ListVA()

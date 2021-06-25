@@ -28,7 +28,7 @@ import cairo
 import logging
 import math
 from odemis import model, util
-from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_MILLED, FEATURE_DEACTIVE
+from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
@@ -294,7 +294,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 set_icon(self._feature_icon_current)
             elif feature.status.value == FEATURE_ACTIVE:
                 set_icon(self._feature_icon_active)
-            elif feature.status.value == FEATURE_MILLED:
+            elif feature.status.value == FEATURE_ROUGH_MILLED:
+                set_icon(self._feature_icon_milled)
+            elif feature.status.value == FEATURE_POLISHED:
                 set_icon(self._feature_icon_milled)
             elif feature.status.value == FEATURE_DEACTIVE:
                 set_icon(self._feature_icon_discarded)
