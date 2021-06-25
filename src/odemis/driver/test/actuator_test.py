@@ -29,7 +29,6 @@ import random
 from odemis import model
 import odemis
 
-print(odemis.__file__)
 from odemis.driver import simulated, tmcm, smaract
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
@@ -1034,6 +1033,7 @@ class TestRotationActuator(unittest.TestCase):
 
         self.axis = "linear"
         self.axis_name = "rz"
+        self.ref_freq = 4
 
         # # create 1 dependency
         self.dependency1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
@@ -1042,7 +1042,12 @@ class TestRotationActuator(unittest.TestCase):
                                           refproc="Standard",
                                           )
 
-        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.dependency1}, self.axis, ref_start=1)
+        self.dev_cycle = RotationActuator("stage", "stage",
+                                          dependencies={self.axis_name: self.dependency1},
+                                          axis_name=self.axis,
+                                          ref_start=1,
+                                          ref_frequency=self.ref_freq
+                                         )
 
         # TODO write test case for args ref_start=... monitor dependency position -> pass zero?
 
@@ -1117,30 +1122,50 @@ class TestRotationActuator(unittest.TestCase):
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        new_pos = 1.5707963267948966  # pi/2
-        for i in range(1, 6):
-            # overrun 2pi after 4 moves in clockwise
-            f = self.dev_cycle.moveRel({axis_name: new_pos})
-            f.result()
-            if i == 5:
-                # if referencing was correct position should not differ more than by
-                # half of the ustepsize from the wanted position
-                self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.dependency1._ustepsize[0] / 2.)
+        # Check it runs referencing also after many small moves, by checking the time
+        durations = []
+        for i in range(self.ref_freq):
+            start_t = time.time()
+            f = self.dev_cycle.moveRelSync({axis_name: 0.1})
+            durations.append(time.time() - start_t)
+
+        # It should have 1 move which takes quite a lot longer (+1s)
+        dur_outlier = max(durations)
+        durations.remove(dur_outlier)
+        dur_std = sum(durations) / len(durations)
+        self.assertGreater(dur_outlier, dur_std + 1)
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        new_pos = 4.71238898038469 # pi* 1.5
-        for i in range(1, 6):
-            # overrun 2pi after 4 moves in counter-clockwise
-            f = self.dev_cycle.moveRel({axis_name: -1.5707963267948966})  # pi/2
+        # overrun 2pi after 4 moves in clockwise
+        shift = math.pi / 2
+        for i in range(5):
+            f = self.dev_cycle.moveRel({axis_name: shift})
             f.result()
-            if i == 5:
-                # if referencing was correct position should not differ more than by
-                # half of the ustepsize from the wanted position
-                self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.dependency1._ustepsize[0] / 2.)
+        exp_pos = (shift * 5) % (2 * math.pi)  # = pi/2
+
+        self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+        self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+
+        f = self.dev_cycle.moveAbs({axis_name: 0.0})
+        f.result()
+
+        # Overrun 2pi after 4 moves in counter-clockwise
+        # The 5th move should be started again from 0
+        for i in range(5):
+            f = self.dev_cycle.moveRel({axis_name:-shift})
+            f.result()
+
+        exp_pos = (-shift * 5) % (2 * math.pi)  #  = 3/2 pi ~= 4.712
+        exp_pos_dep = -shift
+
+        self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+        self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos_dep,
+                               delta=self.dependency1._ustepsize[0])
 
     def test_cycle_offset_mounting(self):
         """
