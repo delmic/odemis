@@ -5999,10 +5999,10 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="FeatureOverviewViewport" name="vp_secom_tl">
+          <object class="FixedOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
-            <XRCED>FeatureOverviewViewport
+            <XRCED>FixedOverviewViewport
               <assign_var>1</assign_var>
             </XRCED>
           </object>
@@ -6539,21 +6539,21 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_tr">
+          <object class="FeatureViewport" name="vp_secom_tr">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_bl">
+          <object class="FeatureViewport" name="vp_secom_bl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_br">
+          <object class="FeatureViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
@@ -6586,7 +6586,7 @@ def __init_resources():
 								<object class="wxBoxSizer">										
 										<object class="sizeritem">
 											<object class="OwnerDrawnComboBox" name="cmb_features">
-											  <size>200,20</size>
+											  <size>155,20</size>
 											  <fg>#2FA7D4</fg>
 											  <bg>#4D4D4D</bg>
 											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
@@ -6600,7 +6600,7 @@ def __init_resources():
 										  <style>wxALIGN_CENTRE</style>
 										</object>
 										<flag>wxLEFT</flag>
-										<border>20</border>
+										<border>65</border>
 									</object>
 								<orient>wxHORIZONTAL</orient>
 								</object>

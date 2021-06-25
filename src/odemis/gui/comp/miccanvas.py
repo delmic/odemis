@@ -249,6 +249,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data.features, tab_data.currentFeature, tab_data.tool)
             self.add_world_overlay(self.cryofeature_overlay)
             self.cryofeature_overlay.active.value = True
+            # Add showFeatures boolean to the view to toggle showing/hiding the features
+            self.view.showFeatures = model.BooleanVA(True)
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 
