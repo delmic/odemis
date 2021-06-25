@@ -2185,6 +2185,21 @@ class StreamBarController(object):
         # would prevent the Stream render thread from terminating.
         gc.collect()
 
+    def clear_panel(self):
+        """
+        Clear the stream bar from its GUI controls, and remove each stream controllers stream from its view
+        Must be called in the main GUI thread
+        """
+        # clear the graphical part
+        self._stream_bar.clear()
+        # Clear the stream from the stream controller view
+        for sc in self.stream_controllers:
+            if hasattr(sc, "view") and hasattr(sc.view, "removeStream"):
+                sc.view.removeStream(sc.stream)
+        self.stream_controllers = []
+
+        gc.collect()
+
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
