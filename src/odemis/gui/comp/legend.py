@@ -392,6 +392,7 @@ class AxisLegend(wx.Panel):
     @lock_va.setter
     def feature_toggle_va(self, va):
         """
+        Set feature toggle button with the va, show it and listen to the va changes to set/unset its toggle value
         Note: The caller must run in the main GUI Thread
         """
         if self._feature_toggle_va != va:

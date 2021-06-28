@@ -2666,30 +2666,27 @@ class CryoChamberTab(Tab):
         Called to perform action prior to terminating the tab
         :return: (bool) True to proceed with termination, False for canceling
         """
-        if self._current_position is not LOADING:
-            if self._move_future._state == RUNNING and self._target_position is LOADING:
-                box = wx.MessageDialog(self.main_frame,
-                                       "The sample is still moving to the loading position, are you sure you want to close Odemis?",
-                                       caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        if self._current_position is LOADING:
+            return True
+        if self._move_future._state == RUNNING and self._target_position is LOADING:
+            return self._confirm_terminate_dialog(
+                "The sample is still moving to the loading position, are you sure you want to close Odemis?"
+            )
 
-                box.SetYesNoLabels("&Close Window", "&Cancel")
-                ans = box.ShowModal()  # Waits for the window to be closed
-                if ans == wx.ID_YES:
-                    return True
-                else:
-                    return False
+        return self._confirm_terminate_dialog(
+            "The sample is still loaded, are you sure you want to close Odemis?"
+        )
 
-            box = wx.MessageDialog(self.main_frame,
-                                   "The sample is still loaded, are you sure you want to close Odemis?",
-                                   caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
-
-            box.SetYesNoLabels("&Close Window", "&Cancel")
-            ans = box.ShowModal()  # Waits for the window to be closed
-            if ans == wx.ID_YES:
-                return True
-            else:
-                return False
-        return True
+    def _confirm_terminate_dialog(self, message):
+        box = wx.MessageDialog(
+            self.main_frame,
+            message,
+            caption="Closing Odemis",
+            style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
+        )
+        box.SetYesNoLabels("&Close Window", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        return ans == wx.ID_YES
 
     @classmethod
     def get_display_priority(cls, main_data):

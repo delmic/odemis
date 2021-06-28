@@ -75,9 +75,13 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
         """
         pos = self.cnvs.view.stage_pos.value
         half_size_offset = self.cnvs.get_half_buffer_size()
-        # convert physical position to buffer 'world' coordinates
-        bpos = self.cnvs.phys_to_buffer_pos((pos['x'], pos['y']), self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
-        return bpos
+        # return physical position converted to buffer 'world' coordinates
+        return self.cnvs.phys_to_buffer_pos(
+            (pos['x'], pos['y']),
+            self.cnvs.p_buffer_center,
+            self.cnvs.scale,
+            offset=half_size_offset,
+        )
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw a cross hair to the Cairo context """
@@ -165,7 +169,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self.cnvs.update_drawing()
 
     def _on_features_changes(self, _):
-
         # refresh the canvas on _features_va list change
         self.cnvs.update_drawing()
 
@@ -220,17 +223,20 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if self.active:
             if self.left_dragging:
                 if self._selected_feature:
-                    v_pos = evt.Position
-                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
-                    self._selected_feature = None
-                    self._selected_tool_va.value = TOOL_NONE
-                    self.cnvs.update_drawing()
+                    self._move_selected_feature(evt)
                 DragMixin._on_left_up(self, evt)
             else:
                 self.cnvs.on_left_up(evt)
         else:
             WorldOverlay.on_left_up(self, evt)
+
+    def _move_selected_feature(self, evt):
+        v_pos = evt.Position
+        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+        self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+        self._selected_feature = None
+        self._selected_tool_va.value = TOOL_NONE
+        self.cnvs.update_drawing()
 
     def _detect_point_inside_feature(self, v_pos):
         """
@@ -262,7 +268,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if feature:
                 self._hover_feature = feature
                 self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
-                self.cnvs.update_drawing()
             else:
                 if self._mode == MODE_EDIT_FEATURES:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
@@ -270,9 +275,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self.cnvs.reset_dynamic_cursor()
                 self._hover_feature = None
                 WorldOverlay.on_motion(self, evt)
-                self.cnvs.update_drawing()
+            self.cnvs.update_drawing()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """
+        Draw the features list show each status and whether it's selected or hovered on
+        """
         if not self.show:
             return
 
