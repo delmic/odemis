@@ -1916,7 +1916,7 @@ class RotationActuator(model.Actuator):
     """
 
     def __init__(self, name, role, dependencies, axis_name, cycle=2 * math.pi,
-                 ref_start=None, inverted=None, **kwargs):
+                 ref_start=None, ref_frequency=5, inverted=None, **kwargs):
         """
         name (string)
         role (string)
@@ -1926,6 +1926,8 @@ class RotationActuator(model.Actuator):
         ref_start (float or None): Value usually chosen close to reference switch from where to start referencing.
                                     Used to optimize runtime for referencing.
                                     If None, value will be 5% of value of cycle.
+        ref_frequency (None or 1 <= int): automatically re-reference the axis
+          after this many moves have been executed. Use None (null) to disable.
         """
         if inverted:
             raise ValueError("Axes shouldn't be inverted")
@@ -1934,11 +1936,13 @@ class RotationActuator(model.Actuator):
             raise ValueError("RotationActuator needs precisely one dependency")
 
         self._cycle = cycle
-        # counter to check when current position has overrun cycle
-        # and is close to zero again (pos and neg direction)
-        self._move_sum = 0
         # check when a specified number of rotations was performed
+        if ref_frequency is None or ref_frequency >= 1:
+            self._ref_frequency = ref_frequency
+        else:
+            raise ValueError("ref_on_move_count is %s, but must be >= 1 or None" % (ref_frequency,))
         self._move_num_total = 0
+
         axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
@@ -2098,8 +2102,8 @@ class RotationActuator(model.Actuator):
         final_pos = cur_pos + move
         pass_ref = (cur_pos // self._cycle) != (final_pos // self._cycle)
 
-        # do referencing after i=5 moves or when passing the reference switch anyways
-        if pass_ref or self._move_num_total >= 5:
+        # Reference if passing by the reference switch, or after N moves (if not disabled)
+        if pass_ref or (self._ref_frequency is not None and self._move_num_total >= self._ref_frequency):
             # Move to pos close to ref switch
             move, cur_pos = self._findShortestMove(self._ref_start)
                 
