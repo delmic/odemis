@@ -1110,13 +1110,10 @@ class TestRotationActuator(unittest.TestCase):
         # check absolute difference is smaller half the ustepsize
         self.assertLess(abs(self.dev_cycle.position.value[axis_name] - shift), self.dependency1._ustepsize[0] / 2.)
 
-    def test_offset_moveAbs(self):
+    def test_auto_ref_on_frequency(self):
         """
-        test if offset is correctly used
-        when accumulation of angles is overrunning 2pi (pos or neg) do referencing to zero
-        only works for cycle = 2pi
+        Test referencing is executed after a certain number of moves as specified in the reference frequency.
         """
-
         axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
@@ -1129,41 +1126,54 @@ class TestRotationActuator(unittest.TestCase):
             f = self.dev_cycle.moveRelSync({axis_name: 0.1})
             durations.append(time.time() - start_t)
 
-        # It should have 1 move which takes quite a lot longer (+1s)
-        dur_outlier = max(durations)
-        durations.remove(dur_outlier)
-        dur_std = sum(durations) / len(durations)
-        self.assertGreater(dur_outlier, dur_std + 1)
+        # It should have 1 move which takes quite a lot longer (at least 1s extra),
+        # because it also ran referencing.
+        dur_longest = max(durations)
+        durations.remove(dur_longest)
+        dur_avg = sum(durations) / len(durations)  # Average/normal time of a move
+        self.assertGreater(dur_longest, dur_avg + 1)  # Was the longest move really longer?
+
+    def test_auto_ref_on_passing(self):
+        """
+        Test referencing is automatically executed when passing the reference switch.
+        """
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        # overrun 2pi after 4 moves in clockwise
+        # overrun 2pi after 4 moves in clockwise direction
         shift = math.pi / 2
         for i in range(5):
             f = self.dev_cycle.moveRel({axis_name: shift})
             f.result()
         exp_pos = (shift * 5) % (2 * math.pi)  # = pi/2
 
+        # Check position reported by rotational axis is within cycle
         self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
                                delta=self.dependency1._ustepsize[0])
+        # If no referencing took place, the dependent device would report pi/2 * 5.
+        # As it was referenced after doing a whole cycle, it's just at pi/2.
         self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos,
                                delta=self.dependency1._ustepsize[0])
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        # Overrun 2pi after 4 moves in counter-clockwise
+        # Overrun 2pi after 4 moves in counter-clockwise direction
         # The 5th move should be started again from 0
         for i in range(5):
             f = self.dev_cycle.moveRel({axis_name:-shift})
             f.result()
 
         exp_pos = (-shift * 5) % (2 * math.pi)  #  = 3/2 pi ~= 4.712
-        exp_pos_dep = -shift
+        exp_pos_dep = -shift  # Expected position of the dependent device
 
+        # Check position reported by rotational axis is within cycle
         self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
                                delta=self.dependency1._ustepsize[0])
+        # If no referencing took place, the dependent device would report - pi/2 * 5.
+        # As it was referenced after doing a whole cycle, it's just at - pi/2.
         self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos_dep,
                                delta=self.dependency1._ustepsize[0])
 
