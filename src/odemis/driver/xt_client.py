@@ -1468,9 +1468,9 @@ class FibScanner(model.Emitter):
         :param role (str):
         :param parent (SEM object):
         :param channel (str): Specifies the type of scanner (alphabetic part) and the quadrant it is displayed in (
-        nummerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope control window
+        numerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope control window
         of TFS. The quadrants are numbered 1 (top left) - 4 (right bottom).
-        ion2 is set as default since the top left quadrant is used as default for the ebeam (electron1)
+        Usually the top right quadrant, ion2 is set as default for the FIB image.
         """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
@@ -1554,24 +1554,25 @@ class Detector(model.Detector):
                     if hasattr(self._scanner, "blanker"):
                         # TODO: When the acquisition ends, if blanker is set to automatic (None), we need to activate
                         #  the blanker again. That should also happen when switching e-beam <--> FIB, but currently
-                        #  the FIB blanker is not support via the XT interface.
+                        #  the FIB blanker is not supported via the XT interface.
                         if self._scanner.blanker.value is None:
                             self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
                     self.parent.set_channel_state(self._scanner.channel, False)
+
                     md = self._scanner._metadata.copy()
+                    if hasattr(self._scanner, "dwellTime"):
+                        md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
+                    if hasattr(self._scanner, "rotation"):
+                        md[model.MD_ROTATION] = self._scanner.rotation.value
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
-                    if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "shape"):
+                    if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "resolution"):
                         n_pixels = self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
                         est_acq_time = self._scanner.dwellTime.value * n_pixels
-                        md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
                     else:
                         # Acquisition time is unknown => assume it will be long
                         est_acq_time = 5 * 60  # 5 minutes
-
-                    if hasattr(self._scanner, "rotation"):
-                        md[model.MD_ROTATION] = self._scanner.rotation.value
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
@@ -1981,9 +1982,8 @@ class Focus(model.Actuator):
         self._updatePosition()
 
         if not hasattr(self.parent, "_scanner"):
-            if not hasattr(self.parent, "_mb-scanner"):
-                    raise ValueError("Required scanner child was not provided."
-                                     "An ebeam or multi-beam scanner is a required child component for the Focus class")
+            raise ValueError("Required scanner child was not provided."
+                             "An ebeam or multi-beam scanner is a required child component for the Focus class")
 
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
@@ -2339,7 +2339,6 @@ class XTTKDetector(Detector):
                           " connected to the network. %s" % (address, err))
         Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._shape = (2**16,)  # Depth of the image
-        self._scanner = self.parent._scanner
 
     def stop_generate(self):
         logging.debug("Stopping image acquisition")
@@ -2347,11 +2346,11 @@ class XTTKDetector(Detector):
             self.cancel_connection._pyroClaimOwnership()
             # Directly calling set_channel_state does not work with XTToolkit.
             # Therefore call get_channel_state, before trying to stop the channel.
-            self.cancel_connection.get_channel_state(self._scanner.channel)
-            self.cancel_connection.set_channel_state(self._scanner.channel, False)
+            self.cancel_connection.get_channel_state(self.parent._scanner.channel)
+            self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
             # Stop twice, to make sure the channel fully stops.
-            self.cancel_connection.set_channel_state(self._scanner.channel, False)
-        if self.parent._scanner.blanker.value is None:
+            self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
+        if self.parent.parent._scanner.blanker.value is None:
             self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
 
@@ -2382,7 +2381,7 @@ class XTTKDetector(Detector):
 
                     # Acquire the image
                     # =================
-                    image = self.parent.get_latest_image(self._scanner.channel)
+                    image = self.parent.get_latest_image(self.parent._scanner.channel)
 
                     md = self.parent._scanner._metadata.copy()
                     md.update(self._metadata)
