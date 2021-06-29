@@ -461,6 +461,8 @@ class TestARExport(unittest.TestCase):
                              model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
                              })
 
+        metadata[-1][model.MD_POS] = (1.2e-3 + 1e-14, -30e-3)  # Introduce a floating point error
+
         # AR polarization analyzer data
         data = []
         for index, md in enumerate(metadata):
@@ -599,6 +601,8 @@ class TestARExport(unittest.TestCase):
                              model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
                              model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
                              })
+
+        metadata[-1][model.MD_POS] = (1.2e-3 + 1e-14, -30e-3)  # Introduce a floating point error
 
         # AR polarization analyzer data
         data = []
