@@ -1341,9 +1341,9 @@ class Test_ASMDataFlow(unittest.TestCase):
                 self._data_received.clear()
                 # Here the stage would move to the right position
                 dataflow.next((x, y))
-                # Allow 1.5 seconds per field image to be acquired
-                if not self._data_received.wait(1.5):
-                    self.fail("No data received after 1.5s for field %d, %d" % (x, y))
+                # Allow 3 seconds per field image to be acquired
+                if not self._data_received.wait(3):
+                    self.fail("No data received after 3s for field %d, %d" % (x, y))
 
         # Wait a bit to allow some processing and receive images.
         dataflow.unsubscribe(self.image_received)
