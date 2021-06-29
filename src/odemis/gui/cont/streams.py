@@ -35,7 +35,7 @@ import numpy
 
 import odemis.acq.fastem
 from odemis import model, util
-from odemis.acq.stream import MeanSpectrumProjection
+from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -216,6 +216,10 @@ class StreamController(object):
 
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
+
+        if tab_data_model.main.role == "mbsem":
+            # It's a FastEM
+            self._add_fastem_ctrls()
 
         # Set the visibility button on the stream panel
         if view:
@@ -1344,6 +1348,38 @@ class StreamController(object):
 
         # Make sure the current value is selected
         self._rep_ctrl.SetSelection(choices.index(rep))
+
+    def _add_fastem_ctrls(self):
+        self.stream_panel.add_divider()
+        _, btn_autofocus = self.stream_panel.add_run_btn("Autofocus")
+        _, btn_autobc = self.stream_panel.add_run_btn("Auto-brightness/contrast")
+        _, btn_autostigmation = self.stream_panel.add_run_btn("Autostigmation")
+
+        btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
+        btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
+        btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
+
+    @call_in_wx_main
+    def _on_btn_autofocus(self, _):
+        self.stream_panel.Enable(False)
+        f = self.stream.focuser.applyAutofocus(self.stream.detector)
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_btn_autobc(self, _):
+        self.stream_panel.Enable(False)
+        f = self.stream.emitter.applyAutoContrastBrightness(self.stream.detector)
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_btn_autostigmation(self, _):
+        self.stream_panel.Enable(False)
+        f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_autofunction_done(self, f):
+        self.stream_panel.Enable(True)
 
 
 class StreamBarController(object):
@@ -3004,6 +3040,33 @@ class SparcStreamsController(StreamBarController):
                 s.useScanStage.value = use
 
 
+class FastEMStreamsController(StreamBarController):
+    """
+    StreamBarController with additional functionality for overview streams (add/remove overview streams from
+    view if main data .overview_streams VA changes).
+    """
+
+    def __init__(self, tab_data, *args, **kwargs):
+        super().__init__(tab_data, *args, **kwargs)
+        tab_data.main.overview_streams.subscribe(self._on_overview_streams)
+
+    def _on_overview_streams(self, _):
+        ovv_streams = self._tab_data_model.main.overview_streams.value.values()
+        tab_streams = self._tab_data_model.streams.value
+        canvas = self._view_controller.viewports[0].canvas
+        # Remove old streams from view
+        for s in tab_streams:
+            if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
+                tab_streams.remove(s)
+                canvas.view.removeStream(s)
+
+        # Add stream to view if it's not already there
+        for s in ovv_streams:
+            if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
+                tab_streams.append(s)
+                canvas.view.addStream(s)
+
+
 # Blue, red, green, cyan, yellow, purple, magenta
 FASTEM_PROJECT_COLOURS = ["#0000ff", "#ff0000", "#00ff00", "#00ffff", "#ffff00", "#ff00ff",
                           "#ff00bf"]
@@ -3030,9 +3093,6 @@ class FastEMProjectBarController(object):
 
         # Always show one project by default
         self._add_project(None)
-
-        # TODO: move to viewport controller?
-        self._view_ctrl.viewports[0].canvas.add_background_overlay(self._tab_data_model.background)
 
     def _add_project(self, _):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
@@ -3195,7 +3255,7 @@ class FastEMProjectController(object):
         roi_x, roi_y = (coordinates[2] + coordinates[0]) / 2, (coordinates[1] + coordinates[3]) / 2
         mindist = 1  # distances always lower 1
         closest = None
-        for num, (sc_x, sc_y) in self._tab_data.scintillator_positions.items():
+        for num, (sc_x, sc_y) in self._tab_data.main.scintillator_positions.items():
             # scintillators are rectangular, use maximum instead of euclidean distance
             dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
             if dist < mindist:
@@ -3241,7 +3301,7 @@ class FastEMROAController(object):
         """
         logging.debug("Creating panel for ROA %s.", self.model.name.value)
         self.panel = FastEMROAPanel(self._project_panel, self.model.name.value,
-                                    ["Calibration %s" % c for c in sorted(self._tab_data.scintillator_positions)])
+                                    ["Calibration %s" % c for c in sorted(self._tab_data.main.scintillator_positions)])
         self._project_panel.add_roa_panel(self.panel)
 
         self.panel.calibration_ctrl.Bind(wx.EVT_COMBOBOX, self._on_combobox)
@@ -3299,7 +3359,7 @@ class FastEMCalibrationController(object):
         self._calibration_bar = calibration_bar
         self._tab_data = tab_data
 
-        self.panel = FastEMCalibrationPanel(calibration_bar, tab_data.scintillator_layout)
+        self.panel = FastEMCalibrationPanel(calibration_bar, tab_data.main.scintillator_layout)
         calibration_bar.add_calibration_panel(self.panel)
 
         self.roc_ctrls = {}  # int --> FastEMROCController
@@ -3340,7 +3400,7 @@ class FastEMROCController(object):
 
         # By default, the calibration region is in the center of the scintillator. The size is given by
         # the ebeam resolution.
-        pos = tab_data.scintillator_positions[number]
+        pos = tab_data.main.scintillator_positions[number]
         sz = (tab_data.main.ebeam.resolution.value[0] * tab_data.main.ebeam.pixelSize.value[0],
               tab_data.main.ebeam.resolution.value[1] * tab_data.main.ebeam.pixelSize.value[1])
 

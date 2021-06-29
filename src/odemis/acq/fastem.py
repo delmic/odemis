@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from odemis import model
+import numpy
 
 
 class FastEMROA(object):
@@ -76,3 +77,21 @@ def _run_fake_acquisition():
 
 def estimateTime(roas):
     return len(roas) * 2
+
+
+# Overview acquisition
+def acquireTiledArea(stream, stage, area, live_stream=None):
+    f = model.ProgressiveFuture()
+    _executor.submitf(f, _run_fake_overview_acquisition, stream, stage, area, live_stream)
+    return f
+
+
+def _run_fake_overview_acquisition(stream, stage, area, live_stream):
+    """
+    :param coords: (float, float, float, float) minx, miny, maxx, maxy coordinates of overview region
+    :param sem_stream (SEMStream):
+    :returns: (DataArray)
+    """
+    time.sleep(2)
+    d = model.DataArray(numpy.random.random((500, 500)))
+    return d

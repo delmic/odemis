@@ -1907,3 +1907,23 @@ class FastEMAcquisitionViewport(MicroscopeViewport):
     """ MicroscopeViewport with specialized FastEMCanvas. """
 
     canvas_class = miccanvas.FastEMAcquisitionCanvas
+
+    def setView(self, view, tab_data):
+        super().setView(view, tab_data)
+        self.canvas.add_background_overlay(self._tab_data_model.main.background)
+
+
+class FastEMOverviewViewport(FeatureOverviewViewport):
+    """ FeatureOverviewViewport (viewport with a CurrentPosCrossHairOverlay) with specialized FastEMCanvas
+    (which adds a background overlay). """
+
+    canvas_class = miccanvas.FastEMAcquisitionCanvas
+
+    def setView(self, view, tab_data):
+        super().setView(view, tab_data)
+        self.canvas.add_background_overlay(self._tab_data_model.main.background)
+
+    def _on_stream_play(self, is_playing):
+        # same as superclass function, except allow dragging if stream is paused
+        super()._on_stream_play(is_playing)
+        self.canvas.abilities.add(CAN_DRAG)

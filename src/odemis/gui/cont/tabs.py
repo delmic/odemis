@@ -47,6 +47,7 @@ from odemis.gui import conf, img
 from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
+from odemis.model import getVAs
 from odemis.util.filename import guess_pattern, create_projectname
 
 import odemis.acq.stream as acqstream
@@ -80,7 +81,8 @@ from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport, \
+    FastEMOverviewViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
@@ -1649,14 +1651,18 @@ class FastEMAcquisitionTab(Tab):
         vpv = collections.OrderedDict([
             (vp,
              {"name": "Acquisition",
-              "cls": guimod.ContentView,  # Center on content (instead of stage)
+              "cls": guimod.StreamView,
               "stream_classes": EMStream,
-              "zPos": self.tab_data_model.zPos,
               }),
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        for num, s in tab_data.overview_streams.value:
-            vp.view.addStream(s)
+
+        # Streams controller
+        self._streams_controller = streamcont.FastEMStreamsController(tab_data,
+                                                                      panel.pnl_fastem_projects,
+                                                                      ignore_view=True,
+                                                                      view_ctrl=self.view_controller,
+                                                                      )
 
         # Project bar controller
         self._projectbar_controller = streamcont.FastEMProjectBarController(
@@ -1680,6 +1686,10 @@ class FastEMAcquisitionTab(Tab):
             self._calibrationbar_controller
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def streams_controller(self):
+        return self._streams_controller
 
     @property
     def projectbar_controller(self):
@@ -1706,6 +1716,96 @@ class FastEMAcquisitionTab(Tab):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
             return 1
+        else:
+            return None
+
+
+class FastEMOverviewTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes given viewport.
+        #
+        # StreamController
+        #   Manages the single beam stream.
+        #
+        # Acquisition Controller
+        #   Takes care of the acquisition and acquisition selection buttons.
+
+        tab_data = guimod.FastEMOverviewGUIData(main_data)
+
+        super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("OVERVIEW")
+
+        # View Controller
+        vp = panel.vp_fastem_overview
+        assert(isinstance(vp, FastEMOverviewViewport))
+        vpv = collections.OrderedDict([
+            (vp,
+             {"name": "Overview",
+              "stage": main_data.stage,
+              "cls": guimod.StreamView,
+              "stream_classes": EMStream,
+              }),
+        ])
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Single-beam SEM stream
+        vanames = ("resolution", "dwellTime", "horizontalFoV")
+        hwemtvas = set()
+        for vaname in getVAs(main_data.ebeam):
+            if vaname in vanames:
+                hwemtvas.add(vaname)
+        sem_stream = acqstream.SEMStream(
+            "Single Beam",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=hwemtvas,
+        )
+        tab_data.streams.value.append(sem_stream)  # it should also be saved
+        tab_data.semStream = sem_stream
+        self._stream_controller = streamcont.FastEMStreamsController(
+            tab_data,
+            panel.pnl_fastem_overview_streams,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
+        )
+        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+
+        # Acquisition controller
+        self._acquisition_controller = acqcont.FastEMOverviewAcquiController(
+            tab_data,
+            panel,
+        )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def streambar_controller(self):
+        return self._stream_controller
+
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
+    def on_acquisition(self, is_acquiring):
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        if is_acquiring:
+            self._stream_controller.enable(False)
+            self._stream_controller.pause()
+        else:
+            self._stream_controller.resume()
+            self._stream_controller.enable(True)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # Tab is used only for FastEM
+        if main_data.role in ("mbsem",):
+            return 2
         else:
             return None
 

@@ -39,20 +39,21 @@ from wx.core import CallAfter
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream
-from odemis.gui import conf
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream, FastEMOverviewStream
+from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
-    wxlimit_invocation
+    wxlimit_invocation, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator, VigilantAttributeConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
 from odemis.util import units
+from odemis.util.dataio import open_acquisition, data_to_static_streams
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -1571,6 +1572,186 @@ class FastEMAcquiController(object):
             logging.exception("Acquisition failed")
             self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
             return
+
+
+class FastEMOverviewAcquiController(object):
+    """
+    Takes care of the overview image acquisition in the FastEM overview tab.
+    """
+
+    def __init__(self, tab_data, tab_panel):
+        """
+        tab_data (FastEMGUIData): the representation of the microscope GUI
+        tab_panel: (wx.Frame): the frame which contains the viewport
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+
+        # For acquisition
+        self.btn_acquire = self._tab_panel.btn_sparc_acquire
+        self.btn_cancel = self._tab_panel.btn_sparc_cancel
+        self.gauge_acq = self._tab_panel.gauge_sparc_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
+        self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.selection_panel = self._tab_panel.selection_panel
+
+        # Create grid of buttons for scintillator selection
+        self.selection_panel.create_controls(tab_data.main.scintillator_layout)
+        for btn in self.selection_panel.buttons.values():
+            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
+
+        # Link acquire/cancel buttons
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        # Hide gauge, disable acquisition button
+        self.gauge_acq.Hide()
+        self._tab_panel.Parent.Layout()
+        self.btn_acquire.Enable(False)
+
+        # Warning that no scintillators are selected
+        self.update_acquisition_time()
+
+    def _on_selection_button(self, evt):
+        # add/remove scintillator number to/from selected_scintillators set and toggle button colour
+        btn = evt.GetEventObject()
+        num = [num for num, b in self.selection_panel.buttons.items() if b == btn][0]
+        if btn.GetValue():
+            if num not in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.append(num)
+            btn.SetBackgroundColour(wx.GREEN)
+        else:
+            if num in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.remove(num)
+            btn.SetBackgroundColour(FG_COLOUR_BUTTON)
+        self.update_acquisition_time()
+        self.check_acquire_button()
+
+    @call_in_wx_main
+    def check_acquire_button(self):
+        self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
+
+    @wxlimit_invocation(1)  # max 1/s
+    def update_acquisition_time(self):
+        lvl = None  # icon status shown
+        if not self._tab_data_model.selected_scintillators.value:
+            lvl = logging.WARN
+            txt = "No scintillator selected for overview acquisition."
+        else:
+            acq_time = len(self._tab_data_model.selected_scintillators.value) * 2
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = u"Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
+
+    def _show_status_icons(self, lvl):
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.Layout()
+
+    def _reset_acquisition_gui(self, text=None, level=None):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self._tab_panel.Layout()
+
+        if text is not None:
+            self.lbl_acqestimate.SetLabel(text)
+            self._show_status_icons(level)
+        else:
+            self.update_acquisition_time()
+
+    def on_acquisition(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        self._main_data_model.is_acquiring.value = True
+        self.btn_acquire.Enable(False)
+        self.btn_cancel.Enable(True)
+        self.btn_cancel.Show()
+        self.gauge_acq.Show()
+        self._show_status_icons(None)
+
+        self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
+        self.gauge_acq.Value = 0
+
+        # Acquire ROAs for all projects
+        for num in self._tab_data_model.selected_scintillators.value:
+            center = self._tab_data_model.main.scintillator_positions[num]
+            sz = self._tab_data_model.main.scintillator_size
+            coords = (center[0] - sz[0], center[1] - sz[1], center[0] + sz[0], center[1] + sz[1])
+            f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+
+            def acq_done(future, num=num):
+                return self.on_acquisition_done(future, num)
+            f.add_done_callback(acq_done)
+        f.add_done_callback(self.full_acquisition_done)
+
+    def increase_acq_progress(self, f):
+        # TODO: improve progress estimation
+        self.gauge_acq.Value += 1
+
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        fastem._executor.cancel()
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_in_wx_main
+    def on_acquisition_done(self, future, num):
+        """
+        Callback called when the one overview image acquisition is finished.
+        """
+        self.increase_acq_progress(None)
+        try:
+            da = future.result()
+        except CancelledError:
+            self._reset_acquisition_gui()
+            return
+        except Exception:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
+            return
+
+        # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
+        fn = os.path.join(get_picture_folder(), "fastem_overview_%s.ome.tiff" % num)
+        dataio.tiff.export(fn, da, pyramid=True)
+        da = open_acquisition(fn)
+        sz = self._tab_data_model.main.scintillator_size
+        md = {model.MD_POS: self._tab_data_model.main.scintillator_positions[num],
+              model.MD_PIXEL_SIZE: [sz[0] / da[0].shape[0], sz[1] / da[0].shape[1]]}
+        da[0].metadata = md
+        s = data_to_static_streams(da)[0]
+        s = FastEMOverviewStream(s.name.value, s.raw[0])
+        self._main_data_model.overview_streams.value[num] = s
+        # Dict VA needs to be notified explicitly
+        self._main_data_model.overview_streams.notify(self._main_data_model.overview_streams.value)
+
+    @call_in_wx_main
+    def full_acquisition_done(self, future):
+        """
+        Callback called when the acquisition of all selected overview images is finished
+        (either successfully or cancelled).
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self._tab_panel.Layout()
+        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._main_data_model.is_acquiring.value = False
 
 
 # TODO: merge with AutoCenterController because they share too many GUI elements

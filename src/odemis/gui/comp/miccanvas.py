@@ -1820,11 +1820,11 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         """
         logging.debug("Zooming out to show all scintillators.")
         if self._tab_data_model:
-            sz = self._tab_data_model.scintillator_size
-            l = min(list(self._tab_data_model.scintillator_positions.values()), key=lambda item: item[0])[0] - sz[0]
-            t = max(list(self._tab_data_model.scintillator_positions.values()), key=lambda item: item[1])[1] + sz[1]
-            r = max(list(self._tab_data_model.scintillator_positions.values()), key=lambda item: item[0])[0] + sz[0]
-            b = min(list(self._tab_data_model.scintillator_positions.values()), key=lambda item: item[1])[1] - sz[1]
+            sz = self._tab_data_model.main.scintillator_size
+            l = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] - sz[0]
+            t = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] + sz[1]
+            r = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] + sz[0]
+            b = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] - sz[1]
             self.fit_to_bbox((l, t, r, b))
         else:
             raise ValueError("Tab data model not initialized yet.")
@@ -1865,6 +1865,5 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         evt.Skip()
 
     def setView(self, view, tab_data):
-        # Same as function from super class, but don't show crosshair
         super(FastEMAcquisitionCanvas, self).setView(view, tab_data)
         view.show_crosshair.value = False

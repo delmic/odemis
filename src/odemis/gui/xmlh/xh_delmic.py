@@ -280,6 +280,32 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
 
 
+class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMSelectionPanel')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMSelectionPanel':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMOverviewSelectionPanel(parent,
+                                                  self.GetID(),
+                                                  self.GetPosition(),
+                                                  self.GetSize(),
+                                                  self.GetStyle())
+            self.SetupWindow(w)
+            #parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMSelectionPanelXmlHandler)
+
+
 class _ImageButtonHandler(xrc.XmlResourceHandler):
 
     klass = None
@@ -648,6 +674,13 @@ class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "FastEMAcquisitionViewport")
 HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
 
+class FastEMOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FastEMOverviewViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FastEMOverviewViewport")
+HANDLER_CLASS_LIST.append(FastEMOverviewViewportXmlHandler)
 
 ##################################
 # Sliders

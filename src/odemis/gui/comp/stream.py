@@ -1155,6 +1155,19 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
+    def add_run_btn(self, label_text):
+        """
+        Add a generic run button and the corresponding side label to the gridbag sizer.
+        :param label_text: (str) label text to display
+        :returns: (wx.StaticText, ImageTextButton) side label and run button
+        """
+        lbl_ctrl = self._add_side_label(label_text)
+        run_btn = ImageTextButton(self._panel, label="Run...", height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(run_btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return lbl_ctrl, run_btn
+
+    @control_bookkeeper
     def add_divider(self):
         """ Add a dividing line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
@@ -2093,3 +2106,42 @@ class FastEMCalibrationPanel(wx.Panel):
 
         self._panel_sizer.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
         self._panel_sizer.AddSpacer(10)
+
+
+class FastEMOverviewSelectionPanel(wx.Panel):
+    """
+    Panel for the calibration buttons.
+    """
+
+    def __init__(self, parent,
+                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 style=wx.CP_DEFAULT_STYLE, name="CalibrationPanel"):
+        """
+        layout (list of lists of int): layout of scintillator grid, given as 2D list of scintillator positions,
+        e.g. [[6, 5, 4], [3, 2, 1]]
+        """
+        wx.Panel.__init__(self, parent, wid, pos, size, style, name)
+        self.buttons = {}  # int --> wx.Button
+
+        self._panel_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(self._panel_sizer)
+
+    def create_controls(self, layout):
+        nrows = len(layout)
+        ncols = max(len(row) for row in layout)
+        calgrid_sz = wx.GridBagSizer(nrows, ncols)
+        for row_idx, row in enumerate(layout):
+            for col_idx, elem in enumerate(row):
+                subsz = wx.BoxSizer(wx.HORIZONTAL)
+                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, size=(30, 30))
+                btn.SetBackgroundColour("#999999")
+                subsz.Add(btn)
+                subsz.AddSpacer(8)
+
+                calgrid_sz.Add(subsz, pos=(row_idx, col_idx))
+                txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, str(elem), size=(10, -1))
+                subsz.Add(txt, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
+                subsz.AddSpacer(20)
+
+                self.buttons[elem] = btn
+        self._panel_sizer.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
