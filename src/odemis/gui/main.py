@@ -133,7 +133,7 @@ class OdemisGUIApp(wx.App):
         # TODO: if microscope.ghost is not empty => wait and/or display a special
         # "hardware status" tab.
 
-        if microscope.role == "mbsem":
+        if microscope and microscope.role == "mbsem":
             self.main_data = guimodel.FastEMMainGUIData(microscope)
         else:
             self.main_data = guimodel.MainGUIData(microscope)
