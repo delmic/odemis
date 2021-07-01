@@ -365,7 +365,7 @@ def write_trigger_delay_csv(filename, trig_delays):
     trig_delays (dict float -> float): time range to trigger delay info
     """
 
-    with open(filename, 'w') as csvfile:
+    with open(filename, 'w', newline='') as csvfile:
         calibFile = csv.writer(csvfile, delimiter=':')
         for time_range, trig_delay in trig_delays.items():
             calibFile.writerow([time_range, trig_delay])
@@ -382,7 +382,7 @@ def read_trigger_delay_csv(filename, time_choices, trigger_delay_range):
     raise IOError: if the file doesn't exist
     """
     tr2d = {}
-    with open(filename, 'r') as csvfile:
+    with open(filename, 'r', newline='') as csvfile:
         calibFile = csv.reader(csvfile, delimiter=':')
         for time_range, delay in calibFile:
             try:
