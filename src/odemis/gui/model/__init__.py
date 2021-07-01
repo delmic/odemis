@@ -1581,13 +1581,13 @@ class StreamView(View):
         stage_limits = self._getStageLimitsXY()
         if "x" in stage_limits and not stage_limits["x"][0] <= move["x"] <= stage_limits["x"][1]:
             move["x"] = max(stage_limits["x"][0], min(move["x"], stage_limits["x"][1]))
-            logging.info("Movements of the stage in x direction are limited by the stage limit, the movement is "
-                         "restricted to %s mm." % (move["x"] * 1e3))
+            logging.info("Movements of the stage in x limited to %s, restricting movement to %s mm." %
+                         (stage_limits["x"], move["x"] * 1e3))
 
         if "y" in stage_limits and not stage_limits["y"][0] <= move["y"] <= stage_limits["y"][1]:
             move["y"] = max(stage_limits["y"][0], min(move["y"], stage_limits["y"][1]))
-            logging.info("Movements of the stage in y direction are limited by the stage limit, the movement is "
-                         "restricted to %s mm." % (move["y"] * 1e3))
+            logging.info("Movements of the stage in y limited to %s, restricting movement to %s mm." %
+                         (stage_limits["y"], move["y"] * 1e3))
 
         logging.debug("Requesting stage to move to %s m", move)
         f = self._stage.moveAbs(move)
@@ -1597,7 +1597,7 @@ class StreamView(View):
 
     def _getStageLimitsXY(self):
         """
-        Based on the physical stage limit and the area of the image used for imaging the stage limits are return in
+        Based on the physical stage limit and the area of the image used for imaging the stage limits are returned in
         a dict. (MD_POS_ACTIVE_RANGE defines the area which can be used for imaging)
         If no stage limits are defined an empty dict is returned.
 
@@ -1606,17 +1606,16 @@ class StreamView(View):
         stage_limits = {}
         # Physical stage limits
         if "x" in self._stage.axes and hasattr(self._stage.axes["x"], "range"):
-            stage_limits.update({"x": [self._stage.axes["x"].range[0], self._stage.axes["x"].range[1]]})
+            stage_limits["x"] = list(self._stage.axes["x"].range)
         if "y" in self._stage.axes and hasattr(self._stage.axes["y"], "range"):
-            stage_limits.update({"y": [self._stage.axes["y"].range[0], self._stage.axes["y"].range[1]]})
+            stage_limits["y"] = list(self._stage.axes["x"].range)
 
         # Area which can be used for imaging
-        if model.MD_POS_ACTIVE_RANGE in self._stage.getMetadata():
-            pos_active_range = self._stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-            if "x" in pos_active_range and "x" in stage_limits:
-                stage_limits = self._updateStageLimits(stage_limits, {"x": pos_active_range["x"]})
-            if "y" in pos_active_range and "y" in stage_limits:
-                stage_limits = self._updateStageLimits(stage_limits, {"y": pos_active_range["y"]})
+        pos_active_range = self._stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
+        if "x" in pos_active_range and "x" in stage_limits:
+            stage_limits = self._updateStageLimits(stage_limits, {"x": pos_active_range["x"]})
+        if "y" in pos_active_range and "y" in stage_limits:
+            stage_limits = self._updateStageLimits(stage_limits, {"y": pos_active_range["y"]})
 
         if not stage_limits:
             logging.info("No stage limits defined")
@@ -1637,7 +1636,7 @@ class StreamView(View):
                 stage_limits.update({key: [max(stage_limits[key][0], new_limits[key][0]),
                                            min(stage_limits[key][1], new_limits[key][1])]})
             else:
-                stage_limits.update({key: [stage_limits[key][0], new_limits[key][1]]})
+                stage_limits[key] = list(stage_limits[key])  # If key isn't already in stage limits
 
         return stage_limits
 
