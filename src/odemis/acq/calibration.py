@@ -24,6 +24,15 @@ import logging
 import numpy
 from odemis import model
 from odemis.util import spectrum, img, find_closest, almost_equal
+import sys
+
+
+# To avoid CSV file to have newlines as "\r\r\n" on Windows
+# See https://docs.python.org/3.6/library/csv.html#id3
+if sys.version_info.major >= 3:
+    OPEN_CSV_KWARGS = {"newline": ""}
+else:  # Python 2
+    OPEN_CSV_KWARGS = {}
 
 
 # AR calibration data is a background image. The file format expected is a
@@ -364,7 +373,7 @@ def write_trigger_delay_csv(filename, trig_delays):
     trig_delays (dict float -> float): time range to trigger delay info
     """
 
-    with open(filename, 'w') as csvfile:
+    with open(filename, 'w', **OPEN_CSV_KWARGS) as csvfile:
         calibFile = csv.writer(csvfile, delimiter=':')
         for time_range, trig_delay in trig_delays.items():
             calibFile.writerow([time_range, trig_delay])
@@ -381,7 +390,7 @@ def read_trigger_delay_csv(filename, time_choices, trigger_delay_range):
     raise IOError: if the file doesn't exist
     """
     tr2d = {}
-    with open(filename, 'r') as csvfile:
+    with open(filename, 'r', **OPEN_CSV_KWARGS) as csvfile:
         calibFile = csv.reader(csvfile, delimiter=':')
         for time_range, delay in calibFile:
             try:
