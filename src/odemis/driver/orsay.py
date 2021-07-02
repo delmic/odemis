@@ -1963,7 +1963,7 @@ class FIBBeam(model.HwComponent):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
-        • blankerVoltage: FloatContinuous, unit="V", range=(0, 145)
+        • blankerVoltage: FloatContinuous, unit="V", range=(0, 150)
         • condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
         • objectiveStigmator: TupleContinuous Float, unit="V", range=[(-2.0, -2.0), (2.0, 2.0)]
         • intermediateStigmator: TupleContinuous Float, unit="V", range=[(-5.0, -5.0), (5.0, 5.0)]
@@ -2005,7 +2005,7 @@ class FIBBeam(model.HwComponent):
 
         self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
         self.blankerConnector = None
-        self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 145))
+        self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 150))
         self.blankerVoltageConnector = None
         self.condenserVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 3e4))
         self.condenserVoltageConnector = None
