@@ -1363,7 +1363,7 @@ class TestFIBSource(unittest.TestCase):
     def test_acceleratorVoltage(self):
         """Check that the heaterState VA is updated correctly"""
         connector_test(self, self.fib_source.acceleratorVoltage, self.fib_source._hvps.Energy,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_energyLink(self):
         """Check that the energyLink VA is updated correctly"""
@@ -1490,7 +1490,7 @@ class TestFIBBeam(unittest.TestCase):
     def test_objectiveVoltage(self):
         """Check that the objectiveVoltage VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveVoltage, self.fibbeam._hvps.ObjectiveVoltage,
-                       [(100, 100), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(100.0, 100.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_beamShift(self):
         """Check that the beamShift VA is updated correctly"""

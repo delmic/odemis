@@ -1796,7 +1796,7 @@ class FIBSource(model.HwComponent):
         • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
         • heaterCurrent: FloatContinuous, unit="A", range=(0, 5)
         • heater: BooleanVA
-        • acceleratorVoltage: IntContinuous, unit="V", range=(0, 3e4)
+        • acceleratorVoltage: FloatContinuous, unit="V", range=(0.0, 3e4)
         • energyLink: BooleanVA
         • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
         """
@@ -1814,16 +1814,16 @@ class FIBSource(model.HwComponent):
         self.currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
         self.sourceCurrentConnector = None
-        self.suppressorVoltage = model.FloatContinuous(0, unit="V", range=(-2e3, 2e3))
+        self.suppressorVoltage = model.FloatContinuous(0.0, unit="V", range=(-2e3, 2e3))
         self.suppressorVoltageConnector = None
         self.heaterCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
         self.heaterCurrentConnector = None
         self.heater = model.BooleanVA(False, setter=self._changeHeater)
-        self.acceleratorVoltage = model.IntContinuous(0, unit="V", range=(0, 3e4))
+        self.acceleratorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 3e4))
         self.acceleratorVoltageConnector = None
         self.energyLink = model.BooleanVA(False)
         self.energyLinkConnector = None
-        self.extractorVoltage = model.FloatContinuous(0, unit="V", range=(0, 12e3))
+        self.extractorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 12e3))
         self.extractorVoltageConnector = None
 
         self._connectorList = []
@@ -1976,7 +1976,7 @@ class FIBBeam(model.HwComponent):
         • xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
         • mirror: BooleanVA
         • imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
-        • objectiveVoltage: IntContinuous, unit="V", range=(0, 2e4)
+        • objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
         • beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
         • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
         • measuringCurrent: BooleanVA
@@ -2030,7 +2030,7 @@ class FIBBeam(model.HwComponent):
         self.mirrorConnector = None
         self.imageFromSteerers = model.BooleanVA(False)
         self.imageFromSteerersConnector = None
-        self.objectiveVoltage = model.IntContinuous(0, unit="V", range=(0, 2e4))
+        self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
         self.objectiveVoltageConnector = None
         self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
         self.beamShiftConnector = None
