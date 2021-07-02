@@ -1428,6 +1428,13 @@ class TestFIBBeam(unittest.TestCase):
                        [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
                        hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
+    def test_intermediateStigmator(self):
+        """Check that the intermediateStigmator VA is updated correctly"""
+        connector_test(self, self.fibbeam.intermediateStigmator, [self.fibbeam._ionColumn.IntermediateStigmatorX,
+                                                                  self.fibbeam._ionColumn.IntermediateStigmatorY],
+                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+
     def test_steererStigmator(self):
         """Check that the steererStigmator VA is updated correctly"""
         connector_test(self, self.fibbeam.steererStigmator, [self.fibbeam._ionColumn.CondensorSteerer1StigmatorX,

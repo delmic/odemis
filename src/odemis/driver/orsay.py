@@ -1966,6 +1966,7 @@ class FIBBeam(model.HwComponent):
         • blankerVoltage: FloatContinuous, unit="V", range=(0, 145)
         • condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
         • objectiveStigmator: TupleContinuous Float, unit="V", range=[(-2.0, -2.0), (2.0, 2.0)]
+        • intermediateStigmator: TupleContinuous Float, unit="V", range=[(-5.0, -5.0), (5.0, 5.0)]
         • steererStigmator: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
         • steererShift: TupleContinuous Float, unit="V", range=[(-100.0, -100.0), (100.0, 100.0)]
         • steererTilt: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
@@ -2010,6 +2011,8 @@ class FIBBeam(model.HwComponent):
         self.condenserVoltageConnector = None
         self.objectiveStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-2.0, -2.0), (2.0, 2.0)])
         self.objectiveStigmatorConnector = None
+        self.intermediateStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-5.0, -5.0), (5.0, 5.0)])
+        self.intermediateStigmatorConnector = None
         self.steererStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
         self.steererStigmatorConnector = None
         self.steererShift = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-100.0, -100.0), (100.0, 100.0)])
@@ -2095,6 +2098,15 @@ class FIBBeam(model.HwComponent):
                                                                            self._ionColumn.ObjectiveStigmatorY_Minvalue],
                                                                    maxpar=[self._ionColumn.ObjectiveStigmatorX_Maxvalue,
                                                                            self._ionColumn.ObjectiveStigmatorY_Maxvalue])
+        self.intermediateStigmatorConnector = OrsayParameterConnector(self.intermediateStigmator,
+                                                                      [self._ionColumn.IntermediateStigmatorX,
+                                                                       self._ionColumn.IntermediateStigmatorY],
+                                                                      minpar=[
+                                                                          self._ionColumn.IntermediateStigmatorX_Minvalue,
+                                                                          self._ionColumn.IntermediateStigmatorY_Minvalue],
+                                                                      maxpar=[
+                                                                          self._ionColumn.IntermediateStigmatorX_Maxvalue,
+                                                                          self._ionColumn.IntermediateStigmatorY_Maxvalue])
         self.steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
                                                                  [self._ionColumn.CondensorSteerer1StigmatorX,
                                                                   self._ionColumn.CondensorSteerer1StigmatorY],
