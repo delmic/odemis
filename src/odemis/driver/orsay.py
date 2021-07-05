@@ -109,13 +109,13 @@ class OrsayComponent(model.HwComponent):
                                                            daemon=True)
         self._connection_monitor_thread.start()
 
-        no_child_str = "The Orsay component was not given a '%s' child"
+        no_child_msg = "The Orsay component was not given a '%s' child"
 
         # create the pneumatic suspension child
         try:
             kwargs = children["pneumatic-suspension"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "pneumatic-suspension")
+            logging.info(no_child_msg % "pneumatic-suspension")
         else:
             self._pneumaticSuspension = pneumaticSuspension(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._pneumaticSuspension)
@@ -124,7 +124,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["pressure"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "pressure")
+            logging.info(no_child_msg % "pressure")
         else:
             self._pressure = vacuumChamber(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._pressure)
@@ -133,7 +133,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["pumping-system"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "pumping-system")
+            logging.info(no_child_msg % "pumping-system")
         else:
             self._pumpingSystem = pumpingSystem(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._pumpingSystem)
@@ -142,7 +142,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["ups"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "ups")
+            logging.info(no_child_msg % "ups")
         else:
             self._ups = UPS(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._ups)
@@ -151,7 +151,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["gis"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "gis")
+            logging.info(no_child_msg % "gis")
         else:
             self._gis = GIS(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis)
@@ -160,7 +160,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["gis-reservoir"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "gis-reservoir")
+            logging.info(no_child_msg % "gis-reservoir")
         else:
             self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis_reservoir)
@@ -169,7 +169,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["fib-device"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "fib-device")
+            logging.info(no_child_msg % "fib-device")
         else:
             self._fib_device = FIBDevice(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_device)
@@ -178,7 +178,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["fib-source"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "fib-source")
+            logging.info(no_child_msg % "fib-source")
         else:
             self._fib_source = FIBSource(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_source)
@@ -187,7 +187,7 @@ class OrsayComponent(model.HwComponent):
         try:
             kwargs = children["fib-beam"]
         except (KeyError, TypeError):
-            logging.info(no_child_str % "fib-beam")
+            logging.info(no_child_msg % "fib-beam")
         else:
             self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_beam)
