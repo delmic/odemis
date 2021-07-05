@@ -41,7 +41,7 @@ import copy
 from odemis.model import prepare_to_listen_to_more_vas
 from concurrent.futures._base import CANCELLED, FINISHED
 from odemis.util.driver import estimate_focuser_move_duration 
-from odemis.gui.util.img import assemble_z_cube
+from odemis.util.img import assembleZCube
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
@@ -232,7 +232,7 @@ class ZStackAcquisitionTask(object):
                     except Exception as exp:
                         logging.exception("The acquisition failed at the %s-th zlevel of streams %s because of %s" %(i+1, stream, exp))
                         # assemble what was acquired so far, and return 
-                        zcube = assemble_z_cube(zstack, self._zpos)
+                        zcube = assembleZCube(zstack, self._zpos)
                         acquired_data.append(zcube)
                         return acquired_data, exp
                     finally:
@@ -241,7 +241,7 @@ class ZStackAcquisitionTask(object):
                         remaining_t -= stream.estimateAcquisitionTime()
                         self._main_future.set_end_time(time.time() + remaining_t)
 
-                zcube = assemble_z_cube(zstack, self._zpos)
+                zcube = assembleZCube(zstack, self._zpos)
                 acquired_data.append(zcube)
 
         # state that the future has finished 

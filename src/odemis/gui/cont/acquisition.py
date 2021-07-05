@@ -39,7 +39,7 @@ from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
-from odemis.acq.stream import EMStream, UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -52,9 +52,8 @@ from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDia
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
 from odemis.util.dataio import open_acquisition, data_to_static_streams
-from odemis.util import driver, units
+from odemis.util import units
 from odemis.util.comp import generate_zlevels
-from odemis.util.driver import estimate_focuser_move_duration
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
