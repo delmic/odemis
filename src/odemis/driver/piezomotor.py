@@ -97,7 +97,7 @@ class PMD401Bus(Actuator):
 
             Axis parameters:
                 axis_number (0 <= int <= 127): typically 1-3 for x-z, required
-                closed_loop (bool): True for closed loop (with encoder), default to True
+                closed_loop (bool): True for closed loop (with encoder), default to False
                 encoder_resolution (float): number of encoder counts per meter, default to 1.22e-9
                 motorstep_resolution (float): number of motor steps per m, default to 5e-6
                 range (tuple of float): in m, default to STROKE_RANGE
@@ -133,7 +133,7 @@ class PMD401Bus(Actuator):
                 closed_loop = axis_par['closed_loop']
             else:
                 closed_loop = False
-                logging.info("Axis mode (closed/open loop) not specified for axis %s. Assuming closed loop.", axis_name)
+                logging.info("Axis parameter \"closed_loop\" not specified for axis %s. Assuming open-loop.", axis_name)
             self._closed_loop[axis_name] = closed_loop
 
             if 'motorstep_resolution' in axis_par:
@@ -473,6 +473,7 @@ class PMD401Bus(Actuator):
         """
         pos = {}
         for axname, axis in self._axis_map.items():
+            # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
             pos[axname] = self.getEncoderPosition(axis)
         logging.debug("Reporting new position at %s", pos)
         pos = self._applyInversion(pos)
