@@ -30,7 +30,7 @@ import collections
 import logging
 import math
 
-from odemis.acq.feature import CryoFeature
+from odemis.acq.feature import CryoFeature, DEFAULT_MILLING_ANGLE, MILLING_ANGLE_RANGE
 from odemis.gui import conf
 from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
@@ -102,9 +102,7 @@ TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False
 
-# Default Milling angle and range for cryo-based microscopes
-DEFAULT_MILLING_ANGLE = math.radians(10)  # rad
-MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
+
 
 
 class MainGUIData(object):

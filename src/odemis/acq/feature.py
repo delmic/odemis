@@ -1,14 +1,18 @@
 import json
 import logging
+import math
 import os
 
 from numpy import long
 
 from odemis import model
-# The current state of the feature
-from odemis.gui.model import DEFAULT_MILLING_ANGLE
 
+# The current state of the feature
 FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = "Active", "Rough Milled", "Polished", "Discarded"
+
+# Default Milling angle and range for cryo-based microscopes
+DEFAULT_MILLING_ANGLE = math.radians(10)  # rad
+MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
 
 
 class CryoFeature(object):
@@ -33,7 +37,8 @@ class CryoFeature(object):
         # TODO: Check if negative milling angle is allowed
         if milling_angle <= 0:
             milling_angle = DEFAULT_MILLING_ANGLE
-            logging.warning(f"Given milling angle {milling_angle} is negative, setting it to default {DEFAULT_MILLING_ANGLE}")
+            logging.warning(
+                f"Given milling angle {milling_angle} is negative, setting it to default {DEFAULT_MILLING_ANGLE}")
         self.milling_angle = model.FloatVA(milling_angle)
         self.status = model.StringVA(FEATURE_ACTIVE, )
         # TODO: Handle acquired files
