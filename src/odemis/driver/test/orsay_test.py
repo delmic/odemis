@@ -1095,7 +1095,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
     def test_parameter_update(self):
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        test_value = 1.0
+        test_value = 1.0  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
         va.value = test_value
         sleep(0.5)
         self.assertEqual(test_value, float(self.datamodel.IonColumnMCS.ObjectivePhi.Actual))
@@ -1103,28 +1103,28 @@ class TestOrsayParameterConnector(unittest.TestCase):
     def test_va_update(self):
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        test_value = 1.0
+        test_value = 1.0  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
         self.datamodel.IonColumnMCS.ObjectivePhi.Target = test_value
-        sleep(0.5)
+        sleep(0.5)  # TODO: TUNE THIS?
         self.assertEqual(test_value, va.value)
 
     def test_range(self):
         va = model.FloatContinuous(0.0, range=(-1, 1))
-        test_max = pi
+        test_max = pi  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
         test_min = -pi
         self.datamodel.IonColumnMCS.ObjectivePhi.Max = test_max
         self.datamodel.IonColumnMCS.ObjectivePhi.Min = test_min
         connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        sleep(0.5)
+        sleep(0.5)  # TODO: TUNE THIS?
         self.assertEqual(va.range[0], test_min)
         self.assertEqual(va.range[1], test_max)
         connector.disconnect()
 
-        minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue
+        minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
         orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent,
                                       minpar=minpar, maxpar=maxpar)
-        sleep(0.5)
+        sleep(0.5)  # TODO: TUNE THIS?
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))
 
