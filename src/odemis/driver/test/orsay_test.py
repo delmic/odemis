@@ -584,11 +584,14 @@ class TestPumpingSystem(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.psys._updateTurboPumpOn(self.datamodel.HybridPlatform.Cancel)
 
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
+
         self.psys._system.TurboPump1.IsOn.Target = True
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(1)
         self.assertTrue(self.psys.turboPumpOn.value)
         self.psys._system.TurboPump1.IsOn.Target = False
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(1)
         self.assertFalse(self.psys.turboPumpOn.value)
 
     def test_updatePrimaryPumpOn(self):
@@ -599,14 +602,14 @@ class TestPumpingSystem(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.psys._updatePrimaryPumpOn(self.datamodel.HybridPlatform.Cancel)
 
-        self.datamodel.HybridPlatform.PrimaryPumpState.Target = True
-        sleep(1)  # TODO: TUNE THIS?
+        if not TEST_NOHW == "sim":
+            self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
+
+        self.datamodel.HybridPlatform.PrimaryPumpState.Actual = True
+        sleep(1)
         self.assertTrue(self.psys.primaryPumpOn.value)
-        if TEST_NOHW == "sim":  # for some reason simulation does not properly deal with setting Target to False
-            self.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
-        else:
-            self.datamodel.HybridPlatform.PrimaryPumpState.Target = False
-        sleep(1)  # TODO: TUNE THIS?
+        self.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
+        sleep(1)
         self.assertFalse(self.psys.primaryPumpOn.value)
 
     def test_updateNitrogenPressure(self):
