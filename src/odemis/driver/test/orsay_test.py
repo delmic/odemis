@@ -768,9 +768,9 @@ class TestGIS(unittest.TestCase):
 
     def test_gasFlow(self):
         """
-        Tests the gas flow control and checks that gas flow cannot be started if the gis is not in working position
+        Tests the gas flow control. Do this in park position, since this is safest
         """
-        f = self.gis.moveAbs({"arm": True})
+        f = self.gis.moveAbs({"arm": False})
         f.result()
 
         self.gis._gis.ReservoirState.Target = orsay.STR_OPEN
@@ -787,13 +787,6 @@ class TestGIS(unittest.TestCase):
         self.gis.injectingGas.value = False
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_CLOSED)
-
-        f = self.gis.moveAbs({"arm": False})
-        f.result()
-
-        with self.assertLogs(logger=None, level=logging.WARN):
-            self.gis.injectingGas.value = True
-        self.assertFalse(self.gis.injectingGas.value)
 
     def test_stop(self):
         """
