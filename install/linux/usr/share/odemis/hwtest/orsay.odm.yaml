@@ -6,6 +6,8 @@ Orsay: {
 }
 
 # Connection to the Orsay server
+# Simulation:   192.168.56.101
+# Hardware:     192.168.30.101
 "OrsayServer": {
     class: orsay.OrsayComponent,
     role: null,

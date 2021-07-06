@@ -1063,6 +1063,8 @@ class GIS(model.Actuator):
         Opens the GIS reservoir if argument goal is True. Closes it otherwise.
         Also closes the reservoir if the position of the GIS is not engaged.
         """
+        if not self.position.value["arm"] and goal:
+            logging.warning("Gas flow opened while not in working position.")
         if goal:
             logging.debug("Starting gas flow.")
             self._reservoirPar.Target = STR_OPEN

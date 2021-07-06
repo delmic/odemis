@@ -32,6 +32,8 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
+TEST_NOHW = 0  # TODO: REMOVE THIS LINE!
+
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
@@ -39,7 +41,7 @@ CONFIG_UPS = {"name": "ups", "role": "ups"}
 CONFIG_GIS = {"name": "gis", "role": "gis"}
 CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 
-CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
+CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
@@ -91,7 +93,7 @@ class TestOrsay(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -138,26 +140,30 @@ class TestOrsay(unittest.TestCase):
         self.oserver._device.MessageConnection.Connection.close()
         self.oserver._device.DataConnection.Connection.close()
         self.oserver._device.MessageConnection.dataConnection.Connection.close()
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         while not self.oserver.state.value == model.ST_RUNNING:
             sleep(2)  # wait for the reconnection
 
         # perform some test to check writing and reading still works
+        init_state = self.psus._valve.Actual
+
         self.psus._valve.Target = orsay.VALVE_OPEN
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertTrue(self.psus.power.value)
 
         self.psus._valve.Target = orsay.VALVE_CLOSED
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertFalse(self.psus.power.value)
 
         self.psus.power.value = True
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
 
         self.psus.power.value = False
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
+
+        self.psus._valve.Target = init_state  # set it back to what it was
 
 
 class TestPneumaticSuspension(unittest.TestCase):
@@ -175,7 +181,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -194,19 +200,19 @@ class TestPneumaticSuspension(unittest.TestCase):
         Test for controlling the power valve
         """
         self.psus._valve.Target = orsay.VALVE_OPEN
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertTrue(self.psus.power.value)
 
         self.psus._valve.Target = orsay.VALVE_CLOSED
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertFalse(self.psus.power.value)
 
         self.psus.power.value = True
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
 
         self.psus.power.value = False
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
 
     def test_errorstate(self):
@@ -255,11 +261,11 @@ class TestPneumaticSuspension(unittest.TestCase):
             self.psus._updatePower(self.datamodel.HybridPlatform.Cancel)
 
         self.psus._valve.Target = orsay.VALVE_OPEN
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertTrue(self.psus.power.value)
 
         self.psus._valve.Target = orsay.VALVE_CLOSED
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(5)
         self.assertFalse(self.psus.power.value)
 
     def test_updatePressure(self):
@@ -294,7 +300,7 @@ class TestVacuumChamber(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -469,7 +475,7 @@ class TestPumpingSystem(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -622,6 +628,7 @@ class TestPumpingSystem(unittest.TestCase):
 
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
+
         test_value = 1.0
         self.psys._system.Manometer1.Pressure.Target = test_value
         sleep(1)
@@ -644,7 +651,7 @@ class TestUPS(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -681,7 +688,7 @@ class TestGIS(unittest.TestCase):
         if TEST_NOHW == 1:
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -764,7 +771,7 @@ class TestGIS(unittest.TestCase):
         self.assertTrue(self.gis.position.value["arm"])
 
         f = self.gis.moveAbs({"arm": False})
-        sleep(1)  # TODO: Tune so the arm has started moving, but is not done yet
+        sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
         f.result()
         self.assertFalse(self.gis.position.value["arm"])
@@ -773,23 +780,26 @@ class TestGIS(unittest.TestCase):
         """
         Tests the gas flow control. Do this in park position, since this is safest
         """
-        f = self.gis.moveAbs({"arm": False})
+        f = self.gis.moveAbs({"arm": False})  # test in park to prevent damaging the sample
         f.result()
 
         self.gis._gis.ReservoirState.Target = orsay.STR_OPEN
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(7)  # TODO: TUNE THIS?
         self.assertTrue(self.gis.injectingGas.value)
         self.gis._gis.ReservoirState.Target = orsay.STR_CLOSED
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(7)  # TODO: TUNE THIS?
         self.assertFalse(self.gis.injectingGas.value)
 
-        self.gis.injectingGas.value = True
-        sleep(1)  # TODO: TUNE THIS?
+        with self.assertLogs(logger=None, level=logging.WARN):  # warning should be logged for gas flow at park position
+            self.gis.injectingGas.value = True
+        sleep(7)  # TODO: TUNE THIS?
         self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_OPEN)
 
         self.gis.injectingGas.value = False
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(7)  # TODO: TUNE THIS?
         self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_CLOSED)
+
+
 
     def test_stop(self):
         """
@@ -801,9 +811,9 @@ class TestGIS(unittest.TestCase):
         f = self.gis.moveAbs({"arm": True})
         f.result()
         self.gis.injectingGas.value = True
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(7)  # TODO: TUNE THIS?
         self.gis.stop()
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(7)  # TODO: TUNE THIS?
         self.assertFalse(self.gis.injectingGas.value)
         self.assertFalse(self.gis.position.value["arm"])
 
@@ -824,7 +834,7 @@ class TestGISReservoir(unittest.TestCase):
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
         for child in cls.oserver.children.value:
@@ -884,13 +894,13 @@ class TestGISReservoir(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.gis_res._updateTemperatureTarget(self.datamodel.HybridPlatform.Cancel)
 
-        test_value = 20  # TODO: TUNE THIS?
+        test_value = 30
         self.gis_res._temperaturePar.Target = test_value
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureTarget.value, test_value)
 
-        self.gis_res._temperaturePar.Target = 0  # TODO: TUNE THIS?
-        sleep(1)  # TODO: TUNE THIS?
+        self.gis_res._temperaturePar.Target = 0
+        sleep(1)
         self.assertEqual(self.gis_res.temperatureTarget.value, 0)
 
     def test_updateTemperature(self):
@@ -922,23 +932,23 @@ class TestGISReservoir(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.gis_res._updateTemperatureRegulation(self.datamodel.HybridPlatform.Cancel)
 
-        self.gis_res._gis.RegulationOn.Target = True
         self.gis_res._gis.RegulationRushOn.Target = True
-        sleep(1)  # TODO: TUNE THIS?
+        self.gis_res._gis.RegulationOn.Target = True
+        sleep(2)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
 
-        self.gis_res._gis.RegulationOn.Target = True
         self.gis_res._gis.RegulationRushOn.Target = False
+        self.gis_res._gis.RegulationOn.Target = True
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 1)
 
-        self.gis_res._gis.RegulationOn.Target = False
         self.gis_res._gis.RegulationRushOn.Target = True
+        self.gis_res._gis.RegulationOn.Target = False
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
-        self.gis_res._gis.RegulationOn.Target = False
         self.gis_res._gis.RegulationRushOn.Target = False
+        self.gis_res._gis.RegulationOn.Target = False
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
@@ -987,13 +997,13 @@ class TestGISReservoir(unittest.TestCase):
         """
         Test the setter of the temperatureTarget VA
         """
-        test_value = 20  # TODO: TUNE THIS?
+        test_value = 30
         self.gis_res.temperatureTarget.value = test_value
-        sleep(1)  # TODO: TUNE THIS?
+        sleep(1)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
 
-        self.gis_res.temperatureTarget.value = 0  # TODO: TUNE THIS?
-        sleep(1)  # TODO: TUNE THIS?
+        self.gis_res.temperatureTarget.value = 0
+        sleep(1)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
 
     def test_setTemperatureRegulation(self):
@@ -1026,9 +1036,9 @@ class TestGISReservoir(unittest.TestCase):
               Tune the sleeping time so it waits long enough for the temperature to be reached
               Tune the test_accuracy (number of decimal places) to reflect the accuracy of the temperature regulation
         """
-        test_value1 = 30  # TODO: Tune!
-        test_value2 = 40  # TODO: Tune!
-        test_accuracy = 0  # TODO: Tune!
+        test_value1 = 27  # TODO: Tune!
+        test_value2 = 30  # TODO: Tune!
+        test_accuracy = 1  # TODO: Tune!
         self.gis_res.temperatureTarget.value = test_value1
         self.gis_res.temperatureRegulation.value = 2
         if not TEST_NOHW == "sim":
@@ -1055,14 +1065,16 @@ class TestGISReservoir(unittest.TestCase):
             self.skipTest("No hardware present to test stop function.")
 
         try:
-            self.gis_res.temperatureRegulation.value = orsay.COMPONENT_STOP
+            self.gis_res.temperatureRegulation.value = 1
             sleep(1)  # TODO: TUNE THIS?
             self.gis.stop()
+            sleep(1)
             self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
-            self.gis_res.temperatureRegulation.value = orsay.COMPONENT_EMERGENCY_STOP
+            self.gis_res.temperatureRegulation.value = 2
             sleep(1)  # TODO: TUNE THIS?
             self.gis.stop()
+            sleep(1)
             self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
         except NameError:
