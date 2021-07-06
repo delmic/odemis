@@ -133,7 +133,7 @@ class ZStackAcquisitionTask(object):
         self._streams = sortStreams(streams)
         self._zlevels = zlevels
         self._settings_obs = settings_obs
-        self._zpos = list(zlevels.values())[0]
+        self._zpos = list(zlevels.values())[0] if zlevels.values() else None
         zstep = abs(self._zpos[0]-self._zpos[1]) if self._zpos else 0
         # get the focuser object of any of the FM streams
         focuser = next((s.focuser for s in self._streams if isinstance(s, FluoStream)), None)
