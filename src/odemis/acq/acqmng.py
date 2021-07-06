@@ -29,6 +29,7 @@ from collections import OrderedDict
 import collections
 from concurrent.futures import CancelledError
 import logging
+import threading
 
 from odemis import model
 from odemis.acq import _futures
@@ -125,6 +126,7 @@ class ZStackAcquisitionTask(object):
         settings_obs (SettingsObserver): VAs to be integrated in the acquired data as metadata
         """
         self._main_future = future
+        self._future_lock = threading.Lock()
         self._actuator_f = None 
         self._single_acqui_f = None 
         self._future_state = None
@@ -143,9 +145,11 @@ class ZStackAcquisitionTask(object):
         (but there might  be some delay (not instantly called) )
         return (Boolean): True if canceled, False otherwise
         """
+        self._future_lock.acquire()
         if self._future_state is FINISHED: 
             return False
         self._future_state = CANCELLED
+        self._future_lock.release()
         # cancel the sub-futures
         self._actuator_f.cancel()
         self._single_acqui_f.cancel()
@@ -244,8 +248,10 @@ class ZStackAcquisitionTask(object):
                 zcube = assembleZCube(zstack, self._zpos)
                 acquired_data.append(zcube)
 
-        # state that the future has finished 
+        # state that the future has finished
+        self._future_lock.acquire() 
         self._future_state = FINISHED
+        self._future_lock.release()
 
         return acquired_data, exp
 

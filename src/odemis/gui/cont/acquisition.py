@@ -546,24 +546,6 @@ class CryoAcquiController(object):
         """
         called when the button "acquire" is pressed
         """
-        # hide/show/disable some widgets
-        self._panel.gauge_cryosecom_acq.Show()
-        self._panel.btn_cryosecom_acqui_cancel.Show()
-        self._panel.txt_cryosecom_left_time.Show()
-        self._panel.txt_cryosecom_est_time.Hide()
-        self._panel.btn_cryosecom_acquire.Disable()
-        self._panel.btn_cryosecom_change_file.Disable()
-        self._panel.btn_acquire_overview.Disable()
-        self._panel.z_stack_chkbox.Disable()
-        self._panel.streams_chk_list.Disable()
-        self._panel.param_Zmin.Enable(False)
-        self._panel.param_Zmax.Enable(False)
-        self._panel.param_Zstep.Enable(False)
-        # disable the streams settings
-        self._tab.streambar_controller.pauseStreams()
-        self._tab.streambar_controller.pause()
-        self._panel.Layout()
-
         # store the focuser position 
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
 
@@ -586,6 +568,25 @@ class CryoAcquiController(object):
             label=self._panel.txt_cryosecom_left_time,
             full=False,
         )
+
+        # hide/show/disable some widgets
+        self._panel.gauge_cryosecom_acq.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Show()
+        self._panel.txt_cryosecom_left_time.Show()
+        self._panel.txt_cryosecom_est_time.Hide()
+        self._panel.btn_cryosecom_acquire.Disable()
+        self._panel.btn_cryosecom_change_file.Disable()
+        self._panel.btn_acquire_overview.Disable()
+        self._panel.z_stack_chkbox.Disable()
+        self._panel.streams_chk_list.Disable()
+        self._panel.param_Zmin.Enable(False)
+        self._panel.param_Zmax.Enable(False)
+        self._panel.param_Zstep.Enable(False)
+        # disable the streams settings
+        self._tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pause()
+        self._panel.Layout()
+        
         self._acq_future.add_done_callback(self._on_acquisition_done)
 
     @call_in_wx_main
