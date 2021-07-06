@@ -445,6 +445,59 @@ class TestConvertStage(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
+    def test_reference(self):
+        dependency = tmcm.TMCLController(name="test", role="test",
+                                         port="/dev/fake3",
+                                         axes=["a", "b"],
+                                         ustepsize=[5.9e-9, 5.8e-9],
+                                         rng=[[-1e-3, 1e-3], [0, 1e-3]],
+                                         refproc="Standard")
+
+        stage = ConvertStage("scaled", "align", {"orig": dependency},
+                             axes=["b", "a"], scale=(0.3, 2.1))
+
+        axes = set(stage.referenced.value)
+
+        self.assertEqual(len(dependency.referenced.value), 2)
+        self.assertEqual(len(axes), 2)
+
+        # first try one by one
+        for a in axes:
+            f = stage.reference({a})
+            f.result()
+            self.assertTrue(stage.referenced.value[a])
+
+        # try all axes simultaneously
+        f = stage.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(stage.referenced.value[a])
+
+    def test_metadata(self):
+        """
+        Check updating the values by metadata works
+        """
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency.speed.value = {"x": 10e-6, "y": 20e-6}
+
+        # start with just scale
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
+                             scale=(10, 10))
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+
+        f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
+        f.result()
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+
+        # TODO: set back metadata to scale 1
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05})
+
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6})
+
     # @skip("skip")
     def test_move_rel(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
@@ -530,14 +583,20 @@ class TestConvertStage(unittest.TestCase):
     # @skip("skip")
     def test_move_abs(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency.speed.value = {"x": 1e-6, "y": 2e-6}
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+        dependency.speed.value = {"x": 2e-6, "y": 5e-6}
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
         test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
@@ -547,6 +606,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
@@ -565,6 +627,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed axes should be inverted & positive!
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 5e-6, "y": 2e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
@@ -582,6 +647,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        # Speed should not be affected by offset
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
