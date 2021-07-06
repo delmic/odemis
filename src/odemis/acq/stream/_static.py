@@ -457,8 +457,11 @@ class StaticARStream(StaticStream):
             # Add a polarimetry VA containing the polarimetry image results.
             # Note: Polarimetry analysis are only possible if all 6 images per ebeam pos exist.
             # Also check if arpolarimetry package can be imported as might not be installed.
-            if polpositions >= set(POL_POSITIONS) and arpolarimetry:
-                self.polarimetry = model.VAEnumerated(MD_POL_S0, choices=set(POL_POSITIONS_RESULTS))
+            if polpositions >= set(POL_POSITIONS):
+                if arpolarimetry:
+                    self.polarimetry = model.VAEnumerated(MD_POL_S0, choices=set(POL_POSITIONS_RESULTS))
+                else:
+                    logging.warning("arpolarimetry module missing, will not provide polarimetry display")
 
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
