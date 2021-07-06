@@ -34,6 +34,8 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
+TEST_NOHW = 0
+
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
@@ -1053,6 +1055,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
 
     @classmethod
@@ -1095,7 +1098,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
     def test_parameter_update(self):
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        test_value = 1.0  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
+        test_value = 0.1
         va.value = test_value
         sleep(0.5)
         self.assertEqual(test_value, float(self.datamodel.IonColumnMCS.ObjectivePhi.Actual))
@@ -1103,28 +1106,28 @@ class TestOrsayParameterConnector(unittest.TestCase):
     def test_va_update(self):
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        test_value = 1.0  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
+        test_value = 0.1
         self.datamodel.IonColumnMCS.ObjectivePhi.Target = test_value
-        sleep(0.5)  # TODO: TUNE THIS?
+        sleep(0.5)
         self.assertEqual(test_value, va.value)
 
     def test_range(self):
         va = model.FloatContinuous(0.0, range=(-1, 1))
-        test_max = pi  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
+        test_max = pi
         test_min = -pi
         self.datamodel.IonColumnMCS.ObjectivePhi.Max = test_max
         self.datamodel.IonColumnMCS.ObjectivePhi.Min = test_min
         connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
-        sleep(0.5)  # TODO: TUNE THIS?
+        sleep(0.5)
         self.assertEqual(va.range[0], test_min)
         self.assertEqual(va.range[1], test_max)
         connector.disconnect()
 
-        minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue  # TODO: CHECK THAT THIS PARAMETER AND VALUE IS SAFE
+        minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
         orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent,
                                       minpar=minpar, maxpar=maxpar)
-        sleep(0.5)  # TODO: TUNE THIS?
+        sleep(0.5)
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))
 
@@ -1132,7 +1135,6 @@ class TestOrsayParameterConnector(unittest.TestCase):
 class TestFIBDevice(unittest.TestCase):
     """
     Tests for the Focused Ion Beam (FIB) device parameters
-    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
     """
 
     oserver = None
@@ -1146,6 +1148,7 @@ class TestFIBDevice(unittest.TestCase):
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
         for child in cls.oserver.children.value:
             if child.name == CONFIG_FIBDEVICE["name"]:
@@ -1271,7 +1274,6 @@ class TestFIBDevice(unittest.TestCase):
 class TestFIBSource(unittest.TestCase):
     """
     Tests for the Focused Ion Beam (FIB) Source
-    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
     """
 
     oserver = None
@@ -1285,6 +1287,7 @@ class TestFIBSource(unittest.TestCase):
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
         for child in cls.oserver.children.value:
             if child.name == CONFIG_FIBSOURCE["name"]:
@@ -1302,12 +1305,12 @@ class TestFIBSource(unittest.TestCase):
     def test_gunOn(self):
         """Check that the gunOn VA is updated correctly"""
         if hasattr(self, 'fib_device'):
-            self.fib_device.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
-            self.fib_device.columnPumpOn.value = True
+            # self.fib_device.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
+            # self.fib_device.columnPumpOn.value = True
             connector_test(self, self.fib_source.gunOn, self.fib_source._hvps.GunState,
-                           [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
-            self.fib_device.gunPumpOn.value = False
-            self.fib_device.columnPumpOn.value = False
+                           [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=5)
+            # self.fib_device.gunPumpOn.value = False
+            # self.fib_device.columnPumpOn.value = False
         else:
             self.skipTest("Was not given a fib_device child, so ion pumps cannot be turned on.")
 
@@ -1319,7 +1322,7 @@ class TestFIBSource(unittest.TestCase):
     def test_currentRegulation(self):
         """Check that the currentRegulation VA is updated correctly"""
         connector_test(self, self.fib_source.currentRegulation, self.fib_source._hvps.BeamCurrent_Enabled,
-                       [(True, "True"), (False, "False")], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=5)  # TODO: Tune the settle time
 
     def test_sourceCurrent(self):
         """Check that the sourceCurrent VA is updated correctly"""
@@ -1330,18 +1333,18 @@ class TestFIBSource(unittest.TestCase):
         """Check that the suppressorVoltage VA is updated correctly"""
         self.fib_source.currentRegulation.value = False  # needed for suppressorVoltage to be used
         connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
     def test_heaterCurrent(self):
         """Check that the heaterCurrent VA is updated correctly"""
         connector_test(self, self.fib_source.heaterCurrent, self.fib_source._hvps.Heater,
-                       [(1, 1), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1, 1), (0, 0)], hw_safe=True, settletime=1)
 
     def test_heater(self):
         """Check that the heater VA is updated correctly"""
         connector_test(self, self.fib_source.heater, self.fib_source._hvps.HeaterState,
                        [(True, orsay.HEATER_ON), (False, orsay.HEATER_OFF)],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       hw_safe=True, settletime=1)
 
         if TEST_NOHW == "sim":  # This part of the test is only safe in simulation
             self.fib_source._hvps.HeaterState.Target = orsay.HEATER_RISING
@@ -1361,25 +1364,24 @@ class TestFIBSource(unittest.TestCase):
             self.fib_source._hvps.HeaterState.Target = orsay.HEATER_ON
 
     def test_acceleratorVoltage(self):
-        """Check that the heaterState VA is updated correctly"""
+        """Check that the acceleratorVoltage VA is updated correctly"""
         connector_test(self, self.fib_source.acceleratorVoltage, self.fib_source._hvps.Energy,
-                       [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_energyLink(self):
         """Check that the energyLink VA is updated correctly"""
         connector_test(self, self.fib_source.energyLink, self.fib_source._hvps.EnergyLink,
-                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=2)  # TODO: Tune the settle time
 
     def test_extractorVoltage(self):
         """Check that the extractorVoltage VA is updated correctly"""
         connector_test(self, self.fib_source.extractorVoltage, self.fib_source._hvps.Extractor,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
 
 class TestFIBBeam(unittest.TestCase):
     """
     Tests for the Focused Ion Beam (FIB) Beam components
-    TODO: Tune the settletime of the hardware safe tests to values appropariate for the hardware
     """
 
     oserver = None
@@ -1393,6 +1395,7 @@ class TestFIBBeam(unittest.TestCase):
             raise unittest.SkipTest("TEST_NOHW is set. No server to contact.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        sleep(1)
         cls.datamodel = cls.oserver.datamodel
         for child in cls.oserver.children.value:
             if child.name == CONFIG_FIBBEAM["name"]:
@@ -1409,112 +1412,112 @@ class TestFIBBeam(unittest.TestCase):
         """Check that the blanker VA is updated correctly"""
         connector_test(self, self.fibbeam.blanker, self.fibbeam._ionColumn.BlankingState,
                        [(True, "LOCAL"), (False, "OFF"), (None, "SOURCE")],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       hw_safe=True, settletime=1)
 
     def test_blankerVoltage(self):
         """Check that the blankerVoltage VA is updated correctly"""
         connector_test(self, self.fibbeam.blankerVoltage, self.fibbeam._ionColumn.BlankingVoltage,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
     def test_condenserVoltage(self):
         """Check that the condenserVoltage VA is updated correctly"""
         connector_test(self, self.fibbeam.condenserVoltage, self.fibbeam._hvps.CondensorVoltage,
-                       [(100, 100), (0, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
     def test_objectiveStigmator(self):
         """Check that the objectiveStigmator VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveStigmator, [self.fibbeam._ionColumn.ObjectiveStigmatorX,
                                                                self.fibbeam._ionColumn.ObjectiveStigmatorY],
-                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_intermediateStigmator(self):
         """Check that the intermediateStigmator VA is updated correctly"""
         connector_test(self, self.fibbeam.intermediateStigmator, [self.fibbeam._ionColumn.IntermediateStigmatorX,
                                                                   self.fibbeam._ionColumn.IntermediateStigmatorY],
-                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_steererStigmator(self):
         """Check that the steererStigmator VA is updated correctly"""
         connector_test(self, self.fibbeam.steererStigmator, [self.fibbeam._ionColumn.CondensorSteerer1StigmatorX,
                                                              self.fibbeam._ionColumn.CondensorSteerer1StigmatorY],
-                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_steererShift(self):
         """Check that the steererShift VA is updated correctly"""
         connector_test(self, self.fibbeam.steererShift, [self.fibbeam._ionColumn.CondensorSteerer1ShiftX,
                                                          self.fibbeam._ionColumn.CondensorSteerer1ShiftY],
-                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_steererTilt(self):
         """Check that the steererTilt VA is updated correctly"""
         connector_test(self, self.fibbeam.steererTilt, [self.fibbeam._ionColumn.CondensorSteerer1TiltX,
                                                         self.fibbeam._ionColumn.CondensorSteerer1TiltY],
-                       [((1.0, -1.0), (1.0, -1.0)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_orthogonality(self):
         """Check that the orthogonality VA is updated correctly"""
         connector_test(self, self.fibbeam.orthogonality, self.fibbeam._ionColumn.ObjectiveOrthogonality,
-                       [(-1.0, -1.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(-0.00017, -0.00017), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_objectiveRotationOffset(self):
         """Check that the objectiveRotationOffset VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveRotationOffset, self.fibbeam._ionColumn.ObjectiveRotationOffset,
-                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_objectiveStageRotationOffset(self):
         """Check that the objectiveStageRotationOffset VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveStageRotationOffset,
                        self.fibbeam._ionColumn.ObjectiveStageRotationOffset,
-                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_tilt(self):
         """Check that the tilt VA is updated correctly"""
         connector_test(self, self.fibbeam.tilt, [self.fibbeam._ionColumn.ObjectivePhi,
                                                  self.fibbeam._ionColumn.ObjectiveTeta],
-                       [((0.1, -0.1), (0.1, -0.1)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((0.01, -0.01), (0.01, -0.01)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_xyRatio(self):
         """Check that the xyRatio VA is updated correctly"""
         connector_test(self, self.fibbeam.xyRatio, self.fibbeam._ionColumn.ObjectiveXYRatio,
-                       [(0.5, 0.5), (1.0, 1.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.5, 0.5), (1.0, 1.0)], hw_safe=True, settletime=1)
 
     def test_mirror(self):
         """Check that the mirror VA is updated correctly"""
         connector_test(self, self.fibbeam.mirror, self.fibbeam._ionColumn.Mirror,
-                       [(True, -1), (False, 1)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, -1), (False, 1)], hw_safe=True, settletime=1)
 
     def test_imageFromSteerers(self):
         """Check that the imageFromSteerers VA is updated correctly"""
         connector_test(self, self.fibbeam.imageFromSteerers, self.fibbeam._ionColumn.ObjectiveScanSteerer,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
 
     def test_objectiveVoltage(self):
         """Check that the objectiveVoltage VA is updated correctly"""
         connector_test(self, self.fibbeam.objectiveVoltage, self.fibbeam._hvps.ObjectiveVoltage,
-                       [(100.0, 100.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_beamShift(self):
         """Check that the beamShift VA is updated correctly"""
         connector_test(self, self.fibbeam.beamShift, [self.fibbeam._ionColumn.ObjectiveShiftX,
                                                       self.fibbeam._ionColumn.ObjectiveShiftY],
-                       [((1e-5, -1e-5), (1e-5, -1e-5)), ((0.0, 0.0), (0.0, 0.0))],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [((1e-6, -1e-6), (1e-6, -1e-6)), ((0.0, 0.0), (0.0, 0.0))],
+                       hw_safe=True, settletime=1)
 
     def test_horizontalFOV(self):
         """Check that the horizontalFOV VA is updated correctly"""
         connector_test(self, self.fibbeam.horizontalFOV, self.fibbeam._ionColumn.ObjectiveFieldSize,
-                       [(1e-4, 1e-4), (5e-6, 5e-6)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-4, 1e-4), (5e-6, 5e-6)], hw_safe=True, settletime=1)
 
     def test_measuringCurrent(self):
         """Check that the measuringCurrent VA is updated correctly"""
         connector_test(self, self.fibbeam.measuringCurrent, self.fibbeam._ionColumn.FaradayStart,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
 
     def test_current(self):
         """Check that the current VA is updated correctly"""
@@ -1524,42 +1527,42 @@ class TestFIBBeam(unittest.TestCase):
     def test_videoDelay(self):
         """Check that the videoDelay VA is updated correctly"""
         connector_test(self, self.fibbeam.videoDelay, self.fibbeam._ionColumn.VideoDelay,
-                       [(0.0, 0.0), (1e-8, 1e-8)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-8, 1e-8), (0.0, 0.0)], hw_safe=True, settletime=0.5)
 
     def test_flybackTime(self):
         """Check that the flybackTime VA is updated correctly"""
         connector_test(self, self.fibbeam.flybackTime, self.fibbeam._ionColumn.FlybackTime,
-                       [(0.0, 0.0), (1e-8, 1e-8)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-8, 1e-8), (0.0, 0.0)], hw_safe=True, settletime=0.5)
 
     def test_blankingDelay(self):
         """Check that the blankingDelay VA is updated correctly"""
         connector_test(self, self.fibbeam.blankingDelay, self.fibbeam._ionColumn.BlankingDelay,
-                       [(0.0, 0.0), (1e-8, 1e-8)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-8, 1e-8), (0.0, 0.0)], hw_safe=True, settletime=0.5)
 
     def test_rotation(self):
         """Check that the rotation VA is updated correctly"""
         connector_test(self, self.fibbeam.rotation, self.fibbeam._ionColumn.ObjectiveScanAngle,
-                       [(1.0, 1.0), (0.0, 0.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     def test_dwellTime(self):
         """Check that the dwellTime VA is updated correctly"""
         connector_test(self, self.fibbeam.dwellTime, self.fibbeam._ionColumn.PixelTime,
-                       [(1e-3, 1e-3), (1e-7, 1e-7)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(1e-3, 1e-3), (1e-7, 1e-7)], hw_safe=True, settletime=1)
 
     def test_contrast(self):
         """Check that the contrast VA is updated correctly"""
         connector_test(self, self.fibbeam.contrast, self.fibbeam._sed.PMT,
-                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
 
     def test_brightness(self):
         """Check that the brightness VA is updated correctly"""
         connector_test(self, self.fibbeam.brightness, self.fibbeam._sed.Level,
-                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
 
     def test_operatingMode(self):
         """Check that the operatingMode VA is updated correctly"""
         connector_test(self, self.fibbeam.operatingMode, self.fibbeam._datamodel.Scanner.OperatingMode,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
 
     def test_imageFormat(self):
         """Check that the imageFormat VA is updated correctly"""
@@ -1568,10 +1571,10 @@ class TestFIBBeam(unittest.TestCase):
 
         connector_test(self, self.fibbeam.imageFormat, self.fibbeam._ionColumn.ImageSize,
                        [((1024, 1024), "1024 1024"), ((512, 512), "512 512")],
-                       hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       hw_safe=True, settletime=1)  # TODO: Tune the settle time
         # test that setting the VA to a value close to a valid value, yields the closest valid value
         self.fibbeam.imageFormat.value = (1000, 1000)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.imageFormat.value, (1024, 1024))
         self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "1024 1024")
 
@@ -1579,31 +1582,31 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.imageFormat.value = (1024, 1024)
         self.fibbeam.resolution.value = (200, 200)
         self.fibbeam.translation.value = (10.0, 10.0)
-        sleep(0.5)
+        sleep(1)
         self.fibbeam.imageFormat.value = (512, 512)
         self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (5.0, 5.0))
         self.assertEqual(self.fibbeam.resolution.value, (100, 100))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
         self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (10.0, 10.0))
         self.assertEqual(self.fibbeam.resolution.value, (200, 200))
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (-511.5, 511.5)
-        sleep(0.5)
+        sleep(1)
         self.fibbeam.imageFormat.value = (512, 512)
         self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
         self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-511.0, 511.0))
         self.assertEqual(self.fibbeam.resolution.value, (2, 2))
 
@@ -1615,53 +1618,53 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.imageFormat.value = (1024, 1024)
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 1024 1024"
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (0, 0))
         self.assertEqual(self.fibbeam.resolution.value, (1024, 1024))
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 1 1"
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-511.5, 511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
         self.fibbeam._ionColumn.ImageArea.Target = "0 0 3 3"
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-510.5, 510.5))
         self.assertEqual(self.fibbeam.resolution.value, (3, 3))
 
         self.fibbeam._ionColumn.ImageArea.Target = "20 50 80 70"
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-452, 427))
         self.assertEqual(self.fibbeam.resolution.value, (80, 70))
 
         self.fibbeam._ionColumn.ImageArea.Target = "1023 1023 1 1"
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (511.5, -511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
         self.fibbeam.translation.value = (0.0, 0.0)
         self.fibbeam.resolution.value = (1024, 1024)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1024 1024")
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (-511.5, 511.5)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1 1")
 
         self.fibbeam.resolution.value = (3, 3)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-510.5, 510.5))
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 3 3")
 
         self.fibbeam.resolution.value = (80, 70)
         self.fibbeam.translation.value = (-452.0, 427.0)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "20 50 80 70")
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (511.5, -511.5)
-        sleep(0.5)
+        sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "1023 1023 1 1")
 
         self.fibbeam.translation.value = (0.0, 0.0)
@@ -1716,7 +1719,7 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
     if not readonly:
         for (va_value, par_value) in valuepairs:
             va.value = va_value
-            sleep(0.5)
+            sleep(settletime)
             try:  # for Tuple VA's
                 for i in range(len(parameters)):
                     target = type(par_value[i])(parameters[i].Target)  # needed since many parameter values are strings
