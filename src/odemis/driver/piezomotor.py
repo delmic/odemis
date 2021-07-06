@@ -86,7 +86,7 @@ class PMD401Bus(Actuator):
 
     def __init__(self, name, role, port, axes, inverted=None, param_file=None, **kwargs):
         """
-        :param axes (dict: {"x", "y", "z"} --> dict): axis name --> axis parameters
+        :param axes (dict: str -> dict): axis name --> axis parameters
             Each axis is specified by a set of parameters.
             After successful configuration with the pmconfig.py script, the only required parameter for a default motor
             is the address which was set during the configuration process.
@@ -97,7 +97,7 @@ class PMD401Bus(Actuator):
 
             Axis parameters:
                 axis_number (0 <= int <= 127): typically 1-3 for x-z, required
-                closed_loop (bool): True for closed loop (with encoder), default to True
+                closed_loop (bool): True for closed loop (with encoder), default to False
                 encoder_resolution (float): number of encoder counts per meter, default to 1.22e-9
                 motorstep_resolution (float): number of motor steps per m, default to 5e-6
                 range (tuple of float): in m, default to STROKE_RANGE
@@ -108,6 +108,7 @@ class PMD401Bus(Actuator):
         """
         self._axis_map = {}  # axis name -> axis number used by controller
         self._closed_loop = {}  # axis name (str) -> bool (True if closed loop)
+        self._speed = {}  # axis name (str) -> speed in unit/s
         self._speed_steps = {}  # axis name (str) -> int, speed in steps per meter
         self._counts_per_meter = {}  # axis name (str) -> float
         self._steps_per_meter = {}  # axis name (str) -> float
@@ -132,7 +133,7 @@ class PMD401Bus(Actuator):
                 closed_loop = axis_par['closed_loop']
             else:
                 closed_loop = False
-                logging.info("Axis mode (closed/open loop) not specified for axis %s. Assuming closed loop.", axis_name)
+                logging.info("Axis parameter \"closed_loop\" not specified for axis %s. Assuming open-loop.", axis_name)
             self._closed_loop[axis_name] = closed_loop
 
             if 'motorstep_resolution' in axis_par:
@@ -156,11 +157,11 @@ class PMD401Bus(Actuator):
                 logging.info("Axis %s has no range. Assuming %s", axis_name, axis_range)
 
             if 'speed' in axis_par:
-                self._speed = axis_par['speed']
+                self._speed[axis_name] = axis_par['speed']
             else:
-                self._speed = DEFAULT_AXIS_SPEED
-                logging.info("Axis %s was not given a speed value. Assuming %s", axis_name, self._speed)
-            self._speed_steps[axis_name] = self._speed * self._steps_per_meter[axis_name]
+                self._speed[axis_name] = DEFAULT_AXIS_SPEED
+                logging.info("Axis %s was not given a speed value. Assuming %s", axis_name, self._speed[axis_name])
+            self._speed_steps[axis_name] = int(round(self._speed[axis_name] * self._steps_per_meter[axis_name]))
 
             if 'unit' in axis_par:
                 axis_unit = axis_par['unit']
@@ -200,10 +201,12 @@ class PMD401Bus(Actuator):
 
         # Position and referenced VAs
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        self.referenced = model.VigilantAttribute({}, unit="m", readonly=True)
+        self.referenced = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
         for axname in self._axis_map.keys():
             self.referenced.value[axname] = False  # just assume they haven't been referenced
+
+        self.speed = model.VigilantAttribute(self._speed, unit="m/s", readonly=True)
 
         # Write parameters from parameter file
         if param_file:
@@ -307,6 +310,8 @@ class PMD401Bus(Actuator):
 
     def _search_index(self, f, axname, direction):
         """
+        :param f (Future)
+        :param axname (str): axis name (as seen by the user)
         :param direction (-1 or 1): -1 for negative direction (beginning of the rod), 1 for positive direction
         returns (bool): True if index was found, false if limit was reached
         raises PMDError for all other errors except limit exceeded error
@@ -315,7 +320,7 @@ class PMD401Bus(Actuator):
         axis = self._axis_map[axname]
         maxdist = self._axes[axname].range[1] - self._axes[axname].range[0]  # complete rodlength
         steps = int(maxdist * self._steps_per_meter[axname])
-        maxdur = maxdist / self._speed + 1
+        maxdur = maxdist / self._speed[axname] + 1
         end_time = time.time() + 2 * maxdur
 
         logging.debug("Searching for index in direction %s.", direction)
@@ -386,7 +391,7 @@ class PMD401Bus(Actuator):
             if self._closed_loop[axname]:
                 targets[axname] = self.position.value[axname] + val
                 encoder_cnts = val * self._counts_per_meter[axname]
-                self.runRelTargetMove(self._axis_map[axname], encoder_cnts)
+                self.runRelTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
             else:
                 steps_float = val * self._steps_per_meter[axname]
                 steps = int(steps_float)
@@ -408,13 +413,15 @@ class PMD401Bus(Actuator):
         :param targets: (dict: str --> int) target (for closed-loop), None for open loop
         """
         move_length = 0
+        dur = 0
         self._updatePosition()
         for ax, target in targets.items():
-            if target is not None:
+            if target is None:  # open-loop
+                move_length = STROKE_RANGE[1] - STROKE_RANGE[0]
+            else:  # closed-loop
                 move_length = max(abs(self.position.value[ax] - target), move_length)
-        if move_length == 0:  # open loop
-            move_length = STROKE_RANGE[1] - STROKE_RANGE[0]
-        dur = move_length / self._speed
+            dur = max(move_length / self._speed[ax], dur)
+
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
 
@@ -466,6 +473,7 @@ class PMD401Bus(Actuator):
         """
         pos = {}
         for axname, axis in self._axis_map.items():
+            # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
             pos[axname] = self.getEncoderPosition(axis)
         logging.debug("Reporting new position at %s", pos)
         pos = self._applyInversion(pos)
@@ -511,17 +519,17 @@ class PMD401Bus(Actuator):
         axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
         return int(self._sendCommand(b'X%dE' % axis)) / self._counts_per_meter[axname]
 
-    def runRelTargetMove(self, axis, encoder_cnts):
+    def runRelTargetMove(self, axis, encoder_cnts, speed):
         """
         Closed-loop relative move.
         :param axis: (int) axis number
         :param encoder_cnts: (int)
+        :param speed: (int) speed in motor steps per s
         """
         # There are two possibilities: move relative to current position (XC) and move relative to
         # target position (XR). We are moving relative to the current position (might be more intuitive
         # if something goes wrong and we're stuck in the wrong position).
-        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
-        self._sendCommand(b'X%dC%d,%d' % (axis, encoder_cnts, self._speed_steps[axname]))
+        self._sendCommand(b'X%dC%d,%d' % (axis, encoder_cnts, speed))
 
     def runMotorJog(self, axis, motor_steps, usteps, speed):
         """
