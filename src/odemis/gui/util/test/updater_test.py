@@ -24,9 +24,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # test the functions of the gui.util.updater module
 from __future__ import division
-from odemis.gui.util import updater
+
 import logging
 import unittest
+import wx
+from odemis.gui.util import updater
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -43,7 +45,17 @@ class TestWindowsUpdater(unittest.TestCase):
 
         # u.check_for_update()
 
+    def test_downloader(self):
+        app = wx.App()
+        app.main_frame = wx.Frame()
+        u = updater.WindowsUpdater()
+        rv = u.get_remote_version()
+        self.assertIsInstance(rv, str)
+        u.download_installer(rv)
+        # u.show_update_dialog(rv)
+
     # TODO: test more methods
+
 
 if __name__ == "__main__":
     unittest.main()
