@@ -32,7 +32,7 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
-TEST_NOHW = 0  # TODO: REMOVE THIS LINE!
+TEST_NOHW = "sim"  # TODO: REMOVE THIS LINE!
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -41,7 +41,9 @@ CONFIG_UPS = {"name": "ups", "role": "ups"}
 CONFIG_GIS = {"name": "gis", "role": "gis"}
 CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 
-CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
+# Simulation:   192.168.56.101
+# Hardware:     192.168.30.101
+CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
@@ -126,11 +128,12 @@ class TestOrsay(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
+        init_state = self.datamodel.HybridPlatform.ProcessInfo.Actual
         test_string = "Some process information"
         self.datamodel.HybridPlatform.ProcessInfo.Actual = test_string
         sleep(1)
         self.assertEqual(self.oserver.processInfo.value, test_string)
-        self.datamodel.HybridPlatform.ProcessInfo.Actual = ""
+        self.datamodel.HybridPlatform.ProcessInfo.Actual = init_state  # return to value from before test
 
     def test_reconnection(self):
         """
@@ -145,25 +148,18 @@ class TestOrsay(unittest.TestCase):
             sleep(2)  # wait for the reconnection
 
         # perform some test to check writing and reading still works
-        init_state = self.psus._valve.Actual
+        init_state = self.gis_res.temperatureTarget.value
 
-        self.psus._valve.Target = orsay.VALVE_OPEN
-        sleep(5)
-        self.assertTrue(self.psus.power.value)
+        test_value = 30
+        self.gis_res.temperatureTarget.value = test_value
+        sleep(1)
+        self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
 
-        self.psus._valve.Target = orsay.VALVE_CLOSED
-        sleep(5)
-        self.assertFalse(self.psus.power.value)
+        self.gis_res.temperatureTarget.value = 0
+        sleep(1)
+        self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
 
-        self.psus.power.value = True
-        sleep(5)
-        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
-
-        self.psus.power.value = False
-        sleep(5)
-        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
-
-        self.psus._valve.Target = init_state  # set it back to what it was
+        self.gis_res.temperatureTarget.value = init_state  # return to value from before test
 
 
 class TestPneumaticSuspension(unittest.TestCase):
@@ -199,6 +195,8 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         Test for controlling the power valve
         """
+        init_state = self.psus._valve.Target
+
         self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertTrue(self.psus.power.value)
@@ -215,6 +213,8 @@ class TestPneumaticSuspension(unittest.TestCase):
         sleep(5)
         self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
 
+        self.psus._valve.Target = init_state  # return to value from before test
+
     def test_errorstate(self):
         """
         Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
@@ -227,20 +227,24 @@ class TestPneumaticSuspension(unittest.TestCase):
                           "outside of simulation.")
         test_string = "This thing broke"
 
+        init_state = self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual
         self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = test_string
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("Manometer2", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
-        self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = ""
+        self.datamodel.HybridPlatform.Manometer2.ErrorState.Actual = init_state  # return to value from before test
 
+        init_state = self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual
         self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = test_string
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension", str(self.psus.state.value))
         self.assertIn(test_string, str(self.psus.state.value))
-        self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = ""
+        # return to value from before test
+        self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = init_state
 
+        init_state = self.psus._valve.Target
         self.psus._valve.Target = 3
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
@@ -252,6 +256,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertEqual(self.psus.state.value, model.ST_RUNNING)
+        self.psus._valve.Target = init_state  # return to value from before test
 
     def test_updatePower(self):
         """
@@ -260,6 +265,8 @@ class TestPneumaticSuspension(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.psus._updatePower(self.datamodel.HybridPlatform.Cancel)
 
+        init_state = self.psus._valve.Target
+
         self.psus._valve.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertTrue(self.psus.power.value)
@@ -267,6 +274,8 @@ class TestPneumaticSuspension(unittest.TestCase):
         self.psus._valve.Target = orsay.VALVE_CLOSED
         sleep(5)
         self.assertFalse(self.psus.power.value)
+
+        self.psus._valve.Target = init_state  # return to value from before test
 
     def test_updatePressure(self):
         """
@@ -278,11 +287,12 @@ class TestPneumaticSuspension(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
+        init_state = self.psus._gauge.Actual
         test_value = 1.0
         self.psus._gauge.Actual = test_value
         sleep(1)
         self.assertEqual(self.psus.pressure.value, test_value)
-        self.psus._gauge.Actual = 0.0
+        self.psus._gauge.Actual = init_state  # return to value from before test
 
 
 class TestVacuumChamber(unittest.TestCase):
@@ -318,6 +328,8 @@ class TestVacuumChamber(unittest.TestCase):
         """
         Test for controlling the gate valve of the chamber
         """
+        init_state = self.pressure._gate.IsOpen.Target
+
         self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
         sleep(1)  # TODO: TUNE THIS?
         self.assertTrue(self.pressure.gateOpen.value)
@@ -333,6 +345,8 @@ class TestVacuumChamber(unittest.TestCase):
         self.pressure.gateOpen.value = False
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(int(self.pressure._gate.IsOpen.Target), orsay.VALVE_CLOSED)
+
+        self.pressure._gate.IsOpen.Target = init_state  # return to value from before test
 
     def test_vacuum_sim(self):
         """
@@ -369,6 +383,8 @@ class TestVacuumChamber(unittest.TestCase):
         pressure_vented = 100000  # TODO: Tune this to vented chamber!
         delta_vented = 10000  # TODO: Tune this to vented chamber!
 
+        init_state = self.pressure.position.value["vacuum"]
+
         f = self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
         f.result()
         self.assertEqual(self.pressure.position.value["vacuum"], 1)  # check that primary vacuum is reached
@@ -396,6 +412,9 @@ class TestVacuumChamber(unittest.TestCase):
         self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
         self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
 
+        f = self.pressure.moveAbs({"vacuum": init_state})  # return to value from before test and wait
+        f.result()
+
     def test_errorstate(self):
         """
         Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
@@ -408,13 +427,15 @@ class TestVacuumChamber(unittest.TestCase):
                           "outside of simulation.")
         test_string = "This thing broke"
 
+        init_state = self.pressure._gate.ErrorState.Actual
         self.pressure._gate.ErrorState.Actual = test_string
         sleep(1)
         self.assertIsInstance(self.pressure.state.value, HwError)
         self.assertIn("ValveP5", str(self.pressure.state.value))
         self.assertIn(test_string, str(self.pressure.state.value))
-        self.pressure._gate.ErrorState.Actual = ""
+        self.pressure._gate.ErrorState.Actual = init_state  # return to value from before test
 
+        init_state = self.pressure._gate.IsOpen.Target
         self.pressure._gate.IsOpen.Target = 3
         sleep(1)
         self.assertIsInstance(self.pressure.state.value, HwError)
@@ -426,6 +447,7 @@ class TestVacuumChamber(unittest.TestCase):
         self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertEqual(self.pressure.state.value, model.ST_RUNNING)
+        self.pressure._gate.IsOpen.Target = init_state  # return to value from before test
 
     def test_updatePressure(self):
         """
@@ -437,11 +459,12 @@ class TestVacuumChamber(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
+        init_state = self.pressure._chamber.Pressure.Actual
         test_value = 1.0
         self.pressure._chamber.Pressure.Actual = test_value
         sleep(1)
         self.assertEqual(self.pressure.pressure.value, test_value)
-        self.pressure._chamber.Pressure.Actual = 0.0
+        self.pressure._chamber.Pressure.Actual = init_state  # return to value from before test
 
     def test_updatePosition(self):
         """
@@ -453,11 +476,12 @@ class TestVacuumChamber(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
+        init_state = self.pressure._chamber.VacuumStatus.Actual
         test_value = 1
         self.pressure._chamber.VacuumStatus.Actual = test_value
         sleep(1)
         self.assertEqual(int(self.pressure.position.value['vacuum']), test_value)
-        self.pressure._chamber.VacuumStatus.Actual = 0
+        self.pressure._chamber.VacuumStatus.Actual = init_state
 
 
 class TestPumpingSystem(unittest.TestCase):
@@ -501,6 +525,7 @@ class TestPumpingSystem(unittest.TestCase):
                           "outside of simulation.")
         test_string = "This thing broke"
 
+        init_state_m = self.psys._system.Manometer1.ErrorState.Actual
         self.psys._system.Manometer1.ErrorState.Actual = test_string
         sleep(1)
         self.assertIsInstance(self.psys.state.value, HwError)
@@ -508,6 +533,7 @@ class TestPumpingSystem(unittest.TestCase):
         self.assertIn(test_string, str(self.psys.state.value))
         self.psys._system.Manometer1.ErrorState.Actual = ""
 
+        init_state_t = self.psys._system.TurboPump1.ErrorState.Actual
         self.psys._system.TurboPump1.ErrorState.Actual = test_string
         sleep(1)
         self.assertIsInstance(self.psys.state.value, HwError)
@@ -517,6 +543,9 @@ class TestPumpingSystem(unittest.TestCase):
         self.psys._system.TurboPump1.ErrorState.Actual = ""
         sleep(1)
         self.assertEqual(self.psys.state.value, model.ST_RUNNING)
+
+        self.psys._system.Manometer1.ErrorState.Actual = init_state_m  # return to value from before test
+        self.psys._system.TurboPump1.ErrorState.Actual = init_state_t
 
     def test_updateSpeed(self):
         """
@@ -528,11 +557,12 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.psys._system.TurboPump1.Speed.Actual
         test_value = 1.0
-        self.psys._system.TurboPump1.Speed.Target = test_value
+        self.psys._system.TurboPump1.Speed.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.speed.value, test_value)
-        self.psys._system.TurboPump1.Speed.Target = 0
+        self.psys._system.TurboPump1.Speed.Actual = init_state  # return to value from before test
 
     def test_updateTemperature(self):
         """
@@ -544,11 +574,12 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.psys._system.TurboPump1.Temperature.Actual
         test_value = 1.0
-        self.psys._system.TurboPump1.Temperature.Target = test_value
+        self.psys._system.TurboPump1.Temperature.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.temperature.value, test_value)
-        self.psys._system.TurboPump1.Temperature.Target = 0
+        self.psys._system.TurboPump1.Temperature.Actual = init_state  # return to value from before test
 
     def test_updatePower(self):
         """
@@ -560,11 +591,12 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.psys._system.TurboPump1.Power.Actual
         test_value = 1.0
-        self.psys._system.TurboPump1.Power.Target = test_value
+        self.psys._system.TurboPump1.Power.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.power.value, test_value)
-        self.psys._system.TurboPump1.Power.Target = 0
+        self.psys._system.TurboPump1.Power.Actual = init_state  # return to value from before test
 
     def test_updateSpeedReached(self):
         """
@@ -577,11 +609,12 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.psys._system.TurboPump1.SpeedReached.Actual
         test_value = True
-        self.psys._system.TurboPump1.SpeedReached.Target = test_value
+        self.psys._system.TurboPump1.SpeedReached.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.speedReached.value, test_value)
-        self.psys._system.TurboPump1.SpeedReached.Target = False
+        self.psys._system.TurboPump1.SpeedReached.Actual = init_state  # return to value from before test
 
     def test_updateTurboPumpOn(self):
         """
@@ -593,12 +626,14 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
-        self.psys._system.TurboPump1.IsOn.Target = True
+        init_state = self.psys._system.TurboPump1.IsOn.Actual
+        self.psys._system.TurboPump1.IsOn.Actual = True
         sleep(1)
         self.assertTrue(self.psys.turboPumpOn.value)
-        self.psys._system.TurboPump1.IsOn.Target = False
+        self.psys._system.TurboPump1.IsOn.Actual = False
         sleep(1)
         self.assertFalse(self.psys.turboPumpOn.value)
+        self.psys._system.TurboPump1.IsOn.Actual = init_state  # return to value from before test
 
     def test_updatePrimaryPumpOn(self):
         """
@@ -611,12 +646,14 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.datamodel.HybridPlatform.PrimaryPumpState.Actual
         self.datamodel.HybridPlatform.PrimaryPumpState.Actual = True
         sleep(1)
         self.assertTrue(self.psys.primaryPumpOn.value)
         self.datamodel.HybridPlatform.PrimaryPumpState.Actual = False
         sleep(1)
         self.assertFalse(self.psys.primaryPumpOn.value)
+        self.datamodel.HybridPlatform.PrimaryPumpState.Actual = init_state  # return to value from before test
 
     def test_updateNitrogenPressure(self):
         """
@@ -629,11 +666,12 @@ class TestPumpingSystem(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.psys._system.Manometer1.Pressure.Actual
         test_value = 1.0
-        self.psys._system.Manometer1.Pressure.Target = test_value
+        self.psys._system.Manometer1.Pressure.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
-        self.psys._system.Manometer1.Pressure.Target = 0
+        self.psys._system.Manometer1.Pressure.Actual = init_state  # return to value from before test
 
 
 class TestUPS(unittest.TestCase):
@@ -714,6 +752,7 @@ class TestGIS(unittest.TestCase):
                           "outside of simulation.")
         test_string = "This thing broke"
 
+        init_state = self.gis._gis.ErrorState.Actual
         self.gis._gis.ErrorState.Actual = test_string
         self.assertIsInstance(self.gis.state.value, HwError)
         self.assertIn(test_string, str(self.gis.state.value))
@@ -721,6 +760,8 @@ class TestGIS(unittest.TestCase):
         self.gis._gis.ErrorState.Actual = ""
         sleep(1)
         self.assertEqual(self.gis.state.value, model.ST_RUNNING)
+
+        self.gis._gis.ErrorState.Actual = init_state  # return to value from before test
 
     def test_updatePosition(self):
         """
@@ -731,6 +772,8 @@ class TestGIS(unittest.TestCase):
 
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
+
+        init_state = self.gis._gis.PositionState.Actual
 
         self.gis._gis.PositionState.Target = orsay.STR_WORK
         sleep(1)
@@ -744,6 +787,8 @@ class TestGIS(unittest.TestCase):
         sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
 
+        self.gis._gis.PositionState.Actual = init_state  # return to value from before test
+
     def test_updateInjectingGas(self):
         """
         Check that the injectingGas VA is updated correctly and an exception is raised when the wrong parameter is passed
@@ -754,6 +799,8 @@ class TestGIS(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
+        init_state = self.gis._gis.ReservoirState.Target
+
         self.gis._gis.ReservoirState.Target = orsay.STR_OPEN
         sleep(1)
         self.assertTrue(self.gis.injectingGas.value)
@@ -762,10 +809,14 @@ class TestGIS(unittest.TestCase):
         sleep(1)
         self.assertFalse(self.gis.injectingGas.value)
 
+        self.gis._gis.ReservoirState.Target = init_state  # return to value from before test
+
     def test_moveAbs(self):
         """
         Test movement of the gis to working position and parking position
         """
+        init_state = self.gis.position.value["arm"]
+
         f = self.gis.moveAbs({"arm": True})
         f.result()
         self.assertTrue(self.gis.position.value["arm"])
@@ -776,10 +827,16 @@ class TestGIS(unittest.TestCase):
         f.result()
         self.assertFalse(self.gis.position.value["arm"])
 
+        f = self.gis.moveAbs({"arm": init_state})  # return to value from before test and wait
+        f.result()
+
     def test_gasFlow(self):
         """
         Tests the gas flow control. Do this in park position, since this is safest
         """
+        init_arm = self.gis.position.value["arm"]
+        init_state = self.gis._gis.ReservoirState.Target
+
         f = self.gis.moveAbs({"arm": False})  # test in park to prevent damaging the sample
         f.result()
 
@@ -799,7 +856,9 @@ class TestGIS(unittest.TestCase):
         sleep(7)  # TODO: TUNE THIS?
         self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_CLOSED)
 
-
+        f = self.gis.moveAbs({"arm": init_arm})  # return to value from before test
+        self.gis._gis.ReservoirState.Target = init_state
+        f.result()
 
     def test_stop(self):
         """
@@ -807,6 +866,9 @@ class TestGIS(unittest.TestCase):
         """
         if not TEST_NOHW == 0:
             self.skipTest("No hardware present to test stop function.")
+
+        init_arm = self.gis.position.value["arm"]
+        init_state = self.gis.injectingGas.value
 
         f = self.gis.moveAbs({"arm": True})
         f.result()
@@ -816,6 +878,10 @@ class TestGIS(unittest.TestCase):
         sleep(7)  # TODO: TUNE THIS?
         self.assertFalse(self.gis.injectingGas.value)
         self.assertFalse(self.gis.position.value["arm"])
+
+        f = self.gis.moveAbs({"arm": init_arm})  # return to value from before test and wait
+        self.gis.injectingGas.value = init_state
+        f.result()
 
 
 class TestGISReservoir(unittest.TestCase):
@@ -862,29 +928,36 @@ class TestGISReservoir(unittest.TestCase):
                           "outside of simulation.")
         test_string = "This thing broke"
 
+        init_error = self.gis_res._gis.ErrorState.Actual
         self.gis_res._gis.ErrorState.Actual = test_string
         self.assertIsInstance(self.gis_res.state.value, HwError)
         self.assertIn(test_string, str(self.gis_res.state.value))
 
         self.gis_res._gis.ErrorState.Actual = ""
-        self.gis_res._gis.RodPosition.Actual = 0
+        init_state = self.gis_res._gis.RodPosition.Actual
+        if not init_state:
+            init_state = orsay.ROD_OK  # in case init_state is None
+        self.gis_res._gis.RodPosition.Actual = orsay.ROD_NOT_DETECTED
         sleep(1)
         self.assertIsInstance(self.gis_res.state.value, HwError)
         self.assertIn("Reservoir rod not detected", str(self.gis_res.state.value))
 
-        self.gis_res._gis.RodPosition.Actual = 1
+        self.gis_res._gis.RodPosition.Actual = orsay.ROD_RESERVOIR_NOT_STRUCK
         sleep(1)
         self.assertIsInstance(self.gis_res.state.value, HwError)
         self.assertIn("Reservoir not struck", str(self.gis_res.state.value))
 
-        self.gis_res._gis.RodPosition.Actual = 3
+        self.gis_res._gis.RodPosition.Actual = orsay.ROD_READING_ERROR
         sleep(1)
         self.assertIsInstance(self.gis_res.state.value, HwError)
         self.assertIn("Error in reading the rod position", str(self.gis_res.state.value))
 
-        self.gis_res._gis.RodPosition.Actual = 2
+        self.gis_res._gis.RodPosition.Actual = orsay.ROD_OK
         sleep(1)
         self.assertEqual(self.gis_res.state.value, model.ST_RUNNING)
+
+        self.gis_res._gis.ErrorState.Actual = init_error  # return to value from before test
+        self.gis_res._gis.RodPosition.Actual = init_state
 
     def test_updateTemperatureTarget(self):
         """
@@ -894,6 +967,8 @@ class TestGISReservoir(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.gis_res._updateTemperatureTarget(self.datamodel.HybridPlatform.Cancel)
 
+        init_state = self.gis_res._temperaturePar.Target
+
         test_value = 30
         self.gis_res._temperaturePar.Target = test_value
         sleep(1)
@@ -902,6 +977,8 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res._temperaturePar.Target = 0
         sleep(1)
         self.assertEqual(self.gis_res.temperatureTarget.value, 0)
+
+        self.gis_res._temperaturePar.Target = init_state  # return to value from before test
 
     def test_updateTemperature(self):
         """
@@ -915,6 +992,8 @@ class TestGISReservoir(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
 
+        init_state = self.gis_res._temperaturePar.Target
+
         test_value = 20
         self.gis_res._temperaturePar.Target = test_value
         sleep(1)
@@ -924,6 +1003,8 @@ class TestGISReservoir(unittest.TestCase):
         sleep(1)
         self.assertEqual(self.gis_res.temperature.value, 0)
 
+        self.gis_res._temperaturePar.Target = init_state  # return to value from before test
+
     def test_updateTemperatureRegulation(self):
         """
         Check that the temperatureRegulation VA is updated correctly and an exception is raised when the wrong parameter
@@ -931,6 +1012,9 @@ class TestGISReservoir(unittest.TestCase):
         """
         with self.assertRaises(ValueError):
             self.gis_res._updateTemperatureRegulation(self.datamodel.HybridPlatform.Cancel)
+
+        init_rush_state = self.gis_res._gis.RegulationRushOn.Target
+        init_state = self.gis_res._gis.RegulationOn.Target
 
         self.gis_res._gis.RegulationRushOn.Target = True
         self.gis_res._gis.RegulationOn.Target = True
@@ -952,6 +1036,9 @@ class TestGISReservoir(unittest.TestCase):
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
 
+        self.gis_res._gis.RegulationRushOn.Target = init_rush_state  # return to value from before test
+        self.gis_res._gis.RegulationOn.Target = init_state
+
     def test_updateAge(self):
         """
         Check that the age VA is updated correctly and an exception is raised when the wrong parameter is passed
@@ -963,6 +1050,8 @@ class TestGISReservoir(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
 
+        init_state = self.gis_res._gis.ReservoirLifeTime.Actual
+
         test_value = 20
         self.gis_res._gis.ReservoirLifeTime.Actual = test_value
         sleep(1)
@@ -971,6 +1060,8 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res._gis.ReservoirLifeTime.Actual = 0
         sleep(1)
         self.assertEqual(self.gis_res.age.value, 0)
+
+        self.gis_res._gis.ReservoirLifeTime.Actual = init_state  # return to value from before test
 
     def test_updatePrecursorType(self):
         """
@@ -984,6 +1075,8 @@ class TestGISReservoir(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
 
+        init_state = self.gis_res._gis.PrecursorType.Actual
+
         test_value = "test precursor"
         self.gis_res._gis.PrecursorType.Actual = test_value
         sleep(1)
@@ -993,10 +1086,14 @@ class TestGISReservoir(unittest.TestCase):
         sleep(1)
         self.assertEqual(self.gis_res.precursorType.value, "Simulation")
 
+        self.gis_res._gis.PrecursorType.Actual = init_state  # return to value from before test
+
     def test_setTemperatureTarget(self):
         """
         Test the setter of the temperatureTarget VA
         """
+        init_state = self.gis_res.temperatureTarget.value
+
         test_value = 30
         self.gis_res.temperatureTarget.value = test_value
         sleep(1)
@@ -1006,10 +1103,14 @@ class TestGISReservoir(unittest.TestCase):
         sleep(1)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
 
+        self.gis_res.temperatureTarget.value = init_state  # return to value from before test
+
     def test_setTemperatureRegulation(self):
         """
         Test the setter of the temperatureRegulation VA
         """
+        init_state = self.gis_res.temperatureRegulation.value
+
         self.gis_res.temperatureRegulation.value = 0
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
@@ -1025,9 +1126,11 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res.temperatureRegulation.value = 2
         sleep(1)  # TODO: TUNE THIS?
         self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
-        self.assertFalse(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
         self.assertTrue(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
         self.gis_res.temperatureRegulation.value = 0
+
+        self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
 
     def test_temperatureRegulation(self):
         """
@@ -1036,6 +1139,9 @@ class TestGISReservoir(unittest.TestCase):
               Tune the sleeping time so it waits long enough for the temperature to be reached
               Tune the test_accuracy (number of decimal places) to reflect the accuracy of the temperature regulation
         """
+        init_temp = self.gis_res.temperatureTarget.value
+        init_state = self.gis_res.temperatureRegulation.value
+
         test_value1 = 27  # TODO: Tune!
         test_value2 = 30  # TODO: Tune!
         test_accuracy = 1  # TODO: Tune!
@@ -1055,7 +1161,8 @@ class TestGISReservoir(unittest.TestCase):
             sleep(1)
         self.assertAlmostEqual(self.gis_res.temperature.value, test_value2, places=test_accuracy)
 
-        self.gis_res.temperatureRegulation.value = 0
+        self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
+        self.gis_res.temperatureTarget.value = init_temp
 
     def test_stop(self):
         """
@@ -1065,6 +1172,8 @@ class TestGISReservoir(unittest.TestCase):
             self.skipTest("No hardware present to test stop function.")
 
         try:
+            init_state = self.gis_res.temperatureRegulation.value
+
             self.gis_res.temperatureRegulation.value = 1
             sleep(1)  # TODO: TUNE THIS?
             self.gis.stop()
@@ -1076,6 +1185,8 @@ class TestGISReservoir(unittest.TestCase):
             self.gis.stop()
             sleep(1)
             self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+
+            self.gis_res.temperatureRegulation.value = init_state
 
         except NameError:
             self.skipTest("No GIS to call stop on.")
