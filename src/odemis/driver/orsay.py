@@ -1791,7 +1791,7 @@ class FIBSource(model.HwComponent):
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • gunOn: BooleanVA
         • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
-        • currentRegulation: BooleanVA, should generally be False, since sourceCurrent's Target cannot be set
+        • currentRegulation: BooleanVA, readonly, should generally be False, since sourceCurrent's Target cannot be set
         • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is True)
         • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
         • heaterCurrent: FloatContinuous, unit="A", range=(0, 5)
@@ -1810,7 +1810,7 @@ class FIBSource(model.HwComponent):
         self.gunOnConnector = None
         self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
         self.lifetimeConnector = None
-        self.currentRegulation = model.BooleanVA(False)
+        self.currentRegulation = model.BooleanVA(False, readonly=True)
         self.currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
         self.sourceCurrentConnector = None

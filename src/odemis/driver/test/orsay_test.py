@@ -1335,12 +1335,14 @@ class TestFIBSource(unittest.TestCase):
     def test_gunOn(self):
         """Check that the gunOn VA is updated correctly"""
         if hasattr(self, 'fib_device'):
-            # self.fib_device.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
-            # self.fib_device.columnPumpOn.value = True
+            init_gun = self.fib_device.gunPumpOn.value
+            init_column = self.fib_device.gunPumpOn.value
+            self.fib_device.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
+            self.fib_device.columnPumpOn.value = True
             connector_test(self, self.fib_source.gunOn, self.fib_source._hvps.GunState,
                            [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=5)
-            # self.fib_device.gunPumpOn.value = False
-            # self.fib_device.columnPumpOn.value = False
+            self.fib_device.gunPumpOn.value = init_gun  # return to value from before test
+            self.fib_device.columnPumpOn.value = init_column
         else:
             self.skipTest("Was not given a fib_device child, so ion pumps cannot be turned on.")
 
@@ -1352,7 +1354,7 @@ class TestFIBSource(unittest.TestCase):
     def test_currentRegulation(self):
         """Check that the currentRegulation VA is updated correctly"""
         connector_test(self, self.fib_source.currentRegulation, self.fib_source._hvps.BeamCurrent_Enabled,
-                       [(True, "True"), (False, "False")], hw_safe=True, settletime=5)  # TODO: Tune the settle time
+                       [(True, "True"), (False, "False")], readonly=True, settletime=1)
 
     def test_sourceCurrent(self):
         """Check that the sourceCurrent VA is updated correctly"""
@@ -1361,7 +1363,6 @@ class TestFIBSource(unittest.TestCase):
 
     def test_suppressorVoltage(self):
         """Check that the suppressorVoltage VA is updated correctly"""
-        self.fib_source.currentRegulation.value = False  # needed for suppressorVoltage to be used
         connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
                        [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
@@ -1401,7 +1402,7 @@ class TestFIBSource(unittest.TestCase):
     def test_energyLink(self):
         """Check that the energyLink VA is updated correctly"""
         connector_test(self, self.fib_source.energyLink, self.fib_source._hvps.EnergyLink,
-                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=2)  # TODO: Tune the settle time
+                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=2)
 
     def test_extractorVoltage(self):
         """Check that the extractorVoltage VA is updated correctly"""
@@ -1726,7 +1727,9 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
         from the Orsay server to the va is tested. Otherwise two way communication is tested. If readonly is True, the
         test will not be performed on the real hardware, because we cannot write to the parameter's Actual value, as
         we'd want to test the reading. Defaults to False.
-    :param hw_safe: tells the test if this it is safe to perform this test on the real hardware. Defaults to False.
+    :param hw_safe: tells the test if this it is safe to perform this test on the real hardware. Defaults to False. Even
+        when it is unsafe, the Connector is already set up, so the value of the parameter is copied to the VA. If this
+        succeeds, the value must be reasonable. Ortherwise the unittest class setup will yield an Exception.
     :param settletime: is the time the test will wait between setting the Target of the Orsay parameter and checking if
         the Actual value of the Orsay parameter matches the VA's value. In simulation, this value is overwritten by 0.5.
         Defaults to 0.5.
