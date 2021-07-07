@@ -34,7 +34,7 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
-TEST_NOHW = 0
+TEST_NOHW = "sim"
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -1096,32 +1096,47 @@ class TestOrsayParameterConnector(unittest.TestCase):
             connector._update_parameter(1.0)
 
     def test_parameter_update(self):
-        va = model.FloatVA(0.0)
-        orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
         test_value = 0.1
+        init_state = test_parameter.Target
+        va = model.FloatVA(0.0)
+        orsay.OrsayParameterConnector(va, test_parameter)
         va.value = test_value
         sleep(0.5)
-        self.assertEqual(test_value, float(self.datamodel.IonColumnMCS.ObjectivePhi.Actual))
+        self.assertEqual(test_value, float(test_parameter.Actual))
+        test_parameter.Target = init_state  # return to value from before test
 
     def test_va_update(self):
-        va = model.FloatVA(0.0)
-        orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
         test_value = 0.1
-        self.datamodel.IonColumnMCS.ObjectivePhi.Target = test_value
+        init_state = test_parameter.Target
+        va = model.FloatVA(0.0)
+        orsay.OrsayParameterConnector(va, test_parameter)
+        test_parameter.Target = test_value
         sleep(0.5)
         self.assertEqual(test_value, va.value)
+        test_parameter.Target = init_state  # return to value from before test
 
     def test_range(self):
-        va = model.FloatContinuous(0.0, range=(-1, 1))
+        test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
         test_max = pi
         test_min = -pi
-        self.datamodel.IonColumnMCS.ObjectivePhi.Max = test_max
-        self.datamodel.IonColumnMCS.ObjectivePhi.Min = test_min
-        connector = orsay.OrsayParameterConnector(va, self.datamodel.IonColumnMCS.ObjectivePhi)
+        init_max = test_parameter.Max
+        if not init_max:
+            init_max = test_max
+        init_min = test_parameter.Min
+        if not init_min:
+            init_min = test_min
+        va = model.FloatContinuous(0.0, range=(-1, 1))
+        test_parameter.Max = test_max
+        test_parameter.Min = test_min
+        connector = orsay.OrsayParameterConnector(va, test_parameter)
         sleep(0.5)
         self.assertEqual(va.range[0], test_min)
         self.assertEqual(va.range[1], test_max)
         connector.disconnect()
+        test_parameter.Max = init_max  # return to value from before test
+        test_parameter.Min = init_min
 
         minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
@@ -1171,6 +1186,7 @@ class TestFIBDevice(unittest.TestCase):
 
         test_string = "This thing broke"
 
+        init_state_gauge = self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual
         self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1178,6 +1194,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = ""
 
+        init_state_interlock1 = self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1185,6 +1202,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = ""
 
+        init_state_interlock2 = self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1192,6 +1210,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = ""
 
+        init_state_column = self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1199,6 +1218,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = ""
 
+        init_state_gun = self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual
         self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1206,6 +1226,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = ""
 
+        init_state_valve = self.datamodel.HybridValveFIB.ErrorState.Actual
         self.datamodel.HybridValveFIB.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1213,6 +1234,7 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridValveFIB.ErrorState.Actual = ""
 
+        init_target_valve = self.fib_device._valve.IsOpen.Target
         self.fib_device._valve.IsOpen.Target = 3
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
@@ -1225,6 +1247,14 @@ class TestFIBDevice(unittest.TestCase):
 
         sleep(0.5)
         self.assertEqual(self.fib_device.state.value, model.ST_RUNNING)
+
+        self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = init_state_gauge
+        self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = init_state_interlock1
+        self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = init_state_interlock2
+        self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = init_state_column
+        self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = init_state_gun
+        self.datamodel.HybridValveFIB.ErrorState.Actual = init_state_valve
+        self.fib_device._valve.IsOpen.Target = init_target_valve
 
     def test_interlockTriggered(self):
         """Check that the interlockTriggered VA is updated correctly"""
@@ -1569,6 +1599,8 @@ class TestFIBBeam(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.fibbeam._updateImageFormat(self.datamodel.HybridPlatform.Cancel)
 
+        init_state = self.fibbeam._ionColumn.ImageSize.Target
+
         connector_test(self, self.fibbeam.imageFormat, self.fibbeam._ionColumn.ImageSize,
                        [((1024, 1024), "1024 1024"), ((512, 512), "512 512")],
                        hw_safe=True, settletime=1)  # TODO: Tune the settle time
@@ -1610,10 +1642,16 @@ class TestFIBBeam(unittest.TestCase):
         self.assertEqual(self.fibbeam.translation.value, (-511.0, 511.0))
         self.assertEqual(self.fibbeam.resolution.value, (2, 2))
 
+        self.fibbeam._ionColumn.ImageSize.Target = init_state  # return to value of before test
+
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""
         with self.assertRaises(ValueError):
             self.fibbeam._updateTranslationResolution(self.datamodel.HybridPlatform.Cancel)
+
+        init_format = self.fibbeam.imageFormat.value
+        init_trans = self.fibbeam.translation.value
+        init_res = self.fibbeam.resolution.value
 
         self.fibbeam.imageFormat.value = (1024, 1024)
 
@@ -1670,6 +1708,10 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.translation.value = (0.0, 0.0)
         self.fibbeam.resolution.value = (1024, 1024)
 
+        self.fibbeam.imageFormat.value = init_format  # return to value of before test
+        self.fibbeam.translation.value = init_trans
+        self.fibbeam.resolution.value = init_res
+
 
 def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=0.5):
     """
@@ -1704,6 +1746,13 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
         attributes.append("Actual")  # in simulation write to both Target and Actual
         settletime = 0.5
 
+    init_values = []
+    if type(parameters) in [set, list, tuple]:
+        for p in parameters:
+            init_values.append(p.Target)  # get the initial values of the parameters
+    else:  # if a single parameter is passed
+        init_values.append(parameters.Target)
+
     # loop twice to assure value pairs are alternated
     for (va_value, par_value) in valuepairs:
         try:  # for Tuple VA's
@@ -1727,6 +1776,12 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             except TypeError:  # if a single parameter is passed
                 target = type(par_value)(parameters.Target)  # needed since many parameter values are strings
                 test_case.assertEqual(target, par_value)
+
+    if type(parameters) in [set, list, tuple]:
+        for i in range(len(parameters)):
+            parameters[i].Target = init_values[i]  # return to the values form before test
+    else:  # if a single parameter is passed
+        parameters.Target = init_values[0]
 
 
 if __name__ == '__main__':
