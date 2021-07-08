@@ -943,13 +943,14 @@ class GIS(model.Actuator):
     def __init__(self, name, role, parent, **kwargs):
         """
         Has axes:
-        • "arm": unit is "None", choices is {True: "engaged", False: "parked"}
+        • "arm": unit is None, choices is {True: "engaged", False: "parked"}
+        • "injectingGas": unit is None, choices is {True: "open", False: "closed"}
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • position (VA, read-only, value is {"arm" : _positionPar.Actual})
-        • injectingGas (BooleanVA, set to True to open/start the gas flow and False to close/stop the gas flow)
+        • position (VA, read-only, value is {"arm": _positionPar.Actual, "injectingGas": _reservoirPar.Actual})
         """
-        axes = {"arm": model.Axis(unit=None, choices={True: "engaged", False: "parked"})}
+        axes = {"arm": model.Axis(unit=None, choices={True: "engaged", False: "parked"}),
+                "injectingGas": model.Axis(unit=None, choices={True: "open", False: "closed"})}
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
@@ -960,9 +961,10 @@ class GIS(model.Actuator):
 
         self._armPositionReached = threading.Event()
         self._armPositionReached.set()
+        self._injectingGasPositionReached = threading.Event()
+        self._injectingGasPositionReached.set()
 
-        self.position = model.VigilantAttribute({"arm": False}, readonly=True)
-        self.injectingGas = model.BooleanVA(False, setter=self._setInjectingGas)
+        self.position = model.VigilantAttribute({"arm": False, "injectingGas": False}, readonly=True)
 
         self.on_connect()
 
@@ -979,7 +981,7 @@ class GIS(model.Actuator):
         self._reservoirPar = self._gis.ReservoirState
         self._errorPar.Subscribe(self._updateErrorState)
         self._positionPar.Subscribe(self._updatePosition)
-        self._reservoirPar.Subscribe(self._updateInjectingGas)
+        self._reservoirPar.Subscribe(self._updatePosition)
         self.update_VAs()
 
     def update_VAs(self):
@@ -988,7 +990,6 @@ class GIS(model.Actuator):
         """
         self._updateErrorState()
         self._updatePosition()
-        self._updateInjectingGas()
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
@@ -1016,85 +1017,113 @@ class GIS(model.Actuator):
 
         Reads the position of the GIS from the Orsay server and saves it in the position VA
         """
-        if parameter is None:
-            parameter = self._positionPar
-        if parameter is not self._positionPar:
+        if parameter not in [self._positionPar, self._reservoirPar, None]:
             raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
-                             "datamodel.HybridGIS.PositionState. Parameter passed is %s." % parameter.Name)
+                             "datamodel.HybridGIS.PositionState, datamodel.HybridGIS.ReservoirState, or None. "
+                             "Parameter passed is %s." % parameter.Name)
         if attributeName == "Actual":
-            pos = self._positionPar.Actual
-            logging.debug("Current position is %s." % pos)
-            self.position._set_value({"arm": pos == STR_WORK}, force_write=True)
+            arm_pos = self._positionPar.Actual
+            gas_pos = self._reservoirPar.Actual
+            new_pos = {"arm": arm_pos == STR_WORK, "injectingGas": gas_pos == STR_OPEN}
+            logging.debug("Current position is %s." % new_pos)
+            self.position._set_value(new_pos, force_write=True)
+
         if self._positionPar.Actual == self._positionPar.Target:
-            logging.debug("Target position reached.")
+            logging.debug("Target arm position reached.")
             self._armPositionReached.set()
         else:
             self._armPositionReached.clear()
 
-    def _updateInjectingGas(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads the GIS gas flow state from the Orsay server and saves it in the injectingGas VA
-        """
-        if parameter is None:
-            parameter = self._reservoirPar
-        if parameter is not self._reservoirPar:
-            raise ValueError("Incorrect parameter passed to _updateInjectingGas. Parameter should be "
-                             "datamodel.HybridGIS.ReservoirState. Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
-            return
-        logging.debug("Gas flow is now %s." % self._reservoirPar.Actual)
-        new_value = self._reservoirPar.Actual == STR_OPEN
-        self.injectingGas._value = new_value  # to not call the setter
-        self.injectingGas.notify(new_value)
-
-    def _setInjectingGas(self, goal):
-        """
-        goal (bool): the goal state of the gas flow: (True: "open", False: "closed")
-        return (bool): the new state the gas flow: (True: "open", False: "closed")
-
-        Opens the GIS reservoir if argument goal is True. Closes it otherwise.
-        Also closes the reservoir if the position of the GIS is not engaged.
-        """
-        if not self.position.value["arm"] and goal:
-            logging.warning("Gas flow opened while not in working position.")
-        if goal:
-            logging.debug("Starting gas flow.")
-            self._reservoirPar.Target = STR_OPEN
+        if self._reservoirPar.Actual == self._reservoirPar.Target:
+            logging.debug("Target injectingGas position reached.")
+            self._injectingGasPositionReached.set()
         else:
-            logging.debug("Stopping gas flow.")
-            self._reservoirPar.Target = STR_CLOSED
-        return self._reservoirPar.Target == STR_OPEN
+            self._injectingGasPositionReached.clear()
 
-    def _setArm(self, goal):
-        """
-        goal (bool): the goal state of the GIS position: (True: "engaged", False: "parked")
-        return (bool): the state the GIS position is in after finishing moving: (True: STR_WORK, False: STR_PARK)
+    # def _updateInjectingGas(self, parameter=None, attributeName="Actual"):
+    #     """
+    #     parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+    #     attributeName (str): the name of the attribute of parameter which was changed
+    #
+    #     Reads the GIS gas flow state from the Orsay server and saves it in the injectingGas VA
+    #     """
+    #     if parameter is None:
+    #         parameter = self._reservoirPar
+    #     if parameter is not self._reservoirPar:
+    #         raise ValueError("Incorrect parameter passed to _updateInjectingGas. Parameter should be "
+    #                          "datamodel.HybridGIS.ReservoirState. Parameter passed is %s." % parameter.Name)
+    #     if not attributeName == "Actual":
+    #         return
+    #     logging.debug("Gas flow is now %s." % self._reservoirPar.Actual)
+    #     new_value = self._reservoirPar.Actual == STR_OPEN
+    #     self.injectingGas._value = new_value  # to not call the setter
+    #     self.injectingGas.notify(new_value)
+    #
+    # def _setInjectingGas(self, goal):
+    #     """
+    #     goal (bool): the goal state of the gas flow: (True: "open", False: "closed")
+    #     return (bool): the new state the gas flow: (True: "open", False: "closed")
+    #
+    #     Opens the GIS reservoir if argument goal is True. Closes it otherwise.
+    #     Also closes the reservoir if the position of the GIS is not engaged.
+    #     """
+    #     if not self.position.value["arm"] and goal:
+    #         logging.warning("Gas flow opened while not in working position.")
+    #     if goal:
+    #         logging.debug("Starting gas flow.")
+    #         self._reservoirPar.Target = STR_OPEN
+    #     else:
+    #         logging.debug("Stopping gas flow.")
+    #         self._reservoirPar.Target = STR_CLOSED
+    #     return self._reservoirPar.Target == STR_OPEN
 
-        Moves the GIS to working position if argument goal is True. Moves it to parking position otherwise.
+    def _doMove(self, goal):
         """
-        if self.injectingGas.value:
-            logging.warning("Gas flow was still on when attempting to move the GIS. Turning off gas flow.")
-            self.injectingGas.value = False  # turn off the gas flow if it wasn't already
-        self._armPositionReached.clear()  # to assure it waits
-        if goal:
-            logging.debug("Moving GIS to working position.")
-            self._positionPar.Target = STR_WORK
-        else:
-            logging.debug("Moving GIS to parking position.")
-            self._positionPar.Target = STR_PARK
+        goal (dict): the goal state of the GIS position and gas flow:
+            {"arm": True (engaged) / False (parked),
+             "injectingGas": True (open) / False (closed)}
+
+        Moves the GIS to working position if argument goal["arm"] is True. Moves it to parking position otherwise.
+        Opens the gas reservoir of the GIS if goal["injectingGas"] is True. Closes it otherwise.
+        """
+        try:
+            if not goal["arm"] == self.position.value["arm"]:  # if the arm needs to move
+                if self.position.value["injectingGas"]:
+                    logging.warning("Moving GIS while gas flow is on.")
+                self._armPositionReached.clear()  # to assure it waits
+                if goal["arm"]:
+                    logging.debug("Moving GIS to working position.")
+                    self._positionPar.Target = STR_WORK
+                else:
+                    logging.debug("Moving GIS to parking position.")
+                    self._positionPar.Target = STR_PARK
+        except KeyError:  # in case "arm" is nog present in goal
+            pass
+
+        try:
+            if not goal["injectingGas"] == self.position.value["injectingGas"]:  # if the gas flow needs to change
+                if not self.position.value["arm"] and goal["injectingGas"]:
+                    logging.warning("Gas flow opened while not in working position.")
+                self._injectingGasPositionReached.clear()  # to assure it waits
+                if goal["injectingGas"]:
+                    logging.debug("Starting gas flow.")
+                    self._reservoirPar.Target = STR_OPEN
+                else:
+                    logging.debug("Stopping gas flow.")
+                    self._reservoirPar.Target = STR_CLOSED
+        except KeyError:  # in case "injectingGas" is nog present in goal
+            pass
+
+        self._injectingGasPositionReached.wait()  # wait for both axes to reach their new position
         self._armPositionReached.wait()
-        self._updatePosition()
 
     @isasync
     def moveAbs(self, pos):
         """
-        Move the axis of this actuator to pos.
+        Move the axes of this actuator to pos.
         """
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._setArm, goal=pos["arm"])
+        return self._executor.submit(self._doMove, goal=pos)
 
     @isasync
     def moveRel(self, shift):
@@ -1108,8 +1137,7 @@ class GIS(model.Actuator):
         Stop the GIS. There is no way to abort the movement of the GIS or GIS reservoir immediately. Best we can do is
         cancel all planned movements that are yet to start.
         """
-        if axes is None or "arm" in axes:
-            self._executor.cancel()
+        self._executor.cancel()
 
     def terminate(self):
         """
@@ -1118,7 +1146,7 @@ class GIS(model.Actuator):
         if self._gis:
             self._errorPar.Unsubscribe(self._updateErrorState)
             self._positionPar.Unsubscribe(self._updatePosition)
-            self._reservoirPar.Unsubscribe(self._updateInjectingGas)
+            self._reservoirPar.Unsubscribe(self._updatePosition)
             if self._executor:
                 self._executor.shutdown()
                 self._executor = None

@@ -763,9 +763,10 @@ class TestGIS(unittest.TestCase):
 
         self.gis._gis.ErrorState.Actual = init_state  # return to value from before test
 
-    def test_updatePosition(self):
+    def test_updatePositionArm(self):
         """
-        Check that the position VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the "arm" part of the position VA is updated correctly and an exception is raised when the wrong
+        parameter is passed
         """
         with self.assertRaises(ValueError):
             self.gis._updatePosition(self.datamodel.HybridPlatform.Cancel)
@@ -773,114 +774,139 @@ class TestGIS(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
-        init_state = self.gis._gis.PositionState.Actual
+        init_pos = self.gis._positionPar.Target
 
-        self.gis._gis.PositionState.Target = orsay.STR_WORK
+        self.gis._positionPar.Target = orsay.STR_WORK
         sleep(1)
         self.assertTrue(self.gis.position.value["arm"])
 
-        self.gis._gis.PositionState.Target = "MOVING"
+        self.gis._positionPar.Target = "MOVING"
         sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
 
-        self.gis._gis.PositionState.Target = orsay.STR_PARK
+        self.gis._positionPar.Target = orsay.STR_PARK
         sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
 
-        self.gis._gis.PositionState.Actual = init_state  # return to value from before test
+        self.gis._positionPar.Target = init_pos  # return to value from before test
 
-    def test_updateInjectingGas(self):
+    def test_updatePositionInjectingGas(self):
         """
-        Check that the injectingGas VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the "injectingGas" part of the position VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis._updateInjectingGas(self.datamodel.HybridPlatform.Cancel)
-
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
-        init_state = self.gis._gis.ReservoirState.Target
+        init_flow = self.gis._reservoirPar.Target
 
-        self.gis._gis.ReservoirState.Target = orsay.STR_OPEN
+        self.gis._reservoirPar.Target = orsay.STR_OPEN
         sleep(1)
-        self.assertTrue(self.gis.injectingGas.value)
+        self.assertTrue(self.gis.position.value["injectingGas"])
 
-        self.gis._gis.ReservoirState.Target = orsay.STR_CLOSED
+        self.gis._reservoirPar.Target = "MOVING"
         sleep(1)
-        self.assertFalse(self.gis.injectingGas.value)
+        self.assertFalse(self.gis.position.value["injectingGas"])
 
-        self.gis._gis.ReservoirState.Target = init_state  # return to value from before test
+        self.gis._reservoirPar.Target = orsay.STR_CLOSED
+        sleep(1)
+        self.assertFalse(self.gis.position.value["injectingGas"])
+
+        self.gis._reservoirPar.Target = init_flow  # return to value from before test
 
     def test_moveAbs(self):
         """
         Test movement of the gis to working position and parking position
         """
-        init_state = self.gis.position.value["arm"]
+        init_arm = self.gis.position.value["arm"]
+        init_gas = self.gis.position.value["injectingGas"]
 
+        # check that the arm works correctly
         f = self.gis.moveAbs({"arm": True})
         f.result()
         self.assertTrue(self.gis.position.value["arm"])
 
         f = self.gis.moveAbs({"arm": False})
         sleep(1)
-        self.assertFalse(self.gis.position.value["arm"])
+        self.assertFalse(self.gis.position.value["arm"])  # while the arm is moving, position should be False
         f.result()
         self.assertFalse(self.gis.position.value["arm"])
 
-        f = self.gis.moveAbs({"arm": init_state})  # return to value from before test and wait
-        f.result()
-
-    def test_gasFlow(self):
-        """
-        Tests the gas flow control. Do this in park position, since this is safest
-        """
-        init_arm = self.gis.position.value["arm"]
-        init_state = self.gis._gis.ReservoirState.Target
-
-        f = self.gis.moveAbs({"arm": False})  # test in park to prevent damaging the sample
-        f.result()
-
-        self.gis._gis.ReservoirState.Target = orsay.STR_OPEN
-        sleep(7)  # TODO: TUNE THIS?
-        self.assertTrue(self.gis.injectingGas.value)
-        self.gis._gis.ReservoirState.Target = orsay.STR_CLOSED
-        sleep(7)  # TODO: TUNE THIS?
-        self.assertFalse(self.gis.injectingGas.value)
-
+        # check that the gas flow works correctly
         with self.assertLogs(logger=None, level=logging.WARN):  # warning should be logged for gas flow at park position
-            self.gis.injectingGas.value = True
-        sleep(7)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_OPEN)
+            f = self.gis.moveAbs({"injectingGas": True})
+            f.result()
+        self.assertTrue(self.gis.position.value["injectingGas"])
 
-        self.gis.injectingGas.value = False
-        sleep(7)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis._gis.ReservoirState.Target, orsay.STR_CLOSED)
+        f = self.gis.moveAbs({"injectingGas": False})
+        sleep(1)
+        self.assertFalse(self.gis.position.value["injectingGas"])  # while the state is moving, position should be False
+        f.result()
+        self.assertFalse(self.gis.position.value["injectingGas"])
 
-        f = self.gis.moveAbs({"arm": init_arm})  # return to value from before test
-        self.gis._gis.ReservoirState.Target = init_state
+        # check that moving two axes at once works well
+        f = self.gis.moveAbs({"arm": True, "injectingGas": True})
+        f.result()
+        self.assertTrue(self.gis.position.value["arm"])
+        self.assertTrue(self.gis.position.value["injectingGas"])
+
+        with self.assertLogs(logger=None, level=logging.WARN):  # warning should be logged for moving arm with gas on
+            f = self.gis.moveAbs({"arm": False, "injectingGas": False})
+            f.result()
+        self.assertFalse(self.gis.position.value["arm"])
+        self.assertFalse(self.gis.position.value["injectingGas"])
+
+        # return to value from before test and wait
+        f = self.gis.moveAbs({"arm": init_arm, "injectingGas": init_gas})
         f.result()
 
     def test_stop(self):
         """
-        Tests that calling stop has the expected behaviour
+        Tests that calling stop has the expected behaviour. This test does not work in simulation, because Futures
+        finish instantly.
         """
         if not TEST_NOHW == 0:
-            self.skipTest("No hardware present to test stop function.")
+            self.skipTest("No hardware present.")
 
         init_arm = self.gis.position.value["arm"]
-        init_state = self.gis.injectingGas.value
+        init_gas = self.gis.position.value["injectingGas"]
 
-        f = self.gis.moveAbs({"arm": True})
+        f = self.gis.moveAbs({"arm": False, "injectingGas": False})  # move to starting position for this test
         f.result()
-        self.gis.injectingGas.value = True
-        sleep(7)  # TODO: TUNE THIS?
-        self.gis.stop()
-        sleep(7)  # TODO: TUNE THIS?
-        self.assertFalse(self.gis.injectingGas.value)
-        self.assertFalse(self.gis.position.value["arm"])
 
-        f = self.gis.moveAbs({"arm": init_arm})  # return to value from before test and wait
-        self.gis.injectingGas.value = init_state
+        # TODO: Not sure what behaviour to expect here. If gis.stop() lets f finish, this code should be fine.
+        #       If not, f.result() will raise a CanceledError. Then the test should expect to find the state from before
+        #       the test, not the first state as set by the test.
+        # test that a second injectingGas move is canceled
+        f = self.gis.moveAbs({"injectingGas": True})
+        self.gis.moveAbs({"injectingGas": False})  # immediately start a second move
+        self.gis.stop()  # cancel all queued moves
+        f.result()  # wait for the first move to finish
+        sleep(1)  # sleep a bit so a potential next move has the chance to get started
+        self.assertTrue(self.gis.position.value["injectingGas"])
+
+        f = self.gis.moveAbs({"injectingGas": False})
+        f.result()  # turn gas flow off again
+
+        # test that a second arm move is canceled
+        f = self.gis.moveAbs({"arm": True})
+        self.gis.moveAbs({"arm": False})  # immediately start a second move
+        self.gis.stop()  # cancel all queued moves
+        f.result()  # wait for the first move to finish
+        sleep(1)  # sleep a bit so a potential next move has the chance to get started
+        self.assertTrue(self.gis.position.value["arm"])
+
+        # test that a double move is successful, but any following move is canceled
+        f = self.gis.moveAbs({"arm": False, "injectingGas": True})
+        self.gis.moveAbs({"arm": True})
+        self.gis.moveAbs({"injectingGas": False})
+        self.gis.stop()
+        f.result()
+        sleep(1)
+        self.assertFalse(self.gis.position.value["arm"])
+        self.assertTrue(self.gis.position.value["injectingGas"])
+
+        # return to value from before test and wait
+        f = self.gis.moveAbs({"arm": init_arm, "injectingGas": init_gas})
         f.result()
 
 
