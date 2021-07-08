@@ -150,7 +150,7 @@ class TestOrsay(unittest.TestCase):
         # perform some test to check writing and reading still works
         init_state = self.gis_res.temperatureTarget.value
 
-        test_value = 30
+        test_value = 27
         self.gis_res.temperatureTarget.value = test_value
         sleep(1)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
@@ -995,7 +995,7 @@ class TestGISReservoir(unittest.TestCase):
 
         init_state = self.gis_res._temperaturePar.Target
 
-        test_value = 30
+        test_value = 27
         self.gis_res._temperaturePar.Target = test_value
         sleep(1)
         self.assertEqual(self.gis_res.temperatureTarget.value, test_value)
@@ -1039,31 +1039,17 @@ class TestGISReservoir(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.gis_res._updateTemperatureRegulation(self.datamodel.HybridPlatform.Cancel)
 
-        init_rush_state = self.gis_res._gis.RegulationRushOn.Target
         init_state = self.gis_res._gis.RegulationOn.Target
 
-        self.gis_res._gis.RegulationRushOn.Target = True
-        self.gis_res._gis.RegulationOn.Target = True
-        sleep(2)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
-
-        self.gis_res._gis.RegulationRushOn.Target = False
         self.gis_res._gis.RegulationOn.Target = True
         sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 1)
+        self.assertTrue(self.gis_res.temperatureRegulation.value)
 
-        self.gis_res._gis.RegulationRushOn.Target = True
         self.gis_res._gis.RegulationOn.Target = False
         sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+        self.assertFalse(self.gis_res.temperatureRegulation.value)
 
-        self.gis_res._gis.RegulationRushOn.Target = False
-        self.gis_res._gis.RegulationOn.Target = False
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
-
-        self.gis_res._gis.RegulationRushOn.Target = init_rush_state  # return to value from before test
-        self.gis_res._gis.RegulationOn.Target = init_state
+        self.gis_res._gis.RegulationOn.Target = init_state  # return to value from before test
 
     def test_updateAge(self):
         """
@@ -1120,7 +1106,7 @@ class TestGISReservoir(unittest.TestCase):
         """
         init_state = self.gis_res.temperatureTarget.value
 
-        test_value = 30
+        test_value = 27
         self.gis_res.temperatureTarget.value = test_value
         sleep(1)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
@@ -1137,85 +1123,39 @@ class TestGISReservoir(unittest.TestCase):
         """
         init_state = self.gis_res.temperatureRegulation.value
 
-        self.gis_res.temperatureRegulation.value = 0
+        self.gis_res.temperatureRegulation.value = False
         sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
+        self.assertFalse(self.gis_res.temperatureRegulation.value)
         self.assertFalse(self.gis_res._gis.RegulationOn.Target.lower() == "true")
-        self.assertFalse(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
 
-        self.gis_res.temperatureRegulation.value = 1
+        self.gis_res.temperatureRegulation.value = True
         sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 1)
+        self.assertTrue(self.gis_res.temperatureRegulation.value)
         self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
-        self.assertFalse(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
-
-        self.gis_res.temperatureRegulation.value = 2
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(self.gis_res.temperatureRegulation.value, 2)
-        self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
-        self.assertTrue(self.gis_res._gis.RegulationRushOn.Target.lower() == "true")
-        self.gis_res.temperatureRegulation.value = 0
 
         self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
 
     def test_temperatureRegulation(self):
         """
         Test if temperature regulation is functioning properly
-        TODO: Tune the target temperatures test_value1 and test_value2 to reasonable values
-              Tune the sleeping time so it waits long enough for the temperature to be reached
+        TODO: Tune the sleeping time so it waits long enough for the temperature to be reached
               Tune the test_accuracy (number of decimal places) to reflect the accuracy of the temperature regulation
         """
         init_temp = self.gis_res.temperatureTarget.value
         init_state = self.gis_res.temperatureRegulation.value
 
-        test_value1 = 27  # TODO: Tune!
-        test_value2 = 30  # TODO: Tune!
+        test_value = 27
         test_accuracy = 1  # TODO: Tune!
-        self.gis_res.temperatureTarget.value = test_value1
-        self.gis_res.temperatureRegulation.value = 2
+        self.gis_res.temperatureTarget.value = test_value
+        self.gis_res.temperatureRegulation.value = True
         if not TEST_NOHW == "sim":
             sleep(10)  # TODO: Tune!
         else:
             sleep(1)
-        self.assertAlmostEqual(self.gis_res.temperature.value, test_value1, places=test_accuracy)
-
-        self.gis_res.temperatureRegulation.value = 1
-        self.gis_res.temperatureTarget.value = test_value2
-        if not TEST_NOHW == "sim":
-            sleep(10)  # TODO: Tune!
-        else:
-            sleep(1)
-        self.assertAlmostEqual(self.gis_res.temperature.value, test_value2, places=test_accuracy)
+        self.assertAlmostEqual(self.gis_res.temperature.value, test_value, places=test_accuracy)
 
         self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
         self.gis_res.temperatureTarget.value = init_temp
-
-    def test_stop(self):
-        """
-        Tests that calling stop has the expected behaviour
-        """
-        if not TEST_NOHW == 0:
-            self.skipTest("No hardware present to test stop function.")
-
-        try:
-            init_state = self.gis_res.temperatureRegulation.value
-
-            self.gis_res.temperatureRegulation.value = 1
-            sleep(1)  # TODO: TUNE THIS?
-            self.gis.stop()
-            sleep(1)
-            self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
-
-            self.gis_res.temperatureRegulation.value = 2
-            sleep(1)  # TODO: TUNE THIS?
-            self.gis.stop()
-            sleep(1)
-            self.assertEqual(self.gis_res.temperatureRegulation.value, 0)
-
-            self.gis_res.temperatureRegulation.value = init_state
-
-        except NameError:
-            self.skipTest("No GIS to call stop on.")
 
 
 if __name__ == '__main__':

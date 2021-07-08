@@ -1166,8 +1166,7 @@ class GISReservoir(model.HwComponent):
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • temperatureTarget: FloatContinuous, unit="°C", range=(-273.15, 10^3), setter=_setTemperatureTarget
         • temperature: FloatContinuous, readonly, unit="°C", range=(-273.15, 10^3)
-        • temperatureRegulation: EnumeratedVA, unit=None, choices={0: "off", 1: "on", 2: "rush"},
-                                 setter=_setTemperatureRegulation
+        • temperatureRegulation: BooleanVA, True: "on", False: "off", setter=_setTemperatureRegulation
         • age: FloatContinuous, readonly, unit="s", range=(0, 10^12)
         • precursorType: StringVA, readonly
         """
@@ -1180,8 +1179,7 @@ class GISReservoir(model.HwComponent):
         self.temperatureTarget = model.FloatContinuous(0, unit="°C", range=(-273.15, 10 ** 3),
                                                        setter=self._setTemperatureTarget)
         self.temperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 10 ** 3), readonly=True)
-        self.temperatureRegulation = model.VAEnumerated(0, unit=None, choices={0: "off", 1: "on", 2: "rush"},
-                                                        setter=self._setTemperatureRegulation)
+        self.temperatureRegulation = model.BooleanVA(False, setter=self._setTemperatureRegulation)
         self.age = model.FloatContinuous(0, unit="s", readonly=True, range=(0, 10 ** 12))
         self.precursorType = model.StringVA("", readonly=True)
 
@@ -1200,7 +1198,6 @@ class GISReservoir(model.HwComponent):
         self._temperaturePar.Subscribe(self._updateTemperatureTarget)
         self._temperaturePar.Subscribe(self._updateTemperature)
         self._gis.RegulationOn.Subscribe(self._updateTemperatureRegulation)
-        self._gis.RegulationRushOn.Subscribe(self._updateTemperatureRegulation)
         self._gis.ReservoirLifeTime.Subscribe(self._updateAge)
         self._gis.PrecursorType.Subscribe(self._updatePrecursorType)
 
@@ -1300,33 +1297,21 @@ class GISReservoir(model.HwComponent):
         Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
         temperatureRegulation VA
         """
-        if parameter not in (self._gis.RegulationOn, self._gis.RegulationRushOn, None):
+        if parameter not in (self._gis.RegulationOn, None):
             raise ValueError("Incorrect parameter passed to _updateTemperatureRegulation. Parameter should be "
-                             "datamodel.HybridGIS.RegulationOn, datamodel.HybridGIS.RegulationRushOn, or None. "
+                             "datamodel.HybridGIS.RegulationOn, or None. "
                              "Parameter passed is %s." % parameter.Name)
         if not attributeName == "Actual":
             return
 
         try:
-            rush = self._gis.RegulationRushOn.Actual.lower() == "true"
-        except AttributeError:  # in case RegulationRushOn.Actual is not a string
-            rush = False
-        try:
             reg = self._gis.RegulationOn.Actual.lower() == "true"
         except AttributeError:  # in case RegulationOn.Actual is not a string
             reg = False
 
-        if rush and reg:
-            logging.debug("Accelerated temperature regulation turned on.")
-            new_value = 2
-        elif reg:
-            logging.debug("Temperature regulation turned on.")
-            new_value = 1
-        else:
-            logging.debug("Temperature regulation turned off.")
-            new_value = 0
-        self.temperatureRegulation._value = new_value  # to not call the setter
-        self.temperatureRegulation.notify(new_value)
+        logging.debug("Temperature regulation turned %s." % "on" if reg else "off")
+        self.temperatureRegulation._value = reg  # to not call the setter
+        self.temperatureRegulation.notify(reg)
 
     def _updateAge(self, parameter=None, attributeName="Actual"):
         """
@@ -1376,23 +1361,12 @@ class GISReservoir(model.HwComponent):
 
     def _setTemperatureRegulation(self, goal):
         """
-        goal (int): mode to set the temperature regulation to. Must be 0, 1 or 2
+        goal (boolean): mode to set the temperature regulation to. True is on, False is off.
 
-        Turns temperature regulation off (if goal = 0), on (if goal = 1) or on in accelerated mode (if goal = 2)
+        Turns temperature regulation off (if goal = False) or on (if goal = True)
         """
-        reg = False
-        rush = False
-        if goal == 2:
-            logging.debug("Setting temperature regulation to accelerated mode.")
-            rush = True
-            reg = True
-        elif goal == 1:
-            logging.debug("Turning on temperature regulation.")
-            reg = True
-        else:
-            logging.debug("Turning off temperature regulation.")
-        self._gis.RegulationOn.Target = reg
-        self._gis.RegulationRushOn.Target = rush
+        logging.debug("Turning temperature regulation %s." % "on" if goal else "off")
+        self._gis.RegulationOn.Target = goal
 
     def terminate(self):
         """
@@ -1404,7 +1378,6 @@ class GISReservoir(model.HwComponent):
             self._temperaturePar.Unsubscribe(self._updateTemperatureTarget)
             self._temperaturePar.Unsubscribe(self._updateTemperature)
             self._gis.RegulationOn.Unsubscribe(self._updateTemperatureRegulation)
-            self._gis.RegulationRushOn.Unsubscribe(self._updateTemperatureRegulation)
             self._gis.ReservoirLifeTime.Unsubscribe(self._updateAge)
             self._gis.PrecursorType.Unsubscribe(self._updatePrecursorType)
             self._temperaturePar = None
