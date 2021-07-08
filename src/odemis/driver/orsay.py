@@ -28,9 +28,6 @@ import threading
 import time
 import logging
 
-COMPONENT_STOP = 1
-COMPONENT_EMERGENCY_STOP = 2
-
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
 VALVE_OPEN = 1
@@ -620,12 +617,10 @@ class vacuumChamber(model.Actuator):
         """
         if not axes or "vacuum" in axes:
             logging.debug("Stopping vacuum.")
-            self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
             self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing
             self._changeVacuum(int(self._chamber.VacuumStatus.Actual))  # the current target is the current state and
             # wait. This assures the executor does not infinitely wait until VacuumStatus.Actual equals
             # VacuumStatus.Target
-            self.parent.datamodel.HybridPlatform.Stop.Target = COMPONENT_STOP
             self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing again
             self._executor.cancel()
 
@@ -1110,12 +1105,10 @@ class GIS(model.Actuator):
 
     def stop(self, axes=None):
         """
-        Stop the GIS. This will turn off temperature regulation (RegulationOn.Target = False),
-        close the reservoir valve (ReservoirState.Target = STR_CLOSED)
-        and move the GIS away from the sample (PositionState.Target = STR_PARK).
+        Stop the GIS. There is no way to abort the movement of the GIS or GIS reservoir immediately. Best we can do is
+        cancel all planned movements that are yet to start.
         """
         if axes is None or "arm" in axes:
-            self._gis.Stop.Target = COMPONENT_STOP
             self._executor.cancel()
 
     def terminate(self):
