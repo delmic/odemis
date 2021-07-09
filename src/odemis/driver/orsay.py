@@ -2068,6 +2068,8 @@ class FIBBeam(model.HwComponent):
                                                 setter=self._resolution_setter)
         self.imageFormatUpdated = threading.Event()
         self.imageFormatUpdated.set()
+        self.imageFormatUpdatedResolutionTranslation = threading.Event()
+        self.imageFormatUpdatedResolutionTranslation.set()
 
         self._connectorList = []
 
@@ -2203,6 +2205,8 @@ class FIBBeam(model.HwComponent):
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
         self.imageFormatUpdated.clear()  # let it be known that image format is updating
+        self.imageFormatUpdatedResolutionTranslation.clear()  # let it be known that image format is updating
+        # resolution and translation
 
         # get the old image format and determine the scale change
         state = self._ionColumn.ImageSize.Actual
@@ -2234,7 +2238,8 @@ class FIBBeam(model.HwComponent):
                 new_translation[1] += 0.5  # prefer adding a pixel to the top
         new_translation = tuple(new_translation)
 
-        self.imageFormatUpdated.wait(60)  # wait until the image format callback was received
+        self.imageFormatUpdated.wait(60)
+        self.imageFormatUpdatedResolutionTranslation.wait(20)  # wait until the image format callback was received
         # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
         # resolution equal to the new image format. We don't want that. We want to keep the resolution and translation
         # as they were (except for appropriate scaling).
@@ -2362,10 +2367,6 @@ class FIBBeam(model.HwComponent):
         if attributeName != "Actual":
             return
 
-        if not self.imageFormatUpdated.is_set():
-            return  # don't update yet if image format is updating. The update for translation and resolution will be
-            # handled by _updateImageFormat
-
         area = self._ionColumn.ImageArea.Actual
         logging.debug("Image area is: %s." % area)
         area = list(map(int, area.split(" ")))
@@ -2379,6 +2380,8 @@ class FIBBeam(model.HwComponent):
 
         self.translation._value = new_translation  # to not call the setter
         self.resolution._value = new_resolution  # to not call the setter
+        self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are not
+        # awaiting an update because of image format any more
         self.translation.notify(new_translation)
         self.resolution.notify(new_resolution)
 
