@@ -34,7 +34,7 @@ VALVE_OPEN = 1
 VALVE_CLOSED = 2
 VALVE_ERROR = 3
 
-VACUUM_CHAMBER_PRESSURE_RNG = (0, 110000)  # Pa
+VACUUM_CHAMBER_PRESSURE_RNG = (0, 150000)  # Pa
 NITROGEN_PRESSURE_RNG = (0, 5000000)  # Pa  Eventhough 0 is nowhere near a realistic value for the compressed
 # nitrogen, it is the initialisation value of this parameter in the Orsay server, meaning it needs to be included in
 # the VA's range
@@ -581,7 +581,7 @@ class vacuumChamber(model.Actuator):
         logging.debug("Setting vacuum status to %s." % self.axes["vacuum"].choices[goal])
         self._vacuumStatusReached.clear()  # to make sure it will wait
         self._chamber.VacuumStatus.Target = goal
-        if not self._vacuumStatusReached.wait(18000):  # wait maximally 5 hours
+        if not self._vacuumStatusReached.wait(1800):  # wait maximally 30 minutes (generally takes no more than 10)
             raise TimeoutError("Something went wrong awaiting a change in the vacuum status.")
         self._updatePosition()
 

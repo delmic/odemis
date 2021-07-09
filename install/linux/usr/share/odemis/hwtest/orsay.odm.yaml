@@ -12,7 +12,7 @@ Orsay: {
     class: orsay.OrsayComponent,
     role: null,
     init: {
-           host: "192.168.56.101"
+           host: "192.168.30.101"
     },
     children: { pneumatic-suspension: "Pneumatic Suspension",
                 pressure: "Chamber",
