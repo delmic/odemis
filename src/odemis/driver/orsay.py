@@ -1722,10 +1722,10 @@ class FIBDevice(model.HwComponent):
         value is the value set to the VA
         returns the same value
 
-        Call with value=True to attempt to reset the FIB related interlocks.
+        Call with value=False to attempt to reset the FIB related interlocks.
         If the reset is successful, _updateInterlockTriggered will be called and the VA will be updated by that.
         """
-        if value:
+        if not value:
             self._interlockHVPS.Reset.Target = ""
             self._interlockChamber.Reset.Target = ""
             logging.debug("Attempting to reset interlocks.")
@@ -2062,14 +2062,13 @@ class FIBBeam(model.HwComponent):
         self.operatingModeConnector = None
         self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(512, 480), (1024, 1024)],
                                                  setter=self._imageFormat_setter)
-        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-511.5, -511.5), (511.5, 511.5)],
+        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-512.0, -512.0), (512.0, 512.0)],
                                                  setter=self._translation_setter)
         self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
                                                 setter=self._resolution_setter)
-        self.imageFormatUpdated = threading.Event()
-        self.imageFormatUpdated.set()
         self.imageFormatUpdatedResolutionTranslation = threading.Event()
         self.imageFormatUpdatedResolutionTranslation.set()
+        self.updatingImageArea = threading.Lock()
 
         self._connectorList = []
 
@@ -2204,7 +2203,6 @@ class FIBBeam(model.HwComponent):
         """
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
-        self.imageFormatUpdated.clear()  # let it be known that image format is updating
         self.imageFormatUpdatedResolutionTranslation.clear()  # let it be known that image format is updating
         # resolution and translation
 
@@ -2238,8 +2236,7 @@ class FIBBeam(model.HwComponent):
                 new_translation[1] += 0.5  # prefer adding a pixel to the top
         new_translation = tuple(new_translation)
 
-        self.imageFormatUpdated.wait(60)
-        self.imageFormatUpdatedResolutionTranslation.wait(20)  # wait until the image format callback was received
+        self.imageFormatUpdatedResolutionTranslation.wait(60)  # wait until the image format has updated image area
         # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
         # resolution equal to the new image format. We don't want that. We want to keep the resolution and translation
         # as they were (except for appropriate scaling).
@@ -2270,7 +2267,6 @@ class FIBBeam(model.HwComponent):
         logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
         new_value = tuple(map(int, state.split(" ")))
         self.imageFormat._value = new_value  # to not call the setter
-        self.imageFormatUpdated.set()
         self.imageFormat.notify(new_value)
 
     def _translation_setter(self, value):
@@ -2281,6 +2277,7 @@ class FIBBeam(model.HwComponent):
         also adjusts the size of the image area (resolution VA) to prevent the new translation from placing part of
         the image area outside of the image format.
         """
+        self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
         new_translation = list(value)
 
         new_translation[0] = math.ceil(new_translation[0])
@@ -2318,6 +2315,7 @@ class FIBBeam(model.HwComponent):
         Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
         the centre of the image area stays where it is.
         """
+        self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
         new_resolution = list(value)
 
         # find the new range for translation
@@ -2367,6 +2365,11 @@ class FIBBeam(model.HwComponent):
         if attributeName != "Actual":
             return
 
+        if not self.imageFormatUpdatedResolutionTranslation.is_set():  # in case this update comes from a change in image format
+            self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are
+        #     # not awaiting an update because of image format any more
+            return  # but don't actually perform the update
+
         area = self._ionColumn.ImageArea.Actual
         logging.debug("Image area is: %s." % area)
         area = list(map(int, area.split(" ")))
@@ -2380,8 +2383,8 @@ class FIBBeam(model.HwComponent):
 
         self.translation._value = new_translation  # to not call the setter
         self.resolution._value = new_resolution  # to not call the setter
-        self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are not
-        # awaiting an update because of image format any more
+        if self.updatingImageArea.locked():
+            self.updatingImageArea.release()
         self.translation.notify(new_translation)
         self.resolution.notify(new_resolution)
 

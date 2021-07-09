@@ -34,7 +34,7 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
-TEST_NOHW = "sim"
+TEST_NOHW = 0
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -1283,7 +1283,7 @@ class TestFIBDevice(unittest.TestCase):
     def test_columnPumpOn(self):
         """Check that the columnPumpOn VA is updated correctly"""
         connector_test(self, self.fib_device.columnPumpOn, self.fib_device._columnPump.IsOn,
-                       [(True, "True"), (False, "False")], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=5)
 
     def test_gunPressure(self):
         """Check that the gunPressure VA is updated correctly"""
@@ -1431,6 +1431,8 @@ class TestFIBBeam(unittest.TestCase):
         for child in cls.oserver.children.value:
             if child.name == CONFIG_FIBBEAM["name"]:
                 cls.fibbeam = child
+            elif child.name == CONFIG_FIBSOURCE["name"]:
+                cls.fibsource = child
 
     @classmethod
     def tearDownClass(cls):
@@ -1453,7 +1455,7 @@ class TestFIBBeam(unittest.TestCase):
     def test_condenserVoltage(self):
         """Check that the condenserVoltage VA is updated correctly"""
         connector_test(self, self.fibbeam.condenserVoltage, self.fibbeam._hvps.CondensorVoltage,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
+                       [(10, 10), (20, 20)], hw_safe=True, settletime=1)
 
     def test_objectiveStigmator(self):
         """Check that the objectiveStigmator VA is updated correctly"""
@@ -1582,13 +1584,23 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_contrast(self):
         """Check that the contrast VA is updated correctly"""
+        init_gun = self.fibsource.gunOn.value
+        self.fibsource.gunOn.value = True  # gun needs to be on for this test
+        sleep(5)  # give it some time to turn on
         connector_test(self, self.fibbeam.contrast, self.fibbeam._sed.PMT,
-                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)
+        self.fibsource.gunOn.value = init_gun  # return to value before test
+        sleep(5)  # give it some time to turn off
 
     def test_brightness(self):
         """Check that the brightness VA is updated correctly"""
+        init_gun = self.fibsource.gunOn.value
+        self.fibsource.gunOn.value = True  # gun needs to be on for this test
+        sleep(5)  # give it some time to turn on
         connector_test(self, self.fibbeam.brightness, self.fibbeam._sed.Level,
-                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)  # TODO: Tune the settle time
+                       [(0.1, 10.0), (0.5, 50.0)], hw_safe=True, settletime=1)
+        self.fibsource.gunOn.value = init_gun  # return to value before test
+        sleep(5)  # give it some time to turn off
 
     def test_operatingMode(self):
         """Check that the operatingMode VA is updated correctly"""
@@ -1619,13 +1631,13 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.translation.value = (10.0, 10.0)
         sleep(1)
         self.fibbeam.imageFormat.value = (512, 512)
-        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
+        self.fibbeam.imageFormatUpdatedResolutionTranslation.wait(5)  # wait until image format callback was received
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (5.0, 5.0))
         self.assertEqual(self.fibbeam.resolution.value, (100, 100))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
-        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
+        self.fibbeam.imageFormatUpdatedResolutionTranslation.wait(5)  # wait until image format callback was received
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (10.0, 10.0))
         self.assertEqual(self.fibbeam.resolution.value, (200, 200))
@@ -1634,13 +1646,13 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.translation.value = (-511.5, 511.5)
         sleep(1)
         self.fibbeam.imageFormat.value = (512, 512)
-        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
+        self.fibbeam.imageFormatUpdatedResolutionTranslation.wait(5)  # wait until image format callback was received
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-255.5, 255.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
         self.fibbeam.imageFormat.value = (1024, 1024)
-        self.fibbeam.imageFormatUpdated.wait(5)  # wait until the image format callback was received
+        self.fibbeam.imageFormatUpdatedResolutionTranslation.wait(5)  # wait until image format callback was received
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-511.0, 511.0))
         self.assertEqual(self.fibbeam.resolution.value, (2, 2))
