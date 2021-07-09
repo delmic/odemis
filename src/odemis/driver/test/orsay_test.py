@@ -1202,13 +1202,29 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = ""
 
-        init_state_interlock2 = self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual
+        init_state_interlock2 = self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual
+        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = test_string
+        sleep(0.5)
+        self.assertIsInstance(self.fib_device.state.value, HwError)
+        self.assertIn("HybridInterlockOutChamberVac", str(self.fib_device.state.value))
+        self.assertIn(test_string, str(self.fib_device.state.value))
+        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = ""
+
+        init_state_interlock3 = self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_device.state.value, HwError)
         self.assertIn("HybridInterlockOutHVPS", str(self.fib_device.state.value))
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = ""
+
+        init_state_interlock4 = self.datamodel.HybridInterlockOutSED.ErrorState.Actual
+        self.datamodel.HybridInterlockOutSED.ErrorState.Actual = test_string
+        sleep(0.5)
+        self.assertIsInstance(self.fib_device.state.value, HwError)
+        self.assertIn("HybridInterlockOutSED", str(self.fib_device.state.value))
+        self.assertIn(test_string, str(self.fib_device.state.value))
+        self.datamodel.HybridInterlockOutSED.ErrorState.Actual = ""
 
         init_state_column = self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = test_string
@@ -1250,21 +1266,51 @@ class TestFIBDevice(unittest.TestCase):
 
         self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = init_state_gauge
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = init_state_interlock1
-        self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = init_state_interlock2
+        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = init_state_interlock2
+        self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = init_state_interlock3
+        self.datamodel.HybridInterlockOutSED.ErrorState.Actual = init_state_interlock4
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = init_state_column
         self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = init_state_gun
         self.datamodel.HybridValveFIB.ErrorState.Actual = init_state_valve
         self.fib_device._valve.IsOpen.Target = init_target_valve
 
-    def test_interlockTriggered(self):
-        """Check that the interlockTriggered VA is updated correctly"""
+    def test_interlockInChamberTriggered(self):
+        """Check that the interlockInChamberTriggered VA is updated correctly"""
         with self.assertRaises(ValueError):
-            self.fib_device._updateInterlockTriggered(self.datamodel.HybridPlatform.Cancel)
+            self.fib_device._updateInterlockInChamberTriggered(self.datamodel.HybridPlatform.Cancel)
 
-        connector_test(self, self.fib_device.interlockTriggered, self.fib_device._interlockHVPS.ErrorState,
+        connector_test(self, self.fib_device.interlockInChamberTriggered,
+                       self.fib_device._interlockInChamber.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
                        readonly=True)
-        connector_test(self, self.fib_device.interlockTriggered, self.fib_device._interlockChamber.ErrorState,
+
+    def test_interlockOutChamberTriggered(self):
+        """Check that the interlockOutChamberTriggered VA is updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fib_device._updateInterlockOutChamberTriggered(self.datamodel.HybridPlatform.Cancel)
+
+        connector_test(self, self.fib_device.interlockOutChamberTriggered,
+                       self.fib_device._interlockOutChamber.ErrorState,
+                       [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
+                       readonly=True)
+
+    def test_interlockOutHVPSTriggered(self):
+        """Check that the interlockOutHVPSTriggered VA is updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fib_device._updateInterlockOutHVPSTriggered(self.datamodel.HybridPlatform.Cancel)
+
+        connector_test(self, self.fib_device.interlockOutHVPSTriggered,
+                       self.fib_device._interlockOutHVPS.ErrorState,
+                       [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
+                       readonly=True)
+
+    def test_interlockOutSEDTriggered(self):
+        """Check that the interlockOutSEDTriggered VA is updated correctly"""
+        with self.assertRaises(ValueError):
+            self.fib_device._updateInterlockOutSEDTriggered(self.datamodel.HybridPlatform.Cancel)
+
+        connector_test(self, self.fib_device.interlockOutSEDTriggered,
+                       self.fib_device._interlockOutSED.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
                        readonly=True)
 
@@ -1284,6 +1330,10 @@ class TestFIBDevice(unittest.TestCase):
         """Check that the columnPumpOn VA is updated correctly"""
         connector_test(self, self.fib_device.columnPumpOn, self.fib_device._columnPump.IsOn,
                        [(True, "True"), (False, "False")], hw_safe=True, settletime=5)
+        # Reset the interlocks that get triggered by turning off the column pump
+        self.fib_device.interlockOutChamberTriggered.value = False
+        self.fib_device.interlockOutHVPSTriggered.value = False
+        self.fib_device.interlockOutSEDTriggered.value = False
 
     def test_gunPressure(self):
         """Check that the gunPressure VA is updated correctly"""

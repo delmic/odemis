@@ -1576,7 +1576,10 @@ class FIBDevice(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • interlockTriggered: BooleanVA
+        • interlockInChamberTriggered: BooleanVA
+        • interlockOutChamberTriggered: BooleanVA
+        • interlockOutHVPSTriggered: BooleanVA
+        • interlockOutSEDTriggered: BooleanVA
         • valveOpen: BooleanVA
         • gunPumpOn: BooleanVA
         • columnPumpOn: BooleanVA
@@ -1589,18 +1592,25 @@ class FIBDevice(model.HwComponent):
 
         self._gunPump = None
         self._columnPump = None
-        self._interlockHVPS = None
-        self._interlockChamber = None
+        self._interlockInChamber = None
+        self._interlockOutChamber = None
+        self._interlockOutHVPS = None
+        self._interlockOutSED = None
         self._valve = None
 
         self._devices_with_errorstates = ("HybridGaugeCompressedAir",
-                                          "HybridInterlockOutHVPS",
                                           "HybridInterlockInChamberVac",
+                                          "HybridInterlockOutChamberVac",
+                                          "HybridInterlockOutHVPS",
+                                          "HybridInterlockOutSED",
                                           "HybridIonPumpGunFIB",
                                           "HybridIonPumpColumnFIB",
                                           "HybridValveFIB")
 
-        self.interlockTriggered = model.BooleanVA(False, setter=self._resetInterlocks)
+        self.interlockInChamberTriggered = model.BooleanVA(False, setter=self._setInterlockInChamber)
+        self.interlockOutChamberTriggered = model.BooleanVA(False, setter=self._setInterlockOutChamber)
+        self.interlockOutHVPSTriggered = model.BooleanVA(False, setter=self._setInterlockOutHVPS)
+        self.interlockOutSEDTriggered = model.BooleanVA(False, setter=self._setInterlockOutSED)
         self.valveOpen = model.BooleanVA(False, setter=self._changeValveOpen)
         self.gunPumpOn = model.BooleanVA(False)
         self.gunPumpOnConnector = None
@@ -1625,12 +1635,16 @@ class FIBDevice(model.HwComponent):
 
         self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
-        self._interlockHVPS = self.parent.datamodel.HybridInterlockOutHVPS
-        self._interlockChamber = self.parent.datamodel.HybridInterlockInChamberVac
+        self._interlockInChamber = self.parent.datamodel.HybridInterlockInChamberVac
+        self._interlockOutChamber = self.parent.datamodel.HybridInterlockOutChamberVac
+        self._interlockOutHVPS = self.parent.datamodel.HybridInterlockOutHVPS
+        self._interlockOutSED = self.parent.datamodel.HybridInterlockOutSED
         self._valve = self.parent.datamodel.HybridValveFIB
 
-        self._interlockHVPS.ErrorState.Subscribe(self._updateInterlockTriggered)
-        self._interlockChamber.ErrorState.Subscribe(self._updateInterlockTriggered)
+        self._interlockInChamber.ErrorState.Subscribe(self._updateInterlockInChamberTriggered)
+        self._interlockOutChamber.ErrorState.Subscribe(self._updateInterlockOutChamberTriggered)
+        self._interlockOutHVPS.ErrorState.Subscribe(self._updateInterlockOutHVPSTriggered)
+        self._interlockOutSED.ErrorState.Subscribe(self._updateInterlockOutSEDTriggered)
         self._valve.IsOpen.Subscribe(self._updateErrorState)
         self._valve.IsOpen.Subscribe(self._updateValveOpen)
         for device in self._devices_with_errorstates:
@@ -1656,7 +1670,11 @@ class FIBDevice(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateErrorState()
-        self._updateInterlockTriggered()
+        self._updateInterlockInChamberTriggered()
+        self._updateInterlockOutChamberTriggered()
+        self._updateInterlockOutHVPSTriggered()
+        self._updateInterlockOutSEDTriggered()
+        self._updateValveOpen()
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
 
@@ -1689,47 +1707,153 @@ class FIBDevice(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateInterlockTriggered(self, parameter=None, attributeName="Actual"):
+    def _updateInterlockInChamberTriggered(self, parameter=None, attributeName="Actual"):
         """
         parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
         attributeName (str): the name of the attribute of parameter which was changed
 
-        Reads the state of the FIB related interlocks from the Orsay server and saves it in the interlockTriggered VA
+        Reads the state of a FIB related interlock from the Orsay server and saves it in the
+        interlockInChamberTriggered VA
         """
-        if parameter is not None and parameter not in (
-                self._interlockHVPS.ErrorState, self._interlockChamber.ErrorState):
-            raise ValueError("Incorrect parameter passed to _updateInterlockTriggered. Parameter should be None or an "
-                             "interlock ErrorState parameter. Parameter passed is %s"
+        if parameter is None:
+            parameter = self._interlockInChamber.ErrorState
+        if not parameter == self._interlockInChamber.ErrorState:
+            raise ValueError("Incorrect parameter passed to _updateInterlockInChamberTriggered. Parameter should be "
+                             "None or HybridInterlockInChamberVac.ErrorState. Parameter passed is %s"
                              % parameter.Name)
         if attributeName != "Actual":
             return
 
-        new_value = False
-        if (self._interlockHVPS.ErrorState.Actual not in NO_ERROR_VALUES and
-            INTERLOCK_DETECTED_STR in self._interlockHVPS.ErrorState.Actual) or \
-                (self._interlockChamber.ErrorState.Actual not in NO_ERROR_VALUES and
-                 INTERLOCK_DETECTED_STR in self._interlockChamber.ErrorState.Actual):
-            new_value = True
+        new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
 
-        logging.debug("%s set to %s." % ("interlockTriggered", str(new_value)))
+        logging.debug("interlockInChamberTriggered set to %s." % str(new_value))
+        self.interlockInChamberTriggered._value = new_value  # to not call the setter
+        self.interlockInChamberTriggered.notify(new_value)
 
-        self.interlockTriggered._value = new_value  # to not call the setter
-        self.interlockTriggered.notify(new_value)
-
-    def _resetInterlocks(self, value):
+    def _updateInterlockOutChamberTriggered(self, parameter=None, attributeName="Actual"):
         """
-        setter for interlockTriggered VA
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the state of a FIB related interlock from the Orsay server and saves it in the
+        interlockOutChamberTriggered VA
+        """
+        if parameter is None:
+            parameter = self._interlockOutChamber.ErrorState
+        if not parameter == self._interlockOutChamber.ErrorState:
+            raise ValueError("Incorrect parameter passed to _updateInterlockOutChamberTriggered. Parameter should be "
+                             "None or HybridInterlockOutChamberVac.ErrorState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+
+        new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
+
+        logging.debug("interlockOutChamberTriggered set to %s." % str(new_value))
+        self.interlockOutChamberTriggered._value = new_value  # to not call the setter
+        self.interlockOutChamberTriggered.notify(new_value)
+
+    def _updateInterlockOutHVPSTriggered(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the state of a FIB related interlock from the Orsay server and saves it in the
+        interlockOutHVPSTriggered VA
+        """
+        if parameter is None:
+            parameter = self._interlockOutHVPS.ErrorState
+        if not parameter == self._interlockOutHVPS.ErrorState:
+            raise ValueError("Incorrect parameter passed to _updateInterlockOutHVPSTriggered. Parameter should be "
+                             "None or HybridInterlockOutHVPS.ErrorState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+
+        new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
+
+        logging.debug("interlockOutHVPSTriggered set to %s." % str(new_value))
+        self.interlockOutHVPSTriggered._value = new_value  # to not call the setter
+        self.interlockOutHVPSTriggered.notify(new_value)
+
+    def _updateInterlockOutSEDTriggered(self, parameter=None, attributeName="Actual"):
+        """
+        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
+        attributeName (str): the name of the attribute of parameter which was changed
+
+        Reads the state of a FIB related interlock from the Orsay server and saves it in the
+        interlockOutSEDTriggered VA
+        """
+        if parameter is None:
+            parameter = self._interlockOutSED.ErrorState
+        if not parameter == self._interlockOutSED.ErrorState:
+            raise ValueError("Incorrect parameter passed to _updateInterlockOutSEDTriggered. Parameter should be "
+                             "None or HybridInterlockOutSED.ErrorState. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+
+        new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
+
+        logging.debug("interlockOutSEDTriggered set to %s." % str(new_value))
+        self.interlockOutSEDTriggered._value = new_value  # to not call the setter
+        self.interlockOutSEDTriggered.notify(new_value)
+
+    def _setInterlockInChamber(self, value):
+        """
+        setter for interlockInChamberTriggered VA
         value is the value set to the VA
         returns the same value
 
-        Call with value=False to attempt to reset the FIB related interlocks.
-        If the reset is successful, _updateInterlockTriggered will be called and the VA will be updated by that.
+        Call with value=False to attempt to reset the interlock.
+        If the reset is successful, _updateInterlockInChamberTriggered will be called, which will update the VA.
         """
         if not value:
-            self._interlockHVPS.Reset.Target = ""
-            self._interlockChamber.Reset.Target = ""
-            logging.debug("Attempting to reset interlocks.")
-        return False
+            self._interlockInChamber.Reset.Target = 0
+            logging.debug("Attempting to reset the HybridInterlockInChamberVac interlock.")
+        return value
+
+    def _setInterlockOutChamber(self, value):
+        """
+        setter for interlockOutChamberTriggered VA
+        value is the value set to the VA
+        returns the same value
+
+        Call with value=False to attempt to reset the interlock.
+        If the reset is successful, _updateInterlockOutChamberTriggered will be called, which will update the VA.
+        """
+        if not value:
+            self._interlockOutChamber.Reset.Target = 0
+            logging.debug("Attempting to reset the HybridInterlockOutChamberVac interlock.")
+        return value
+
+    def _setInterlockOutHVPS(self, value):
+        """
+        setter for interlockOutHVPSTriggered VA
+        value is the value set to the VA
+        returns the same value
+
+        Call with value=False to attempt to reset the interlock.
+        If the reset is successful, _updateInterlockOutHVPSTriggered will be called, which will update the VA.
+        """
+        if not value:
+            self._interlockOutHVPS.Reset.Target = 0
+            logging.debug("Attempting to reset the HybridInterlockOutHVPS interlock.")
+        return value
+
+    def _setInterlockOutSED(self, value):
+        """
+        setter for interlockOutSEDTriggered VA
+        value is the value set to the VA
+        returns the same value
+
+        Call with value=False to attempt to reset the interlock.
+        If the reset is successful, _updateInterlockOutSEDTriggered will be called, which will update the VA.
+        """
+        if not value:
+            self._interlockOutSED.Reset.Target = 0
+            logging.debug("Attempting to reset the HybridInterlockOutSED interlock.")
+        return value
 
     def _updateValveOpen(self, parameter=None, attributeName="Actual"):
         """
@@ -2367,7 +2491,7 @@ class FIBBeam(model.HwComponent):
 
         if not self.imageFormatUpdatedResolutionTranslation.is_set():  # in case this update comes from a change in image format
             self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are
-        #     # not awaiting an update because of image format any more
+            #     # not awaiting an update because of image format any more
             return  # but don't actually perform the update
 
         area = self._ionColumn.ImageArea.Actual
