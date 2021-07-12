@@ -136,6 +136,12 @@ class SEM(model.HwComponent):
             self._stage = Stage(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._stage)
 
+        # create the chamber child, if requested
+        if "chamber" in children:
+            ckwargs = children["chamber"]
+            self._chamber = Chamber(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._chamber)
+
         # create a focuser, if requested
         if "focus" in children:
             ckwargs = children["focus"]
@@ -417,7 +423,8 @@ class SEM(model.HwComponent):
             self.server.pump()
 
     def get_vacuum_state(self):
-        """Returns: (string) the vacuum state of the microscope chamber to see if it is pumped or vented."""
+        """Returns: (str) the vacuum state of the microscope chamber to see if it is pumped or vented,
+        possible states: "vacuum", "vented", "prevac", "pumping", "venting","vacuum_error" """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_vacuum_state()
@@ -433,6 +440,12 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_pressure()
+
+    def pressure_info(self):
+        """Returns (dict): the unit and range of the pressure."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.pressure_info()
 
     def home_stage(self):
         """Home stage asynchronously. This is non-blocking."""
@@ -1616,6 +1629,68 @@ class Detector(model.Detector):
         return msg
 
 
+class Chamber(model.Actuator):
+    """
+    Component representing the vacuum chamber. Changing the pressure is possible by moving the "vacuum" axis,
+    which accepts two position values: 0 for vented, 1 for vacuum.
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        axes = {"vacuum": model.Axis(choices={0: "vented", 1: "vacuum"})}
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
+
+        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
+        info = self.parent.pressure_info()
+        self.pressure = model.FloatContinuous(self.parent.get_pressure(), info["range"], readonly=True, unit=info["unit"])
+        self._polling_thread = util.RepeatingTimer(5, self._refreshPressure, "Pressure polling")
+        self._polling_thread.start()
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+        if self._executor._queue:
+            logging.warning("Stopping the pumping/venting process is not supported.")
+
+    @isasync
+    def moveRel(self, shift):
+        raise NotImplementedError("Relative movements are not implemented for vacuum control. Use moveAbs instead.")
+
+    @isasync
+    def moveAbs(self, pos):
+        self._checkMoveAbs(pos)
+        return self._executor.submit(self._changePressure, pos["vacuum"])
+
+    def _changePressure(self, target):
+        """
+        target (0, 1): 0 for pumping to vacuum, 1 for venting the chamber
+        """
+        self._refreshPressure()
+        if target == self.position.value["vacuum"]:
+            logging.info("Chamber state already %s, doing nothing.", target)
+            return
+
+        self.parent.pump() if target == 1 else self.parent.vent()
+        self._refreshPressure()
+
+    def _refreshPressure(self):
+        # Position (0/1 vacuum state)
+        state = self.parent.get_vacuum_state()
+        val = {"vacuum": 1 if state == "vacuum" else 0}
+        self.position._set_value(val, force_write=True)
+        self.position.notify(val)
+
+        # Pressure
+        pressure = self.parent.get_pressure()
+        self.pressure._set_value(pressure, force_write=True)
+        self.pressure.notify(pressure)
+
+        logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
+
+    def terminate(self):
+        self._polling_thread.cancel()
+
+
 class TerminationRequested(Exception):
     """
     Generator termination requested.
@@ -2132,7 +2207,7 @@ class MultiBeamScanner(Scanner):
 
         self.power = model.BooleanVA(
             self.parent.get_beam_is_on(),
-            setter=self.parent.set_beam_power
+            setter=self._setBeamPower
         )
 
         # TODO If _updateSettings is updated move this to the top of the __init__ function. For now the update thread
@@ -2227,6 +2302,10 @@ class MultiBeamScanner(Scanner):
         self.parent.set_beamlet_index(beamlet_index)
         new_beamlet_index = self.parent.get_beamlet_index()
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
+
+    def _setBeamPower(self, power_value):
+        self.parent.set_beam_power(power_value)
+        return self.parent.get_beam_is_on()
 
     def _setImmersion(self, immersion: bool):
         # immersion disabled -> focusing mode = 0
