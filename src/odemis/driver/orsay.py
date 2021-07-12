@@ -958,43 +958,6 @@ class GIS(model.Actuator):
         else:
             self._injectingGasPositionReached.clear()
 
-    # def _updateInjectingGas(self, parameter=None, attributeName="Actual"):
-    #     """
-    #     parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-    #     attributeName (str): the name of the attribute of parameter which was changed
-    #
-    #     Reads the GIS gas flow state from the Orsay server and saves it in the injectingGas VA
-    #     """
-    #     if parameter is None:
-    #         parameter = self._reservoirPar
-    #     if parameter is not self._reservoirPar:
-    #         raise ValueError("Incorrect parameter passed to _updateInjectingGas. Parameter should be "
-    #                          "datamodel.HybridGIS.ReservoirState. Parameter passed is %s." % parameter.Name)
-    #     if not attributeName == "Actual":
-    #         return
-    #     logging.debug("Gas flow is now %s." % self._reservoirPar.Actual)
-    #     new_value = self._reservoirPar.Actual == STR_OPEN
-    #     self.injectingGas._value = new_value  # to not call the setter
-    #     self.injectingGas.notify(new_value)
-    #
-    # def _setInjectingGas(self, goal):
-    #     """
-    #     goal (bool): the goal state of the gas flow: (True: "open", False: "closed")
-    #     return (bool): the new state the gas flow: (True: "open", False: "closed")
-    #
-    #     Opens the GIS reservoir if argument goal is True. Closes it otherwise.
-    #     Also closes the reservoir if the position of the GIS is not engaged.
-    #     """
-    #     if not self.position.value["arm"] and goal:
-    #         logging.warning("Gas flow opened while not in working position.")
-    #     if goal:
-    #         logging.debug("Starting gas flow.")
-    #         self._reservoirPar.Target = STR_OPEN
-    #     else:
-    #         logging.debug("Stopping gas flow.")
-    #         self._reservoirPar.Target = STR_CLOSED
-    #     return self._reservoirPar.Target == STR_OPEN
-
     def _doMove(self, goal):
         """
         goal (dict): the goal state of the GIS position and gas flow:
