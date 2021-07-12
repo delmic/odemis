@@ -1441,3 +1441,91 @@ class DelphiStateController(SecomStateController):
         rem_time = est_end - time.time()
         logging.debug("Loading future remaining time: %f", rem_time)
 
+
+class FastEMStateController(object):
+    """
+    Manages the chamber pressure and ebeam power states.
+    """
+
+    def __init__(self, tab_data, tab_panel):
+        """ Binds the 'hardware' buttons (pressure and ebeam) to their appropriate
+        Vigilant Attributes in the tab and GUI models
+
+        tab_data (MicroscopyGUIData): ebeam, chamber
+        tab_panel: (wx.Panel): the microscope tab
+        """
+        self._main_data = tab_data.main
+        self._tab_data = tab_data
+        self._tab_panel = tab_panel
+
+        # E-beam management
+        tooltips = {STATE_OFF: "Turn E-beam on", STATE_ON: "Turn E-beam off"}
+        self._ebeam_btn_ctrl = HardwareButtonController(tab_panel.btn_ebeam,
+                                                        self._main_data.emState,
+                                                        tooltips)
+        self._main_data.emState.subscribe(self._on_ebeam_state)
+        self._main_data.ebeam.power.subscribe(self._on_ebeam_power, init=True)
+
+        # Chamber management
+        self._press_btn_ctrl = ChamberButtonController(tab_panel.btn_pressure,
+                                                       self._main_data.chamberState,
+                                                       self._main_data)
+        self._main_data.chamberState.subscribe(self.on_chamber_state)
+        ch_pos = self._main_data.chamber.position
+        ch_pos.subscribe(self.on_chamber_pos, init=True)
+
+    def _on_ebeam_state(self, _):
+        self._main_data.ebeam.power.value = (self._main_data.emState.value == STATE_ON)
+
+    def _on_ebeam_power(self, power):
+        self._main_data.emState.value = STATE_ON if power else STATE_OFF
+
+    def on_chamber_state(self, state):
+        """
+        Set the desired pressure on the chamber when the chamber's state changes
+        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING)
+        will start a change in pressure.
+        """
+        logging.debug("Chamber state changed to %d", state)
+        chamber = self._main_data.chamber
+        if state == CHAMBER_PUMPING:
+            wx.CallAfter(self._press_btn_ctrl.Enable, False)
+            f = chamber.moveAbs({"vacuum": 1})
+            f.add_done_callback(self._on_future_done)
+        elif state == CHAMBER_VENTING:
+            wx.CallAfter(self._press_btn_ctrl.Enable, False)
+            f = chamber.moveAbs({"vacuum": 0})
+            f.add_done_callback(self._on_future_done)
+
+    def _on_future_done(self, f):
+        try:
+            f.result()
+        except Exception as ex:
+            logging.error("Future of chamber move failed with exception '%s'.", ex)
+        position = self._main_data.chamber.position.value
+        state = self._main_data.chamber.axes["vacuum"].choices[position["vacuum"]]
+        self._main_data.emState.value = STATE_ON if self._main_data.ebeam.power.value else STATE_OFF
+        if state == "vacuum":
+            self._main_data.chamberState.value = CHAMBER_VACUUM
+        elif state == "vented":
+            self._main_data.chamberState.value = CHAMBER_VENTED
+        else:
+            self._main_data.chamberState.value = CHAMBER_UNKNOWN
+        wx.CallAfter(self._press_btn_ctrl.Enable, True)
+
+    def on_chamber_pos(self, position):
+        """
+        Determine the state of the chamber when the pressure changes on the hardware.
+        """
+        if self._main_data.chamberState.value in (CHAMBER_PUMPING, CHAMBER_VENTING):
+            # PUMPING/VENTING states are used to signal a pump/vent request from the GUI,
+            # don't update the state while a pump/vent process is in progress.
+            return
+
+        vacuum_state = self._main_data.chamber.axes["vacuum"].choices[position["vacuum"]]
+        if vacuum_state == "vacuum":
+            self._main_data.chamberState.value = CHAMBER_VACUUM
+        elif vacuum_state == "vented":
+            self._main_data.chamberState.value = CHAMBER_VENTED
+        else:
+            self._main_data.chamberState.value = CHAMBER_UNKNOWN

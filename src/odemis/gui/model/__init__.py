@@ -1121,6 +1121,13 @@ class FastEMMainGUIData(MainGUIData):
         # Overview streams
         self.overview_streams = model.VigilantAttribute({})  # dict: int --> stream or None
 
+        # Scintillators containing sample (manual selection in chamber tab)
+        self.active_scintillators = model.ListVA([])
+
+        # Indicate state of ebeam button
+        hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
+        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
 
 class FastEMAcquisitionGUIData(MicroscopyGUIData):
     """
