@@ -32,8 +32,6 @@ TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
 
-TEST_NOHW = 0  # TODO: REMOVE THIS LINE!
-
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_PSYS = {"name": "pumping-system", "role": "pumping-system"}
@@ -43,7 +41,7 @@ CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
-CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
+CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
@@ -324,127 +322,30 @@ class TestVacuumChamber(unittest.TestCase):
         """
         cls.oserver.terminate()
 
-    def test_valve(self):
+    def test_vacuum(self):
         """
-        Test for controlling the gate valve of the chamber
+        Tests for controlling the vacuum. For testing on the hardware, use the Odemis CLI or a Python console.
+        In simulation only perform tests that end with self.pressure.stop(), otherwise the server will endlessly wait
+        for the chamber pressure to change, whilst the simulator does not change the pressure.
         """
-        init_state = self.pressure._gate.IsOpen.Target
-
-        self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertTrue(self.pressure.gateOpen.value)
-
-        self.pressure._gate.IsOpen.Target = orsay.VALVE_CLOSED
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertFalse(self.pressure.gateOpen.value)
-
-        self.pressure.gateOpen.value = True
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(int(self.pressure._gate.IsOpen.Target), orsay.VALVE_OPEN)
-
-        self.pressure.gateOpen.value = False
-        sleep(1)  # TODO: TUNE THIS?
-        self.assertEqual(int(self.pressure._gate.IsOpen.Target), orsay.VALVE_CLOSED)
-
-        self.pressure._gate.IsOpen.Target = init_state  # return to value from before test
-
-    # def test_vacuum_sim(self):
-    #     """
-    #     Test for controlling the vacuum that can be run in simulation and on the real system
-    #     """
-    #     self.pressure.moveAbs({"vacuum": 1})
-    #     sleep(1)  # TODO: TUNE THIS?
-    #     self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
-    #     self.pressure.stop()
-    #
-    #     self.pressure.moveAbs({"vacuum": 2})
-    #     sleep(1)  # TODO: TUNE THIS?
-    #     self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
-    #     self.pressure.stop()
-    #
-    #     self.pressure.moveAbs({"vacuum": 0})
-    #     sleep(1)  # TODO: TUNE THIS?
-    #     self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
-    #     self.pressure.stop()
-
-    def test_vacuum_real(self):
-        """
-        Test for controlling the real vacuum
-        TODO: Tune the goal pressure and allowed difference (delta) of all vacuum statuses in this test!!!
-              Tune these such that they are realistic and appropriate for primary vacuum, high vacuum or vented chamber.
-        """
-        if TEST_NOHW == "sim":
-            self.skipTest("TEST_NOHW is set, cannot change vacuum pressure in simulation")
-
-        pressure_primary = 1  # TODO: Tune this to primary vacuum!
-        delta_primary = 1e-1  # TODO: Tune this to primary vacuum!
-        pressure_high = 1e-5  # TODO: Tune this to high vacuum!
-        delta_high = 1e-6  # TODO: Tune this to high vacuum!
-        pressure_vented = 1e5  # TODO: Tune this to vented chamber!
-        delta_vented = 1e4  # TODO: Tune this to vented chamber!
-
-        # init_state = self.pressure.position.value["vacuum"]
-
-        f = self.pressure.moveAbs({"vacuum": 0})
-        f.result()
-
-        # f = self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
-        # f.result()
-        # self.assertEqual(self.pressure.position.value["vacuum"], 1)  # check that primary vacuum is reached
-        # self.assertAlmostEqual(self.pressure.pressure.value, pressure_primary, delta=delta_primary)
-
-        # f = self.pressure.moveAbs({"vacuum": 2})  # go to high vacuum
-        # f.result()
-        # self.assertEqual(self.pressure.position.value["vacuum"], 2)  # check that high vacuum is reached
-        # self.assertAlmostEqual(self.pressure.pressure.value, pressure_high, delta=delta_high)
-        #
-        # f = self.pressure.moveAbs({"vacuum": 0})  # vent chamber
-        # f.result()
-        # self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
-        # self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
-
-        # self.pressure.moveAbs({"vacuum": 1})  # go to primary vacuum
-        # sleep(5)
-        # self.pressure.stop()
-        # self.assertEqual(self.pressure.position.value["vacuum"], 0)  # check that the chamber is vented
-        # self.assertAlmostEqual(self.pressure.pressure.value, pressure_vented, delta=delta_vented)
-
-        # f = self.pressure.moveAbs({"vacuum": init_state})  # return to value from before test and wait
-        # f.result()
-
-    def test_errorstate(self):
-        """
-        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
-        """
-        with self.assertRaises(ValueError):
-            self.pressure._updateErrorState(self.datamodel.HybridPlatform.Cancel)
 
         if not TEST_NOHW == "sim":
-            self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
-                          "outside of simulation.")
-        test_string = "This thing broke"
+            self.skipTest("Perform tests with the vacuum status manually on the hardware.")
 
-        init_state = self.pressure._gate.ErrorState.Actual
-        self.pressure._gate.ErrorState.Actual = test_string
+        self.pressure.moveAbs({"vacuum": 1})
         sleep(1)
-        self.assertIsInstance(self.pressure.state.value, HwError)
-        self.assertIn("ValveP5", str(self.pressure.state.value))
-        self.assertIn(test_string, str(self.pressure.state.value))
-        self.pressure._gate.ErrorState.Actual = init_state  # return to value from before test
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
+        self.pressure.stop()
 
-        init_state = self.pressure._gate.IsOpen.Target
-        self.pressure._gate.IsOpen.Target = 3
+        self.pressure.moveAbs({"vacuum": 2})
         sleep(1)
-        self.assertIsInstance(self.pressure.state.value, HwError)
-        self.assertIn("ValveP5 is in error", str(self.pressure.state.value))
-        self.pressure._gate.IsOpen.Target = -1
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
+        self.pressure.stop()
+
+        self.pressure.moveAbs({"vacuum": 0})
         sleep(1)
-        self.assertIsInstance(self.pressure.state.value, HwError)
-        self.assertIn("ValveP5 could not be contacted", str(self.pressure.state.value))
-        self.pressure._gate.IsOpen.Target = orsay.VALVE_OPEN
-        sleep(5)
-        self.assertEqual(self.pressure.state.value, model.ST_RUNNING)
-        self.pressure._gate.IsOpen.Target = init_state  # return to value from before test
+        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
+        self.pressure.stop()
 
     def test_updatePressure(self):
         """

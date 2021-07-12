@@ -419,7 +419,6 @@ class vacuumChamber(model.Actuator):
         • "vacuum": choices is {0 : "vented", 1 : "primary vacuum", 2 : "high vacuum"}
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • gateOpen (BooleanVA, set to True to open/start and False to close/stop)
         • position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
         • pressure (FloatContinuous, range=VACUUM_CHAMBER_PRESSURE_RNG, read-only, unit is "Pa",
                     value is _chamber.Pressure.Actual)
@@ -429,13 +428,11 @@ class vacuumChamber(model.Actuator):
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
-        self._gate = None
         self._chamber = None
 
+        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
         self.pressure = model.FloatContinuous(VACUUM_CHAMBER_PRESSURE_RNG[0], range=VACUUM_CHAMBER_PRESSURE_RNG,
                                               readonly=True, unit="Pa")
-        self.gateOpen = model.BooleanVA(False, setter=self._changeGateOpen)
-        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
 
         self._vacuumStatusReached = threading.Event()
         self._vacuumStatusReached.set()
@@ -449,13 +446,10 @@ class vacuumChamber(model.Actuator):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        self._gate = self.parent.datamodel.HybridPlatform.ValveP5
         self._chamber = self.parent.datamodel.HybridPlatform.AnalysisChamber
 
-        self._gate.ErrorState.Subscribe(self._updateErrorState)
         self._chamber.VacuumStatus.Subscribe(self._updatePosition)
         self._chamber.Pressure.Subscribe(self._updatePressure)
-        self._gate.IsOpen.Subscribe(self._updateGateOpen)
 
         self.update_VAs()
 
@@ -463,70 +457,8 @@ class vacuumChamber(model.Actuator):
         """
         Update the VA's. Should be called after reconnection to the server
         """
-        self._updateErrorState()
         self._updatePosition()
         self._updatePressure()
-        self._updateGateOpen()
-
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads the error state from the Orsay server and saves it in the state VA
-        """
-        if parameter is not self._gate.ErrorState and parameter is not None:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                             "datamodel.HybridPlatform.ValveP5.ErrorState or None. Parameter passed is %s"
-                             % parameter.Name)
-        if attributeName != "Actual":
-            return
-        eState = ""
-        gateEState = self._gate.ErrorState.Actual
-        if gateEState not in NO_ERROR_VALUES:
-            eState += "ValveP5 error: " + gateEState
-        valve_state = int(self._gate.IsOpen.Actual)
-        if valve_state == VALVE_ERROR:  # in case of valve error
-            if not eState == "":
-                eState += ", "
-            eState += "ValveP5 is in error"
-        elif valve_state == VALVE_UNDEF:  # in case no communication is present with the valve
-            if not eState == "":
-                eState += ", "
-            eState += "ValveP5 could not be contacted"
-        if eState == "":
-            self.state._set_value(model.ST_RUNNING, force_write=True)
-        else:
-            self.state._set_value(HwError(eState), force_write=True)
-
-    def _updateGateOpen(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads if ValveP5 is open from the Orsay server and saves it in the gateOpen VA
-        """
-        if parameter is None:
-            parameter = self._gate.IsOpen
-        if parameter is not self._gate.IsOpen:
-            raise ValueError("Incorrect parameter passed to _updateGateOpen. Parameter should be "
-                             "datamodel.HybridPlatform.ValveP5.IsOpen. Parameter passed is %s"
-                             % parameter.Name)
-        if attributeName != "Actual":
-            return
-        valve_state = int(parameter.Actual)
-        log_msg = "ValveP5 state is: %s."
-        if valve_state in (VALVE_UNDEF, VALVE_ERROR):
-            logging.warning(log_msg % valve_state)
-            self._updateErrorState()
-        elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
-            new_value = valve_state == VALVE_OPEN
-            if not new_value == self.gateOpen.value:
-                logging.debug(log_msg % valve_state)
-            self.gateOpen._value = new_value  # to not call the setter
-            self.gateOpen.notify(new_value)
-        else:  # if parameter.Actual is VALVE_TRANSIT, or undefined
-            logging.debug(log_msg % valve_state)
 
     def _updatePosition(self, parameter=None, attributeName="Actual"):
         """
@@ -585,17 +517,6 @@ class vacuumChamber(model.Actuator):
             raise TimeoutError("Something went wrong awaiting a change in the vacuum status.")
         self._updatePosition()
 
-    def _changeGateOpen(self, goal):
-        """
-        goal (bool): goal position of the gate: (True: "open", False: "closed")
-        return (bool): goal position of the gate as set to the server: (True: "open", False: "closed")
-
-        Opens ValveP5 on the Orsay server if argument goal is True. Closes it otherwise.
-        """
-        logging.debug("Setting gate to %s." % ("open" if goal else "closed"))
-        self._gate.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
-        return self._gate.IsOpen.Target == VALVE_OPEN
-
     @isasync
     def moveAbs(self, pos):
         """
@@ -629,14 +550,11 @@ class vacuumChamber(model.Actuator):
         Called when Odemis is closed
         """
         if self._chamber:
-            self._gate.ErrorState.Unsubscribe(self._updateErrorState)
             self._chamber.VacuumStatus.Unsubscribe(self._updatePosition)
             self._chamber.Pressure.Unsubscribe(self._updatePressure)
-            self._gate.IsOpen.Unsubscribe(self._updateGateOpen)
             if self._executor:
                 self._executor.shutdown()
                 self._executor = None
-            self._gate = None
             self._chamber = None
 
 
