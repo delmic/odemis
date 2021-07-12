@@ -366,16 +366,16 @@ class pneumaticSuspension(model.HwComponent):
         if vpsEState not in NO_ERROR_VALUES:
             eState += "ValvePneumaticSuspension error: " + vpsEState
         if manEState not in NO_ERROR_VALUES:
-            if not eState == "":
+            if eState != "":
                 eState += ", "
             eState += "Manometer2 error: " + manEState
         valve_state = int(self._valve.Actual)
         if valve_state == VALVE_ERROR:  # in case of valve error
-            if not eState == "":
+            if eState != "":
                 eState += ", "
             eState += "ValvePneumaticSuspension is in error"
         elif valve_state == VALVE_UNDEF:  # in case no communication is present with the valve
-            if not eState == "":
+            if eState != "":
                 eState += ", "
             eState += "ValvePneumaticSuspension could not be contacted"
         if eState == "":
@@ -393,7 +393,7 @@ class pneumaticSuspension(model.HwComponent):
         """
         logging.debug("Setting valve to %s." % goal)
         self._valve.Target = VALVE_OPEN if goal else VALVE_CLOSED
-        return self._valve.Target == VALVE_OPEN
+        return goal
 
     def terminate(self):
         """
@@ -642,7 +642,7 @@ class pumpingSystem(model.HwComponent):
         if manEState not in NO_ERROR_VALUES:
             eState += "Manometer1 error: " + manEState
         if tpEState not in NO_ERROR_VALUES:
-            if not eState == "":
+            if eState != "":
                 eState += ", "
             eState += "TurboPump1 error: " + tpEState
         if eState == "":
@@ -862,13 +862,13 @@ class GIS(model.Actuator):
         """
         Has axes:
         • "arm": unit is None, choices is {True: "engaged", False: "parked"}
-        • "injectingGas": unit is None, choices is {True: "open", False: "closed"}
+        • "reservoir": unit is None, choices is {True: "open", False: "closed"}
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • position (VA, read-only, value is {"arm": _positionPar.Actual, "injectingGas": _reservoirPar.Actual})
+        • position (VA, read-only, value is {"arm": _positionPar.Actual, "reservoir": _reservoirPar.Actual})
         """
         axes = {"arm": model.Axis(unit=None, choices={True: "engaged", False: "parked"}),
-                "injectingGas": model.Axis(unit=None, choices={True: "open", False: "closed"})}
+                "reservoir": model.Axis(unit=None, choices={True: "open", False: "closed"})}
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
@@ -879,10 +879,10 @@ class GIS(model.Actuator):
 
         self._armPositionReached = threading.Event()
         self._armPositionReached.set()
-        self._injectingGasPositionReached = threading.Event()
-        self._injectingGasPositionReached.set()
+        self._reservoirPositionReached = threading.Event()
+        self._reservoirPositionReached.set()
 
-        self.position = model.VigilantAttribute({"arm": False, "injectingGas": False}, readonly=True)
+        self.position = model.VigilantAttribute({"arm": False, "reservoir": False}, readonly=True)
 
         self.on_connect()
 
@@ -921,7 +921,7 @@ class GIS(model.Actuator):
         if parameter is not self._errorPar:
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
                              "datamodel.HybridGIS.ErrorState. Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
         if self._errorPar.Actual not in NO_ERROR_VALUES:
             self.state._set_value(HwError(self._errorPar.Actual), force_write=True)
@@ -942,7 +942,7 @@ class GIS(model.Actuator):
         if attributeName == "Actual":
             arm_pos = self._positionPar.Actual
             gas_pos = self._reservoirPar.Actual
-            new_pos = {"arm": arm_pos == STR_WORK, "injectingGas": gas_pos == STR_OPEN}
+            new_pos = {"arm": arm_pos == STR_WORK, "reservoir": gas_pos == STR_OPEN}
             logging.debug("Current position is %s." % new_pos)
             self.position._set_value(new_pos, force_write=True)
 
@@ -953,49 +953,44 @@ class GIS(model.Actuator):
             self._armPositionReached.clear()
 
         if self._reservoirPar.Actual == self._reservoirPar.Target:
-            logging.debug("Target injectingGas position reached.")
-            self._injectingGasPositionReached.set()
+            logging.debug("Target reservoir position reached.")
+            self._reservoirPositionReached.set()
         else:
-            self._injectingGasPositionReached.clear()
+            self._reservoirPositionReached.clear()
 
     def _doMove(self, goal):
         """
         goal (dict): the goal state of the GIS position and gas flow:
             {"arm": True (engaged) / False (parked),
-             "injectingGas": True (open) / False (closed)}
+             "reservoir": True (open) / False (closed)}
 
         Moves the GIS to working position if argument goal["arm"] is True. Moves it to parking position otherwise.
-        Opens the gas reservoir of the GIS if goal["injectingGas"] is True. Closes it otherwise.
+        Opens the gas reservoir of the GIS if goal["reservoir"] is True. Closes it otherwise.
         """
-        try:
-            if not goal["arm"] == self.position.value["arm"]:  # if the arm needs to move
-                if self.position.value["injectingGas"]:
-                    logging.warning("Moving GIS while gas flow is on.")
-                self._armPositionReached.clear()  # to assure it waits
-                if goal["arm"]:
-                    logging.debug("Moving GIS to working position.")
-                    self._positionPar.Target = STR_WORK
-                else:
-                    logging.debug("Moving GIS to parking position.")
-                    self._positionPar.Target = STR_PARK
-        except KeyError:  # in case "arm" is nog present in goal
-            pass
+        if "arm" in goal and goal["arm"] != self.position.value["arm"]:  # if the arm needs to move
+            if self.position.value["reservoir"]:
+                logging.warning("Moving GIS while gas flow is on.")
+            self._armPositionReached.clear()  # to assure it waits
+            if goal["arm"]:
+                logging.debug("Moving GIS to working position.")
+                self._positionPar.Target = STR_WORK
+            else:
+                logging.debug("Moving GIS to parking position.")
+                self._positionPar.Target = STR_PARK
 
-        try:
-            if not goal["injectingGas"] == self.position.value["injectingGas"]:  # if the gas flow needs to change
-                if not self.position.value["arm"] and goal["injectingGas"]:
-                    logging.warning("Gas flow opened while not in working position.")
-                self._injectingGasPositionReached.clear()  # to assure it waits
-                if goal["injectingGas"]:
-                    logging.debug("Starting gas flow.")
-                    self._reservoirPar.Target = STR_OPEN
-                else:
-                    logging.debug("Stopping gas flow.")
-                    self._reservoirPar.Target = STR_CLOSED
-        except KeyError:  # in case "injectingGas" is nog present in goal
-            pass
+        # if the gas flow needs to change
+        if "reservoir" in goal and goal["reservoir"] != self.position.value["reservoir"]:
+            if not self.position.value["arm"] and goal["reservoir"]:
+                logging.warning("Gas flow opened while not in working position.")
+            self._reservoirPositionReached.clear()  # to assure it waits
+            if goal["reservoir"]:
+                logging.debug("Starting gas flow.")
+                self._reservoirPar.Target = STR_OPEN
+            else:
+                logging.debug("Stopping gas flow.")
+                self._reservoirPar.Target = STR_CLOSED
 
-        self._injectingGasPositionReached.wait()  # wait for both axes to reach their new position
+        self._reservoirPositionReached.wait()  # wait for both axes to reach their new position
         self._armPositionReached.wait()
 
     @isasync
@@ -1045,10 +1040,10 @@ class GISReservoir(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • temperatureTarget: FloatContinuous, unit="°C", range=(-273.15, 10^3), setter=_setTemperatureTarget
-        • temperature: FloatContinuous, readonly, unit="°C", range=(-273.15, 10^3)
-        • temperatureRegulation: BooleanVA, True: "on", False: "off", setter=_setTemperatureRegulation
-        • age: FloatContinuous, readonly, unit="s", range=(0, 10^12)
+        • targetTemperature: FloatContinuous, unit="°C", range=(-273.15, 1e3)
+        • temperature: FloatContinuous, readonly, unit="°C", range=(-273.15, 1e3)
+        • temperatureRegulation: BooleanVA, True: "on", False: "off"
+        • age: FloatContinuous, readonly, unit="s", range=(0, 1e12)
         • precursorType: StringVA, readonly
         """
 
@@ -1057,11 +1052,11 @@ class GISReservoir(model.HwComponent):
         self._gis = None
         self._temperaturePar = None
 
-        self.temperatureTarget = model.FloatContinuous(0, unit="°C", range=(-273.15, 10 ** 3),
-                                                       setter=self._setTemperatureTarget)
-        self.temperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 10 ** 3), readonly=True)
+        self.targetTemperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3),
+                                                       setter=self._setTargetTemperature)
+        self.temperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3), readonly=True)
         self.temperatureRegulation = model.BooleanVA(False, setter=self._setTemperatureRegulation)
-        self.age = model.FloatContinuous(0, unit="s", readonly=True, range=(0, 10 ** 12))
+        self.age = model.FloatContinuous(0, unit="s", readonly=True, range=(0, 1e12))
         self.precursorType = model.StringVA("", readonly=True)
 
         self.on_connect()
@@ -1076,7 +1071,7 @@ class GISReservoir(model.HwComponent):
 
         self._gis.ErrorState.Subscribe(self._updateErrorState)
         self._gis.RodPosition.Subscribe(self._updateErrorState)
-        self._temperaturePar.Subscribe(self._updateTemperatureTarget)
+        self._temperaturePar.Subscribe(self._updateTargetTemperature)
         self._temperaturePar.Subscribe(self._updateTemperature)
         self._gis.RegulationOn.Subscribe(self._updateTemperatureRegulation)
         self._gis.ReservoirLifeTime.Subscribe(self._updateAge)
@@ -1089,7 +1084,7 @@ class GISReservoir(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateErrorState()
-        self._updateTemperatureTarget()
+        self._updateTargetTemperature()
         self._updateTemperature()
         self._updateTemperatureRegulation()
         self._updateAge()
@@ -1106,7 +1101,7 @@ class GISReservoir(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
                              "datamodel.HybridGIS.ErrorState, datamodel.HybridGIS.RodPosition, or None. "
                              "Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
 
         msg = ""
@@ -1131,24 +1126,24 @@ class GISReservoir(model.HwComponent):
         else:
             self.state._set_value(HwError(msg), force_write=True)
 
-    def _updateTemperatureTarget(self, parameter=None, attributeName="Target"):
+    def _updateTargetTemperature(self, parameter=None, attributeName="Target"):
         """
         parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
         attributeName (str): the name of the attribute of parameter which was changed
 
-        Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the temperatureTarget VA
+        Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the targetTemperature VA
         """
         if parameter is None:
             parameter = self._temperaturePar
         if parameter is not self._temperaturePar:
-            raise ValueError("Incorrect parameter passed to _updateTemperatureTarget. Parameter should be "
+            raise ValueError("Incorrect parameter passed to _updateTargetTemperature. Parameter should be "
                              "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Target":
+        if attributeName != "Target":
             return
         new_value = float(self._temperaturePar.Target)
         logging.debug("Target temperature changed to %f." % new_value)
-        self.temperatureTarget._value = new_value  # to not call the setter
-        self.temperatureTarget.notify(new_value)
+        self.targetTemperature._value = new_value  # to not call the setter
+        self.targetTemperature.notify(new_value)
 
     def _updateTemperature(self, parameter=None, attributeName="Actual"):
         """
@@ -1166,7 +1161,7 @@ class GISReservoir(model.HwComponent):
         if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
             logging.debug("Target temperature reached.")
 
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
         self.temperature._set_value(float(self._temperaturePar.Actual), force_write=True)
 
@@ -1178,11 +1173,13 @@ class GISReservoir(model.HwComponent):
         Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
         temperatureRegulation VA
         """
+        # datamodel.HybridGIS.RegulationRushOn parameter is also available for extra fast (agressive) control of the
+        # temperature, but this feature currently does not work and is not needed.
         if parameter not in (self._gis.RegulationOn, None):
             raise ValueError("Incorrect parameter passed to _updateTemperatureRegulation. Parameter should be "
                              "datamodel.HybridGIS.RegulationOn, or None. "
                              "Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
 
         try:
@@ -1206,7 +1203,7 @@ class GISReservoir(model.HwComponent):
         if parameter is not self._gis.ReservoirLifeTime:
             raise ValueError("Incorrect parameter passed to _updateAge. Parameter should be "
                              "datamodel.HybridGIS.ReservoirLifeTime. Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
         logging.debug("GIS reservoir lifetime updated to %f hours." % float(self._gis.ReservoirLifeTime.Actual))
         self.age._set_value(float(self._gis.ReservoirLifeTime.Actual) * 3600,  # convert hours to seconds
@@ -1224,12 +1221,12 @@ class GISReservoir(model.HwComponent):
         if parameter is not self._gis.PrecursorType:
             raise ValueError("Incorrect parameter passed to _updatePrecursorType. Parameter should be "
                              "datamodel.HybridGIS.PrecursorType. Parameter passed is %s." % parameter.Name)
-        if not attributeName == "Actual":
+        if attributeName != "Actual":
             return
         logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
         self.precursorType._set_value(self._gis.PrecursorType.Actual, force_write=True)
 
-    def _setTemperatureTarget(self, goal):
+    def _setTargetTemperature(self, goal):
         """
         goal (float): temperature in °C to set as a target temperature
         return (float): temperature in °C the target temperature is set to
@@ -1248,6 +1245,7 @@ class GISReservoir(model.HwComponent):
         """
         logging.debug("Turning temperature regulation %s." % "on" if goal else "off")
         self._gis.RegulationOn.Target = goal
+        return goal
 
     def terminate(self):
         """
@@ -1256,7 +1254,7 @@ class GISReservoir(model.HwComponent):
         if self._gis:
             self._gis.ErrorState.Unsubscribe(self._updateErrorState)
             self._gis.RodPosition.Unsubscribe(self._updateErrorState)
-            self._temperaturePar.Unsubscribe(self._updateTemperatureTarget)
+            self._temperaturePar.Unsubscribe(self._updateTargetTemperature)
             self._temperaturePar.Unsubscribe(self._updateTemperature)
             self._gis.RegulationOn.Unsubscribe(self._updateTemperatureRegulation)
             self._gis.ReservoirLifeTime.Unsubscribe(self._updateAge)
