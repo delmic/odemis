@@ -1163,13 +1163,11 @@ class MPPC(model.Detector):
                         # FIXME: Hack: The current ASM HW does not scan the very first field image correctly. This issue
                         #  needs to be fixed in HW. However, until this is done, we need to "throw away" the first field
                         #  image and scan it a second time to receive a good first field image. To do so, just always
-                        #  scan the first image twice.
+                        #  scan the first image twice. Note: scan_field is a blocking call - it waits until the scan is
+                        #  finished.
                         if field_data.position_x == 0 and field_data.position_y == 0:
                             logging.debug("Rescanning first field to workaround hardware limitations.")
                             self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
-                            # wait a bit as the caller does not know about this fix... (dwell time * field size + 1sec)
-                            time.sleep(self._scanner.dwellTime.value * self.cellCompleteResolution.value[0]
-                                       * self.cellCompleteResolution.value[1] + 1)
 
                         self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
 
