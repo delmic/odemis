@@ -1753,12 +1753,12 @@ class FastEMOverviewTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Single-beam SEM stream
-        vanames = ("resolution", "dwellTime", "horizontalFoV")
+        vanames = ("resolution", "scale", "dwellTime", "horizontalFoV")
         hwemtvas = set()
         for vaname in getVAs(main_data.ebeam):
             if vaname in vanames:
                 hwemtvas.add(vaname)
-        sem_stream = acqstream.SEMStream(
+        sem_stream = acqstream.FastEMSEMStream(
             "Single Beam",
             main_data.sed,
             main_data.sed.data,
