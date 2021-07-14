@@ -1580,8 +1580,6 @@ class FIBDevice(model.HwComponent):
         • interlockOutChamberTriggered: BooleanVA
         • interlockOutHVPSTriggered: BooleanVA
         • interlockOutSEDTriggered: BooleanVA
-        • valveOpen: BooleanVA
-        • gunPumpOn: BooleanVA
         • columnPumpOn: BooleanVA
         • gunPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
         • columnPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
@@ -1590,13 +1588,12 @@ class FIBDevice(model.HwComponent):
 
         super().__init__(name, role, parent=parent, **kwargs)
 
-        self._gunPump = None
         self._columnPump = None
+        self._gunPump = None
         self._interlockInChamber = None
         self._interlockOutChamber = None
         self._interlockOutHVPS = None
         self._interlockOutSED = None
-        self._valve = None
 
         self._devices_with_errorstates = ("HybridGaugeCompressedAir",
                                           "HybridInterlockInChamberVac",
@@ -1611,9 +1608,6 @@ class FIBDevice(model.HwComponent):
         self.interlockOutChamberTriggered = model.BooleanVA(False, setter=self._setInterlockOutChamber)
         self.interlockOutHVPSTriggered = model.BooleanVA(False, setter=self._setInterlockOutHVPS)
         self.interlockOutSEDTriggered = model.BooleanVA(False, setter=self._setInterlockOutSED)
-        self.valveOpen = model.BooleanVA(False, setter=self._changeValveOpen)
-        self.gunPumpOn = model.BooleanVA(False)
-        self.gunPumpOnConnector = None
         self.columnPumpOn = model.BooleanVA(False)
         self.columnPumpOnConnector = None
         self.gunPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
@@ -1633,25 +1627,21 @@ class FIBDevice(model.HwComponent):
         Needs to be called after connection and reconnection to the server.
         """
 
-        self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
+        self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._interlockInChamber = self.parent.datamodel.HybridInterlockInChamberVac
         self._interlockOutChamber = self.parent.datamodel.HybridInterlockOutChamberVac
         self._interlockOutHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockOutSED = self.parent.datamodel.HybridInterlockOutSED
-        self._valve = self.parent.datamodel.HybridValveFIB
 
         self._interlockInChamber.ErrorState.Subscribe(self._updateInterlockInChamberTriggered)
         self._interlockOutChamber.ErrorState.Subscribe(self._updateInterlockOutChamberTriggered)
         self._interlockOutHVPS.ErrorState.Subscribe(self._updateInterlockOutHVPSTriggered)
         self._interlockOutSED.ErrorState.Subscribe(self._updateInterlockOutSEDTriggered)
-        self._valve.IsOpen.Subscribe(self._updateErrorState)
-        self._valve.IsOpen.Subscribe(self._updateValveOpen)
         for device in self._devices_with_errorstates:
             p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
-        self.gunPumpOnConnector = OrsayParameterConnector(self.gunPumpOn, self._gunPump.IsOn)
         self.columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
         self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
         self.columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
@@ -1674,7 +1664,6 @@ class FIBDevice(model.HwComponent):
         self._updateInterlockOutChamberTriggered()
         self._updateInterlockOutHVPSTriggered()
         self._updateInterlockOutSEDTriggered()
-        self._updateValveOpen()
         for obj_name in self._connectorList:
             getattr(self, obj_name).update_VA()
 
@@ -1855,54 +1844,20 @@ class FIBDevice(model.HwComponent):
             logging.debug("Attempting to reset the HybridInterlockOutSED interlock.")
         return value
 
-    def _updateValveOpen(self, parameter=None, attributeName="Actual"):
-        """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
-        Reads if the valve between the FIB column and analysis chamber is open from the Orsay server and saves it in
-        the valveOpen VA
-        """
-        if parameter is None:
-            parameter = self._valve.IsOpen
-        if parameter is not self._valve.IsOpen:
-            raise ValueError("Incorrect parameter passed to _updateValveOpen. Parameter should be "
-                             "datamodel.HybridValveFIB.IsOpen. Parameter passed is %s"
-                             % parameter.Name)
-        if attributeName != "Actual":
-            return
-        valve_state = int(parameter.Actual)
-        logging.debug("FIB valve state is: %s." % valve_state)
-        if valve_state in (VALVE_OPEN, VALVE_CLOSED):  # alternative values: VALVE_UNDEF, VALVE_ERROR, VALVE_TRANSIT
-            new_value = valve_state == VALVE_OPEN
-            self.valveOpen._value = new_value  # to not call the setter
-            self.valveOpen.notify(new_value)
-
-    def _changeValveOpen(self, goal):
-        """
-        goal (bool): goal position of the valve: (True: "open", False: "closed")
-        return (bool): goal position of the gate as set to the server: (True: "open", False: "closed")
-
-        Opens the valve between the FIB column and analysis chamber on the Orsay server if argument goal is True.
-        Closes it otherwise.
-        """
-        logging.debug("Setting FIB valve to %s." % ("open" if goal else "closed"))
-        self._valve.IsOpen.Target = VALVE_OPEN if goal else VALVE_CLOSED
-        return self._valve.IsOpen.Target == VALVE_OPEN
-
     def terminate(self):
         """
         Called when Odemis is closed
         """
-        if self._valve is not None:
+        if self._columnPump is not None:
             for obj_name in self._connectorList:
                 getattr(self, obj_name).disconnect()
             self._connectorList = []
-            self._gunPump = None
             self._columnPump = None
             self._devices_with_errorstates = None
-            self._interlockHVPS = None
-            self._interlockChamber = None
+            self._interlockInChamber = None
+            self._interlockOutChamber = None
+            self._interlockOutHVPS = None
+            self._interlockOutSED = None
 
 
 class FIBSource(model.HwComponent):

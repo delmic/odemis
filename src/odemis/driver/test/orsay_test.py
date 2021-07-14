@@ -1250,17 +1250,6 @@ class TestFIBDevice(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_device.state.value))
         self.datamodel.HybridValveFIB.ErrorState.Actual = ""
 
-        init_target_valve = self.fib_device._valve.IsOpen.Target
-        self.fib_device._valve.IsOpen.Target = 3
-        sleep(0.5)
-        self.assertIsInstance(self.fib_device.state.value, HwError)
-        self.assertIn("ValveFIB is in error", str(self.fib_device.state.value))
-        self.fib_device._valve.IsOpen.Target = -1
-        sleep(0.5)
-        self.assertIsInstance(self.fib_device.state.value, HwError)
-        self.assertIn("ValveFIB could not be contacted", str(self.fib_device.state.value))
-        self.fib_device._valve.IsOpen.Target = orsay.VALVE_OPEN
-
         sleep(0.5)
         self.assertEqual(self.fib_device.state.value, model.ST_RUNNING)
 
@@ -1272,7 +1261,6 @@ class TestFIBDevice(unittest.TestCase):
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = init_state_column
         self.datamodel.HybridIonPumpGunFIB.ErrorState.Actual = init_state_gun
         self.datamodel.HybridValveFIB.ErrorState.Actual = init_state_valve
-        self.fib_device._valve.IsOpen.Target = init_target_valve
 
     def test_interlockInChamberTriggered(self):
         """Check that the interlockInChamberTriggered VA is updated correctly"""
@@ -1313,18 +1301,6 @@ class TestFIBDevice(unittest.TestCase):
                        self.fib_device._interlockOutSED.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
                        readonly=True)
-
-    def test_valve(self):
-        """Test for controlling the valve in between the FIB column and the analysis chamber"""
-        if not TEST_NOHW == "sim":
-            self.skipTest("This test is generally not hardware safe. Be very sure it is safe before running this test.")
-        connector_test(self, self.fib_device.valveOpen, self.fib_device._valve.IsOpen,
-                       [(True, orsay.VALVE_OPEN), (False, orsay.VALVE_CLOSED)], hw_safe=False)
-
-    def test_gunPumpOn(self):
-        """Check that the gunPumpOn VA is updated correctly"""
-        connector_test(self, self.fib_device.gunPumpOn, self.fib_device._gunPump.IsOn,
-                       [(True, "True"), (False, "False")], hw_safe=True, settletime=0.5)  # TODO: Tune the settle time
 
     def test_columnPumpOn(self):
         """Check that the columnPumpOn VA is updated correctly"""
