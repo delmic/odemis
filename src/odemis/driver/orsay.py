@@ -1597,12 +1597,14 @@ class FIBDevice(model.HwComponent):
 
         self._devices_with_errorstates = ("HybridGaugeCompressedAir",
                                           "HybridInterlockInChamberVac",
-                                          "HybridInterlockOutChamberVac",
+                                          # "HybridInterlockOutChamberVac",
                                           "HybridInterlockOutHVPS",
                                           "HybridInterlockOutSED",
                                           "HybridIonPumpGunFIB",
                                           "HybridIonPumpColumnFIB",
-                                          "HybridValveFIB")
+                                          "HybridValveFIB")  # TODO!!!!!!!!
+        # TODO: HybridInterlockOutChamberVac needs to be included, but this component does
+        #       not exist in simulation, so with this value nothing can be tested in simulation...
 
         self.interlockInChamberTriggered = model.BooleanVA(False, setter=self._setInterlockInChamber)
         self.interlockOutChamberTriggered = model.BooleanVA(False, setter=self._setInterlockOutChamber)
@@ -1630,7 +1632,9 @@ class FIBDevice(model.HwComponent):
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._interlockInChamber = self.parent.datamodel.HybridInterlockInChamberVac
-        self._interlockOutChamber = self.parent.datamodel.HybridInterlockOutChamberVac
+        self._interlockOutChamber = self.parent.datamodel.HybridInterlockInChamberVac  # TODO!!!!!!!!
+        # TODO: The above value should be self.parent.datamodel.HybridInterlockOutChamberVac, but this component does
+        #       not exist in simulation, so with this value nothing can be tested in simulation...
         self._interlockOutHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockOutSED = self.parent.datamodel.HybridInterlockOutSED
 
@@ -1687,7 +1691,7 @@ class FIBDevice(model.HwComponent):
         for device in self._devices_with_errorstates:
             this_state = getattr(self.parent.datamodel, device).ErrorState.Actual
             if this_state not in NO_ERROR_VALUES:
-                if not eState == "":
+                if eState != "":
                     eState += ", "
                 eState += "%s error: %s" % (device, this_state)
 
@@ -1706,7 +1710,7 @@ class FIBDevice(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockInChamber.ErrorState
-        if not parameter == self._interlockInChamber.ErrorState:
+        if parameter != self._interlockInChamber.ErrorState:
             raise ValueError("Incorrect parameter passed to _updateInterlockInChamberTriggered. Parameter should be "
                              "None or HybridInterlockInChamberVac.ErrorState. Parameter passed is %s"
                              % parameter.Name)
@@ -1729,7 +1733,7 @@ class FIBDevice(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutChamber.ErrorState
-        if not parameter == self._interlockOutChamber.ErrorState:
+        if parameter != self._interlockOutChamber.ErrorState:
             raise ValueError("Incorrect parameter passed to _updateInterlockOutChamberTriggered. Parameter should be "
                              "None or HybridInterlockOutChamberVac.ErrorState. Parameter passed is %s"
                              % parameter.Name)
@@ -1752,7 +1756,7 @@ class FIBDevice(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutHVPS.ErrorState
-        if not parameter == self._interlockOutHVPS.ErrorState:
+        if parameter != self._interlockOutHVPS.ErrorState:
             raise ValueError("Incorrect parameter passed to _updateInterlockOutHVPSTriggered. Parameter should be "
                              "None or HybridInterlockOutHVPS.ErrorState. Parameter passed is %s"
                              % parameter.Name)
@@ -1775,7 +1779,7 @@ class FIBDevice(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutSED.ErrorState
-        if not parameter == self._interlockOutSED.ErrorState:
+        if parameter != self._interlockOutSED.ErrorState:
             raise ValueError("Incorrect parameter passed to _updateInterlockOutSEDTriggered. Parameter should be "
                              "None or HybridInterlockOutSED.ErrorState. Parameter passed is %s"
                              % parameter.Name)
@@ -1791,58 +1795,74 @@ class FIBDevice(model.HwComponent):
     def _setInterlockInChamber(self, value):
         """
         setter for interlockInChamberTriggered VA
-        value is the value set to the VA
-        returns the same value
+        value is the value attempted to be set to the VA
+        returns the current value the VA already has
 
-        Call with value=False to attempt to reset the interlock.
-        If the reset is successful, _updateInterlockInChamberTriggered will be called, which will update the VA.
+        interlockInChamberTriggered VA is True if the interlock is triggered, False if it is not triggered.
+        If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
+        interlock. (This will have no effect.)
+        If the interlock is triggered and value is False, the interlock will be attempted to reset. The value of the VA
+        is still not changed, because, if the reset was succesful, _updateInterlockInChamberTriggered will take care of
+        changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
             self._interlockInChamber.Reset.Target = 0
             logging.debug("Attempting to reset the HybridInterlockInChamberVac interlock.")
-        return value
+        return self.interlockOutChamberTriggered.value
 
     def _setInterlockOutChamber(self, value):
         """
         setter for interlockOutChamberTriggered VA
-        value is the value set to the VA
-        returns the same value
+        value is the value attempted to be set to the VA
+        returns the current value the VA already has
 
-        Call with value=False to attempt to reset the interlock.
-        If the reset is successful, _updateInterlockOutChamberTriggered will be called, which will update the VA.
+        interlockOutChamberTriggered VA is True if the interlock is triggered, False if it is not triggered.
+        If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
+        interlock. (This will have no effect.)
+        If the interlock is triggered and value is False, the interlock will be attempted to reset. The value of the VA
+        is still not changed, because, if the reset was succesful, _updateInterlockOutChamberTriggered will take care of
+        changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
             self._interlockOutChamber.Reset.Target = 0
             logging.debug("Attempting to reset the HybridInterlockOutChamberVac interlock.")
-        return value
+        return self.interlockOutChamberTriggered.value
 
     def _setInterlockOutHVPS(self, value):
         """
         setter for interlockOutHVPSTriggered VA
-        value is the value set to the VA
-        returns the same value
+        value is the value attempted to be set to the VA
+        returns the current value the VA already has
 
-        Call with value=False to attempt to reset the interlock.
-        If the reset is successful, _updateInterlockOutHVPSTriggered will be called, which will update the VA.
+        interlockOutHVPSTriggered VA is True if the interlock is triggered, False if it is not triggered.
+        If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
+        interlock. (This will have no effect.)
+        If the interlock is triggered and value is False, the interlock will be attempted to reset. The value of the VA
+        is still not changed, because, if the reset was succesful, _updateInterlockOutHVPSTriggered will take care of
+        changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
             self._interlockOutHVPS.Reset.Target = 0
             logging.debug("Attempting to reset the HybridInterlockOutHVPS interlock.")
-        return value
+        return self.interlockOutHVPSTriggered.value
 
     def _setInterlockOutSED(self, value):
         """
         setter for interlockOutSEDTriggered VA
-        value is the value set to the VA
-        returns the same value
+        value is the value attempted to be set to the VA
+        returns the current value the VA already has
 
-        Call with value=False to attempt to reset the interlock.
-        If the reset is successful, _updateInterlockOutSEDTriggered will be called, which will update the VA.
+        interlockOutSEDTriggered VA is True if the interlock is triggered, False if it is not triggered.
+        If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
+        interlock. (This will have no effect.)
+        If the interlock is triggered and value is False, the interlock will be attempted to reset. The value of the VA
+        is still not changed, because, if the reset was succesful, _updateInterlockOutSEDTriggered will take care of
+        changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
             self._interlockOutSED.Reset.Target = 0
             logging.debug("Attempting to reset the HybridInterlockOutSED interlock.")
-        return value
+        return self.interlockOutSEDTriggered.value
 
     def terminate(self):
         """
@@ -1969,7 +1989,7 @@ class FIBSource(model.HwComponent):
 
         Reads the error state from the Orsay server and saves it in the state VA
         """
-        if parameter is not None and not parameter == self._hvps.HeaterState:
+        if parameter not in (None, self._hvps.HeaterState):
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or the"
                              "HVPSFloatingIon.HeaterState. Parameter passed is %s"
                              % parameter.Name)
@@ -2019,7 +2039,7 @@ class FIBSource(model.HwComponent):
         """
         logging.debug("Setting FIB source heater to %s." % (HEATER_ON if goal else HEATER_OFF))
         self._hvps.HeaterState.Target = HEATER_ON if goal else HEATER_OFF
-        return self._hvps.HeaterState.Target == HEATER_ON
+        return goal
 
     def terminate(self):
         """
@@ -2282,8 +2302,8 @@ class FIBBeam(model.HwComponent):
         """
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
-        self.imageFormatUpdatedResolutionTranslation.clear()  # let it be known that image format is updating
-        # resolution and translation
+        self.imageFormatUpdatedResolutionTranslation.clear()  # let it be known that image format is updating...
+        # ...resolution and translation
 
         # get the old image format and determine the scale change
         state = self._ionColumn.ImageSize.Actual
@@ -2304,14 +2324,16 @@ class FIBBeam(model.HwComponent):
 
         # determine new value of translation
         new_translation = list(self.translation.value)
-        if scale < 1:
-            new_translation[0] = math.ceil(new_translation[0])
-            new_translation[1] = math.floor(new_translation[1])
+        # if scale < 1:
+        new_translation[0] = int(new_translation[0])
+        new_translation[1] = int(new_translation[1])
         new_translation = [float(k * scale) for k in new_translation]
         if scale < 1:
-            if not new_resolution[0] % 2 == 0:  # if horizontal resolution is odd
+            # if horizontal resolution is odd and the translation does not already contain a half
+            if new_resolution[0] % 2 != 0 and new_translation[0] == int(new_translation[0]):
                 new_translation[0] -= 0.5  # prefer adding a pixel to the left
-            if not new_resolution[1] % 2 == 0:  # if vertical resolution is odd
+            # if vertical resolution is odd and the translation does not already contain a half
+            if new_resolution[1] % 2 != 0 and new_translation[1] == int(new_translation[1]):
                 new_translation[1] += 0.5  # prefer adding a pixel to the top
         new_translation = tuple(new_translation)
 
@@ -2361,9 +2383,9 @@ class FIBBeam(model.HwComponent):
 
         new_translation[0] = math.ceil(new_translation[0])
         new_translation[1] = math.floor(new_translation[1])
-        if not self.resolution.value[0] % 2 == 0:  # if horizontal resolution is odd
+        if self.resolution.value[0] % 2 != 0:  # if horizontal resolution is odd
             new_translation[0] -= 0.5  # prefer adding a pixel to the left
-        if not self.resolution.value[1] % 2 == 0:  # if vertical resolution is odd
+        if self.resolution.value[1] % 2 != 0:  # if vertical resolution is odd
             new_translation[1] += 0.5  # prefer adding a pixel to the top
 
         # find the current limits for translation and clip the new value
