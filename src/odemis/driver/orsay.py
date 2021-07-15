@@ -1318,27 +1318,41 @@ class GISReservoir(model.HwComponent):
 
 class OrsayParameterConnector:
     """
-    Attribute that is connected to a VA and a parameter on the Orsay server.
+    Object that is connected to a VA and a parameter on the Orsay server.
     If VA is readonly, the VA will be kept up to date of the changes of the Orsay parameter, but force writing to the VA
     will not update the Orsay parameter.
     If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
+
+    This class exists to prevent the need for copy-pasting similar code for each such connection that needs to be made.
+    This class overwrites the setter of the VA, but does not use the getter. Instead it subscribes an update method to
+    the Parameter. This assures that the VA's value will be updated the moment the Parameter's value changes. This way
+    any component that subscribes to the VA will be notified immediately when the Parameter changes value. This would
+    not be the case if the getter was used.
     """
 
     def __init__(self, va, parameter, attributeName="Actual", conversion=None, factor=None, minpar=None, maxpar=None):
         """
-        va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
-        setter yet. The setter will be overwritten.
-        parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
-        equal length.
-        attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
-        conversion is a dict mapping values of the VA (dict keys) to values of the parameter (dict values). If None is
-        supplied, factor can be used. factor specifies a conversion factor between the value of the parameter and the
-        value of the va, such that VA = factor * Parameter. factor is only used for float type va's. If neither
-        conversion nor factor is supplied, no special conversion is performed.
-        minpar and maxpar supply the possibility to explicitly pass a seperate parameter which contains the minimal and
-        maximal value of the parameter respectively. Can be a list of equal length to the list of parameters for tuple
-        VA's. Then the first parameters in minpar and maxpar dictate the limits of the first parameter in parameters.
-        Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
+        Initialise the Connector
+
+        :param (VigilantAttribute) va: The vigilant attribute this Orsay parameter connector should be connected to.
+            This VA should not have a setter yet, because the setter will be overwritten.
+        :param (Orsay Parameter) parameter: A parameter of the Orsay server. It can also be a list of parameters, if va
+            can contain a Tuple of equal length.
+        :param (string) attributeName: The name of the attribute of parameter the va should be synchronised with.
+            Defaults to "Actual".
+        :param (dict) conversion: A dict mapping values of the VA (dict keys) to values of the parameter (dict values).
+            If None is supplied, factor can be used, or no special conversion is applied.
+        :param (float) factor: Specifies a conversion factor between the value of the parameter and the value of the va,
+            such that VA = factor * Parameter. factor is only used for float type va's (or tuples of floats) and only if
+            conversion is None. If neither conversion nor factor is supplied, no special conversion is performed.
+        :param (Orsay Parameter) minpar: supplies the possibility to explicitly pass a seperate parameter which contains
+            the minimal value of the parameter. Can be a list of equal length to the list of parameters for tuple VA's.
+            Then the first parameter in minpar dictates the minimum of the first parameter in parameters.
+            Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
+        :param (Orsay Parameter) maxpar: supplies the possibility to explicitly pass a seperate parameter which contains
+            the maximal value of the parameter. Can be a list of equal length to the list of parameters for tuple VA's.
+            Then the first parameter in maxpar dictates the maximum of the first parameter in parameters.
+            Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
         """
         self._parameters = None
         self._attributeName = None
@@ -1354,33 +1368,40 @@ class OrsayParameterConnector:
 
     def connect(self, va, parameter, attributeName="Actual"):
         """
-        va is the vigilant attribute this Orsay parameter connector should be connected to. This VA should not have a
-        setter yet. The setter will be overwritten.
-        parameter is a parameter of the Orsay server. It can also be a list of parameters, if va contains a Tuple of
-        equal length.
-        attributeName is the name of the attribute of parameter the va should be synchronised with. Defaults to "Actual"
-
         Subscribes the VA to the parameter
+
+        :param (VigilantAttribute) va: The vigilant attribute this Orsay parameter connector should be connected to.
+            This VA should not have a setter yet, because the setter will be overwritten.
+        :param (Orsay Parameter) parameter: A parameter of the Orsay server. It can also be a list of parameters, if va
+            can contain a Tuple of equal length.
+        :param (string) attributeName: The name of the attribute of parameter the va should be synchronised with.
+            Defaults to "Actual".
         """
+        # Log a warning when using the connector to connect a parameter to a VA, whilst the connector is already in use
         if self._parameters is not None and None not in {self._attributeName, self._va, self._va_type_name}:
             logging.warning("OrsayParameterConnector is already connected to an Orsay parameter. It is better to call "
                             "disconnect before reconnecting to something else.")
 
-        if type(parameter) in {set, list, tuple}:
+        # Assure that self._parameters (and self._minpar and self._maxpar if applicable) is a list
+        if type(parameter) in {set, list, tuple}:  # if multiple parameters are passed
             self._parameters = list(parameter)
             if self._minpar is not None and self._maxpar is not None:
                 self._minpar = list(self._minpar)
                 self._maxpar = list(self._maxpar)
-        else:
+        else:  # if just one parameter is passed
             self._parameters = [parameter]
             if self._minpar is not None and self._maxpar is not None:
                 self._minpar = [self._minpar]
                 self._maxpar = [self._maxpar]
+
+        # Check that the number of parameters passed make sense
         if len(self._parameters) == 0:
             raise ValueError("No parameters passed")
-        if self._minpar is not None and self._maxpar is not None:
-            if not len(self._parameters) == len(self._minpar) or not len(self._parameters) == len(self._maxpar):
-                raise ValueError("Number of parameters, minimum parameters and maximum parameters is not equal")
+        if self._minpar is not None and self._maxpar is not None and (len(self._parameters) != len(self._minpar) or
+                                                                      len(self._parameters) != len(self._maxpar)):
+            raise ValueError("Number of parameters, minimum parameters and maximum parameters is not equal")
+
+        # Store and analyse the passed VA, to determine its type, if it's a tuple or not and if it's read-only
         self._attributeName = attributeName
         self._va = va
         self._va_type_name = va.__class__.__name__
@@ -1390,13 +1411,14 @@ class OrsayParameterConnector:
         else:
             self._va_is_tuple = False
             self._va_value_type = type(self._va.value)
-        if not self._va.readonly:
+        if not self._va.readonly:  # only overwrite the VA's setter if the VA is not read-only
             self._va._setter = WeakMethod(self._update_parameter)
         if self._va_is_tuple and not len(self._parameters) == len(self._va.value):
             raise ValueError("Length of Tuple VA does not match number of parameters passed.")
         if len(self._parameters) > 1 and not self._va_is_tuple:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
 
+        # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
         if hasattr(self._va, "range"):
             if self._va_is_tuple:
                 new_range = [list(self._va.range[0]), list(self._va.range[1])]
@@ -1405,7 +1427,7 @@ class OrsayParameterConnector:
 
             for i in range(len(self._parameters)):
                 p = self._parameters[i]
-
+                # Search for a lowerbound on the server
                 lowerbound = None
                 if self._minpar is not None:  # in case a minimum parameter is supplied
                     if self._minpar[i].Actual is not None:
@@ -1418,10 +1440,9 @@ class OrsayParameterConnector:
                     if p.Min is not None and not p.Min == lowerbound:
                         raise AssertionError("%s.Min and %s contain different, non-None values."
                                              "Contact Orsay Physics about this!" % (p.Name, self._minpar[i].Name))
-
                 if lowerbound is not None:  # if a lowerbound is defined in the server
                     new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
-
+                # Search for an upperbound on the server
                 upperbound = None
                 if self._maxpar is not None:  # in case a minimum parameter is supplied
                     if self._maxpar[i].Actual is not None:
@@ -1441,20 +1462,19 @@ class OrsayParameterConnector:
                 new_range = (new_range[0][0], new_range[1][0])
             else:
                 new_range = (tuple(new_range[0]), tuple(new_range[1]))
-
+            # Set the range of the VA
             self._va._value = new_range[0]
             self._va.range = new_range
             self._va.notify(new_range[0])
 
+        # The actual hart of this method, linking the update callbacks to the Orsay parameters
         for p in self._parameters:
-            p.Subscribe(self.update_VA)
+            p.Subscribe(self.update_VA)  # Subscribe to the parameter on the Orsay server
 
         self.update_VA()
 
     def disconnect(self):
-        """
-        Unsubscribes the VA from the parameter
-        """
+        """Unsubscribes the VA from the parameter"""
         if self._va is not None and self._parameters is not None:
             for p in self._parameters:
                 p.Unsubscribe(self.update_VA)
@@ -1467,26 +1487,30 @@ class OrsayParameterConnector:
 
     def update_VA(self, parameter=None, attributeName=None):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server that calls this callback
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Copies the value of the parameter to the VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
+        # Check that the connector is actually connecting a parameter to a VA
         if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
             raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
                                  "Call this object's connect method before calling update.")
 
+        # Check that the value of the attributeName argument makes sense
         if attributeName is None:
             attributeName = self._attributeName
         if not attributeName == self._attributeName:
             return
 
+        # Check that the value of the parameter argument makes sense
         namesstring = ""
         namesstring = namesstring.join([(p.Name + ", ") for p in self._parameters])[:-2]
         if parameter is not None and parameter not in self._parameters:
             raise ValueError("Incorrect parameter passed. Excpected: %s. Received: %s."
                              % (namesstring, parameter.Name))
 
+        # Determine the new value that the VA should get
         if self._va_is_tuple:
             new_values = []
             for p in self._parameters:
@@ -1496,6 +1520,7 @@ class OrsayParameterConnector:
         else:
             new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attributeName))
 
+        # For logging
         namesstring = "("
         for p in self._parameters:
             namesstring += p.Name + "." + attributeName + ", "
@@ -1503,35 +1528,47 @@ class OrsayParameterConnector:
             namesstring = namesstring[:-2] + ")"
         else:
             namesstring = namesstring[1:-2]
-
         logging.debug("%s's VA changed to %s." % (namesstring, str(new_value)))
+
+        # Write the new value to the VA
         self._va._value = new_value  # to not call the setter
         self._va.notify(new_value)
 
     def _update_parameter(self, goal):
         """
-        setter of the non-read-only VA. Sets goal to the Orsay parameter's Target and returns goal to set it to the VA
+        Setter of the non-read-only VA. Unused for read-only VA's.
+        :param (any) goal: value to write to the Orsay parameter's Target attribute. Type depends on the VA type
+        :return (any): goal
         """
+        # Check that the connector is actually connecting a parameter to a VA
         if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
             raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
                                  "Call this object's connect method before setting a value to its VA.")
 
+        # If this method is called even though the VA is read-only, raise an exception
         if self._va.readonly:
             raise NotSettableError("Value is read-only")
 
+        # Write the goal value of the VA to the Target of the corresponding Orsay parameter(s) and log this
         if self._va_is_tuple:
             for i in range(len(self._parameters)):
-                self._parameters[i].Target = self._VA_to_parameter_value(goal[i])
-        else:
-            self._parameters[0].Target = self._VA_to_parameter_value(goal)
+                target = self._VA_to_parameter_value(goal[i])
+                self._parameters[i].Target = target
+                logging.debug("Changing %s to %s." % (self._parameters[i].Name, str(target)))
+        else:  # in case goal is not subscriptable
+            target = self._VA_to_parameter_value(goal)
+            self._parameters[0].Target = target
+            logging.debug("Changing %s to %s." % (self._parameters[0].Name, str(target)))
 
         return goal
 
     def _VA_to_parameter_value(self, va_value):
         """
-        Converts a value of the VA to its corresponding value for the parameter
-        va_value is the value of the VA
-        returns the corresponding value of the parameter
+        Converts a value of the VA to its corresponding value for the parameter. Uses the dictionary in self._conversion
+        or the factor in self._factor to do so.
+
+        :param (any) va_value: The value of the VA. Its type depends on the VA type
+        :return (any): The corresponding value of the parameter. Type depends on the parameter type
         """
         if self._conversion is not None:  # if a conversion dict is supplied
             try:
@@ -1545,15 +1582,18 @@ class OrsayParameterConnector:
 
     def _parameter_to_VA_value(self, par_value):
         """
-        Converts a value of the parameter to its corresponding value for the VA
-        par_value is the value of the parameter
-        returns the corresponding value of the VA
+        Converts a value of the parameter to its corresponding value for the VA. Uses the dictionary in self._conversion
+        or the factor in self._factor to do so.
+
+        :param (any) par_value: The value of the parameter. Its type depends on the parameter type. Often a string
+        :return (any): The corresponding value of the VA. Type depends on the VA type
         """
         if self._conversion is not None:  # if a conversion dict is supplied
             for key, value in self._conversion.items():
                 if value == type(value)(par_value):
                     return key
 
+        # Assure that the returned value is of the same type as the VA, even if the par_value is a string
         if self._va_value_type == float:
             new_value = float(par_value)
             if self._factor is not None:
@@ -1562,7 +1602,7 @@ class OrsayParameterConnector:
         elif self._va_value_type == int:
             return int(par_value)
         elif self._va_value_type == bool:
-            return par_value in {True, "True", "true", 1, "1", "ON"}
+            return par_value in {True, "True", "true", "1", "ON"}
         else:
             raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
                                       % self._va_type_name)
@@ -1576,14 +1616,14 @@ class FIBDevice(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • interlockInChamberTriggered: BooleanVA
-        • interlockOutChamberTriggered: BooleanVA
-        • interlockOutHVPSTriggered: BooleanVA
-        • interlockOutSEDTriggered: BooleanVA
-        • columnPumpOn: BooleanVA
-        • gunPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
-        • columnPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
-        • compressedAirPressure: FloatContinuous, readonly, unit="Pa", range=(0, 5e6)
+        + interlockInChamberTriggered: BooleanVA
+        + interlockOutChamberTriggered: BooleanVA
+        + interlockOutHVPSTriggered: BooleanVA
+        + interlockOutSEDTriggered: BooleanVA
+        + columnPumpOn: BooleanVA
+        + gunPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
+        + columnPressure: FloatContinuous, readonly, unit="Pa", range=(0, 11e4)
+        + compressedAirPressure: FloatContinuous, readonly, unit="Pa", range=(0, 5e6)
         """
 
         super().__init__(name, role, parent=parent, **kwargs)
@@ -1597,27 +1637,25 @@ class FIBDevice(model.HwComponent):
 
         self._devices_with_errorstates = ("HybridGaugeCompressedAir",
                                           "HybridInterlockInChamberVac",
-                                          # "HybridInterlockOutChamberVac",
+                                          "HybridInterlockOutChamberVac",
                                           "HybridInterlockOutHVPS",
                                           "HybridInterlockOutSED",
                                           "HybridIonPumpGunFIB",
                                           "HybridIonPumpColumnFIB",
-                                          "HybridValveFIB")  # TODO!!!!!!!!
-        # TODO: HybridInterlockOutChamberVac needs to be included, but this component does
-        #       not exist in simulation, so with this value nothing can be tested in simulation...
+                                          "HybridValveFIB")
 
         self.interlockInChamberTriggered = model.BooleanVA(False, setter=self._setInterlockInChamber)
         self.interlockOutChamberTriggered = model.BooleanVA(False, setter=self._setInterlockOutChamber)
         self.interlockOutHVPSTriggered = model.BooleanVA(False, setter=self._setInterlockOutHVPS)
         self.interlockOutSEDTriggered = model.BooleanVA(False, setter=self._setInterlockOutSED)
         self.columnPumpOn = model.BooleanVA(False)
-        self.columnPumpOnConnector = None
+        self._columnPumpOnConnector = None
         self.gunPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
-        self.gunPressureConnector = None
+        self._gunPressureConnector = None
         self.columnPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
-        self.columnPressureConnector = None
+        self._columnPressureConnector = None
         self.compressedAirPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=COMP_AIR_PRESSURE_RNG)
-        self.compAirPressureConnector = None
+        self._compAirPressureConnector = None
 
         self._connectorList = []
 
@@ -1632,12 +1670,11 @@ class FIBDevice(model.HwComponent):
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._interlockInChamber = self.parent.datamodel.HybridInterlockInChamberVac
-        self._interlockOutChamber = self.parent.datamodel.HybridInterlockInChamberVac  # TODO!!!!!!!!
-        # TODO: The above value should be self.parent.datamodel.HybridInterlockOutChamberVac, but this component does
-        #       not exist in simulation, so with this value nothing can be tested in simulation...
+        self._interlockOutChamber = self.parent.datamodel.HybridInterlockOutChamberVac
         self._interlockOutHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockOutSED = self.parent.datamodel.HybridInterlockOutSED
 
+        # Subscribe to the parameter on the Orsay server
         self._interlockInChamber.ErrorState.Subscribe(self._updateInterlockInChamberTriggered)
         self._interlockOutChamber.ErrorState.Subscribe(self._updateInterlockOutChamberTriggered)
         self._interlockOutHVPS.ErrorState.Subscribe(self._updateInterlockOutHVPSTriggered)
@@ -1646,11 +1683,11 @@ class FIBDevice(model.HwComponent):
             p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
-        self.columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
-        self.gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
-        self.columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
-        self.compAirPressureConnector = OrsayParameterConnector(self.compressedAirPressure,
-                                                                self.parent.datamodel.HybridGaugeCompressedAir.Pressure)
+        self._columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
+        self._gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
+        self._columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
+        self._compAirPressureConnector = OrsayParameterConnector(self.compressedAirPressure,
+                                                                 self.parent.datamodel.HybridGaugeCompressedAir.Pressure)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -1673,10 +1710,10 @@ class FIBDevice(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the error state from the Orsay server and saves it in the state VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         errorParameters = (getattr(self.parent.datamodel, device).ErrorState
                            for device in self._devices_with_errorstates)
@@ -1702,11 +1739,11 @@ class FIBDevice(model.HwComponent):
 
     def _updateInterlockInChamberTriggered(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockInChamberTriggered VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockInChamber.ErrorState
@@ -1725,11 +1762,11 @@ class FIBDevice(model.HwComponent):
 
     def _updateInterlockOutChamberTriggered(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutChamberTriggered VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutChamber.ErrorState
@@ -1748,11 +1785,11 @@ class FIBDevice(model.HwComponent):
 
     def _updateInterlockOutHVPSTriggered(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutHVPSTriggered VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutHVPS.ErrorState
@@ -1771,11 +1808,11 @@ class FIBDevice(model.HwComponent):
 
     def _updateInterlockOutSEDTriggered(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutSEDTriggered VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutSED.ErrorState
@@ -1795,8 +1832,9 @@ class FIBDevice(model.HwComponent):
     def _setInterlockInChamber(self, value):
         """
         setter for interlockInChamberTriggered VA
-        value is the value attempted to be set to the VA
-        returns the current value the VA already has
+
+        :param (bool) value: The value attempted to be set to the VA
+        :return (bool): The current value the VA already has
 
         interlockInChamberTriggered VA is True if the interlock is triggered, False if it is not triggered.
         If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
@@ -1813,8 +1851,9 @@ class FIBDevice(model.HwComponent):
     def _setInterlockOutChamber(self, value):
         """
         setter for interlockOutChamberTriggered VA
-        value is the value attempted to be set to the VA
-        returns the current value the VA already has
+
+        :param (bool) value: The value attempted to be set to the VA
+        :return (bool): The current value the VA already has
 
         interlockOutChamberTriggered VA is True if the interlock is triggered, False if it is not triggered.
         If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
@@ -1831,8 +1870,9 @@ class FIBDevice(model.HwComponent):
     def _setInterlockOutHVPS(self, value):
         """
         setter for interlockOutHVPSTriggered VA
-        value is the value attempted to be set to the VA
-        returns the current value the VA already has
+
+        :param (bool) value: The value attempted to be set to the VA
+        :return (bool): The current value the VA already has
 
         interlockOutHVPSTriggered VA is True if the interlock is triggered, False if it is not triggered.
         If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
@@ -1849,8 +1889,9 @@ class FIBDevice(model.HwComponent):
     def _setInterlockOutSED(self, value):
         """
         setter for interlockOutSEDTriggered VA
-        value is the value attempted to be set to the VA
-        returns the current value the VA already has
+
+        :param (bool) value: The value attempted to be set to the VA
+        :return (bool): The current value the VA already has
 
         interlockOutSEDTriggered VA is True if the interlock is triggered, False if it is not triggered.
         If the interlock is not triggered, this VA should not be changed, though it is allowed to attempt to reset the
@@ -1888,16 +1929,16 @@ class FIBSource(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • gunOn: BooleanVA
-        • lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
-        • currentRegulation: BooleanVA, readonly, should generally be False, since sourceCurrent's Target cannot be set
-        • sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is True)
-        • suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
-        • heaterCurrent: FloatContinuous, unit="A", range=(0, 5)
-        • heater: BooleanVA
-        • acceleratorVoltage: FloatContinuous, unit="V", range=(0.0, 3e4)
-        • energyLink: BooleanVA
-        • extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
+        + gunOn: BooleanVA
+        + lifetime: FloatContinuous, readonly, unit="Ah", range=(0, 10)
+        + currentRegulation: BooleanVA, readonly, should generally be False, since sourceCurrent's Target cannot be set
+        + sourceCurrent: FloatContinuous, readonly, unit="A", range=(0, 1e-5) (only used if currentRegulation is True)
+        + suppressorVoltage: FloatContinuous, unit="V", range=(-2e3, 2e3) (only used if currentRegulation is False)
+        + heaterCurrent: FloatContinuous, unit="A", range=(0, 5)
+        + heater: BooleanVA
+        + acceleratorVoltage: FloatContinuous, unit="V", range=(0.0, 3e4)
+        + energyLink: BooleanVA
+        + extractorVoltage: FloatContinuous, unit="V", range=(0, 12e3)
         """
 
         super().__init__(name, role, parent=parent, **kwargs)
@@ -1906,24 +1947,24 @@ class FIBSource(model.HwComponent):
         self._ionColumn = None
 
         self.gunOn = model.BooleanVA(False)
-        self.gunOnConnector = None
+        self._gunOnConnector = None
         self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
-        self.lifetimeConnector = None
+        self._lifetimeConnector = None
         self.currentRegulation = model.BooleanVA(False, readonly=True)
-        self.currentRegulationConnector = None
+        self._currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
-        self.sourceCurrentConnector = None
+        self._sourceCurrentConnector = None
         self.suppressorVoltage = model.FloatContinuous(0.0, unit="V", range=(-2e3, 2e3))
-        self.suppressorVoltageConnector = None
+        self._suppressorVoltageConnector = None
         self.heaterCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
-        self.heaterCurrentConnector = None
+        self._heaterCurrentConnector = None
         self.heater = model.BooleanVA(False, setter=self._changeHeater)
         self.acceleratorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 3e4))
-        self.acceleratorVoltageConnector = None
+        self._acceleratorVoltageConnector = None
         self.energyLink = model.BooleanVA(False)
-        self.energyLinkConnector = None
+        self._energyLinkConnector = None
         self.extractorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 12e3))
-        self.extractorVoltageConnector = None
+        self._extractorVoltageConnector = None
 
         self._connectorList = []
 
@@ -1938,33 +1979,34 @@ class FIBSource(model.HwComponent):
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._ionColumn = self.parent.datamodel.IonColumnMCS
 
+        # Subscribe to the parameter on the Orsay server
         self._hvps.HeaterState.Subscribe(self._updateHeater)
         self._hvps.HeaterState.Subscribe(self._updateErrorState)
 
-        self.gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
-                                                      conversion={True: "ON", False: "OFF"})
-        self.lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
-                                                         minpar=self._hvps.SourceLifeTime_Minvalue,
-                                                         maxpar=self._hvps.SourceLifeTime_Maxvalue)
-        self.currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
-                                                                  self._hvps.BeamCurrent_Enabled)
-        self.sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent,
-                                                              minpar=self._hvps.BeamCurrent_Minvalue,
-                                                              maxpar=self._hvps.BeamCurrent_Maxvalue)
-        self.suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor,
-                                                                  minpar=self._hvps.Suppressor_Minvalue,
-                                                                  maxpar=self._hvps.Suppressor_Maxvalue)
-        self.heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
-                                                              minpar=self._hvps.Heater_Minvalue,
-                                                              maxpar=self._hvps.Heater_Maxvalue)
-        self.acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy,
-                                                                   minpar=self._hvps.Energy_Minvalue,
-                                                                   maxpar=self._hvps.Energy_Maxvalue)
-        self.energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
-                                                           conversion={True: "ON", False: "OFF"})
-        self.extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
-                                                                 minpar=self._hvps.Extractor_Minvalue,
-                                                                 maxpar=self._hvps.Extractor_Maxvalue)
+        self._gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
+                                                       conversion={True: "ON", False: "OFF"})
+        self._lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
+                                                          minpar=self._hvps.SourceLifeTime_Minvalue,
+                                                          maxpar=self._hvps.SourceLifeTime_Maxvalue)
+        self._currentRegulationConnector = OrsayParameterConnector(self.currentRegulation,
+                                                                   self._hvps.BeamCurrent_Enabled)
+        self._sourceCurrentConnector = OrsayParameterConnector(self.sourceCurrent, self._hvps.BeamCurrent,
+                                                               minpar=self._hvps.BeamCurrent_Minvalue,
+                                                               maxpar=self._hvps.BeamCurrent_Maxvalue)
+        self._suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor,
+                                                                   minpar=self._hvps.Suppressor_Minvalue,
+                                                                   maxpar=self._hvps.Suppressor_Maxvalue)
+        self._heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
+                                                               minpar=self._hvps.Heater_Minvalue,
+                                                               maxpar=self._hvps.Heater_Maxvalue)
+        self._acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy,
+                                                                    minpar=self._hvps.Energy_Minvalue,
+                                                                    maxpar=self._hvps.Energy_Maxvalue)
+        self._energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
+                                                            conversion={True: "ON", False: "OFF"})
+        self._extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
+                                                                  minpar=self._hvps.Extractor_Minvalue,
+                                                                  maxpar=self._hvps.Extractor_Maxvalue)
 
         self._connectorList = [x for (x, _) in  # save only the names of the returned members
                                inspect.getmembers(self,  # get all members of this FIB_source object
@@ -1984,10 +2026,10 @@ class FIBSource(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the error state from the Orsay server and saves it in the state VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter not in (None, self._hvps.HeaterState):
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or the"
@@ -2009,10 +2051,10 @@ class FIBSource(model.HwComponent):
 
     def _updateHeater(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._hvps.HeaterState
@@ -2032,10 +2074,10 @@ class FIBSource(model.HwComponent):
 
     def _changeHeater(self, goal):
         """
-        goal (bool): goal state of the heater: (True: "ON", False: "OFF")
-        return (bool): goal state of the heater as set to the server: (True: "ON", False: "OFF")
-
         Turns on the FIB source heater on the Orsay server if argument goal is True. Turns it off otherwise.
+
+        :param (bool) goal: Goal state of the heater: (True: "ON", False: "OFF")
+        :return (bool): Goal state of the heater as set to the server: (True: "ON", False: "OFF")
         """
         logging.debug("Setting FIB source heater to %s." % (HEATER_ON if goal else HEATER_OFF))
         self._hvps.HeaterState.Target = HEATER_ON if goal else HEATER_OFF
@@ -2061,104 +2103,105 @@ class FIBBeam(model.HwComponent):
     def __init__(self, name, role, parent, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
-        • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
-        • blankerVoltage: FloatContinuous, unit="V", range=(0, 150)
-        • condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
-        • objectiveStigmator: TupleContinuous Float, unit="V", range=[(-2.0, -2.0), (2.0, 2.0)]
-        • intermediateStigmator: TupleContinuous Float, unit="V", range=[(-5.0, -5.0), (5.0, 5.0)]
-        • steererStigmator: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
-        • steererShift: TupleContinuous Float, unit="V", range=[(-100.0, -100.0), (100.0, 100.0)]
-        • steererTilt: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
-        • orthogonality: FloatContinuous, unit="rad", range=(-pi, pi)
-        • objectiveRotationOffset: FloatContinuous, unit="rad", range=(0, 2*pi)
-        • objectiveStageRotationOffset: FloatContinuous, unit="rad", range=(-pi, pi)
-        • tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
-        • xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
-        • mirror: BooleanVA
-        • imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
-        • objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
-        • beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
-        • horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
-        • measuringCurrent: BooleanVA
-        • current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
-        • videoDelay: FloatContinuous, unit="s", range=(0, 1e-3)
-        • flybackTime: FloatContinuous, unit="s", range=(0, 1e-3)
-        • blankingDelay:  FloatContinuous, unit="s", range=(0, 1e-3)
-        • rotation: FloatContinuous, unit="rad", range=(-pi, pi)
-        • dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
-        • contrast: FloatContinuous, unit="", range=(0, 1)
-        • brightness: FloatContinuous, unit="", range=(0, 1)
-        • operatingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
-        • imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512)
+        + blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
+        + blankerVoltage: FloatContinuous, unit="V", range=(0, 150)
+        + condenserVoltage: FloatContinuous, unit="V", range=(0, 3e4)
+        + objectiveStigmator: TupleContinuous Float, unit="V", range=[(-2.0, -2.0), (2.0, 2.0)]
+        + intermediateStigmator: TupleContinuous Float, unit="V", range=[(-5.0, -5.0), (5.0, 5.0)]
+        + steererStigmator: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
+        + steererShift: TupleContinuous Float, unit="V", range=[(-100.0, -100.0), (100.0, 100.0)]
+        + steererTilt: TupleContinuous Float, unit="V", range=[(-10.0, -10.0), (10.0, 10.0)]
+        + orthogonality: FloatContinuous, unit="rad", range=(-pi, pi)
+        + objectiveRotationOffset: FloatContinuous, unit="rad", range=(0, 2*pi)
+        + objectiveStageRotationOffset: FloatContinuous, unit="rad", range=(-pi, pi)
+        + tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
+        + xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
+        + mirror: BooleanVA
+        + imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
+        + objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
+        + beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
+        + horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
+        + measuringCurrent: BooleanVA
+        + current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
+        + videoDelay: FloatContinuous, unit="s", range=(0, 1e-3)
+        + flybackTime: FloatContinuous, unit="s", range=(0, 1e-3)
+        + blankingDelay:  FloatContinuous, unit="s", range=(0, 1e-3)
+        + rotation: FloatContinuous, unit="rad", range=(-pi, pi)
+        + dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
+        + contrast: FloatContinuous, unit="", range=(0, 1)
+        + brightness: FloatContinuous, unit="", range=(0, 1)
+        + operatingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
+        + imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512)
                        or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
-        • translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
-        • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
+        + translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
+        + resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
 
         super().__init__(name, role, parent=parent, **kwargs)
 
+        # Variables for shorthand access to Orsay Parameters. They will get their value in on_connect()
         self._datamodel = None
         self._ionColumn = None
         self._hvps = None
         self._sed = None
 
         self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
-        self.blankerConnector = None
+        self._blankerConnector = None
         self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 150))
-        self.blankerVoltageConnector = None
+        self._blankerVoltageConnector = None
         self.condenserVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 3e4))
-        self.condenserVoltageConnector = None
+        self._condenserVoltageConnector = None
         self.objectiveStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-2.0, -2.0), (2.0, 2.0)])
-        self.objectiveStigmatorConnector = None
+        self._objectiveStigmatorConnector = None
         self.intermediateStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-5.0, -5.0), (5.0, 5.0)])
-        self.intermediateStigmatorConnector = None
+        self._intermediateStigmatorConnector = None
         self.steererStigmator = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
-        self.steererStigmatorConnector = None
+        self._steererStigmatorConnector = None
         self.steererShift = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-100.0, -100.0), (100.0, 100.0)])
-        self.steererShiftConnector = None
+        self._steererShiftConnector = None
         self.steererTilt = model.TupleContinuous((0.0, 0.0), unit="V", range=[(-10.0, -10.0), (10.0, 10.0)])
-        self.steererTiltConnector = None
+        self._steererTiltConnector = None
         self.orthogonality = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
-        self.orthogonalityConnector = None
+        self._orthogonalityConnector = None
         self.objectiveRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
-        self.objectiveRotationOffsetConnector = None
+        self._objectiveRotationOffsetConnector = None
         self.objectiveStageRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
-        self.objectiveStageRotationOffsetConnector = None
+        self._objectiveStageRotationOffsetConnector = None
         self.tilt = model.TupleContinuous((0.0, 0.0), unit="rad", range=[(-pi, -pi), (pi, pi)])
-        self.tiltConnector = None
+        self._tiltConnector = None
         self.xyRatio = model.FloatContinuous(1.0, unit="rad", range=(0.0, 2.0))
-        self.xyRatioConnector = None
+        self._xyRatioConnector = None
         self.mirror = model.BooleanVA(False)
-        self.mirrorConnector = None
+        self._mirrorConnector = None
         self.imageFromSteerers = model.BooleanVA(False)
-        self.imageFromSteerersConnector = None
+        self._imageFromSteerersConnector = None
         self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
-        self.objectiveVoltageConnector = None
+        self._objectiveVoltageConnector = None
         self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
-        self.beamShiftConnector = None
+        self._beamShiftConnector = None
         self.horizontalFOV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
-        self.horizontalFOVConnector = None
+        self._horizontalFOVConnector = None
         self.measuringCurrent = model.BooleanVA(False)
-        self.measuringCurrentConnector = None
+        self._measuringCurrentConnector = None
         self.current = model.FloatContinuous(0.0, readonly=True, unit="A", range=(0.0, 1.0e-5))
-        self.currentConnector = None
+        self._currentConnector = None
         self.videoDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
-        self.videoDelayConnector = None
+        self._videoDelayConnector = None
         self.flybackTime = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
-        self.flybackTimeConnector = None
+        self._flybackTimeConnector = None
         self.blankingDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
-        self.blankingDelayConnector = None
+        self._blankingDelayConnector = None
         self.rotation = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
-        self.rotationConnector = None
+        self._rotationConnector = None
         self.dwellTime = model.FloatEnumerated(1e-7, unit="s",
                                                choices={1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7})
-        self.dwellTimeConnector = None
+        self._dwellTimeConnector = None
         self.contrast = model.FloatContinuous(1.0, unit="", range=(0, 1))
-        self.contrastConnector = None
+        self._contrastConnector = None
         self.brightness = model.FloatContinuous(1.0, unit="", range=(0, 1))
-        self.brightnessConnector = None
+        self._brightnessConnector = None
         self.operatingMode = model.BooleanVA(False)
-        self.operatingModeConnector = None
+        self._operatingModeConnector = None
         self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(512, 480), (1024, 1024)],
                                                  setter=self._imageFormat_setter)
         self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-512.0, -512.0), (512.0, 512.0)],
@@ -2183,100 +2226,103 @@ class FIBBeam(model.HwComponent):
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._sed = self.parent.datamodel.Sed
 
-        self.blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
-                                                        conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
-        self.blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage,
-                                                               minpar=self._ionColumn.BlankingVoltage_Minvalue,
-                                                               maxpar=self._ionColumn.BlankingVoltage_Maxvalue)
-        self.condenserVoltageConnector = OrsayParameterConnector(self.condenserVoltage, self._hvps.CondensorVoltage,
-                                                                 minpar=self._hvps.CondensorVoltage_Minvalue,
-                                                                 maxpar=self._hvps.CondensorVoltage_Maxvalue)
-        self.objectiveStigmatorConnector = OrsayParameterConnector(self.objectiveStigmator,
-                                                                   [self._ionColumn.ObjectiveStigmatorX,
-                                                                    self._ionColumn.ObjectiveStigmatorY],
-                                                                   minpar=[self._ionColumn.ObjectiveStigmatorX_Minvalue,
-                                                                           self._ionColumn.ObjectiveStigmatorY_Minvalue],
-                                                                   maxpar=[self._ionColumn.ObjectiveStigmatorX_Maxvalue,
-                                                                           self._ionColumn.ObjectiveStigmatorY_Maxvalue])
-        self.intermediateStigmatorConnector = OrsayParameterConnector(self.intermediateStigmator,
-                                                                      [self._ionColumn.IntermediateStigmatorX,
-                                                                       self._ionColumn.IntermediateStigmatorY],
-                                                                      minpar=[
-                                                                          self._ionColumn.IntermediateStigmatorX_Minvalue,
-                                                                          self._ionColumn.IntermediateStigmatorY_Minvalue],
-                                                                      maxpar=[
-                                                                          self._ionColumn.IntermediateStigmatorX_Maxvalue,
-                                                                          self._ionColumn.IntermediateStigmatorY_Maxvalue])
-        self.steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
-                                                                 [self._ionColumn.CondensorSteerer1StigmatorX,
-                                                                  self._ionColumn.CondensorSteerer1StigmatorY],
-                                                                 minpar=[
-                                                                     self._ionColumn.CondensorSteerer1StigmatorX_Minvalue,
-                                                                     self._ionColumn.CondensorSteerer1StigmatorY_Minvalue],
-                                                                 maxpar=[
-                                                                     self._ionColumn.CondensorSteerer1StigmatorX_Maxvalue,
-                                                                     self._ionColumn.CondensorSteerer1StigmatorY_Maxvalue])
-        self.steererShiftConnector = OrsayParameterConnector(self.steererShift,
-                                                             [self._ionColumn.CondensorSteerer1ShiftX,
-                                                              self._ionColumn.CondensorSteerer1ShiftY],
-                                                             minpar=[self._ionColumn.CondensorSteerer1ShiftX_Minvalue,
-                                                                     self._ionColumn.CondensorSteerer1ShiftY_Minvalue],
-                                                             maxpar=[self._ionColumn.CondensorSteerer1ShiftX_Maxvalue,
-                                                                     self._ionColumn.CondensorSteerer1ShiftY_Maxvalue])
-        self.steererTiltConnector = OrsayParameterConnector(self.steererTilt,
-                                                            [self._ionColumn.CondensorSteerer1TiltX,
-                                                             self._ionColumn.CondensorSteerer1TiltY],
-                                                            minpar=[self._ionColumn.CondensorSteerer1TiltX_Minvalue,
-                                                                    self._ionColumn.CondensorSteerer1TiltY_Minvalue],
-                                                            maxpar=[self._ionColumn.CondensorSteerer1TiltX_Maxvalue,
-                                                                    self._ionColumn.CondensorSteerer1TiltY_Maxvalue])
-        self.orthogonalityConnector = OrsayParameterConnector(self.orthogonality,
-                                                              self._ionColumn.ObjectiveOrthogonality)
-        self.objectiveRotationOffsetConnector = OrsayParameterConnector(self.objectiveRotationOffset,
-                                                                        self._ionColumn.ObjectiveRotationOffset)
-        self.objectiveStageRotationOffsetConnector = OrsayParameterConnector(self.objectiveStageRotationOffset,
-                                                                             self._ionColumn.ObjectiveStageRotationOffset,
-                                                                             minpar=self._ionColumn.ObjectiveStageRotationOffset_Minvalue,
-                                                                             maxpar=self._ionColumn.ObjectiveStageRotationOffset_Maxvalue)
-        self.tiltConnector = OrsayParameterConnector(self.tilt, [self._ionColumn.ObjectivePhi,
-                                                                 self._ionColumn.ObjectiveTeta])
-        self.xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio,
-                                                        minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
-                                                        maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
-        self.mirrorConnector = OrsayParameterConnector(self.mirror, self._ionColumn.Mirror,
-                                                       conversion={True: -1, False: 1})
-        self.imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
-                                                                  self._ionColumn.ObjectiveScanSteerer,
+        self._blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
+                                                         conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
+        self._blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage,
+                                                                minpar=self._ionColumn.BlankingVoltage_Minvalue,
+                                                                maxpar=self._ionColumn.BlankingVoltage_Maxvalue)
+        self._condenserVoltageConnector = OrsayParameterConnector(self.condenserVoltage, self._hvps.CondensorVoltage,
+                                                                  minpar=self._hvps.CondensorVoltage_Minvalue,
+                                                                  maxpar=self._hvps.CondensorVoltage_Maxvalue)
+        self._objectiveStigmatorConnector = OrsayParameterConnector(self.objectiveStigmator,
+                                                                    [self._ionColumn.ObjectiveStigmatorX,
+                                                                     self._ionColumn.ObjectiveStigmatorY],
+                                                                    minpar=[
+                                                                        self._ionColumn.ObjectiveStigmatorX_Minvalue,
+                                                                        self._ionColumn.ObjectiveStigmatorY_Minvalue],
+                                                                    maxpar=[
+                                                                        self._ionColumn.ObjectiveStigmatorX_Maxvalue,
+                                                                        self._ionColumn.ObjectiveStigmatorY_Maxvalue])
+        self._intermediateStigmatorConnector = OrsayParameterConnector(self.intermediateStigmator,
+                                                                       [self._ionColumn.IntermediateStigmatorX,
+                                                                        self._ionColumn.IntermediateStigmatorY],
+                                                                       minpar=[
+                                                                           self._ionColumn.IntermediateStigmatorX_Minvalue,
+                                                                           self._ionColumn.IntermediateStigmatorY_Minvalue],
+                                                                       maxpar=[
+                                                                           self._ionColumn.IntermediateStigmatorX_Maxvalue,
+                                                                           self._ionColumn.IntermediateStigmatorY_Maxvalue])
+        self._steererStigmatorConnector = OrsayParameterConnector(self.steererStigmator,
+                                                                  [self._ionColumn.CondensorSteerer1StigmatorX,
+                                                                   self._ionColumn.CondensorSteerer1StigmatorY],
+                                                                  minpar=[
+                                                                      self._ionColumn.CondensorSteerer1StigmatorX_Minvalue,
+                                                                      self._ionColumn.CondensorSteerer1StigmatorY_Minvalue],
+                                                                  maxpar=[
+                                                                      self._ionColumn.CondensorSteerer1StigmatorX_Maxvalue,
+                                                                      self._ionColumn.CondensorSteerer1StigmatorY_Maxvalue])
+        self._steererShiftConnector = OrsayParameterConnector(self.steererShift,
+                                                              [self._ionColumn.CondensorSteerer1ShiftX,
+                                                               self._ionColumn.CondensorSteerer1ShiftY],
+                                                              minpar=[self._ionColumn.CondensorSteerer1ShiftX_Minvalue,
+                                                                      self._ionColumn.CondensorSteerer1ShiftY_Minvalue],
+                                                              maxpar=[self._ionColumn.CondensorSteerer1ShiftX_Maxvalue,
+                                                                      self._ionColumn.CondensorSteerer1ShiftY_Maxvalue])
+        self._steererTiltConnector = OrsayParameterConnector(self.steererTilt,
+                                                             [self._ionColumn.CondensorSteerer1TiltX,
+                                                              self._ionColumn.CondensorSteerer1TiltY],
+                                                             minpar=[self._ionColumn.CondensorSteerer1TiltX_Minvalue,
+                                                                     self._ionColumn.CondensorSteerer1TiltY_Minvalue],
+                                                             maxpar=[self._ionColumn.CondensorSteerer1TiltX_Maxvalue,
+                                                                     self._ionColumn.CondensorSteerer1TiltY_Maxvalue])
+        self._orthogonalityConnector = OrsayParameterConnector(self.orthogonality,
+                                                               self._ionColumn.ObjectiveOrthogonality)
+        self._objectiveRotationOffsetConnector = OrsayParameterConnector(self.objectiveRotationOffset,
+                                                                         self._ionColumn.ObjectiveRotationOffset)
+        self._objectiveStageRotationOffsetConnector = OrsayParameterConnector(self.objectiveStageRotationOffset,
+                                                                              self._ionColumn.ObjectiveStageRotationOffset,
+                                                                              minpar=self._ionColumn.ObjectiveStageRotationOffset_Minvalue,
+                                                                              maxpar=self._ionColumn.ObjectiveStageRotationOffset_Maxvalue)
+        self._tiltConnector = OrsayParameterConnector(self.tilt, [self._ionColumn.ObjectivePhi,
+                                                                  self._ionColumn.ObjectiveTeta])
+        self._xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio,
+                                                         minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
+                                                         maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
+        self._mirrorConnector = OrsayParameterConnector(self.mirror, self._ionColumn.Mirror,
+                                                        conversion={True: -1, False: 1})
+        self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
+                                                                   self._ionColumn.ObjectiveScanSteerer,
+                                                                   conversion={True: 1, False: 0})
+        self._objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
+                                                                  minpar=self._hvps.ObjectiveVoltage_Minvalue,
+                                                                  maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
+        self._beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
+                                                                            self._ionColumn.ObjectiveShiftY],
+                                                           minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
+                                                                   self._ionColumn.ObjectiveShiftY_Minvalue],
+                                                           maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
+                                                                   self._ionColumn.ObjectiveShiftY_Maxvalue])
+        self._horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize,
+                                                               minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
+                                                               maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
+        self._measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
                                                                   conversion={True: 1, False: 0})
-        self.objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
-                                                                 minpar=self._hvps.ObjectiveVoltage_Minvalue,
-                                                                 maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
-        self.beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
-                                                                           self._ionColumn.ObjectiveShiftY],
-                                                          minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
-                                                                  self._ionColumn.ObjectiveShiftY_Minvalue],
-                                                          maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
-                                                                  self._ionColumn.ObjectiveShiftY_Maxvalue])
-        self.horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize,
-                                                              minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
-                                                              maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
-        self.measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
-                                                                 conversion={True: 1, False: 0})
-        self.currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent,
-                                                        minpar=self._ionColumn.FaradayCurrent_Minvalue,
-                                                        maxpar=self._ionColumn.FaradayCurrent_Maxvalue)
-        self.videoDelayConnector = OrsayParameterConnector(self.videoDelay, self._ionColumn.VideoDelay)
-        self.flybackTimeConnector = OrsayParameterConnector(self.flybackTime, self._ionColumn.FlybackTime)
-        self.blankingDelayConnector = OrsayParameterConnector(self.blankingDelay, self._ionColumn.BlankingDelay)
-        self.rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle)
-        self.dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime,
-                                                          minpar=self._ionColumn.PixelTime_Minvalue,
-                                                          maxpar=self._ionColumn.PixelTime_Maxvalue)
-        self.contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
-        self.brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
-        self.operatingModeConnector = OrsayParameterConnector(self.operatingMode, self._datamodel.Scanner.OperatingMode,
-                                                              conversion={True: 1, False: 0})
-
+        self._currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent,
+                                                         minpar=self._ionColumn.FaradayCurrent_Minvalue,
+                                                         maxpar=self._ionColumn.FaradayCurrent_Maxvalue)
+        self._videoDelayConnector = OrsayParameterConnector(self.videoDelay, self._ionColumn.VideoDelay)
+        self._flybackTimeConnector = OrsayParameterConnector(self.flybackTime, self._ionColumn.FlybackTime)
+        self._blankingDelayConnector = OrsayParameterConnector(self.blankingDelay, self._ionColumn.BlankingDelay)
+        self._rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle)
+        self._dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime,
+                                                           minpar=self._ionColumn.PixelTime_Minvalue,
+                                                           maxpar=self._ionColumn.PixelTime_Maxvalue)
+        self._contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
+        self._brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
+        self._operatingModeConnector = OrsayParameterConnector(self.operatingMode,
+                                                               self._datamodel.Scanner.OperatingMode,
+                                                               conversion={True: 1, False: 0})
+        # Subscribe to the parameter on the Orsay server
         self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
         self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
 
@@ -2299,6 +2345,10 @@ class FIBBeam(model.HwComponent):
     def _imageFormat_setter(self, value):
         """
         Setter of the imageFormat VA
+
+        :param (tuple (int, int)) value: The goal format of the image. Will be corrected to the closest available value
+            in IMAGEFORMAT_OPTIONS.
+        :return (tuple (int, int)): The actual image format set.
         """
         if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
             value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
@@ -2351,10 +2401,10 @@ class FIBBeam(model.HwComponent):
 
     def _updateImageFormat(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the image format from the Orsay server and saves it in the imageFormat VA
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._ionColumn.ImageSize
@@ -2372,11 +2422,15 @@ class FIBBeam(model.HwComponent):
 
     def _translation_setter(self, value):
         """
-        Setter of the translation VA. The translation VA marks the centre of the image area with respect to the
-        centre of the field of view. This setter transforms the coordinates of the centre of the image area to the
-        coordinates of the top left corner of the image area, which is the format the Orsay server takes. The setter
-        also adjusts the size of the image area (resolution VA) to prevent the new translation from placing part of
-        the image area outside of the image format.
+        Setter of the translation VA.
+
+        :param (tuple (float, float)) value: Target translation of the area to image
+        :return (tuple (float, float)): The actual translation set
+
+        The translation VA marks the centre of the image area with respect to the centre of the field of view. This
+        setter transforms the coordinates of the centre of the image area to the coordinates of the top left corner of
+        the image area, which is the format the Orsay server takes. The setter also adjusts the size of the image area
+        (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
         self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
         new_translation = list(value)
@@ -2413,8 +2467,13 @@ class FIBBeam(model.HwComponent):
 
     def _resolution_setter(self, value):
         """
-        Setter of the resolution VA. Also adapts the coordinates of the top left corner of the image area to assure that
-        the centre of the image area stays where it is.
+        Setter of the resolution VA.
+
+        :param (tuple (float, float)) value: Target resolution of the area to image
+        :return (tuple (float, float)): The actual resolution set
+
+        Also adapts the coordinates of the top left corner of the image area to assure that the centre of the image area
+        stays where it is.
         """
         self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
         new_resolution = list(value)
@@ -2451,11 +2510,11 @@ class FIBBeam(model.HwComponent):
 
     def _updateTranslationResolution(self, parameter=None, attributeName="Actual"):
         """
-        parameter (Orsay Parameter): the parameter on the Orsay server to use to update the VA
-        attributeName (str): the name of the attribute of parameter which was changed
-
         Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
-        and resolution VA's respectively
+        and resolution VA's respectively.
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+        :param (str) attributeName: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._ionColumn.ImageArea
@@ -2466,7 +2525,7 @@ class FIBBeam(model.HwComponent):
         if attributeName != "Actual":
             return
 
-        if not self.imageFormatUpdatedResolutionTranslation.is_set():  # in case this update comes from a change in image format
+        if not self.imageFormatUpdatedResolutionTranslation.is_set():  # if this update comes from change in imageFormat
             self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are
             #     # not awaiting an update because of image format any more
             return  # but don't actually perform the update

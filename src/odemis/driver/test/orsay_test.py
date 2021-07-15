@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import os
 import unittest
+import itertools
 
 from math import pi
 from time import sleep
@@ -33,8 +34,6 @@ from odemis import model
 TEST_NOHW = os.environ.get("TEST_NOHW", 0)  # Default to Hw testing
 if not TEST_NOHW == "sim":
     TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
-
-TEST_NOHW = 0
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -1838,42 +1837,67 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
         attributes.append("Actual")  # in simulation write to both Target and Actual
         settletime = 0.5
 
-    init_values = []
-    if type(parameters) in [set, list, tuple]:
-        for p in parameters:
-            init_values.append(p.Target)  # get the initial values of the parameters
-    else:  # if a single parameter is passed
-        init_values.append(parameters.Target)
+    # assure that non-tuple va's can be handled the same as tuple va's for the remainder of this function
+    if type(parameters) not in [set, list, tuple]:
+        parameters = [parameters]  # make it into an iterable list, if it isn't already
+        valuepairs = list(map(list, valuepairs))  # make the parameter values mutable
+        for i in range(len(valuepairs)):
+            valuepairs[i][1] = [valuepairs[i][1]]  # make parameter values also an iterable list
 
-    # loop twice to assure value pairs are alternated
-    for (va_value, par_value) in valuepairs:
-        try:  # for Tuple VA's
-            for i in range(len(parameters)):
-                for a in attributes:
-                    setattr(parameters[i], a, par_value[i])
-        except TypeError:  # if a single parameter is passed
+    init_values = []
+    for p in parameters:
+        init_values.append(p.Target)  # get the initial values of the parameters
+
+    # write to the Parameter, check that the VA follows
+    # Do this such that all possible transitions of one value to another are tested at least once
+    for ((va_value1, par_value1), (va_value2, par_value2)) in itertools.combinations(valuepairs, 2):
+        # Go to the first value
+        for i in range(len(parameters)):
             for a in attributes:
-                setattr(parameters, a, par_value)
+                setattr(parameters[i], a, par_value1[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value)
+        test_case.assertEqual(va.value, va_value1)
+
+        # Go to the second value
+        for i in range(len(parameters)):
+            for a in attributes:
+                setattr(parameters[i], a, par_value2[i])
+        sleep(settletime)
+        test_case.assertEqual(va.value, va_value2)
+
+        # Go back to the first value
+        for i in range(len(parameters)):
+            for a in attributes:
+                setattr(parameters[i], a, par_value1[i])
+        sleep(settletime)
+        test_case.assertEqual(va.value, va_value1)
 
     if not readonly:
-        for (va_value, par_value) in valuepairs:
-            va.value = va_value
+        # write to the VA, check that the Parameter follows
+        for ((va_value1, par_value1), (va_value2, par_value2)) in itertools.combinations(valuepairs, 2):
+            # Go to the first value
+            va.value = va_value1
             sleep(settletime)
-            try:  # for Tuple VA's
-                for i in range(len(parameters)):
-                    target = type(par_value[i])(parameters[i].Target)  # needed since many parameter values are strings
-                    test_case.assertEqual(target, par_value[i])
-            except TypeError:  # if a single parameter is passed
-                target = type(par_value)(parameters.Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value)
+            for i in range(len(parameters)):
+                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                test_case.assertEqual(target, par_value1[i])
 
-    if type(parameters) in [set, list, tuple]:
-        for i in range(len(parameters)):
-            parameters[i].Target = init_values[i]  # return to the values form before test
-    else:  # if a single parameter is passed
-        parameters.Target = init_values[0]
+            # Go to the second value
+            va.value = va_value2
+            sleep(settletime)
+            for i in range(len(parameters)):
+                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                test_case.assertEqual(target, par_value2[i])
+
+            # Go back to the first value
+            va.value = va_value1
+            sleep(settletime)
+            for i in range(len(parameters)):
+                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                test_case.assertEqual(target, par_value1[i])
+
+    for i in range(len(parameters)):
+        parameters[i].Target = init_values[i]  # return to the values form before test
 
 
 if __name__ == '__main__':
