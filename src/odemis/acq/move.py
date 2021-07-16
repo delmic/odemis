@@ -204,6 +204,7 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
         focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
         align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
         align_active = align_md[model.MD_FAV_POS_ACTIVE]
+        stage_referenced = all(stage.referenced.value.values())
         # Fail early when required axes are not found on the positions metadata
         required_axes = {'x', 'y', 'z', 'rx', 'rz'}
         for stage_position in [stage_active, stage_deactive, stage_coating]:
@@ -212,27 +213,32 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
         current_pos = stage.position.value
         # To hold the ordered sub moves list
         sub_moves = []
+        # To hold the sub moves to run if the ordered sub moves failed
+        fallback_submoves = []
         # Create axis->pos dict from target position given smaller number of axes
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
-        # Initial submove for all procedures is to park focus if it's not already parked
-        if not _isNearPosition(focus.position.value, focus_deactive, {'z'}):
+        # Initial submoves for all procedures is to park focus & aligner to safe position
+        if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
             sub_moves.append((focus, focus_deactive))
+        if not _isNearPosition(align.position.value, align_deactive, align.axes):
+            run_sub_move(future, align, align_deactive)
 
         current_label = getCurrentPositionLabel(current_pos, stage)
         if target == LOADING:
-            if current_label is UNKNOWN:
+            if current_label is UNKNOWN and stage_referenced:
                 logging.warning("Moving stage to loading while current position is unknown.")
             if abs(stage_deactive['rx']) > ATOL_ROTATION_POS:
                 raise ValueError(
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
+
             # Check if stage is not referenced:
             # 1. reference focus if not already referenced
             # 2. Move focus to deactive position
             # 3. reference aligner if not already referenced
             # 4. Move aligner to deactive position
             # 5. reference stage
-            if not all(stage.referenced.value.values()):
+            if not stage_referenced:
                 if not all(focus.referenced.value.values()):
                     run_reference(future, focus)
                 run_sub_move(future, focus, focus_deactive)
@@ -241,10 +247,18 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
                 run_sub_move(future, align, align_deactive)
                 run_reference(future, stage)
 
+            fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, stage_deactive)))
+            fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, stage_deactive)))
             # Add the sub moves to perform the loading move
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, stage_deactive)))
-            sub_moves.append((stage, filter_dict({'x', 'y'}, stage_deactive)))
-            sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
+            if current_label is UNKNOWN and not stage_referenced:
+                # After referencing the stage could move near the maximum axes range,
+                # and moving single axes may result in an invalid/reachable position error,
+                # so all axes will moved together for this special case.
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, stage_deactive)))
+            else:
+                sub_moves.append((stage, filter_dict({'x', 'y'}, stage_deactive)))
+                sub_moves.append((stage, filter_dict({'z'}, stage_deactive)))
 
         elif target in (IMAGING, COATING):
             if current_label is LOADING:
@@ -259,11 +273,17 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
 
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             target_pos = stage_active if target is IMAGING else stage_coating
-            if target == COATING:
-                sub_moves.append((align, align_deactive))
+
+            fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+            fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
             # Add the sub moves to perform the imaging/coating move
-            sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-            sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
+            if current_label == LOADING:
+                # As moving from loading position requires re-referencing the stage, move all axes together to
+                # prevent invalid/reachable position error
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+            else:
+                sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos)))
             sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
             # TODO: check if the following movement is necessary as it could be done later, only when the user start
             #  the FM stream (in which case it’d be handled by the optical path manager)
@@ -273,8 +293,16 @@ def _doCryoSwitchSamplePosition(future, stage, focus, align, target):
         else:
             raise ValueError("Unknown target value %s." % target)
 
-        for component, sub_move in sub_moves:
-            run_sub_move(future, component, sub_move)
+        try:
+            for component, sub_move in sub_moves:
+                run_sub_move(future, component, sub_move)
+        except IndexError:
+            # In case the required movement is invalid/unreachable with the smaract 5dof stage
+            # Move all linear axes first then rotational ones using the fallback_submoves
+            logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
+            for component, sub_move in fallback_submoves:
+                run_sub_move(future, component, sub_move)
+
     except CancelledError:
         logging.info("_doCryoLoadSample cancelled.")
     except Exception as exp:
@@ -345,6 +373,9 @@ def _doCryoTiltSample(future, stage, focus, align, rx, rz):
             else:
                 raise ValueError("Cannot proceed with tilting while focus is not near FAV_POS_DEACTIVE position.")
 
+        # Move lens aligner to its Deactive position
+        sub_moves.append((align, align_deactive))
+
         if rx == 0 and rz == 0:  # Imaging
             # Get the actual Imaging position (which should be ~ 0 as well)
             rx = stage_active['rx']
@@ -353,8 +384,6 @@ def _doCryoTiltSample(future, stage, focus, align, rx, rz):
             # Move lens aligner to its active position
             sub_moves.append((align, align_active))
         else:
-            # Move lens aligner to its Deactive position
-            sub_moves.append((align, align_deactive))
             sub_moves.append((stage, {'rx': rx}))
             sub_moves.append((stage, {'rz': rz}))
 

@@ -467,23 +467,14 @@ class ARRawProjection(ARProjection):
     def projectAsRaw(self):
         """
         Returns the raw data for the currently selected pixel (ebeam position).
-        :returns: (dict: MD_POL_* -> DataArray) Dictionary containing all images with different
-                  polarization analyzer positions for one pixel with metadata.
+        :returns: (DataArray or dict: MD_POL_* -> DataArray)
+            If there is no polarization, a single DataArray of shape 90,360 is returned
+            corresponding to the data for angle of theta/phi.
+            If there is polarization, a dictionary is returned containing data
+            as described, but for every polarization analyzer positions.
         """
-        data_dict = {}
-
         ebeam_pos = self.stream.point.value  # ebeam pos selected
-
-        # find positions of each acquisition
-        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
-        pos = {}
-        # TODO why do we actually do that for all images and not only the displayed one??
-        for data_raw in self.raw:
-            try:
-                pos[data_raw.metadata[model.MD_POS] + (
-                    data_raw.metadata.get(model.MD_POL_MODE, None),)] = img.ensure2DImage(data_raw)
-            except KeyError:
-                logging.info("Skipping DataArray without known position")
+        data_dict = {}
 
         if hasattr(self, "polarization"):
             pol_positions = self.polarization.choices
@@ -491,7 +482,7 @@ class ARRawProjection(ARProjection):
             pol_positions = [None]
 
         for pol_pos in pol_positions:
-            data = pos[ebeam_pos + (pol_pos,)]
+            data = self.stream._pos[ebeam_pos + (pol_pos,)]
 
             # Correct image for background. It must match the polarization (defaulting to MD_POL_NONE).
             calibrated = self._processBackground(data, data.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE),

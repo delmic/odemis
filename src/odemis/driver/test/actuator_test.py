@@ -29,7 +29,6 @@ import random
 from odemis import model
 import odemis
 
-print(odemis.__file__)
 from odemis.driver import simulated, tmcm, smaract
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
@@ -446,6 +445,59 @@ class TestConvertStage(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
+    def test_reference(self):
+        dependency = tmcm.TMCLController(name="test", role="test",
+                                         port="/dev/fake3",
+                                         axes=["a", "b"],
+                                         ustepsize=[5.9e-9, 5.8e-9],
+                                         rng=[[-1e-3, 1e-3], [0, 1e-3]],
+                                         refproc="Standard")
+
+        stage = ConvertStage("scaled", "align", {"orig": dependency},
+                             axes=["b", "a"], scale=(0.3, 2.1))
+
+        axes = set(stage.referenced.value)
+
+        self.assertEqual(len(dependency.referenced.value), 2)
+        self.assertEqual(len(axes), 2)
+
+        # first try one by one
+        for a in axes:
+            f = stage.reference({a})
+            f.result()
+            self.assertTrue(stage.referenced.value[a])
+
+        # try all axes simultaneously
+        f = stage.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(stage.referenced.value[a])
+
+    def test_metadata(self):
+        """
+        Check updating the values by metadata works
+        """
+        dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency.speed.value = {"x": 10e-6, "y": 20e-6}
+
+        # start with just scale
+        stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
+                             scale=(10, 10))
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+
+        f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
+        f.result()
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+
+        # TODO: set back metadata to scale 1
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05})
+
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6})
+
     # @skip("skip")
     def test_move_rel(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
@@ -531,14 +583,20 @@ class TestConvertStage(unittest.TestCase):
     # @skip("skip")
     def test_move_abs(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
+        dependency.speed.value = {"x": 1e-6, "y": 2e-6}
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+        dependency.speed.value = {"x": 2e-6, "y": 5e-6}
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
         test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
@@ -548,6 +606,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
@@ -566,6 +627,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        # Speed axes should be inverted & positive!
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 5e-6, "y": 2e-6})
+
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
@@ -583,6 +647,9 @@ class TestConvertStage(unittest.TestCase):
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
         test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        # Speed should not be affected by offset
+        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
         test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
@@ -1034,6 +1101,7 @@ class TestRotationActuator(unittest.TestCase):
 
         self.axis = "linear"
         self.axis_name = "rz"
+        self.ref_freq = 4
 
         # # create 1 dependency
         self.dependency1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
@@ -1042,7 +1110,12 @@ class TestRotationActuator(unittest.TestCase):
                                           refproc="Standard",
                                           )
 
-        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.dependency1}, self.axis, ref_start=1)
+        self.dev_cycle = RotationActuator("stage", "stage",
+                                          dependencies={self.axis_name: self.dependency1},
+                                          axis_name=self.axis,
+                                          ref_start=1,
+                                          ref_frequency=self.ref_freq
+                                         )
 
         # TODO write test case for args ref_start=... monitor dependency position -> pass zero?
 
@@ -1105,42 +1178,72 @@ class TestRotationActuator(unittest.TestCase):
         # check absolute difference is smaller half the ustepsize
         self.assertLess(abs(self.dev_cycle.position.value[axis_name] - shift), self.dependency1._ustepsize[0] / 2.)
 
-    def test_offset_moveAbs(self):
+    def test_auto_ref_on_frequency(self):
         """
-        test if offset is correctly used
-        when accumulation of angles is overrunning 2pi (pos or neg) do referencing to zero
-        only works for cycle = 2pi
+        Test referencing is executed after a certain number of moves as specified in the reference frequency.
         """
-
         axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        new_pos = 1.5707963267948966  # pi/2
-        for i in range(1, 6):
-            # overrun 2pi after 4 moves in clockwise
-            f = self.dev_cycle.moveRel({axis_name: new_pos})
-            f.result()
-            if i == 5:
-                # if referencing was correct position should not differ more than by
-                # half of the ustepsize from the wanted position
-                self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.dependency1._ustepsize[0] / 2.)
+        # Check it runs referencing also after many small moves, by checking the time
+        durations = []
+        for i in range(self.ref_freq):
+            start_t = time.time()
+            f = self.dev_cycle.moveRelSync({axis_name: 0.1})
+            durations.append(time.time() - start_t)
+
+        # It should have 1 move which takes quite a lot longer (at least 1s extra),
+        # because it also ran referencing.
+        dur_longest = max(durations)
+        durations.remove(dur_longest)
+        dur_avg = sum(durations) / len(durations)  # Average/normal time of a move
+        self.assertGreater(dur_longest, dur_avg + 1)  # Was the longest move really longer?
+
+    def test_auto_ref_on_passing(self):
+        """
+        Test referencing is automatically executed when passing the reference switch.
+        """
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
 
-        new_pos = 4.71238898038469 # pi* 1.5
-        for i in range(1, 6):
-            # overrun 2pi after 4 moves in counter-clockwise
-            f = self.dev_cycle.moveRel({axis_name: -1.5707963267948966})  # pi/2
+        # overrun 2pi after 4 moves in clockwise direction
+        shift = math.pi / 2
+        for i in range(5):
+            f = self.dev_cycle.moveRel({axis_name: shift})
             f.result()
-            if i == 5:
-                # if referencing was correct position should not differ more than by
-                # half of the ustepsize from the wanted position
-                self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos),
-                                self.dependency1._ustepsize[0] / 2.)
+        exp_pos = (shift * 5) % (2 * math.pi)  # = pi/2
+
+        # Check position reported by rotational axis is within cycle
+        self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+        # If no referencing took place, the dependent device would report pi/2 * 5.
+        # As it was referenced after doing a whole cycle, it's just at pi/2.
+        self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+
+        f = self.dev_cycle.moveAbs({axis_name: 0.0})
+        f.result()
+
+        # Overrun 2pi after 4 moves in counter-clockwise direction
+        # The 5th move should be started again from 0
+        for i in range(5):
+            f = self.dev_cycle.moveRel({axis_name:-shift})
+            f.result()
+
+        exp_pos = (-shift * 5) % (2 * math.pi)  #  = 3/2 pi ~= 4.712
+        exp_pos_dep = -shift  # Expected position of the dependent device
+
+        # Check position reported by rotational axis is within cycle
+        self.assertAlmostEqual(self.dev_cycle.position.value[axis_name], exp_pos,
+                               delta=self.dependency1._ustepsize[0])
+        # If no referencing took place, the dependent device would report - pi/2 * 5.
+        # As it was referenced after doing a whole cycle, it's just at - pi/2.
+        self.assertAlmostEqual(self.dependency1.position.value[self.axis], exp_pos_dep,
+                               delta=self.dependency1._ustepsize[0])
 
     def test_cycle_offset_mounting(self):
         """

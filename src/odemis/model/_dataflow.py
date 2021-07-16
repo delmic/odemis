@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 2 Apr 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2014 Éric Piel, Delmic
+Copyright © 2012-2021 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 # Provides data-flow: an object that can contain a large array of data regularly
 # updated. Typically it is used to transmit video (sequence of images). It does it
 # losslessly and with metadata attached (see _metadata for the conventional ones).
@@ -95,6 +95,7 @@ class DataArray(numpy.ndarray):
     #     out_arr.metadata = self.metadata
     #     return numpy.ndarray.__array_wrap__(self, out_arr, context)
 
+
 class DataFlowBase(object):
     """
     This is an abstract class that must be extended by each detector which
@@ -127,7 +128,13 @@ class DataFlowBase(object):
             self._listeners.add(WeakMethod(listener))
             logging.debug("Listener %r subscribed, now %d subscribers", listener, len(self._listeners))
             if count_before == 0:
-                self.start_generate()
+                try:
+                    self.start_generate()
+                except Exception as ex:
+                    logging.error("Subscribing listener %r to the dataflow failed. %s", listener, ex)
+                    self._listeners.discard(WeakMethod(listener))
+                    logging.debug("Listener %r unsubscribed, now %d subscribers", listener, len(self._listeners))
+                    raise
 
     def unsubscribe(self, listener):
         with self._lock:
@@ -335,9 +342,21 @@ class DataFlow(DataFlowBase):
                 assert callable(listener)
                 self._listeners.add(WeakMethod(listener))
 
-            logging.debug("Listener %r subscribed, now %d subscribers on %s", listener, self._count_listeners(), self._global_name)
+            logging.debug("Listener %r subscribed, now %d subscribers on %s",
+                          listener, self._count_listeners(), self._global_name)
             if count_before == 0:
-                self.start_generate()
+                try:
+                    self.start_generate()
+                except Exception as ex:
+                    logging.error("Subscribing listener %r to the dataflow failed. %s", listener, ex)
+                    if isinstance(listener, basestring):
+                        # remove string from listeners
+                        self._remote_listeners.discard(listener)
+                    else:
+                        self._listeners.discard(WeakMethod(listener))
+                    logging.debug("Listener %r unsubscribed, now %d subscribers on %s", listener,
+                                  self._count_listeners(), self._global_name)
+                    raise
 
     def unsubscribe(self, listener):
         with self._lock:
@@ -388,6 +407,7 @@ class DataFlow(DataFlowBase):
         if self._count_listeners() > 0:
             self.stop_generate()
         self._unregister()
+
 
 # DataFlowBase object automatically created on the client (in an Odemic component)
 class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
@@ -450,12 +470,16 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         if not self._thread:
             self._create_thread()
         self._commands.send(b"SUB")
-        self._commands.recv() # synchronise
+        self._commands.recv()  # synchronise
 
-        # send subscription to the actual dataflow
-        # a bit tricky because the underlying method gets created on the fly
-#        Pyro4.Proxy.subscribe(self, self._global_name)
-        Pyro4.Proxy.__getattr__(self, "subscribe")(self._proxy_name)
+        try:
+            # send subscription to the actual dataflow and inform dataflow that this remote listener is interested
+            # a bit tricky because the underlying method gets created on the fly
+            Pyro4.Proxy.__getattr__(self, "subscribe")(self._proxy_name)
+        except Exception as ex:
+            logging.error("Subscribing to the dataflow failed. %s", ex)
+            self._commands.send(b"UNSUB")  # asynchronous (necessary to not deadlock)
+            raise
 
     def stop_generate(self):
         # stop the remote subscription
@@ -605,6 +629,7 @@ def unregister_dataflows(self):
     for name, value in inspect_getmembers(self, lambda x: isinstance(x, DataFlow)):
         value._unregister()
 
+
 def dump_dataflows(self):
     """
     return the names and value of all the DataFlows added to an object
@@ -620,6 +645,7 @@ def dump_dataflows(self):
             value._register(daemon)
         dataflows[name] = value
     return dataflows
+
 
 def load_dataflows(self, dataflows):
     """
@@ -637,6 +663,7 @@ def DataFlowSerializer(self):
         return DataFlowProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
+
 
 Pyro4.Daemon.serializers[DataFlow] = DataFlowSerializer
 
@@ -705,6 +732,7 @@ class Event(EventBase):
         """
         return Pyro4.core.pyroObjectSerializer(self)[2]
 
+
 class EventProxy(EventBase, Pyro4.Proxy):
     def __init__(self, uri):
         Pyro4.Proxy.__init__(self, uri)
@@ -723,6 +751,7 @@ def unregister_events(self):
         if daemon:
             daemon.unregister(value)
 
+
 def dump_events(self):
     """
     return the names and value of all the Events added to an object
@@ -739,6 +768,7 @@ def dump_events(self):
         events[name] = value
     return events
 
+
 def load_events(self, events):
     """
     duplicate the given events into the instance.
@@ -746,6 +776,7 @@ def load_events(self, events):
     """
     for name, evt in events.items():
         setattr(self, name, evt)
+
 
 # Without this one, it would share events, but they would look like a basic Proxy,
 # so there would be no way to know
@@ -757,6 +788,7 @@ def EventSerializer(self):
         return EventProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
+
 
 Pyro4.Daemon.serializers[Event] = EventSerializer
 

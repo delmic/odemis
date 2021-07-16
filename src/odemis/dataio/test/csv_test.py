@@ -71,7 +71,7 @@ class TestCSVIO(unittest.TestCase):
         self.assertFalse(raised, 'Failed to read csv file')
 
         # test intensity value is at correct position
-        file = pycsv.reader(open(FILENAME, 'r'))
+        file = pycsv.reader(open(FILENAME, 'r', newline=''))
 
         a = numpy.zeros((91, 361))
         index = 0

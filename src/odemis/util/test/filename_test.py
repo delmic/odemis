@@ -26,7 +26,7 @@ import time
 import os
 import unittest
 from odemis.gui.util import get_home_folder
-from odemis.util.filename import create_filename, guess_pattern, update_counter
+from odemis.util.filename import create_filename, guess_pattern, update_counter, make_unique_name
 
 date = time.strftime("%Y%m%d")
 daterev = time.strftime("%d%m%Y")
@@ -140,6 +140,21 @@ class TestFilenameSuggestions(unittest.TestCase):
         self.assertEqual(update_counter('9'), '10')
         self.assertEqual(update_counter('000'), '001')
         self.assertRaises(AssertionError, update_counter, '-5')
+
+    def test_make_unique_name(self):
+        self.assertEqual(make_unique_name('abc', []), 'abc')
+        self.assertEqual(make_unique_name('abc', ['abc']), 'abc-1')
+        self.assertEqual(make_unique_name('abc', ['abc', 'abc-1']), 'abc-2')
+        self.assertEqual(make_unique_name('abc-1', ['abc', 'abc-1']), 'abc-2')
+        self.assertEqual(make_unique_name('abc-2', ['abc', 'abc-2']), 'abc-3')
+        self.assertEqual(make_unique_name('abc', ['abc', 'abc-2']), 'abc-1')
+        self.assertEqual(make_unique_name('abc', ['abc', 'abc-1', 'abc-2']), 'abc-3')
+        self.assertEqual(make_unique_name('abc-1', ['abc', 'abc-1', 'abc-2']), 'abc-3')
+        self.assertEqual(make_unique_name('abc-0', ['abc-1']), 'abc-0')
+        self.assertEqual(make_unique_name('abc-0', ['abc-0']), 'abc-1')
+        self.assertEqual(make_unique_name('abc-1abc', ['abc-1abc']), 'abc-2abc')
+        self.assertEqual(make_unique_name('abc-1s-0.5d-1', ['abc-1s-0.5d-1']), 'abc-1s-0.5d-2')
+
 
 
 if __name__ == "__main__":

@@ -223,6 +223,89 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
+class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMProjectBar')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMProjectBar':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMProjectBar(parent,
+                                      self.GetID(),
+                                      self.GetPosition(),
+                                      self.GetSize(),
+                                      self.GetStyle(),
+                                      add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            # 'Dirty' fix for the hard coded 'add stream' child button
+            if self.GetBool('add_button'):
+                w.btn_add_project.SetBackgroundColour(w.GetBackgroundColour())
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMProjectBarXmlHandler)
+
+
+class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMCalibrationBar')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMCalibrationBar':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMCalibrationBar(parent,
+                                          self.GetID(),
+                                          self.GetPosition(),
+                                          self.GetSize(),
+                                          self.GetStyle(),
+                                          add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
+
+
+class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMSelectionPanel')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMSelectionPanel':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMOverviewSelectionPanel(parent,
+                                                  self.GetID(),
+                                                  self.GetPosition(),
+                                                  self.GetSize(),
+                                                  self.GetStyle())
+            self.SetupWindow(w)
+            #parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMSelectionPanelXmlHandler)
+
+
 class _ImageButtonHandler(xrc.XmlResourceHandler):
 
     klass = None
@@ -441,9 +524,9 @@ class CameraViewportXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(CameraViewportXmlHandler)
 
 
-class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
+class FixedOverviewViewportXmlHandler(xrc.XmlResourceHandler):
 
-    klass = vport.OverviewViewport
+    klass = vport.FixedOverviewViewport
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -453,7 +536,7 @@ class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "OverviewViewport")
+        return self.IsOfClass(node, "FixedOverviewViewport")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -466,7 +549,7 @@ class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
                            style=self.GetStyle())
         self.SetupWindow(panel)
         return panel
-HANDLER_CLASS_LIST.append(OverviewViewportXmlHandler)
+HANDLER_CLASS_LIST.append(FixedOverviewViewportXmlHandler)
 
 
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
@@ -508,6 +591,15 @@ class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "LiveViewport")
 HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
+
+
+class FeatureOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FeatureOverviewViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FeatureOverviewViewport")
+HANDLER_CLASS_LIST.append(FeatureOverviewViewportXmlHandler)
 
 
 class ARAcquiViewportXmlHandler(MicroscopeViewportXmlHandler):
@@ -574,6 +666,21 @@ class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
+class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FastEMAcquisitionViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FastEMAcquisitionViewport")
+HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
+
+class FastEMOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FastEMOverviewViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FastEMOverviewViewport")
+HANDLER_CLASS_LIST.append(FastEMOverviewViewportXmlHandler)
 
 ##################################
 # Sliders

@@ -157,6 +157,7 @@ from wx.lib import wxcairo
 CAN_DRAG = 1    # Content can be dragged
 CAN_FOCUS = 2   # Can adjust focus
 CAN_ZOOM = 4    # Can adjust scale
+CAN_MOVE_STAGE = 5  # Can move stage on dragging
 
 
 @decorator

@@ -95,7 +95,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._hide_on_no_match = hide_on_no_match
         self._select_callback = select_callback
         self._entry_callback = entry_callback
-        self._match_function = match_function
+        self._match_function = self._match_start_text if match_function is None else match_function
         self._screen_size = (wx.SystemSettings.GetMetric(wx.SYS_SCREEN_X),
                              wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y))
 
@@ -184,6 +184,16 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._col_search = evt.GetColumn()
         evt.Skip()
 
+    def _match_start_text(self, text, choice):
+        """
+        Default match function: match if the choices starts with the text, case
+          insensitive
+        text (str)
+        choice (str)
+        return bool
+        """
+        return choice.lower().startswith(text.lower())
+
     def onEnteredText(self, event):
         text = event.GetString()
         if self._entry_callback:
@@ -194,25 +204,34 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                 self._showDropDown(False)
             event.Skip()
             return
-        found = False
 
+        found = None
         choices = self._choices
 
+        # Find the first match, based on the match function
         for numCh, choice in enumerate(choices):
-            if self._match_function and self._match_function(text, choice):
-                found = True
-            elif choice.lower().startswith(text.lower()):
-                found = True
-            if found:
-                self._showDropDown(True)
-                item = self.dropdownlistbox.GetItem(numCh)
-                toSel = item.GetId()
-                self.dropdownlistbox.Select(toSel)
+            if self._match_function(text, choice):
+                found = numCh
                 break
-        if not found:
+        else:
+            # Nothing found. Instead of completely giving up, try to match any part of the text
+            for numCh, choice in enumerate(choices):
+                if text.lower() in choice.lower():
+                    found = numCh
+                    break
+
+        if found is not None:
+            # Found an entry => select it
+            self._showDropDown(True)
+            item = self.dropdownlistbox.GetItem(found)
+            toSel = item.GetId()
+            self.dropdownlistbox.Select(toSel)
+        else:
+            # Nothing found => unselect any item still selected
             self.dropdownlistbox.Select(self.dropdownlistbox.GetFirstSelected(), False)
             if self._hide_on_no_match:
                 self._showDropDown(False)
+
         self._listItemVisible()
         event.Skip()
 
@@ -301,6 +320,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._entry_callback = cb
 
     def Setmatch_function(self, mf=None):
+        if mf is None:
+            mf = self._match_start_text
         self._match_function = mf
 
     #-- Internal methods

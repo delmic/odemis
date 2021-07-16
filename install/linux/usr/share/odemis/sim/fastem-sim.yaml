@@ -1,0 +1,63 @@
+# Minimal configuration file to start the Fast-EM GUI
+FASTEM-sim: {
+    class: Microscope,
+    role: mbsem,
+    children: ["EBeam Scanner", "EBeam Focus", "SED",
+               "Sample Stage"],
+}
+
+"SEM": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+    },
+    children: {scanner: "EBeam Scanner",
+               focus: "EBeam Focus",
+               detector0: "SED", # simsem needs detector0 child
+    }
+}
+
+"EBeam Scanner": {
+    # Internal child of SEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+}
+
+"EBeam Focus": {
+    # Internal child of SEM, so no class
+    role: ebeam-focus,
+}
+
+"SED": { # aka ETD or secondary electron detector
+    # Internal child of SEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"Sample Stage": {
+    class: piezomotor.PMD401Bus,
+    role: stage,
+    init: {
+        port: "/dev/fake",
+        axes: {
+            'x': {
+                axis_number: 1,
+                speed: 0.001, # m/s
+                closed_loop: True,
+                },
+            'y': {
+                axis_number: 2,
+                speed: 0.001, # m/s
+                closed_loop: True,
+            },
+        },
+    },
+    metadata: {
+        POS_ACTIVE_RANGE: {"x": [-60e-3, 60e-3], "y": [-60e-3, 60e-3]},
+    },
+    affects: ["EBeam Scanner"],
+}

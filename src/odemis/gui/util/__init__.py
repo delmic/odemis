@@ -39,7 +39,7 @@ import wx
 # Decorators & Wrappers
 # They are almost the same but the decorators assume that they are decorating
 # a method of a wx.Object (ie, it has a "self" argument)
-
+from odemis.acq.move import getCurrentPositionLabel
 
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
@@ -282,3 +282,15 @@ class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
+
+
+@call_in_wx_main
+def enable_tab_on_stage_position(button, stage, pos, target):
+    """
+    Enable the given tab button if the stage is in target position, disable it otherwise
+    :param button: (Button) the Tab button to enable/disable
+    :param stage: (Actuator) the stage driver
+    :param pos: (dict str->float) current position to check its label
+    :param target: (int) target position label (IMAGING, LOADING..etc)
+    """
+    button.Enable(getCurrentPositionLabel(pos, stage) == target)

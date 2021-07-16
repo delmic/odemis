@@ -23,16 +23,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division, print_function
 
+from builtins import range
 from concurrent import futures
 import logging
 import math
 from odemis import model
 from odemis.driver import pigcs
+from odemis.driver.pigcs import PIGCSError
 import os
+import pickle
 import time
 import unittest
 from unittest.case import skip
-from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -199,6 +201,15 @@ class TestActuator(unittest.TestCase):
 
         self.assertAlmostEqual(orig_pos + move["x"], stage.position.value["x"])
         stage.terminate()
+
+    def test_exception_pickling(self):
+        """
+        Check the exception can be pickled and unpickled (for Pyro4)
+        """
+        ex = PIGCSError(3)
+        p = pickle.dumps(ex)
+        ep = pickle.loads(p)
+        self.assertIsInstance(ep, PIGCSError)
 
 #    @skip("faster")
     def test_sync(self):

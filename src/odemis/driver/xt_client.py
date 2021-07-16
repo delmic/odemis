@@ -48,6 +48,26 @@ GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
 
+# Value to use on the FASTEM to activate the immersion mode
+COMPOUND_LENS_FOCUS_IMMERSION = 2.0
+
+# List of known supported resolutions.
+# Although the API only provide the min/max of resolution in X/Y, not every value
+# or combination works. Actually, setting X always changes Y to the corresponding
+# value. Note that they are not all the same aspect ratio. "Legacy" resolutions
+# are ~8/7 while the new ones are 3/2. The "legacy" resolutions end up with a
+# larger vertical field of view.
+RESOLUTIONS = (
+    (512, 442),
+    (1024, 884),
+    (2048, 1768),
+    (4096, 3536),
+    (768, 512),
+    (1536, 1024),
+    (3072, 2048),
+    (6144, 4096),
+)
+
 
 class SEM(model.HwComponent):
     """
@@ -89,18 +109,15 @@ class SEM(model.HwComponent):
         # Check if at least one of the required scanner types is instantiated
         scanner_types = ["scanner", "fib-scanner", "mb-scanner"]  # All allowed scanners types
         if not any(scanner_type in children for scanner_type in scanner_types):
-            raise KeyError("SEM was not given any scanner type as child."
-                           "On of the types 'scanner', 'fib-scanner' or 'mb-scanner' need to be included as child")
+            raise KeyError("SEM was not given any scanner as child. "
+                           "One of 'scanner', 'fib-scanner' or 'mb-scanner' need to be included as child")
+
+        has_detector = "detector" in children
 
         if "scanner" in children:
             kwargs = children["scanner"]
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+            self._scanner = Scanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
             self.children.value.add(self._scanner)
-
-        if "fib-scanner" in children:
-            kwargs = children["fib-scanner"]
-            self._fib_scanner = FibScanner(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._fib_scanner)
 
         if "mb-scanner" in children:
             if "scanner" in children:
@@ -109,8 +126,13 @@ class SEM(model.HwComponent):
             kwargs = children["mb-scanner"]
             if "xttoolkit" not in self._swVersion.lower():
                 raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
-            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
+            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
             self.children.value.add(self._scanner)
+
+        if "fib-scanner" in children:
+            kwargs = children["fib-scanner"]
+            self._fib_scanner = FibScanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_scanner)
 
         # create the stage child, if requested
         if "stage" in children:
@@ -121,7 +143,10 @@ class SEM(model.HwComponent):
         # create a focuser, if requested
         if "focus" in children:
             ckwargs = children["focus"]
-            self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
+            if "xttoolkit" in self._swVersion.lower():
+                self._focus = XTTKFocus(parent=self, daemon=daemon, **ckwargs)
+            else:
+                self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
         if "detector" in children:
@@ -279,7 +304,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_scanning_size(x - 1e-18)  # Necessary because it doesn't accept the max of the range
+            self.server.set_scanning_size(x)
 
     def get_scanning_size(self):
         """
@@ -663,7 +688,7 @@ class SEM(model.HwComponent):
         """Returns the resolution of the image as (width, height)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_resolution()
+            return tuple(self.server.get_resolution())
 
     def resolution_info(self):
         """Returns the unit and range of the resolution of the image."""
@@ -689,34 +714,6 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_beam_is_on()
-
-    def is_autostigmating(self, channel_name):
-        """
-        Parameters
-        ----------
-            channel_name (str): Holds the channels name on which the state is checked.
-
-        Returns True if autostigmator is running and False if autostigmator is not running.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.is_autostigmating(channel_name)
-
-    def set_autostigmator(self, channel_name, state):
-        """
-        Set the state of autostigmator, beam must be turned on. This is non-blocking.
-
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the electron channels, the channel must be running.
-        state: XT_RUN or XT_STOP
-            State is start, starts the autostigmator. States cancel and stop both stop the autostigmator, some
-            microscopes might need stop, while others need cancel.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.set_autostigmator(channel_name, state)
 
     def get_delta_pitch(self):
         """
@@ -985,6 +982,35 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.beamlet_index_info()
 
+    def get_compound_lens_focusing_mode(self):
+        """
+        Get the compound lens focus mode. Used to adjust the immersion mode.
+        :return (0<= float <= 10): the focusing mode (0 means no immersion)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_compound_lens_focusing_mode()
+
+    def set_compound_lens_focusing_mode(self, mode):
+        """
+        Set the compound lens focus mode. Used to adjust the immersion mode.
+        :param mode (0<= float <= 10): focusing mode (0 means no immersion)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_compound_lens_focusing_mode(mode)
+
+    def compound_lens_focusing_mode_info(self):
+        """
+        Get the min/max values of the compound lens focus mode.
+
+        :return (dict str -> Any): The range of the focusing mode for the key "range"
+           (as a tuple min/max). The unit for key "unit", as a string or None. 
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.compound_lens_focusing_mode_info()
+
     def scan_image(self, channel_name='electron1'):
         """
         Start the scan of a single image and block until the image is done scanning.
@@ -1046,9 +1072,11 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", has_detector=False, **kwargs):
         """
-        :param channel (str): Name of one of the electron channels.
+        channel (str): Name of one of the electron channels.
+        has_detector (bool): True if a Detector is also controlled. In this case,
+          the .resolution, .scale and associated VAs will be provided too.
         """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
@@ -1058,6 +1086,7 @@ class Scanner(model.Emitter):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self._hfw_nomag = hfw_nomag
+        self._has_detector = has_detector
 
         dwell_time_info = self.parent.dwell_time_info()
         self.dwellTime = model.FloatContinuous(
@@ -1110,6 +1139,7 @@ class Scanner(model.Emitter):
             unit=scanning_size_info["unit"],
             range=scanning_size_info["range"]["x"],
             setter=self._setHorizontalFoV)
+        self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         mag = self._hfw_nomag / fov
         mag_range_max = self._hfw_nomag / scanning_size_info["range"]["x"][0]
@@ -1122,38 +1152,38 @@ class Scanner(model.Emitter):
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
-        rng = self.parent.resolution_info()["range"]
-        self._shape = (rng["x"][1], rng["y"][1])
-        # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
-        # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[0] * mag))
-        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        # .resolution is the number of pixels actually scanned. If it's less than
-        # the whole possible area, it's centered.
-        resolution = self.parent.get_resolution()
+        if has_detector:
+            rng = self.parent.resolution_info()["range"]
+            self._shape = (rng["x"][1], rng["y"][1])
+            # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
+            # == smallest size/ between two different ebeam positions
+            pxs = (fov / self._shape[0],
+                   fov / self._shape[0])
+            self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        self.resolution = model.ResolutionVA(tuple(resolution),
-                                             ((rng["x"][0], rng["y"][0]),
-                                              (rng["x"][1], rng["y"][1])),
-                                             setter=self._setResolution)
-        self._resolution = resolution
+            # .resolution is the number of pixels actually scanned. It's almost
+            # fixed to full frame, with the exceptions of the resolutions which
+            # are a different aspect ratio from the shape are "more than full frame".
+            # So it's read-only and updated when the scale is updated.
+            resolution = tuple(self.parent.get_resolution())
+            res_choices = set(r for r in RESOLUTIONS
+                              if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
+                             )
+            self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
+            self._resolution = resolution
 
-        # (float, float) as a ratio => how big is a pixel, compared to pixelSize
-        # it basically works the same as binning, but can be float
-        # (Default to scan the whole area)
-        self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        self.scale = model.TupleContinuous(self._scale,
-                                           [(1, 1), self._shape],
-                                           unit="",
-                                           cls=(int, float),  # int; when setting scale the GUI returns a tuple of ints.
-                                           setter=self._setScale)
-        self.scale.subscribe(self._onScale, init=True)  # to update metadata
+            # (float, float) as a ratio => how big is a pixel, compared to pixelSize
+            # it basically works the same as binning, but can be float.
+            # Defined as the scale to match the allowed resolutions, with pixels
+            # always square (ie, scale is always the same in X and Y).
+            scale = (self._shape[0] / resolution[0],) * 2
+            scale_choices = set((self._shape[0] / r[0],) * 2 for r in res_choices)
+            self.scale = model.VAEnumerated(scale, scale_choices, unit="", setter=self._setScale)
+            self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+            # Just to make some code happy
+            self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
 
         emode = self._isExternal()
         self.external = model.BooleanVA(emode, setter=self._setExternal)
@@ -1208,30 +1238,44 @@ class Scanner(model.Emitter):
             if external != self.external.value:
                 self.external._value = external
                 self.external.notify(external)
+            if self._has_detector:
+                self._updateResolution()
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
-            the original pixel size. It will adapt the translation and resolution to
+            the original pixel size. It will adapt the resolution to
             have the same ROI (just different amount of pixels scanned)
         return the actual value used
         """
-        prev_scale = self._scale
-        self._scale = value
+        # Pick the resolution which matches the scale in X
+        res_x = int(round(self._shape[0] / value[0]))
+        res = next(r for r in self.resolution.choices if r[0] == res_x)
 
-        # adapt resolution so that the ROI stays the same
-        change = (prev_scale[0] / self._scale[0],
-                  prev_scale[1] / self._scale[1])
-        old_resolution = self.resolution.value
-        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
-                          max(int(round(old_resolution[1] * change[1])), 1))
-        self.resolution.value = new_resolution
+        # TODO: instead of setting both X and Y, only set X, and read back Y?
+        # This would be slightly more flexible in case the XT lib supports other
+        # resolutions than the hard-coded ones. For now we assume the hard-coded
+        # ones are all the possibles ones.
+        self.parent.set_resolution(res)
+        self.resolution._set_value(res, force_write=True)
+
         return value
 
     def _onScale(self, s):
         self._updatePixelSize()
+
+    def _updateResolution(self):
+        """
+        To be called to read the server resolution and update the corresponding VAs
+        """
+        resolution = tuple(self.parent.get_resolution())
+        if resolution != self.resolution.value:
+            scale = (self._shape[0] / resolution[0],) * 2
+            self.scale._value = scale  # To not call the setter
+            self.resolution._set_value(resolution, force_write=True)
+            self.scale.notify(scale)
 
     def _updatePixelSize(self):
         """
@@ -1297,9 +1341,12 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / fov
         self.magnification._value = mag
         self.magnification.notify(mag)
-        self._updateDepthOfField()
-        self._updatePixelSize()
         return fov
+
+    def _onHorizontalFoV(self, fov):
+        self._updateDepthOfField()
+        if self._has_detector:
+            self._updatePixelSize()
 
     def _updateDepthOfField(self):
         fov = self.horizontalFoV.value
@@ -1307,23 +1354,6 @@ class Scanner(model.Emitter):
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
-
-    def _setResolution(self, value):
-        """
-        value (0<int, 0<int): defines the size of the resolution. If the requested
-            resolution is not possible, it will pick the most fitting one.
-        returns the actual value used
-        """
-        max_size = self.resolution.range[1]
-
-        # At least one pixel, and at most the whole area.
-        size = (max(min(value[0], max_size[0]), 1),
-                max(min(value[1], max_size[1]), 1))
-        self._resolution = size
-        self.parent.set_resolution(size)
-
-        self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
-        return value
 
     def _isExternal(self):
         """
@@ -1397,62 +1427,6 @@ class Scanner(model.Emitter):
             except OSError as error_msg:
                 logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
                 return False
-
-    # TODO Commented out code because it is currently not supported by XT. An update or another implementation may be
-    # made later
-
-    # @isasync
-    # def applyAutoStigmator(self, detector):
-    #     """
-    #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-    #     the beam must be turned on and unblanked. This call is non-blocking.
-    #
-    #     :param detector (str): Role of the detector.
-    #     :return: Future object
-    #     """
-    #     # Create ProgressiveFuture and update its state
-    #     est_start = time.time() + 0.1
-    #     f = ProgressiveFuture(start=est_start,
-    #                           end=est_start + 8)  # rough time estimation
-    #     f._auto_stigmator_lock = threading.Lock()
-    #     f._must_stop = threading.Event()  # cancel of the current future requested
-    #     f.task_canceller = self._cancelAutoStigmator
-    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
-    #         # Auto stigmation is only supported on channel electron1, not on the other channels
-    #         raise KeyError("This detector is not supported for auto stigmation")
-    #     f.c = DETECTOR2CHANNELNAME[detector]
-    #     return self._executor.submitf(f, self._applyAutoStigmator, f)
-    #
-    # def _applyAutoStigmator(self, future):
-    #     """
-    #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
-    #     :param future (Future): the future to start running.
-    #     """
-    #     channel_name = future._channel_name
-    #     with future._auto_stigmator_lock:
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #         self.parent.set_autostigmator(channel_name, XT_RUN)
-    #         time.sleep(0.5)  # Wait for the auto stigmator to start
-    #
-    #     # Wait until the microscope is no longer applying auto stigmator
-    #     while self.parent.is_autostigmating(channel_name):
-    #         future._must_stop.wait(0.1)
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #
-    # def _cancelAutoStigmator(self, future):
-    #     """
-    #     Cancels the auto stigmator. Non-blocking.
-    #     :param future (Future): the future to stop.
-    #     :return (bool): True if it successfully cancelled (stopped) the move.
-    #     """
-    #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
-    #
-    #     with future._auto_stigmator_lock:
-    #         logging.debug("Cancelling auto stigmator")
-    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
-    #         return True
 
 
 class FibScanner(model.Emitter):
@@ -2205,6 +2179,20 @@ class MultiBeamScanner(Scanner):
             setter=self._setBeamletIndex
         )
 
+        # The compound lens focusing mode accepts value between 0 and 10. However,
+        # in practice, we use it to switch between immersion mode or not.
+        # So instead of passing a float, we just provide a boolean, with the immersion
+        # mode always set to the same (hard-coded, TFS approved) value.
+        # When reading, anything above 0 is considered in immersion.
+        focusing_mode_info = self.parent.compound_lens_focusing_mode_info()
+        focusing_mode_range = focusing_mode_info["range"]
+        assert focusing_mode_range[0] <= COMPOUND_LENS_FOCUS_IMMERSION <= focusing_mode_range[1]
+        focusing_mode = self.parent.get_compound_lens_focusing_mode()
+        self.immersion = model.BooleanVA(
+            focusing_mode > 0,
+            setter=self._setImmersion
+        )
+
         multibeam_mode = (self.parent.get_use_case() == 'MultiBeamTile')
         self.multiBeamMode = model.BooleanVA(
             multibeam_mode,
@@ -2221,6 +2209,17 @@ class MultiBeamScanner(Scanner):
         # Instantiate the super scanner class with the update thread
         super(MultiBeamScanner, self).__init__(name, role, parent, hfw_nomag, **kwargs)
 
+    @isasync
+    def applyAutoStigmator(self):
+        """
+        Wrapper for autostigmation flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+        return f
+
     def _updateSettings(self):
         """
         Read all the current settings from the SEM and reflects them on the VAs
@@ -2233,6 +2232,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self)._updateSettings()
         # Polling XTtoolkit settings
         try:
+            self._updateHFWRange()
             delta_pitch = self.parent.get_delta_pitch() * 1e-6
             if delta_pitch != self.deltaPitch.value:
                 self.deltaPitch._value = delta_pitch
@@ -2261,6 +2261,10 @@ class MultiBeamScanner(Scanner):
             if beamlet_index != self.beamletIndex.value:
                 self.beamletIndex._value = beamlet_index
                 self.beamletIndex.notify(beamlet_index)
+            immersion = self.parent.get_compound_lens_focusing_mode() > 0
+            if immersion != self.immersion.value:
+                self.immersion._value = immersion
+                self.immersion.notify(immersion)
             multibeam_mode = (self.parent.get_use_case() == 'MultiBeamTile')
             if multibeam_mode != self.multiBeamMode.value:
                 self.multiBeamMode._value = multibeam_mode
@@ -2292,6 +2296,35 @@ class MultiBeamScanner(Scanner):
         self.parent.set_beamlet_index(beamlet_index)
         new_beamlet_index = self.parent.get_beamlet_index()
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
+
+    def _setImmersion(self, immersion: bool):
+        # immersion disabled -> focusing mode = 0
+        # immersion enabled -> focusing mode = COMPOUND_LENS_FOCUS_IMMERSION
+        self.parent.set_compound_lens_focusing_mode(COMPOUND_LENS_FOCUS_IMMERSION if immersion else 0)
+        # The immersion mode affects the HFW maximum
+        # Note: if the HFW is set to a value which is out of range in the new settings,
+        # the XT server takes care of adjusting the HFW to a value within range.
+        self._updateHFWRange()
+        return self.parent.get_compound_lens_focusing_mode() > 0
+
+    def _updateHFWRange(self):
+        """
+        To be called when the field of view range might have changed.
+        This can happen when some settings are changed.
+        If the range is changed, the VA subscribers will be updated.
+        """
+        hfov_range = tuple(self.parent.scanning_size_info()["range"]["x"])
+        if self.horizontalFoV.range != hfov_range:
+            logging.debug("horizontalFoV range changed to %s", hfov_range)
+
+            fov = self.parent.get_scanning_size()[0]
+            self.horizontalFoV._value = fov
+            self.horizontalFoV.range = hfov_range  # Does the notification
+
+            self.magnification._value = self._hfw_nomag / fov
+            mag_range_max = self._hfw_nomag / hfov_range[0]
+            mag_range_min = self._hfw_nomag / hfov_range[1]
+            self.magnification.range = (mag_range_min, mag_range_max)
 
     def _setMultiBeamMode(self, multi_beam_mode):
         # TODO: When changing the beam mode of the microscope changes we don't want to also change the aperture and
@@ -2398,3 +2431,21 @@ class XTTKDetector(Detector):
             logging.exception("Failure in acquisition thread: %s", err)
         finally:
             self._generator = None
+
+
+class XTTKFocus(Focus):
+    """
+    This is an extension of xt_client.Focus class. It overwrites the autofocus function to use the one
+    provided by the flash script.
+    """
+
+    @isasync
+    def applyAutofocus(self, detector):
+        """
+        Wrapper for autofocus flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
+        return f

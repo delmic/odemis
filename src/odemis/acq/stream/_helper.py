@@ -186,8 +186,8 @@ class RepetitionStream(LiveStream):
             # the stream. To do so, restart everything and keep the last image received.
             try:
                 self.raw = [self._img_intor.append(data)]
-            except Exception:
-                logging.warning("Failed to integrate image: %s", data)
+            except Exception as ex:
+                logging.warning("Failed to integrate image (of shape %s): %s", data.shape, ex)
                 self._img_intor = img.ImageIntegrator(self.integrationCounts.value)
                 self.raw = [self._img_intor.append(data)]
         else:

@@ -542,13 +542,15 @@ class SPTError(HwError):
     Symphotime Error Exception object
     errcode (int): a symphotime error code, as defined in the ERRCODE dictionary
     '''
-    def __init__(self, errcode):
-        if errcode in ERRCODE:
-            text = "Error %d: %s" % (errcode, ERRCODE[errcode])
-        else:
-            text = "Unknown error code."
-        HwError.__init__(self, text)
 
+    def __init__(self, errno, *args, **kwargs):
+        # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
+        super(SPTError, self).__init__(errno, *args, **kwargs)
+        self.errno = errno
+        self.strerror = "Error %d. %s" % (errno, ERRCODE.get(errno, "Unknown error code."))
+
+    def __str__(self):
+        return self.strerror
 
 class Controller(model.Detector):
     '''

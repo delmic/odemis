@@ -21,6 +21,7 @@ This module contains update functionality for the Windows Viewer version of Odem
 """
 from __future__ import division
 
+from concurrent.futures import CancelledError
 import logging
 import odemis
 import os
@@ -92,6 +93,7 @@ class WindowsUpdater:
             web_version_file.close()
         except IOError as err:
             logging.warn("Error on remote version check (%s)", err)
+            return None
 
         return web_version.decode('latin1')
 
@@ -135,61 +137,66 @@ class WindowsUpdater:
         )
 
         if answer == wx.YES:
-            self.download_installer(web_version)
+            try:
+                local_path = self.download_installer(web_version)
+            except CancelledError as ex:
+                logging.info(str(ex))
+                return
+            except Exception:
+                logging.exception("Failed to download installer")
+                return
+
+            self.run_installer(local_path)
 
     def download_installer(self, remote_version):
+        """
+        Download the installer for the given version to a temporary directory
+        remote_version (str): version number as "1.20.3"
+        return (str): path to the local file
+        """
+        installer_file = INSTALLER_FILE % remote_version
+        web_file = self._open_remote_file(installer_file)
+        file_size = int(web_file.headers["Content-Length"])
 
-        pdlg = None
+        dest_dir = tempfile.gettempdir()
+        local_path = os.path.join(dest_dir, installer_file)
+
+        logging.info("Downloading from %s (%d bytes) to %s...", web_file.url, file_size, local_path)
 
         try:
-            dest_dir = tempfile.gettempdir()
-
-            installer_file = INSTALLER_FILE % remote_version
-            web_file = self._open_remote_file(installer_file)
-            meta = web_file.info()
-            file_size = int(meta.getheaders("Content-Length")[0])
-            local_path = os.path.join(dest_dir, installer_file)
-            local_file = open(local_path, 'wb')
-
-            logging.info("Downloading from %s (%d bytes) to %s...", web_file.url, file_size, local_path)
-
             pdlg = wx.ProgressDialog(
                 "Downloading update...",
-                "The new %s installer is being downloaded." % VIEWER_NAME,
+                "The new %s installer %s is being downloaded." % (VIEWER_NAME, remote_version),
                 maximum=file_size,
                 parent=wx.GetApp().main_frame,
                 style=wx.PD_CAN_ABORT | wx.PD_AUTO_HIDE | wx.PD_APP_MODAL | wx.PD_REMAINING_TIME)
 
-            keep_going = True
-            count = 0
-            chunk_size = 100 * 1024  # Too small chunks slows down the download
-            while keep_going and count < file_size:
-                grabbed = web_file.read(chunk_size)
-                local_file.write(grabbed)
-                if grabbed:
-                    count += len(grabbed)
-                else:
-                    logging.warning("Received no more data, will assume the file is only %d bytes", count)
-                    break
-                if count > file_size:
-                    logging.warning("Received too much data (%d bytes), will stop", count)
-                    break
-                keep_going, skip = pdlg.Update(count)
+            with open(local_path, 'wb') as local_file:
+                count = 0
+                chunk_size = 100 * 1024  # Too small chunks slows down the download
+                while count < file_size:
+                    grabbed = web_file.read(chunk_size)
+                    local_file.write(grabbed)
+                    if grabbed:
+                        count += len(grabbed)
+                    else:
+                        logging.warning("Received no more data, will assume the file is only %d bytes", count)
+                        break
+                    if count > file_size:
+                        logging.warning("Received too much data (%d bytes), will stop", count)
+                        break
+                    keep_going, skip = pdlg.Update(count)
+                    if not keep_going:
+                        raise CancelledError("Download cancelled by user")
 
-            pdlg.Destroy()
-
-            web_file.close()
-            local_file.close()
             logging.info("Download done.")
-
-            if keep_going:
-                self.run_installer(local_path)
-        except Exception:
-            logging.exception("Failure to download")
+            return local_path
+        finally:
             try:
                 pdlg.Destroy()
             except (RuntimeError, AttributeError):
                 pass
+            web_file.close()
 
     @staticmethod
     def run_installer(local_path):

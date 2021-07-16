@@ -68,8 +68,9 @@ class TestCryoMove(unittest.TestCase):
         cls.aligner.moveRelSync({"x": 1e-6})
 
         # The 5DoF stage is not referenced automatically, so let's do it now
-        stage_axes = set(cls.stage.axes.keys())
-        cls.stage.reference(stage_axes).result()
+        if not all(cls.stage.referenced.value.values()):
+            stage_axes = set(cls.stage.axes.keys())
+            cls.stage.reference(stage_axes).result()
 
         # Set custom value that works well within the simulator range
         cls.rx_angle = 0.3
@@ -246,7 +247,8 @@ class TestCryoMove(unittest.TestCase):
 
         # Move to imaging position and cancel the movement before reaching there
         f = cryoSwitchSamplePosition(IMAGING)
-        time.sleep(2)
+        # abit long wait for the loading-imaging referencing to finish
+        time.sleep(7)
         f.cancel()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, LOADING_PATH)
@@ -279,6 +281,23 @@ class TestCryoMove(unittest.TestCase):
         f.cancel()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, LOADING_PATH)
+
+    def test_smaract_stage_fallback_movement(self):
+        """
+        Test behaviour of smaract 5dof stage when the linear axes are near the maximum range
+        """
+        # 1. Move to imaging position
+        f = cryoSwitchSamplePosition(IMAGING)
+        f.result()
+        # 2. Move the stage linear axes to their max range + move rx from 0
+        self.focus.moveAbs(self.focus_deactive).result()
+        self.stage.moveAbs({'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1], 'rx': 0.15}).result()
+        # 3. Move to loading where the ordered submoves would start from rx/rx, resulting in an invalid move
+        # exception if it's not handled
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        test.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
+                                     atol=ATOL_LINEAR_POS)
 
 
 if __name__ == "__main__":

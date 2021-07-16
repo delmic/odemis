@@ -58,7 +58,8 @@ class FakePH300(model.Component):
     def GetCountRate(self, channel):
         return random.randint(0, 5000)
 
-CLASS_TR_CTRL = picoquant.PH300RawDetector
+
+CLASS_TR_CTRL = picoquant.RawDetector
 KWARGS_TR_CTRL = dict(name="Photon counter signal", role="photo-detector", parent=FakePH300("fake"), channel=0, shutter_name='shutter1')
 
 CLASS_PMT = pmtctrl.PMT
@@ -290,6 +291,7 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.acq_left, 0)
         # the protection remains off during the acquisition
         self.assertEqual(self.pmt_protection_recorded, self.pmt_protection_expected)
+        self.acq_complete.clear()
 
         logging.debug("Acquiring again...")
         self.acq_left = 10

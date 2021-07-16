@@ -2,9 +2,9 @@
 """
 Created on 22 Aug 2012
 
-@author: Éric Piel
+@author: Éric Piel, Philip Winkler
 
-Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
+Copyright © 2012-2021 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -34,23 +34,26 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
 import math
+
+from wx.core import CallAfter
 from odemis import model, dataio
-from odemis.acq import align, acqmng, stream
+from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
-from odemis.gui import conf
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream, FastEMOverviewStream
+from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
-    wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
+    wxlimit_invocation, get_home_folder
+from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator, VigilantAttributeConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
 from odemis.util import units
+from odemis.util.dataio import open_acquisition, data_to_static_streams
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -58,8 +61,13 @@ import subprocess
 import threading
 import time
 import wx
+from datetime import datetime
 
 import odemis.gui.model as guimod
+
+# black list of VAs name which are known to not affect the acquisition time
+VAS_NO_ACQUISITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
+                             "is_active", "should_update", "status", "name", "tint")
 
 
 class SnapshotController(object):
@@ -449,6 +457,451 @@ class SecomAcquiController(object):
             main_data.tab.value = tab
             tab.load_data(acq_dialog.last_saved_file)
 
+# constants for the acquisition future state of the cryo-secom
+ST_FINISHED = "FINISHED"
+ST_FAILED = "FAILED"
+ST_CANCELED = "CANCELED"
+
+
+class CryoAcquiController(object):
+    """
+    Controller to handle the acquisitions of the cryo-secom
+    microscope.
+    """
+
+    def __init__(self, tab_data, panel, tab):
+        self._panel = panel
+        self._tab_data = tab_data
+        self._tab = tab
+
+        self.overview_acqui_controller = OverviewStreamAcquiController(
+            self._tab_data, self._tab
+        )
+        self._config = conf.get_acqui_conf()
+        # contains the acquisition progressive future for the given streams 
+        self._acq_future = None
+
+        # VA's
+        self._filename = self._tab_data.filename
+        self._acquiStreams = self._tab_data.acquisitionStreams
+        self._zStackActive = self._tab_data.zStackActive
+
+        # hide/show some widgets at initialization
+        self._panel.gauge_cryosecom_acq.Hide()
+        self._panel.txt_cryosecom_left_time.Hide()
+        self._panel.txt_cryosecom_est_time.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Hide()
+        self._panel.Layout()
+
+        # bind events (buttons, checking, ...) with callbacks 
+        # for "ACQUIRE" button
+        self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
+        # for "change..." button
+        self._panel.btn_cryosecom_change_file.Bind(
+            wx.EVT_BUTTON, self._on_btn_change
+        )
+        # for "acquire overview" button
+        self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON, self._on_acquire_overview)
+        # for "cancel" button
+        self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+        # for the check list box
+        self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
+
+        # callbacks of VA's
+        self._tab_data.filename.subscribe(self._on_filename, init=True)
+        self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
+        self._tab_data.zMin.subscribe(self._on_z_min, init=True)
+        self._tab_data.zMax.subscribe(self._on_z_max, init=True)
+        self._tab_data.zStep.subscribe(self._on_z_step, init=True)
+        self._tab_data.streams.subscribe(self._on_streams_change, init=True)
+        # TODO link .acquiStreams with a callback that is called
+        # to check/uncheck items (?)
+
+        # VA's connector
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zStackActive,
+            value_ctrl=self._panel.z_stack_chkbox,
+            events=wx.EVT_CHECKBOX,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zMin,
+            value_ctrl=self._panel.param_Zmin,
+            events=wx.EVT_COMMAND_ENTER,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zMax,
+            value_ctrl=self._panel.param_Zmax,
+            events=wx.EVT_COMMAND_ENTER,
+        )
+        _ = VigilantAttributeConnector(
+            va=self._tab_data.zStep,
+            value_ctrl=self._panel.param_Zstep,
+            events=wx.EVT_COMMAND_ENTER,
+        )
+
+    def _on_acquire(self, _):
+        """
+        called when the button "acquire" is pressed
+        """
+        # hide/show/disable some widgets
+        self._panel.gauge_cryosecom_acq.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Show()
+        self._panel.txt_cryosecom_left_time.Show()
+        self._panel.txt_cryosecom_est_time.Hide()
+        self._panel.btn_cryosecom_acquire.Disable()
+        self._panel.btn_cryosecom_change_file.Disable()
+        self._panel.btn_acquire_overview.Disable()
+        self._panel.z_stack_chkbox.Disable()
+        self._panel.streams_chk_list.Disable()
+        # disable the streams settings
+        self._tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pause()
+        self._panel.Layout()
+
+        # TODO use the function "generate_zlevels". The zrange
+        # is defined using the zMax and zMin obtained
+        # from the GUI from the user. Similarly for zStep. Pass
+        # the returned dictionary to the acquisition function below,
+        # after replacing "acquire" function with "acquireZStack".
+        self._acq_future = acqmng.acquire(
+            self._acquiStreams.value, self._tab_data.main.settings_obs
+        )
+        self._tab_data.main.is_acquiring.value = True
+        logging.info("Acquisition started")
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
+        self._acq_future.add_done_callback(self._on_acquisition_done)
+
+    @call_in_wx_main
+    def _on_acquisition_done(self, future):
+        """
+        Called when the acquisition process is
+        done, failed or canceled
+        """
+        self._acq_future = None
+        self._gauge_future_conn = None
+        self._tab_data.main.is_acquiring.value = False
+
+        # try to get the acquisition data
+        try:
+            data, exp = future.result()
+            self._panel.txt_cryosecom_est_time.Show()
+            self._panel.txt_cryosecom_est_time.SetLabel("Saving file ...")
+            logging.info("The acquisition is done")
+        except CancelledError:
+            logging.info("The acquisition was canceled")
+            self._reset_acquisition_gui(state=ST_CANCELED)
+            return
+        except Exception:
+            logging.exception("The acquisition failed")
+            self._reset_acquisition_gui(
+                text="Acquisition failed (see log panel).", state=ST_FAILED
+            )
+            return
+        if exp:
+            logging.error("Acquisition partially failed %s: ", exp)
+
+        # save the data
+        executor = futures.ThreadPoolExecutor(max_workers=2)
+        st = stream.StreamTree(streams=list(self._acquiStreams.value))
+        thumb_nail = acqmng.computeThumbnail(st, future)
+        scheduled_future = executor.submit(self._export_data, data, thumb_nail)
+        scheduled_future.add_done_callback(self._on_export_data_done)
+
+    def _reset_acquisition_gui(self, text=None, state=None):
+        """
+        Resets some GUI widgets for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        state (str): the state of the acquisition future
+        """
+        # hide/enable some widgets
+        self._panel.gauge_cryosecom_acq.Hide()
+        self._panel.btn_cryosecom_acqui_cancel.Hide()
+        self._panel.btn_cryosecom_acquire.Enable()
+        self._panel.btn_cryosecom_change_file.Enable()
+        self._panel.btn_acquire_overview.Enable()
+        self._panel.z_stack_chkbox.Enable()
+        self._panel.streams_chk_list.Enable()
+        self._panel.txt_cryosecom_left_time.Hide()
+        self._tab.streambar_controller.resume()
+        self._panel.Layout()
+
+        if state == ST_FINISHED:
+            # update the counter of the filename
+            self._config.fn_count = update_counter(self._config.fn_count)
+            # reset the storing directory to the project directory
+            self._config.last_path = self._config.pj_last_path
+        elif state == ST_FAILED:
+            self._panel.txt_cryosecom_est_time.Show()
+            self._panel.txt_cryosecom_est_time.SetLabel(text)
+        elif state == ST_CANCELED:
+            self._panel.txt_cryosecom_est_time.Show()
+            self._update_acquisition_time()
+        else:
+            raise ValueError("The acquisition future state %s is unknown" % state)
+
+    def _display_acquired_data(self, data):
+        """
+        Shows the acquired image on the view
+        """
+        # get the localization tab
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        local_tab.display_acquired_data(data)
+
+    @call_in_wx_main
+    def _on_export_data_done(self, future):
+        """
+        Called after exporting the data
+        """
+        self._reset_acquisition_gui(state=ST_FINISHED)
+        self._update_acquisition_time()
+        data = future.result()
+        self._display_acquired_data(data)
+
+    def _export_data(self, data, thumb_nail):
+        """
+        Called to export the acquired data.
+        data (DataArray): the returned data/images from the future
+        thumb_nail (DataArray): the thumbnail of the views  
+        """
+        filename = self._filename.value
+        if data:
+            exporter = dataio.get_converter(self._config.last_format)
+            exporter.export(filename, data, thumb_nail)
+            logging.info(u"Acquisition saved as file '%s'.", filename)
+            # update the filename
+            self._filename.value = create_filename(
+                self._config.pj_last_path,
+                self._config.fn_ptn,
+                self._config.last_extension,
+                self._config.fn_count,
+            )
+        else:
+            logging.debug("Not saving into file '%s' as there is no data", filename)
+
+        return data
+
+    @call_in_wx_main
+    def _on_streams_change(self, streams):
+        """
+        a VA callback that is called when the .streams VA is changed, more specifically
+        it is called when the user adds or removes a stream 
+        """
+        # removing a stream 
+        # for every entry in the list, is it also present in the .streams?
+        # Note: the reverse order is needed in case 2 or more streams are deleted 
+        # at the same time. Because, when an entry in array is deleted, the other
+        # entries shift leftwards. So iterating from left to right would lead to skipping
+        # some entires required to delete, and deleting other entires. Therefore,
+        # iterating from right to left is chosen. 
+        for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
+            item_stream = self._panel.streams_chk_list.GetClientData(i)
+            if item_stream not in streams:
+                self._panel.streams_chk_list.Delete(i)
+                if item_stream in self._acquiStreams.value:
+                    self._acquiStreams.value.remove(item_stream)
+                # unsubscribe the settings VA's of this removed stream
+                for va in self._get_settings_vas(item_stream):
+                    va.unsubscribe(self._on_settings_va)
+                self._update_acquisition_time()
+                # unsubscribe the name and wavelength VA's of this removed stream
+                for va in self._get_wavelength_vas(item_stream):
+                    va.unsubscribe(self._on_stream_wavelength)
+                item_stream.name.unsubscribe(self._on_stream_name)
+
+        # adding a stream 
+        # for every stream in .streams, is it already present in the list?
+        item_streams = [
+            self._panel.streams_chk_list.GetClientData(i)
+            for i in range(self._panel.streams_chk_list.GetCount())
+        ]
+        for i, s in enumerate(streams):
+            if s not in item_streams and not isinstance(s, StaticStream):
+                self._panel.streams_chk_list.Insert(s.name.value, i, s)
+                self._panel.streams_chk_list.Check(i)
+                self._acquiStreams.value.append(s)
+                # subscribe the name and wavelength VA's of this added stream
+                for va in self._get_wavelength_vas(s):
+                    va.subscribe(self._on_stream_wavelength, init=False)
+                s.name.subscribe(self._on_stream_name, init=False)
+                # subscribe the settings VA's of this added stream
+                for va in self._get_settings_vas(s):
+                    va.subscribe(self._on_settings_va)
+                self._update_acquisition_time()
+
+        # sort streams after addition or removal
+        item_streams = [
+            self._panel.streams_chk_list.GetClientData(i)
+            for i in range(self._panel.streams_chk_list.GetCount())
+        ]
+        self._sort_streams(item_streams)
+
+    @wxlimit_invocation(1)  # max 1/s
+    def _update_acquisition_time(self):
+        """
+        Updates the estimated time
+        required for acquisition
+        """
+        acq_time = acqmng.estimateTime(self._acquiStreams.value)
+        acq_time = math.ceil(acq_time)  # round a bit pessimistic
+        # TODO take into account the time of acquiring the zlevels
+        # as well as the time required for moving the actuator
+        txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
+        self._panel.txt_cryosecom_est_time.SetLabel(txt)
+
+    @call_in_wx_main
+    def _on_stream_wavelength(self, _=None):
+        """
+        a VA callback that is called to sort the streams when the user changes
+         the emission or excitation wavelength
+        """
+        counts = self._panel.streams_chk_list.GetCount()
+        streams = [
+            self._panel.streams_chk_list.GetClientData(i) for i in range(counts)
+        ]
+        self._sort_streams(streams)
+
+    @call_in_wx_main
+    def _sort_streams(self, streams):
+        for i, s in enumerate(acqmng.sortStreams(streams)):
+            # replace the unsorted streams with the sorted streams one by one
+            self._panel.streams_chk_list.Delete(i)
+            self._panel.streams_chk_list.Insert(s.name.value, i, s)
+            if s in self._acquiStreams.value:
+                self._panel.streams_chk_list.Check(i)
+
+    @call_in_wx_main
+    def _on_stream_name(self, _):
+        """
+        a VA callback that is called when the user changes
+         the name of a stream 
+        """
+        counts = self._panel.streams_chk_list.GetCount()
+        for i in range(counts):
+            sname = self._panel.streams_chk_list.GetString(i)
+            s = self._panel.streams_chk_list.GetClientData(i)
+            if s.name.value != sname:
+                self._panel.streams_chk_list.SetString(i, s.name.value)
+
+    @call_in_wx_main
+    def _update_zstack_active(self, active):
+        """
+        a VA callback. Called when the user
+        checks/uncheck the zstack checkbox
+        """
+        self._panel.param_Zmin.Enable(active)
+        self._panel.param_Zmax.Enable(active)
+        self._panel.param_Zstep.Enable(active)
+        self._update_acquisition_time()
+
+    def _on_z_min(self, zmin):
+        self._tab_data.zMin.value = zmin
+
+    def _on_z_max(self, zmax):
+        self._tab_data.zMax.value = zmax
+
+    def _on_z_step(self, zstep):
+        self._tab_data.zStep.value = zstep
+
+    def _on_check_list(self, _):
+        """
+        called when user checks/unchecks the items in checklist
+        """
+        for i in range(self._panel.streams_chk_list.GetCount()):
+            item = self._panel.streams_chk_list.GetClientData(i)
+            # the user checked new item
+            if (
+                self._panel.streams_chk_list.IsChecked(i)
+                and item not in self._acquiStreams.value
+            ):
+                self._acquiStreams.value.append(item)
+                self._update_acquisition_time()
+
+            # the user unchecked item
+            elif (
+                not self._panel.streams_chk_list.IsChecked(i)
+                and item in self._acquiStreams.value
+            ):
+                self._acquiStreams.value.remove(item)
+                self._update_acquisition_time()
+
+    def _on_cancel(self, _):
+        """
+        called when the button "cancel" is pressed
+        """
+        if self._acq_future is not None:
+            # cancel the acquisition future
+            self._acq_future.cancel()
+
+    def _on_acquire_overview(self, _):
+        """
+        called when the button "acquire overview" is pressed
+        """
+        das = self.overview_acqui_controller.open_acquisition_dialog()
+        if das:
+            self._tab.load_data(das)
+
+    @call_in_wx_main
+    def _on_filename(self, name):
+        """
+        called when the .filename VA changes
+        """
+        path, base = os.path.split(name)
+        self._panel.txt_filename.SetValue(str(path))
+        self._panel.txt_filename.SetInsertionPointEnd()
+        self._panel.txt_filename.SetValue(str(base))
+
+    def _on_btn_change(self, _):
+        """
+        called when the button "change" is pressed
+        """
+        current_filename = self._filename.value
+        new_filename = ShowAcquisitionFileDialog(self._panel, current_filename)
+        if new_filename is not None:
+            self._filename.value = new_filename
+            self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
+            logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
+
+    def _get_wavelength_vas(self, st):
+        """
+        Gets the excitation and emission VAs of a stream.
+        st (Stream): the stream of which the excitation and emission wavelengths 
+            are to be returned
+        return (set of VAs)
+        """
+        nvas = model.getVAs(st)  # name -> va
+        vas = set()
+        # only add the name, emission and excitation VA's
+        for n, va in nvas.items():
+            if n in ["emission", "excitation"]:
+                vas.add(va)
+        return vas
+
+    def _get_settings_vas(self, stream):
+        """
+        Find all the VAs of a stream which can potentially affect the acquisition time
+        return (set of VAs)
+        """
+        nvas = model.getVAs(stream)  # name -> va
+        vas = set()
+        # remove some VAs known to not affect the acquisition time
+        for n, va in nvas.items():
+            if n not in VAS_NO_ACQUISITION_EFFECT:
+                vas.add(va)
+        return vas
+
+    def _on_settings_va(self, _):
+        """
+        Called when a VA which might affect the acquisition is modified
+        """
+        self._update_acquisition_time()
+
 
 class OverviewStreamAcquiController(object):
     """ controller to handle high-res image acquisition of the overview for the cryo-secom
@@ -489,7 +942,8 @@ class OverviewStreamAcquiController(object):
 
         # create the dialog
         try:
-            acq_dialog = OverviewAcquisitionDialog(self._tab.main_frame, self._tab_data_model)
+            acq_dialog = OverviewAcquisitionDialog(
+                self._tab.main_frame, self._tab_data_model)
             parent_size = [v * 0.77 for v in self._tab.main_frame.GetSize()]
 
             acq_dialog.SetSize(parent_size)
@@ -595,10 +1049,6 @@ class SparcAcquiController(object):
     def __del__(self):
         self._executor.shutdown(wait=False)
 
-    # black list of VAs name which are known to not affect the acquisition time
-    VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
-                                "is_active", "should_update", "status", "name", "tint")
-
     def _get_settings_vas(self, stream):
         """
         Find all the VAs of a stream which can potentially affect the acquisition time
@@ -608,7 +1058,7 @@ class SparcAcquiController(object):
         vas = set()
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
-            if n not in self.VAS_NO_ACQUSITION_EFFECT:
+            if n not in VAS_NO_ACQUISITION_EFFECT:
                 vas.add(va)
         return vas
 
@@ -925,6 +1375,383 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Acquisition failed (see log panel).",
                                         level=logging.WARNING,
                                         keep_filename=(not data))
+
+
+class FastEMAcquiController(object):
+    """
+    Takes care of the acquisition button and process in the FastEM acquisition tab.
+    """
+
+    def __init__(self, tab_data, tab_panel, projectbar_ctrl, calibration_ctrl):
+        """
+        tab_data (FastEMGUIData): the representation of the microscope GUI
+        tab_panel: (wx.Frame): the frame which contains the viewport
+        projectbar_ctrl (FastEMProjectBarController): project bar controller
+        calibration_ctrl (FastEMCalibrationController): calibration controller
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+        self._projectbar_ctrl = projectbar_ctrl
+        self._calibration_ctrl = calibration_ctrl
+
+        # Path to the acquisition
+        # <External storage>/<date>/<project name>/<roa name>
+        # TODO: display proper path to external storage (if mounted)
+        self.path = datetime.today().strftime('%Y-%m-%d')
+        self._tab_panel.txt_destination.SetValue("<External Storage>/%s" % self.path)
+
+        # ROA count
+        self.roa_count = 0
+        self._tab_panel.txt_num_rois.SetValue("0")
+
+        # For acquisition
+        self.btn_acquire = self._tab_panel.btn_sparc_acquire
+        self.btn_cancel = self._tab_panel.btn_sparc_cancel
+        self.gauge_acq = self._tab_panel.gauge_sparc_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.txt_num_rois = self._tab_panel.txt_num_rois
+        self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
+        self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+
+        # Link buttons
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        # Hide gauge, disable acquisition button
+        self.gauge_acq.Hide()
+        self._tab_panel.Parent.Layout()
+        self.btn_acquire.Enable(False)
+
+        # Update text controls when projects/roas/rocs are changed
+        self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
+        tab_data.projects.subscribe(self._on_projects, init=True)
+        for roc in self._tab_data_model.calibration_regions.value.values():
+            roc.coordinates.subscribe(self._on_roc)
+
+    def _on_projects(self, projects):
+        for p in projects:
+            p.roas.subscribe(self._on_roas)
+
+    def _on_roas(self, roas):
+        # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
+        for roa in roas:
+            if roa not in self.roa_subscribers:
+                roa.roc.subscribe(self._on_roc)
+                self.roa_subscribers.append(roa)
+        self._update_roa_count()
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def _on_roc(self, _):
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def check_acquire_button(self):
+        self.btn_acquire.Enable(self.roa_count and not self._get_undefined_calibrations())
+
+    @wxlimit_invocation(1)  # max 1/s
+    def update_acquisition_time(self):
+        lvl = None  # icon status shown
+        if self.roa_count == 0:
+            lvl = logging.WARN
+            txt = "No region of acquisition selected."
+        elif self._get_undefined_calibrations():
+            lvl = logging.WARN
+            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations()),)
+        else:
+            # Don't update estimated time if acquisition is running (as we are
+            # sharing the label with the estimated time-to-completion).
+            if self._main_data_model.is_acquiring.value:
+                return
+            # Display acquisition time
+            projects = self._tab_data_model.projects.value
+            acq_time = fastem.estimateTime([roa for p in projects for roa in p.roas.value])
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = u"Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
+
+    def _get_undefined_calibrations(self):
+        """
+        returns (list of str): names of ROCs which are undefined
+        """
+        undefined = set()
+        for p in self._tab_data_model.projects.value:
+            for roa in p.roas.value:
+                roc = roa.roc.value
+                if roc.coordinates.value == stream.UNDEFINED_ROI:
+                    undefined.add(roc.name.value)
+        return sorted(undefined)
+
+    def _update_roa_count(self):
+        roas = [roa for p in self._tab_data_model.projects.value for roa in p.roas.value]
+        self.txt_num_rois.SetValue("%s" % len(roas))
+        self.roa_count = len(roas)
+
+    def _show_status_icons(self, lvl):
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.Layout()
+
+    def _reset_acquisition_gui(self, text=None, level=None):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self._tab_panel.Layout()
+
+        if text is not None:
+            self.lbl_acqestimate.SetLabel(text)
+            self._show_status_icons(level)
+        else:
+            self.update_acquisition_time()
+
+    def on_acquisition(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        self._main_data_model.is_acquiring.value = True
+        self.btn_acquire.Enable(False)
+        self.btn_cancel.Enable(True)
+        self.btn_cancel.Show()
+        self.gauge_acq.Show()
+        self._show_status_icons(None)
+
+        self.gauge_acq.Range = self.roa_count
+        self.gauge_acq.Value = 0
+
+        # Acquire ROAs for all projects
+        for p in self._tab_data_model.projects.value:
+            ppath = os.path.join(self.path, p.name.value)
+            for roa in p.roas.value:
+                fn = os.path.join(ppath, roa.name.value)
+                f = fastem.acquire(roa, fn)
+                f.add_done_callback(self.increase_acq_progress)
+
+        f.add_done_callback(self.on_acquisition_done)
+
+    def increase_acq_progress(self, f):
+        # TODO: improve progress estimation
+        self.gauge_acq.Value += 1
+
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        fastem._executor.cancel()
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_in_wx_main
+    def on_acquisition_done(self, future):
+        """
+        Callback called when the acquisition is finished (either successfully or
+        cancelled)
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self._tab_panel.Layout()
+        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._main_data_model.is_acquiring.value = False
+        try:
+            future.result()
+        except CancelledError:
+            self._reset_acquisition_gui()
+            return
+        except Exception as exp:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
+            return
+
+
+class FastEMOverviewAcquiController(object):
+    """
+    Takes care of the overview image acquisition in the FastEM overview tab.
+    """
+
+    def __init__(self, tab_data, tab_panel):
+        """
+        tab_data (FastEMGUIData): the representation of the microscope GUI
+        tab_panel: (wx.Frame): the frame which contains the viewport
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+
+        # For acquisition
+        self.btn_acquire = self._tab_panel.btn_sparc_acquire
+        self.btn_cancel = self._tab_panel.btn_sparc_cancel
+        self.gauge_acq = self._tab_panel.gauge_sparc_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
+        self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.selection_panel = self._tab_panel.selection_panel
+
+        # Create grid of buttons for scintillator selection
+        self.selection_panel.create_controls(tab_data.main.scintillator_layout)
+        for btn in self.selection_panel.buttons.values():
+            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
+
+        # Link acquire/cancel buttons
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        # Hide gauge, disable acquisition button
+        self.gauge_acq.Hide()
+        self._tab_panel.Parent.Layout()
+        self.btn_acquire.Enable(False)
+
+        # Warning that no scintillators are selected
+        self.update_acquisition_time()
+
+    def _on_selection_button(self, evt):
+        # add/remove scintillator number to/from selected_scintillators set and toggle button colour
+        btn = evt.GetEventObject()
+        num = [num for num, b in self.selection_panel.buttons.items() if b == btn][0]
+        if btn.GetValue():
+            if num not in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.append(num)
+            btn.SetBackgroundColour(wx.GREEN)
+        else:
+            if num in self._tab_data_model.selected_scintillators.value:
+                self._tab_data_model.selected_scintillators.value.remove(num)
+            btn.SetBackgroundColour(FG_COLOUR_BUTTON)
+        self.update_acquisition_time()
+        self.check_acquire_button()
+
+    @call_in_wx_main
+    def check_acquire_button(self):
+        self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
+
+    @wxlimit_invocation(1)  # max 1/s
+    def update_acquisition_time(self):
+        lvl = None  # icon status shown
+        if not self._tab_data_model.selected_scintillators.value:
+            lvl = logging.WARN
+            txt = "No scintillator selected for overview acquisition."
+        else:
+            acq_time = len(self._tab_data_model.selected_scintillators.value) * 2
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = u"Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
+
+    def _show_status_icons(self, lvl):
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.Layout()
+
+    def _reset_acquisition_gui(self, text=None, level=None):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self._tab_panel.Layout()
+
+        if text is not None:
+            self.lbl_acqestimate.SetLabel(text)
+            self._show_status_icons(level)
+        else:
+            self.update_acquisition_time()
+
+    def on_acquisition(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        self._main_data_model.is_acquiring.value = True
+        self.btn_acquire.Enable(False)
+        self.btn_cancel.Enable(True)
+        self.btn_cancel.Show()
+        self.gauge_acq.Show()
+        self._show_status_icons(None)
+
+        self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
+        self.gauge_acq.Value = 0
+
+        # Acquire ROAs for all projects
+        for num in self._tab_data_model.selected_scintillators.value:
+            center = self._tab_data_model.main.scintillator_positions[num]
+            sz = self._tab_data_model.main.scintillator_size
+            coords = (center[0] - sz[0], center[1] - sz[1], center[0] + sz[0], center[1] + sz[1])
+            f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+
+            def acq_done(future, num=num):
+                return self.on_acquisition_done(future, num)
+            f.add_done_callback(acq_done)
+        f.add_done_callback(self.full_acquisition_done)
+
+    def increase_acq_progress(self, f):
+        # TODO: improve progress estimation
+        self.gauge_acq.Value += 1
+
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        fastem._executor.cancel()
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_in_wx_main
+    def on_acquisition_done(self, future, num):
+        """
+        Callback called when the one overview image acquisition is finished.
+        """
+        self.increase_acq_progress(None)
+        try:
+            da = future.result()
+        except CancelledError:
+            self._reset_acquisition_gui()
+            return
+        except Exception:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
+            return
+
+        # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
+        fn = os.path.join(get_picture_folder(), "fastem_overview_%s.ome.tiff" % num)
+        dataio.tiff.export(fn, da, pyramid=True)
+        da = open_acquisition(fn)
+        sz = self._tab_data_model.main.scintillator_size
+        md = {model.MD_POS: self._tab_data_model.main.scintillator_positions[num],
+              model.MD_PIXEL_SIZE: [sz[0] / da[0].shape[0], sz[1] / da[0].shape[1]]}
+        da[0].metadata = md
+        s = data_to_static_streams(da)[0]
+        s = FastEMOverviewStream(s.name.value, s.raw[0])
+        self._main_data_model.overview_streams.value[num] = s
+        # Dict VA needs to be notified explicitly
+        self._main_data_model.overview_streams.notify(self._main_data_model.overview_streams.value)
+
+    @call_in_wx_main
+    def full_acquisition_done(self, future):
+        """
+        Callback called when the acquisition of all selected overview images is finished
+        (either successfully or cancelled).
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self._tab_panel.Layout()
+        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._main_data_model.is_acquiring.value = False
 
 
 # TODO: merge with AutoCenterController because they share too many GUI elements

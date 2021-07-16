@@ -76,6 +76,8 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
+        self.btn_tab_fastem_overview = xrc.XRCCTRL(self, "btn_tab_fastem_overview")
+        self.btn_tab_fastem_acqui = xrc.XRCCTRL(self, "btn_tab_fastem_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
         self.temperature_display = xrc.XRCCTRL(self, "temperature_display")
@@ -368,7 +370,7 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
         self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
+        self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
 
 
 
@@ -460,6 +462,92 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
+        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
+
+
+
+class xrcpnl_tab_fastem_acqui(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_fastem_acqui.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_fastem_acqui.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_acqui")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_acqui")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
+        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
+        self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
+        self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
+        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
+        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
+
+
+
+class xrcpnl_tab_fastem_overview(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_fastem_overview.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_fastem_overview.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_overview")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_overview")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
+        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
+        self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
@@ -638,7 +726,20 @@ class xrcpnl_tab_localization(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
-        self.pnl_overview_streams = xrc.XRCCTRL(self, "pnl_overview_streams")
+        self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
+        self.z_stack_chkbox = xrc.XRCCTRL(self, "z_stack_chkbox")
+        self.param_Zmin = xrc.XRCCTRL(self, "param_Zmin")
+        self.param_Zstep = xrc.XRCCTRL(self, "param_Zstep")
+        self.param_Zmax = xrc.XRCCTRL(self, "param_Zmax")
+        self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
+        self.btn_cryosecom_change_file = xrc.XRCCTRL(self, "btn_cryosecom_change_file")
+        self.btn_cryosecom_acquire = xrc.XRCCTRL(self, "btn_cryosecom_acquire")
+        self.txt_cryosecom_est_time = xrc.XRCCTRL(self, "txt_cryosecom_est_time")
+        self.gauge_cryosecom_acq = xrc.XRCCTRL(self, "gauge_cryosecom_acq")
+        self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
+        self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
+        self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
+        self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
 
 
 
@@ -1038,6 +1139,42 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_acqui">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ACQUISITION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+			<object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_overview">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ACQUISITION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_acqui">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ACQUISITION</label>
@@ -4367,14 +4504,16 @@ def __init_resources():
 			<minsize>400,-1</minsize>
 		</object>
 		<object class="sizeritem">
-			<object class="ARAcquiViewport" name="vp_chamber">
-				<XRCED>
-					<assign_var>1</assign_var>
-				</XRCED>
-			</object>
-			<option>1</option>
-			<flag>wxEXPAND</flag>
-		</object>
+						<object class="FeatureOverviewViewport" name="vp_overview_map">
+						<fg>#BFBFBF</fg>
+						<bg>#000000</bg>
+						<XRCED>
+						  <assign_var>1</assign_var>
+						</XRCED>
+					  </object>
+					<option>1</option>
+					<flag>wxEXPAND</flag>
+					</object>
 		<orient>wxHORIZONTAL</orient>
 	</object>
 	<bg>#333333</bg>
@@ -4951,6 +5090,555 @@ def __init_resources():
                               <object class="sizeritem">
                                 <object class="wxStaticText" name="lbl_sparc_acq_estimate">
                                   <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_sparc_acq">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <fg>#1A1A1A</fg>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                      <icon>img_icon_ico_acqui_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>START</label>
+                      <fg>#FFFFFF</fg>
+                      <font>
+                        <size>15</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <bg>#333333</bg>
+  </object>
+  <object class="wxPanel" name="pnl_tab_fastem_acqui">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_left">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ToolBar" name="sparc_acq_toolbar">
+                <style>wxVERTICAL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_RIGHT</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+		    <object class="spacer">
+              <option>8</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>-1,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem">
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
+						  <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>CALIBRATION</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+					  <object class="FoldPanelItem">
+                        <object class="FastEMProjectBar" name="pnl_fastem_projects">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>PROJECTS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>ACQUISITION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxFlexGridSizer">
+                            <object class="sizeritem">
+                              <object class="wxStaticText">
+                                <label>Total number of ROIs:</label>
+                                <fg>#E5E5E5</fg>
+                              </object>
+                              <flag>wxTOP</flag>
+                              <border>2</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxTextCtrl" name="txt_num_rois">
+                                <size>200,20</size>
+                                <value>...</value>
+                                <fg>#BFBFBF</fg>
+                                <bg>#333333</bg>
+                                <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText">
+                                <label>Destination</label>
+                                <fg>#E5E5E5</fg>
+                              </object>
+                              <flag>wxTOP</flag>
+                              <border>2</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxTextCtrl" name="txt_destination">
+                                <size>200,20</size>
+                                <value>...</value>
+                                <fg>#BFBFBF</fg>
+                                <bg>#333333</bg>
+                                <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                            </object>
+                            <cols>2</cols>
+                            <rows>3</rows>
+                            <vgap>5</vgap>
+                            <hgap>10</hgap>
+                            <growablecols>1</growablecols>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                  <bitmap>img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                  <bitmap>img_icon_dialog_warning_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_sparc_acq">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <fg>#1A1A1A</fg>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                      <icon>img_icon_ico_acqui_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>START</label>
+                      <fg>#FFFFFF</fg>
+                      <font>
+                        <size>15</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <bg>#333333</bg>
+  </object>
+ <object class="wxPanel" name="pnl_tab_fastem_overview">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_left">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ToolBar" name="sparc_acq_toolbar">
+                <style>wxVERTICAL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_RIGHT</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+		    <object class="spacer">
+              <option>8</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>-1,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="FastEMOverviewViewport" name="vp_fastem_overview">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar" name="fpb_settings">
+					  <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_fastem_overview_streams">
+                          <size>300,-1</size>
+                          <add_button>0</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>SEM</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+<object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>OVERVIEW ACQUISITION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+				  <object class="sizeritem">
+				    <object class="FastEMSelectionPanel" name="selection_panel">
+					  <bg>#333333</bg>
+					  <fg>#999999</fg>
+					  <size>400,-1</size>
+					  <flag>wxALL|wxEXPAND</flag>
+					 </object> 
+                   </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                  <bitmap>img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                  <bitmap>img_icon_dialog_warning_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No scintillator selected for overview acquisition.</label>
                                   <fg>#DDDDDD</fg>
                                   <font>
                                     <size>10</size>
@@ -5629,7 +6317,7 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="LiveViewport" name="vp_secom_tl">
+          <object class="FeatureOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
@@ -5663,7 +6351,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="OverviewViewport" name="vp_overview_sem">
+          <object class="FixedOverviewViewport" name="vp_overview_sem">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
@@ -6190,8 +6878,8 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          
-          
+
+
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -6202,7 +6890,7 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-            
+
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
@@ -6232,18 +6920,361 @@ def __init_resources():
                         <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_overview_streams">
-                          <size>300,-1</size>
-                          <label>ADD OVERVIEW</label>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                    <object class="wxCheckListBox" name="streams_chk_list">
+                                        <content/>
+                                        <font>
+                                            <size>10</size>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <option>1</option>
+                                    <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                                    <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                        <object class="sizeritem">
+                                            <object class="wxCheckBox" name="z_stack_chkbox">
+                                                <label>Z-stack acquisition</label>
+                                                <fg>#E5E5E5</fg>
+                                            </object>
+                                            <option>0</option>
+                                            <flag>wxTOP</flag>
+                                            <border>10</border>
+                                        </object>
+                                        <orient>wxVERTICAL</orient>
+                                    </object>
+                                    <option>0</option>
+                                    <flag>wxLEFT</flag>
+                                    <border>5</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                        <object class="sizeritem">
+                                            <object class="wxFlexGridSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxStaticText">
+                                                        <label>Zmin =</label>
+                                                        <fg>#E5E5E5</fg>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="UnitFloatCtrl" name="param_Zmin">
+                                                        <size>-1,15</size>
+                                                        <value>10</value>
+                                                        <key_step>0.1</key_step>
+                                                        <min>-1000</min>
+                                                        <max>0</max>
+                                                        <unit>m</unit>
+                                                        <scale>linear</scale>
+                                                        <accuracy>4</accuracy>
+                                                        <font>
+                                                            <size>8</size>
+                                                            <encoding>UTF-8</encoding>
+                                                        </font>
+                                                        <style>wxBORDER_NONE</style>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <cols>2</cols>
+                                                <rows>1</rows>
+                                                <vgap>3</vgap>
+                                                <hgap>6</hgap>
+                                                <growablecols>1</growablecols>
+                                            </object>
+                                            <option>0</option>
+                                            <flag>wxLEFT</flag>
+                                            <border>25</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="wxFlexGridSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxStaticText">
+                                                        <label>Zstep =</label>
+                                                        <fg>#E5E5E5</fg>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="UnitFloatCtrl" name="param_Zstep">
+                                                        <size>-1,15</size>
+                                                        <value>10</value>
+                                                        <key_step>0.1</key_step>
+                                                        <min>-100</min>
+                                                        <max>100</max>
+                                                        <unit>m</unit>
+                                                        <scale>linear</scale>
+                                                        <accuracy>4</accuracy>
+                                                        <font>
+                                                            <size>8</size>
+                                                            <encoding>UTF-8</encoding>
+                                                        </font>
+                                                        <style>wxBORDER_NONE</style>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <cols>2</cols>
+                                                <rows>1</rows>
+                                                <vgap>3</vgap>
+                                                <hgap>6</hgap>
+                                                <growablecols>1</growablecols>
+                                            </object>
+                                            <option>0</option>
+                                            <flag>wxLEFT</flag>
+                                            <border>1</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="wxFlexGridSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxStaticText">
+                                                        <label>Zmax =</label>
+                                                        <fg>#E5E5E5</fg>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="UnitFloatCtrl" name="param_Zmax">
+                                                        <size>-1,15</size>
+                                                        <value>1</value>
+                                                        <key_step>0.1</key_step>
+                                                        <min>0</min>
+                                                        <max>1000</max>
+                                                        <unit>m</unit>
+                                                        <scale>linear</scale>
+                                                        <accuracy>4</accuracy>
+                                                        <font>
+                                                            <size>8</size>
+                                                            <encoding>UTF-8</encoding>
+                                                        </font>
+                                                        <style>wxBORDER_NONE</style>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>3</border>
+                                                </object>
+                                                <cols>2</cols>
+                                                <rows>1</rows>
+                                                <vgap>3</vgap>
+                                                <hgap>6</hgap>
+                                                <growablecols>1</growablecols>
+                                            </object>
+                                            <option>0</option>
+                                            <flag>wxLEFT</flag>
+                                            <border>-5</border>
+                                        </object>
+                                        <orient>wxHORIZONTAL</orient>
+                                    </object>
+                                    <option>0</option>
+                                    <flag>wxTOP</flag>
+                                    <border>9</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                        <object class="sizeritem">
+                                            <object class="wxFlexGridSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxStaticText">
+                                                        <label>Filename</label>
+                                                        <fg>#E5E5E5</fg>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>4</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="wxTextCtrl" name="txt_filename">
+                                                        <size>150,20</size>
+                                                        <value>Select a destination file</value>
+                                                        <fg>#2FA7D4</fg>
+                                                        <bg>#333333</bg>
+                                                        <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxLEFT|wxEXPAND</flag>
+                                                    <border>1</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="ImageTextButton" name="btn_cryosecom_change_file">
+                                                        <height>24</height>
+                                                        <face_colour>def</face_colour>
+                                                        <label>change…</label>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxLEFT</flag>
+                                                    <border>85</border>
+                                                </object>
+                                                <cols>3</cols>
+                                                <rows>1</rows>
+                                                <vgap>5</vgap>
+                                                <hgap>10</hgap>
+                                                <growablecols>1</growablecols>
+                                            </object>
+                                            <flag>wxLEFT</flag>
+                                            <border>10</border>
+                                        </object>
+                                        <orient>wxHORIZONTAL</orient>
+                                    </object>
+                                    <option>0</option>
+                                    <flag>wxTOP</flag>
+                                    <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxFlexGridSizer">
+                                        <object class="sizeritem">
+                                            <object class="ImageTextButton" name="btn_cryosecom_acquire">
+                                                <icon>img_icon_ico_acqui_png</icon>
+                                                <height>48</height>
+                                                <face_colour>blue</face_colour>
+                                                <label>ACQUIRE</label>
+                                                <fg>#FFFFFF</fg>
+                                                <font>
+                                                    <size>15</size>
+                                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                </font>
+                                                <style>wxALIGN_CENTRE</style>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                            </object>
+                                            <flag>wxALL|wxEXPAND</flag>
+                                            <border>2</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="wxBoxSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxStaticText" name="txt_cryosecom_est_time">
+                                                        <label>Estimated time ...</label>
+                                                        <fg>#E5E5E5</fg>
+                                                        <hidden>1</hidden>
+                                                    </object>
+                                                    <flag>wxLEFT</flag>
+                                                    <border>-2</border>
+                                                </object>
+                                                <orient>wxHORIZONTAL</orient>
+                                            </object>
+                                            <flag>wxTOP</flag>
+                                            <border>17</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="wxBoxSizer">
+                                                <object class="sizeritem">
+                                                    <object class="wxBoxSizer">
+                                                        <object class="sizeritem">
+                                                            <object class="wxGauge" name="gauge_cryosecom_acq">
+                                                                <size>-1,10</size>
+                                                                <range>100</range>
+                                                                <value>0</value>
+                                                                <style>wxGA_SMOOTH</style>
+                                                                <XRCED>
+                                                                    <assign_var>1</assign_var>
+                                                                </XRCED>
+                                                            </object>
+                                                            <option>1</option>
+                                                            <flag>wxTOP</flag>
+                                                            <border>10</border>
+                                                        </object>
+                                                        <object class="sizeritem">
+                                                            <object class="wxStaticText" name="txt_cryosecom_left_time">
+                                                                <label>3 m 15 s left</label>
+                                                                <fg>#E5E5E5</fg>
+                                                                <hidden>1</hidden>
+                                                            </object>
+                                                            <option>1</option>
+                                                            <flag>wxTOP</flag>
+                                                            <border>10</border>
+                                                        </object>
+                                                        <orient>wxVERTICAL</orient>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>-8</border>
+                                                </object>
+                                                <object class="sizeritem">
+                                                    <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
+                                                        <height>24</height>
+                                                        <face_colour>def</face_colour>
+                                                        <label>cancel</label>
+                                                        <XRCED>
+                                                            <assign_var>1</assign_var>
+                                                        </XRCED>
+                                                    </object>
+                                                    <flag>wxTOP</flag>
+                                                    <border>12</border>
+                                                    <option>0</option>
+                                                </object>
+                                                <orient>wxHORIZONTAL</orient>
+                                            </object>
+                                            <flag>wxEXPAND</flag>
+                                        </object>
+                                        <cols>3</cols>
+                                        <rows>1</rows>
+                                        <vgap>0</vgap>
+                                        <hgap>5</hgap>
+                                        <growablecols>1</growablecols>
+                                    </object>
+                                    <flag>wxALL|wxEXPAND</flag>
+                                    <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="btn_acquire_overview">
+                                        <height>48</height>
+                                        <face_colour>def</face_colour>
+                                        <label>Acquire overview</label>
+                                        <font>
+                                            <size>14</size>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <option>0</option>
+                                    <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                                    <border>10</border>
+                                </object>
+                                <orient>wxVERTICAL</orient>
+                            </object>
+                            <size>400,-1</size>
+                            <bg>#333333</bg>
+                            <style>wxBORDER_NONE</style>
                         </object>
                         <label>ACQUISITIONS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem">
+                          <object class="StreamBar" name="pnl_cryosecom_acquired">
+                              <size>300,-1</size>
+                              <add_button>0</add_button>
+                              <fg>#7F7F7F</fg>
+                              <bg>#333333</bg>
+                              <XRCED>
+                                  <assign_var>1</assign_var>
+                              </XRCED>
+                          </object>
+                          <label>ACQUIRED</label>
+                          <fg>#1A1A1A</fg>
+                          <bg>#555555</bg>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -6646,41 +7677,41 @@ def __init_resources():
                   <object class="sizeritem">
                     <flag>wxTOP|wxEXPAND</flag>
                     <border>20</border>
-					<object class="wxBoxSizer">
-							<object class="sizeritem">
-								<object class="wxStaticText">
-									<label>ZStack steps</label>
-									<fg>#BFBFBF</fg>
-									<XRCED>
-										<assign_var>1</assign_var>
-									</XRCED>
-									<font>
-										<size>11</size>
-									</font>
-								</object>
-								<option>0</option>
-								<flag>wxLEFT</flag>
-								<border>10</border>
-							</object>
-							<object class="sizeritem">
-								<object class="UnitIntegerSlider" name="zstack_steps">
-										<size>-1,20</size>
-										<value>21</value>
-										<min>1</min>
-										<max>51</max>
-										<fg>#E5E5E5</fg>
-										<style>wxBORDER_NONE</style>
-										<XRCED>
-										  <assign_var>1</assign_var>
-										</XRCED>
-							    </object>
-							    <option>1</option>
-								<flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-								<border>10</border>
-							</object>
-						</object>
-					</object>
-				</object>
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>ZStack steps</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>11</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerSlider" name="zstack_steps">
+                          <size>-1,20</size>
+                          <value>21</value>
+                          <min>1</min>
+                          <max>51</max>
+                          <fg>#E5E5E5</fg>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                  </object>
+                </object>
                 <size>400,-1</size>
                 <bg>#333333</bg>
                 <style>wxVSCROLL</style>
