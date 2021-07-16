@@ -2383,7 +2383,7 @@ class XTTKDetector(Detector):
             self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
             # Stop twice, to make sure the channel fully stops.
             self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
-        if self.parent.parent._scanner.blanker.value is None:
+        if self.parent._scanner.blanker.value is None:
             self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
 
