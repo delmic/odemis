@@ -1249,6 +1249,8 @@ class MC_5DOF(model.Actuator):
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+        # A boolean to retry the movement in case of timeout error
+        self.movement_retired = False
 
         # Reference tilted positioners towards the negative position
         # Normally this is not needed. Some old version of the controller needed
@@ -1709,7 +1711,8 @@ class MC_5DOF(model.Actuator):
                     # Use the Event, so that a cancellation can stop it
                     if future._must_stop.wait(self._settle_time):
                         raise CancelledError()
-
+            # Reset movement_retired in case of no error
+            self.movement_retired = False
         except SA_MCError as ex:
             # This occurs if a stop command interrupts moves
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
@@ -1718,8 +1721,18 @@ class MC_5DOF(model.Actuator):
             elif future._must_stop.is_set():
                 raise CancelledError()
             elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT:
-                logging.error("Move timed out after %g s: %s", max_dur, ex)
-                raise TimeoutError("Move timed out after %g s" % (max_dur,))
+                # A timeout error can happen if the movement of some axes pulled others slightly out of their
+                # position, and because they are not expected to move by the kinematics (e.g. the x-positioners in
+                # case of a pure y movement), they go back to their position very slowly, causing the movement event
+                # to time out. As a fix for this, the same movement will be tried again.
+                if self.movement_retired:
+                    self.movement_retired = False
+                    logging.error("Move timed out after %g s: %s", max_dur, ex)
+                    raise TimeoutError("Move timed out after %g s" % (max_dur,))
+                else:
+                    self.movement_retired = True
+                    logging.warning("Movement to {} timed out while current position is {}. Retrying the same movement...".format(pos, self.position.value))
+                    self._doMoveAbs(future, pos)
             elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE:
                 raise IndexError(str(ex))
             else:
