@@ -208,10 +208,6 @@ class TestMicroscope(unittest.TestCase):
         fov_min = ebeam.horizontalFoV.range[0]
         fov_max = ebeam.horizontalFoV.range[1]
         ebeam.horizontalFoV.value = fov_min
-        self.assertAlmostEqual(fov_min, ebeam.horizontalFoV.value)
-
-        ebeam.horizontalFoV.value = fov_max
-        self.assertAlmostEqual(fov_max, ebeam.horizontalFoV.value)
         self.assertAlmostEqual(fov_min, ebeam.horizontalFoV.value, places=10)
 
         ebeam.horizontalFoV.value = fov_max
