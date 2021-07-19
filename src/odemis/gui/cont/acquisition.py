@@ -307,8 +307,8 @@ class SnapshotController(object):
         if not os.name == 'nt':
             xrandr_out = subprocess.check_output("xrandr")
             # only pick the "connected" outputs
-            ret = re.findall(b"^(\\w+) connected ", xrandr_out, re.MULTILINE)
-            return ret
+            ret = re.findall(b"^(\\S+) connected ", xrandr_out, re.MULTILINE)
+            return [o.decode("utf-8") for o in ret]
         else:
             return []
 
