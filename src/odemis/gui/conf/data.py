@@ -705,7 +705,6 @@ STREAM_SETTINGS_CONFIG = {
         OrderedDict((
             # Display the adjusted pixelsize (pixelsize * scale) with the hw VAs.
             ("pixelSize", {
-                "label": "Pixel size",
                 "control_type": odemis.gui.CONTROL_READONLY,
             }),
         )),
