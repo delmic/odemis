@@ -189,7 +189,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         """
         coords = numpy.array(list(map(spot.FindCenterCoordinates, self.imgdata)))
         delta = coords - self.coords0
-        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
+        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 1])
         self.assertTrue(pvalue > 0.05)
 
     def test_accuracy(self):
