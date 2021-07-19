@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Jan 2014
 
 @author: Kimon Tsitsikas
@@ -13,31 +13,20 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
-import functools
 import math
 import numpy
 from odemis import model
 from odemis.dataio import tiff, hdf5
-from odemis.util import spot
+from odemis.util import spot, synthetic
 import os
 import scipy.stats
 import unittest
-import warnings
 
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
-
-
-def ignore_pending_deprecation_warning(func):
-    @functools.wraps(func)
-    def decorated(self, *args, **kwargs):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", PendingDeprecationWarning)
-            func(self, *args, **kwargs)
-    return decorated
 
 
 class TestMomentOfInertia(unittest.TestCase):
@@ -89,7 +78,6 @@ class TestSpotIntensity(unittest.TestCase):
     Test SpotIntensity()
     """
 
-    @ignore_pending_deprecation_warning
     def test_precomputed(self):
         # These are example data (computer generated)
         data = hdf5.read_data("image1.h5")[0]
@@ -114,7 +102,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
         self.imgdata = tiff.read_data('spotdata.tif')
         self.coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
 
-    @ignore_pending_deprecation_warning
     def test_find_center(self):
         """
         Test FindCenterCoordinates
@@ -137,7 +124,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
             spot_coordinates = spot.FindCenterCoordinates(data)
             numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates[i], 3)
 
-    @ignore_pending_deprecation_warning
     def test_find_center_big(self):
         """
         Test FindCenterCoordinates on large data
@@ -166,7 +152,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
             spot_coordinates = spot.FindCenterCoordinates(databig)
             numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates[i], 3)
 
-    @ignore_pending_deprecation_warning
     def test_find_center_syn(self):
         """
         Test FindCenterCoordinates on synthetic data
@@ -182,7 +167,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
             spot_coordinates = spot.FindCenterCoordinates(data)
             numpy.testing.assert_almost_equal(spot_coordinates, ofs, 3)
 
-    @ignore_pending_deprecation_warning
     def test_zero_bias(self):
         """
         FindCenterCoordinates should estimate the center position without any
@@ -197,7 +181,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
         self.assertTrue(all(numpy.abs(bias) < (stdev / numpy.sqrt(n))))
         self.assertTrue(all(numpy.abs(bias) < 5.0e-4))
 
-    @ignore_pending_deprecation_warning
     def test_anisotropic_accuracy(self):
         """
         FindCenterCoordinates should have equal accuracy in all directions.
@@ -209,7 +192,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
         _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
         self.assertTrue(pvalue > 0.05)
 
-    @ignore_pending_deprecation_warning
     def test_accuracy(self):
         """
         FindCenterCoordinates should have an accuracy of better than 0.05 px.
@@ -219,7 +201,6 @@ class TestFindCenterCoordinates(unittest.TestCase):
         stdev = numpy.std(delta.ravel())
         self.assertLess(stdev, 0.05)
 
-    @ignore_pending_deprecation_warning
     def test_sanity(self):
         """
         Create an image consisting of all zeros and a single pixel with value
@@ -239,90 +220,12 @@ class TestFindCenterCoordinates(unittest.TestCase):
 
 class TestRadialSymmetryCenter(unittest.TestCase):
     """
-    Unit test class to test the behavior of RadialSymmetryCenter in
+    Unit test class to test the behavior of radial_symmetry_center in
     odemis.util.spot.
     """
 
-    @staticmethod
-    def _psf_sigma_wffm(refractive_index, numerical_aperture, wavelength):
-        """
-        Calculate the Gaussian approximation of a wide field fluorescence
-        microscope point spread function.
-
-        Parameters
-        ----------
-        refractive_index : float, >= 1
-            Refractive index
-        numerical_aperture: float, positive
-            Numerical aperture of the optical system
-        wavelength : float
-            Wavelength.
-
-        Returns
-        -------
-        sigma : float
-            The standard deviation of the Gaussian approximation of a
-            fluorescence microscope point spread function.
-
-        References
-        ----------
-        .. [1] Zhang, B., Zerubia, J., & Olivo-Marin, J. C. (2007). Gaussian
-        approximations of fluorescence microscope point-spread function models.
-        Applied optics, 46(10), 1819-1829.
-
-        """
-        if refractive_index < 1:
-            raise ValueError("The refractive index should be greater than or "
-                             "equal to 1.")
-        if numerical_aperture <= 0:
-            raise ValueError("The numerical aperture should be positive.")
-        if wavelength <= 0:
-            raise ValueError("The wavelength should be positive.")
-        if numerical_aperture >= refractive_index:
-            raise ValueError("The numerical aperture should be less than the "
-                             "refractive index.")
-
-        k = 2 * numpy.pi / wavelength
-        nk = refractive_index * k
-        sa = numerical_aperture / refractive_index
-        ca = math.sqrt(1 - sa * sa)
-        t = pow(ca, 1.5)
-        sigma = 1 / (nk * numpy.sqrt((4 - 7 * t + 3 * pow(ca, 3.5)) / (7 * (1 - t))))
-        return sigma
-
-    @staticmethod
-    def _psf_gaussian(shape, loc, sigma):
-        """
-        Return a synthetic spot image of a point-spread function (PSF)
-        approximated by a 2-dimensional Gaussian function.
-
-        Parameters
-        ----------
-        shape : tuple of ints
-            Shape of the array, e.g. ``(9, 9)``.
-        loc : tuple of floats
-            Position of the maximum in pixel coordinates `(j0, i0)` relative to
-            the center of the spot image.
-        sigma : float, positive
-            Standard deviation of the Gaussian.
-
-        Returns
-        -------
-        out : ndarray
-            Array with the image of the point spread function with the given
-            shape and size and at the given location.
-
-        """
-        n, m = shape
-        j0, i0 = loc
-        j = numpy.arange(n, dtype=float) - 0.5 * float(n - 1)
-        i = numpy.arange(m, dtype=float) - 0.5 * float(m - 1)
-        kj = numpy.exp(-0.5 * numpy.square((j - j0) / sigma))
-        ki = numpy.exp(-0.5 * numpy.square((i - i0) / sigma))
-        out = numpy.outer(kj, ki)
-        return out
-
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """Create a synthetic dataset of 1000 spot images."""
         n = 1000
         shape = (9, 9)
@@ -336,54 +239,51 @@ class TestRadialSymmetryCenter(unittest.TestCase):
         # 'random' numbers.
         numpy.random.seed(0)
 
-        sigma = (magnification / pixel_size) * \
-            self._psf_sigma_wffm(refractive_index, numerical_aperture, wavelength)
-        self.coords0 = numpy.random.random_sample((n, 2)) - 0.5
-        self.imgdata = numpy.empty((n, ) + shape)
+        sigma = (magnification / pixel_size) * synthetic.psf_sigma_wffm(
+            refractive_index, numerical_aperture, wavelength
+        )
+        coords0 = 0.5 * numpy.asarray(shape) - numpy.random.random_sample((n, 2))
+        imgdata = numpy.empty((n,) + shape)
         for i in range(n):
-            self.imgdata[i] = self._psf_gaussian(shape, self.coords0[i], sigma)
-        self.coords0.flags.writeable = False
-        self.imgdata.flags.writeable = False
+            imgdata[i] = synthetic.psf_gaussian(shape, coords0[i], sigma)
+        coords = numpy.array(list(map(spot.radial_symmetry_center, imgdata)))
+
+        # Make the dataset available as an immutable array
+        cls.delta = coords - coords0
+        cls.delta.flags.writeable = False
 
     def test_zero_bias(self):
         """
-        RadialSymmetryCenter should estimate the center position without any
+        radial_symmetry_center should estimate the center position without any
         bias; i.e. the expectation value of the difference between the actual
         position and the estimated position should be zero.
         """
-        n = len(self.imgdata)
-        coords = numpy.array(list(map(spot.RadialSymmetryCenter, self.imgdata)))
-        delta = coords - self.coords0
-        bias = numpy.average(delta, axis=0)
-        stdev = numpy.std(delta, axis=0)
+        n = len(self.delta)
+        bias = numpy.average(self.delta, axis=0)
+        stdev = numpy.std(self.delta, axis=0)
         self.assertTrue(all(numpy.abs(bias) < (stdev / numpy.sqrt(n))))
         self.assertTrue(all(numpy.abs(bias) < 5.0e-4))
 
     def test_anisotropic_accuracy(self):
         """
-        RadialSymmetryCenter should have equal accuracy in all directions.
-        Perform Bartlett's test for equal variances on the residuals in x and
-        y at a significance level of 5%.
+        radial_symmetry_center should have equal accuracy in all directions.
+        Perform Bartlett's test for equal variances on the residuals in `j` and
+        `i` at a significance level of 5%.
         """
-        coords = numpy.array(list(map(spot.RadialSymmetryCenter, self.imgdata)))
-        delta = coords - self.coords0
-        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
+        _, pvalue = scipy.stats.bartlett(self.delta[:, 0], self.delta[:, 1])
         self.assertTrue(pvalue > 0.05)
 
     def test_accuracy(self):
         """
-        RadialSymmetryCenter should have an accuracy of better than 0.05 px.
+        radial_symmetry_center should have an accuracy of better than 0.05 px.
         """
-        coords = numpy.array(list(map(spot.RadialSymmetryCenter, self.imgdata)))
-        delta = coords - self.coords0
-        stdev = numpy.std(delta.ravel())
+        stdev = numpy.std(self.delta.ravel())
         self.assertLess(stdev, 0.05)
 
     def test_sanity(self):
         """
         Create an image consisting of all zeros and a single pixel with value
-        one. RadialSymmetryCenter should return the coordinates of this one
-        pixel.
+        one. radial_symmetry_center should return the pixel index of this pixel.
         """
         for n in range(5, 12):
             for m in range(5, 12):
@@ -391,9 +291,9 @@ class TestRadialSymmetryCenter(unittest.TestCase):
                     for i in range(2, m - 2):
                         img = numpy.zeros((n, m))
                         img[j, i] = 1
-                        jc, ic = spot.RadialSymmetryCenter(img)
-                        self.assertAlmostEqual(j, jc + 0.5 * (n - 1))
-                        self.assertAlmostEqual(i, ic + 0.5 * (m - 1))
+                        jc, ic = spot.radial_symmetry_center(img)
+                        self.assertAlmostEqual(j, jc)
+                        self.assertAlmostEqual(i, ic)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 24 Aug 2015
 
 @author: Kimon Tsitsikas
@@ -13,21 +13,23 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
-import cv2
 import logging
 import math
+from typing import Tuple
+
+import cv2
 import numpy
+import scipy.signal
 from odemis import model
 from odemis.util import img
-import scipy.signal
+from odemis.util.transform import to_physical_space
 from scipy import ndimage
+from scipy.cluster.vq import kmeans
 from scipy.spatial import cKDTree as KDTree
 from scipy.spatial.distance import cdist
-from scipy.cluster.vq import kmeans
-import warnings
 
 
 def _SubtractBackground(data, background=None):
@@ -132,16 +134,25 @@ def SpotIntensity(data, background=None):
 #     return [FindCenterCoordinates(i) for i in subimages]
 
 
-def FindCenterCoordinates(image, smoothing=True):
-    warnings.warn(
-        "FindCenterCoordinates will become deprecated, use RadialSymmetryCenter instead.",
-        PendingDeprecationWarning
-    )
-    jc, ic = RadialSymmetryCenter(image, smoothing)
-    return ic, jc
+def FindCenterCoordinates(
+    image: numpy.ndarray, smoothing: bool = True
+) -> Tuple[float, float]:
+    """
+    Returns the radial symmetry center of the image with sub-pixel resolution.
+    The position is returned as a tuple `(dx, -dy)` in pixels relative to the
+    center of the image.
+
+    For more information see radial_symmetry_center().
+
+    """
+    ji = radial_symmetry_center(image, smoothing)
+    xc, yc = to_physical_space(ji, image.shape)
+    return xc, -yc
 
 
-def RadialSymmetryCenter(image, smoothing=True):
+def radial_symmetry_center(
+    image: numpy.ndarray, smoothing: bool = True
+) -> Tuple[float, float]:
     """
     Returns the radial symmetry center of the image with sub-pixel resolution.
     This is the spot center location if there is only a single spot contained
@@ -157,9 +168,8 @@ def RadialSymmetryCenter(image, smoothing=True):
     Returns
     -------
     pos : tuple
-        Position of the radial symmetry center `(dj, di)` in pixels relative to
-        the center of the image, where `dj` is the positon in the row-index and
-        `di` is the position in the column index.
+        Position of the radial symmetry center `(j, i)` as pixel index of the
+        image, where `j` is the row-index and `i` is the column index.
 
     References
     ----------
@@ -169,9 +179,9 @@ def RadialSymmetryCenter(image, smoothing=True):
     Examples
     --------
     >>> img = numpy.zeros((5, 7))
-    >>> img[2, 2] = 1
-    >>> RadialSymmetryCenter(img, smoothing=False)
-    (0.0, -1.0)
+    >>> img[2, 4] = 1
+    >>> radial_symmetry_center(img, smoothing=False)
+    (2.0, 4.0)
 
     """
     image = numpy.asarray(image, dtype=numpy.float64)
@@ -179,19 +189,20 @@ def RadialSymmetryCenter(image, smoothing=True):
     # Compute lattice midpoints (jk, ik).
     n, m = image.shape
     jk, ik = numpy.meshgrid(
-        numpy.arange(n - 1, dtype=float) - 0.5 * float(n - 2),
-        numpy.arange(m - 1, dtype=float) - 0.5 * float(m - 2),
-        indexing='ij')
+        numpy.arange(n - 1, dtype=float) + 0.5,
+        numpy.arange(m - 1, dtype=float) + 0.5,
+        indexing="ij",
+    )
 
     # Calculate the intensity gradient.
     kj = numpy.array([(1, 1), (-1, -1)])
     ki = numpy.array([(1, -1), (1, -1)])
-    dIdj = scipy.signal.convolve2d(image, kj, mode='valid')
-    dIdi = scipy.signal.convolve2d(image, ki, mode='valid')
+    dIdj = scipy.signal.convolve2d(image, kj, mode="valid")
+    dIdi = scipy.signal.convolve2d(image, ki, mode="valid")
     if smoothing:
-        k = numpy.ones((3, 3)) / 9.
-        dIdj = scipy.signal.convolve2d(dIdj, k, boundary='symm', mode='same')
-        dIdi = scipy.signal.convolve2d(dIdi, k, boundary='symm', mode='same')
+        k = numpy.ones((3, 3)) / 9.0
+        dIdj = scipy.signal.convolve2d(dIdj, k, boundary="symm", mode="same")
+        dIdi = scipy.signal.convolve2d(dIdi, k, boundary="symm", mode="same")
     dI2 = numpy.square(dIdj) + numpy.square(dIdi)
 
     # Discard entries where the intensity gradient magnitude is zero, flatten
@@ -222,7 +233,7 @@ def RadialSymmetryCenter(image, smoothing=True):
     # Solve the linear set of equations in a least-squares sense.
     # Note: rcond is set explicitly to have correct and consistent behavior,
     #       independent on numpy version.
-    rcond = numpy.finfo(numpy.float64).eps * max(m, n)
+    rcond = numpy.finfo(numpy.float64).eps * max(n, m)
     jc, ic = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond)[0]
 
     return jc, ic
