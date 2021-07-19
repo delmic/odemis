@@ -239,11 +239,14 @@ class FileBrowser(wx.Panel):
 
         if self.dialog_style & wx.FD_SAVE and bn != "":
             # Select the format corresponding to the current file extension
+            # (or the format with the longest matching extension, if there are several)
             all_exts = self._get_all_exts_from_wildcards(self.wildcard)
+            best_len = 0
             for i, exts in enumerate(all_exts):
-                if any(fnmatch.fnmatch(bn, ext) for ext in exts):
+                len_ext = max((len(ext) for ext in exts if fnmatch.fnmatch(bn, ext)), default=0)
+                if len_ext > best_len:
                     dlg.SetFilterIndex(i)
-                    break
+                    best_len = len_ext
             else:
                 logging.debug("File %s didn't match any extension", bn)
 

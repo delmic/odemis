@@ -2509,7 +2509,6 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertEqual(self.streak_ccd.exposureTime.value, 1)
         self.assertEqual(streaks.integrationTime.value, 4)
         self.assertEqual(streaks.integrationCounts.value, 4)
-        self.assertEqual(len(streaks.raw), 4)  # list of raw images when stream active
 
         # change stream VA --> HW VAs should change as stream is still active
         streaks.integrationTime.value = 0.9  # s
@@ -3247,7 +3246,6 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
         self.assertEqual(ars.integrationTime.value, 12)
         self.assertEqual(ars.integrationCounts.value, 2)
-        self.assertEqual(len(ars.raw), 2)  # list of raw images when stream active
 
         # change stream VA --> HW VAs should change as stream is still active
         ars.integrationTime.value = 0.9  # s

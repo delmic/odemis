@@ -22,12 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-import os
-
-import time
-import unittest
 from odemis.driver import smaract
 from odemis.util import test
+import os
+import pickle
+import time
+import unittest
+
 import odemis.model as model
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -91,6 +92,15 @@ class TestSmarPod(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
+
+    def test_exception_pickling(self):
+        """
+        Check the exception can be pickled and unpickled (for Pyro4)
+        """
+        ex = smaract.SmarPodError(3)
+        p = pickle.dumps(ex)
+        ep = pickle.loads(p)
+        self.assertIsInstance(ep, smaract.SmarPodError)
 
     def test_reference_cancel(self):
         # Test canceling referencing
@@ -185,19 +195,20 @@ CONFIG_5DOF = {"name": "5DOF",
         "locator": "network:sn:MCS2-00001602",
         # "locator": "fake",
         "hold_time": 5,  # s
+        "settle_time": 1,  # s
         "pos_deactive_after_ref": True,  # Not actually used as there is no MD_FAV_POS_DEACTIVE
         "inverted": ['z'],
         "axes": {
             'x': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.6e-2, 1.6e-2],
                 'unit': 'm',
             },
             'y': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.5e-2, 1.5e-2],
                 'unit': 'm',
             },
             'z': {
-                'range': [-3e-3, 3e-3],
+                'range': [-1.e-2, 0.002],
                 'unit': 'm',
             },
             'rx': {
@@ -273,6 +284,23 @@ class Test5DOF(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.dev.moveAbs(pos).result()
 
+    def test_unreachable_position_error(self):
+        edge_move = {'x': 1.6e-2, 'y': 1.5e-2, 'z': -0.002, 'rx': 0, 'rz': 0}
+        rot_move = {'rx': 0.001, 'rz': 0.001}
+        zero_move = {'x': 0, 'y': 0, 'z': 0}
+
+        # move the stage to the maximum range
+        self.dev.moveAbs(edge_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, edge_move, match_all=False)
+        # moving rx/rz would throw unreachable move exception
+        with self.assertRaises(IndexError):
+            self.dev.moveAbs(rot_move).result()
+        # moving all linear axes from range then moving rx/rz would be fine
+        self.dev.moveAbs(zero_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, zero_move, match_all=False)
+        self.dev.moveAbs(rot_move).result()
+        test.assert_pos_almost_equal(self.dev.position.value, rot_move, match_all=False)
+
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'rz': 0.001}
         pos2 = {'x':0, 'y': 0, 'z': 0, 'rx': 0, 'rz':0}
@@ -297,7 +325,7 @@ class Test5DOF(unittest.TestCase):
         Test to make sure the system updates the position as it moves
         """
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
-        pos2 = {'x': 3e-3, 'y': 3e-3, 'z': 3e-3, 'rx': 3e-4, 'rz':-1e-4}
+        pos2 = {'x': 2e-3, 'y': 2e-3, 'z': 2e-3, 'rx': 3e-4, 'rz':-1e-4}
         self.dev.moveAbs(pos1).result()
         time.sleep(0.1)
         f = self.dev.moveAbs(pos2)
@@ -382,6 +410,27 @@ class Test5DOF(unittest.TestCase):
             self.assertTrue(i)
 
         test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+
+    def test_move_and_settle(self):
+        pos1 = {'x': 0, 'y': 0}
+        pos2 = {'x': 1e-3, 'y': 1e-5}
+
+        # Check that it's faster to move 2x in a raw, than waiting after the move,
+        # because the settle time takes extra time between each move.
+        self.dev.moveAbs(pos1).result()
+        start_t = time.time()
+        self.dev.moveAbs(pos2).result()
+        self.dev.moveAbs(pos1).result()
+        dur_serial = time.time() - start_t
+
+        self.dev.moveAbs(pos1).result()
+        start_t = time.time()
+        self.dev.moveAbs(pos2)
+        self.dev.moveAbs(pos1).result()
+        dur_same_time = time.time() - start_t
+
+        # Serialized move should take 1s more. To take into account "flux", we check it's at least 0.5s.
+        self.assertGreater(dur_serial, dur_same_time + 0.5)
 
 
 CONFIG_3DOF = {"name": "3DOF",

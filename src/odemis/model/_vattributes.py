@@ -114,7 +114,7 @@ class VigilantAttribute(VigilantAttributeBase):
     def __init__(self, initval, readonly=False, setter=None, getter=None, max_discard=100, *args, **kwargs):
         """
         readonly (bool): if True, value setter will raise an exception. It's still
-            possible to change the value by calling _set() and then notify()
+            possible to change the value by calling _set_value(..., force_write=True).
         setter (callable value -> value): function that will be called whenever the value has to
             be changed and returns the new actual value (which might be different
             from what was given).
@@ -171,7 +171,7 @@ class VigilantAttribute(VigilantAttributeBase):
         if self._getter:
             try:
                 # Store the value for the setter to know if the value has changed
-                # TODO: any way to not avoid calling the getter during serialization?
+                # TODO: any way to avoid calling the getter during serialization?
                 self._value = self._getter()
             except WeakRefLostError:
                 logging.warning("Getter for VA %s is gone", self)
@@ -218,7 +218,7 @@ class VigilantAttribute(VigilantAttributeBase):
                 if prev_value is not self._value or value is not self._value:
                     must_notify = True
             elif any(isinstance(v, numpy.ndarray) for v in (prev_value, value)):
-                # the new value is _not_ a numpy array => it's different
+                # the old value was a numpy array, and not the new value (or opposite) => it's different
                 must_notify = True
             else:
                 if prev_value != self._value or value != self._value:
@@ -794,11 +794,20 @@ class TupleVA(VigilantAttribute):
     def __init__(self, value=None, *args, **kwargs):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
+    def _set_value(self, value, **kwargs):
+        if isinstance(value, list):
+            # force tuple
+            value = tuple(value)
+        VigilantAttribute._set_value(self, value, **kwargs)
+    # need to overwrite the whole property
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value,
+                     "The actual value")
+
     def _check(self, value):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
+        # TODO remove None functionality in future?
         if not (isinstance(value, tuple) or value is None):
             raise TypeError("Value '%r' is not a tuple." % value)
-
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
@@ -871,6 +880,7 @@ class Continuous(object):
         else:
             value = self.value
             start, end = new_range
+            tvalue = value
             if not isinstance(value, collections.Iterable):
                 tvalue = (value,)
                 start, end = (start,), (end,)
@@ -1181,8 +1191,9 @@ class TupleContinuous(VigilantAttribute, Continuous):
 
     def _check(self, value):
         if not all(isinstance(v, self._cls) for v in value):
-            msg = "Value '%s' must be a tuple only consisting of types %s."
-            raise TypeError(msg % (value, self._cls))
+            msg = "Value '%s' must be a tuple only consisting of types %s, but also got %s."
+            bad_classes = set(v.__class__.__name__ for v in value if not isinstance(v, self._cls))
+            raise TypeError(msg % (value, self._cls, bad_classes))
         Continuous._check(self, value)
 
 

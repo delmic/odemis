@@ -1,6 +1,6 @@
 # bash completion for odemis-cli
 
-have odemis-cli &&
+_have odemis-cli &&
 _odemis_cli()
 {
     local cur prev
@@ -8,7 +8,7 @@ _odemis_cli()
     _get_comp_words_by_ref cur prev
     # TODO: handle 2nd argument for --set-attr (=type:va)
     case $prev in
-        --list-prop|-L|--move|-m|--position|-p|--reference|--set-attr|-s|--update-metadata|-u|--acquire|-a|--live)
+        --list-prop|-L|list-prop|--move|-m|move|--position|-p|position|--reference|reference|--set-attr|-s|set-attr|--update-metadata|-u|update-metadata|--acquire|-a|acquire|--live|live)
             # TODO: For some commands, only actuators or detectors are valid.
             odemis-cli --check || return 0
             local components=$(odemis-cli --list --machine | cut -f 1,2 | sed -e "s/\\t/\\n/" | grep -v "role:None" | sed -e "s/^role://")
@@ -27,17 +27,20 @@ _odemis_cli()
 
     case $cur in
         *)
-            COMPREPLY=( $(compgen -W '--help --log-level --machine \
-                --kill --check --scan --list --list-prop --set-attr \
-                --update-metadata --move --position --reference --stop \
-                --acquire --output --live --version --big-distance' -- "$cur") )
+            COMPREPLY=( $(compgen -W '--help help --log-level --machine \
+                --kill kill --check check --scan scan --list list --list-prop list-prop \
+                --set-attr set-attr --update-metadata update-metadata \
+                --move move --position position --reference reference --stop stop \
+                --acquire acquire --output --live live --version version --big-distance' -- "$cur") )
             return 0
             ;;
     esac
 
     return 0
-} &&
-complete -F _odemis_cli odemis-cli -o filenames
+}
+
+_have odemis-cli && complete -F _odemis_cli odemis-cli -o filenames
+_have odemis && complete -F _odemis_cli odemis -o filenames
 
 # Local variables:
 # mode: shell-script

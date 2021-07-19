@@ -778,7 +778,7 @@ class Shamrock(model.Actuator):
                         raise
                     # just try again
                     retry += 1
-                    logging.info("Failed to set wavelength, will try again")
+                    logging.info("Failed to set grating, will try again")
                     time.sleep(0.1 * retry)
                 else:
                     break

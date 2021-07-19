@@ -122,52 +122,24 @@ def rot_almost_equal(a, b, atol=1e-18, rtol=1e-7):
     return False
 
 
-if sys.version_info[0] < 3:
-    def to_str_escape(s):
-        """
-        Escapes the given string (or unicode string) in such a way that all the
-        non-displayable characters converted to "\\??". It's possible to use that string
-        in a Python interpreter to obtain the original data.
-        s (str or unicode): the data to escape
-        return (str): A user-displayable string, which has no control character.
-        """
-        if isinstance(s, str):
-            # 10x faster than "s.encode("string_escape")"
-            return s.decode("latin1").encode("unicode_escape")
-        else:  # unicode
-            return s.encode("unicode_escape")
-else:
-    def to_str_escape(s):
-        """
-        Escapes the given string (or bytes) in such a way that all the
-        non-displayable characters converted to "\\??". It's possible to use that string
-        in a Python interpreter to obtain the original data.
-        s (bytes or str): the data to escape
-        return (str): A user-displayable string, which has no control character.
-        """
-        # Python 3 "lost" its ability to directly escape a string. It's still
-        # possible to call .encode("unicode_escape"), but only on a string, and
-        # it returns bytes (which need to be conveted back to string for display)
-        if isinstance(s, bytes):
-            # 40 % faster than "repr(s)[2:-1]"
-            return s.decode("latin1").encode("unicode_escape").decode("ascii")
-        else:  # str
-            # 50% faster than "repr(s)[1:-1]"
-            return s.encode("unicode_escape").decode("ascii")
+def to_str_escape(s):
+    """
+    Escapes the given string (or bytes) in such a way that all the
+    non-displayable characters converted to "\\??". It's possible to use that string
+    in a Python interpreter to obtain the original data.
+    s (bytes or str): the data to escape
+    return (str): A user-displayable string, which has no control character.
+    """
+    # Python 3 "lost" its ability to directly escape a string. It's still
+    # possible to call .encode("unicode_escape"), but only on a string, and
+    # it returns bytes (which need to be converted back to string for display)
+    if isinstance(s, bytes):
+        # 40 % faster than "repr(s)[2:-1]"
+        return s.decode("latin1").encode("unicode_escape").decode("ascii")
+    else:  # str
+        # 50% faster than "repr(s)[1:-1]"
+        return s.encode("unicode_escape").decode("ascii")
 
-if sys.version_info[0] < 3:
-    def fsdecode(filename):
-        """
-        Decode filename from the filesystem encoding.
-        return (unicode)
-        """
-        if isinstance(filename, unicode):
-            return filename
-        else:
-            return filename.decode(sys.getfilesystemencoding())
-else:
-    import os
-    fsdecode = os.fsdecode
 
 def recursive_dict_update(d, other):
     """ Recursively update the values of the first dictionary with the values of the second
@@ -376,6 +348,30 @@ def normalize_rect(rect):
 
     # Re-create the result using the same type as the `rect` parameter
     return type(rect)((l, t, r, b))
+
+
+def is_point_in_rect(p, rect):
+    """
+    Check if a point is inside in a rectangle.
+
+    p (tuple of 2 floats): x, y coordinates of point
+    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
+    return (bool): True if point is in rectangle, False otherwise
+    """
+    minx, miny, maxx, maxy = rect
+    return minx <= p[0] <= maxx and miny <= p[1] <= maxy
+
+
+def expand_rect(rect, margin):
+    """
+    Expand a rectangle by a fixed margin.
+
+    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
+    margin (float): margin to increase rectangle by
+    return (tuple of 4 floats): minx, miny, maxx, maxy positions of adjusted rectangle
+    """
+    minx, miny, maxx, maxy = rect
+    return minx - margin, miny - margin, maxx + margin, maxy + margin
 
 
 def find_plot_content(xd, yd):

@@ -171,7 +171,7 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
         self._current_scan_area = None  # l,t,r,b (int)
 
         # Start threading event for live update overlay
-        self._live_update_period = 0.33
+        self._live_update_period = 2
         self._im_needs_recompute = threading.Event()
         self._init_thread(self._live_update_period)
 

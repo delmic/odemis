@@ -55,8 +55,12 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
 CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [0.2, -0.1]}
 CONFIG_CNT = {"name": "cnt", "role": "cnt", "source":0}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3]],
-                  "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3,
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam",
+                  "limits": [[-5, 5], [3, -3]],
+                  "channels": [0, 1],
+                  "max_res": [4096, 3072],  # 4:3 ratio
+                  "settle_time": 10e-6,
+                  "hfw_nomag": 10e-3,
                   "park": [8, 8],
                   "scanning_ttl": {4: True, 2: [True, "external"], 3: [False, "blanker", True]}
                   }
@@ -204,6 +208,21 @@ class TestSEM(unittest.TestCase):
         for v in (True, False, None):
             self.scanner.external.value = v
             self.scanner.blanker.value = v
+
+    def test_magnification(self):
+        pxs_orig = self.scanner.pixelSize.value
+        mag_orig = self.scanner.magnification.value
+
+        self.assertEqual(pxs_orig[0], pxs_orig[1])
+
+        # Mag x 2 => pixel size / 2
+        self.scanner.magnification.value *= 2
+        self.assertAlmostEqual(mag_orig * 2, self.scanner.magnification.value)
+        new_pxs = self.scanner.pixelSize.value
+        self.assertAlmostEqual(pxs_orig[1] / 2, new_pxs[0])
+        self.assertEqual(new_pxs[0], new_pxs[1])
+
+        self.scanner.magnification.value = mag_orig
 
 #     @unittest.skip("simple")
     def test_acquire(self):

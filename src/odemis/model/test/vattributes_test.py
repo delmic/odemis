@@ -445,6 +445,31 @@ class VigilantAttributeTest(unittest.TestCase):
         with self.assertRaises(IndexError):
             va = model.TupleContinuous((0.1, 10), ((-1.3, 12), (100., 150.)), cls=(int, long, float))
 
+    def test_tuple(self):
+        """
+        Tuple VA
+        """
+
+        va = model.TupleVA((0.1, 10, .5))
+        self.assertEqual(va.value, (0.1, 10, .5))
+
+        # change value
+        va.value = (-0.2, 2, .2)
+        self.assertEqual(va.value, (-0.2, 2, .2))
+
+        # check None is possible as value
+        # TODO remove this functionality? Does not look like a good idea to allow None on a tuple VA
+        va.value = None
+        self.assertIsNone(va.value)
+
+        # must convert list to a tuple
+        va.value = [-1, 150, .5]
+        self.assertEqual(va.value, (-1, 150, .5))
+
+        # TODO check that it is not possible to assign a tuple of different length than the inital tuple
+        # with self.assertRaises(TypeError, msg="Assigning a 2-tuple to a 3-tuple should not be allowed."):
+        #     va.value = (-10., 10.)
+
     def test_weakref(self):
         """
         checks that even if an object has a method subscribed to a property,

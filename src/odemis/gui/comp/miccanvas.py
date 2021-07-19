@@ -4,7 +4,7 @@ Created on 6 Feb 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2017 Éric Piel, Delmic
+Copyright © 2012-2021 Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -31,7 +31,7 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
@@ -91,7 +91,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.view = None
         self._tab_data_model = None
 
-        self.abilities |= {CAN_ZOOM, CAN_FOCUS}
+        self.abilities |= {CAN_ZOOM, CAN_FOCUS, CAN_MOVE_STAGE}
         self.fit_view_to_next_image = True
 
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
@@ -216,7 +216,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.gadget_overlay = world_overlay.GadgetOverlay(self, tab_data.tool)
             # Ruler selection overlay: always shown & active
             self.add_world_overlay(self.gadget_overlay)
-            self.gadget_overlay.activate()
+            self.gadget_overlay.active.value = True
 
         if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
@@ -302,9 +302,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 view = self.view
                 self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
             self.add_view_overlay(self._pixelvalue_ol)
-            self._pixelvalue_ol.activate()
+            self._pixelvalue_ol.active.value = True
         elif self._pixelvalue_ol:
-            self._pixelvalue_ol.deactivate()
+            self._pixelvalue_ol.active.value = False
             self.remove_view_overlay(self._pixelvalue_ol)
 
     @ignore_dead
@@ -335,17 +335,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             if use_world:
                 self.add_world_overlay(self._spotmode_ol)
-                self._spotmode_ol.activate()
+                self._spotmode_ol.active.value = True
             else:
                 self.add_view_overlay(self._spotmode_ol)
-                self._spotmode_ol.activate()
+                self._spotmode_ol.active.value = True
 
         elif self._spotmode_ol:
             if use_world:
                 self.remove_world_overlay(self._spotmode_ol)
             else:
                 self.remove_view_overlay(self._spotmode_ol)
-            self._spotmode_ol.deactivate()
+            self._spotmode_ol.active.value = False
 
         if self._spotmode_ol:
             self.view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
@@ -358,9 +358,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.dicho_overlay = view_overlay.DichotomyOverlay(self,
                                                                    self._tab_data_model.dicho_seq)
                 self.add_view_overlay(self.dicho_overlay)
-            self.dicho_overlay.activate()
+            self.dicho_overlay.active.value = True
         elif self.dicho_overlay:
-            self.dicho_overlay.deactivate()
+            self.dicho_overlay.active.value = False
 
     # TODO: move the logic of 'tool -> overlay' to the (tab?) controller
     # => different mode for "pixel" or "point"
@@ -383,20 +383,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not len(stream_tree):
                 return
             elif stream_tree.get_projections_by_type(stream.SpectrumStream):
-                self.pixel_overlay.activate()
+                self.pixel_overlay.active.value = True
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
                 self.add_world_overlay(self.points_overlay)
-                self.points_overlay.activate()
+                self.points_overlay.active.value = True
             elif any(isinstance(s, stream.SpectrumStream) for s in tab_streams):
-                self.pixel_overlay.activate()
+                self.pixel_overlay.active.value = True
                 self.add_world_overlay(self.pixel_overlay)
         else:
             if self.pixel_overlay:
-                self.pixel_overlay.deactivate()
+                self.pixel_overlay.active.value = False
                 self.remove_world_overlay(self.pixel_overlay)
             if self.points_overlay:
-                self.points_overlay.deactivate()
+                self.points_overlay.active.value = False
                 self.remove_world_overlay(self.points_overlay)
 
     def _set_line_select_mode(self, tool_mode):
@@ -407,11 +407,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # is attached to the view
             stream_tree = self.view.stream_tree
             if stream_tree.get_projections_by_type(stream.SpectrumStream):
-                self.line_overlay.activate()
+                self.line_overlay.active.value = True
                 self.add_world_overlay(self.line_overlay)
         else:
             if self.line_overlay:
-                self.line_overlay.deactivate()
+                self.line_overlay.active.value = False
                 self.remove_world_overlay(self.line_overlay)
 
     # END Overlay creation and activation
@@ -456,7 +456,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             ostream = s.stream if isinstance(s, DataProjection) else s
-            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream, stream.CLStream)):
+            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream, stream.CLStream, stream.FastEMOverviewStream)):
                 images_opt.append((image, BLEND_SCREEN, s.name.value, s))
             elif isinstance(ostream, stream.SpectrumStream):
                 images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
@@ -622,7 +622,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         shift (float, float): offset moved in physical coordinates
         """
-        if self.view:
+        if self.view and CAN_MOVE_STAGE in self.abilities:
             self.view.moveStageBy(shift)
 
     def fit_view_to_content(self, recenter=None):
@@ -924,15 +924,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_roa_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_ROA:
-            self.roa_overlay.activate()
+            self.roa_overlay.active.value = True
         elif self.roa_overlay:
-            self.roa_overlay.deactivate()
+            self.roa_overlay.active.value = False
 
     def _set_dc_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_RO_ANCHOR:
-            self.driftcor_overlay.activate()
+            self.driftcor_overlay.active.value = True
         elif self.driftcor_overlay:
-            self.driftcor_overlay.deactivate()
+            self.driftcor_overlay.active.value = False
 
         # TODO: maybe should not be called directly, but should be a VA on the view or the tab?
     def show_repetition(self, rep, style=None):
@@ -1167,14 +1167,14 @@ class BarPlotCanvas(canvas.PlotCanvas):
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
         if data is not None:
-            self.markline_overlay.activate()
+            self.markline_overlay.active.value = True
         else:
-            self.markline_overlay.deactivate()
+            self.markline_overlay.active.value = False
 
     def clear(self):
         super(BarPlotCanvas, self).clear()
         self.markline_overlay.clear_labels()
-        self.markline_overlay.deactivate()
+        self.markline_overlay.active.value = False
         wx.CallAfter(self.update_drawing)
 
     def setView(self, view, tab_data):
@@ -1494,7 +1494,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = None
         self.range_y = None
         self.markline_overlay.clear_labels()
-        self.markline_overlay.deactivate()
+        self.markline_overlay.active.value = False
         wx.CallAfter(self.update_drawing)
 
     def setView(self, view, tab_data):
@@ -1548,7 +1548,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = range_x
         self.range_y = range_y
 
-        self.markline_overlay.activate()
+        self.markline_overlay.active.value = True
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
@@ -1667,7 +1667,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         # any image changes
         self.view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
-        self.polar_overlay.activate()
+        self.polar_overlay.active.value = True
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as
@@ -1747,3 +1747,123 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             img = self._get_img_from_buffer()
             if img is not None:
                 self.view.thumbnail.value = img
+
+
+class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
+    """
+    Canvas for FastEM acquisition tab, inherits from DblMicroscopeCanvas. Unlike DblMicroscopeCanvas,
+    it can contain multiple ROA overlays and calibration overlays specific to FastEM. It also allows to
+    add a background overlay (e.g. to simulate a sample holder).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(FastEMAcquisitionCanvas, self).__init__(*args, **kwargs)
+        # When starting the GUI, we want to zoom out to show the background overlay. However, calling this function
+        # here in __init__ does not work, probably because some values are not initialized properly yet (.ClientSize?)
+        # As a hack, the zooming is done in on_size, but only once after starting.
+        # TODO: find a better way of implementing this
+        self._starting = True
+
+    def on_size(self, evt):
+        """ Called when the canvas is resized """
+        if self._starting:
+            try:
+                self.zoom_out()
+                self._starting = False
+            except (ValueError, IndexError):
+                logging.debug("Zooming out failed, waiting for initialization.")
+        super(FastEMAcquisitionCanvas, self).on_size(evt)
+
+    def add_background_overlay(self, rectangles):
+        """
+        rectangles (list of (float, float, float, float)): background rectangles in physical ltrb coordinates
+        """
+        overlay = world_overlay.FastEMBackgroundOverlay(self, rectangles)
+        self.add_world_overlay(overlay)
+        return overlay
+
+    def add_roa_overlay(self, coordinates, colour=gui.SELECTION_COLOUR):
+        """
+        coordinates (TupleContinuousVA): VA of 4 floats representing region of acquisition coordinates
+        colour (str): border colour of ROA overlay, given as string of hex code
+        """
+        overlay = world_overlay.FastEMROAOverlay(self, coordinates, colour=colour)
+        self.add_world_overlay(overlay)
+        # Always activate after creating, otherwise the code to select the region in
+        # FastEMROAOverlay.on_left_down will never be called.
+        overlay.active.value = True
+        return overlay
+
+    def remove_roa_overlay(self, overlay):
+        """
+        overlay (FastEMROAOverlay): overlay to be deleted
+        """
+        overlay.active.value = False  # deactivating the overlay avoids weird behaviour
+        self.remove_world_overlay(overlay)
+        wx.CallAfter(self.request_drawing_update)
+
+    def add_calibration_overlay(self, coordinates, label, colour=gui.FG_COLOUR_WARNING):
+        """
+        coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
+        label (str): label for the overlay (typically a number 1-9)
+        colour (str): border colour of ROA overlay, given as string of hex code
+        """
+        overlay = world_overlay.FastEMROCOverlay(self, coordinates, label, colour=colour)
+        self.add_world_overlay(overlay)
+        overlay.active.value = False  # no need to activate by default
+        return overlay
+
+    def zoom_out(self):
+        """
+        Zoom out to show all scintillators.
+        raises ValueError, IndexError: in case it's called too early during GUI startup
+        """
+        logging.debug("Zooming out to show all scintillators.")
+        if self._tab_data_model:
+            sz = self._tab_data_model.main.scintillator_size
+            l = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] - sz[0]
+            t = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] + sz[1]
+            r = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] + sz[0]
+            b = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] - sz[1]
+            self.fit_to_bbox((l, t, r, b))
+        else:
+            raise ValueError("Tab data model not initialized yet.")
+
+    def fit_to_bbox(self, bbox):
+        """
+        Zoom in to the bbox and recenter. Same as fit_to_content, but with explicit bounding box,
+        so we can zoom to a specific position.
+        bbox (tuple of 4 floats): l, t, r, b positions in m
+        """
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # TODO: check sign of Y
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])  # m
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f m", w, h)
+            return  # no image
+
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+        self.view.mpp.value = 1 / self.scale
+
+        # TODO: avoid aliasing when possible by picking a round number for the
+        # zoom level (for the "main" image) if it's ±10% of the target size
+
+        c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+        self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
+
+        wx.CallAfter(self.request_drawing_update)
+
+    def on_dbl_click(self, evt):
+        # don't recenter on double click, it's confusing, especially because selecting + moving a ROA
+        # involves two clicks
+        evt.Skip()
+
+    def setView(self, view, tab_data):
+        super(FastEMAcquisitionCanvas, self).setView(view, tab_data)
+        view.show_crosshair.value = False

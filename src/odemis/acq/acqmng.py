@@ -216,7 +216,7 @@ def _weight_stream(stream):
         if isinstance(ewl_center, collections.Iterable):
             # multi-band filter, so fallback to guess based on excitation
             xwl_center = fluo.get_center(stream.excitation.value)
-            if isinstance(ewl_center, collections.Iterable):
+            if isinstance(xwl_center, collections.Iterable):
                 # also unguessable => just pick one "randomly"
                 ewl_bonus = ewl_center[0]
             else:
@@ -237,6 +237,15 @@ def _weight_stream(stream):
     else:
         logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
+
+
+def sortStreams(streams):
+    """
+    Sorts a list of streams based on the order they will be acquired 
+    streams (acq.stream.Stream): a list of streams to be sorted 
+    returns (acq.stream.Stream): a list of sorted streams 
+    """
+    return sorted(streams, key=_weight_stream, reverse=True)
 
 
 class AcquisitionTask(object):

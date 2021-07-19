@@ -198,6 +198,38 @@ def create_filename(path, ptn, ext, count="001"):
 
     return os.path.join(path, fn + ext)
 
+def make_unique_name(name, existing):
+    """
+    Creates a name based on the input name which is unique in a list of existing names by adding a counter.
+    input
+        name (str): proposed name (without extension)
+        names (list of str): list of existing names
+    returns
+        name (str): unique name
+    """
+    # Filename not in names, just return
+    if name not in existing:
+        return name
+
+    # Detect if filename has counter already, otherwise use 1
+    cnt_ptn = r'-\d{1,5}'
+    cnt_m = None
+    for m in re.finditer(cnt_ptn, name):
+        cnt_m = m
+    # if multiple numbers are present, use last
+    if cnt_m:
+        cnt = int(cnt_m.group()[1:])
+        ptn = name[:cnt_m.start()] + "{cnt}" + name[cnt_m.end():]
+    else:
+        cnt = 1  # will be used in case cnt pattern is added afterwards
+        ptn = name + "{cnt}"
+
+    # Count up until unique filename is found
+    while name in existing:
+        name = ptn.format(cnt="-%s" % cnt)
+        cnt += 1
+
+    return name
 
 def update_counter(old_count):
     """

@@ -16,8 +16,12 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
+from abc import ABCMeta
 import logging
+import copy
 import numpy
+from abc import abstractmethod
 from odemis import model, util
 from odemis.util import img
 
@@ -30,7 +34,69 @@ from odemis.util import img
 # directly copy the image already transformed.
 # TODO: handle higher dimensions by just copying them as-is
 
-class CollageWeaver(object):
+class Weaver(with_metaclass(ABCMeta, object)):
+    """
+    Abstract class representing a weaver.
+    A weaver assembles a set of small images with MD_POS metadata (tiles) into one large image.
+    """
+
+    def __init__(self, adjust_brightness=False):
+        """
+        adjust_brightness (bool): True if brightness correction should be applied (useful in case of
+        tiles with strong bleaching/depletion effects)
+        """
+        self.tiles = []
+        self.adjust_brt = adjust_brightness
+
+    def addTile(self, tile):
+        """
+        Adds one tile to the weaver.
+        tile (2D DataArray): the image must have at least MD_POS and
+        MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
+        """
+        # Merge the correction metadata inside each image (to keep the rest of the
+        # code simple)
+        tile = model.DataArray(tile, tile.metadata.copy())
+        img.mergeMetadata(tile.metadata)
+        self.tiles.append(tile)
+
+    @abstractmethod
+    def getFullImage(self):
+        """
+        Assembles the tiles into a large image.
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
+        """
+        pass
+
+    def _adjust_brightness(self, tile, tiles):
+        """
+        Adjusts the brightness of a tile, so its mean corresponds to the mean of a list of tiles.
+        tile (DataArray): tile to adjust
+        tiles (2D DataArray): input tiles
+        return (2D DataArray): tiles with adjusted brightness
+        """
+        # This is a very simple algorithm. In reality, not every tile should have the same brightness. A better
+        # way to handle it would be to do local brightness adjustments, e.g. by comparing the overlapping
+        # regions.
+        # In general, even this simple calculation helps to improve the quality of the overall image
+        # if there are a lot of bleaching/deposition effects, which cause a small number of tiles to have
+        # a very different (typically higher) brightness than the others.
+        tile = copy.deepcopy(tile)  # don't change the input tile
+        im_brt = numpy.mean(tiles)
+        tile_brt = numpy.mean(tile)
+        diff = im_brt - tile_brt
+        # To avoid overflows, we need to clip the results to the dtype range.
+        if numpy.issubdtype(tile.dtype, numpy.integer):
+            maxval = numpy.iinfo(tile.dtype).max
+        elif numpy.issubdtype(tile.dtype, numpy.float):
+            maxval = numpy.finfo(tile.dtype).max
+        else:
+            maxval = numpy.inf
+        tile = tile + numpy.minimum(maxval - tile, diff)  # clip to maxval
+        return tile
+
+
+class CollageWeaver(Weaver):
     """
     Very straight-forward version, which just paste the images where their center
     position is. It expects that the pixel size for all the images are identical.
@@ -43,25 +109,10 @@ class CollageWeaver(object):
       the bounding box.
     """
 
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        """
-        tile (2D DataArray): the image must have at least MD_POS and
-        MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
-        """
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
-
     def getFullImage(self):
         """
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
         """
-
         tiles = self.tiles
 
         # Compute the bounding box of each tile and the global bounding box
@@ -115,6 +166,8 @@ class CollageWeaver(object):
         # Use minimum of the values in the tiles for background
         im[:] = numpy.amin(tiles)
         for b, t in zip(tbbx_px, tiles):
+            if self.adjust_brt:
+                t = self._adjust_brightness(t, tiles)
             im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = t
             # TODO: border
 
@@ -128,23 +181,13 @@ class CollageWeaver(object):
         return model.DataArray(im, md)
 
 
-class CollageWeaverReverse(object):
+class CollageWeaverReverse(Weaver):
     """
     Similar to CollageWeaver, but only fills parts of the global image with the new tile that
     are still empty. This is desirable if the quality of the overlap regions is much better the first
     time a region is imaged due to bleaching effects. The result is equivalent to a collage that starts 
     with the last tile and pastes the older tiles in reverse order of acquisition.
     """
-
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
 
     def getFullImage(self):
         """
@@ -210,6 +253,9 @@ class CollageWeaverReverse(object):
             roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
+            if self.adjust_brt:
+                t = self._adjust_brightness(t, tiles)
+
             # Insert image at positions that are still empty
             roi[~moi] = t[~moi]
 
@@ -226,21 +272,11 @@ class CollageWeaverReverse(object):
         return model.DataArray(im, md)
 
 
-class MeanWeaver(object):
+class MeanWeaver(Weaver):
     """
     Pixels of the final image which are corresponding to several tiles are computed as an 
     average of the pixel of each tile.
     """
-
-    def __init__(self):
-        self.tiles = []
-
-    def addTile(self, tile):
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-        tile = model.DataArray(tile, tile.metadata.copy())
-        img.mergeMetadata(tile.metadata)
-        self.tiles.append(tile)
 
     def getFullImage(self):
         """
@@ -323,6 +359,8 @@ class MeanWeaver(object):
             roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
+            if self.adjust_brt:
+                self._adjust_brightness(t, tiles)
             # Insert image at positions that are still empty
             roi[~moi] = t[~moi]
 

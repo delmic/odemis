@@ -342,7 +342,7 @@ class TestCommandLine(unittest.TestCase):
         time.sleep(1)  # make sure the backend is done writing the VA values to the settings file
         # Check if persistent VAs are written to file before closing
         with open('test-settings.yaml', 'r+') as f:
-            f_content = yaml.load(f)
+            f_content = yaml.safe_load(f)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["resolution"], res)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["gain"], gain)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["exposureTime"], expt)
@@ -356,7 +356,7 @@ class TestCommandLine(unittest.TestCase):
         self.assertEqual(ret, 2, "Backend is said to be running")
 
         with open('test-settings.yaml', 'r+') as f:
-            f_content = yaml.load(f)
+            f_content = yaml.safe_load(f)
         self.assertEqual(f_content["Andor SimCam"]["metadata"]["SENSOR_PIXEL_SIZE"], pxs)
         self.assertEqual(f_content["Andor SimCam"]["metadata"]["POS_COR"], list(pos_cor))
 
@@ -439,7 +439,7 @@ class TestCommandLine(unittest.TestCase):
         # Check if persistent VAs are written to file before closing
         time.sleep(1)
         with open('test-settings-broken.yaml', 'r') as f:
-            f_content = yaml.load(f)
+            f_content = yaml.safe_load(f)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["resolution"], res)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["gain"], gain)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["exposureTime"], expt)

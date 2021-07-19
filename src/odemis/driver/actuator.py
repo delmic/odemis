@@ -633,7 +633,23 @@ class ConvertStage(model.Actuator):
         # it's just a conversion from the dep's position
         self._dependency.position.subscribe(self._updatePosition, init=True)
 
-        # Speed & reference: it's complicated => user should look at the dep
+        if model.hasVA(self._dependency, "referenced"):
+            # Technically, in case there is a rotation the axes are not matching the
+            # dep's ones... however, it's still useful, and if both axes are referenced
+            # it means it's all referenced. So we keep with the "simple" mapping
+            # which doesn't take the rotation into account.
+            self.referenced = model.VigilantAttribute({}, readonly=True)
+            self._dependency.referenced.subscribe(self._updateReferenced, init=True)
+
+        if model.hasVA(self._dependency, "speed"):
+            speed_axes = set(self._dependency.speed.value.keys())
+            if set(axes) <= speed_axes:
+                # TODO: also support write if the dependency supports write
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._dependency.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(axes) - speed_axes)
 
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
@@ -679,10 +695,33 @@ class ConvertStage(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._set_value({"x": vpos[0], "y": vpos[1]}, force_write=True)
 
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # Convert the same way as position, but without origin
+        dep_vec_speed = [dep_speed[self._axes_dep["x"]],
+                         dep_speed[self._axes_dep["y"]]]
+        vec_speed = self._convertPosFromdep(dep_vec_speed, absolute=False)
+        self.speed._set_value({"x": abs(vec_speed[0]), "y": abs(vec_speed[1])}, force_write=True)
+
     def updateMetadata(self, md):
         self._metadata.update(md)
         self._updateConversion()
         self._updatePosition(self._dependency.position.value)
+        if hasattr(self, "speed"):
+            self._updateSpeed(self._dependency.speed.value)
+
+    def _updateReferenced(self, dep_refd):
+        """
+        update the referenced VA
+        """
+        refd = {}  # str (axes name) -> boolean (is referenced)
+        for ax, ad in self._axes_dep.items():
+            if ad in dep_refd:
+                refd[ax] = dep_refd[ad]
+
+        self.referenced._set_value(refd, force_write=True)
 
     @isasync
     def moveRel(self, shift, **kwargs):
@@ -720,7 +759,8 @@ class ConvertStage(model.Actuator):
 
     @isasync
     def reference(self, axes):
-        f = self._dependency.reference(axes)
+        dep_axes = set(self._axes_dep[a] for a in axes)
+        f = self._dependency.reference(dep_axes)
         return f
 
 
@@ -1916,7 +1956,7 @@ class RotationActuator(model.Actuator):
     """
 
     def __init__(self, name, role, dependencies, axis_name, cycle=2 * math.pi,
-                 ref_start=None, inverted=None, **kwargs):
+                 ref_start=None, ref_frequency=5, inverted=None, **kwargs):
         """
         name (string)
         role (string)
@@ -1926,6 +1966,8 @@ class RotationActuator(model.Actuator):
         ref_start (float or None): Value usually chosen close to reference switch from where to start referencing.
                                     Used to optimize runtime for referencing.
                                     If None, value will be 5% of value of cycle.
+        ref_frequency (None or 1 <= int): automatically re-reference the axis
+          after this many moves have been executed. Use None (null) to disable.
         """
         if inverted:
             raise ValueError("Axes shouldn't be inverted")
@@ -1934,11 +1976,13 @@ class RotationActuator(model.Actuator):
             raise ValueError("RotationActuator needs precisely one dependency")
 
         self._cycle = cycle
-        # counter to check when current position has overrun cycle
-        # and is close to zero again (pos and neg direction)
-        self._move_sum = 0
         # check when a specified number of rotations was performed
+        if ref_frequency is None or ref_frequency >= 1:
+            self._ref_frequency = ref_frequency
+        else:
+            raise ValueError("ref_on_move_count is %s, but must be >= 1 or None" % (ref_frequency,))
         self._move_num_total = 0
+
         axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
@@ -2098,8 +2142,8 @@ class RotationActuator(model.Actuator):
         final_pos = cur_pos + move
         pass_ref = (cur_pos // self._cycle) != (final_pos // self._cycle)
 
-        # do referencing after i=5 moves or when passing the reference switch anyways
-        if pass_ref or self._move_num_total >= 5:
+        # Reference if passing by the reference switch, or after N moves (if not disabled)
+        if pass_ref or (self._ref_frequency is not None and self._move_num_total >= self._ref_frequency):
             # Move to pos close to ref switch
             move, cur_pos = self._findShortestMove(self._ref_start)
                 

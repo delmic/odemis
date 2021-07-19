@@ -42,7 +42,4 @@ SEM: {
 
 "EBeam Detector": {
   role: se-detector,
-  init: {
-    channel_name: "electron1",
-  }
 }

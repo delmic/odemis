@@ -35,7 +35,7 @@ import numpy
 from odemis import model
 from odemis import util
 from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture, \
-    DataArray
+    DataArray, StringEnumerated
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -48,10 +48,25 @@ GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
 
-# Convert from a detector role (following the Odemis convention) to a detector name in xtlib
-DETECTOR2CHANNELNAME = {
-    "se-detector": "electron1",
-}
+# Value to use on the FASTEM to activate the immersion mode
+COMPOUND_LENS_FOCUS_IMMERSION = 2.0
+
+# List of known supported resolutions.
+# Although the API only provide the min/max of resolution in X/Y, not every value
+# or combination works. Actually, setting X always changes Y to the corresponding
+# value. Note that they are not all the same aspect ratio. "Legacy" resolutions
+# are ~8/7 while the new ones are 3/2. The "legacy" resolutions end up with a
+# larger vertical field of view.
+RESOLUTIONS = (
+    (512, 442),
+    (1024, 884),
+    (2048, 1768),
+    (4096, 3536),
+    (768, 512),
+    (1536, 1024),
+    (3072, 2048),
+    (6144, 4096),
+)
 
 
 class SEM(model.HwComponent):
@@ -90,23 +105,34 @@ class SEM(model.HwComponent):
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
 
-        # create the scanner child
-        try:
-            if "mb-scanner" in children:
-                kwargs = children["mb-scanner"]
-                if "xttoolkit" in self._swVersion.lower():
-                    self.xt_type = "xttoolkit"
-                else:
-                    raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
-            else:
-                kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            raise KeyError("SEM was not given a 'scanner' or 'mb-scanner' child")
+        # Create the scanner type child(ren)
+        # Check if at least one of the required scanner types is instantiated
+        scanner_types = ["scanner", "fib-scanner", "mb-scanner"]  # All allowed scanners types
+        if not any(scanner_type in children for scanner_type in scanner_types):
+            raise KeyError("SEM was not given any scanner as child. "
+                           "One of 'scanner', 'fib-scanner' or 'mb-scanner' need to be included as child")
+
+        has_detector = "detector" in children
+
+        if "scanner" in children:
+            kwargs = children["scanner"]
+            self._scanner = Scanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
+            self.children.value.add(self._scanner)
+
         if "mb-scanner" in children:
-            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, **kwargs)
-        else:
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._scanner)
+            if "scanner" in children:
+                raise NotImplementedError("The combination of both an multi-beam scanner and single beam scanner at "
+                                          "the same time is not supported")
+            kwargs = children["mb-scanner"]
+            if "xttoolkit" not in self._swVersion.lower():
+                raise TypeError("XTtoolkit must be running to instantiate the multi-beam scanner child.")
+            self._scanner = MultiBeamScanner(parent=self, daemon=daemon, has_detector=has_detector, **kwargs)
+            self.children.value.add(self._scanner)
+
+        if "fib-scanner" in children:
+            kwargs = children["fib-scanner"]
+            self._fib_scanner = FibScanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_scanner)
 
         # create the stage child, if requested
         if "stage" in children:
@@ -117,13 +143,18 @@ class SEM(model.HwComponent):
         # create a focuser, if requested
         if "focus" in children:
             ckwargs = children["focus"]
-            self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
+            if "xttoolkit" in self._swVersion.lower():
+                self._focus = XTTKFocus(parent=self, daemon=daemon, **ckwargs)
+            else:
+                self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
-        # create a detector, if requested
         if "detector" in children:
             ckwargs = children["detector"]
-            self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
+            if "xttoolkit" in self._swVersion.lower():
+                self._detector = XTTKDetector(parent=self, daemon=daemon, address=address, **ckwargs)
+            else:
+                self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
 
     def list_available_channels(self):
@@ -273,7 +304,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_scanning_size(x - 1e-18)  # Necessary because it doesn't accept the max of the range
+            self.server.set_scanning_size(x)
 
     def get_scanning_size(self):
         """
@@ -657,7 +688,7 @@ class SEM(model.HwComponent):
         """Returns the resolution of the image as (width, height)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_resolution()
+            return tuple(self.server.get_resolution())
 
     def resolution_info(self):
         """Returns the unit and range of the resolution of the image."""
@@ -683,34 +714,6 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_beam_is_on()
-
-    def is_autostigmating(self, channel_name):
-        """
-        Parameters
-        ----------
-            channel_name (str): Holds the channels name on which the state is checked.
-
-        Returns True if autostigmator is running and False if autostigmator is not running.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.is_autostigmating(channel_name)
-
-    def set_autostigmator(self, channel_name, state):
-        """
-        Set the state of autostigmator, beam must be turned on. This is non-blocking.
-
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the electron channels, the channel must be running.
-        state: XT_RUN or XT_STOP
-            State is start, starts the autostigmator. States cancel and stop both stop the autostigmator, some
-            microscopes might need stop, while others need cancel.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.set_autostigmator(channel_name, state)
 
     def get_delta_pitch(self):
         """
@@ -747,58 +750,17 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.delta_pitch_info()
 
-    def get_primary_stigmator(self):
-        """
-        Retrieves the current primary stigmator x and y values. Within the MBSEM system
-        there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
-
-        Returns
-        -------
-        tuple, (float, float) current x and y values of stigmator, unitless.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return tuple(self.server.get_primary_stigmator())
-
-    def set_primary_stigmator(self, x, y):
-        """
-        Sets the primary stigmator x and y values. Within the MBSEM system
-        there are two stigmators to correct for both beamlet astigmatism as well
-        as multi-probe shape. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
-
-        Parameters
-        -------
-        x (float): x value of stigmator, unitless.
-        y (float): y value of stigmator, unitless.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.set_primary_stigmator(x, y)
-
-    def primary_stigmator_info(self):
-        """"
-        Returns the unit and range of the primary stigmator. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
-
-        Returns
-        -------
-        dict, keys: "unit", "range"
-        'unit': returns physical unit of the stigmator, typically None.
-        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.primary_stigmator_info()
-
     def get_secondary_stigmator(self):
         """
         Retrieves the current secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
         as multi-probe shape. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
+
+        Notes
+        -----
+        Will be deprecated as soon as FumoBeta is refurbished.
+        The primary stigmator does not have its own method, because it gets the
+        same value as get_stigmator()
 
         Returns
         -------
@@ -813,7 +775,12 @@ class SEM(model.HwComponent):
         Sets the secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
         as multi-probe shape. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
+
+        Notes
+        -----
+        Will be deprecated as soon as FumoBeta is refurbished.
+        The primary stigmator does not have its own method, because it sets the
+        same value as set_stigmator()
 
         Parameters
         -------
@@ -827,7 +794,12 @@ class SEM(model.HwComponent):
     def secondary_stigmator_info(self):
         """"
         Returns the unit and range of the secondary stigmator. Only available on MBSEM systems.
-        Note: Will be deprecated as soon as FumoBeta is refurbished.
+
+        Notes
+        -----
+        Will be deprecated as soon as FumoBeta is refurbished.
+        The primary stigmator does not have its own method, because it gets the
+        same info as stigmator_info()
 
         Returns
         -------
@@ -1010,6 +982,87 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.beamlet_index_info()
 
+    def get_compound_lens_focusing_mode(self):
+        """
+        Get the compound lens focus mode. Used to adjust the immersion mode.
+        :return (0<= float <= 10): the focusing mode (0 means no immersion)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_compound_lens_focusing_mode()
+
+    def set_compound_lens_focusing_mode(self, mode):
+        """
+        Set the compound lens focus mode. Used to adjust the immersion mode.
+        :param mode (0<= float <= 10): focusing mode (0 means no immersion)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_compound_lens_focusing_mode(mode)
+
+    def compound_lens_focusing_mode_info(self):
+        """
+        Get the min/max values of the compound lens focus mode.
+
+        :return (dict str -> Any): The range of the focusing mode for the key "range"
+           (as a tuple min/max). The unit for key "unit", as a string or None. 
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.compound_lens_focusing_mode_info()
+
+    def scan_image(self, channel_name='electron1'):
+        """
+        Start the scan of a single image and block until the image is done scanning.
+        This function does not return the image, to get the image call get_latest_image after this function.
+        Only works for systems running XTToolkit.
+
+        Parameters
+        ----------
+        channel_name: str
+            Name of one of the channels.
+
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.scan_image(channel_name)
+
+    def start_autofocusing_flash(self):
+        """
+        Start running autofocus through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_autofocusing_flash()
+
+    def start_autostigmating_flash(self):
+        """
+        Start running auto stigmation through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_autostigmating_flash()
+
+    def start_auto_lens_centering_flash(self):
+        """
+        Start running lens alignment through FLASH. This is a blocking call.
+
+        Scan mode must be full frame, use case SingleBeamlet, and the beam must be turned on and unblanked.
+
+        FLASH is a python script provided by TFS to run autofocus, autostigmation and lens alignment.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_auto_lens_centering_flash()
+
 
 class Scanner(model.Emitter):
     """
@@ -1019,13 +1072,21 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", has_detector=False, **kwargs):
+        """
+        channel (str): Name of one of the electron channels.
+        has_detector (bool): True if a Detector is also controlled. In this case,
+          the .resolution, .scale and associated VAs will be provided too.
+        """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        self.channel = channel  # Name of the electron channel used.
 
         # will take care of executing auto contrast/brightness and auto stigmator asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self._hfw_nomag = hfw_nomag
+        self._has_detector = has_detector
 
         dwell_time_info = self.parent.dwell_time_info()
         self.dwellTime = model.FloatContinuous(
@@ -1078,6 +1139,7 @@ class Scanner(model.Emitter):
             unit=scanning_size_info["unit"],
             range=scanning_size_info["range"]["x"],
             setter=self._setHorizontalFoV)
+        self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         mag = self._hfw_nomag / fov
         mag_range_max = self._hfw_nomag / scanning_size_info["range"]["x"][0]
@@ -1090,38 +1152,38 @@ class Scanner(model.Emitter):
         self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e3),
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
-        rng = self.parent.resolution_info()["range"]
-        self._shape = (rng["x"][1], rng["y"][1])
-        # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
-        # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[0] * mag))
-        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        # .resolution is the number of pixels actually scanned. If it's less than
-        # the whole possible area, it's centered.
-        resolution = self.parent.get_resolution()
+        if has_detector:
+            rng = self.parent.resolution_info()["range"]
+            self._shape = (rng["x"][1], rng["y"][1])
+            # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
+            # == smallest size/ between two different ebeam positions
+            pxs = (fov / self._shape[0],
+                   fov / self._shape[0])
+            self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        self.resolution = model.ResolutionVA(tuple(resolution),
-                                             ((rng["x"][0], rng["y"][0]),
-                                              (rng["x"][1], rng["y"][1])),
-                                             setter=self._setResolution)
-        self._resolution = resolution
+            # .resolution is the number of pixels actually scanned. It's almost
+            # fixed to full frame, with the exceptions of the resolutions which
+            # are a different aspect ratio from the shape are "more than full frame".
+            # So it's read-only and updated when the scale is updated.
+            resolution = tuple(self.parent.get_resolution())
+            res_choices = set(r for r in RESOLUTIONS
+                              if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
+                             )
+            self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
+            self._resolution = resolution
 
-        # (float, float) as a ratio => how big is a pixel, compared to pixelSize
-        # it basically works the same as binning, but can be float
-        # (Default to scan the whole area)
-        self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        self.scale = model.TupleContinuous(self._scale,
-                                           [(1, 1), self._shape],
-                                           unit="",
-                                           cls=(int, float),  # int; when setting scale the GUI returns a tuple of ints.
-                                           setter=self._setScale)
-        self.scale.subscribe(self._onScale, init=True)  # to update metadata
+            # (float, float) as a ratio => how big is a pixel, compared to pixelSize
+            # it basically works the same as binning, but can be float.
+            # Defined as the scale to match the allowed resolutions, with pixels
+            # always square (ie, scale is always the same in X and Y).
+            scale = (self._shape[0] / resolution[0],) * 2
+            scale_choices = set((self._shape[0] / r[0],) * 2 for r in res_choices)
+            self.scale = model.VAEnumerated(scale, scale_choices, unit="", setter=self._setScale)
+            self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+            # Just to make some code happy
+            self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
 
         emode = self._isExternal()
         self.external = model.BooleanVA(emode, setter=self._setExternal)
@@ -1176,30 +1238,44 @@ class Scanner(model.Emitter):
             if external != self.external.value:
                 self.external._value = external
                 self.external.notify(external)
+            if self._has_detector:
+                self._updateResolution()
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
-            the original pixel size. It will adapt the translation and resolution to
+            the original pixel size. It will adapt the resolution to
             have the same ROI (just different amount of pixels scanned)
         return the actual value used
         """
-        prev_scale = self._scale
-        self._scale = value
+        # Pick the resolution which matches the scale in X
+        res_x = int(round(self._shape[0] / value[0]))
+        res = next(r for r in self.resolution.choices if r[0] == res_x)
 
-        # adapt resolution so that the ROI stays the same
-        change = (prev_scale[0] / self._scale[0],
-                  prev_scale[1] / self._scale[1])
-        old_resolution = self.resolution.value
-        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
-                          max(int(round(old_resolution[1] * change[1])), 1))
-        self.resolution.value = new_resolution
+        # TODO: instead of setting both X and Y, only set X, and read back Y?
+        # This would be slightly more flexible in case the XT lib supports other
+        # resolutions than the hard-coded ones. For now we assume the hard-coded
+        # ones are all the possibles ones.
+        self.parent.set_resolution(res)
+        self.resolution._set_value(res, force_write=True)
+
         return value
 
     def _onScale(self, s):
         self._updatePixelSize()
+
+    def _updateResolution(self):
+        """
+        To be called to read the server resolution and update the corresponding VAs
+        """
+        resolution = tuple(self.parent.get_resolution())
+        if resolution != self.resolution.value:
+            scale = (self._shape[0] / resolution[0],) * 2
+            self.scale._value = scale  # To not call the setter
+            self.resolution._set_value(resolution, force_write=True)
+            self.scale.notify(scale)
 
     def _updatePixelSize(self):
         """
@@ -1265,9 +1341,12 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / fov
         self.magnification._value = mag
         self.magnification.notify(mag)
-        self._updateDepthOfField()
-        self._updatePixelSize()
         return fov
+
+    def _onHorizontalFoV(self, fov):
+        self._updateDepthOfField()
+        if self._has_detector:
+            self._updatePixelSize()
 
     def _updateDepthOfField(self):
         fov = self.horizontalFoV.value
@@ -1275,23 +1354,6 @@ class Scanner(model.Emitter):
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
-
-    def _setResolution(self, value):
-        """
-        value (0<int, 0<int): defines the size of the resolution. If the requested
-            resolution is not possible, it will pick the most fitting one.
-        returns the actual value used
-        """
-        max_size = self.resolution.range[1]
-
-        # At least one pixel, and at most the whole area.
-        size = (max(min(value[0], max_size[0]), 1),
-                max(min(value[1], max_size[1]), 1))
-        self._resolution = size
-        self.parent.set_resolution(size)
-
-        self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
-        return value
 
     def _isExternal(self):
         """
@@ -1328,7 +1390,7 @@ class Scanner(model.Emitter):
         f._auto_contrast_brighness_lock = threading.Lock()
         f._must_stop = threading.Event()  # Cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
-        f._channel_name = DETECTOR2CHANNELNAME[detector]
+        f._channel_name = self.channel
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
     def _applyAutoContrastBrightness(self, future):
@@ -1366,61 +1428,32 @@ class Scanner(model.Emitter):
                 logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
                 return False
 
-    # TODO Commented out code because it is currently not supported by XT. An update or another implementation may be
-    # made later
 
-    # @isasync
-    # def applyAutoStigmator(self, detector):
-    #     """
-    #     Wrapper for running the auto stigmator functionality asynchronously. It sets the state of autostigmator,
-    #     the beam must be turned on and unblanked. This call is non-blocking.
-    #
-    #     :param detector (str): Role of the detector.
-    #     :return: Future object
-    #     """
-    #     # Create ProgressiveFuture and update its state
-    #     est_start = time.time() + 0.1
-    #     f = ProgressiveFuture(start=est_start,
-    #                           end=est_start + 8)  # rough time estimation
-    #     f._auto_stigmator_lock = threading.Lock()
-    #     f._must_stop = threading.Event()  # cancel of the current future requested
-    #     f.task_canceller = self._cancelAutoStigmator
-    #     if DETECTOR2CHANNELNAME[detector] != "electron1":
-    #         # Auto stigmation is only supported on channel electron1, not on the other channels
-    #         raise KeyError("This detector is not supported for auto stigmation")
-    #     f.c = DETECTOR2CHANNELNAME[detector]
-    #     return self._executor.submitf(f, self._applyAutoStigmator, f)
-    #
-    # def _applyAutoStigmator(self, future):
-    #     """
-    #     Starts applying auto stigmator and checks if the process is finished for the ProgressiveFuture object.
-    #     :param future (Future): the future to start running.
-    #     """
-    #     channel_name = future._channel_name
-    #     with future._auto_stigmator_lock:
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #         self.parent.set_autostigmator(channel_name, XT_RUN)
-    #         time.sleep(0.5)  # Wait for the auto stigmator to start
-    #
-    #     # Wait until the microscope is no longer applying auto stigmator
-    #     while self.parent.is_autostigmating(channel_name):
-    #         future._must_stop.wait(0.1)
-    #         if future._must_stop.is_set():
-    #             raise CancelledError()
-    #
-    # def _cancelAutoStigmator(self, future):
-    #     """
-    #     Cancels the auto stigmator. Non-blocking.
-    #     :param future (Future): the future to stop.
-    #     :return (bool): True if it successfully cancelled (stopped) the move.
-    #     """
-    #     future._must_stop.set()  # tell the thread taking care of auto stigmator it's over
-    #
-    #     with future._auto_stigmator_lock:
-    #         logging.debug("Cancelling auto stigmator")
-    #         self.parent.set_autostigmator(future._channel_name, XT_STOP)
-    #         return True
+class FibScanner(model.Emitter):
+    """
+    This is an extension of the model.Emitter class for controlling the FIB (focused ion beam). Currently via XTLib
+    only minimal control of the FIB is possible.
+    """
+
+    def __init__(self, name, role, parent, channel="ion2", **kwargs):
+        """
+
+        :param name (str):
+        :param role (str):
+        :param parent (SEM object):
+        :param channel (str): Specifies the type of scanner (alphabetic part) and the quadrant it is displayed in (
+        numerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope control window
+        of TFS. The quadrants are numbered 1 (top left) - 4 (right bottom).
+        Usually the top right quadrant, ion2 is set as default for the FIB image.
+        """
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        self.channel = channel  # Name of the ion channel used.
+
+        # Fictional values for the interface. Xtlib doesn't support reading/controlling these values
+        self._shape = (4096, 4096)
+        res = self._shape[:2]
+        self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
 
 class Detector(model.Detector):
@@ -1430,10 +1463,7 @@ class Detector(model.Detector):
     is captured.
     """
 
-    def __init__(self, name, role, parent, channel_name, **kwargs):
-        """
-        channel_name (str): Name of one of the electron channels.
-        """
+    def __init__(self, name, role, parent, **kwargs):
         # The acquisition is based on a FSM that roughly looks like this:
         # Event\State |    Stopped    |   Acquiring    | Receiving data |
         #    START    | Ready for acq |        .       |       .        |
@@ -1445,7 +1475,18 @@ class Detector(model.Detector):
         self._shape = (256,)  # Depth of the image
         self.data = SEMDataFlow(self)
 
-        self._channel_name = channel_name
+        if hasattr(self.parent, "_scanner") and hasattr(self.parent, "_fib_scanner"):
+            self.scanner = StringEnumerated(self.parent._scanner.name,
+                                            choices={self.parent._scanner.name, self.parent._fib_scanner.name},
+                                            setter=self._set_scanner)
+            self._set_scanner(self.parent._scanner.name)  # Call setter to instantiate ._scanner attribute
+        elif hasattr(self.parent, "_scanner"):
+            self._scanner = self.parent._scanner
+        elif hasattr(self.parent, "_fib_scanner"):
+            self._scanner = self.parent._fib_scanner
+        else:
+            raise ValueError("No Scanner available")
+
         self._genmsg = queue.Queue()  # GEN_*
         self._generator = None
 
@@ -1465,8 +1506,9 @@ class Detector(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        if self.parent._scanner.blanker.value is None:
-            self.parent.blank_beam()
+        if hasattr(self._scanner, "blanker"):
+            if self._scanner.blanker.value is None:
+                self.parent.blank_beam()
         self._genmsg.put(GEN_STOP)
 
     def _acquire(self):
@@ -1482,15 +1524,29 @@ class Detector(model.Detector):
                 while True:
                     if self._acq_should_stop():
                         break
-                    self.parent.set_channel_state(self._channel_name, True)
-                    if self.parent._scanner.blanker.value is None:
-                        self.parent.unblank_beam()
+                    self.parent.set_channel_state(self._scanner.channel, True)
+                    if hasattr(self._scanner, "blanker"):
+                        # TODO: When the acquisition ends, if blanker is set to automatic (None), we need to activate
+                        #  the blanker again. That should also happen when switching e-beam <--> FIB, but currently
+                        #  the FIB blanker is not supported via the XT interface.
+                        if self._scanner.blanker.value is None:
+                            self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
-                    self.parent.set_channel_state(self._channel_name, False)
+                    self.parent.set_channel_state(self._scanner.channel, False)
+
+                    md = self._scanner._metadata.copy()
+                    if hasattr(self._scanner, "dwellTime"):
+                        md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
+                    if hasattr(self._scanner, "rotation"):
+                        md[model.MD_ROTATION] = self._scanner.rotation.value
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
-                    n_pixels = self.parent._scanner.shape[0] * self.parent._scanner.shape[1]
-                    est_acq_time = self.parent._scanner.dwellTime.value * n_pixels
+                    if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "resolution"):
+                        n_pixels = self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
+                        est_acq_time = self._scanner.dwellTime.value * n_pixels
+                    else:
+                        # Acquisition time is unknown => assume it will be long
+                        est_acq_time = 5 * 60  # 5 minutes
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
@@ -1503,14 +1559,10 @@ class Detector(model.Detector):
                         logging.error(err)
                         self.stop_acquisition()
                         break
-                    # Acquire the image
-                    image = self.parent.get_latest_image(self._channel_name)
 
-                    md = self.parent._scanner._metadata.copy()
+                    # Retrieve the image
+                    image = self.parent.get_latest_image(self._scanner.channel)
                     md.update(self._metadata)
-                    md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
-                    md[model.MD_ROTATION] = self.parent._scanner.rotation.value
-
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
                     self.data.notify(da)
@@ -1527,14 +1579,14 @@ class Detector(model.Detector):
         Stop acquiring images.
         """
         # Stopping the channel once stops it after the acquisition is done.
-        self.parent.set_channel_state(self._channel_name, False)
-        if self.parent.get_channel_state(self._channel_name) == XT_STOP:
+        self.parent.set_channel_state(self._scanner.channel, False)
+        if self.parent.get_channel_state(self._scanner.channel) == XT_STOP:
             return
         else:  # Channel is canceling
             logging.debug("Channel not fully stopped will try again.")
             time.sleep(0.5)
             # Stopping it twice does a full stop.
-            self.parent.set_channel_state(self._channel_name, False)
+            self.parent.set_channel_state(self._scanner.channel, False)
 
     def _acq_should_stop(self, timeout=None):
         """
@@ -1574,7 +1626,7 @@ class Detector(model.Detector):
         tend = time.time() + timeout
         t = time.time()
         logging.debug("Waiting for %g s:", tend - t)
-        while self.parent.get_channel_state(self._channel_name) != XT_STOP:
+        while self.parent.get_channel_state(self._scanner.channel) != XT_STOP:
             t = time.time()
             if t > tend:
                 raise TimeoutError("Acquisition timeout after %g s" % timeout)
@@ -1614,6 +1666,20 @@ class Detector(model.Detector):
             logging.warning("Acq received unexpected message %s", msg)
         return msg
 
+    def _set_scanner(self, scanner_name):
+        """
+        Setter for changing the scanner which will be used. The correct scanner object is also updated in
+        ._scanner.
+        :param scanner_name (string): contains mode, can be either 'scanner' or 'fib-scanner'
+        :return (string): The set mode
+        """
+        if scanner_name == self.parent._scanner.name:
+            self._scanner = self.parent._scanner
+        elif scanner_name == self.parent._fib_scanner.name:
+            self._scanner = self.parent._fib_scanner
+
+        return scanner_name
+
 
 class TerminationRequested(Exception):
     """
@@ -1632,8 +1698,6 @@ class SEMDataFlow(model.DataFlow):
     def __init__(self, detector):
         """
         detector (model.Detector): the detector that the dataflow corresponds to
-        sem (model.Emitter): the SEM
-        channel_name (str): Name of one of the electron channels
         """
         model.DataFlow.__init__(self)
         self._detector = detector
@@ -1891,6 +1955,10 @@ class Focus(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
+        if not hasattr(self.parent, "_scanner"):
+            raise ValueError("Required scanner child was not provided."
+                             "An ebeam or multi-beam scanner is a required child component for the Focus class")
+
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
@@ -1914,7 +1982,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f._channel_name = DETECTOR2CHANNELNAME[detector]
+        f._channel_name = self.parent._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):
@@ -2044,14 +2112,16 @@ class MultiBeamScanner(Scanner):
     Whenever one of these attributes is changed, its setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
+        self.channel = channel  # Name of the electron channel used.
+
         # First instantiate the xt_toolkit VA's then call the __init__ of the super for the update thread.
         self.parent = parent
 
         # Add XTtoolkit specific VA's
         delta_pitch_info = self.parent.delta_pitch_info()
         assert delta_pitch_info["unit"] == "um", "Delta pitch unit is incorrect, current: {}, should be: um.".format(
-                delta_pitch_info["unit"])
+            delta_pitch_info["unit"])
         self.deltaPitch = model.FloatContinuous(
             self.parent.get_delta_pitch() * 1e-6,
             unit="m",
@@ -2109,6 +2179,20 @@ class MultiBeamScanner(Scanner):
             setter=self._setBeamletIndex
         )
 
+        # The compound lens focusing mode accepts value between 0 and 10. However,
+        # in practice, we use it to switch between immersion mode or not.
+        # So instead of passing a float, we just provide a boolean, with the immersion
+        # mode always set to the same (hard-coded, TFS approved) value.
+        # When reading, anything above 0 is considered in immersion.
+        focusing_mode_info = self.parent.compound_lens_focusing_mode_info()
+        focusing_mode_range = focusing_mode_info["range"]
+        assert focusing_mode_range[0] <= COMPOUND_LENS_FOCUS_IMMERSION <= focusing_mode_range[1]
+        focusing_mode = self.parent.get_compound_lens_focusing_mode()
+        self.immersion = model.BooleanVA(
+            focusing_mode > 0,
+            setter=self._setImmersion
+        )
+
         multibeam_mode = (self.parent.get_use_case() == 'MultiBeamTile')
         self.multiBeamMode = model.BooleanVA(
             multibeam_mode,
@@ -2125,6 +2209,17 @@ class MultiBeamScanner(Scanner):
         # Instantiate the super scanner class with the update thread
         super(MultiBeamScanner, self).__init__(name, role, parent, hfw_nomag, **kwargs)
 
+    @isasync
+    def applyAutoStigmator(self):
+        """
+        Wrapper for autostigmation flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+        return f
+
     def _updateSettings(self):
         """
         Read all the current settings from the SEM and reflects them on the VAs
@@ -2137,6 +2232,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self)._updateSettings()
         # Polling XTtoolkit settings
         try:
+            self._updateHFWRange()
             delta_pitch = self.parent.get_delta_pitch() * 1e-6
             if delta_pitch != self.deltaPitch.value:
                 self.deltaPitch._value = delta_pitch
@@ -2165,6 +2261,10 @@ class MultiBeamScanner(Scanner):
             if beamlet_index != self.beamletIndex.value:
                 self.beamletIndex._value = beamlet_index
                 self.beamletIndex.notify(beamlet_index)
+            immersion = self.parent.get_compound_lens_focusing_mode() > 0
+            if immersion != self.immersion.value:
+                self.immersion._value = immersion
+                self.immersion.notify(immersion)
             multibeam_mode = (self.parent.get_use_case() == 'MultiBeamTile')
             if multibeam_mode != self.multiBeamMode.value:
                 self.multiBeamMode._value = multibeam_mode
@@ -2197,6 +2297,35 @@ class MultiBeamScanner(Scanner):
         new_beamlet_index = self.parent.get_beamlet_index()
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
 
+    def _setImmersion(self, immersion: bool):
+        # immersion disabled -> focusing mode = 0
+        # immersion enabled -> focusing mode = COMPOUND_LENS_FOCUS_IMMERSION
+        self.parent.set_compound_lens_focusing_mode(COMPOUND_LENS_FOCUS_IMMERSION if immersion else 0)
+        # The immersion mode affects the HFW maximum
+        # Note: if the HFW is set to a value which is out of range in the new settings,
+        # the XT server takes care of adjusting the HFW to a value within range.
+        self._updateHFWRange()
+        return self.parent.get_compound_lens_focusing_mode() > 0
+
+    def _updateHFWRange(self):
+        """
+        To be called when the field of view range might have changed.
+        This can happen when some settings are changed.
+        If the range is changed, the VA subscribers will be updated.
+        """
+        hfov_range = tuple(self.parent.scanning_size_info()["range"]["x"])
+        if self.horizontalFoV.range != hfov_range:
+            logging.debug("horizontalFoV range changed to %s", hfov_range)
+
+            fov = self.parent.get_scanning_size()[0]
+            self.horizontalFoV._value = fov
+            self.horizontalFoV.range = hfov_range  # Does the notification
+
+            self.magnification._value = self._hfw_nomag / fov
+            mag_range_max = self._hfw_nomag / hfov_range[0]
+            mag_range_min = self._hfw_nomag / hfov_range[1]
+            self.magnification.range = (mag_range_min, mag_range_max)
+
     def _setMultiBeamMode(self, multi_beam_mode):
         # TODO: When changing the beam mode of the microscope changes we don't want to also change the aperture and
         #  beamlet index. However, it seems that this is the way TFS will be implementing and supporting XTtoolkit.
@@ -2215,3 +2344,108 @@ class MultiBeamScanner(Scanner):
         #     self.apertureIndex.value = current_aperture
         #     self.beamletIndex.value = current_beamlet
         return (self.parent.get_use_case() == 'MultiBeamTile')
+
+
+class XTTKDetector(Detector):
+    """
+    This is an extension of xt_client.Detector class. It overwrites the image acquisition
+    to work with image acquisition in XTToolkit.
+    """
+
+    def __init__(self, name, role, parent, address, **kwargs):
+        # The acquisition is based on a FSM that roughly looks like this:
+        # Event\State |    Stopped    |   Acquiring    | Receiving data |
+        #    START    | Ready for acq |        .       |       .        |
+        #    DATA     |       .       | Receiving data |       .        |
+        #    STOP     |       .       |     Stopped    |    Stopped     |
+        #    TERM     |     Final     |      Final     |     Final      |
+        self._cancel_access = threading.Lock()
+        try:
+            # A second connection to the xtadapter is needed to properly cancel a scan.
+            # The scan_image call is blocking, therefore we cannot cancel a scan
+            # using the same thread and connection the scan_image call is made.
+            self.cancel_connection = Pyro5.api.Proxy(address)
+            self.cancel_connection._pyroTimeout = 30  # seconds
+        except Exception as err:
+            raise HwError("Failed to connect to XT server '%s'. Check that the "
+                          "uri is correct and XT server is"
+                          " connected to the network. %s" % (address, err))
+        Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self._shape = (2**16,)  # Depth of the image
+
+    def stop_generate(self):
+        logging.debug("Stopping image acquisition")
+        with self._cancel_access:
+            self.cancel_connection._pyroClaimOwnership()
+            # Directly calling set_channel_state does not work with XTToolkit.
+            # Therefore call get_channel_state, before trying to stop the channel.
+            self.cancel_connection.get_channel_state(self.parent._scanner.channel)
+            self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
+            # Stop twice, to make sure the channel fully stops.
+            self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
+        if self.parent._scanner.blanker.value is None:
+            self.parent.blank_beam()
+        self._genmsg.put(GEN_STOP)
+
+    def _acquire(self):
+        """
+        Acquisition thread
+        Managed via the ._genmsg Queue
+        """
+        try:
+            while True:
+                # Wait until we have a start (or terminate) message
+                self._acq_wait_start()
+                logging.debug("Preparing acquisition")
+                while True:
+                    if self._acq_should_stop():
+                        break
+
+                    # Start a complete scan.
+                    try:
+                        self.parent.scan_image()
+                    except OSError as err:
+                        if err.errno == -2147467260:  # -2147467260 corresponds to: Operation aborted.
+                            logging.debug("Scan image aborted.")
+                            # Operation aborted, indicating acquisition should stop.
+                            break
+                        else:
+                            raise
+
+                    # Acquire the image
+                    # =================
+                    image = self.parent.get_latest_image(self.parent._scanner.channel)
+
+                    md = self.parent._scanner._metadata.copy()
+                    md.update(self._metadata)
+                    md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+                    md[model.MD_ROTATION] = self.parent._scanner.rotation.value
+
+                    da = DataArray(image, md)
+                    logging.debug("Notify dataflow with new image of shape: %s.", image.shape)
+                    self.data.notify(da)
+            logging.debug("Acquisition stopped")
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception as err:
+            logging.exception("Failure in acquisition thread: %s", err)
+        finally:
+            self._generator = None
+
+
+class XTTKFocus(Focus):
+    """
+    This is an extension of xt_client.Focus class. It overwrites the autofocus function to use the one
+    provided by the flash script.
+    """
+
+    @isasync
+    def applyAutofocus(self, detector):
+        """
+        Wrapper for autofocus flash function, non-blocking.
+        """
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
+        return f

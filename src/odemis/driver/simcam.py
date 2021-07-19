@@ -61,7 +61,10 @@ class Camera(model.DigitalCamera):
         self._img = converter.read_data(image)[0]  # can be RGB or greyscale
 
         model.DigitalCamera.__init__(self, name, role, dependencies=dependencies, daemon=daemon, **kwargs)
-
+        
+        # remove metadata which would not be on real hardware 
+        self._img.metadata.pop(model.MD_DESCRIPTION, None)
+        
         if self._img.ndim > 3:  # remove dims of length 1
             self._img = numpy.squeeze(self._img)
 

@@ -492,7 +492,7 @@ The following two Mixin classes can be inherited by any VigilantAttribute class.
 
     .. py:attribute:: choices
     
-        Set of valid values.
+        Set or dict (value → str). All possible value that can be assigned. If it's a dict, all the values that can be assigned and a user-readable description of the values.
 
 .range and .choices can be modified at runtime, but only by the owner of the VA and only if the current value is compatible. This should be avoided whenever possible because no notification is sent to the subscribers.
 

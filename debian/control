@@ -2,22 +2,16 @@ Source: odemis
 Section: science
 Priority: optional
 Maintainer: Éric Piel <piel@delmic.com>
-Standards-Version: 3.9.2
-Build-Depends: debhelper (>= 9),
+Standards-Version: 4.1.4
+Build-Depends: debhelper (>= 11),
                dh-python,
-               python-setuptools,
-               python-sphinx (>= 1.1.3),
                texlive-full,
                inkscape,
-               cython,
                cython3,
-               python-numpy,
-               python-all-dev (>= 2.7.1),
                python3-setuptools,
                python3-sphinx (>= 1.1.3),
                python3-numpy,
                python3-all-dev (>= 3.5.1)
-X-Python-Version: >= 2.7
 X-Python3-Version: >= 3.5
 Homepage: http://www.delmic.com
 Vcs-Git: git://github.com/delmic/odemis.git
@@ -25,55 +19,16 @@ Vcs-Browser: https://github.com/delmic/odemis
 
 Package: odemis
 Architecture: any
-Depends: python (>= 2.7.1),
-         python-wxgtk4.0,
-         python-pkg-resources,
-         python-future,
-         python-decorator,
-         python-yaml,
-         python-serial,
-         python-netifaces,
-# PIL is only needed in test cases, and indirectly by scipy for some image processing
-         python-pil,
-# python-evdev is just to support the Powermate in the GUI
-         python-evdev,
-         python-cairo,
-         python-numpy,
-         python-concurrent.futures,
-         python-scipy,
-# pylibtiff 0.4.1 is recommended
-         python-libtiff (>= 0.4.0),
-         python-h5py (>= 2.1),
-         python-xdg,
-# suds is only needed for phenom driver
-         python-suds,
-# matplotlib is only used for pituner
-         python-matplotlib,
-         python-opencv (>= 2.4),
-         python-notify2,
-# psutil is not required, if not present, less debug information will be available
-         python-psutil,
-# comedi is only needed for semcomedi driver
-         python-comedilib (>= 0.10.0),
-# blinkstick is only needed for blinkstick driver
-         python-blinkstick,
-# currently authbind is only needed for the auto probing of nfpm driver
-         authbind,
-         python-zmq (>= 2.1),
-         python-pyro4-delmic,
-         cgroup-bin,
-# On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
-         python-gi,
-         python-requests,
-# just to take screenshots during bug report
-         graphicsmagick,
-         odemis-doc,
-         ${shlibs:Depends},
+Depends: ${shlibs:Depends},
          ${misc:Depends},
-         ${python:Depends},
          ${python3:Depends},
          ${sphinxdoc:Depends},
-# python 3 dependencies
+         odemis-doc,
+         cgroup-bin,
+# just to take screenshots during bug report
+         graphicsmagick,
+# currently authbind is only needed for the auto probing of nfpm driver
+         authbind,
          python3,
          python3-wxgtk4.0,
          python3-pkg-resources,
@@ -81,24 +36,33 @@ Depends: python (>= 2.7.1),
          python3-decorator,
          python3-yaml,
          python3-serial,
+         python3-canopen,
+         python3-pymodbus,
          python3-netifaces,
          python3-pil,
+# python-evdev is just to support the Powermate in the GUI
          python3-evdev,
          python3-cairo,
          python3-numpy,
          python3-scipy,
+# pylibtiff 0.4.1 is recommended
          python3-libtiff (>= 0.4.0),
          python3-h5py (>= 2.1),
          python3-xdg,
+# suds is only needed for phenom driver
          python3-suds,
          python3-matplotlib,
          python3-opencv (>= 3.2),
          python3-notify2,
+# psutil is not required, if not present, less debug information will be available
          python3-psutil,
+# comedi is only needed for semcomedi driver and pwrcomedi
          python3-comedilib (>= 0.10.0),
+# blinkstick is only needed for blinkstick driver
          python3-blinkstick,
          python3-zmq (>= 2.1),
          python3-pyro4-delmic,
+# On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
          python3-gi,
          python3-requests,
 Suggests: imagej

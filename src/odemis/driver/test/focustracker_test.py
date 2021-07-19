@@ -23,88 +23,108 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-import numpy
-import os
-import unittest
-
-from canopen import SdoCommunicationError
-
 from odemis import model
 from odemis.driver.focustracker import FocusTrackerCO
 from odemis.model import NotSettableError
+import os
+import time
+import unittest
+
 
 logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
+KWARGS = {"name": "Focus Tracker",
+          "role": "focus-position",
+          "node_idx": 2,
+          "channel": 'can0',
+          # "inverted": ["z"]
+}
 if TEST_NOHW:
-    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_idx": 0x10, "channel": 'fake'}
-else:
-    KWARGS = {"name": "Focus Tracker", "role": "focus-tracker", "node_idx": 0x10, "channel": 'can0'}
+    KWARGS["channel"] = "fake"
 
 
 class TestFocusTrackerCO(unittest.TestCase):
     """Test the focus tracker functionality with the CANopen network."""
 
-    def setUp(self):
-        self.focus_tracker = FocusTrackerCO(**KWARGS)
-        self.kwargs = KWARGS
+    @classmethod
+    def setUpClass(cls):
+        cls.focus_tracker = FocusTrackerCO(**KWARGS)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.focus_tracker.terminate()
 
     def test_connection(self):
-        """Test that connection to the network is successful when connected, and unsuccessful when disconnected."""
+        """Test that connection to the network is unsuccessful when disconnected."""
         if not TEST_NOHW:
-            # If the network scanner sees a node at index 0x10, the focus tracker is connected.
-            self.assertTrue(0x10 in self.focus_tracker.network.scanner.nodes)
-            # When the node_idx is incorrect an empty node is added to the network, this then results in an
-            # SDOCommunicationError when we try to send a message to an object in the object dictionary.
-            with self.assertRaises(SdoCommunicationError):
-                FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel=self.kwargs['channel'],
-                               node_idx=0x12)
-        # If a fake channel name is entered, an IOError should be raised.
-        with self.assertRaises(IOError):
+            # If the node_idx is not found, maybe the device is disconnected => raise HwError
+            with self.assertRaises(model.HwError):
+                FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel=KWARGS['channel'],
+                               node_idx=KWARGS['node_idx'] + 10)
+
+        # If channel not found, maybe the CAN adapter is disconnected => raise HwError
+        with self.assertRaises(model.HwError):
             FocusTrackerCO(name="Focus Tracker", role="focus_tracker", channel='not a channel',
-                           node_idx=self.kwargs['node_idx'])
+                           node_idx=KWARGS['node_idx'])
 
     def test_position(self):
         """Verify that the current position can be read and not written."""
-        self.assertIsInstance(self.focus_tracker.position.value, float)
+        pos = self.focus_tracker.position.value["z"]
+        self.assertIsInstance(pos, float)
+        self.assertGreaterEqual(pos, -10e-6)  # In theory, it can be a tiny bit negative, but it's unlikely
+        # It should be in m. The distance is typically < 1mm. So let's say always < 10cm
+        self.assertLess(pos, 0.1)
+
         with self.assertRaises(NotSettableError):
-            self.focus_tracker.position.value = 10
+            self.focus_tracker.position.value = {"z": 10}
 
-    def test_target_pos(self):
-        """Verify that the target position can be read and not written."""
-        self.assertIsInstance(self.focus_tracker.targetPosition.value, float)
-        self.focus_tracker.targetPosition.value = 10e-6
-        self.assertAlmostEqual(self.focus_tracker.targetPosition.value, 10e-6)
-        with self.assertRaises(IndexError):
-            self.focus_tracker.targetPosition.value = -10e-6
+        # After a while the position should change (at least, just due to noise):
+        positions = [pos]
+        for i in range(10):
+            time.sleep(0.1)
+            positions.append(self.focus_tracker.position.value["z"])
 
-    def test_switch_tracking(self):
-        """Verify that the focus tracker can switch between tracking and untracking."""
-        self.focus_tracker.tracking.value = True
-        self.assertTrue(self.focus_tracker.tracking.value)
-        self.focus_tracker.tracking.value = False
-        self.assertFalse(self.focus_tracker.tracking.value)
+        # At least 2 positions different
+        self.assertGreaterEqual(len(set(positions)), 2, "All positions reported are %s" % (pos,))
 
-    def test_pid_gains(self):
-        """Test that PID gains are set when within range and remain unchanged when new gain is out of range."""
-        # Test setting all 3 values at the same time.
-        new_p = 0
-        new_i = 15.8
-        new_d = 3
-        self.focus_tracker.updateMetadata({model.MD_GAIN_P: new_p, model.MD_GAIN_I: new_i, model.MD_GAIN_D: new_d})
-        set_p = self.focus_tracker._get_proportional()
-        self.assertEqual(numpy.floor(new_p), numpy.floor(set_p))
-        set_i = self.focus_tracker._get_integral()
-        self.assertEqual(numpy.floor(new_i), numpy.floor(set_i))
-        set_d = self.focus_tracker._get_derivative()
-        self.assertEqual(numpy.floor(new_d), numpy.floor(set_d))
-        # Test setting a single value.
-        self.focus_tracker.updateMetadata({model.MD_GAIN_I: 10})
-        self.assertEqual(10, self.focus_tracker._get_integral())
-        # check that a ValueError is raised when trying to set a negative value.
+    def test_position_sub(self):
+        """Verify that the position is automatically updated from the hardware"""
+        self._positions = []
+        self.focus_tracker.position.subscribe(self.on_position)
+
+        time.sleep(2)  # Wait for the positions to come in
+
+        # Check we did receive some positions, and they are not identical
+        self.focus_tracker.position.unsubscribe(self.on_position)
+        lpos = len(self._positions)
+        self.assertGreater(lpos, 4)  # at least 2Hz (normally, it's 50Hz)
+        self.assertGreaterEqual(len(set(self._positions)), 2, "All positions reported are %s" % (self._positions[0],))
+
+        # Check we didn't receive more positions after unsubscribing
+        time.sleep(1)
+        self.assertEqual(lpos, len(self._positions), "Positions got updated after unsubscribing")
+
+    def on_position(self, pos):
+        self._positions.append(pos["z"])
+
+    def test_pos_cor(self):
+        """Check that the MD_POS_COR is subtracted from the original value"""
+
         with self.assertRaises(ValueError):
-            self.focus_tracker.updateMetadata({model.MD_GAIN_P: -10})
+            self.focus_tracker.updateMetadata({model.MD_POS_COR: "booo"})
+
+        # Subtract a big enough value that it's always negative
+        self.focus_tracker.updateMetadata({model.MD_POS_COR: 10e-3})
+        pos_cor = self.focus_tracker.getMetadata()[model.MD_POS_COR]
+        self.assertAlmostEqual(pos_cor, 10e-3)
+
+        pos = self.focus_tracker.position.value["z"]
+        self.assertLess(pos, 0)
+
+        self.focus_tracker.updateMetadata({model.MD_POS_COR: 0})
 
 
 if __name__ == "__main__":

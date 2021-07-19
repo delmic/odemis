@@ -4,7 +4,7 @@
 """
 :created: 2014-01-25
 :author: Rinze de Laat
-:copyright: © 2014-2017 Rinze de Laat, Éric Piel, Delmic
+:copyright: © 2014-2021 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -31,8 +31,10 @@ from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
-    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
+from odemis.gui.comp.overlay.view import CrossHairOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
 import wx
@@ -43,6 +45,71 @@ from odemis.util.comp import compute_scanner_fov, get_fov_rect
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
+class CurrentPosCrossHairOverlay(WorldOverlay):
+    """ Render a static cross hair to the current position of the stage"""
+
+    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
+        WorldOverlay.__init__(self, cnvs)
+
+        if not hasattr(cnvs.view, "stage_pos"):
+            raise ValueError("CurrentPosCrossHairOverlay requires stage_pos VA on the view to function properly.")
+        cnvs.view.stage_pos.subscribe(self._current_pos_updated, init=True)
+
+        self.colour = conversion.hex_to_frgba(colour)
+        self.size = size
+
+    @call_in_wx_main
+    def _current_pos_updated(self, _):
+        """
+        Called when current stage position updated
+        """
+        # Directly refresh the canvas (so the overlay draw is called with proper context)
+        self.cnvs.update_drawing()
+
+    def _get_current_stage_buffer_pos(self):
+        """
+        Get the buffer position of the current stage physical position
+        :return: (float, float) buffer coordinates of current position
+        """
+        pos = self.cnvs.view.stage_pos.value
+        half_size_offset = self.cnvs.get_half_buffer_size()
+        # convert physical position to buffer 'world' coordinates
+        bpos = self.cnvs.phys_to_buffer_pos((pos['x'], pos['y']), self.cnvs.p_buffer_center, self.cnvs.scale, offset=half_size_offset)
+        return bpos
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw a cross hair to the Cairo context """
+        center = self._get_current_stage_buffer_pos()
+        CrossHairOverlay.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
+
+class StagePointSelectOverlay(WorldOverlay):
+    """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
+
+    def on_dbl_click(self, evt):
+        if self.active:
+            v_pos = evt.Position
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            # directly move the stage to the selected physical position
+            self.cnvs.view.moveStageTo(p_pos)
+        else:
+            WorldOverlay.on_dbl_click(self, evt)
+
+    def on_left_down(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_down(evt)
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            # let the canvas handle dragging
+            self.cnvs.on_left_up(evt)
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        pass
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
@@ -127,7 +194,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.p_start_pos = rect[:2]
             self.p_end_pos = rect[2:4]
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """ Draw the selection as a rectangle """
 
         if self.p_start_pos and self.p_end_pos:
@@ -161,14 +228,15 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                     b_end_pos.y - b_start_pos.y)
 
             # draws a light black background for the rectangle
-            ctx.set_line_width(4)
+            ctx.set_line_width(line_width)
             ctx.set_source_rgba(0, 0, 0, 0.5)
             ctx.rectangle(*rect)
             ctx.stroke()
 
             # draws the dotted line
-            ctx.set_line_width(2)
-            ctx.set_dash([2])
+            ctx.set_line_width(line_width)
+            if dash:
+                ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
@@ -194,7 +262,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             SelectionMixin._on_left_down(self, evt)
             self._view_to_phys()
             self.cnvs.update_drawing()
@@ -203,7 +271,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             SelectionMixin._on_left_up(self, evt)
             self._view_to_phys()
             self.cnvs.update_drawing()
@@ -211,20 +279,20 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             WorldOverlay.on_left_up(self, evt)
 
     def on_enter(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
         else:
             WorldOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.reset_default_cursor()
         else:
             WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             self._on_motion(evt)  # Call the SelectionMixin motion handler
 
             if not self.dragging:
@@ -405,7 +473,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def on_left_up(self, evt):
         WorldSelectOverlay.on_left_up(self, evt)
         if self._roa:
-            if self.active:
+            if self.active.value:
                 if self.get_size() != (None, None):
                     phys_rect = self.get_physical_sel()
                     if self._scanner:
@@ -791,13 +859,13 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         SpotModeBase.draw(self, ctx, bx, by)
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             DragMixin._on_left_down(self, evt)
         else:
             WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             DragMixin._on_left_up(self, evt)
             self.p_pos = self.cnvs.view_to_phys(evt.Position, self.offset_b)
             self._phys_to_ratio()
@@ -806,7 +874,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
             WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
-        if self.active and self.left_dragging:
+        if self.active.value and self.left_dragging:
             self.p_pos = self.cnvs.view_to_phys(evt.Position, self.offset_b)
             self._phys_to_ratio()
             self.cnvs.update_drawing()
@@ -814,24 +882,26 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
             WorldOverlay.on_left_up(self, evt)
 
     def on_enter(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
             WorldOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.reset_default_cursor()
         else:
             WorldOverlay.on_leave(self, evt)
 
-    def activate(self):
+    def _activate(self):
+        # callback for .active VA
         self._ratio_to_phys()
-        WorldOverlay.activate(self)
+        WorldOverlay._activate(self)
 
-    def deactivate(self):
+    def _deactivate(self):
+        # callback for .active VA
         self.p_pos = None
-        WorldOverlay.deactivate(self)
+        WorldOverlay._deactivate(self)
 
 
 class GadgetToolInterface(with_metaclass(ABCMeta, object)):
@@ -1679,7 +1749,7 @@ class GadgetOverlay(WorldOverlay):
     def on_left_down(self, evt):
         """ Start drawing a tool if the create mode is active, otherwise start editing/moving a selected tool"""
 
-        if not self.active:
+        if not self.active.value:
             return super(GadgetOverlay, self).on_left_down(evt)
 
         vpos = evt.Position
@@ -1729,7 +1799,7 @@ class GadgetOverlay(WorldOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
-        if not self.active:
+        if not self.active.value:
             return super(GadgetOverlay, self).on_motion(evt)
 
         if hasattr(self.cnvs, "left_dragging") and self.cnvs.left_dragging:
@@ -1762,7 +1832,7 @@ class GadgetOverlay(WorldOverlay):
 
     def on_char(self, evt):
         """ Delete the selected tool"""
-        if not self.active:
+        if not self.active.value:
             return super(GadgetOverlay, self).on_char(evt)
 
         if evt.GetKeyCode() == wx.WXK_DELETE:
@@ -1780,7 +1850,7 @@ class GadgetOverlay(WorldOverlay):
 
     def on_left_up(self, evt):
         """ Stop drawing a selected tool if the overlay is active """
-        if not self.active:
+        if not self.active.value:
             return super(GadgetOverlay, self).on_left_up(evt)
 
         if self._left_dragging:
@@ -1916,7 +1986,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
-        if self.active:
+        if self.active.value:
             self._on_motion(evt)  # Call the SelectionMixin motion handler
 
             if not self.dragging:
@@ -1988,7 +2058,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     def _on_selection(self, selected_line):
         """ Update the overlay when it's active and the line changes """
 
-        if selected_line and self.active:
+        if selected_line and self.active.value:
             self.start_pixel, self.end_pixel = selected_line
 
             if (None, None) not in selected_line:
@@ -2004,12 +2074,12 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
     def _on_pix_selection(self, _):
         """ Update the overlay when it's active and the pixel changes """
-        if self.active:
+        if self.active.value:
             wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_width(self, _):
         """ Update the overlay when it's active and the line width changes """
-        if self.active:
+        if self.active.value:
             wx.CallAfter(self.cnvs.request_drawing_update)
 
     def get_selection_points(self, pixel):
@@ -2073,7 +2143,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     def on_left_down(self, evt):
         """ Start drawing a selection line if the overlay is active """
 
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             if self.is_over_pixel_data(v_pos):
                 LineSelectOverlay.on_left_down(self, evt)
@@ -2084,7 +2154,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     def on_left_up(self, evt):
         """ Stop drawing a selection line if the overlay is active """
 
-        if self.active:
+        if self.active.value:
             self._snap_to_pixel()
             LineSelectOverlay.on_left_up(self, evt)
 
@@ -2128,7 +2198,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
 
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             if self.is_over_pixel_data(v_pos):
                 LineSelectOverlay.on_motion(self, evt)
@@ -2172,25 +2242,25 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
 
     def _on_selection(self, _):
         """ Update the overlay when it's active and the line changes """
-        if self.active:
+        if self.active.value:
             wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_width(self, _):
         """ Update the overlay when it's active and the line width changes """
-        if self.active:
+        if self.active.value:
             wx.CallAfter(self.cnvs.request_drawing_update)
 
-    def deactivate(self):
+    def _deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
-        WorldOverlay.deactivate(self)
+        WorldOverlay._deactivate(self)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     # Event handlers
 
     def on_leave(self, evt):
 
-        if self.active:
+        if self.active.value:
             self._pixel_pos = None
             wx.CallAfter(self.cnvs.request_drawing_update)
 
@@ -2199,7 +2269,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
     def on_motion(self, evt):
         """ Update the current mouse position """
 
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             PixelDataMixin._on_motion(self, evt)
             DragMixin._on_motion(self, evt)
@@ -2222,7 +2292,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
             WorldOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             if self.data_properties_are_set:
                 DragMixin._on_left_down(self, evt)
 
@@ -2231,7 +2301,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
     def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """
 
-        if self.active:
+        if self.active.value:
             if self._pixel_pos and self.is_over_pixel_data():
                 if self._selected_pixel_va.value != self._pixel_pos:
                     self._selected_pixel_va.value = self._pixel_pos
@@ -2350,7 +2420,7 @@ class PointsOverlay(WorldOverlay):
 
     def on_left_up(self, evt):
         """ Set the selected point if the mouse cursor is hovering over one """
-        if self.active:
+        if self.active.value:
             # Clear the hover when the canvas was dragged
             if self.cursor_over_point and not self.cnvs.was_dragged:
                 self.point.value = self.cursor_over_point
@@ -2364,7 +2434,7 @@ class PointsOverlay(WorldOverlay):
 
     def on_wheel(self, evt):
         """ Clear the hover when the canvas is zooming """
-        if self.active:
+        if self.active.value:
             self.cursor_over_point = None
             self.b_hover_box = None
 
@@ -2372,7 +2442,7 @@ class PointsOverlay(WorldOverlay):
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
-        if self.active:
+        if self.active.value:
             if not self.cnvs.left_dragging and self.choices:
                 v_x, v_y = evt.Position
                 b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
@@ -2425,7 +2495,7 @@ class PointsOverlay(WorldOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if not self.choices or not self.active:
+        if not self.choices or not self.active.value:
             return
 
         if self.b_hover_box:
@@ -2535,26 +2605,26 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         self.cnvs.request_drawing_update()
 
     def on_left_down(self, evt):
-        if self.active:
+        if self.active.value:
             DragMixin._on_left_down(self, evt)
             self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
         else:
             WorldOverlay.on_left_down(self, evt)
 
     def on_enter(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.set_default_cursor(wx.CURSOR_HAND)
         else:
             WorldOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
-        if self.active:
+        if self.active.value:
             self.cnvs.reset_default_cursor()
         else:
             WorldOverlay.on_leave(self, evt)
 
     def on_left_up(self, evt):
-        if self.active:
+        if self.active.value:
             DragMixin._on_left_up(self, evt)
             # Convert the final delta value to physical coordinates and add it to the hole position
             d = self.cnvs.buffer_to_phys(self.delta_v)
@@ -2567,7 +2637,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
             WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
-        if self.active and self.left_dragging:
+        if self.active.value and self.left_dragging:
             DragMixin._on_motion(self, evt)
             self.cnvs.update_drawing()
         else:
@@ -2660,3 +2730,220 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.line_to(hole_radius_b * 2, hole_pos_b.y)
         # ctx.stroke()
         # END DEBUG Lines Mirror Center
+
+
+class FastEMSelectOverlay(WorldSelectOverlay):
+    """ Superclass for FastEM selection overlays (region of acquisition and region of calibration). """
+
+    def __init__(self, cnvs, coordinates, colour=gui.SELECTION_COLOUR):
+        """
+        cnvs (FastEMAcquisitionCanvas): canvas for the overlay
+        coordinates (TupleContinuousVA): VA representing region of acquisition coordinates
+        colour (str): border colour of ROA overlay, given as string of hex code
+        """
+        super(FastEMSelectOverlay, self).__init__(cnvs, colour)
+        self._coordinates = coordinates
+        self._coordinates.subscribe(self._on_coordinates, init=True)
+
+    def _on_coordinates(self, coordinates):
+        """
+        Update the overlay with the new data of the .coordinates VA.
+        coordinates (tuple of 4 floats): left, top, right, bottom position in m
+        """
+        if coordinates != UNDEFINED_ROI:
+            self.set_physical_sel(coordinates)
+            wx.CallAfter(self.cnvs.request_drawing_update)
+
+
+class FastEMROAOverlay(FastEMSelectOverlay):
+    """ Overlay representing one region of acquisition (ROA) on the FastEM. """
+
+    def on_left_down(self, evt):
+        """
+        Similar to the same function in SelectionMixin, but only starts a selection, if ._coordinates is undefined. If a ROA
+        has already been selected for this overlay, any left click outside this ROA will be ignored.
+        """
+        # Start editing / dragging if the overlay is active
+        if self.active.value:
+            DragMixin._on_left_down(self, evt)
+
+            if self.left_dragging:
+                hover = self.get_hover(self.drag_v_start_pos)
+                if not hover:
+                    # Clicked outside selection
+                    if self._coordinates.value == UNDEFINED_ROI:  # that's different from SelectionMixin
+                        # If ROA undefined, create new selection
+                        self.start_selection()
+                elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+                    # Clicked inside selection or near line, so start dragging
+                    self.start_drag()
+                else:
+                    # Clicked on an edit point (e.g. an edge or start or end point), so edit
+                    self.start_edit(hover)
+
+            self._view_to_phys()
+            self.cnvs.update_drawing()
+        else:
+            WorldOverlay.on_left_down(self, evt)  # skip event
+
+    def on_left_up(self, evt):
+        """
+        Check if left click was in ROA. If so, activate the overlay. Otherwise, deactivate.
+        """
+        abort_roa_creation = (self._coordinates.value == UNDEFINED_ROI and
+                              max(self.get_height(), self.get_width()) < gui.SELECTION_MINIMUM)
+        if abort_roa_creation:
+            # Process aborted by clicking in the viewport
+            # VA did not change, so notify explicitly to make sure aborting the process works
+            self._coordinates.notify(UNDEFINED_ROI)
+        else:
+            # Activate/deactivate region
+            self._view_to_phys()
+            rect = self.get_physical_sel()
+            pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+            self.active.value = True if util.is_point_in_rect(pos, rect) else False
+
+            # Update ._coordinates VA
+            if self.active.value:
+                self._coordinates.value = rect
+
+        # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
+        # that we need
+        self.clear_drag()
+        self.selection_mode = SEL_MODE_NONE
+        self.edit_hover = None
+
+        self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
+        self.cnvs.reset_default_cursor()
+        WorldOverlay.on_left_up(self, evt)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw the selection as a rectangle. Exactly the same as parent function except that
+         it has an adaptive line width (wider if the overlay is active). """
+        line_width = 5 if self.active.value else 2
+        super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash=True)
+
+
+class FastEMROCOverlay(FastEMSelectOverlay):
+    """ Overlay representing one region of calibration (ROC) on the FastEM. """
+
+    def __init__(self, cnvs, coordinates, label, colour=gui.SELECTION_COLOUR):
+        """
+        cnvs (FastEMAcquisitionCanvas): canvas for the overlay
+        coordinates (TupleContinuousVA): VA representing region of calibration coordinates
+        label (str or int): label to be displayed next to rectangle
+        colour (str): hex colour code for ROC display in viewport
+        """
+        super(FastEMROCOverlay, self).__init__(cnvs, coordinates, colour)
+        self.label = label
+
+    def on_left_down(self, evt):
+        """
+        Replaces SelectionMixin.on_left_down, only allow dragging, no editing or starting a selection.
+        """
+        # Start dragging if the overlay is active
+        if self.active.value:
+            DragMixin._on_left_down(self, evt)
+
+            if self.left_dragging:
+                hover = self.get_hover(self.drag_v_start_pos)
+                if hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+                    # Clicked inside selection or near line, so start dragging
+                    self.start_drag()
+                # Don't allow editing or creating new selection, ROC has a fixed size
+
+            self._view_to_phys()
+            self.cnvs.update_drawing()
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        # Activate region if clicked
+        self._view_to_phys()
+        rect = self.p_start_pos + self.p_end_pos
+        pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+        # The calibration region often needs to be selected from a distant zoom level, so it is difficult
+        # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
+        # the rectangle if the selection is near (based on mpp value, so independent of scale).
+        margin = self.cnvs.view.mpp.value * 20
+        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin))
+
+        # Get new ROC coordinates
+        if self.active.value:
+            self._coordinates.value = rect
+
+        # Stop dragging
+        # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
+        # not possible here. To keep it simple, the selection mode is just reset manually.
+        self.clear_drag()
+        self.selection_mode = SEL_MODE_NONE
+        self.edit_hover = None
+
+        self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
+        self.cnvs.reset_default_cursor()
+        WorldOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        """
+        Process drag motion, similar to function in WorldSelectOverlay, but don't show the cursors for editing.
+        """
+        if self.active.value:
+            self._on_motion(evt)  # Call the SelectionMixin motion handler
+
+            if not self.dragging:
+                if self.hover == gui.HOVER_SELECTION:
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                # Don't change cursor to editing etc.
+                else:
+                    self.cnvs.reset_dynamic_cursor()
+            else:
+                self._view_to_phys()
+            self.cnvs.request_drawing_update()
+        else:
+            WorldOverlay.on_motion(self, evt)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """
+        Draw with adaptive line width (depending on whether or not the overlay is active) and add label.
+        """
+        line_width = 5 if self.active.value else 2
+        super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash=False)
+
+        # Draw the label of the ROC on the bottom left of the rectangle
+        if self.p_start_pos and self.p_end_pos:
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+            b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
+            b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+            pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)  # bottom left
+
+            self.position_label.pos = pos
+            self.position_label.text = "%s" % self.label
+            self.position_label.colour = self.colour
+            self._write_labels(ctx)
+
+
+class FastEMBackgroundOverlay(WorldOverlay):
+    """ Background overlay. Displays a list of rectangles in grey to simulate a background, e.g. a sample carrier. """
+
+    def __init__(self, cnvs, rectangles):
+        """
+        cnvs (FastEMAcquisitionCanvas): canvas for the overlay
+        rectangles (list of tuples of 4 floats): l, t, r, b positions of rectangle in m
+        """
+        super(FastEMBackgroundOverlay, self).__init__(cnvs)
+        self.rectangles = rectangles
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw the background image by displaying all rectangles in grey. """
+        for r in self.rectangles:
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.phys_to_buffer((r[0], r[1]), offset)
+            b_end_pos = self.cnvs.phys_to_buffer((r[2], r[3]), offset)
+            rect = (b_start_pos[0],
+                    b_start_pos[1],
+                    b_end_pos[0] - b_start_pos[0],
+                    b_end_pos[1] - b_start_pos[1])
+            ctx.set_source_rgba(0.5, 0.5, 0.5, 1)  # grey
+            ctx.rectangle(*rect)
+            ctx.fill()

@@ -36,7 +36,7 @@ import threading
 
 from odemis import model
 from odemis import util
-from odemis.util import driver, RepeatingTimer
+from odemis.util import driver, RepeatingTimer, almost_equal
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute
 
 
@@ -278,9 +278,15 @@ class SmarPodError(Exception):
     """
     SmarPod Exception
     """
-    def __init__(self, error_code):
-        self.errno = error_code
-        super(SmarPodError, self).__init__("Error %d. %s" % (error_code, SmarPodDLL.err_code.get(error_code, "")))
+
+    def __init__(self, errno, *args, **kwargs):
+        # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
+        super(SmarPodError, self).__init__(errno, *args, **kwargs)
+        self.errno = errno
+        self.strerror = "Error %d. %s" % (errno, SmarPodDLL.err_code.get(errno, ""))
+
+    def __str__(self):
+        return self.strerror
 
 
 class SmarPod(model.Actuator):
@@ -1149,7 +1155,8 @@ class SA_MCError(IOError):
 class MC_5DOF(model.Actuator):
 
     def __init__(self, name, role, locator, axes, ref_on_init=False, linear_speed=0.01,
-                 rotary_speed=0.0174533, hold_time=float("inf"), pos_deactive_after_ref=False, **kwargs):
+                 rotary_speed=0.0174533, hold_time=float("inf"), settle_time=0,
+                 pos_deactive_after_ref=False, **kwargs):
         """
         A driver for a SmarAct SA_MC Actuator, custom build for Delmic.
         Has 5 degrees of freedom
@@ -1168,9 +1175,11 @@ class MC_5DOF(model.Actuator):
                 network:<ip>:<port>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
-        hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
+        hold_time (float>=0): the hold time, in seconds, for the actuator after the target position is reached.
             Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
             Is set to the same value for all channels.
+        settle_time (float>=0): extra waiting time after a move, to ensure that
+          vibrations are entirely stopped on the sample.
         linear_speed: (double) the default speed (in m/s) of the linear actuators
         rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
@@ -1229,7 +1238,6 @@ class MC_5DOF(model.Actuator):
             raise
         logging.debug("Successfully connected to SA_MC Controller ID %d", self._id.value)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
         # Add metadata
         self._hwVersion = "%s (model code: %d)" % (self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_MODEL_NAME),
                                                    self.GetProperty_i32(MC_5DOF_DLL.SA_MC_PKEY_MODEL_CODE))
@@ -1259,6 +1267,10 @@ class MC_5DOF(model.Actuator):
 
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
+
+        if settle_time < 0:
+            raise ValueError("settle_time should be >= 0, but got %s" % (settle_time,))
+        self._settle_time = settle_time
 
         referenced = self._is_referenced()
         # define the referenced VA from the query
@@ -1518,7 +1530,7 @@ class MC_5DOF(model.Actuator):
         """
         f = CancellableFuture()
         f._moving_lock = threading.RLock()  # taken while moving
-        f._must_stop = False  # cancel of the current future requested
+        f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelCurrentMove
         return f
 
@@ -1542,7 +1554,7 @@ class MC_5DOF(model.Actuator):
         """
         try:
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
 
                 # Reset reference so that if it fails, it states the axes are not
@@ -1554,7 +1566,7 @@ class MC_5DOF(model.Actuator):
                 self.Reference()
 
             # wait till reference completes
-            while not future._must_stop:
+            while not future._must_stop.is_set():
                 ev = self.WaitForEvent(100)  # large timeout
                 # check if move is done
                 if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
@@ -1586,7 +1598,7 @@ class MC_5DOF(model.Actuator):
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
                 logging.info("Referencing stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 raise CancelledError()
             else:
                 logging.error("Referencing failed: %s", ex)
@@ -1637,11 +1649,12 @@ class MC_5DOF(model.Actuator):
             abs(new_pos.get('rz', 0) - pos['rz']) / self.rotary_speed,
             )
 
-    def _doMoveAbs(self, future, pos):
+    def _doMoveAbs(self, future, pos, retrial=False):
         """
         Blocking and cancellable absolute move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> absolute target position
+        retrial (bool): a boolean to retry the movement in case of timeout error
         raise:
             SA_MCError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
@@ -1656,12 +1669,12 @@ class MC_5DOF(model.Actuator):
             # take up to 1s before the first position update happens.
             self.update_position_timer.period = 0.05
             with future._moving_lock:
-                if future._must_stop:
+                if future._must_stop.is_set():
                     raise CancelledError()
                 self.Move(pos)
 
             # Wait until the move is done
-            while not future._must_stop:
+            while not future._must_stop.is_set():
                 ev = self.WaitForEvent(max_dur)
                 # check if move is done
                 if ev.type == MC_5DOF_DLL.SA_MC_EVENT_MOVEMENT_FINISHED:
@@ -1679,19 +1692,44 @@ class MC_5DOF(model.Actuator):
                     raise TimeoutError("Move is not over after %g s, while "
                                        "expected it takes only %g s" %
                                        (max_dur, dur))
+
             else:
                 raise CancelledError()
 
+            # Extra settling time, typically to wait for the sample (connected to the hardware) to stop vibrating
+            if self._settle_time:
+                if self._executor.get_next_future(future) is not None:
+                    # Another move queued means that the user wants to keep
+                    # moving. So no need to wait extra time to ensure the
+                    # sample is perfectly still, and immediately finish that
+                    # move, which will then wait the settle time.
+                    logging.debug("Not waiting for axis settling as another move is queued")
+                else:
+                    logging.debug("Waiting %g s for settling of the axis", self._settle_time)
+                    # TODO: if there is a new move coming while waiting, stop early
+                    # Use the Event, so that a cancellation can stop it
+                    if future._must_stop.wait(self._settle_time):
+                        raise CancelledError()
         except SA_MCError as ex:
             # This occurs if a stop command interrupts moves
             if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
                 logging.debug("Movement stopped: %s", ex)
                 raise CancelledError()
-            elif future._must_stop:
+            elif future._must_stop.is_set():
                 raise CancelledError()
             elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_TIMEOUT:
-                logging.error("Move timed out after %g s: %s", max_dur, ex)
-                raise TimeoutError("Move timed out after %g s" % (max_dur,))
+                # A timeout error can happen if the movement of some axes pulled others slightly out of their
+                # position, and because they are not expected to move by the kinematics (e.g. the x-positioners in
+                # case of a pure y movement), they go back to their position very slowly, causing the movement event
+                # to time out. As a fix for this, the same movement will be tried again.
+                if retrial:
+                    logging.error("Move timed out after %g s: %s", max_dur, ex)
+                    raise TimeoutError("Move timed out after %g s" % (max_dur,))
+                else:
+                    logging.warning("Movement to {} timed out while current position is {}. Retrying the same movement...".format(pos, self.position.value))
+                    self._doMoveAbs(future, pos, retrial=True)
+            elif ex.errno == MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE:
+                raise IndexError(str(ex))
             else:
                 logging.error("Move failed: %s", ex)
                 raise
@@ -1719,7 +1757,7 @@ class MC_5DOF(model.Actuator):
         #  * the task is finishing (about to say that it finished successfully)
         logging.debug("Canceling current move")
 
-        future._must_stop = True  # tell the thread taking care of the move it's over
+        future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
             self.Stop()
 
@@ -1766,13 +1804,14 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = SA_MC_Vec3()
 
         # Specify ranges
+        # Mirroring actual ranges
         self._range = {}
-        self._range['x'] = (-1, 1)
-        self._range['y'] = (-1, 1)
-        self._range['z'] = (-1, 1)
-        self._range['rx'] = (-45, 45)
+        self._range['x'] = (-1.6e-2, 1.6e-2)
+        self._range['y'] = (-1.5e-2, 1.5e-2)
+        self._range['z'] = (-1.e-2, 0.002)
+        self._range['rx'] = (-28, 28)
         self._range['ry'] = (0, 0)
-        self._range['rz'] = (-45, 45)
+        self._range['rz'] = (-28, 28)
 
         self.stopping = threading.Event()
 
@@ -1853,10 +1892,32 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = _deref(p_piv, SA_MC_Vec3)
         logging.debug("sim MC5DOF: Setting pivot to (%f, %f, %f)" % (self._pivot.x, self._pivot.y, self._pivot.z))
 
+    ATOL_LINEAR_POS = 100e-6
+
+    def _check_reachable_position(self, current_pos, target_pos):
+        """
+        Check that the target position is unreachable from the current stage position. This would happen if one the
+        stage axes is near to the maximum range, and the target movement is not done on all linear axes.
+        N.B.: This is to simulate the actual behaviour of the stage.
+        :param current_pos: (dict) current position of the stage.
+        :param target_pos: (target) target position to move the stage to.
+        :raises: (SA_MCError) if the target move is unreachable
+        """
+        linear_axes = {'x', 'y', 'z'}
+        rot_axes = {'rx', 'rz'}
+        edge_axes = {a for a in linear_axes
+                     if any(almost_equal(r, current_pos[a], self.ATOL_LINEAR_POS) for r in self._range[a])}
+
+        # Simulate unreachable move when all linear axes near the range and the target move is rotational
+        if edge_axes == linear_axes and any(target_pos.get(a, 0) != current_pos[a] for a in rot_axes):
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "Unreachable target position, please move "
+                                                                           "all x,y,z axes at the same time.")
+
     def SA_MC_Move(self, id, p_pose):
         self.stopping.clear()
         pose = _deref(p_pose, SA_MC_Pose)
         if self._pose_in_range(pose):
+            self._check_reachable_position(self.pose.asdict(), pose.asdict())
             self.target.x = pose.x
             self.target.y = pose.y
             self.target.z = pose.z
@@ -1880,7 +1941,7 @@ class FakeMC_5DOF_DLL(object):
             self._last_time = time.time()
             logging.debug("sim MC5DOF: moving to target: %s duration %f s" % (self.target, dur))
         else:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "error")
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "Position not in range error.")
 
     def SA_MC_GetPose(self, id, p_pose):
         if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
@@ -2554,6 +2615,13 @@ class MCS2(model.Actuator):
             self._set_accel(channel, accel)
             self._set_hold_time(channel, hold_time)
 
+            # Log referencing mode, and warn if it's not normal (autozero)
+            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE, channel)
+            log_lvl = logging.INFO
+            if ref_mode & SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO:
+                log_lvl = logging.WARNING
+            logging.log(log_lvl, "Current referencing mode = {}.".format(ref_mode))
+
         self.position = model.VigilantAttribute({}, readonly=True)
 
         # Indicates moving to a deactive position after referencing.
@@ -3063,6 +3131,8 @@ class MCS2(model.Actuator):
 
     @isasync
     def reference(self, axes):
+        self._checkReference(axes)
+
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doReference, f, axes)
         return f
@@ -3086,9 +3156,6 @@ class MCS2(model.Actuator):
                     channel = self._axis_map[a]
                     moving_channels.add(channel)
                     self.referenced._value[a] = False
-                    # set property key for normal referencing.
-                    self.SetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
-                            channel, SA_CTLDLL.SA_CTL_REF_OPT_BIT_NORMAL)
                     self.Reference(channel)  # search for the negative limit signal to set an origin
 
                 self._waitEndMove(future, moving_channels, time.time() + 100)  # block until it's over
@@ -3159,6 +3226,7 @@ class FakeMCS2_DLL(object):
             SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
             SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
+            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE: [0, 0, 0],
         }
 
         # Specify ranges

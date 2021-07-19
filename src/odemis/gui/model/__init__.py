@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2018 Éric Piel, Rinze de Laat, Delmic
+:copyright: © 2012-2020 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -32,15 +32,13 @@ import math
 from odemis.gui import conf
 from odemis.util.filename import create_filename
 from odemis import model
-from odemis.acq import path, leech, acqmng
+from odemis.acq import path, acqmng, fastem
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
-    ARPolarimetryProjection
+from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProjection
 from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
-from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 from odemis.gui.log import observe_comp_state
 import os
 import threading
@@ -184,7 +182,7 @@ class MainGUIData(object):
         "tc-od-filter": "tc_od_filter",
         "tc-filter": "tc_filter",
         "slit-in-big": "slit_in_big",
-        "sample-thermostat": "sample_thermostat"
+        "sample-thermostat": "sample_thermostat",
     }
 
     def __init__(self, microscope):
@@ -308,6 +306,22 @@ class MainGUIData(object):
                 self.sp_ccd = self.sp_ccds[0]
             if self.spectrometer is None and self.spectrometers:
                 self.spectrometer = self.spectrometers[0]
+
+            # Check for the most known microscope types that the basics are there
+            required_roles = []
+            if self.role in ("secom", "delphi", "cryo-secom"):
+                required_roles += ["e-beam", "light", "stage", "focus"]
+                if self.role == "secom":
+                    required_roles += ["align", "se-detector"]
+            elif self.role in ("sparc", "sparc2"):
+                required_roles += ["e-beam", "mirror", "lens"]
+            elif self.role == "mbsem":
+                required_roles += ["e-beam", "stage"]
+
+            for crole in required_roles:
+                attrname = self._ROLE_TO_ATTR[crole]
+                if getattr(self, attrname) is None:
+                    raise KeyError("Microscope (%s) is missing the '%s' component" % (self.role, crole))
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
@@ -633,7 +647,7 @@ class LocalizationGUIData(MicroscopyGUIData):
         # for the filename 
         config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
-            config.last_path, config.fn_ptn,
+            config.pj_last_path, config.fn_ptn,
             config.last_extension,
             config.fn_count))
 
@@ -1043,6 +1057,105 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # Update without calling the setter
         self.polePositionPhysical._value = posphy
         self.polePositionPhysical.notify(posphy)
+
+
+class FastEMMainGUIData(MainGUIData):
+    """
+    Data common to all FastEM tabs.
+    """
+    # Parameters of the scintillators according to the technical drawing of the sample carrier
+    # (positions are given relative to top left of sample carrier)
+    # Scintillator arrangement on the sample carrier:
+    # 3 6 9
+    # 2 5 8
+    # 1 4 7
+    # The format looks like YAML, because eventually it should be possible to pass it in the microscope (YAML) file.
+    SAMPLE_CARRIER_3x3 = {
+        "dims": (120e-3, 120e-3),  # m
+        "layout": [[3, 6, 9],
+                   [2, 5, 8],
+                   [1, 4, 7]],  # grid positions of scintillators
+        "scintillator_offsets": {
+            1: (42e-3, 42e-3), 4: (60e-3, 42e-3), 7: (78e-3, 42e-3),
+            2: (42e-3, 60e-3), 5: (60e-3, 60e-3), 8: (78e-3, 60e-3),
+            3: (42e-3, 78e-3), 6: (60e-3, 78e-3), 9: (78e-3, 78e-3),
+        },  # center position of the scintillators relative to bottom left (physical coordinates) of sample carrier
+        "scintillator_size": (14e-3, 14e-3),
+        "background": [(0, 0, 35e-3, 120e-3), (49e-3, 0, 53e-3, 120e-3), (67e-3, 0, 71e-3, 120e-3), (85e-3, 0, 120e-3, 120e-3),
+                       (0, 0, 120e-3, 35e-3), (0, 49e-3, 120e-3, 53e-3), (0, 67e-3, 120e-3, 71e-3), (0, 85e-3, 120e-3, 120e-3)]
+                       # minx, miny, maxx, maxy positions of rectangles for background, from bottom left
+    }
+
+    def __init__(self, microscope):
+        super(FastEMMainGUIData, self).__init__(microscope)
+
+        # Make sure we have a stage with the range metadata (this metadata is required to map user-selected
+        # screen positions to stage positions for the acquisition)
+        if self.stage is None:
+            raise KeyError("No stage found in the microscope.")
+        md = self.stage.getMetadata()
+        if model.MD_POS_ACTIVE_RANGE not in md:
+            raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
+        carrier_range = md[model.MD_POS_ACTIVE_RANGE]
+        minx, miny = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
+
+        # TODO: in the future, there could be an additional argument in the configuration file to specify
+        #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
+        carrier_params = self.SAMPLE_CARRIER_3x3
+
+        # Initialize attributes related to the sample carrier
+        #  * .scintillator_size (float, float): size of one scintillator in m
+        #  * .scintillator_positions (dict: 1 <= int <= 9 --> (float, float)): positions in stage coordinates
+        #  * .scintillator_layout (list of list of int): 2D layout of scintillator grid
+        #  * .background (list of ltrb tuples): coordinates for background overlay,
+        #    rectangles can be displayed in world overlay as grey bars, e.g. for simulating a sample carrier
+        self.scintillator_size = carrier_params["scintillator_size"]
+        self.scintillator_positions = {}  # dict: 1 <= int <= 9 --> (float, float)
+        for num, offset in carrier_params["scintillator_offsets"].items():
+            self.scintillator_positions[num] = (minx + offset[0], miny + offset[1])
+        self.scintillator_layout = carrier_params["layout"]
+        self.background = []
+        for rect in carrier_params["background"]:
+            self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
+
+        # Overview streams
+        self.overview_streams = model.VigilantAttribute({})  # dict: int --> stream or None
+
+
+class FastEMAcquisitionGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM acquisition tab. It contains the user-selected acquisition and
+    calibration regions.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super(FastEMAcquisitionGUIData, self).__init__(main)
+
+        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        for i in main.scintillator_positions:
+            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+        self.projects = model.ListVA([])  # list of FastEMProject
+
+
+class FastEMOverviewGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM overview tab.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super(FastEMOverviewGUIData, self).__init__(main)
+
+        self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
+
+
+class FastEMProject(object):
+    """ Representation of a FastEM project. """
+
+    def __init__(self, name):
+        self.name = model.StringVA(name)
+        self.roas = model.ListVA([])  # list of acq.fastem.FastEMROA
 
 
 class FileInfo(object):
@@ -1680,7 +1793,7 @@ class ContentView(StreamView):
     # is not yet at the place where the move finished.
 
 
-class OverviewView(StreamView):
+class FixedOverviewView(StreamView):
     """
     A large FoV view which is used to display the previous positions reached
     (if possible) on top of an overview image of the sample.
@@ -1694,5 +1807,16 @@ class OverviewView(StreamView):
         self.interpolate_content.value = False
         self.show_pixelvalue.value = False
 
+        self.mpp.value = 10e-6
+        self.mpp.range = (1e-10, 1)
+
+class FeatureOverviewView(StreamView):
+    """
+    A large FoV view which is used to display an overview map with optional bookmarked features
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+
+        self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)

@@ -41,7 +41,6 @@ other dealings in the software.
 
 from __future__ import division
 
-from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -57,8 +56,10 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
 import os.path
+from past.builtins import long
 import threading
 import time
+import wx
 
 import odemis.util.driver as udriver
 
@@ -201,6 +202,26 @@ class SpectralARScanStream(stream.Stream):
             yres = 1
         return int(xres), int(yres)
 
+    def _estimateCCDTime(self):
+        """
+        Estimate the time it will take for measurement at one ebeam position
+        """
+        # Each pixel = the exposure time (of the detector) + readout time +
+        # 10ms overhead + 20% overhead
+
+        binning = (self.binninghorz.value, self.binningvert.value)
+        res = [s / b for s, b in zip(self._detector.resolution.range[1], binning)]
+
+        try:
+            ro_rate = self._detector.readoutRate.value
+        except Exception:
+            ro_rate = 100e6  # Hz
+        readout = numpy.prod(res) / ro_rate
+
+        exp = self.dwellTime.value
+
+        return (exp + readout + 0.01) * 1.20
+
     def estimateAcquisitionTime(self):
         """
         Estimate the time it will take for the measurement. The number of pixels still has to be defined in the stream part
@@ -208,17 +229,18 @@ class SpectralARScanStream(stream.Stream):
         xres, yres = self.get_scan_res()
         npos = xres * yres
 
-        dt = self.dwellTime.value * npos * 1.1
+        dt = self._estimateCCDTime()
         # logic that only adds acquisition time for DC if a DC region is defined
         if self.dcRegion.value != UNDEFINED_ROI:
             dc = drift.AnchoredEstimator(self._emitter, self._sed,
                                          self.dcRegion.value, self.dcDwellTime.value)
             dctime = dc.estimateAcquisitionTime()
             nDC = self.nDC.value
-            # time for spatial drift correction, for now we just assume that spatial drift correction is done every pixel but we could include actual number of scanned pixelsv
-            dt += (npos * nDC + 1) * (dctime + 0.1)
+            # time for spatial drift correction, for now we just assume that spatial
+            # drift correction is done every pixel but we could include actual number of scanned pixels
+            dt = dt * nDC * (dctime + 0.1)
 
-        return dt
+        return dt * npos + self.SETUP_OVERHEAD
 
     def _cancelAcquisition(self, future):
         """
@@ -241,9 +263,6 @@ class SpectralARScanStream(stream.Stream):
         future._acq_done.wait(5)
         return True
 
-    def _discard_data(self, sed, data):
-        pass
-
     def _runAcquisition(self, future):
         # number of drift corrections per pixel
         nDC = self.nDC.value
@@ -260,10 +279,9 @@ class SpectralARScanStream(stream.Stream):
         #exposure time and dwell time should be the same in this case
         bins = (self.binninghorz.value,self.binningvert.value)
         self._detector.binning.value = bins
-        #check if this is correct syntax
         specresx = self._detector.shape[0] // bins[0]
         specresy = self._detector.shape[1] // bins[1]
-        self._detector.resolution.value = (specresx,specresy)
+        self._detector.resolution.value = (specresx, specresy)
         # semfov, physwidth = self._get_sem_fov()
         #xyps, stepsize = self._calc_xy_pos()
         xres, yres = self.get_scan_res()
@@ -396,7 +414,7 @@ class SpectralARScanStream(stream.Stream):
             raise
         finally:
             logging.debug("AR spectral acquisition finished")
-            self._sed.data.unsubscribe(self._discard_data)
+            self._sed.data.unsubscribe(self._receive_sem_data)
             future._acq_done.set()
             self._resume_hw_settings()
 
@@ -415,7 +433,7 @@ class SpectralARScanStream(stream.Stream):
         startt = time.time()
         #dat = self._detector.data.get()
         self._detector.data.subscribe(self._receive_ARspectral_data)
-        timeout = 1 + dwellT * 2.5
+        timeout = 1 + self._estimateCCDTime() * 2.5
         if not self.ARspectral_data_received.wait(timeout):
             if future._acq_state == CANCELLED:
                 raise CancelledError()
@@ -741,7 +759,7 @@ class SpectralARScanStream(stream.Stream):
 
 class ARspectral(Plugin):
     name = "AR/Spectral"
-    __version__ = "2.3"
+    __version__ = "2.5"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -852,7 +870,8 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, bigslit, main_data.opm, wl_inverted)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_data.getTabByName("sparc_acqui").tab_data_model
+        self._tab = main_data.getTabByName("sparc_acqui")
+        self._tab_data = self._tab.tab_data_model
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised
@@ -879,6 +898,8 @@ class ARspectral(Plugin):
         self.dwellTime.subscribe(self._update_exp_dur)
         self.stepsize.subscribe(self._update_exp_dur)
         self.nDC.subscribe(self._update_exp_dur)
+        self.readoutRate.subscribe(self._update_exp_dur)
+        self.cam_res.subscribe(self._update_exp_dur)
 
         # subscribe to update X/Y res
         self.stepsize.subscribe(self._update_res)
@@ -965,8 +986,7 @@ class ARspectral(Plugin):
         Finds the SEM survey stream in the acquisition tab
         return (SEMStream or None): None if not found
         """
-        tab_data = self.main_app.main_data.tab.value.tab_data_model
-        for s in tab_data.streams.value:
+        for s in self._tab_data.streams.value:
             if isinstance(s, stream.SEMStream):
                 return s
 
@@ -990,9 +1010,17 @@ class ARspectral(Plugin):
         raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def start(self):
+        if self.main_app.main_data.tab.value.name != "sparc_acqui":
+            box = wx.MessageDialog(self.main_app.main_frame,
+                       "AR spectral acquisition must be done from the acquisition tab.",
+                       "AR spectral acquisition not possible", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
+
         # get region and dwelltime for drift correction
-        self._ARspectral_s.dcRegion.value = self._acqui_tab.driftCorrector.roi.value
-        self._ARspectral_s.dcDwellTime.value = self._acqui_tab.driftCorrector.dwellTime.value
+        self._ARspectral_s.dcRegion.value = self._tab_data.driftCorrector.roi.value
+        self._ARspectral_s.dcDwellTime.value = self._tab_data.driftCorrector.dwellTime.value
 
         # Update the grating position to its current position
         self.grating.value = self.sgrh.position.value["grating"]
@@ -1001,7 +1029,7 @@ class ARspectral(Plugin):
         self._survey_s = self._get_sem_survey()
 
         # For ROI:
-        roi = self._acqui_tab.semStream.roi.value
+        roi = self._tab_data.semStream.roi.value
         if roi == UNDEFINED_ROI:
             roi = (0, 0, 1, 1)
         self.roi.value = roi
@@ -1037,10 +1065,7 @@ class ARspectral(Plugin):
 
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
-        try:
-            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
-        except AttributeError: # Odemis v2.6 and earlier versions
-            str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        str_ctrl = self._tab.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
 
         strs = []

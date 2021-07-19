@@ -63,7 +63,7 @@ def export(filename, data):
                 spectrum_tuples = data.reshape(data.shape[0], 1)
                 headers = ['# intensity']
 
-            with open(filename, 'w') as fd:
+            with open(filename, 'w', newline='') as fd:
                 csv_writer = csv.writer(fd)
                 csv_writer.writerow(headers)
                 csv_writer.writerows(spectrum_tuples)
@@ -82,7 +82,7 @@ def export(filename, data):
                 time_tuples = data.reshape(data.shape[0], 1)
                 headers = ['# intensity']
 
-            with open(filename, 'w') as fd:
+            with open(filename, 'w', newline='') as fd:
                 csv_writer = csv.writer(fd)
                 csv_writer.writerow(headers)
                 csv_writer.writerows(time_tuples)
@@ -103,7 +103,7 @@ def export(filename, data):
 
             # Data should be in the form of (X, C+1), with the first row and column the
             # distance_from_origin\wavelength
-            with open(filename, 'w') as fd:
+            with open(filename, 'w', newline='') as fd:
                 csv_writer = csv.writer(fd)
                 # Set the 'header' in the 0,0 element
                 first_row = ['distance_from_origin(m)\\wavelength(' + unit + ')'] + spectrum_range
@@ -127,7 +127,7 @@ def export(filename, data):
         headers = ["time(" + unit_t + ")\\wavelength(" + unit_c + ")"] + spectrum_range
         rows = [(t,) + tuple(d) for t, d in zip(time_range, data)]
 
-        with open(filename, 'w') as fd:
+        with open(filename, 'w', newline='') as fd:
             csv_writer = csv.writer(fd)
             csv_writer.writerow(headers)
             csv_writer.writerows(rows)
@@ -135,7 +135,7 @@ def export(filename, data):
     elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_AR:
         logging.debug("Exporting AR data to CSV")
         # Data should be in the form of (Y+1, X+1), with the first row and column the angles
-        with open(filename, 'w') as fd:
+        with open(filename, 'w', newline='') as fd:
             csv_writer = csv.writer(fd)
 
             # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column

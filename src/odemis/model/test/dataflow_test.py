@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 17 Jul 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2013 Éric Piel, Delmic
+Copyright © 2012-2021 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -19,15 +19,19 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
+
 from __future__ import division, print_function
+
+import logging
+
 from Pyro4.core import oneway
 from odemis import model
-import logging
 import pickle
 import threading
 import time
 import unittest
+
 
 class SimpleDataFlow(model.DataFlow):
     # very basic dataflow
@@ -39,7 +43,7 @@ class SimpleDataFlow(model.DataFlow):
     
     def _thread_main(self):
         i = 0
-        # generate a stupid array every 0.1s
+        # generate a simple array every 0.1s
         while not self._thread_must_stop.wait(0.1):
             self.startAcquire.notify()
             data = model.DataArray([[i, 0],[0, 0]], metadata={"a": 1, "num": i})
@@ -63,7 +67,8 @@ class SimpleDataFlow(model.DataFlow):
         assert not self._thread_must_stop.is_set()
         # we don't wait for the thread to stop fully
         self._thread_must_stop.set()
-    
+
+
 class SynchronizableDataFlow(model.DataFlow):
     # very basic dataflow
     def __init__(self, *args, **kwargs):
@@ -117,7 +122,7 @@ class SynchronizableDataFlow(model.DataFlow):
         
     def _thread_main(self):
         i = 0
-        # generate a stupid array every time we receive an event
+        # generate a simple array every time we receive an event
         while not self._thread_must_stop.is_set():
             time.sleep(0.01) # bit of "initialisation" time
             
@@ -159,22 +164,40 @@ class SynchronizableDataFlow(model.DataFlow):
         if self._sync_event:
             self._sync_event.subscribe(self)
 
-        
+
+class DataFlowRaiseError(model.DataFlow):
+    """Very simple dataflow which raises an error during the start of the data generation."""
+
+    def start_generate(self):
+        """Starts the data generation."""
+        # simulate an error raised during start of the data generation
+        raise FakeDataFlowException("Start of data generation failed.")
+
+    def stop_generate(self):
+        """Stops the data generation."""
+        return
+
+
+class FakeDataFlowException(Exception):
+    """Very minimal class to simulate exceptions on the dataflow."""
+    pass
+
+
 class TestDataFlow(unittest.TestCase):
     
-#    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_dataarray_pickle(self):
-        darray = model.DataArray([[1, 2],[3, 4]], metadata={"a": 1})
+        darray = model.DataArray([[1, 2], [3, 4]], metadata={"a": 1})
         jar = pickle.dumps(darray)
         up_darray = pickle.loads(jar)
         self.assertEqual(darray.data, up_darray.data, "data is different after pickling")
         self.assertEqual(darray.metadata, up_darray.metadata, "metadata is different after pickling")
         self.assertEqual(up_darray.metadata["a"], 1)
 
-#    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_df_subscribe_get(self):
         self.df = SimpleDataFlow()
-        self.size = (2,2)
+        self.size = (2, 2)
         
         number = 5
         self.left = number
@@ -195,19 +218,19 @@ class TestDataFlow(unittest.TestCase):
             # end early if it's already finished
             if self.left == 0:
                 break
-            time.sleep(0.2) # 0.2s per image should be more than enough in any case
+            time.sleep(0.2)  # 0.2s per image should be more than enough in any case
         
         self.assertEqual(self.left, 0)
     
-#    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_df_double_subscribe(self):
         self.df = SimpleDataFlow()
-        self.size = (2,2)
+        self.size = (2, 2)
         number, number2 = 8, 3
         self.left = number
         self.df.subscribe(self.receive_data)
         
-        time.sleep(0.2) # long enough to be after the first data
+        time.sleep(0.2)  # long enough to be after the first data
         self.left2 = number2
         self.df.subscribe(self.receive_data2)
         
@@ -215,9 +238,9 @@ class TestDataFlow(unittest.TestCase):
             # end early if it's already finished
             if self.left == 0:
                 break
-            time.sleep(0.2) # 0.2s should be more than enough in any case
+            time.sleep(0.2)  # 0.2s should be more than enough in any case
         
-        self.assertEqual(self.left2, 0) # it should be done before left
+        self.assertEqual(self.left2, 0)  # it should be done before left
         self.assertEqual(self.left, 0)
 
     def receive_data(self, dataflow, data):
@@ -226,11 +249,10 @@ class TestDataFlow(unittest.TestCase):
         """
         self.assertEqual(data.shape, self.size)
         self.assertIn("a", data.metadata)
-#        print "Received an image"
+        logging.debug("Received an image.")
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_data)
-
 
     def receive_data2(self, dataflow, data):
         """
@@ -242,18 +264,17 @@ class TestDataFlow(unittest.TestCase):
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_data2)
 
-
     def test_synchronized_df(self):
         self.dfe = SimpleDataFlow()
         self.dfs = SynchronizableDataFlow()
         self.dfs.synchronizedOn(self.dfe.startAcquire)
         
-        self.size = (2,2)
+        self.size = (2, 2)
         number = 30
         self.left = number + 10
         self.dfs.subscribe(self.receive_data)
         
-        time.sleep(0.2) # long enough to be after the first data
+        time.sleep(0.2)  # long enough to be after the first data
         # ensure the dfs hasn't generated anything yet
         self.assertEqual(self.left, number + 10)
         
@@ -265,9 +286,9 @@ class TestDataFlow(unittest.TestCase):
             # end early if it's already finished
             if self.left2 == 0:
                 break
-            time.sleep(0.2) # 0.2s should be more than enough in any case
+            time.sleep(0.2)  # 0.2s should be more than enough in any case
         
-        self.assertEqual(self.left2, 0) # it should be done before left
+        self.assertEqual(self.left2, 0)  # it should be done before left
         self.assertEqual(self.left, 10)
         
         # make sure we can unsubscribe even if synchronized and waiting on event
@@ -282,7 +303,7 @@ class TestDataFlow(unittest.TestCase):
         self.df = SynchronizableDataFlow()
         self.df.synchronizedOn(None)
         
-        self.size = (2,2)
+        self.size = (2, 2)
         number = 3
         self.left = number
         self.df.subscribe(self.receive_data)
@@ -295,6 +316,23 @@ class TestDataFlow(unittest.TestCase):
         
         self.assertEqual(self.left, 0)
 
-        
+    def test_df_raise_error(self):
+        """Check that if an error occurred during the start of the data generation, that the listener is properly
+        unsubscribed and that the exception is raised."""
+        self.df = DataFlowRaiseError()
+
+        # check that an error is raised when requesting a single image via the dataflow
+        with self.assertRaises(FakeDataFlowException):
+            im = self.df.get()
+        # check that the listener was properly unsubscribed from the df
+        self.assertEqual(len(self.df._listeners), 0)
+
+        # check that an error is raised when subscribing to the dataflow
+        with self.assertRaises(FakeDataFlowException):
+            im = self.df.subscribe(self.receive_data)
+        # check that the listener was properly unsubscribed from the df
+        self.assertEqual(len(self.df._listeners), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

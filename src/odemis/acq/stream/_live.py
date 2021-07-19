@@ -299,8 +299,11 @@ class SEMStream(LiveStream):
         res, trans = self._computeROISettings(self.roi.value)
 
         # always in this order
-        self._emitter.resolution.value = res
-        self._emitter.translation.value = trans
+        if not self._emitter.resolution.readonly:
+            self._emitter.resolution.value = res
+
+        if not self._emitter.translation.readonly:
+            self._emitter.translation.value = trans
 
     def _onROI(self, roi):
         """
@@ -523,6 +526,25 @@ class AlignedSEMStream(SEMStream):
 #     def _onActive(self, active):
 #         # TODO: if preparing (ie, executor has a futures running) => wait
 #         super(AlignedSEMStream, self)._onActive(active)
+
+
+class FastEMSEMStream(SEMStream):
+    """
+    SEM stream with special pixelsize VA (driver value is adjusted with scale).
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, blanker=None, **kwargs):
+        super().__init__(name, detector, dataflow, emitter, blanker=blanker, **kwargs)
+        pxs = (emitter.pixelSize.value[0] * emitter.scale.value[0],
+               emitter.pixelSize.value[1] * emitter.scale.value[1])
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        emitter.pixelSize.subscribe(self._on_pxsize)
+        emitter.scale.subscribe(self._on_pxsize, init=True)
+
+    def _on_pxsize(self, _):
+        pxs = (self.emitter.pixelSize.value[0] * self.emitter.scale.value[0],
+               self.emitter.pixelSize.value[1] * self.emitter.scale.value[1])
+        self.pixelSize._set_value(pxs, force_write=True)
 
 
 class SpotSEMStream(LiveStream):

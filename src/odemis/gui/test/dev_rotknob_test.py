@@ -45,7 +45,7 @@ class RotationKnobTestCase(test.GuiTestCase):
         cnvs = miccanvas.SparcARCanvas(self.panel)
         cnvs.scale = 20000
         cnvs.add_world_overlay(cnvs.mirror_ol)
-        cnvs.mirror_ol.activate()
+        cnvs.mirror_ol.active.value = True
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         def zoom(evt):

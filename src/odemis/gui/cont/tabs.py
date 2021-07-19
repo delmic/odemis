@@ -3,7 +3,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2021 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
 
 Handles the switch of the content of the main GUI tabs.
 
@@ -25,10 +25,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
-import copy
 import gc
 import logging
 import math
+import os
 import os.path
 import shutil
 import time
@@ -44,8 +44,10 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
+from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
+from odemis.model import getVAs
 from odemis.util.filename import guess_pattern, create_projectname
 
 import odemis.acq.stream as acqstream
@@ -61,6 +63,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.move import getCurrentPositionLabel, IMAGING
 from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
@@ -70,7 +73,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream
+    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
 from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -78,7 +81,8 @@ from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport, \
+    FastEMOverviewViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
@@ -92,7 +96,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, fsdecode, normalize_rect
+from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
@@ -396,16 +400,15 @@ class LocalizationTab(Tab):
             view_ctrl=self.view_controller
         )
 
-        self._acquisition_controller = acqcont.OverviewStreamAcquiController(tab_data, self)
+        self._acquisition_controller = acqcont.CryoAcquiController(
+            tab_data, panel, self)
 
         self._overview_stream_controller = streamcont.StreamBarController(
             tab_data,
-            panel.pnl_overview_streams,
+            panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
-
-        self._overview_stream_controller.add_overview_action(self._on_acquire)
 
         # Toolbar
         self.tb = panel.secom_toolbar
@@ -449,6 +452,9 @@ class LocalizationTab(Tab):
         sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        self.stage = self.tab_data_model.main.stage
+        self.stage.position.subscribe(self._on_stage_pos, init=True)
+
     @property
     def settingsbar_controller(self):
         return self._settingbar_controller
@@ -467,8 +473,11 @@ class LocalizationTab(Tab):
         logging.info("Creating combined SEM/Optical viewport layout")
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
-             {"name": "Overview",
-              "stream_classes": StaticStream,
+             {
+                 "cls": guimod.FeatureOverviewView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
               }),
             (viewports[1],
              {"name": "Acquired",
@@ -477,12 +486,12 @@ class LocalizationTab(Tab):
             (viewports[2],
              {"name": "Live 1",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream),
+              "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
               "stage": main_data.stage,
-              "stream_classes": (EMStream, OpticalStream)
+              "stream_classes": LiveStream,
               }),
         ])
 
@@ -495,33 +504,51 @@ class LocalizationTab(Tab):
 
         return vpv
 
-    def _on_acquire(self, _):
-        """
-        Called when ADD OVERVIEW is pressed
-        (second unused argument is an event object)
-        """
-        das = self._acquisition_controller.open_acquisition_dialog()
-        if das:
-            self.load_data(das)
-
     def load_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
 
-        # TODO: Clear previous overview streams
-        self.clear_data()
-
         for s in streams:
+            self.clear_overview_streams(s.name.value)
             scont = self._overview_stream_controller.addStream(s, add_to_view=True)
             scont.stream_panel.show_remove_btn(True)
 
-    def clear_data(self):
+            # Display the same acquired data in the chamber tab view
+            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+            chamber_tab.load_overview_data(streams)
+
+    def _load_overview_data(self, stream):
         """
-        Clear the tab data upon resetting the project:
-        - Clear overview map streams
-        - Clear live streams data
+        Add the given stream to the overview view and stream panel
         """
-        self._overview_stream_controller.clear()
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        scont = self._overview_stream_controller.addStream(stream, add_to_view=overview_view)
+        scont.stream_panel.show_remove_btn(True)
+
+    def clear_live_streams(self):
+        """
+        Clear the content of the live streams
+
+
+        """
+        live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
+        for stream in live_streams:
+            if stream.raw:
+                stream.raw = []
+                stream.image.value = None
+                stream.histogram._value = numpy.empty(0)
+                stream.histogram.notify(stream.histogram._value)
+
+    def clear_overview_streams(self, filter_stream_name=None):
+        """
+        Remove overview map (Static) streams and clear them from view and panel.
+        @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
+        """
+        static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
+        for stream in static_streams:
+            if filter_stream_name and stream.name.value != filter_stream_name:
+                continue
+            self._overview_stream_controller.removeStreamPanel(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -599,6 +626,14 @@ class LocalizationTab(Tab):
         else:
             wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
 
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
+
+
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -620,6 +655,7 @@ class LocalizationTab(Tab):
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -638,6 +674,20 @@ class LocalizationTab(Tab):
             return 2
         else:
             return None
+
+    @call_in_wx_main
+    def display_acquired_data(self, data):
+        """
+        Displays the acquired streams on the top right view
+        data (DataArray): the images/data acquired 
+        """
+        # TODO adjust this code to fit the feature behavior
+        # get the top right view port
+        view = self.tab_data_model.views.value[1]
+        for s in data_to_static_streams(data):
+            stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, s, self.tab_data_model,
+                                           show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
+            stream_cont.stream_panel.collapse(True)
 
 
 class SecomStreamsTab(Tab):
@@ -925,7 +975,7 @@ class SecomStreamsTab(Tab):
         if len(viewports) == 6:
             logging.debug("Inserting Overview viewport")
             vpv[viewports[5]] = {
-                "cls": guimod.OverviewView,
+                "cls": guimod.FixedOverviewView,
                 "name": "Overview",
                 "stage": main_data.stage,
                 "stream_classes": (RGBUpdatableStream, RGBCameraStream, BrightfieldStream),
@@ -1572,6 +1622,194 @@ class SparcAcquisitionTab(Tab):
             return None
 
 
+class FastEMAcquisitionTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes the given viewports by creating views for them, and
+        #   assigning them to their viewport.
+        #
+        # ProjectBarController
+        #   Manages the projects.
+        #
+        # CalibrationBarController
+        #   Manages the calibration regions.
+        #
+        # Acquisition Controller
+        #   Takes care of what happens after the "Start" button is pressed,
+        #   calls functions of the acquisition manager.
+
+        tab_data = guimod.FastEMAcquisitionGUIData(main_data)
+        super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ACQUISITION")
+
+        # View Controller
+        vp = panel.vp_fastem_acqui
+        assert(isinstance(vp, FastEMAcquisitionViewport))
+        vpv = collections.OrderedDict([
+            (vp,
+             {"name": "Acquisition",
+              "cls": guimod.StreamView,
+              "stream_classes": EMStream,
+              }),
+        ])
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Streams controller
+        self._streams_controller = streamcont.FastEMStreamsController(tab_data,
+                                                                      panel.pnl_fastem_projects,
+                                                                      ignore_view=True,
+                                                                      view_ctrl=self.view_controller,
+                                                                      )
+
+        # Project bar controller
+        self._projectbar_controller = streamcont.FastEMProjectBarController(
+            tab_data,
+            panel.pnl_fastem_projects,
+            view_ctrl=self.view_controller,
+        )
+
+        # Controller for calibration regions
+        self._calibrationbar_controller = streamcont.FastEMCalibrationController(
+            tab_data,
+            panel.pnl_fastem_calibration,
+            view_ctrl=self.view_controller,
+        )
+
+        # Acquisition controller
+        self._acquisition_controller = acqcont.FastEMAcquiController(
+            tab_data,
+            panel,
+            self._projectbar_controller,
+            self._calibrationbar_controller
+        )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def streams_controller(self):
+        return self._streams_controller
+
+    @property
+    def projectbar_controller(self):
+        return self._projectbar_controller
+
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
+    @property
+    def calibrationbar_controller(self):
+        return self._calibrationbar_controller
+
+    def on_acquisition(self, is_acquiring):
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self.projectbar_controller._project_bar.Enable(not is_acquiring)
+        self.calibrationbar_controller._calibration_bar.Enable(not is_acquiring)
+
+    def Show(self, show=True):
+        super(FastEMAcquisitionTab, self).Show(show)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # Tab is used only for FastEM
+        if main_data.role in ("mbsem",):
+            return 1
+        else:
+            return None
+
+
+class FastEMOverviewTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes given viewport.
+        #
+        # StreamController
+        #   Manages the single beam stream.
+        #
+        # Acquisition Controller
+        #   Takes care of the acquisition and acquisition selection buttons.
+
+        tab_data = guimod.FastEMOverviewGUIData(main_data)
+
+        super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("OVERVIEW")
+
+        # View Controller
+        vp = panel.vp_fastem_overview
+        assert(isinstance(vp, FastEMOverviewViewport))
+        vpv = collections.OrderedDict([
+            (vp,
+             {"name": "Overview",
+              "stage": main_data.stage,
+              "cls": guimod.StreamView,
+              "stream_classes": EMStream,
+              }),
+        ])
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Single-beam SEM stream
+        vanames = ("resolution", "scale", "dwellTime", "horizontalFoV")
+        hwemtvas = set()
+        for vaname in getVAs(main_data.ebeam):
+            if vaname in vanames:
+                hwemtvas.add(vaname)
+        sem_stream = acqstream.FastEMSEMStream(
+            "Single Beam",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=hwemtvas,
+        )
+        tab_data.streams.value.append(sem_stream)  # it should also be saved
+        tab_data.semStream = sem_stream
+        self._stream_controller = streamcont.FastEMStreamsController(
+            tab_data,
+            panel.pnl_fastem_overview_streams,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
+        )
+        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+
+        # Acquisition controller
+        self._acquisition_controller = acqcont.FastEMOverviewAcquiController(
+            tab_data,
+            panel,
+        )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    @property
+    def streambar_controller(self):
+        return self._stream_controller
+
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
+    def on_acquisition(self, is_acquiring):
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        if is_acquiring:
+            self._stream_controller.enable(False)
+            self._stream_controller.pause()
+        else:
+            self._stream_controller.resume()
+            self._stream_controller.enable(True)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # Tab is used only for FastEM
+        if main_data.role in ("mbsem",):
+            return 2
+        else:
+            return None
+
+
 # Different states of the mirror stage positions
 MIRROR_NOT_REFD = 0
 MIRROR_PARKED = 1
@@ -1942,7 +2180,17 @@ class CryoChamberTab(Tab):
 
         # future to handle the move
         self._move_future = model.CancellableFuture()
+        # create the tiled area view and its controller to show on the chamber tab
+        vpv = collections.OrderedDict([
+            (panel.vp_overview_map,
+             {
+                 "cls": guimod.FeatureOverviewView,
+                 "stage": main_data.stage,
+                 "name": "Overview",
+                 "stream_classes": StaticStream,
+             }), ])
 
+        self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
@@ -1956,9 +2204,9 @@ class CryoChamberTab(Tab):
         stage = self.tab_data_model.main.stage
         stage_metadata = stage.getMetadata()
         # start and end position are used for the gauge progress bar
-        self.start_pos = stage.position.value
-        self.end_pos = self.start_pos
-        # Show position of the stage via the progress bar
+        self._start_pos = stage.position.value
+        self._end_pos = self._start_pos
+        # Show current position of the stage via the progress bar
         main_data.stage.position.subscribe(self._update_progress_bar, init=False)
         try:
             self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
@@ -2009,10 +2257,10 @@ class CryoChamberTab(Tab):
                                          COATING: stage_metadata[model.MD_FAV_POS_COATING], }
 
         # Determine and show current position of the stage
-        self.current_position, self.target_position = None, None
+        self._current_position, self._target_position = None, None
         self._enable_movement_controls()
-        if self.current_position in self.position_btns.keys():
-            pos_button = next(button for pos, button in self.position_btns.items() if pos == self.current_position)
+        if self._current_position in self.position_btns.keys():
+            pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
             self._toggle_switch_buttons(pos_button)
         self._show_cancel_warning_msg(None)
 
@@ -2039,11 +2287,30 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
+    def load_overview_data(self, streams):
+        """
+        Load the overview view with the given list of acquired static streams
+        :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
+        """
+        # Replace the old streams with the newly acquired ones in the view
+
+        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        if not overview_view:
+            logging.warning("Could not find view of type FeatureOverviewView.")
+            return
+        existing_streams = overview_view.getStreams()
+        for stream in streams:
+            ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
+            if ex_st:
+                overview_view.removeStream(ex_st)
+            overview_view.addStream(stream)
+
     def _on_change_project_folder(self, evt):
         """
         Shows a dialog to change the path and name of the project directory.
         returns nothing, but updates .conf and project path text control
         """
+        # TODO: do not warn if there is no data (eg, at init)
         box = wx.MessageDialog(self.main_frame,
                                "This will clear the current project data from Odemis",
                                caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
@@ -2052,68 +2319,57 @@ class CryoChamberTab(Tab):
         ans = box.ShowModal()  # Waits for the window to be closed
         if ans == wx.ID_NO:
             return
-        # Generate suggestion for the new project name to show it on the file dialog
-        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
-        new_dir = ShowChamberFileDialog(self._tab_panel, np)
-        if new_dir is None:
-            return
-        # Reset project, clear the data
-        self._reset_project_data()
-        # Get previous project dir from configuration
+
         prev_dir = self.conf.pj_last_path
 
-        def check_same_partition(source, destination):
-            """
-            Check if source and destination dirs in the same partition
-            """
-            return os.stat(source).st_dev == os.stat(destination).st_dev
+        # Generate suggestion for the new project name to show it on the file dialog
+        root_dir = os.path.dirname(self.conf.pj_last_path)
+        np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
+        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        if new_dir is None: # Cancelled
+            return
 
-        def move_files(source, destination):
-            """
-            Move all files found in source directory to destination
-            """
-            file_names = os.listdir(source)
-            for file_name in file_names:
-                shutil.move(os.path.join(source, file_name), destination)
+        logging.debug("Selected project folder %s", new_dir)
 
-        def is_subdir(check_dir, parent_dir):
-            """
-           Check if directory is sub directory of another one
-            """
-            return os.path.realpath(check_dir).startswith(os.path.realpath(parent_dir) + os.sep)
-
-        if not os.path.isdir(prev_dir):
+        # Three possibilities:
+        # * The folder doesn't exists yet => create it
+        # * The folder already exists and is empty => nothing else to do
+        # * The folder already exists and has files in it => Error (because we might override files)
+        # TODO: in the last case, ask the user if we should re-open this project,
+        # to add new acquisitions to it.
+        if not os.path.isdir(new_dir):
             os.mkdir(new_dir)
-            self._change_project_conf(new_dir)
-        else:
-            try:
-                os.rename(prev_dir, new_dir)
-                self._change_project_conf(new_dir)
-            # For permission related errors
-            except PermissionError:
-                logging.error("Operation not permitted.")
-            # For other errors
-            except OSError as error:
-                # Do a complete move if not on the same partition
-                if not check_same_partition(prev_dir, new_dir):
-                    move_files(prev_dir, new_dir)
-                    # delete the 'now empty' old folder
-                    os.rmdir(prev_dir)
-                    self._change_project_conf(new_dir)
-                elif is_subdir(new_dir, prev_dir):
-                    # It's inside a the current directory => If there are already files in it, tell the user it's not
-                    # possible. If the prev_dir is empty, create a directory inside it.
-                    if os.listdir(prev_dir):
-                        dlg = wx.MessageDialog(self.main_frame,
-                                               "Selected directory {} already contains files.".format(prev_dir),
-                                               style=wx.OK | wx.ICON_WARNING)
-                        dlg.ShowModal()
-                        dlg.Destroy()
-                    else:
-                        os.mkdir(new_dir)
-                        self._change_project_conf(new_dir)
-                else:
-                    logging.error(error)
+        elif os.listdir(new_dir):
+            dlg = wx.MessageDialog(self.main_frame,
+                                   "Selected directory {} already contains files.".format(new_dir),
+                                   style=wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        # Reset project, clear the data
+        self._reset_project_data()
+
+        # If the previous project is empty, it means the user never used it.
+        # (for instance, this happens just after starting the GUI and the user
+        # doesn't like the automatically chosen name)
+        # => Just automatically delete previous folder if empty.
+        try:
+            if os.path.isdir(prev_dir) and not os.listdir(prev_dir):
+                logging.debug("Deleting empty project folder %s", prev_dir)
+                os.rmdir(prev_dir)
+        except Exception:
+            # It might be just due to some access rights, let's not worry too much
+            logging.exception("Failed to delete previous project folder %s", prev_dir)
+
+        # Handle weird cases where the previous directory would point to the same
+        # folder as the new folder, either with completely the same path, or with
+        # different paths (eg, due to symbolic links).
+        if not os.path.isdir(new_dir):
+            logging.warning("Recreating folder %s which was gone", new_dir)
+            os.mkdir(new_dir)
+
+        self._change_project_conf(new_dir)
 
     def _change_project_conf(self, new_dir):
         """
@@ -2128,14 +2384,16 @@ class CryoChamberTab(Tab):
         """
         Create a new project directory from config pattern and update project config with new name
         """
-        np = create_projectname(self.conf.pj_last_path, self.conf.pj_ptn, count=self.conf.pj_count)
+        root_dir = os.path.dirname(self.conf.pj_last_path)
+        np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
         os.mkdir(np)
         self._change_project_conf(np)
 
     def _reset_project_data(self):
         try:
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
-            localization_tab.clear_data()
+            localization_tab.clear_overview_streams()
+            localization_tab.clear_live_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")
 
@@ -2148,8 +2406,12 @@ class CryoChamberTab(Tab):
         """
         if not self.IsShown():
             return
+        # start and end position should be set for the progress bar to update
+        # otherwise, the movement is not coming from the tab switching buttons
+        if not self._start_pos or not self._end_pos:
+            return
         # Get the ratio of the current position in respect to the start/end position
-        val = getMovementProgress(pos, self.start_pos, self.end_pos)
+        val = getMovementProgress(pos, self._start_pos, self._end_pos)
         if val is None:
             return
         # Set the move gauge with the movement progress percentage
@@ -2169,10 +2431,10 @@ class CryoChamberTab(Tab):
         """
         stage = self.tab_data_model.main.stage
         # Get current movement (including unknown and on the path)
-        self.current_position = getCurrentPositionLabel(stage.position.value, stage)
-        self._enable_position_controls(self.current_position, cancelled)
+        self._current_position = getCurrentPositionLabel(stage.position.value, stage)
+        self._enable_position_controls(self._current_position, cancelled)
         # Enable stage advanced controls on milling
-        self._enable_advanced_controls(True) if self.current_position is MILLING else self._enable_advanced_controls(
+        self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(
             False)
 
     def _enable_position_controls(self, current_position=None, cancelled=False):
@@ -2243,7 +2505,7 @@ class CryoChamberTab(Tab):
         :param pos: (float) value of rx
        """
         # Update the milling control only during milling
-        if self.current_position is MILLING and self.target_position is None:
+        if self._current_position is MILLING and self._target_position is None:
             # Only update when change from former value is significant
             if pos - (self._prev_milling_angle + self.ion_to_sample) <= 1e-3:
                 return
@@ -2329,7 +2591,11 @@ class CryoChamberTab(Tab):
         self.panel.btn_cancel.Disable()
         # Get currently pressed button (if any) then re-enable the tab controls
         self._enable_movement_controls()
-        self.target_position = None
+        # After the movement is done, set start, end and target position to None
+        # That way any stage moves from outside the the chamber tab are not considered
+        self._target_position = None
+        self._start_pos = None
+        self._end_pos = None
 
     def _on_cancel(self, evt):
         """
@@ -2339,11 +2605,11 @@ class CryoChamberTab(Tab):
         self._move_future.cancel()
         self.panel.btn_cancel.Disable()
         # Show warning message if target position is indicated
-        if self.target_position is not None:
-            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self.current_position],
-                                                                             target_pos_str[self.target_position])
+        if self._target_position is not None:
+            txt_warning = "Stage stopped between {} and {} positions".format(target_pos_str[self._current_position],
+                                                                             target_pos_str[self._target_position])
             self._show_cancel_warning_msg(txt_warning)
-            self.target_position = None
+            self._target_position = None
         self._enable_movement_controls(cancelled=True)
         logging.info("Stage move cancelled.")
 
@@ -2357,15 +2623,15 @@ class CryoChamberTab(Tab):
         if self._move_future._state == RUNNING:
             return
         stage = self.tab_data_model.main.stage
-        self.start_pos = stage.position.value
+        self._start_pos = stage.position.value
         # Get the required target_position from the pressed button
-        self.target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
-                                    None)
-        if self.target_position is None:
+        self._target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
+                                     None)
+        if self._target_position is None:
             return
         # target_position metadata has the end positions for all movements except milling
-        if self.target_position in self.target_position_metadata.keys():
-            if self.current_position is LOADING:
+        if self._target_position in self.target_position_metadata.keys():
+            if self._current_position is LOADING:
                 box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
                                        caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
 
@@ -2374,12 +2640,12 @@ class CryoChamberTab(Tab):
                 if ans == wx.ID_NO:
                     return
             # Save the milling angle control current value (to return to it when switch back to milling)
-            if self.current_position is MILLING:
+            if self._current_position is MILLING:
                 milling_angle = self._get_milling_angle_value()
                 if milling_angle is not None:
                     self._prev_milling_angle = milling_angle
-            self.end_pos = self.target_position_metadata[self.target_position]
-            return cryoSwitchSamplePosition(self.target_position)
+            self._end_pos = self.target_position_metadata[self._target_position]
+            return cryoSwitchSamplePosition(self._target_position)
         else:
             # Target position is milling, get rx value from saved milling angle
             rx_angle_value = self.ion_to_sample + self._prev_milling_angle
@@ -2429,8 +2695,8 @@ class CryoChamberTab(Tab):
         Called to perform action prior to terminating the tab
         :return: (bool) True to proceed with termination, False for canceling
         """
-        if self.current_position is not LOADING:
-            if self._move_future._state == RUNNING and self.target_position is LOADING:
+        if self._current_position is not LOADING:
+            if self._move_future._state == RUNNING and self._target_position is LOADING:
                 box = wx.MessageDialog(self.main_frame,
                                        "The sample is still moving to the loading position, are you sure you want to close Odemis?",
                                        caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
@@ -2670,7 +2936,7 @@ class AnalysisTab(Tab):
             return False
 
         # Detect the format to use
-        filename = fsdecode(dialog.GetPath())
+        filename = os.fsdecode(dialog.GetPath())
         if extend:
             logging.debug("Extending the streams with file %s", filename)
         else:
@@ -3173,7 +3439,11 @@ class AnalysisTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        return 0
+        # Don't display tab for FastEM
+        if main_data.role in ("mbsem",):
+            return None
+        else:
+            return 0
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform
@@ -3408,6 +3678,10 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        # stage will be used to listen to position changes (to enable/disable the tab in the right positions)
+        self.stage = self.tab_data_model.main.stage
+        if main_data.role == "cryo-secom":
+            self.stage.position.subscribe(self._on_stage_pos, init=True)
 
     def _on_ccd_should_update(self, update):
         """
@@ -3418,8 +3692,8 @@ class SecomAlignTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        # Store/restore previous confocal settings when entering/leaving the tab
         main_data = self.tab_data_model.main
+        # Store/restore previous confocal settings when entering/leaving the tab
         lm = main_data.laser_mirror
         if show and lm:
             # Must be done before starting the stream
@@ -3466,6 +3740,7 @@ class SecomAlignTab(Tab):
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -3697,6 +3972,13 @@ class SecomAlignTab(Tab):
         best_mpp = max(mpp)  # to fit everything if not same ratio
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
+
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
     def _on_align_pos(self, pos):
         """
@@ -5023,6 +5305,11 @@ class Sparc2AlignTab(Tab):
         stream.should_update.value = True
         stream.is_active.value = True
 
+        # Move the optical path selectors for the detector (spec-det-selector in particular)
+        # The moves will happen in the background.
+        opm = self.tab_data_model.main.opm
+        opm.selectorsToPath(stream.detector.name)
+
     def add_combobox_control(self, label_text, value=None, conf=None):
         """ Add a combo box to the focus panel
         # Note: this is a hack. It must be named so, to look like a StreamPanel
@@ -5090,6 +5377,8 @@ class Sparc2AlignTab(Tab):
             # Update GUI
             self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
         else:  # manual focus button is untoggled
+            # First pause the streams, so that image of the slit (almost closed) is the final image
+            self._stream_controller.pauseStreams()
             # Go back to previous mode (=> open the slit & turn off the lamp)
             # Get the optical path from align mode
             opath = self._mode_to_opm[align_mode]
@@ -5570,4 +5859,3 @@ class TabBarController(object):
             logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
 
         evt.Skip()
-

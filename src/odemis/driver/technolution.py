@@ -4,7 +4,7 @@ Created on 11 May 2020
 
 @author: Sabrina Rossberger, Kornee Kleijwegt
 
-Copyright © 2019-2020 Kornee Kleijwegt, Delmic
+Copyright © 2019-2021 Kornee Kleijwegt, Delmic
 
 This file is part of Odemis.
 
@@ -35,7 +35,6 @@ import time
 from PIL import Image
 from io import BytesIO
 from urllib.parse import urlparse, urlunparse
-
 from requests import Session
 from scipy import signal
 
@@ -43,10 +42,10 @@ from odemis import model
 from odemis.model import HwError
 from odemis.util import almost_equal
 
-from openapi_server.models.field_meta_data import FieldMetaData
-from openapi_server.models.mega_field_meta_data import MegaFieldMetaData
-from openapi_server.models.cell_parameters import CellParameters
-from openapi_server.models.calibration_loop_parameters import CalibrationLoopParameters
+from technolution_asm.models.field_meta_data import FieldMetaData
+from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
+from technolution_asm.models.cell_parameters import CellParameters
+from technolution_asm.models.calibration_loop_parameters import CalibrationLoopParameters
 
 VOLT_RANGE = (-10, 10)
 DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
@@ -826,7 +825,7 @@ class EBeamScanner(model.Emitter):
 
         :param resolution (int, int): requested resolution for a single field image. It is the product of the number of
         cell images multiplied by the effective cell size.
-        :return resolution  (int, int): resolution closest possible to the requested resolution for the single field image.
+        :return (int, int): resolution closest possible to the requested resolution for the single field image.
         """
         COMMON_DIVISOR = 4
 
@@ -835,7 +834,7 @@ class EBeamScanner(model.Emitter):
         eff_cell_size = numpy.round(req_eff_cell_size / COMMON_DIVISOR) * COMMON_DIVISOR
         resolution = eff_cell_size * self.parent._mppc.shape[0:2]
 
-        return tuple(resolution.astype(int))
+        return tuple(int(i) for i in resolution)
 
 
 class MirrorDescanner(model.Emitter):
@@ -1032,9 +1031,7 @@ class MPPC(model.Detector):
         # Acquisition queue with commands of actions that need to be executed. The queue should hold "(str,
         # *)" containing "(command, data corresponding to the call)".
         self.acq_queue = queue.Queue()
-        self._acq_thread = threading.Thread(target=self._acquire, name="acquisition thread")
-        self._acq_thread.deamon = True
-        self._acq_thread.start()
+        self._acq_thread = None
 
         self.data = ASMDataFlow(self)
 
@@ -1051,8 +1048,9 @@ class MPPC(model.Detector):
             except queue.Empty:
                 break
 
-        self.acq_queue.put(("terminate", ))
-        self._acq_thread.join(5)
+        if self._acq_thread:
+            self.acq_queue.put(("terminate", ))
+            self._acq_thread.join(5)
 
     def _assembleMegafieldMetadata(self):
         """
@@ -1129,41 +1127,70 @@ class MPPC(model.Detector):
                 logging.debug("Loaded the command '%s' in the acquisition thread from the acquisition queue." % command)
 
                 if command == "start":
+                    megafield_metadata = args[0]
+                    notifier_func = args[1]  # Return function: queue.put(), content of queue is then read by caller
+
                     if acquisition_in_progress:
                         logging.warning("ASM acquisition already had the '%s', received this command again." % command)
+                        # Return None so that the caller receives something and does not timeout. Thus, the caller is
+                        # still able to request a next field image and the current acquisition can keep going.
+                        notifier_func(None)
                         continue
 
-                    acquisition_in_progress = True
-                    megafield_metadata = args[0]
-                    self.parent.asmApiPostCall("/scan/start_mega_field", 204, megafield_metadata.to_dict())
+                    try:
+                        self.parent.asmApiPostCall("/scan/start_mega_field", 204, megafield_metadata.to_dict())
+                        notifier_func(None)  # return None on the queue if all went fine
+                    except Exception as ex:
+                        logging.error("During the start of the acquisition an error has occurred: %s." % ex)
+                        notifier_func(ex)  # return exception on the queue
+                        continue  # let the caller decide on what to do next
+
+                    acquisition_in_progress = True  # acquisition was successfully started
 
                 elif command == "next":
-                    if not acquisition_in_progress:
-                        logging.warning("Start ASM acquisition before request to acquire field images.")
-                        continue
-
                     self._metadata = self._mergeMetadata()
                     field_data = args[0]  # Field metadata for the specific position of the field to scan
                     dataContent = args[1]  # Specifies the type of image to return (empty, thumbnail or full)
-                    notifier_func = args[2]  # Return function (usually, dataflow.notify or acquire_single_field queue)
+                    # Return function (dataflow.notify() for megafields or queue.put() for single field acquisition)
+                    notifier_func = args[2]
 
-                    self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
+                    if not acquisition_in_progress:
+                        logging.warning("Start the acquisition first before requesting to acquire field images.")
+                        notifier_func(ValueError("Start acquisition first before requesting to acquire field images."))
+                        continue
 
-                    if DATA_CONTENT_TO_ASM[dataContent] is None:
-                        da = model.DataArray(numpy.array([[0]], dtype=numpy.uint8), metadata=self._metadata)
-                    else:
-                        # TODO remove time.sleep if the function "waitOnFieldImage" exists. Otherwise the image is
-                        #  not yet loaded on the ASM when trying to retrieve it.
-                        time.sleep(0.5)
-                        resp = self.parent.asmApiGetCall(
-                                "/scan/field?x=%d&y=%d&thumbnail=%s" %
-                                (field_data.position_x, field_data.position_y,
-                                 str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
-                                200, raw_response=True, stream=True)
-                        resp.raw.decode_content = True  # handle spurious Content-Encoding
-                        img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
+                    try:
+                        # FIXME: Hack: The current ASM HW does not scan the very first field image correctly. This issue
+                        #  needs to be fixed in HW. However, until this is done, we need to "throw away" the first field
+                        #  image and scan it a second time to receive a good first field image. To do so, just always
+                        #  scan the first image twice. Note: scan_field is a blocking call - it waits until the scan is
+                        #  finished.
+                        if field_data.position_x == 0 and field_data.position_y == 0:
+                            logging.debug("Rescanning first field to workaround hardware limitations.")
+                            self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
 
-                        da = model.DataArray(img, metadata=self._metadata)
+                        self.parent.asmApiPostCall("/scan/scan_field", 204, field_data.to_dict())
+
+                        if DATA_CONTENT_TO_ASM[dataContent] is None:
+                            da = model.DataArray(numpy.array([[0]], dtype=numpy.uint8), metadata=self._metadata)
+                        else:
+                            # TODO remove time.sleep if the function "waitOnFieldImage" exists. Otherwise the image is
+                            #  not yet loaded on the ASM when trying to retrieve it.
+                            time.sleep(0.5)
+                            resp = self.parent.asmApiGetCall(
+                                    "/scan/field?x=%d&y=%d&thumbnail=%s" %
+                                    (field_data.position_x, field_data.position_y,
+                                     str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
+                                    200, raw_response=True, stream=True)
+                            resp.raw.decode_content = True  # handle spurious Content-Encoding
+                            img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
+
+                            da = model.DataArray(img, metadata=self._metadata)
+                    except Exception as ex:
+                        logging.error("During the acquisition of field %s an error has occurred: %s.",
+                                      (field_data.position_x, field_data.position_y), ex)
+                        notifier_func(ex)
+                        continue  # let the caller decide on what to do next
 
                     # Send DA to the function to be notified
                     notifier_func(da)
@@ -1195,56 +1222,84 @@ class MPPC(model.Detector):
             self.parent.asmApiPostCall("/scan/finish_mega_field", 204)
             logging.debug("Acquisition thread ended")
 
+    def _ensure_acquisition_thread(self):
+        """
+        Make sure that the acquisition thread is running. If not, it (re)starts it.
+        """
+        if self._acq_thread and self._acq_thread.is_alive():
+            return
+
+        logging.info('Starting acquisition thread and clearing remainder of the old queue')
+
+        # Clear the queue
+        while True:
+            try:
+                self.acq_queue.get(block=False)
+            except queue.Empty:
+                break
+
+        self._acq_thread = threading.Thread(target=self._acquire,
+                                            name="acquisition thread")
+        self._acq_thread.deamon = True
+        self._acq_thread.start()
+
     def startAcquisition(self):
         """
-        Put a the command 'start' mega field scan on the queue with the appropriate MegaFieldMetaData Model of the mega
-        field image to be scanned. The MegaFieldMetaData is used to setup the HW accordingly, for each field image
+        Put the command 'start' mega field scan on the queue with the appropriate MegaFieldMetaData model of the mega
+        field image to be scanned. The MegaFieldMetaData is used to setup the HW accordingly. For each field image
         additional field image related metadata is provided.
+        :raise: (Exception) Raise exception if start of megafield acquisition failed.
+                (TimeoutError) Raise if return queue did not receive either an Exception or None within time.
         """
-        if not self._acq_thread or not self._acq_thread.is_alive():
-            logging.info('Starting acquisition thread and clearing remainder of the old queue')
-
-            # Clear the queue
-            while True:
-                try:
-                    self.acq_queue.get(block=False)
-                except queue.Empty:
-                    break
-
-            self._acq_thread = threading.Thread(target=self._acquire,
-                                                name="acquisition thread")
-            self._acq_thread.deamon = True
-            self._acq_thread.start()
-
+        self._ensure_acquisition_thread()
+        return_queue = queue.Queue()  # queue which allows to return error messages or None (if all was fine)
         megafield_metadata = self._assembleMegafieldMetadata()
-        self.acq_queue.put(("start", megafield_metadata))
+        self.acq_queue.put(("start", megafield_metadata, return_queue.put))
+        try:
+            status_start = return_queue.get(timeout=60)
+        except queue.Empty:
+            logging.error("Start of the megafield acquisition timed out.")
+            # Something went wrong during the start of the acquisition, so terminate the acquisition thread, so it is
+            # properly restarted at a new acquisition attempt.
+            self.acq_queue.put(("terminate",))
+            raise TimeoutError("Start of the megafield acquisition timed out after 60s.")
+        if isinstance(status_start, Exception):
+            logging.debug("Received an exception from the acquisition thread.")
+            raise status_start
 
     def getNextField(self, field_num):
-        '''
+        """
         Puts the command 'next' field image scan on the queue with the appropriate field meta data model of the field
         image to be scanned. Can only be executed if it preceded by a 'start' mega field scan command on the queue.
         The acquisition thread returns the acquired image to the provided notifier function added in the acquisition queue
         with the "next" command. As notifier function the dataflow.notify is send. The returned image will be
         returned to the dataflow.notify which will provide the new data to all the subscribers of the dataflow.
 
-        :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
-        '''
+        :param field_num: (int, int) x,y coordinates of the field number.
+        :raise: (ValueError) Raise if field coordinates are not of correct type, length and positive.
+        """
+        # Note that this means we don't support numpy ints for now.
+        # That's actually correct, as they'd fail in the JSON encoding (which
+        # could be worked around too, of course, for instance with the JsonExtraEncoder).
+        if len(field_num) != 2 or not all(v >= 0 and isinstance(v, int) for v in field_num):
+            raise ValueError("field_num must be 2 ints >= 0, but got %s" % (field_num,))
+
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
         self.acq_queue.put(("next", field_data, self.dataContent.value, self.data.notify))
 
     def stopAcquisition(self):
         """
-        Puts a 'stop' field image scan on the queue, after this call, no fields can be scanned anymore. A new mega
-        field can be started. The call triggers the post processing process to generate and offload additional zoom
-        levels.
+        Puts the command 'stop' field image scan on the queue. After this call, no fields can be scanned anymore.
+        A new mega field can be started. The call triggers the post processing process to generate and offload
+        additional zoom levels.
         """
-        self.acq_queue.put(("stop",))
+        self.acq_queue.put(("stop", ))
 
     def cancelAcquistion(self, execution_wait=0.2):
         """
-        Clears the entire queue and finished the current acquisition. Does not terminate acquisition thread.
+        Clears the entire queue and finishes the current acquisition. Does not terminate the acquisition thread.
         """
-        time.sleep(0.3)  # Wait to make sure noting is being loaded on the queue
+        time.sleep(0.3)  # Wait to make sure nothing is still being put on the queue
         # Clear the queue
         while True:
             try:
@@ -1255,45 +1310,77 @@ class MPPC(model.Detector):
         self.acq_queue.put(("stop", ))
 
         if execution_wait > 30:
-            logging.error("Failed to cancel the acquisition. mppc is terminated.")
+            logging.error("Failed to cancel the acquisition. MPPC detector is terminated.")
             self.terminate()
-            raise ConnectionError("Connection quality was to low to cancel the acquisition. mppc is terminated.")
+            raise ConnectionError("Connection quality was too poor to cancel the acquisition. MPPC is terminated.")
 
-        time.sleep(execution_wait)  # Wait until finish command is executed
+        time.sleep(execution_wait)  # Wait until command executed is finished
 
         if not self.acq_queue.empty():
-            self.cancelAcquistion(execution_wait=execution_wait * 2)  # Let the waiting time increase
+            self.cancelAcquistion(execution_wait=execution_wait * 2)  # Increase the waiting time
 
     def acquireSingleField(self, dataContent="thumbnail", field_num=(0, 0)):
         """
-        Scans a single field image via the acquire thread and the acquisition queue with the appropriate metadata models.
-        The function returns this image by providing a return_queue to the acquisition thread. The use of this queue
-        allows the use of the timeout functionality of a queue to prevent waiting to long on a return image (
-        timeout=600 seconds).
+        Scans a single field image via the acquire thread and the acquisition queue with the appropriate metadata
+        models. The function returns the image by providing a return_queue to the acquisition thread. Making use of
+        the timeout functionality of the queue prevents waiting too long for an image (timeout=600 seconds).
 
-        :param dataContent (string): Can be either: "empty", "thumbnail", "full"
-        :param field_num (tuple): x,y integer number, location of the field number with the metadata provided.
-        :return: DA of the single field image
+        :param dataContent: (str) Can be either: "empty", "thumbnail", "full".
+        :param field_num: (int, int) x,y location of the field.
+        :return: (DataArray) The single field image.
+        :raise: (TimeoutError) Raise if return queue did not receive either an Exception or None within time.
+                (Exception) Exception raised during the single field acquisition.
+                (ValueError) Raised if not an image of type DataArray was received but something else.
         """
+        logging.debug("Acquire single field.")
         if dataContent not in DATA_CONTENT_TO_ASM:
-            logging.warning("Incorrect dataContent provided for acquiring a single image, thumbnail is used as default "
-                            "instead.")
-            dataContent = "thumbnail"
+            raise ValueError("Unknown data content: %s" % (dataContent,))
 
         return_queue = queue.Queue()  # queue which allows to return images and be blocked when waiting on images
         mega_field_data = self._assembleMegafieldMetadata()
 
-        self.acq_queue.put(("start", mega_field_data))
+        self._ensure_acquisition_thread()
+
+        # request to start the acquisition
+        self.acq_queue.put(("start", mega_field_data, return_queue.put))
+        try:
+            status_start = return_queue.get(timeout=60)
+        except queue.Empty:
+            logging.error("Start of the single field acquisition timed out.")
+            # Something went wrong during the start of the acquisition, so terminate the acquisition thread, so it is
+            # properly restarted at a new acquisition attempt.
+            self.acq_queue.put(("terminate",))
+            raise TimeoutError("Start of the single field image acquisition timed out after 60s.")
+        if isinstance(status_start, Exception):
+            logging.debug("Received an exception from the acquisition thread during the start of the single field "
+                          "image acquisition.")
+            raise status_start
+
         field_data = FieldMetaData(*self.convertFieldNum2Pixels(field_num))
 
+        # request to scan a single field image
         self.acq_queue.put(("next", field_data, dataContent, return_queue.put))
-        self.acq_queue.put(("stop",))
+        # request to stop the acquisition
+        self.acq_queue.put(("stop",))  # make sure it always stops even in case of errors
 
-        return return_queue.get(timeout=600)
+        try:
+            status_next = return_queue.get(timeout=600)
+        except queue.Empty:
+            logging.error("Acquisition of the single field image timed out.")
+            self.acq_queue.put(("terminate",))  # terminate the acquisition
+            raise TimeoutError("Acquisition of the single field image timed out after 600s.")
+
+        if isinstance(status_next, Exception):
+            logging.debug("Received an exception from the acquisition thread during the acquisition of the single "
+                          "field image.")
+            raise status_next
+        elif not isinstance(status_next, model.DataArray):
+            raise ValueError("Did not receive image data but the following: %s." % status_next)  # should never happen
+
+        return status_next  # return the image data
 
     def convertFieldNum2Pixels(self, field_num):
         """
-
         :param field_num(tuple): tuple with x,y coordinates in integers of the field number.
         :return: field number (tuple of ints)
         """
@@ -1347,15 +1434,14 @@ class MPPC(model.Detector):
 
     def _setFilename(self, file_name):
         """
-        Check if filename complies with set allowed characters
-        :param file_name (string):
-        :return: file_name (string)
+        Check if filename complies with the set of allowed characters.
+        :param file_name: (str) The requested filename for the image data to be acquired.
+        :return: (str) The set filename for the image data to be acquired.
         """
-        ASM_FILE_ILLEGAL_CHARS = r'[^a-z0-9_()-]'
-        if re.search(ASM_FILE_ILLEGAL_CHARS, file_name):
-            logging.warning("File_name contains invalid characters, file_name remains unchanged (only the characters "
-                            "'%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return self.filename.value
+        ASM_FILE_CHARS = r'[^a-z0-9_()-]'
+        if re.search(ASM_FILE_CHARS, file_name):
+            raise ValueError("Filename contains invalid characters. Only the following characters are allowed: "
+                             "'%s'. Please choose a new filename." % ASM_FILE_CHARS[2:-1])
         else:
             return file_name
 
@@ -1374,37 +1460,37 @@ class MPPC(model.Detector):
             raise ValueError("An incorrect shape of the cell translation parameters is provided.\n "
                              "Please change the shape of the cell translation parameters according to the shape of the "
                              "mppc detector.\n "
-                             "Cell translation parameters remain unchanged.")
+                             "Cell translation parameter values remain unchanged.")
 
         for row, cellTranslationRow in enumerate(cellTranslation):
             if len(cellTranslationRow) != self._shape[1]:
                 raise ValueError("An incorrect shape of the cell translation parameters is provided.\n"
-                                 "Please change the shape of the cellTranslation parameters according to the shape of "
+                                 "Please change the shape of the cell translation parameters according to the shape of "
                                  "the mppc detector.\n "
-                                 "Cell translation parameters remain unchanged.")
+                                 "Cell translation parameter values remain unchanged.")
 
             for column, eff_origin in enumerate(cellTranslationRow):
-                if not isinstance(eff_origin, tuple) or len(eff_origin) != 2:
+                if not isinstance(eff_origin, (tuple, list)) or len(eff_origin) != 2:
                     raise ValueError("Incorrect cell translation parameters provided, wrong number/type of coordinates "
                                      "for cell (%s, %s) are provided.\n"
-                                     "Please provide an 'x effective origin' and an 'y effective origin' for this cell "
-                                     "image.\n "
-                                     "Cell translation parameters remain unchanged." %
+                                     "Cell translation parameter values remain unchanged." %
                                      (row, column))
 
                 if not isinstance(eff_origin[0], int) or not isinstance(eff_origin[1], int):
                     raise ValueError(
                             "An incorrect type is used for the cell translation coordinates of cell (%s, %s).\n"
-                            "Please use type integer for both 'x effective origin' and and 'y effective "
-                            "origin' for this cell image.\n"
                             "Type expected is: '(%s, %s)' type received '(%s, %s)'\n"
-                            "Cell translation parameters remain unchanged." %
+                            "Cell translation parameter values remain unchanged." %
                             (row, column, int, int, type(eff_origin[0]), type(eff_origin[1])))
 
-                elif eff_origin[0] < 0 or eff_origin[1] < 0:
+                if eff_origin[0] < 0 or eff_origin[1] < 0:
                     raise ValueError("Please use a minimum of 0 cell translation coordinates of cell (%s, %s).\n"
-                                     "Cell translation parameters remain unchanged." %
+                                     "Cell translation parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellTranslation = tuple(tuple(tuple(item) for item in row) for row in cellTranslation)
+
         return cellTranslation
 
     def _setCellDigitalGain(self, cellDigitalGain):
@@ -1421,34 +1507,30 @@ class MPPC(model.Detector):
         if len(cellDigitalGain) != self._shape[0]:
             raise ValueError("An incorrect shape of the digital gain parameters is provided. Please change the "
                              "shape of the digital gain parameters according to the shape of the mppc detector.\n"
-                             "Digital gain parameters value remain unchanged.")
+                             "Digital gain parameter values remain unchanged.")
 
         for row, cellDigitalGain_row in enumerate(cellDigitalGain):
             if len(cellDigitalGain_row) != self._shape[1]:
                 raise ValueError("An incorrect shape of the digital gain parameters is provided.\n"
                                  "Please change the shape of the digital gain parameters according to the shape of the "
                                  "mppc detector.\n "
-                                 "Digital gain parameters value remain unchanged.")
+                                 "Digital gain parameter values remain unchanged.")
 
             for column, DigitalGain in enumerate(cellDigitalGain_row):
-                if isinstance(DigitalGain, int):
-                    # Convert all input values to floats.
-                    logging.warning("Input integer values for the digital gain are converted to floats.")
-                    cellDigitalGain = tuple(tuple(float(cellDigitalGain[i][j]) for j in range(0, self.shape[0]))
-                                            for i in range(0, self.shape[0]))
-                    # Call the setter again with all int values converted to floats and return the output
-                    return self._setCellDigitalGain(cellDigitalGain)
 
-                elif not isinstance(DigitalGain, float):
+                if not isinstance(DigitalGain, (int, float)):
                     raise ValueError("An incorrect type is used for the digital gain parameters of cell (%s, %s).\n"
-                                     "Please use type float for digital gain parameters for this cell image.\n"
-                                     "Type expected is: '%s' type received '%s' \n"
-                                     "Digital gain parameters value remain unchanged." %
-                                     (row, column, float, type(DigitalGain)))
-                elif DigitalGain < 0:
+                                     "Type expected is: '%s' or '%s'; type received '%s' \n"
+                                     "Digital gain parameter values remain unchanged." %
+                                     (row, column, float, int, type(DigitalGain)))
+
+                if DigitalGain < 0:
                     raise ValueError("Please use a minimum of 0 for digital gain parameters of cell image (%s, %s).\n"
-                                     "Digital gain parameters value remain unchanged." %
+                                     "Digital gain parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellDigitalGain = tuple(tuple(item) for item in cellDigitalGain)
 
         return cellDigitalGain
 
@@ -1456,9 +1538,8 @@ class MPPC(model.Detector):
         """
         Setter for the dark offset of the cells, each cell has a dark offset stored as an integer (compensating for
         the offset in darkness in each detector cell). The dark offset  values for a full row are nested in a tuple.
-        And finally, all dark offset values per row are nested in a another tuple
-        representing the full cell image. This setter checks the correct shape of the nested tuples, the type and
-        minimum value.
+        And finally, all dark offset values per row are nested in a another tuple representing the full cell image.
+        This setter checks the correct shape of the nested tuples, the type and minimum value.
 
         :param cellDarkOffset: (nested tuple of ints)
         :return: cellDarkOffset: (nested tuple of ints)
@@ -1467,14 +1548,14 @@ class MPPC(model.Detector):
             raise ValueError("An incorrect shape of the dark offset parameters is provided.\n"
                              "Please change the shape of the dark offset parameters according to the shape of the mppc "
                              "detector.\n "
-                             "Dark offset parameters value remain unchanged.")
+                             "Dark offset parameter values remain unchanged.")
 
         for row, cellDarkOffsetRow in enumerate(cellDarkOffset):
             if len(cellDarkOffsetRow) != self._shape[1]:
                 raise ValueError("An incorrect shape of the dark offset parameters is provided.\n"
                                  "Please change the shape of the dark offset parameters according to the shape of the "
                                  "mppc detector.\n "
-                                 "Dark offset parameters value remain unchanged.")
+                                 "Dark offset parameter values remain unchanged.")
 
             for column, DarkOffset in enumerate(cellDarkOffsetRow):
                 if not isinstance(DarkOffset, int):
@@ -1482,20 +1563,23 @@ class MPPC(model.Detector):
                                      "%s). \n"
                                      "Please use type integer for dark offset for this cell image.\n"
                                      "Type expected is: '%s' type received '%s' \n"
-                                     "Dark offset parameters value remain unchanged." %
+                                     "Dark offset parameter values remain unchanged." %
                                      (row, column, int, type(DarkOffset)))
 
-                elif DarkOffset < 0:
+                if DarkOffset < 0:
                     raise ValueError("Please use a minimum of 0 for dark offset parameters of cell image (%s, %s).\n"
-                                     "Dark offset parameters value remain unchanged." %
+                                     "Dark offset parameter values remain unchanged." %
                                      (row, column))
+
+        # force items to be a tuple
+        cellDarkOffset = tuple(tuple(item) for item in cellDarkOffset)
 
         return cellDarkOffset
 
 
 class ASMDataFlow(model.DataFlow):
     """
-    Represents the acquisition on the ASM
+    Represents the acquisition on the ASM.
     """
 
     def __init__(self, mppc):
@@ -1506,39 +1590,53 @@ class ASMDataFlow(model.DataFlow):
 
     def start_generate(self):
         """
-        Start the dataflow using the provided function. The appropriate settings are retrieved via the VA's of the
-        each component
+        Start the dataflow.
         """
         self._mppc.startAcquisition()
 
     def next(self, field_num):
         """
-        Acquire the next field image using the provided function.
-        :param field_num (tuple): tuple with x,y coordinates in integers of the field number.
+        Acquire the next field image if at least one subscriber on the dataflow is present.
+        :param field_num: (int, int) x,y coordinates of the field number.
+        :raise: (ValueError) Raise if there is no listener on the dataflow.
         """
+        if self._count_listeners() == 0:
+            raise ValueError("There is no listener subscribed to the dataflow yet.")
+
         self._mppc.getNextField(field_num)
+
+    def notify(self, data):
+        """
+        Call this method to share the data with all the listeners or return in case an exception was raised. Note, that
+        in the later case, the listeners are not notified and are not aware that an exception has occurred.
+        :param data: (DataArray or Exception) Either the image data to be sent to the listeners or an Exception that
+            was raised during image acquisition.
+        """
+        if isinstance(data, Exception):
+            logging.error("During image data acquisition, an exception has occurred: %s", data)
+            return  # makes sure that the acquisition thread does not fail
+        super().notify(data)  # if image data received, notify the listeners
 
     def stop_generate(self):
         """
-        Stop the dataflow using the provided function.
+        Stop the dataflow.
         """
         self._mppc.stopAcquisition()
 
     def get(self, *args, **kwargs):
         """
-        Acquire a single field, can only be called if no other acquisition is active.
-        :return: (DataArray)
+        Acquire a single field image. Can only be called if no other acquisition is active.
+        :return: (DataArray or Exception) The acquired single field image.
+        :raise (ValueError) Raise if there is already a listener on the dataflow.
         """
         if self._count_listeners() < 1:
             # Acquire and return received image
             image = self._mppc.acquireSingleField(*args, **kwargs)
             return image
-
         else:
-            logging.error("There is already an acquisition on going with %s listeners subscribed, first cancel/stop "
-                          "current running acquisition to acquire a single field-image" % self._count_listeners())
-            raise Exception("There is already an acquisition on going with %s listeners subscribed, first cancel/stop "
-                            "current running acquisition to acquire a single field-image" % self._count_listeners())
+            raise ValueError("There is already an acquisition ongoing with %s listeners subscribed. First cancel/stop "
+                             "the current running acquisition before acquiring a single field-image."
+                             % self._count_listeners())
 
 
 class AsmApiException(Exception):

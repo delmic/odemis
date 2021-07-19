@@ -75,3 +75,4 @@ magic.odm.yaml
 /src/odemis/driver/hitachi.py
 /src/odemis/driver/jeol.py
 /src/odemis/driver/nikonc.py
+/.mypy_cache/
