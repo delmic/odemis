@@ -648,6 +648,16 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
         },
     },
+    "mbsem": {
+        "e-beam": {
+            "scale": {
+                # Make sure it's displayed as a combobox with choices. If we don't set choices here to None,
+                # the hw choices will not be displayed and instead of a combobox, we get a single readonly
+                # value control.
+                "choices": None,
+            },
+        }
+    }
 }
 
 # The sparc-simplex is identical to the sparc
@@ -689,6 +699,13 @@ STREAM_SETTINGS_CONFIG = {
             ("ccdTemperature", {  # Trick for the sparc-simplex
                 "label": "CCD temperature",
                 "tooltip": u"Current temperature of the spectrometer CCD",
+            }),
+        )),
+    stream.FastEMSEMStream:
+        OrderedDict((
+            # Display the adjusted pixelsize (pixelsize * scale) with the hw VAs.
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_READONLY,
             }),
         )),
     stream.SpectrumSettingsStream:
