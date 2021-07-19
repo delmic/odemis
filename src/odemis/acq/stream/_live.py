@@ -534,16 +534,17 @@ class FastEMSEMStream(SEMStream):
     """
 
     def __init__(self, name, detector, dataflow, emitter, blanker=None, **kwargs):
-        super().__init__(name, detector, dataflow, emitter, blanker=None, **kwargs)
-        self.pixelSize = model.VigilantAttribute(0, unit="m", readonly=True)
-        emitter.pixelSize.subscribe(self._on_pxsize, init=True)
+        super().__init__(name, detector, dataflow, emitter, blanker=blanker, **kwargs)
+        pxs = (emitter.pixelSize.value[0] * emitter.scale.value[0],
+               emitter.pixelSize.value[1] * emitter.scale.value[1])
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        emitter.pixelSize.subscribe(self._on_pxsize)
         emitter.scale.subscribe(self._on_pxsize, init=True)
 
     def _on_pxsize(self, _):
         pxs = (self.emitter.pixelSize.value[0] * self.emitter.scale.value[0],
                self.emitter.pixelSize.value[1] * self.emitter.scale.value[1])
         self.pixelSize._set_value(pxs, force_write=True)
-        self.pixelSize.notify(pxs)
 
 
 class SpotSEMStream(LiveStream):
