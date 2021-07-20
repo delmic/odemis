@@ -285,12 +285,14 @@ class AttrDict(dict):
 
 
 @call_in_wx_main
-def enable_tab_on_stage_position(button, stage, pos, target):
+def enable_tab_on_stage_position(button, pos, target):
     """
     Enable the given tab button if the stage is in target position, disable it otherwise
     :param button: (Button) the Tab button to enable/disable
-    :param stage: (Actuator) the stage driver
     :param pos: (dict str->float) current position to check its label
-    :param target: (int) target position label (IMAGING, LOADING..etc)
+    :param target: (int) target position label (IMAGING, SEM_IMAGING or FM_IMAGING)
     """
-    button.Enable(getCurrentPositionLabel(pos, stage) == target)
+    if getCurrentPositionLabel(pos) in target:
+        button.Enable(True)
+    else:
+        button.Enable(False)
