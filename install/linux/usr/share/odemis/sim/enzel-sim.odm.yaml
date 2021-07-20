@@ -1,6 +1,6 @@
 ENZEL-Sim: {
     class: Microscope,
-    role: cryo-secom,
+    role: enzel,
     children: [
         "Sample Thermostat", "Cooler Controller",
         "SEM E-beam Full", "SEM Detector",
