@@ -344,6 +344,10 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.txt_projectpath = xrc.XRCCTRL(self, "txt_projectpath")
         self.btn_change_folder = xrc.XRCCTRL(self, "btn_change_folder")
         self.pnl_switch_buttons = xrc.XRCCTRL(self, "pnl_switch_buttons")
+        self.btn_switch_sem_imaging = xrc.XRCCTRL(self, "btn_switch_sem_imaging")
+        self.btn_switch_fm_imaging = xrc.XRCCTRL(self, "btn_switch_fm_imaging")
+        self.btn_switch_grid1 = xrc.XRCCTRL(self, "btn_switch_grid1")
+        self.btn_switch_grid2 = xrc.XRCCTRL(self, "btn_switch_grid2")
         self.btn_switch_loading = xrc.XRCCTRL(self, "btn_switch_loading")
         self.btn_switch_imaging = xrc.XRCCTRL(self, "btn_switch_imaging")
         self.btn_switch_milling = xrc.XRCCTRL(self, "btn_switch_milling")
@@ -1159,7 +1163,7 @@ def __init_resources():
               <object class="TabButton" name="btn_tab_fastem_overview">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
-                <label>ACQUISITION</label>
+                <label>OVERVIEW</label>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -3976,6 +3980,97 @@ def __init_resources():
 									<flag>wxBOTTOM|wxALL</flag>
 									<border>5</border>
 								</object>
+                <object class="sizeritem">
+                  <object class="wxGridBagSizer">
+										<object class="sizeritem">
+											<object class="GraphicRadioButton" name="btn_switch_sem_imaging">
+												<icon>img_icon_ico_eject_png</icon>
+												<icon_on>img_icon_ico_eject_orange_png</icon_on>
+												<height>48</height>
+												<face_colour>def</face_colour>
+												<label>SEM IMAGING</label>
+												<fg>#1A1A1A</fg>
+												<font>
+													<size>11</size>
+													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+												</font>
+												<style>wxALIGN_CENTRE</style>
+												<XRCED>
+													<assign_var>1</assign_var>
+												</XRCED>
+											</object>
+											<flag>wxALL|wxEXPAND</flag>
+											<border>10</border>
+											<cellpos>0,0</cellpos>
+										</object>
+										<object class="sizeritem">
+											<object class="GraphicRadioButton" name="btn_switch_fm_imaging">
+												<icon>img_icon_ico_imaging_png</icon>
+												<icon_on>img_icon_ico_imaging_orange_png</icon_on>
+												<height>48</height>
+												<face_colour>def</face_colour>
+												<label>FM IMAGING</label>
+												<fg>#1A1A1A</fg>
+												<font>
+													<size>11</size>
+													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+												</font>
+												<style>wxALIGN_CENTRE</style>
+												<XRCED>
+													<assign_var>1</assign_var>
+												</XRCED>
+											</object>
+											<flag>wxALL|wxEXPAND</flag>
+											<border>10</border>
+											<cellpos>0,1</cellpos>
+										</object>
+										<object class="sizeritem">
+											<object class="GraphicRadioButton" name="btn_switch_grid1">
+												<icon>img_icon_ico_milling_png</icon>
+												<icon_on>img_icon_ico_milling_orange_png</icon_on>
+												<height>48</height>
+												<face_colour>def</face_colour>
+												<label>GRID 1</label>
+												<fg>#1A1A1A</fg>
+												<font>
+													<size>11</size>
+													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+												</font>
+												<style>wxALIGN_CENTRE</style>
+												<XRCED>
+													<assign_var>1</assign_var>
+												</XRCED>
+											</object>
+											<flag>wxALL|wxEXPAND</flag>
+											<border>10</border>
+											<cellpos>1,0</cellpos>
+										</object>
+										<object class="sizeritem">
+											<object class="GraphicRadioButton" name="btn_switch_grid2">
+												<icon>img_icon_ico_coating_png</icon>
+												<icon_on>img_icon_ico_coating_orange_png</icon_on>
+												<height>48</height>
+												<face_colour>def</face_colour>
+												<label>GRID 2</label>
+												<fg>#1A1A1A</fg>
+												<font>
+													<size>11</size>
+													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+												</font>
+												<style>wxALIGN_CENTRE</style>
+												<XRCED>
+													<assign_var>1</assign_var>
+												</XRCED>
+											</object>
+											<flag>wxALL|wxEXPAND</flag>
+											<border>10</border>
+											<cellpos>1,1</cellpos>
+										</object>
+										<vgap>5</vgap>
+										<hgap>20</hgap>
+									</object>
+                  <flag>wxALL|wxALIGN_CENTRE</flag>
+                </object>
 								<object class="sizeritem">
 									<object class="wxGridBagSizer">
 										<object class="sizeritem">
