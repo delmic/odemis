@@ -153,6 +153,7 @@ class MainGUIData(object):
         "overview-ccd": "overview_ccd",
         "stage": "stage",
         "scan-stage": "scan_stage",
+        "stage-bare": "stage_bare",
         "focus": "focus",
         "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
@@ -206,6 +207,7 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
+        self.stage_bare = None # stage in the chamber referential 
         self.focus = None  # actuator to change the camera focus
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
@@ -319,7 +321,7 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            if self.role in ("secom", "delphi", "cryo-secom"):
+            if self.role in ("secom", "delphi", "enzel", "meteor"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role == "secom":
                     required_roles += ["align", "se-detector"]
@@ -362,7 +364,7 @@ class MainGUIData(object):
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
 
-            if "cryo" in microscope.role:
+            if microscope.role in ("meteor", "enzel"):
                 # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
                 # VA for the currently selected feature
@@ -631,7 +633,7 @@ class CryoGUIData(MicroscopyGUIData):
     Represents an interface for handling cryo microscopes.
     """
     def __init__(self, main):
-        if "cryo" not in main.role:
+        if main.role not in ("meteor", "enzel"):
             raise ValueError(
                 "Expected a cryo microscope role but found it to be %s." % main.role)
         MicroscopyGUIData.__init__(self, main)
@@ -678,7 +680,7 @@ class CryoLocalizationGUIData(CryoGUIData):
     """
 
     def __init__(self, main):
-        if main.role != "cryo-secom":
+        if main.role not in ("enzel", "meteor"):
             raise ValueError(
                 "Microscope role was found to be %s, while expected 'cryo-secom'" % main.role)
         CryoGUIData.__init__(self, main)
