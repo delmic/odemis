@@ -188,6 +188,9 @@ MD_OVERVIEW_RANGE = "Range for overview map"  # dict str → (float, float): axi
 MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
 MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
 MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
+MD_FAV_POS_SEM_IMAGING = "Favourite position SEM imaging" 
+MD_FAV_POS_FM_IMAGING = "Favourite position FM imaging"
+
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str

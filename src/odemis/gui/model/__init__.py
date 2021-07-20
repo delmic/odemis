@@ -309,7 +309,7 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            if self.role in ("secom", "delphi", "cryo-secom"):
+            if self.role in ("secom", "delphi", "enzel", "meteor"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role == "secom":
                     required_roles += ["align", "se-detector"]
@@ -620,9 +620,9 @@ class LocalizationGUIData(MicroscopyGUIData):
     """
 
     def __init__(self, main):
-        if main.role != "cryo-secom":
+        if main.role not in ("enzel", "meteor"):
             raise ValueError(
-                "Microscope role was found to be %s, while expected 'cryo-secom'" % main.role)
+                "Microscope role was found to be %s, while expected 'enzel' or 'meteor'" % main.role)
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)

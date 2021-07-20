@@ -63,7 +63,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
-from odemis.acq.move import getCurrentPositionLabel, IMAGING
+from odemis.acq.move import FM_IMAGING, GRID_1, GRID_2, SEM_IMAGING, IMAGING
 from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
@@ -448,9 +448,10 @@ class LocalizationTab(Tab):
             detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
         )
 
-        # The sem stream is always visible, so add it by default
-        sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
-        sem_stream_cont.stream_panel.show_remove_btn(False)
+        # The sem stream is visible for enzel, but not for meteor 
+        if self.main_data.role == 'enzel': 
+            sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
+            sem_stream_cont.stream_panel.show_remove_btn(False)
 
         self.stage = self.tab_data_model.main.stage
         self.stage.position.subscribe(self._on_stage_pos, init=True)
@@ -631,7 +632,7 @@ class LocalizationTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
+        guiutil.enable_tab_on_stage_position(self.button, pos, target=[IMAGING, FM_IMAGING, SEM_IMAGING])
 
 
     def _on_stream_update(self, updated):
@@ -670,7 +671,7 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("cryo-secom",):
+        if main_data.role in ("enzel", "meteor"):
             return 2
         else:
             return None
@@ -1176,7 +1177,7 @@ class SecomStreamsTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         # For SECOM/DELPHI and all simple microscopes
-        if main_data.role in ("cryo-secom",):
+        if main_data.role in ("enzel", "meteor"):
             return None
         elif main_data.role in ("secom", "delphi", "sem", "optical"):
             return 2
@@ -2301,60 +2302,130 @@ class CryoChamberTab(Tab):
         # Create new project directory on starting the GUI
         self._create_new_dir()
 
-        stage = self.tab_data_model.main.stage
-        stage_metadata = stage.getMetadata()
-        # start and end position are used for the gauge progress bar
-        self._start_pos = stage.position.value
-        self._end_pos = self._start_pos
-        # Show current position of the stage via the progress bar
-        main_data.stage.position.subscribe(self._update_progress_bar, init=False)
-        try:
-            self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
-        except KeyError:
-            raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
-        # Define axis connector to link milling angle to UI float ctrl
-        self.milling_connector = AxisConnector('rx', stage, panel.ctrl_milling, pos_2_ctrl=self._milling_angle_changed,
-                                               ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
-        # Set the milling angle range according to rx axis range
-        try:
-            rx_range = stage.axes['rx'].range
-            milling_range = [-(self.ion_to_sample - a) for a in rx_range]
-            # sort milling range in case ion_to_sample made range values flip
-            actual_rng = sorted(milling_range)
-            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
-            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
-                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
-            panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
-            # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
-            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
-        except KeyError:
-            raise ValueError('The stage is missing an rx axis.')
-        panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
+        if main_data.role == 'enzel':  
+            try:
+                # start and end position are used for the gauge progress bar
+                self._start_pos = main_data.stage.position.value
+                self._end_pos = self._start_pos
+                # Show current position of the stage via the progress bar
+                main_data.stage.position.subscribe(self._update_progress_bar, init=False)
+                # get the stage and its meta data 
+                stage = self.tab_data_model.main.stage
+                stage_metadata = stage.getMetadata()
+                self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
+            except KeyError:
+                raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
+            # Define axis connector to link milling angle to UI float ctrl
+            self.milling_connector = AxisConnector('rx', stage, panel.ctrl_milling, pos_2_ctrl=self._milling_angle_changed,
+                                                ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
+            # Set the milling angle range according to rx axis range
+            try:
+                rx_range = stage.axes['rx'].range
+                milling_range = [-(self.ion_to_sample - a) for a in rx_range]
+                # sort milling range in case ion_to_sample made range values flip
+                actual_rng = sorted(milling_range)
+                ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
+                if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                    raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+                panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
+                # Default value for milling angle, will be used to store the angle value out of milling position
+                self._prev_milling_angle = DEFAULT_MILLING_ANGLE
+                self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
+            except KeyError:
+                raise ValueError('The stage is missing an rx axis.')
+            panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
+            if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
+                raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
+            if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
+                raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
+            self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
+                                self.panel.stage_align_btn_m_aligner_x: ("x", -1),
+                                self.panel.stage_align_btn_p_aligner_y: ("y", 1),
+                                self.panel.stage_align_btn_m_aligner_y: ("y", -1),
+                                self.panel.stage_align_btn_p_aligner_z: ("z", 1),
+                                self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
+            # hide meteor buttons
+            panel.btn_switch_sem_imaging.Hide()
+            panel.btn_switch_fm_imaging.Hide()
+            panel.btn_switch_grid1.Hide()
+            panel.btn_switch_grid2.Hide() 
+            # Vigilant attribute connectors for the align slider and show advanced button
+            self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
+                                                                        self.panel.stage_align_slider_aligner,
+                                                                        events=wx.EVT_SCROLL_CHANGED)
+            self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
+                                                                        self.panel.btn_switch_advanced,
+                                                                        events=wx.EVT_BUTTON,
+                                                                        ctrl_2_va=self._btn_show_advaned_toggled,
+                                                                        va_2_ctrl=self._on_show_advanced)
 
-        self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
+            self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
                               MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
-        if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
-            raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
-        if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
-            raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
-        self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
-                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
-                                 self.panel.stage_align_btn_p_aligner_y: ("y", 1),
-                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
-                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
-                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
-        self.btn_toggle_icons = {
+
+            # Check stage FAV positions in its metadata, and store them in respect to their movement
+            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
+                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
+            self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
+                                            IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
+                                            COATING: stage_metadata[model.MD_FAV_POS_COATING], }
+
+            self.btn_toggle_icons = {
             self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
             self.panel.btn_switch_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
             self.panel.btn_switch_milling: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
             self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
-        # Check stage FAV positions in its metadata, and store them in respect to their movement
-        if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
-            raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
-        self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
-                                         IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
-                                         COATING: stage_metadata[model.MD_FAV_POS_COATING], }
+            # Event binding for tab controls
+            panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_coating.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.stage_align_btn_p_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
+            panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+
+        elif main_data.role == 'meteor':
+            stage  = model.getComponent(role='stage-bare')
+            # start and end position are used for the gauge progress bar
+            self._start_pos = stage.position.value
+            self._end_pos = self._start_pos
+            # Show current position of the stage via the progress bar
+            self.tab_data_model.main.stage.position.subscribe(self._update_progress_bar, init=False)
+            # metadata 
+            stage_metadata = stage.getMetadata()
+            # TODO: check for the metadata of meteor stage positions (should include enzel pos as well??)
+            if not {model.MD_FAV_POS_SEM_IMAGING, model.MD_FAV_POS_FM_IMAGING}.issubset(stage_metadata):
+                raise ValueError('The stage is missing FAV_POS_SEM_IMAGING, FAV_POS_FM_IMAGING metadata.')
+            # store the metadata for the corresponding movement 
+            self.target_position_metadata = {SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
+                                            FM_IMAGING: stage_metadata[model.MD_FAV_POS_FM_IMAGING]}
+            # the meteor buttons 
+            self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                                GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+            # TODO: add buttons icons of meteor 
+            self.btn_toggle_icons = {
+                self.panel.btn_switch_sem_imaging: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
+                self.panel.btn_switch_fm_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
+                self.panel.btn_switch_grid2: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
+                self.panel.btn_switch_grid1: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
+            # hide some of enzel widgets 
+            panel.btn_switch_loading.Hide()
+            panel.btn_switch_imaging.Hide()
+            panel.btn_switch_milling.Hide()
+            panel.btn_switch_coating.Hide()  
+            panel.lbl_milling_angle.Hide()
+            panel.btn_switch_advanced.Hide()
+            panel.ctrl_milling.Hide()
+            panel.pnl_advanced_align.Hide()
+            # Event binding for tab controls
+            panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_fm_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_grid1.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_grid2.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
         # Determine and show current position of the stage
         self._current_position, self._target_position = None, None
@@ -2363,29 +2434,6 @@ class CryoChamberTab(Tab):
             pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
             self._toggle_switch_buttons(pos_button)
         self._show_cancel_warning_msg(None)
-
-        # Vigilant attribute connectors for the align slider and show advanced button
-        self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
-                                                                       self.panel.stage_align_slider_aligner,
-                                                                       events=wx.EVT_SCROLL_CHANGED)
-        self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
-                                                                      self.panel.btn_switch_advanced,
-                                                                      events=wx.EVT_BUTTON,
-                                                                      ctrl_2_va=self._btn_show_advaned_toggled,
-                                                                      va_2_ctrl=self._on_show_advanced)
-
-        # Event binding for tab controls
-        panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-        panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-        panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-        panel.btn_switch_coating.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-        panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.stage_align_btn_p_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-        panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
     def load_overview_data(self, streams):
         """
@@ -2529,36 +2577,69 @@ class CryoChamberTab(Tab):
         Enable/disable chamber move controls (position and stage) based on current move
         :param cancelled: (bool) if the move is cancelled
         """
-        stage = self.tab_data_model.main.stage
-        # Get current movement (including unknown and on the path)
-        self._current_position = getCurrentPositionLabel(stage.position.value, stage)
-        self._enable_position_controls(self._current_position, cancelled)
-        # Enable stage advanced controls on milling
-        self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(
-            False)
+        if self.tab_data_model.main.role == 'enzel':
+            stage = self.tab_data_model.main.stage
+            # Get current movement (including unknown and on the path)
+            self._current_position = getCurrentPositionLabel(stage.position.value)
+            # Enable stage advanced controls on milling
+            self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(
+                False)
+
+        elif self.tab_data_model.main.role == 'meteor':
+            self._current_position = getCurrentPositionLabel(model.getComponent(role='stage-bare').position.value)
+        self._enable_position_controls(self._current_position, cancelled)            
 
     def _enable_position_controls(self, current_position=None, cancelled=False):
         """
         Enable/disable switching position button based on current move
         """
-        # The move button should turn green only if current move is known and not cancelled
-        if current_position in self.position_btns.keys() and not cancelled:
-            currently_pressed = self.position_btns[current_position]
-            self._toggle_switch_buttons(currently_pressed)
-            currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
-            currently_pressed.Refresh()
-        else:
-            self._toggle_switch_buttons(currently_pressed=None)
-        # Define which button to disable in respect to the current move
-        disable_buttons = {LOADING: MILLING, IMAGING: None, MILLING: COATING, COATING: MILLING, LOADING_PATH: MILLING}
-        for movement, button in self.position_btns.items():
-            if current_position == UNKNOWN:
-                # Only enable loading button when the move is unknown
-                button.Enable() if movement == LOADING else button.Disable()
-            elif movement == disable_buttons[current_position]:
-                button.Disable()
+        if self.tab_data_model.main.role == 'enzel':
+            # The move button should turn green only if current move is known and not cancelled
+            if current_position in self.position_btns.keys() and not cancelled:
+                currently_pressed = self.position_btns[current_position]
+                self._toggle_switch_buttons(currently_pressed)
+                currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
+                currently_pressed.Refresh()
             else:
-                button.Enable()
+                self._toggle_switch_buttons(currently_pressed=None)
+            # Define which button to disable in respect to the current move
+            disable_buttons = {LOADING: MILLING, IMAGING: None, MILLING: COATING, COATING: MILLING, LOADING_PATH: MILLING}
+            for movement, button in self.position_btns.items():
+                if current_position == UNKNOWN:
+                    # Only enable loading button when the move is unknown
+                    button.Enable() if movement == LOADING else button.Disable()
+                elif movement == disable_buttons[current_position]:
+                    button.Disable()
+                else:
+                    button.Enable()
+        elif self.tab_data_model.main.role == 'meteor':
+            # The move button should turn green only if current move is known and not cancelled
+            if current_position in self.position_btns.keys() and not cancelled:
+                currently_pressed = self.position_btns[current_position]
+                self._toggle_switch_buttons(currently_pressed)
+                currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
+                currently_pressed.Refresh()
+            else:
+                self._toggle_switch_buttons(currently_pressed=None)
+            # enabling/disabling meteor buttons based on the new pressed button 
+            if current_position == UNKNOWN:
+                # at unknown position: SEM=0, FM=0, G1=0, G2=0, Loc=0
+                for _, button in self.position_btns.items():
+                    button.Disable()
+            elif current_position in [LOADING, MILLING, COATING]:
+                # at loading/coating/milling position: G1=0, G2=0, FM=1, SEM=1, Loc=0
+                self.panel.btn_switch_sem_imaging.Enable()
+                self.panel.btn_switch_fm_imaging.Enable()
+                self.panel.btn_switch_grid2.Disable()
+                self.panel.btn_switch_grid1.Disable()
+            elif current_position in [SEM_IMAGING, FM_IMAGING]:
+                # at SEM/FM position: G1=1, G2=1, FM=1, Loc=1 
+                self.panel.btn_switch_grid2.Enable()
+                self.panel.btn_switch_grid1.Enable()
+                if current_position == SEM_IMAGING:
+                    self.panel.btn_switch_fm_imaging.Enable()
+                else:   # FM_IMAGING 
+                    self.panel.btn_switch_sem_imaging.Enable()
 
     def _enable_advanced_controls(self, enable=True):
         """
@@ -2722,34 +2803,50 @@ class CryoChamberTab(Tab):
         # Only proceed if there is no currently running target_position
         if self._move_future._state == RUNNING:
             return
-        stage = self.tab_data_model.main.stage
-        self._start_pos = stage.position.value
         # Get the required target_position from the pressed button
         self._target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
                                      None)
         if self._target_position is None:
             return
-        # target_position metadata has the end positions for all movements except milling
-        if self._target_position in self.target_position_metadata.keys():
+
+        if self.tab_data_model.main.role == 'enzel': 
+            # define the start position 
+            stage = self.tab_data_model.main.stage
+            self._start_pos = stage.position.value
+            # target_position metadata has the end positions for all movements except milling
+            if self._target_position in self.target_position_metadata.keys():
+                if self._current_position is LOADING:
+                    box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
+                                        caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
+
+                    box.SetYesNoLabels("&Load", "&Cancel")
+                    ans = box.ShowModal()  # Waits for the window to be closed
+                    if ans == wx.ID_NO:
+                        return
+                # Save the milling angle control current value (to return to it when switch back to milling)
+                if self._current_position is MILLING:
+                    milling_angle = self._get_milling_angle_value()
+                    if milling_angle is not None:
+                        self._prev_milling_angle = milling_angle
+                self._end_pos = self.target_position_metadata[self._target_position]
+                return cryoSwitchSamplePosition(self._target_position)
+            else:
+                # Target position is milling, get rx value from saved milling angle
+                rx_angle_value = self.ion_to_sample + self._prev_milling_angle
+                return cryoTiltSample(rx=rx_angle_value)
+        
+        elif self.tab_data_model.main.role == 'meteor':
+            # update the start and end position 
+            self._start_pos = model.getComponent(role='stage-bare').position.value
+            self._end_pos = self.target_position_metadata[self._target_position]
             if self._current_position is LOADING:
                 box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
-                                       caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
-
+                                    caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
                 box.SetYesNoLabels("&Load", "&Cancel")
                 ans = box.ShowModal()  # Waits for the window to be closed
                 if ans == wx.ID_NO:
                     return
-            # Save the milling angle control current value (to return to it when switch back to milling)
-            if self._current_position is MILLING:
-                milling_angle = self._get_milling_angle_value()
-                if milling_angle is not None:
-                    self._prev_milling_angle = milling_angle
-            self._end_pos = self.target_position_metadata[self._target_position]
             return cryoSwitchSamplePosition(self._target_position)
-        else:
-            # Target position is milling, get rx value from saved milling angle
-            rx_angle_value = self.ion_to_sample + self._prev_milling_angle
-            return cryoTiltSample(rx=rx_angle_value)
 
     def _perform_axis_relative_movement(self, target_button):
         """
@@ -2822,7 +2919,7 @@ class CryoChamberTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role == "cryo-secom":
+        if main_data.role in ("enzel", "meteor"):
             return 10
         return None
 
@@ -4114,7 +4211,7 @@ class SecomAlignTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("secom", "cryo-secom"):
+        if main_data.role in ("secom", "enzel"):
             return 1
         else:
             return None
