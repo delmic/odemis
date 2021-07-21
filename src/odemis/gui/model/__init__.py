@@ -1138,6 +1138,9 @@ class FastEMMainGUIData(MainGUIData):
         hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
         self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
+        # Alignment status
+        self.is_aligned = model.BooleanVA(False)
+
 
 class FastEMAcquisitionGUIData(MicroscopyGUIData):
     """

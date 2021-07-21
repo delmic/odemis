@@ -502,6 +502,11 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_alignment = xrc.XRCCTRL(self, "pnl_fastem_alignment")
+        self.btn_align = xrc.XRCCTRL(self, "btn_align")
+        self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
+        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
+        self.align_btn_cancel = xrc.XRCCTRL(self, "align_btn_cancel")
         self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
@@ -5282,6 +5287,82 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
+                        <object class="wxPanel" name="pnl_fastem_alignment">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_align">
+                                <size>150,-1</size>
+                                <height>32</height>
+                                <face_colour>def</face_colour>
+                                <label>Align</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="align_gauge_progress">
+                                <size>-1,8</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxALL|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="align_lbl_gauge">
+                                    <fg>#DDDDDD</fg>
+                                    <font>
+                                      <size>14</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <option>1</option>
+                                  <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                                  <border>5</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="align_btn_cancel">
+                                    <height>24</height>
+                                    <face_colour>def</face_colour>
+                                    <label>cancel</label>
+                                    <enabled>0</enabled>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+                                  <border>5</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                              <border>5</border>
+                              <bg>#4D4D4D</bg>
+                            </object>
+                          </object>
+                        </object>
+                        <label>ALIGNMENT</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+					  <object class="FoldPanelItem">
                         <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
 						  <size>300,-1</size>
                           <add_button>1</add_button>

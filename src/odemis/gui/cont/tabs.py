@@ -1678,6 +1678,12 @@ class FastEMAcquisitionTab(Tab):
             view_ctrl=self.view_controller,
         )
 
+        # Controller for alignment panel
+        self._alignment_controller = acqcont.FastEMAlignmentController(
+            tab_data,
+            panel
+        )
+
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,
