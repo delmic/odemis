@@ -215,6 +215,14 @@ class PixelValueOverlay(ViewOverlay):
 
         self._label.text = ""
 
+    def _activate(self):
+        # Read the mouse position, so that the value under the cursor can be
+        # immediately shown (instead of waiting for the user to move the mouse).
+        # If the mouse is outside of the view, it's fine, it'll just show the
+        # corresponding value under the mouse, even if it's not displayed.
+        self._v_pos = self.cnvs.ScreenToClient(wx.GetMousePosition())
+        super()._activate()
+
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
         if not self.active:
@@ -222,7 +230,7 @@ class PixelValueOverlay(ViewOverlay):
         else:
             self._v_pos = None
             self._p_pos = None
-            self.cnvs.request_drawing_update()
+            self.cnvs.Refresh()
 
     def on_motion(self, evt):
         """ Update the display of the raw pixel value based on the current mouse position """
@@ -238,7 +246,7 @@ class PixelValueOverlay(ViewOverlay):
             return
 
         self._v_pos = Vec(evt.Position)
-        self.cnvs.request_drawing_update()
+        self.cnvs.Refresh()
 
     def _draw_legend(self, stream):
         """ Get the pixel coordinates and the raw pixel value given a projection """
