@@ -1,3 +1,21 @@
+odemis (3.1.6-1) xenial; urgency=medium
+
+  * New version: 3.1.6
+  * Main bug fixes:
+    - When "show pixel value" is selected, it's now possible to change
+      focus, use measure tool, etc.
+    - On Windows, when exporting CSV files, they would sometimes have an extra line
+    - Fix download of new version from the Windows Viewer
+    - Restore the "snapshot" screen feedback
+    - When exporting to CSV, AR polarimetry samples acquired with drift correction,
+      it could sometimes fail.
+    - Warn if the user is trying to open AR polarimetry data, without having
+      the special polarimetry module
+    - If a move fails on a Physik Instrumente actuator, properly report it
+      in the GUI
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 22 Jul 2021 08:21:45 +0200
+
 odemis (3.1.5-1) xenial; urgency=medium
 
   * New version: 3.1.5
