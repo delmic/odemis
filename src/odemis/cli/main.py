@@ -24,8 +24,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, print_function
 
-import argparse
+from past.builtins import basestring, unicode
 from builtins import str
+import argparse
 import codecs
 import collections
 import importlib
@@ -39,7 +40,6 @@ from odemis.util import units, inspect_getmembers
 from odemis.util.conversion import convert_to_object
 from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status, BACKEND_STARTING
-from past.builtins import basestring, unicode
 import sys
 import threading
 
@@ -284,6 +284,13 @@ def print_events(component, pretty):
 
 
 def print_vattribute(component, name, va, pretty):
+    """
+    Print on one line the information about a VigilantAttribute
+    component (Component): the component containing the VigilantAttribute
+    name (str): the name of the VigilantAttribute
+    va (VigilantAttribute): the VigilantAttribute to display
+    pretty (bool): whether to display for the user (True) or for a machine (False)
+    """
     if va.unit:
         if pretty:
             unit = u" (unit: %s)" % va.unit
@@ -351,6 +358,7 @@ def print_vattribute(component, name, va, pretty):
                 try:
                     axis_def = component.axes[an]
                 except KeyError:
+                    logging.warning("axes is missing axis '%s' from .position", an)
                     continue
                 if axis_def.unit == "rad":
                     pos_deg[an] = math.degrees(pos)
