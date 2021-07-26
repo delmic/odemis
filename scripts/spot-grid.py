@@ -29,6 +29,7 @@ from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 MAX_WIDTH = 2000  # px
 PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
 DEFAULT_MAGNIFICATION = 50
+PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
 
 
 class VideoDisplayerGrid(VideoDisplayer):
@@ -37,8 +38,7 @@ class VideoDisplayerGrid(VideoDisplayer):
     It should be pretty much platform independent.
     """
 
-    def __init__(self, title="Live image", size=(640, 480), gridsize=None,
-                 pxsize=PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION):
+    def __init__(self, title="Live image", size=(640, 480), gridsize=None, pxsize=PIXEL_SIZE):
         """
         Displays the window on the screen
         size (2-tuple int,int): X and Y size of the window at initialisation
@@ -140,10 +140,10 @@ class ImageWindowApp(wx.App):
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         info = [
             "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
-            "pitch-x: {:.2f} um".format(self.pixelsize * self.scale[0]),
-            "pitch-y: {:.2f} um".format(self.pixelsize * self.scale[1]),
-            "translation-x: {:.1f} um".format(self.pixelsize * self.translation[0]),
-            "translation-y: {:.1f} um".format(self.pixelsize * self.translation[1]),
+            "pitch-x: {:.2f} um".format(self.pixelsize * self.scale[0] * 1e6),
+            "pitch-y: {:.2f} um".format(self.pixelsize * self.scale[1] * 1e6),
+            "translation-x: {:.1f} um".format(self.pixelsize * self.translation[0] * 1e6),
+            "translation-y: {:.1f} um".format(self.pixelsize * self.translation[1] * 1e6),
             "shear: {:.5f} ".format(self.shear),
         ]
         ctx2 = cairo.Context(text_surface)
@@ -216,7 +216,7 @@ class StaticImageDataFlow(model.DataFlow):
         self.notify(self._detector.array)
 
 
-def live_display(ccd, dataflow, kill_ccd=True, gridsize=None, pxsize=PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION):
+def live_display(ccd, dataflow, pxsize, kill_ccd=True, gridsize=None):
     """
     Acquire an image from one (or more) dataflow and display it with a spot grid overlay.
     ccd: a camera object
@@ -304,16 +304,16 @@ def main(args):
         converter = dataio.find_fittest_converter(options.filename, default=None, mode=os.O_RDONLY)
         data = converter.read_data(options.filename)[0]
         fakeccd = StaticCCD(options.filename, "fakeccd", data)
-        live_display(fakeccd, fakeccd.data, gridsize=options.gridsize, pxsize=pxsize)
+        live_display(fakeccd, fakeccd.data, pxsize, gridsize=options.gridsize)
     elif options.role:
         if get_backend_status() != BACKEND_RUNNING:
             raise ValueError("Backend is not running while role command is specified.")
         ccd = model.getComponent(role=options.role)
-        live_display(ccd, ccd.data, kill_ccd=False, gridsize=options.gridsize, pxsize=pxsize)
+        live_display(ccd, ccd.data, pxsize, kill_ccd=False, gridsize=options.gridsize)
     else:
         ccd = ueye.Camera("camera", "ccd", device=None)
         ccd.SetFrameRate(2)
-        live_display(ccd, ccd.data, gridsize=options.gridsize, pxsize=pxsize)
+        live_display(ccd, ccd.data, pxsize, gridsize=options.gridsize)
     return 0
 
 
