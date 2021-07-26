@@ -27,7 +27,7 @@ from odemis.driver import ueye
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 
 MAX_WIDTH = 2000  # px
-PIXEL_SIZE_SAMPLE_PLANE = 3.45
+PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
 DEFAULT_MAGNIFICATION = 50
 
 
@@ -42,7 +42,7 @@ class VideoDisplayerGrid(VideoDisplayer):
         """
         Displays the window on the screen
         size (2-tuple int,int): X and Y size of the window at initialisation
-        px_size (float): pixelsize in µm
+        px_size (float): pixelsize in m
         Note that the size of the window automatically adapts afterwards to the
         coming pictures
         """
@@ -223,7 +223,7 @@ def live_display(ccd, dataflow, kill_ccd=True, gridsize=None, pxsize=PIXEL_SIZE_
     dataflow_name: name of the dataflow to access
     kill_ccd: True if it is required to terminate the ccd after closing the window
     gridsize: size of the grid of spots.
-    px_size (float): pixelsize in µm
+    px_size (float): pixelsize in m
     """
     # create a window
     window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize, pxsize)
@@ -264,7 +264,7 @@ def main(args):
     parser.add_argument("--gridsize", dest="gridsize", nargs=2, metavar="<gridsize>", type=int, default=None,
                         help="size of the grid of spots in x y, default 8 8")
     parser.add_argument("--magnification", dest="magnification", type=float,
-                        help="magnification in µm (typically 40 or 50)")
+                        help="magnification (typically 40 or 50)")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
                         default=0, help="set verbosity level (0-2, default = 0)")
     options = parser.parse_args(args[1:])
@@ -289,14 +289,14 @@ def main(args):
     if options.magnification:
         magnification = options.magnification
         if lens_mag and lens_mag != magnification:
-            logging.warning("Requested magnification %s µm differs from lens magnification %s µm.",
+            logging.warning("Requested magnification %s differs from lens magnification %s.",
                             magnification, lens_mag)
     elif lens_mag:
         magnification = lens_mag
-        logging.debug("No magnification specified, using lens magnification %s µm.", lens_mag)
+        logging.debug("No magnification specified, using lens magnification %s.", lens_mag)
     else:
         magnification = DEFAULT_MAGNIFICATION
-        logging.warning("No magnification specified, falling back to %s µm", magnification)
+        logging.warning("No magnification specified, falling back to %s.", magnification)
     pxsize = PIXEL_SIZE_SAMPLE_PLANE / magnification
 
     if options.filename:
