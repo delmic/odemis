@@ -1526,15 +1526,15 @@ class StreamView(View):
 
         # If needed clip current movements in x/y direction to the maximum allowed stage limits
         stage_limits = self._getStageLimitsXY()
-        if "x" in stage_limits and not stage_limits["x"][0] <= req_abs_move["x"] <= stage_limits["x"][1]:
+        if not stage_limits["x"][0] <= req_abs_move["x"] <= stage_limits["x"][1]:
             rel_move["x"] = max(stage_limits["x"][0], min(req_abs_move["x"], stage_limits["x"][1])) - current_pos["x"]
-            logging.info("Movements of the stage in x direction are limited by the stage limit, the movement is "
-                         "restricted to %s mm." % (rel_move["x"] * 1e3))
+            logging.info("The movement of the stage in x direction is limited by the stage limits to %s mm." % (
+                        rel_move["x"] * 1e3))
 
-        if "y" in stage_limits and not stage_limits["y"][0] <= req_abs_move["y"] <= stage_limits["y"][1]:
+        if not stage_limits["y"][0] <= req_abs_move["y"] <= stage_limits["y"][1]:
             rel_move["y"] = max(stage_limits["y"][0], min(req_abs_move["y"], stage_limits["y"][1])) - current_pos["y"]
-            logging.info("Movements of the stage in y direction are limited by the stage limit, the movement is "
-                         "restricted to %s mm." % (rel_move["y"] * 1e3))
+            logging.info("The movement of the stage in y direction is limited by the stage limits to %s mm." % (
+                        rel_move["y"] * 1e3))
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
@@ -1575,25 +1575,33 @@ class StreamView(View):
         if not self._stage:
             return None
 
-        move = {"x": pos[0], "y": pos[1]}
+        move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
 
-        # If needed clip current movements in x/y direction to the maximum allowed stage limits
-        stage_limits = self._getStageLimitsXY()
-        if "x" in stage_limits and not stage_limits["x"][0] <= move["x"] <= stage_limits["x"][1]:
-            move["x"] = max(stage_limits["x"][0], min(move["x"], stage_limits["x"][1]))
-            logging.info("Movements of the stage in x limited to %s, restricting movement to %s mm." %
-                         (stage_limits["x"], move["x"] * 1e3))
-
-        if "y" in stage_limits and not stage_limits["y"][0] <= move["y"] <= stage_limits["y"][1]:
-            move["y"] = max(stage_limits["y"][0], min(move["y"], stage_limits["y"][1]))
-            logging.info("Movements of the stage in y limited to %s, restricting movement to %s mm." %
-                         (stage_limits["y"], move["y"] * 1e3))
-
-        logging.debug("Requesting stage to move to %s m", move)
+        logging.debug("Requesting stage to move to %s mm in x direction and %s mm in y direction",
+                      move["x"] * 1e3, move["y"] * 1e3)
         f = self._stage.moveAbs(move)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f
+
+    def clipToStageLimits(self, pos):
+        """
+        Clip current a position in x/y direction to the maximum allowed stage limits.
+
+        :param pos (dict): Position to be clipped with keys "x" and "y"
+        :return(dict): Position clipped to the stage limits with keys "x" and "y"
+        """
+        stage_limits = self._getStageLimitsXY()
+        if not stage_limits["x"][0] <= pos["x"] <= stage_limits["x"][1]:
+            pos["x"] = max(stage_limits["x"][0], min(pos["x"], stage_limits["x"][1]))
+            logging.info("Movements of the stage in x limited to %s mm, restricting movement to %s mm.",
+                         stage_limits["x"], pos["x"] * 1e3)
+
+        if not stage_limits["y"][0] <= pos["x"] <= stage_limits["y"][1]:
+            pos["y"] = max(stage_limits["y"][0], min(pos["y"], stage_limits["y"][1]))
+            logging.info("Movements of the stage in y limited to %s mm, restricting movement to %s mm.",
+                         stage_limits["y"], pos["y"] * 1e3)
+        return pos
 
     def _getStageLimitsXY(self):
         """
@@ -1605,16 +1613,16 @@ class StreamView(View):
         """
         stage_limits = {}
         # Physical stage limits
-        if "x" in self._stage.axes and hasattr(self._stage.axes["x"], "range"):
+        if hasattr(self._stage.axes["x"], "range"):
             stage_limits["x"] = list(self._stage.axes["x"].range)
-        if "y" in self._stage.axes and hasattr(self._stage.axes["y"], "range"):
+        if hasattr(self._stage.axes["y"], "range"):
             stage_limits["y"] = list(self._stage.axes["x"].range)
 
         # Area which can be used for imaging
         pos_active_range = self._stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
-        if "x" in pos_active_range and "x" in stage_limits:
+        if "x" in pos_active_range:
             stage_limits = self._updateStageLimits(stage_limits, {"x": pos_active_range["x"]})
-        if "y" in pos_active_range and "y" in stage_limits:
+        if "y" in pos_active_range:
             stage_limits = self._updateStageLimits(stage_limits, {"y": pos_active_range["y"]})
 
         if not stage_limits:

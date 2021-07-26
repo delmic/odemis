@@ -608,6 +608,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         phys_pos (float, float): the coordinates of the center of the buffer in
                                  physical units (m, with Y going up)
         """
+        move_dict = self.view.clipToStageLimits({"x": phys_pos[0], "y": phys_pos[1]})
+        phys_pos = (move_dict["x"], move_dict["y"])
+
         # in case we are not attached to a view yet (shouldn't happen)
         super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
         if self.view:

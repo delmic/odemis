@@ -1550,20 +1550,11 @@ class DraggableCanvas(BitmapCanvas):
             offset = (-shift[0] / self.scale, shift[1] / self.scale)
             new_pos = [self.p_buffer_center[0] + offset[0],
                        self.p_buffer_center[1] + offset[1]]
-
-            # Update the position within the allowed limits. The Streamview class logs if the movement is limited.
-            stage_limits = self.view._getStageLimitsXY()
-            if "x" in stage_limits and not stage_limits["x"][0] <= new_pos[0] <= stage_limits["x"][1]:
-                new_pos[0] = max(stage_limits["x"][0], min(new_pos[0], stage_limits["x"][1]))
-
-            if "y" in stage_limits and not stage_limits["y"][0] <= new_pos[1] <= stage_limits["y"][1]:
-                new_pos[1] = max(stage_limits["y"][0], min(new_pos[1], stage_limits["y"][1]))
+            logging.debug("Double click at %s", new_pos)
 
             self.recenter_buffer(new_pos)
 
             self.on_center_position_changed(offset)
-
-            logging.debug("Double click at %s", new_pos)
 
         super(DraggableCanvas, self).on_dbl_click(evt)
 
