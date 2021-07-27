@@ -5316,7 +5316,7 @@ def __init_resources():
                                 </XRCED>
                               </object>
                               <option>1</option>
-                              <flag>wxTOP</flag>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>18</border>
                             </object>
                             <object class="sizeritem">

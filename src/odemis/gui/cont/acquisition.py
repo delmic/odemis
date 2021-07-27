@@ -2213,8 +2213,9 @@ class FastEMAlignmentController:
 
         # Change button to "cancel", show progress bar
         self._panel.align_gauge_progress.Show()
-        # make sure label is displayed on the right, but gauge bar occupies the whole free space
-        # (regular spacer cannot be hidden, so use panel instead)
+        # Label is displayed on the right, but during the acquisition, we want the gauge bar to occupy the
+        # full available space --> use a panel instead of a spacer which can be hidden (spacers cannot) to
+        # make it look nice.
         self._panel.align_spacer_panel.Hide()
         self._panel.align_lbl_gauge.Hide()
         self._panel.btn_align.SetLabel("Cancel")
