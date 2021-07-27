@@ -4414,17 +4414,6 @@
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="align_lbl_gauge">
-                                <label>~ 30 seconds</label>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxTOP|wxBOTTOM</flag>
-                              <border>14</border>
-                            </object>
-                            <object class="sizeritem">
                               <object class="wxGauge" name="align_gauge_progress">
                                 <size>-1,10</size>
                                 <range>100</range>
@@ -4439,6 +4428,26 @@
                               <flag>wxTOP</flag>
                               <border>18</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="wxPanel" name="align_spacer_panel">
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="align_lbl_gauge">
+                                <label>~ 30 seconds</label>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <style>wxALIGN_RIGHT</style>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>

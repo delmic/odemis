@@ -504,8 +504,9 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_fastem_alignment = xrc.XRCCTRL(self, "pnl_fastem_alignment")
         self.btn_align = xrc.XRCCTRL(self, "btn_align")
-        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
         self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
+        self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
+        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
         self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
@@ -5304,17 +5305,6 @@ def __init_resources():
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="align_lbl_gauge">
-                                <label>~ 30 seconds</label>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxTOP|wxBOTTOM</flag>
-                              <border>14</border>
-                            </object>
-                            <object class="sizeritem">
                               <object class="wxGauge" name="align_gauge_progress">
                                 <size>-1,10</size>
                                 <range>100</range>
@@ -5329,6 +5319,26 @@ def __init_resources():
                               <flag>wxTOP</flag>
                               <border>18</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="wxPanel" name="align_spacer_panel">
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="align_lbl_gauge">
+                                <label>~ 30 seconds</label>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <style>wxALIGN_RIGHT</style>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
