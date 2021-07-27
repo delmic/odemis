@@ -2201,17 +2201,20 @@ class FastEMAlignmentController:
         self._panel = panel
 
         self._panel.align_gauge_progress.Hide()
-        self._panel.align_btn_cancel.Hide()
-        self._panel.align_lbl_gauge.Hide()
-
         panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
 
+        self._is_aligning = False
+
     def _on_btn_align(self, evt):
-        # Disable button, show progress bar
-        self._panel.btn_align.Enable(False)
+        if self._is_aligning:
+            logging.error("Cancelling alignment currently not supported.")
+            return
+        self._is_aligning = True
+
+        # Change button to "cancel", show progress bar
         self._panel.align_gauge_progress.Show()
-        self._panel.align_btn_cancel.Show()
-        self._panel.align_lbl_gauge.Show()
+        self._panel.align_lbl_gauge.Hide()
+        self._panel.btn_align.SetLabel("Cancel")
         self._panel.Parent.Layout()
 
         # Start alignment
@@ -2220,15 +2223,12 @@ class FastEMAlignmentController:
 
     @call_in_wx_main
     def _on_alignment_done(self, future):
-        # Update .is_aligned
         self._tab_data.main.is_aligned.value = True
-
-        # Change text colour to green to show alignment is done
-        self._panel.btn_align.SetForegroundColour(wx.GREEN)
+        self._is_aligning = False
 
         # Enable button, hide progress bar
-        self._panel.btn_align.Enable(True)
         self._panel.align_gauge_progress.Hide()
-        self._panel.align_btn_cancel.Hide()
-        self._panel.align_lbl_gauge.Hide()
+        self._panel.align_lbl_gauge.Show()
+        self._panel.align_lbl_gauge.SetLabel("Alignment done.")
+        self._panel.btn_align.SetLabel("Alignment...")
         self._panel.Parent.Layout()
