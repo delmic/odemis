@@ -192,15 +192,15 @@ class TestFindGridSpots(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
                                                 decimal=1)
 
-    def test_find_grid(self):
+    def test_find_grid_affine(self):
         """
         Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
-        that the rotation, scaling and translation are correct.
+        that the rotation, scaling, translation and shear are correct when using the similarity transformation method.
         """
         image = numpy.zeros((256, 256))
         # set a grid of 8 by 8 points to 1
         image[54:150:12, 54:150:12] = 1
-        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8))
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8), method='affine')
         self.assertAlmostEqual(rotation, 0, places=4)
         self.assertEqual(shear, 0)
         # create a grid that contains the coordinates of the spots
@@ -210,6 +210,33 @@ class TestFindGridSpots(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=2)
         numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
         numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_find_grid_similarity(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct when using the similarity transformation method.
+        """
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8), method='similarity')
+        self.assertAlmostEqual(rotation, 0, places=4)
+        self.assertEqual(shear, None)
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(54, 150, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=2)
+        numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_wrong_method(self):
+        """Test that an error is raised when a wrong method is passed."""
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        with self.assertRaises(ValueError):
+            spot.FindGridSpots(image, (8, 8), method='scaling')
 
     def test_find_grid_on_image(self):
         """

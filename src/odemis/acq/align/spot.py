@@ -33,7 +33,7 @@ from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
-from odemis.util.transform import AffineTransform
+from odemis.util.transform import AffineTransform, SimilarityTransform
 import os
 from scipy.spatial import cKDTree as KDTree
 import threading
@@ -342,7 +342,7 @@ def FindSpot(image, sensitivity_limit=100):
     return max_pos
 
 
-def FindGridSpots(image, repetition):
+def FindGridSpots(image, repetition, method="affine"):
     """
     Find the coordinates of a grid of spots in an image. And find the
     corresponding transformation to transform a grid centered around the origin
@@ -354,6 +354,11 @@ def FindGridSpots(image, repetition):
         Data array containing the greyscale image.
     repetition : tuple of ints
         Number of expected spots in (X, Y).
+    method : str, "affine" or "similarity"
+        The transformation method used to get the returned grid of spots.
+        If the similarity method is used the returned grid has 90 degree angles with equal scaling in x and y.
+        It the affine method is used the returned grid contains a shear component, therefore the angles in the grid
+        do not have to be 90 degrees. The grid can also have different scaling in x and y.
 
     Returns
     -------
@@ -364,13 +369,15 @@ def FindGridSpots(image, repetition):
         Translation from the origin to the center of the grid in image space,
         origin is top left of the image. Primary axis points right and the
         secondary axis points down.
-    scaling : tuple of two floats
-        Scaling factors for primary and secondary axis.
+    scaling : tuple of two floats or float
+        Scaling factors for primary and secondary axis when the affine method is used.
+        Single scaling factor when the similarity method is used.
     rotation : float
         Rotation in image space, positive rotation is clockwise.
     shear : float
         Horizontal shear factor. A positive shear factor transforms a coordinate
-        in the positive x direction parallel to the x axis.
+        in the positive x direction parallel to the x axis. The shear is None
+        when similarity method is used.
 
     """
     # Find the center coordinates of the spots in the image.
@@ -389,14 +396,20 @@ def FindGridSpots(image, repetition):
     transform_to_spot_positions = AffineTransform(matrix=transformation_matrix, translation=translation)
     # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
     grid = GridPoints(*repetition)
-    spot_grid = transform_to_spot_positions(grid)
+    spot_grid = transform_to_spot_positions.apply(grid)
     tree = KDTree(spot_positions)
     dd, ii = tree.query(spot_grid, k=1)
     # Sort the original spot positions by mapping them to the order of the GridPoints.
     pos_sorted = spot_positions[ii.ravel(), :]
     # Find the transformation from a grid centered around the origin to the sorted positions.
-    transformation = AffineTransform.from_pointset(grid, pos_sorted)
-    spot_coordinates = transformation(grid)
+    if method == "affine":
+        transformation = AffineTransform.from_pointset(grid, pos_sorted)
+    elif method == "similarity":
+        transformation = SimilarityTransform.from_pointset(grid, pos_sorted)
+        transformation.shear = None  # The similarity transform does not have a shear component.
+    else:
+        raise ValueError("Method: %s is unknown, should be 'affine' or 'similarity'." % method)
+    spot_coordinates = transformation.apply(grid)
     return spot_coordinates, translation, transformation.scale, transformation.rotation, transformation.shear
 
 
