@@ -18,13 +18,14 @@ from __future__ import division
 
 import logging
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import cv2
 import numpy
 import scipy.signal
 from odemis import model
 from odemis.util import img
+from odemis.util.peak_local_max import peak_local_max
 from odemis.util.transform import to_physical_space
 from scipy import ndimage
 from scipy.cluster.vq import kmeans
@@ -279,7 +280,7 @@ def MaximaFind(image, qty, len_object=18):
 
     """
     # Reduce the noise in the image.
-    filtered = BandPassFilter(image, 1, len_object)
+    filtered = bandpass_filter(image, 1, len_object)
 
     # Dilate the filtered image to make the size of each spot larger.
     structure = _CreateSEDisk(len_object // 2)
@@ -332,6 +333,91 @@ def MaximaFind(image, qty, len_object=18):
         refined_center[idx] = numpy.array(FindCenterCoordinates(spot))
     refined_position = pos + refined_center
     return refined_position
+
+
+def _get_subimage(
+    image: numpy.ndarray, ji: Tuple[int, int], size: int
+) -> numpy.ndarray:
+    """
+    Return a subimage of an image.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image
+    ji : tuple of ints (j, i)
+        2-dimensional index of the array `image`
+    size : int
+        Size of the output image
+
+    Returns
+    -------
+    out : ndarray
+        A view of the input array `image` centered at `ji` of shape
+        `(2 * size + 1, 2 * size + 1)`.
+
+    """
+    n, m = image.shape
+    j, i = ji
+    if any((j < size, i < size, j >= n - size, i >= m - size)):
+        raise IndexError("Position too close to the edge of the image.")
+    return image[(j - size):(j + size + 1), (i - size):(i + size + 1)]
+
+
+def find_spot_positions(
+    image: numpy.ndarray,
+    sigma: float,
+    threshold_abs: Optional[float] = None,
+    threshold_rel: Optional[float] = None,
+    num_spots: Optional[int] = None,
+) -> numpy.ndarray:
+    """
+    Find the center coordinates of maximum spots in an image.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image.
+    sigma : float
+        Expected size of the spots. Assuming the spots are Gaussian shaped,
+        this is the standard deviation.
+    threshold_abs : float, optional
+        Minimum intensity of peaks. By default, the absolute threshold is
+        the minimum intensity of the image.
+    threshold_rel : float, optional
+        Minimum intensity of peaks, calculated as `max(image) * threshold_rel`.
+    num_spots : int, optional
+        Maximum number of spots. When the number of spots exceeds `num_spots`,
+        return `num_spots` peaks based on highest spot intensity.
+
+    Returns
+    -------
+    refined_position : ndarray
+        A 2-dimensional array of shape `(N, 2)` containing the coordinates of
+        the maxima.
+
+    """
+    size = int(round(3 * sigma))
+    min_distance = 2 * size
+    filtered = bandpass_filter(image, sigma, min_distance)
+    coordinates = peak_local_max(
+        filtered,
+        min_distance=min_distance,
+        threshold_abs=threshold_abs,
+        threshold_rel=threshold_rel,
+        num_peaks=num_spots,
+        p_norm=2,
+    )
+
+    # Improve coordinate estimate using radial symmetry center.
+    refined_coordinates = numpy.empty_like(coordinates, dtype=float)
+    for idx, ji in enumerate(coordinates):
+        subimg = _get_subimage(filtered, ji, size)
+        rsc = radial_symmetry_center(subimg, smoothing=False)
+        delta = numpy.subtract(rsc, size)
+        refined_coordinates[idx] = ji + delta
+
+    return refined_coordinates
 
 
 def EstimateLatticeConstant(pos):
@@ -420,7 +506,7 @@ def GridPoints(grid_size_x, grid_size_y):
     return numpy.column_stack((xx.ravel(), yy.ravel()))
 
 
-def BandPassFilter(image, len_noise, len_object):
+def bandpass_filter(image, len_noise, len_object):
     """
     Implements a real-space bandpass filter that suppresses pixel noise and
     long-wavelength image variations while retaining information of a
@@ -445,14 +531,17 @@ def BandPassFilter(image, len_noise, len_object):
         The filtered image
 
     """
-    image = numpy.asarray(image).astype(numpy.float64)
+    image = numpy.asarray(image)
 
     # Low-pass filter using a Gaussian kernel.
-    std = numpy.sqrt(2.) * len_noise
-    denoised = ndimage.filters.gaussian_filter(image, std, mode='reflect')
+    denoised = ndimage.filters.gaussian_filter(image, len_noise, mode='reflect')
 
     # Estimate background variations using a boxcar kernel.
     N = 2 * int(round(len_object)) + 1
     background = ndimage.filters.uniform_filter(image, N, mode='reflect')
 
-    return numpy.maximum(denoised - background, 0.)
+    if image.dtype.kind == "u":
+        # Use cv2.subtract for unsigned integers (no wrap-around).
+        return cv2.subtract(denoised, background)
+    else:
+        return numpy.maximum(denoised - background, 0)

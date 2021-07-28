@@ -37,7 +37,7 @@ from scipy.spatial import cKDTree
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 
-from odemis.util.spot import BandPassFilter
+from odemis.util.spot import bandpass_filter
 from ..align import transform
 
 
@@ -66,7 +66,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     # Bold spots
     # Third parameter must be a length in pixels somewhat larger than a typical
     # spot
-    filtered_image = BandPassFilter(filtered_image, 1, 20)
+    filtered_image = bandpass_filter(filtered_image, 1, 20)
 
     image = model.DataArray(filtered_image, data.metadata)  # TODO: why a DataArray?
     avg_intensity = numpy.average(image)

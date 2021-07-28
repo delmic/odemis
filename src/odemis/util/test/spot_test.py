@@ -21,6 +21,7 @@ import numpy
 from odemis import model
 from odemis.dataio import tiff, hdf5
 from odemis.util import spot, synthetic
+from odemis.util.peak_local_max import ensure_spacing
 import os
 import scipy.stats
 import unittest
@@ -294,6 +295,46 @@ class TestRadialSymmetryCenter(unittest.TestCase):
                         jc, ic = spot.radial_symmetry_center(img)
                         self.assertAlmostEqual(j, jc)
                         self.assertAlmostEqual(i, ic)
+
+
+class TestFindSpotPositions(unittest.TestCase):
+    def test_multiple(self):
+        """
+        Generate a test image containing at most 100 randomly distributed spots
+        with guaranteed minimal spacing. `find_spot_positions` should find all
+        spot positions.
+
+        """
+        n = 100
+        shape = (256, 256)
+        refractive_index = 1
+        numerical_aperture = 0.95
+        wavelength = 0.55  # [µm]
+        magnification = 40
+        pixel_size = 3.45  # [µm]
+
+        # Ensure that each time when the test case is run we have the same
+        # 'random' numbers.
+        numpy.random.seed(0)
+
+        sigma = (magnification / pixel_size) * synthetic.psf_sigma_wffm(
+            refractive_index, numerical_aperture, wavelength
+        )
+
+        spacing = int(round(10 * sigma))
+        border = numpy.asarray((spacing, spacing))
+        srange = numpy.asarray(shape) - 2 * border - numpy.array((1, 1))
+        loc = border + srange * numpy.random.random_sample((n, 2))
+        loc = ensure_spacing(loc, spacing=spacing, p_norm=2)
+        image = synthetic.psf_gaussian(shape, loc, sigma)
+
+        ji = spot.find_spot_positions(image, sigma)
+
+        tree = scipy.spatial.cKDTree(loc)
+        distances, indices = tree.query(ji, k=1, workers=-1)
+
+        numpy.testing.assert_array_equal(sorted(indices), range(len(loc)))
+        numpy.testing.assert_array_less(distances, 0.05)
 
 
 if __name__ == "__main__":
