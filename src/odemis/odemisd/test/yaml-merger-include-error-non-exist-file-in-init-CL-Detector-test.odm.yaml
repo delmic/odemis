@@ -1,0 +1,4 @@
+init: {
+    settle_time: !include yaml-merger-error-non-existing-file.odm.yaml,
+    test_input: "a",
+}

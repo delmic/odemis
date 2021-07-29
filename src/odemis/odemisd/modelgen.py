@@ -28,10 +28,12 @@ from __future__ import division
 import collections
 import itertools
 import logging
-from odemis import model
-from odemis.util import mock
+import os
 import re
 import yaml
+
+from odemis import model
+from odemis.util import mock
 
 
 # Detect duplicate keys on mappings (e.g., two components with the same name)
@@ -40,7 +42,11 @@ import yaml
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
+
 class SafeLoader(yaml.SafeLoader):
+    def __init__(self, stream):
+        self._root = os.path.dirname(stream.name)  # Directory containing the YAML file
+        super(SafeLoader, self).__init__(stream)
 
     def construct_mapping(self, node, deep=False):
         # From BaseConstructor
@@ -73,6 +79,88 @@ class SafeLoader(yaml.SafeLoader):
             mapping[key] = value
         return mapping
 
+    def include(self, node):
+        """
+        Method for including values defined in a yaml file into another yaml file. This can be used to add values to
+        a specified key in a dict or outside a dict (e.g. to define the content of a component definition).
+
+        :param node (yaml.nodes.ScalarNode): Contains both the key which indicated to including another file, and the
+        path to the file.
+        :return: Data which from external file which needs to be included.
+        """
+        try:
+            filename = os.path.join(self._root, self.construct_scalar(node))  # For supporting relative paths
+            with open(filename, 'r') as f:
+                logging.info("Loading file '%s' via the !include key", filename)
+                return yaml.load(f, SafeLoader)
+
+        except FileNotFoundError as error:
+            # Informing the user in case the user forgot a comma and maybe received an unclear error as result
+            if any(c in filename for c in ("!", "\n", "\\", "/", " ", ":", "<")):
+                logging.error("File not found, probably because an invalid character is used or a comma is forgotten "
+                              "when using include in a dict.")
+            raise FileNotFoundError(error)
+
+    def construct_yaml_map(self, node):
+        """
+        Method overwriting the original "construct_yaml_map" which adds the functionality to extend/update a dict in a
+        yaml file with an external yaml file via the use of the key "!extend"
+        For double defined keys the values contained in the last "!extend" key will be used.
+        :param node (Mapping node):
+        """
+        data = {}
+        yield data
+
+        # Check all nodes for the "!extend" key
+        for idx, (key_node, value_node) in enumerate(node.value):
+            if key_node.tag == "!extend":
+                filename = os.path.join(self._root, key_node.value)  # For supporting relative paths
+                logging.info("Loading file '%s' via the !extend key", filename)
+                try:
+                    with open(filename, 'r') as f:
+                        try:
+                            node_new = SafeLoader(f).get_single_node()  # Get the data from the external file.
+                        except yaml.parser.ParserError as error:
+                            raise ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
+                                             % (key_node.value, error))
+                except FileNotFoundError as error:
+                    if any(c in filename for c in ("!", "\n", "\\", "/", " ", ":", "<")):
+                        logging.error("File not found, probably because an invalid character is used"
+                                      "or a comma is forgotten when using the '!include' key in a dict.")
+
+                    raise FileNotFoundError(error)
+
+                del node.value[idx]  # Delete the old ScalarNode which defined the reference to the external file.
+                for scal_node in node_new.value:  # Add the respective ScalarNodes to the main MappingNode.
+                    node.value.append(scal_node)  # Order of the output dict is in arbitrary order.
+
+        try:
+            value = self.construct_mapping(node)
+        except yaml.parser.ParserError as error:
+            try:  # A try/catch part because accessing the node structure during an parsing error might fail.
+                for (key_node, value_node) in node.value:
+                    if key_node.tag == "!include" or value_node.tag == "!include":
+                        filename = value_node.value if value_node.tag == "!include" else key_node.value
+                        error = ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
+                                           % (filename, error))
+                        break
+                    if key_node.tag == "!extend" or value_node.tag == "!extend":
+                        filename = value_node.value if value_node.tag == "!extend" else key_node.value
+                        error = ParseError("Parsing of file '%s' using the '!extend' key failed with the error:\n%s"
+                                           % (filename, error))
+                        break
+            except:
+                pass
+            logging.error("Parsing of the input file failed with the following traceback: \n%s", error)
+            raise error
+
+        data.update(value)
+
+# Add yaml merger features to the SafeLoader class to combine multiple yaml files into one
+# Add the key '!include' by adding a constructor which allows to include external yaml files
+SafeLoader.add_constructor('!include', SafeLoader.include)
+# Overwrite construct_yaml_map with custom mapper which adds support for the "!extend" key to extend a dictionary
+SafeLoader.yaml_constructors['tag:yaml.org,2002:map'] = SafeLoader.construct_yaml_map
 
 class ParseError(Exception):
     pass
@@ -898,7 +986,7 @@ class Instantiator(object):
                 comps.add(n)
 
         return comps
-            
+
     def read_yaml(self, f):
         """
         Read content of YAML file. This is a wrapper for yaml.safe_load that returns an
@@ -922,7 +1010,7 @@ class Instantiator(object):
             logging.warning("Settings file reset after loading failed with Exception %s." % ex)
             data = {}
         return data
-        
+
     def _parse_settings(self, settings_file):
         """
         Parse settings file and return persistent properties and metadata in useful format.

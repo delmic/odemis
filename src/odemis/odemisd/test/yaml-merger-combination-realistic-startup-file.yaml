@@ -1,0 +1,60 @@
+# Microscope file which uses multiple parents for a component:
+# * one parent (SEM Scan Interface) creates the component (CL PMT)
+# * one parent (CL Detector) uses the component
+
+SPARC2: {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "CL Detector"],
+}
+
+"SEM Scan Interface": !include yaml-merger-combination-SEM-Scan-Interface.yaml
+
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: !include yaml-merger-include-complete-init-CL-Detector-test.odm.yaml,
+    dependencies: {
+       "detector": "CL PMT",
+       # A relative path reference:
+       !extend yaml-merger-relative-path-test/yaml-merger-combination-extend-CL-dep-pmt-control.yaml,
+    },
+}
+
+"CL PMT": {
+    # Internal child of SEM Scan Interface, so no class but instead a creator
+    creator: "SEM Scan Interface",
+    role: null,
+    init: {
+        channel: 1,
+        limits: [3, 0],
+    },
+}
+
+"CL PMT control unit": {
+    class: pmtctrl.PMTControl,
+    role: null,
+    init: {
+        port: "/dev/fake", # for simulator
+        prot_time: 0.0002,  # s
+        prot_curr: 50.e-6,  # A
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SEM ExtXY, so no class
+    role: e-beam,
+    init: {
+        channels: [1, 0],
+        limits: [[0, 5], [0, 5]],  # V
+        park: [0, 0], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
+    },
+    properties: {
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        dwellTime: 10.e-6, # s
+        magnification: 100, # (ratio)
+    },
+    affects: ["CL PMT", "CL Detector", "SEM Scan Interface"] # affects the CCD in case of cathodoluminescence
+}
