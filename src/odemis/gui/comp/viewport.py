@@ -622,7 +622,8 @@ class MicroscopeViewport(ViewPort):
             # Disable temporarily setting the HFW from the mpp to avoid loops.
             self.view.mpp.unsubscribe(self._on_view_mpp_change)
             self.view.mpp.value = mpp
-            self.view.mpp.subscribe(self._on_view_mpp_change)
+            if self.view.fov_hw:
+                self.view.mpp.subscribe(self._on_view_mpp_change)
 
     def _set_fov_from_mpp(self):
         """
