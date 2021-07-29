@@ -658,7 +658,8 @@ class TestGIS(unittest.TestCase):
     def test_updatePositionArm(self):
         """
         Check that the "arm" part of the position VA is updated correctly and an exception is raised when the wrong
-        parameter is passed
+        parameter is passed.
+        Only perform this test in simulation, because MOVING should never be written to Target on the hardware.
         """
         with self.assertRaises(ValueError):
             self.gis._updatePosition(self.datamodel.HybridPlatform.Cancel)
@@ -684,7 +685,8 @@ class TestGIS(unittest.TestCase):
 
     def test_updatePositionReservoir(self):
         """
-        Check that the "reservoir" part of the position VA is updated correctly
+        Check that the "reservoir" part of the position VA is updated correctly.
+        Only perform this test in simulation, because MOVING should never be written to Target on the hardware.
         """
         if not TEST_NOHW == "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
