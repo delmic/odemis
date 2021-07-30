@@ -21,22 +21,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+from concurrent.futures import CancelledError
+import copy
 import glob
 import logging
-from concurrent.futures import CancelledError
 from odemis import model
-from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture, isasync
+from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture, isasync, HwError
 from odemis.util import to_str_escape
+from odemis.util.driver import getSerialDriver
 import os
+import re
+import serial
+from threading import Thread
 import threading
 import time
-import serial
+
 import serial.tools.list_ports
-import re
-from threading import Thread
-import copy
-from odemis.model import HwError
-from odemis.util.driver import getSerialDriver
 
 BAUDRATE = 115200
 DEFAULT_AXIS_SPEED = 0.001  # m / s
@@ -356,24 +356,27 @@ class PMD401Bus(Actuator):
 
     def _doMoveAbs(self, f, pos):
         self._check_hw_error()
-        targets = {}
+        self._updatePosition()
+        current_pos = self._applyInversion(self.position.value)
+
+        shifts = {}
+        if f._must_stop.is_set():
+            raise CancelledError()
         for axname, val in pos.items():
-            if f._must_stop.is_set():
-                self.stopAxis(self._axis_map[axname])
-                raise CancelledError()
             if self._closed_loop[axname]:
+                shifts[axname] = val - current_pos[axname]
                 encoder_cnts = round(val * self._counts_per_meter[axname])
                 self.runAbsTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
-                targets[axname] = val
             else:
-                target = val - self.position.value[axname]
-                steps_float = target * self._steps_per_meter[axname]
+                # No absolute move for open-loop => convert to relative move
+                shifts[axname] = val - current_pos[axname]
+                steps_float = shifts[axname] * self._steps_per_meter[axname]
                 steps = int(steps_float)
                 usteps = int((steps_float - steps) * USTEPS_PER_STEP)
                 self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
-                targets[axname] = None
+
         try:
-            self._waitEndMotion(f, targets)
+            self._waitEndMotion(f, shifts)
         finally:
             # Leave target mode in case of closed-loop move
             for ax in pos:
@@ -382,67 +385,66 @@ class PMD401Bus(Actuator):
 
     def _doMoveRel(self, f, shift):
         self._check_hw_error()
-        targets = {}
-        self._updatePosition()
+
+        shifts = {}
+        if f._must_stop.is_set():
+            raise CancelledError()
+
         for axname, val in shift.items():
-            if f._must_stop.is_set():
-                self.stopAxis(self._axis_map[axname])
-                raise CancelledError()
             if self._closed_loop[axname]:
-                targets[axname] = self.position.value[axname] + val
+                shifts[axname] = val
                 encoder_cnts = val * self._counts_per_meter[axname]
                 self.runRelTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
             else:
+                shifts[axname] = val
                 steps_float = val * self._steps_per_meter[axname]
                 steps = int(steps_float)
                 usteps = int((steps_float - steps) * USTEPS_PER_STEP)
                 self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
-                targets[axname] = None
+
         try:
-            self._waitEndMotion(f, targets)
+            self._waitEndMotion(f, shifts)
         finally:
             # Leave target mode in case of closed-loop move
             for ax in shift:
                 self.stopAxis(self._axis_map[ax])
             self._updatePosition()
 
-    def _waitEndMotion(self, f, targets):
+    def _waitEndMotion(self, f, shifts):
         """
         Wait until move is done.
         :param f: (CancellableFuture) move future
-        :param targets: (dict: str --> int) target (for closed-loop), None for open loop
+        :param shifts: (dict: str --> floats) relative move (in m) between current position and previous position
         """
-        move_length = 0
         dur = 0
-        self._updatePosition()
-        for ax, target in targets.items():
-            if target is None:  # open-loop
-                move_length = STROKE_RANGE[1] - STROKE_RANGE[0]
-            else:  # closed-loop
-                move_length = max(abs(self.position.value[ax] - target), move_length)
-            dur = max(move_length / self._speed[ax], dur)
+        for ax, shift in shifts.items():
+            dur = max(abs(shift / self._speed[ax]), dur)
 
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
 
-        for axname, target in targets.items():
-            axis = self._axis_map[axname]
-            moving = True
-            end_time = time.time() + max_dur
-            while moving:
-                if f._must_stop.is_set():
+        end_time = time.time() + max_dur
+        moving_axes = set(shifts.keys())  # All axes (still) moving
+        while moving_axes:
+            if f._must_stop.is_set():
+                for axname in moving_axes:
                     self.stopAxis(self._axis_map[axname])
                     raise CancelledError()
-                if time.time() > end_time:
-                    raise IOError("Timeout while waiting for end of motion on axis %s" % axis)
+
+            if time.time() > end_time:
+                raise TimeoutError("Timeout after while waiting for end of motion on axes %s for %g s" % (moving_axes, max_dur))
+
+            for axname in moving_axes.copy():  # Copy as the set can change during the iteration
+                axis = self._axis_map[axname]
                 if self._closed_loop[axname]:
-                    if target is None:
-                        raise ValueError("No target provided for closed-loop move on axis %s." % axis)
                     moving = self.isMovingClosedLoop(axis)
                 else:
                     moving = self.isMovingOpenLoop(axis)
-                self._check_hw_error()
-                time.sleep(0.05)
+                if not moving:
+                    moving_axes.discard(axname)
+
+            self._check_hw_error()
+            time.sleep(0.05)
 
     def _check_hw_error(self):
         """
