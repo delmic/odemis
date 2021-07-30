@@ -322,6 +322,7 @@ def EstimateLatticeConstant(pos):
     ----------
     pos : array like
         A 2D array of shape (N, 2) containing the (x, y) coordinates of the points.
+        Where N must be at least 5.
 
     Returns
     -------
@@ -330,6 +331,10 @@ def EstimateLatticeConstant(pos):
         the second row corresponds to the (x, y) direction of the second lattice constant.
 
     """
+    if len(pos) < 5:
+        # Because the lattice constants are based on the 4 nearest neighbours of a point,
+        # a total of 5 points is needed to estimate the lattice constants.
+        raise ValueError("Need at least 5 positions to estimate the lattice constants")
     # Find the closest 4 neighbours (excluding itself) for each point.
     tree = KDTree(pos)
     dd, ii = tree.query(pos, k=5)
