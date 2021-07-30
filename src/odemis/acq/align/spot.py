@@ -46,6 +46,9 @@ FOV_MARGIN = 250  # pixels
 STAGE_MOVE = "Stage move"
 BEAM_SHIFT = "Beam shift"
 OBJECTIVE_MOVE = "Objective lens move"
+# Constants for selecting the correct method in FindGridSpots
+GRID_AFFINE = "affine"
+GRID_SIMILARITY = "similarity"
 
 
 def MeasureSNR(image):
@@ -342,7 +345,7 @@ def FindSpot(image, sensitivity_limit=100):
     return max_pos
 
 
-def FindGridSpots(image, repetition, method="affine"):
+def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
     """
     Find the coordinates of a grid of spots in an image. And find the
     corresponding transformation to transform a grid centered around the origin
@@ -353,8 +356,10 @@ def FindGridSpots(image, repetition, method="affine"):
     image : array like
         Data array containing the greyscale image.
     repetition : tuple of ints
-        Number of expected spots in (X, Y).
-    method : str, "affine" or "similarity"
+        Number of expected spots in (X, Y). Where the total number of expected spots must be at least 6.
+    spot_size : int
+        A length in pixels somewhat larger than a typical spot.
+    method : GRID_AFFINE or GRID_SIMILARITY
         The transformation method used to get the returned grid of spots.
         If the similarity method is used the returned grid has 90 degree angles with equal scaling in x and y.
         It the affine method is used the returned grid contains a shear component, therefore the angles in the grid
@@ -380,11 +385,13 @@ def FindGridSpots(image, repetition, method="affine"):
         when similarity method is used.
 
     """
+    if repetition[0] * repetition[1] < 6:
+        raise ValueError("Need at least 6 expected points to properly find the grid.")
     # Find the center coordinates of the spots in the image.
-    spot_positions = MaximaFind(image, repetition[0] * repetition[1])
+    spot_positions = MaximaFind(image, repetition[0] * repetition[1], len_object=spot_size)
     if len(spot_positions) < repetition[0] * repetition[1]:
         logging.warning('Not enough spots found, returning only the found spots.')
-        return spot_positions, None, None, None
+        return spot_positions, None, None, None, None
     # Estimate the two most common (orthogonal) directions in the grid of spots, defined in the image coordinate system.
     lattice_constants = EstimateLatticeConstant(spot_positions)
     # Each row in the lattice_constants array corresponds to one direction. By transposing the array the direction
@@ -402,9 +409,9 @@ def FindGridSpots(image, repetition, method="affine"):
     # Sort the original spot positions by mapping them to the order of the GridPoints.
     pos_sorted = spot_positions[ii.ravel(), :]
     # Find the transformation from a grid centered around the origin to the sorted positions.
-    if method == "affine":
+    if method == GRID_AFFINE:
         transformation = AffineTransform.from_pointset(grid, pos_sorted)
-    elif method == "similarity":
+    elif method == GRID_SIMILARITY:
         transformation = SimilarityTransform.from_pointset(grid, pos_sorted)
         transformation.shear = None  # The similarity transform does not have a shear component.
     else:
