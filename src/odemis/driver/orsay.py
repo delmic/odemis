@@ -19,11 +19,11 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import collections.abc
 
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util.weak import WeakMethod
-from odemis.model._vattributes import NotSettableError
 from ConsoleClient.Communication.Connection import Connection
 
 import threading
@@ -33,18 +33,17 @@ import inspect
 from math import pi
 import math
 
-# from varname import nameof
-
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
 VALVE_OPEN = 1
 VALVE_CLOSED = 2
 VALVE_ERROR = 3
 
-VACUUM_CHAMBER_PRESSURE_RNG = (0, 150000)  # Pa
-NITROGEN_PRESSURE_RNG = (0, 5000000)  # Pa  Eventhough 0 is nowhere near a realistic value for the compressed
-# nitrogen, it is the initialisation value of this parameter in the Orsay server, meaning it needs to be included in
-# the VA's range
+VACUUM_PRESSURE_RNG = (0, 150000)  # Pa
+NITROGEN_PRESSURE_RNG = (0, 5e6)  # Pa  Eventhough 0 is nowhere near a realistic value for the compressed
+# nitrogen or air, it is the initialisation value of this parameter in the Orsay server, meaning it needs to be included
+# in the VA's range
+COMP_AIR_PRESSURE_RNG = (0, 5e6)  # Pa
 
 ROD_NOT_DETECTED = 0
 ROD_RESERVOIR_NOT_STRUCK = 1
@@ -62,11 +61,24 @@ HEATER_RISING = "UP"
 HEATER_FALLING = "DOWN"
 HEATER_ERROR = "EOFF"
 
-IMAGEFORMAT_OPTIONS = ((512, 512), (1024, 1024))  # TODO: add support for rectangular options (640, 480) and (800, 600)
-
 NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
 INTERLOCK_DETECTED_STR = "Interlock event detected"
+
+
+def get_orsay_param_connectors(obj):
+    """
+    Retrieve a list of references to the instances of class OrsayParameterConnector of the passed object.
+    :param obj: any object of which to retrieve references to its instances of class OrsayParameterConnector
+    :return: a list of references to the connectors
+    """
+    connectorList = [x for (_, x) in  # save only the references to the returned members
+                     inspect.getmembers(obj,  # get all members of this object
+                                        lambda thing: isinstance(thing, OrsayParameterConnector)  # get only the
+                                        # OrsayParameterConnectors from all members of this object
+                                        )
+                     ]
+    return connectorList
 
 
 class OrsayComponent(model.HwComponent):
@@ -165,14 +177,14 @@ class OrsayComponent(model.HwComponent):
             self._gis_reservoir = GISReservoir(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._gis_reservoir)
 
-        # create the FIB device child
+        # create the FIB vacuum child
         try:
-            kwargs = children["fib-device"]
+            kwargs = children["fib-vacuum"]
         except (KeyError, TypeError):
-            logging.info(no_child_msg % "fib-device")
+            logging.info(no_child_msg % "fib-vacuum")
         else:
-            self._fib_device = FIBDevice(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._fib_device)
+            self._fib_vacuum = FIBVacuum(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_vacuum)
 
         # create the FIB source child
         try:
@@ -253,12 +265,12 @@ class OrsayComponent(model.HwComponent):
             logging.debug("Orsay server connection monitor thread finished.")
             self._stop_connection_monitor.clear()
 
-    def _updateProcessInfo(self, parameter=None, attributeName="Actual"):
+    def _updateProcessInfo(self, parameter=None, attr_name="Actual"):
         """
         Reads the process information from the Orsay server and saves it in the processInfo VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self.datamodel.HybridPlatform.ProcessInfo
@@ -266,7 +278,7 @@ class OrsayComponent(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateProcessInfo. Parameter should be "
                              "datamodel.HybridPlatform.ProcessInfo. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         currentProcessInfo = str(parameter.Actual)
         currentProcessInfo = currentProcessInfo.replace("N/A", "")
@@ -353,12 +365,12 @@ class pneumaticSuspension(model.HwComponent):
         self._updatePower()
         self._updatePressure()
 
-    def _updatePower(self, parameter=None, attributeName="Actual"):
+    def _updatePower(self, parameter=None, attr_name="Actual"):
         """
         Reads the power status from the Orsay server and saves it in the power VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._valve
@@ -366,7 +378,7 @@ class pneumaticSuspension(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
                              "datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         valve_state = int(parameter.Actual)
         log_msg = "ValvePneumaticSuspension state changed to: %s."
@@ -381,12 +393,12 @@ class pneumaticSuspension(model.HwComponent):
         else:  # if _valve.Actual == VALVE_TRANSIT, or undefined
             logging.debug(log_msg % valve_state)
 
-    def _updatePressure(self, parameter=None, attributeName="Actual"):
+    def _updatePressure(self, parameter=None, attr_name="Actual"):
         """
         Reads the pressure from the Orsay server and saves it in the pressure VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._gauge
@@ -394,16 +406,16 @@ class pneumaticSuspension(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
                              "datamodel.HybridPlatform.Manometer2.Pressure. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.pressure._set_value(float(parameter.Actual), force_write=True)
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
                 not self.parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
@@ -411,7 +423,7 @@ class pneumaticSuspension(model.HwComponent):
                              "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
                              "datamodel.HybridPlatform.Manometer2.ErrorState or None. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         eState = ""
         vpsEState = str(self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual)
@@ -473,7 +485,7 @@ class vacuumChamber(model.Actuator):
 
         Defines the following VA's and links them to the callbacks from the Orsay server:
         + position (VA, read-only, value is {"vacuum" : _chamber.VacuumStatus.Actual})
-        + pressure (FloatContinuous, range=VACUUM_CHAMBER_PRESSURE_RNG, read-only, unit is "Pa",
+        + pressure (FloatContinuous, range=VACUUM_PRESSURE_RNG, read-only, unit is "Pa",
                     value is _chamber.Pressure.Actual)
         """
 
@@ -484,7 +496,7 @@ class vacuumChamber(model.Actuator):
         self._chamber = None
 
         self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
-        self.pressure = model.FloatContinuous(VACUUM_CHAMBER_PRESSURE_RNG[0], range=VACUUM_CHAMBER_PRESSURE_RNG,
+        self.pressure = model.FloatContinuous(VACUUM_PRESSURE_RNG[0], range=VACUUM_PRESSURE_RNG,
                                               readonly=True, unit="Pa")
 
         self._vacuumStatusReached = threading.Event()
@@ -513,12 +525,12 @@ class vacuumChamber(model.Actuator):
         self._updatePosition()
         self._updatePressure()
 
-    def _updatePosition(self, parameter=None, attributeName="Actual"):
+    def _updatePosition(self, parameter=None, attr_name="Actual"):
         """
         Reads the vacuum state from the Orsay server and saves it in the position VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._chamber.VacuumStatus
@@ -531,18 +543,18 @@ class vacuumChamber(model.Actuator):
             self._vacuumStatusReached.set()
         else:
             self._vacuumStatusReached.clear()
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         currentVacuum = int(parameter.Actual)
         logging.debug("Vacuum status changed to %f." % currentVacuum)
         self.position._set_value({"vacuum": currentVacuum}, force_write=True)
 
-    def _updatePressure(self, parameter=None, attributeName="Actual"):
+    def _updatePressure(self, parameter=None, attr_name="Actual"):
         """
         Reads the chamber pressure from the Orsay server and saves it in the pressure VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._chamber.Pressure
@@ -550,7 +562,7 @@ class vacuumChamber(model.Actuator):
             raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
                              "datamodel.HybridPlatform.AnalysisChamber.Pressure. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.pressure._set_value(float(parameter.Actual), force_write=True)
 
@@ -674,12 +686,12 @@ class pumpingSystem(model.HwComponent):
         self._updatePrimaryPumpOn()
         self._updateNitrogenPressure()
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is not self._system.Manometer1.ErrorState and parameter is not self._system.TurboPump1.ErrorState \
                 and parameter is not None:
@@ -687,7 +699,7 @@ class pumpingSystem(model.HwComponent):
                              "datamodel.HybridPlatform.PumpingSystem.Manometer1.ErrorState or "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.ErrorState or None. "
                              "Parameter passed is %s" % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         eState = ""
         manEState = self._system.Manometer1.ErrorState.Actual
@@ -703,12 +715,12 @@ class pumpingSystem(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateSpeed(self, parameter=None, attributeName="Actual"):
+    def _updateSpeed(self, parameter=None, attr_name="Actual"):
         """
         Reads the turbopump's speed from the Orsay server and saves it in the speed VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Speed
@@ -716,16 +728,16 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateSpeed. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Speed. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.speed._set_value(float(parameter.Actual), force_write=True)
 
-    def _updateTemperature(self, parameter=None, attributeName="Actual"):
+    def _updateTemperature(self, parameter=None, attr_name="Actual"):
         """
         Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Temperature
@@ -733,16 +745,16 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateTemperature. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
 
-    def _updatePower(self, parameter=None, attributeName="Actual"):
+    def _updatePower(self, parameter=None, attr_name="Actual"):
         """
         Reads the turbopump's power from the Orsay server and saves it in the power VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Power
@@ -750,16 +762,16 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Power. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.power._set_value(float(parameter.Actual), force_write=True)
 
-    def _updateSpeedReached(self, parameter=None, attributeName="Actual"):
+    def _updateSpeedReached(self, parameter=None, attr_name="Actual"):
         """
         Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.TurboPump1.SpeedReached
@@ -767,17 +779,17 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         logging.debug("Speed reached changed to %s." % str(parameter.Actual))
         self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
 
-    def _updateTurboPumpOn(self, parameter=None, attributeName="Actual"):
+    def _updateTurboPumpOn(self, parameter=None, attr_name="Actual"):
         """
         Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.TurboPump1.IsOn
@@ -785,18 +797,18 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
         logging.debug("Turbopump turned %s." % ("on" if state else "off"))
         self.turboPumpOn._set_value(state, force_write=True)
 
-    def _updatePrimaryPumpOn(self, parameter=None, attributeName="Actual"):
+    def _updatePrimaryPumpOn(self, parameter=None, attr_name="Actual"):
         """
         Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState
@@ -804,18 +816,18 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
                              "datamodel.HybridPlatform.PrimaryPumpState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
         logging.debug("Primary pump turned %s." % ("on" if state else "off"))
         self.primaryPumpOn._set_value(state, force_write=True)
 
-    def _updateNitrogenPressure(self, parameter=None, attributeName="Actual"):
+    def _updateNitrogenPressure(self, parameter=None, attr_name="Actual"):
         """
         Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._system.Manometer1.Pressure
@@ -823,7 +835,7 @@ class pumpingSystem(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
                              "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
 
@@ -880,19 +892,19 @@ class UPS(model.HwComponent):
         """
         self._updateLevel()
 
-    def _updateLevel(self, parameter=None, attributeName="Actual"):
+    def _updateLevel(self, parameter=None, attr_name="Actual"):
         """
         Reads the battery level of the UPS from the Orsay server and saves it in the level VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._blevel
         if parameter is not self._blevel:
             raise ValueError("Incorrect parameter passed to _updateLevel. Parameter should be "
                              "datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel")
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         currentLevel = float(parameter.Actual)
         self.level._set_value(currentLevel / 100, force_write=True)
@@ -962,37 +974,37 @@ class GIS(model.Actuator):
         self._updateErrorState()
         self._updatePosition()
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._errorPar
         if parameter is not self._errorPar:
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
                              "datamodel.HybridGIS.ErrorState. Parameter passed is %s." % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         if self._errorPar.Actual not in NO_ERROR_VALUES:
             self.state._set_value(HwError(self._errorPar.Actual), force_write=True)
         else:
             self.state._set_value(model.ST_RUNNING, force_write=True)
 
-    def _updatePosition(self, parameter=None, attributeName="Actual"):
+    def _updatePosition(self, parameter=None, attr_name="Actual"):
         """
         Reads the position of the GIS from the Orsay server and saves it in the position VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter not in [self._positionPar, self._reservoirPar, None]:
             raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
                              "datamodel.HybridGIS.PositionState, datamodel.HybridGIS.ReservoirState, or None. "
                              "Parameter passed is %s." % parameter.Name)
-        if attributeName == "Actual":
+        if attr_name == "Actual":
             arm_pos = self._positionPar.Actual
             gas_pos = self._reservoirPar.Actual
             new_pos = {"arm": arm_pos == STR_WORK, "reservoir": gas_pos == STR_OPEN}
@@ -1143,18 +1155,18 @@ class GISReservoir(model.HwComponent):
         self._updateAge()
         self._updatePrecursorType()
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter not in (self._gis.ErrorState, self._gis.RodPosition, None):
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
                              "datamodel.HybridGIS.ErrorState, datamodel.HybridGIS.RodPosition, or None. "
                              "Parameter passed is %s." % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         msg = ""
@@ -1179,31 +1191,31 @@ class GISReservoir(model.HwComponent):
         else:
             self.state._set_value(HwError(msg), force_write=True)
 
-    def _updateTargetTemperature(self, parameter=None, attributeName="Target"):
+    def _updateTargetTemperature(self, parameter=None, attr_name="Target"):
         """
         Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the targetTemperature VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._temperaturePar
         if parameter is not self._temperaturePar:
             raise ValueError("Incorrect parameter passed to _updateTargetTemperature. Parameter should be "
                              "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
-        if attributeName != "Target":
+        if attr_name != "Target":
             return
         new_value = float(self._temperaturePar.Target)
         logging.debug("Target temperature changed to %f." % new_value)
         self.targetTemperature._value = new_value  # to not call the setter
         self.targetTemperature.notify(new_value)
 
-    def _updateTemperature(self, parameter=None, attributeName="Actual"):
+    def _updateTemperature(self, parameter=None, attr_name="Actual"):
         """
         Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperature VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._temperaturePar
@@ -1214,17 +1226,17 @@ class GISReservoir(model.HwComponent):
         if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
             logging.debug("Target temperature reached.")
 
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         self.temperature._set_value(float(self._temperaturePar.Actual), force_write=True)
 
-    def _updateTemperatureRegulation(self, parameter=None, attributeName="Actual"):
+    def _updateTemperatureRegulation(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
         temperatureRegulation VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         # datamodel.HybridGIS.RegulationRushOn parameter is also available for extra fast (agressive) control of the
         # temperature, but this feature currently does not work and is not needed.
@@ -1232,7 +1244,7 @@ class GISReservoir(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateTemperatureRegulation. Parameter should be "
                              "datamodel.HybridGIS.RegulationOn, or None. "
                              "Parameter passed is %s." % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         try:
@@ -1244,37 +1256,37 @@ class GISReservoir(model.HwComponent):
         self.temperatureRegulation._value = reg  # to not call the setter
         self.temperatureRegulation.notify(reg)
 
-    def _updateAge(self, parameter=None, attributeName="Actual"):
+    def _updateAge(self, parameter=None, attr_name="Actual"):
         """
         Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._gis.ReservoirLifeTime
         if parameter is not self._gis.ReservoirLifeTime:
             raise ValueError("Incorrect parameter passed to _updateAge. Parameter should be "
                              "datamodel.HybridGIS.ReservoirLifeTime. Parameter passed is %s." % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         logging.debug("GIS reservoir lifetime updated to %f hours." % float(self._gis.ReservoirLifeTime.Actual))
         self.age._set_value(float(self._gis.ReservoirLifeTime.Actual) * 3600,  # convert hours to seconds
                             force_write=True)
 
-    def _updatePrecursorType(self, parameter=None, attributeName="Actual"):
+    def _updatePrecursorType(self, parameter=None, attr_name="Actual"):
         """
         Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attributeName: the name of the attribute of parameter which was changed
+        :param (str) attr_name: the name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._gis.PrecursorType
         if parameter is not self._gis.PrecursorType:
             raise ValueError("Incorrect parameter passed to _updatePrecursorType. Parameter should be "
                              "datamodel.HybridGIS.PrecursorType. Parameter passed is %s." % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
         self.precursorType._set_value(self._gis.PrecursorType.Actual, force_write=True)
@@ -1330,84 +1342,71 @@ class OrsayParameterConnector:
     not be the case if the getter was used.
     """
 
-    def __init__(self, va, parameter, attributeName="Actual", conversion=None, factor=None, minpar=None, maxpar=None):
+    def __init__(self, va, parameter, attr_name="Actual", conversion=None, factor=None, minpar=None, maxpar=None):
         """
         Initialise the Connector
 
         :param (VigilantAttribute) va: The vigilant attribute this Orsay parameter connector should be connected to.
-            This VA should not have a setter yet, because the setter will be overwritten.
+            This VA should not have a setter yet, because the setter will be overwritten. Must be a Tuple VA if a list
+            of parameters is passed to the parameter argument.
         :param (Orsay Parameter) parameter: A parameter of the Orsay server. It can also be a list of parameters, if va
             can contain a Tuple of equal length.
-        :param (string) attributeName: The name of the attribute of parameter the va should be synchronised with.
+        :param (string) attr_name: The name of the attribute of parameter the va should be synchronised with.
             Defaults to "Actual".
-        :param (dict) conversion: A dict mapping values of the VA (dict keys) to values of the parameter (dict values).
-            If None is supplied, factor can be used, or no special conversion is applied.
-        :param (float) factor: Specifies a conversion factor between the value of the parameter and the value of the va,
-            such that VA = factor * Parameter. factor is only used for float type va's (or tuples of floats) and only if
-            conversion is None. If neither conversion nor factor is supplied, no special conversion is performed.
-        :param (Orsay Parameter) minpar: supplies the possibility to explicitly pass a seperate parameter which contains
-            the minimal value of the parameter. Can be a list of equal length to the list of parameters for tuple VA's.
-            Then the first parameter in minpar dictates the minimum of the first parameter in parameters.
-            Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
-        :param (Orsay Parameter) maxpar: supplies the possibility to explicitly pass a seperate parameter which contains
-            the maximal value of the parameter. Can be a list of equal length to the list of parameters for tuple VA's.
-            Then the first parameter in maxpar dictates the maximum of the first parameter in parameters.
-            Make sure to supply both minpar and maxpar, or neither, but never just one of the two.
+        :param (dict or None) conversion: A dict mapping values of the VA (dict keys) to values of the parameter (dict
+            values). If None is supplied, factor can be used, or no special conversion is applied.
+        :param (float or None) factor: Specifies a conversion factor between the value of the parameter and the value of
+            the va, such that VA = factor * Parameter. factor is only used for float type va's (or tuples of floats) and
+            only if conversion is None. If neither conversion nor factor is supplied, no special conversion is
+            performed.
+        :param (Orsay Parameter or None) minpar: supplies the possibility to explicitly pass a seperate parameter which
+            contains the minimal value of parameter on .Actual, for cases where parameter.Min does not provide this. Can
+            be a list of equal length to the list of parameters for tuple VA's. Then the first parameter in minpar
+            dictates the minimum of the first parameter in parameters. Make sure to supply both minpar and maxpar, or
+            neither, but never just one of the two.
+        :param (Orsay Parameter or None) maxpar: supplies the possibility to explicitly pass a seperate parameter which
+            contains the maximal value of parameter on .Actual, for cases where parameter.Max does not provide this. Can
+            be a list of equal length to the list of parameters for tuple VA's. Then the first parameter in maxpar
+            dictates the maximum of the first parameter in parameters. Make sure to supply both minpar and maxpar, or
+            neither, but never just one of the two.
         """
-        self._parameters = None
-        self._attributeName = None
-        self._va = None
-        self._va_type_name = None
-        self._va_is_tuple = False
-        self._va_value_type = None
+        # The following parameters will get their values below
+        self._parameters = None  # list of parameters to connect to
+        self._attr_name = None  # equal to attr_name argument, but None when not connected
+        self._va = None  # equal to va argument, but None when not connected
+        self._va_is_tuple = False  # boolean, indicates if the va is a tuple (True) or not (False).
+        self._va_value_type = None  # contains the type (int, float, str, etc.) of the va. If the va is a tuple, it
+        # contains the type of the values contained in the tuple.
+
         self._conversion = conversion
-        self._factor = factor
         self._minpar = minpar
         self._maxpar = maxpar
-        self.connect(va, parameter, attributeName)
 
-    def connect(self, va, parameter, attributeName="Actual"):
-        """
-        Subscribes the VA to the parameter
-
-        :param (VigilantAttribute) va: The vigilant attribute this Orsay parameter connector should be connected to.
-            This VA should not have a setter yet, because the setter will be overwritten.
-        :param (Orsay Parameter) parameter: A parameter of the Orsay server. It can also be a list of parameters, if va
-            can contain a Tuple of equal length.
-        :param (string) attributeName: The name of the attribute of parameter the va should be synchronised with.
-            Defaults to "Actual".
-        """
-        # Log a warning when using the connector to connect a parameter to a VA, whilst the connector is already in use
-        if self._parameters is not None and None not in {self._attributeName, self._va, self._va_type_name}:
-            logging.warning("OrsayParameterConnector is already connected to an Orsay parameter. It is better to call "
-                            "disconnect before reconnecting to something else.")
-
-        # Assure that self._parameters (and self._minpar and self._maxpar if applicable) is a list
-        if type(parameter) in {set, list, tuple}:  # if multiple parameters are passed
-            self._parameters = list(parameter)
+        # Assure that self._parameters (and self._minpar and self._maxpar if applicable) is a tuple
+        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
+            self._parameters = tuple(parameter)
             if self._minpar is not None and self._maxpar is not None:
-                self._minpar = list(self._minpar)
-                self._maxpar = list(self._maxpar)
+                self._minpar = tuple(self._minpar)
+                self._maxpar = tuple(self._maxpar)
         else:  # if just one parameter is passed
-            self._parameters = [parameter]
+            self._parameters = (parameter,)
             if self._minpar is not None and self._maxpar is not None:
-                self._minpar = [self._minpar]
-                self._maxpar = [self._maxpar]
+                self._minpar = (self._minpar,)
+                self._maxpar = (self._maxpar,)
 
         # Check that the number of parameters passed make sense
-        if len(self._parameters) == 0:
+        if not self._parameters:
             raise ValueError("No parameters passed")
         if self._minpar is not None and self._maxpar is not None and (len(self._parameters) != len(self._minpar) or
                                                                       len(self._parameters) != len(self._maxpar)):
             raise ValueError("Number of parameters, minimum parameters and maximum parameters is not equal")
 
         # Store and analyse the passed VA, to determine its type, if it's a tuple or not and if it's read-only
-        self._attributeName = attributeName
+        self._attr_name = attr_name
         self._va = va
-        self._va_type_name = va.__class__.__name__
-        if self._va_type_name.startswith("Tuple"):
+        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
             self._va_is_tuple = True
-            self._va_value_type = type(self._va.value[0])
+            self._va_value_type = type(self._va.value[0])  # if no Tuple VA is passed, this line will raise an exception
         else:
             self._va_is_tuple = False
             self._va_value_type = type(self._va.value)
@@ -1417,6 +1416,10 @@ class OrsayParameterConnector:
             raise ValueError("Length of Tuple VA does not match number of parameters passed.")
         if len(self._parameters) > 1 and not self._va_is_tuple:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
+
+        self._factor = None
+        if self._va_value_type == float and factor != 0:
+            self._factor = factor
 
         # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
         if hasattr(self._va, "range"):
@@ -1428,33 +1431,29 @@ class OrsayParameterConnector:
             for i in range(len(self._parameters)):
                 p = self._parameters[i]
                 # Search for a lowerbound on the server
-                lowerbound = None
-                if self._minpar is not None:  # in case a minimum parameter is supplied
+                if self._minpar:  # in case a minimum parameter is supplied
                     if self._minpar[i].Actual is not None:
                         lowerbound = self._minpar[i].Actual
                     else:
                         lowerbound = self._minpar[i].Target
-                if lowerbound is None:
-                    lowerbound = p.Min
+                    if p.Min is not None and p.Min != lowerbound:
+                        logging.warning("%s.Min and %s contain different, non-None values."
+                                        "Contact Orsay Physics about this!" % (p.Name, self._minpar[i].Name))
                 else:
-                    if p.Min is not None and not p.Min == lowerbound:
-                        raise AssertionError("%s.Min and %s contain different, non-None values."
-                                             "Contact Orsay Physics about this!" % (p.Name, self._minpar[i].Name))
+                    lowerbound = p.Min
                 if lowerbound is not None:  # if a lowerbound is defined in the server
                     new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
                 # Search for an upperbound on the server
-                upperbound = None
-                if self._maxpar is not None:  # in case a minimum parameter is supplied
+                if self._maxpar:  # in case a minimum parameter is supplied
                     if self._maxpar[i].Actual is not None:
                         upperbound = self._maxpar[i].Actual
                     else:
                         upperbound = self._maxpar[i].Target
-                if upperbound is None:
-                    upperbound = p.Max
+                    if p.Max is not None and p.Max != upperbound:
+                        logging.warning("%s.Max and %s contain different, non-None values."
+                                        "Contact Orsay Physics about this!" % (p.Name, self._maxpar[i].Name))
                 else:
-                    if p.Max is not None and not p.Max == upperbound:
-                        raise AssertionError("%s.Max and %s contain different, non-None values."
-                                             "Contact Orsay Physics about this!" % (p.Name, self._maxpar[i].Name))
+                    upperbound = p.Max
                 if upperbound is not None:  # if an upperbound is defined in the server
                     new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
 
@@ -1462,10 +1461,12 @@ class OrsayParameterConnector:
                 new_range = (new_range[0][0], new_range[1][0])
             else:
                 new_range = (tuple(new_range[0]), tuple(new_range[1]))
+
             # Set the range of the VA
+            # Overwrite the VA value to make sure the current value is within the new range, so the new range can be
+            # set. The correct value the VA should have will be set by calling update_VA below.
             self._va._value = new_range[0]
             self._va.range = new_range
-            self._va.notify(new_range[0])
 
         # The actual hart of this method, linking the update callbacks to the Orsay parameters
         for p in self._parameters:
@@ -1473,62 +1474,53 @@ class OrsayParameterConnector:
 
         self.update_VA()
 
+    def __del__(self):
+        """Called when all references to this object are gone"""
+        self.disconnect()
+
     def disconnect(self):
         """Unsubscribes the VA from the parameter"""
         if self._va is not None and self._parameters is not None:
             for p in self._parameters:
                 p.Unsubscribe(self.update_VA)
             self._parameters = None
-            self._attributeName = None
-            self._va._setter = WeakMethod(self._va._VigilantAttribute__default_setter)
+            self._attr_name = None
+            self._va._setter = WeakMethod(self._va._VigilantAttribute__default_setter)  # va's setter back to default
             self._va = None
-            self._va_type_name = None
-            self._conversion = None
 
-    def update_VA(self, parameter=None, attributeName=None):
+    def update_VA(self, parameter=None, attr_name=None):
         """
         Copies the value of the parameter to the VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
-        # Check that the connector is actually connecting a parameter to a VA
-        if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
-            raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
-                                 "Call this object's connect method before calling update.")
-
-        # Check that the value of the attributeName argument makes sense
-        if attributeName is None:
-            attributeName = self._attributeName
-        if not attributeName == self._attributeName:
+        # Check that the value of the attr_name argument makes sense
+        if attr_name is None:
+            attr_name = self._attr_name
+        if attr_name != self._attr_name:
             return
 
         # Check that the value of the parameter argument makes sense
-        namesstring = ""
-        namesstring = namesstring.join([(p.Name + ", ") for p in self._parameters])[:-2]
         if parameter is not None and parameter not in self._parameters:
-            raise ValueError("Incorrect parameter passed. Excpected: %s. Received: %s."
-                             % (namesstring, parameter.Name))
+            namesstring = ", ".join([p.Name for p in self._parameters])
+            msg = "Incorrect parameter passed. Excpected: %s. Received: %s." % (namesstring, parameter.Name)
+            logging.warning(msg)
+            raise ValueError(msg)
 
         # Determine the new value that the VA should get
         if self._va_is_tuple:
             new_values = []
             for p in self._parameters:
-                new_entry = self._parameter_to_VA_value(getattr(p, attributeName))
+                new_entry = self._parameter_to_VA_value(getattr(p, attr_name))
                 new_values.append(new_entry)
             new_value = tuple(new_values)
         else:
-            new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attributeName))
+            new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attr_name))
 
         # For logging
-        namesstring = "("
-        for p in self._parameters:
-            namesstring += p.Name + "." + attributeName + ", "
-        if self._va_is_tuple:
-            namesstring = namesstring[:-2] + ")"
-        else:
-            namesstring = namesstring[1:-2]
-        logging.debug("%s's VA changed to %s." % (namesstring, str(new_value)))
+        names = tuple(p.Name + "." + attr_name for p in self._parameters)
+        logging.debug("VA's of %s changed to %s." % (names, new_value))
 
         # Write the new value to the VA
         self._va._value = new_value  # to not call the setter
@@ -1540,25 +1532,16 @@ class OrsayParameterConnector:
         :param (any) goal: value to write to the Orsay parameter's Target attribute. Type depends on the VA type
         :return (any): goal
         """
-        # Check that the connector is actually connecting a parameter to a VA
-        if self._parameters is None or None in {self._attributeName, self._va, self._va_type_name}:
-            raise AttributeError("OrsayParameterConnector is not connected to an Orsay parameter. "
-                                 "Call this object's connect method before setting a value to its VA.")
-
-        # If this method is called even though the VA is read-only, raise an exception
-        if self._va.readonly:
-            raise NotSettableError("Value is read-only")
-
         # Write the goal value of the VA to the Target of the corresponding Orsay parameter(s) and log this
         if self._va_is_tuple:
-            for i in range(len(self._parameters)):
-                target = self._VA_to_parameter_value(goal[i])
-                self._parameters[i].Target = target
-                logging.debug("Changing %s to %s." % (self._parameters[i].Name, str(target)))
+            for p, g in zip(self._parameters, goal):
+                target = self._VA_to_parameter_value(g)
+                p.Target = target
+                logging.debug("Changing %s to %s." % (p.Name, target))
         else:  # in case goal is not subscriptable
             target = self._VA_to_parameter_value(goal)
             self._parameters[0].Target = target
-            logging.debug("Changing %s to %s." % (self._parameters[0].Name, str(target)))
+            logging.debug("Changing %s to %s." % (self._parameters[0].Name, target))
 
         return goal
 
@@ -1574,9 +1557,9 @@ class OrsayParameterConnector:
             try:
                 return self._conversion[va_value]
             except KeyError:
-                logging.debug("Conversion dictionary does not contain key %s. Sticking to value %s" %
-                              (str(va_value), str(va_value)))
-        elif self._factor is not None and self._va_value_type == float:
+                logging.warning("Conversion dictionary does not contain key %s. Sticking to value %s" %
+                                (va_value, va_value))
+        elif self._factor:
             return va_value / self._factor
         return va_value
 
@@ -1596,7 +1579,7 @@ class OrsayParameterConnector:
         # Assure that the returned value is of the same type as the VA, even if the par_value is a string
         if self._va_value_type == float:
             new_value = float(par_value)
-            if self._factor is not None:
+            if self._factor:
                 new_value *= self._factor
             return new_value
         elif self._va_value_type == int:
@@ -1605,12 +1588,12 @@ class OrsayParameterConnector:
             return par_value in {True, "True", "true", "1", "ON"}
         else:
             raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
-                                      % self._va_type_name)
+                                      % self._va.__class__.__name__)
 
 
-class FIBDevice(model.HwComponent):
+class FIBVacuum(model.HwComponent):
     """
-    Represents the Focused Ion Beam (FIB) device from Orsay Physics. Contains generic device properties and settings
+    Represents the Focused Ion Beam (FIB) vacuum from Orsay Physics. Contains vacuum related properties and settings
     """
 
     def __init__(self, name, role, parent, **kwargs):
@@ -1635,7 +1618,7 @@ class FIBDevice(model.HwComponent):
         self._interlockOutHVPS = None
         self._interlockOutSED = None
 
-        self._devices_with_errorstates = ("HybridGaugeCompressedAir",
+        self.DEVICES_WITH_ERROR_STATES = ("HybridGaugeCompressedAir",
                                           "HybridInterlockInChamberVac",
                                           "HybridInterlockOutChamberVac",
                                           "HybridInterlockOutHVPS",
@@ -1644,10 +1627,20 @@ class FIBDevice(model.HwComponent):
                                           "HybridIonPumpColumnFIB",
                                           "HybridValveFIB")
 
+        # The setters of the interlocks only accept False to be set.
+        # This will reset the interlock after it has been triggered.
+
+        # interlockInChamber gets triggered when the vacuum inside the chamber suddenly becomes too weak.
+        # The FIB valve will close and the column ion pump will shut down.
         self.interlockInChamberTriggered = model.BooleanVA(False, setter=self._setInterlockInChamber)
+        # interlockOutChamber gets triggered when the vacuum in the FIB column suddenly becomes too weak.
         self.interlockOutChamberTriggered = model.BooleanVA(False, setter=self._setInterlockOutChamber)
+        # interlockOutHVPS gets triggered when the chamber vacuum level becomes unsafe for the high voltage electronics.
         self.interlockOutHVPSTriggered = model.BooleanVA(False, setter=self._setInterlockOutHVPS)
+        # interlockOutSED gets triggered when the chamber vacuum level becomes unsafe for the SED, at which point the
+        # SED will be shut down.
         self.interlockOutSEDTriggered = model.BooleanVA(False, setter=self._setInterlockOutSED)
+
         self.columnPumpOn = model.BooleanVA(False)
         self._columnPumpOnConnector = None
         self.gunPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
@@ -1656,8 +1649,6 @@ class FIBDevice(model.HwComponent):
         self._columnPressureConnector = None
         self.compressedAirPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=COMP_AIR_PRESSURE_RNG)
         self._compAirPressureConnector = None
-
-        self._connectorList = []
 
         self.on_connect()
 
@@ -1679,7 +1670,7 @@ class FIBDevice(model.HwComponent):
         self._interlockOutChamber.ErrorState.Subscribe(self._updateInterlockOutChamberTriggered)
         self._interlockOutHVPS.ErrorState.Subscribe(self._updateInterlockOutHVPSTriggered)
         self._interlockOutSED.ErrorState.Subscribe(self._updateInterlockOutSEDTriggered)
-        for device in self._devices_with_errorstates:
+        for device in self.DEVICES_WITH_ERROR_STATES:
             p = getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
@@ -1688,13 +1679,7 @@ class FIBDevice(model.HwComponent):
         self._columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
         self._compAirPressureConnector = OrsayParameterConnector(self.compressedAirPressure,
                                                                  self.parent.datamodel.HybridGaugeCompressedAir.Pressure)
-
-        self._connectorList = [x for (x, _) in  # save only the names of the returned members
-                               inspect.getmembers(self,  # get all members of this FIB_source object
-                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
-                                                  # OrsayParameterConnectors from all members of this FIB_source object
-                                                  )
-                               ]
+        self.update_VAs()
 
     def update_VAs(self):
         """
@@ -1705,27 +1690,27 @@ class FIBDevice(model.HwComponent):
         self._updateInterlockOutChamberTriggered()
         self._updateInterlockOutHVPSTriggered()
         self._updateInterlockOutSEDTriggered()
-        for obj_name in self._connectorList:
-            getattr(self, obj_name).update_VA()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         errorParameters = (getattr(self.parent.datamodel, device).ErrorState
-                           for device in self._devices_with_errorstates)
+                           for device in self.DEVICES_WITH_ERROR_STATES)
         if parameter is not None and parameter not in errorParameters:
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or a FIB "
                              "related ErrorState parameter. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         eState = ""
-        for device in self._devices_with_errorstates:
+        for device in self.DEVICES_WITH_ERROR_STATES:
             this_state = getattr(self.parent.datamodel, device).ErrorState.Actual
             if this_state not in NO_ERROR_VALUES:
                 if eState != "":
@@ -1737,13 +1722,13 @@ class FIBDevice(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateInterlockInChamberTriggered(self, parameter=None, attributeName="Actual"):
+    def _updateInterlockInChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockInChamberTriggered VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockInChamber.ErrorState
@@ -1751,22 +1736,22 @@ class FIBDevice(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateInterlockInChamberTriggered. Parameter should be "
                              "None or HybridInterlockInChamberVac.ErrorState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
 
-        logging.debug("interlockInChamberTriggered set to %s." % str(new_value))
+        logging.debug("interlockInChamberTriggered set to %s." % new_value)
         self.interlockInChamberTriggered._value = new_value  # to not call the setter
         self.interlockInChamberTriggered.notify(new_value)
 
-    def _updateInterlockOutChamberTriggered(self, parameter=None, attributeName="Actual"):
+    def _updateInterlockOutChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutChamberTriggered VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutChamber.ErrorState
@@ -1774,22 +1759,22 @@ class FIBDevice(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateInterlockOutChamberTriggered. Parameter should be "
                              "None or HybridInterlockOutChamberVac.ErrorState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
 
-        logging.debug("interlockOutChamberTriggered set to %s." % str(new_value))
+        logging.debug("interlockOutChamberTriggered set to %s." % new_value)
         self.interlockOutChamberTriggered._value = new_value  # to not call the setter
         self.interlockOutChamberTriggered.notify(new_value)
 
-    def _updateInterlockOutHVPSTriggered(self, parameter=None, attributeName="Actual"):
+    def _updateInterlockOutHVPSTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutHVPSTriggered VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutHVPS.ErrorState
@@ -1797,22 +1782,22 @@ class FIBDevice(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateInterlockOutHVPSTriggered. Parameter should be "
                              "None or HybridInterlockOutHVPS.ErrorState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
 
-        logging.debug("interlockOutHVPSTriggered set to %s." % str(new_value))
+        logging.debug("interlockOutHVPSTriggered set to %s." % new_value)
         self.interlockOutHVPSTriggered._value = new_value  # to not call the setter
         self.interlockOutHVPSTriggered.notify(new_value)
 
-    def _updateInterlockOutSEDTriggered(self, parameter=None, attributeName="Actual"):
+    def _updateInterlockOutSEDTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutSEDTriggered VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._interlockOutSED.ErrorState
@@ -1820,12 +1805,12 @@ class FIBDevice(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateInterlockOutSEDTriggered. Parameter should be "
                              "None or HybridInterlockOutSED.ErrorState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         new_value = (parameter.Actual not in NO_ERROR_VALUES and INTERLOCK_DETECTED_STR in parameter.Actual)
 
-        logging.debug("interlockOutSEDTriggered set to %s." % str(new_value))
+        logging.debug("interlockOutSEDTriggered set to %s." % new_value)
         self.interlockOutSEDTriggered._value = new_value  # to not call the setter
         self.interlockOutSEDTriggered.notify(new_value)
 
@@ -1910,11 +1895,9 @@ class FIBDevice(model.HwComponent):
         Called when Odemis is closed
         """
         if self._columnPump is not None:
-            for obj_name in self._connectorList:
-                getattr(self, obj_name).disconnect()
-            self._connectorList = []
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._columnPump = None
-            self._devices_with_errorstates = None
             self._interlockInChamber = None
             self._interlockOutChamber = None
             self._interlockOutHVPS = None
@@ -1943,6 +1926,8 @@ class FIBSource(model.HwComponent):
 
         super().__init__(name, role, parent=parent, **kwargs)
 
+        # on_connect will fill these attributes with references to some components of the Orsay datamodel, for easier
+        # access.
         self._hvps = None
         self._ionColumn = None
 
@@ -1965,8 +1950,6 @@ class FIBSource(model.HwComponent):
         self._energyLinkConnector = None
         self.extractorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 12e3))
         self._extractorVoltageConnector = None
-
-        self._connectorList = []
 
         self.on_connect()
 
@@ -2007,13 +1990,7 @@ class FIBSource(model.HwComponent):
         self._extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
                                                                   minpar=self._hvps.Extractor_Minvalue,
                                                                   maxpar=self._hvps.Extractor_Maxvalue)
-
-        self._connectorList = [x for (x, _) in  # save only the names of the returned members
-                               inspect.getmembers(self,  # get all members of this FIB_source object
-                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
-                                                  # OrsayParameterConnectors from all members of this FIB_source object
-                                                  )
-                               ]
+        self.update_VAs()
 
     def update_VAs(self):
         """
@@ -2021,21 +1998,21 @@ class FIBSource(model.HwComponent):
         """
         self._updateHeater()
         self._updateErrorState()
-        for obj_name in self._connectorList:
-            getattr(self, obj_name).update_VA()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
-    def _updateErrorState(self, parameter=None, attributeName="Actual"):
+    def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
         Reads the error state from the Orsay server and saves it in the state VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter not in (None, self._hvps.HeaterState):
             raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or the"
                              "HVPSFloatingIon.HeaterState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         eState = ""
@@ -2049,12 +2026,12 @@ class FIBSource(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateHeater(self, parameter=None, attributeName="Actual"):
+    def _updateHeater(self, parameter=None, attr_name="Actual"):
         """
         Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._hvps.HeaterState
@@ -2062,7 +2039,7 @@ class FIBSource(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateHeater. Parameter should be "
                              "datamodel.HVPSFloatingIon.HeaterState. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         heater_state = self._hvps.HeaterState.Actual
         new_value = False
@@ -2088,9 +2065,8 @@ class FIBSource(model.HwComponent):
         Called when Odemis is closed
         """
         if self._hvps is not None:
-            for obj_name in self._connectorList:
-                getattr(self, obj_name).disconnect()
-            self._connectorList = []
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._hvps = None
             self._ionColumn = None
 
@@ -2116,7 +2092,7 @@ class FIBBeam(model.HwComponent):
         + objectiveStageRotationOffset: FloatContinuous, unit="rad", range=(-pi, pi)
         + tilt: TupleContinuous Float, unit="rad", range=[(-pi, -pi), (pi, pi)]
         + xyRatio: FloatContinuous, unit="rad", range=(0.0, 2.0)
-        + mirror: BooleanVA
+        + mirrorImage: BooleanVA, True to mirror the retrieved image
         + imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
         + objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
         + beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
@@ -2130,9 +2106,9 @@ class FIBBeam(model.HwComponent):
         + dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
         + contrast: FloatContinuous, unit="", range=(0, 1)
         + brightness: FloatContinuous, unit="", range=(0, 1)
-        + operatingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
-        + imageFormat: TupleContinuous Int, unit="px", range=[(512, 512), (1024, 1024)], can only contain (512, 512)
-                       or (1024, 1024), stored in IMAGEFORMAT_OPTIONS
+        + imagingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
+        + imageFormat: VAEnumerated, unit="px", choices={(512, 512), (1024, 1024)}
+                       TODO: add support for rectangular options (640, 480) and (800, 600)
         + translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
         + resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
@@ -2163,7 +2139,7 @@ class FIBBeam(model.HwComponent):
         self._steererTiltConnector = None
         self.orthogonality = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
         self._orthogonalityConnector = None
-        self.objectiveRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
+        self.objectiveRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
         self._objectiveRotationOffsetConnector = None
         self.objectiveStageRotationOffset = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
         self._objectiveStageRotationOffsetConnector = None
@@ -2171,9 +2147,9 @@ class FIBBeam(model.HwComponent):
         self._tiltConnector = None
         self.xyRatio = model.FloatContinuous(1.0, unit="rad", range=(0.0, 2.0))
         self._xyRatioConnector = None
-        self.mirror = model.BooleanVA(False)
-        self._mirrorConnector = None
-        self.imageFromSteerers = model.BooleanVA(False)
+        self.mirrorImage = model.BooleanVA(False)  # True to mirror the retrieved image
+        self._mirrorImageConnector = None
+        self.imageFromSteerers = model.BooleanVA(False)  # True to image from Steerers, False to image from Octopoles
         self._imageFromSteerersConnector = None
         self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
         self._objectiveVoltageConnector = None
@@ -2200,19 +2176,47 @@ class FIBBeam(model.HwComponent):
         self._contrastConnector = None
         self.brightness = model.FloatContinuous(1.0, unit="", range=(0, 1))
         self._brightnessConnector = None
-        self.operatingMode = model.BooleanVA(False)
-        self._operatingModeConnector = None
-        self.imageFormat = model.TupleContinuous((1024, 1024), unit="px", range=[(512, 480), (1024, 1024)],
-                                                 setter=self._imageFormat_setter)
-        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-512.0, -512.0), (512.0, 512.0)],
-                                                 setter=self._translation_setter)
+        self.imagingMode = model.BooleanVA(False)  # True means 'imaging in progess', False means 'not imaging'
+        self._imagingModeConnector = None
+
+        # The following three VA's are highly intertwined. The imageFormat is the size of the buffer (in pixels) in
+        # which the image is being stored on the Orsay server, and is therefore the maximal value of the resolution.
+        # The resolution is the size of the subarea of the image buffer (in pixels) that is currently being updated.
+        # The translation contains the (X, Y) coordinates of the centre point of the area defined by the resolution with
+        # respect to the centre of the entire image (in pixels). Translation contains half pixels when the resolution
+        # contains odd numbers.
+        # Since the allowable values of these VA's depend on the current values of the other VA's, a hierarchy is
+        # defined, with imageFormat at the top, then resolution, then translation. The effects are as follows:
+        # When imageFormat is changed, the value of resolution is adapted such that the same fraction of the total area
+        # is imaged (i.e. doubling the imageFormat will double the resolution).
+        # When the resolution is changed, the value of translation is adapted such that it is as close to its current
+        # value as possible, whilst making sure the area defined by resolution completely fits the imageFormat.
+        self.imageFormat = model.VAEnumerated((1024, 1024), unit="px", choices={(512, 512), (1024, 1024)},
+                                              setter=self._imageFormat_setter)
         self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
                                                 setter=self._resolution_setter)
+        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-512.0, -512.0), (512.0, 512.0)],
+                                                 setter=self._translation_setter)
+        # imageFormatUpdatedResolutionTranslation is an event that is cleared when the imageFormat is set. The event is
+        # set when the resolution and translation are being updated.
+        # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
+        # resolution equal to the new image format. (This is something the Orsay server does automatically.) We don't
+        # want that. We want to keep the resolution and translation as they were (except for appropriate scaling). So
+        # after updating the imageFormat, an update from the server on resolution and translation should be ignored and
+        # instead the current value of the resolution and translation (with appropriate scaling) is sent to the server.
         self.imageFormatUpdatedResolutionTranslation = threading.Event()
         self.imageFormatUpdatedResolutionTranslation.set()
+        # translation and resolution are on the Orsay server captured in a single variable, called ImageArea. This
+        # means that problems can arise when trying to update translation and resolution shortly after each other.
+        # The following Lock is acquired by the setters of the translation and resolution VA's. The below Event is
+        # cleared by these same setters and set by the updater of the translation and resolution VA's, which gets
+        # called after the ImageArea on the Orsay server changes value. The setters of both VA's block until the
+        # event gets set (or timeout). The blocking makes sure two consecutive calles to update one and then the
+        # other VA won't interfere with each other. The addition of the Lock assures that also calls originating from
+        # different threads won't interfere with each other.
         self.updatingImageArea = threading.Lock()
-
-        self._connectorList = []
+        self.imageAreaUpdated = threading.Event()
+        self.imageAreaUpdated.set()
 
         self.on_connect()
 
@@ -2288,8 +2292,8 @@ class FIBBeam(model.HwComponent):
         self._xyRatioConnector = OrsayParameterConnector(self.xyRatio, self._ionColumn.ObjectiveXYRatio,
                                                          minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
                                                          maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
-        self._mirrorConnector = OrsayParameterConnector(self.mirror, self._ionColumn.Mirror,
-                                                        conversion={True: -1, False: 1})
+        self._mirrorImageConnector = OrsayParameterConnector(self.mirrorImage, self._ionColumn.Mirror,
+                                                             conversion={True: -1, False: 1})
         self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
                                                                    self._ionColumn.ObjectiveScanSteerer,
                                                                    conversion={True: 1, False: 0})
@@ -2319,19 +2323,14 @@ class FIBBeam(model.HwComponent):
                                                            maxpar=self._ionColumn.PixelTime_Maxvalue)
         self._contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
         self._brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
-        self._operatingModeConnector = OrsayParameterConnector(self.operatingMode,
-                                                               self._datamodel.Scanner.OperatingMode,
-                                                               conversion={True: 1, False: 0})
+        self._imagingModeConnector = OrsayParameterConnector(self.imagingMode,
+                                                             self._datamodel.Scanner.OperatingMode,
+                                                             conversion={True: 1, False: 0})
         # Subscribe to the parameter on the Orsay server
         self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
         self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
 
-        self._connectorList = [x for (x, _) in  # save only the names of the returned members
-                               inspect.getmembers(self,  # get all members of this FIB_source object
-                                                  lambda obj: type(obj) == OrsayParameterConnector  # get only the
-                                                  # OrsayParameterConnectors from all members of this FIB_source object
-                                                  )
-                               ]
+        self.update_VAs()
 
     def update_VAs(self):
         """
@@ -2339,27 +2338,24 @@ class FIBBeam(model.HwComponent):
         """
         self._updateImageFormat()
         self._updateTranslationResolution()
-        for obj_name in self._connectorList:
-            getattr(self, obj_name).update_VA()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
     def _imageFormat_setter(self, value):
         """
         Setter of the imageFormat VA
 
-        :param (tuple (int, int)) value: The goal format of the image. Will be corrected to the closest available value
-            in IMAGEFORMAT_OPTIONS.
+        :param (tuple (int, int)) value: The goal format of the image.
         :return (tuple (int, int)): The actual image format set.
         """
-        if value not in IMAGEFORMAT_OPTIONS:  # get the closest option available in IMAGEFORMAT_OPTIONS
-            value = min(IMAGEFORMAT_OPTIONS, key=lambda x: abs(x[0] - value[0]) + abs(x[1] - value[1]))
-        self.imageFormatUpdatedResolutionTranslation.clear()  # let it be known that image format is updating...
-        # ...resolution and translation
+        # let it be known that image format is updating resolution and translation
+        self.imageFormatUpdatedResolutionTranslation.clear()
 
         # get the old image format and determine the scale change
-        state = self._ionColumn.ImageSize.Actual
-        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
-        old_value = tuple(map(int, state.split(" ")))
-        scale = value[0] / old_value[0]  # determine by how much the x axis is scaled
+        prev_value = self.imageFormat.value
+        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly."
+                      % str(prev_value))
+        scale = value[0] / prev_value[0]  # determine by how much the x axis is scaled
 
         self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])  # write the new image format to the server
 
@@ -2387,7 +2383,7 @@ class FIBBeam(model.HwComponent):
                 new_translation[1] += 0.5  # prefer adding a pixel to the top
         new_translation = tuple(new_translation)
 
-        self.imageFormatUpdatedResolutionTranslation.wait(60)  # wait until the image format has updated image area
+        self.imageFormatUpdatedResolutionTranslation.wait(10)  # wait until the image format has updated image area
         # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
         # resolution equal to the new image format. We don't want that. We want to keep the resolution and translation
         # as they were (except for appropriate scaling).
@@ -2399,12 +2395,12 @@ class FIBBeam(model.HwComponent):
                       % str(value))
         return value
 
-    def _updateImageFormat(self, parameter=None, attributeName="Actual"):
+    def _updateImageFormat(self, parameter=None, attr_name="Actual"):
         """
         Reads the image format from the Orsay server and saves it in the imageFormat VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._ionColumn.ImageSize
@@ -2412,7 +2408,7 @@ class FIBBeam(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateImageFormat. Parameter should be "
                              "datamodel.IonColumnMCS.ImageSize. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
         state = self._ionColumn.ImageSize.Actual
         logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
@@ -2420,101 +2416,101 @@ class FIBBeam(model.HwComponent):
         self.imageFormat._value = new_value  # to not call the setter
         self.imageFormat.notify(new_value)
 
+    def _clip_and_set_image_area(self, target_resolution, target_translation):
+        """
+        Clip the translation based on the resolution, calculate the imageArea and set the imageArea to the Orsay server
+
+        :param ((int, int)) target_resolution: intended resolution to set
+        :param ((float, float)) target_translation: intended translation to set
+        :return: ((int, int)) new_resolution, ((float, float)) new_translation: actual resolution and
+                 translation set
+        """
+        target_translation = list(target_translation)  # make the entries mutable
+        # find the current limits for translation and clip the new value
+        tran_limit_0 = float(self.imageFormat.value[0] / 2 - target_resolution[0] / 2)
+        tran_limit_1 = float(self.imageFormat.value[1] / 2 - target_resolution[1] / 2)
+        if target_translation[0] < -tran_limit_0:
+            target_translation[0] = -tran_limit_0
+        elif target_translation[0] > tran_limit_0:
+            target_translation[0] = tran_limit_0
+        if target_translation[1] < -tran_limit_1:
+            target_translation[1] = -tran_limit_1
+        elif target_translation[1] > tran_limit_1:
+            target_translation[1] = tran_limit_1
+
+        translation_target = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
+        translation_target[0] = int(self.imageFormat.value[0] / 2 + target_translation[0] - target_resolution[0] / 2)
+        translation_target[1] = int(self.imageFormat.value[1] / 2 - target_translation[1] - target_resolution[1] / 2)
+
+        target = map(str, translation_target + list(target_resolution))
+        target = " ".join(target)
+        self._ionColumn.ImageArea.Target = target
+
+        logging.debug("Updating imageArea to %s." % target)
+
+        return target_resolution, tuple(target_translation)
+
     def _translation_setter(self, value):
         """
         Setter of the translation VA.
 
-        :param (tuple (float, float)) value: Target translation of the area to image
-        :return (tuple (float, float)): The actual translation set
+        :param ((float, float)) value: Target translation of the area to image
+        :return ((float, float)): The actual translation set
 
         The translation VA marks the centre of the image area with respect to the centre of the field of view. This
         setter transforms the coordinates of the centre of the image area to the coordinates of the top left corner of
         the image area, which is the format the Orsay server takes. The setter also adjusts the size of the image area
         (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
-        self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
-        new_translation = list(value)
+        with self.updatingImageArea:  # translation and resolution cannot be updated simultaniously
+            self.imageAreaUpdated.clear()
 
-        new_translation[0] = math.ceil(new_translation[0])
-        new_translation[1] = math.floor(new_translation[1])
-        if self.resolution.value[0] % 2 != 0:  # if horizontal resolution is odd
-            new_translation[0] -= 0.5  # prefer adding a pixel to the left
-        if self.resolution.value[1] % 2 != 0:  # if vertical resolution is odd
-            new_translation[1] += 0.5  # prefer adding a pixel to the top
+            new_translation = list(value)
 
-        # find the current limits for translation and clip the new value
-        tran_limit_0 = float(self.imageFormat.value[0] / 2 - self.resolution.value[0] / 2)
-        tran_limit_1 = float(self.imageFormat.value[1] / 2 - self.resolution.value[1] / 2)
-        if new_translation[0] < -tran_limit_0:
-            new_translation[0] = -tran_limit_0
-        elif new_translation[0] > tran_limit_0:
-            new_translation[0] = tran_limit_0
-        if new_translation[1] < -tran_limit_1:
-            new_translation[1] = -tran_limit_1
-        elif new_translation[1] > tran_limit_1:
-            new_translation[1] = tran_limit_1
+            new_translation[0] = math.ceil(new_translation[0])
+            new_translation[1] = math.floor(new_translation[1])
+            if self.resolution.value[0] % 2 != 0:  # if horizontal resolution is odd
+                new_translation[0] -= 0.5  # prefer adding a pixel to the left
+            if self.resolution.value[1] % 2 != 0:  # if vertical resolution is odd
+                new_translation[1] += 0.5  # prefer adding a pixel to the top
 
-        target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
-        target_translation[0] = int(self.imageFormat.value[0] / 2 + new_translation[0] - self.resolution.value[0] / 2)
-        target_translation[1] = int(self.imageFormat.value[1] / 2 - new_translation[1] - self.resolution.value[1] / 2)
+            _, clipped_translation = self._clip_and_set_image_area(self.resolution.value, new_translation)
 
-        target = map(str, target_translation + list(self.resolution.value))
-        target = " ".join(target)
-        self._ionColumn.ImageArea.Target = target
+            # wait for the Orsay server to have updated the image area based on the new translation (or timeout)
+            self.imageAreaUpdated.wait(10)
 
-        logging.debug("Updating imageArea to %s." % target)
-        return tuple(new_translation)
+            return clipped_translation
 
     def _resolution_setter(self, value):
         """
         Setter of the resolution VA.
 
-        :param (tuple (float, float)) value: Target resolution of the area to image
-        :return (tuple (float, float)): The actual resolution set
+        :param ((int, int)) value: Target resolution of the area to image
+        :return ((int, int)): The actual resolution set
 
         Also adapts the coordinates of the top left corner of the image area to assure that the centre of the image area
         stays where it is.
         """
-        self.updatingImageArea.acquire()  # translation and resolution cannot be updated simultaniously
-        new_resolution = list(value)
+        with self.updatingImageArea:  # translation and resolution cannot be updated simultaniously
+            self.imageAreaUpdated.clear()
 
-        # find the new range for translation
-        tran_limit_0 = float(self.imageFormat.value[0] / 2 - new_resolution[0] / 2)
-        tran_limit_1 = float(self.imageFormat.value[1] / 2 - new_resolution[1] / 2)
+            new_resolution, _ = self._clip_and_set_image_area(value, self.translation.value)
+            # no need to set the clipped translation, because the clipped translation is used to calculate the new image
+            # area, which is set to the Orsay server, which will call _updateTranalstionResolution, which will write the
+            # clipped translation to the translation VA.
 
-        new_translation = list(self.translation.value)
-        if new_translation[0] < -tran_limit_0:
-            new_translation[0] = -tran_limit_0
-        elif new_translation[0] > tran_limit_0:
-            new_translation[0] = tran_limit_0
-        if new_translation[1] < -tran_limit_1:
-            new_translation[1] = -tran_limit_1
-        elif new_translation[1] > tran_limit_1:
-            new_translation[1] = tran_limit_1
-        new_translation = tuple(new_translation)
-        self.translation._value = new_translation
-        self.translation.notify(new_translation)
+            # wait for the Orsay server to have updated the image area based on the new resolution (or timeout)
+            self.imageAreaUpdated.wait(10)
 
-        target_translation = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
-        target_translation[0] = int(self.imageFormat.value[0] / 2 +
-                                    math.ceil(new_translation[0]) - math.ceil(new_resolution[0] / 2))
-        target_translation[1] = int(self.imageFormat.value[1] / 2 -
-                                    math.floor(new_translation[1]) - math.ceil(new_resolution[1] / 2))
+            return new_resolution
 
-        target = map(str, target_translation + new_resolution)
-        target = " ".join(target)
-        self._ionColumn.ImageArea.Target = target
-
-        logging.debug("Updating imageArea to %s." % target)
-        return tuple(new_resolution)
-
-    def _updateTranslationResolution(self, parameter=None, attributeName="Actual"):
+    def _updateTranslationResolution(self, parameter=None, attr_name="Actual"):
         """
         Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
         and resolution VA's respectively.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attributeName: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed
         """
         if parameter is None:
             parameter = self._ionColumn.ImageArea
@@ -2522,12 +2518,12 @@ class FIBBeam(model.HwComponent):
             raise ValueError("Incorrect parameter passed to _updateTranslationResolution. Parameter should be "
                              "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
                              % parameter.Name)
-        if attributeName != "Actual":
+        if attr_name != "Actual":
             return
 
         if not self.imageFormatUpdatedResolutionTranslation.is_set():  # if this update comes from change in imageFormat
             self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are
-            #     # not awaiting an update because of image format any more
+            # not awaiting an update because of image format any more
             return  # but don't actually perform the update
 
         area = self._ionColumn.ImageArea.Actual
@@ -2543,8 +2539,7 @@ class FIBBeam(model.HwComponent):
 
         self.translation._value = new_translation  # to not call the setter
         self.resolution._value = new_resolution  # to not call the setter
-        if self.updatingImageArea.locked():
-            self.updatingImageArea.release()
+        self.imageAreaUpdated.set()
         self.translation.notify(new_translation)
         self.resolution.notify(new_resolution)
 
@@ -2553,8 +2548,7 @@ class FIBBeam(model.HwComponent):
         Called when Odemis is closed
         """
         if self._ionColumn is not None:
-            for obj_name in self._connectorList:
-                getattr(self, obj_name).disconnect()
-            self._connectorList = []
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._ionColumn = None
             self._hvps = None
