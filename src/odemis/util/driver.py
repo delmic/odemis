@@ -144,25 +144,25 @@ def estimateMoveDuration(distance, speed, accel):
 
 
 DEFAULT_SPEED = 10e-6 # m/s
-DEFAULT_ACCELERATION = 0.01 
+DEFAULT_ACCELERATION = 0.01 # m/s²
 
-def estimate_focuser_move_duration(focuser, zstep, accel=DEFAULT_ACCELERATION):
+def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATION):
     """
-    focuser (Actuator): focuser object of a fluorescence stream (FM)
-    zstep (float): the moving distance for which the time to be estimated  
-    return (float > 0): estimated time (in s) that it takes to move the focus actuator
-        by one step.
-
-    Note: This function is wrapped around the function
-        deriver.estimateMoveDuration()
+    actuator (Actuator): actuator object 
+    axis (str): indicates along which axis the movement is. 
+    distance (float): the move for which the time to be estimated  
+    return (float >= 0): the estimated time (in s)
     """
     speed = None
-    if focuser is not None:
-        if model.hasVA(focuser, "speed"):
-            speed = focuser.speed.value.get("z", None)
+    if not (hasattr(actuator, "axes") and isinstance(actuator.axes, dict)):
+        raise ValueError("The component %s is expected to have a dictionary of axes, but it does not." % actuator)  
+    if not axis in actuator.axes:
+        raise KeyError("The actuator component %s is expected to have %s axis, but it does not." % (actuator, axis))
+    if model.hasVA(actuator, "speed"):
+        speed = actuator.speed.value.get("z", None)
     if speed is None:
         speed = DEFAULT_SPEED  
-    return estimateMoveDuration(zstep, DEFAULT_SPEED, accel) 
+    return estimateMoveDuration(distance, speed, accel) 
 
 
 def checkLightBand(band):

@@ -16,9 +16,10 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 import copy
+
+import numpy
 from odemis import model
 from odemis.util import img
-from numpy import floor, ceil, round, linspace 
 
 
 # Essentially, it's very straight-forward: FoV = max resolution * pixel size
@@ -111,17 +112,27 @@ def get_fov_rect(comp, fov):
             center[1] + fov[1] / 2)  # bottom
 
 
+MAX_ZLEVELS = 500
+
 def generate_zlevels(focuser, zrange, zstep):
     """
     Calculates the zlevels for a zstack acquisition, using the zmax, zmin
-    and zstep obtained from the GUI, as well as the current focus z position
+    and zstep, as well as the current focus z position
     focuser (Actuator): focus component
-    zrange (list or tuple of floats): contains the zMin and zMax, respectively 
-    zstep (float): distance between two successive zlevels 
-    returns (numpy.ndarray of floats): array of zlevels     
+    zrange (float, float): contains the zMin and zMax, respectively. Error is raised
+        if the order is not (zMin, zMax). 
+    zstep (float>0 or float<0): distance between two successive zlevels. If negative,
+        the order of the returned list of zlevels is reversed. The actual zstep in the 
+        returned list is adjusted to the closest value of the given zstep that divides
+        the zrange. If zstep is too small, this will lead to too large number of zlevels. 
+        In that case IndexError is raised. 
+    returns (list of floats): list of zlevels, where each zlevel is absolute position for
+        the focuser.  
     """
     if zstep == 0:
         raise ZeroDivisionError("The step size 'Zstep' can not be zero")
+    if zrange[0] > zrange[1]:
+        raise ValueError("The given range is not correct. zmin should be first and zmax second")
     if zrange[0] == zrange[1] == 0:
         raise ValueError("'zmax' and 'zmin' can not be both zeros")
     if "z" not in focuser.axes.keys():
@@ -137,18 +148,18 @@ def generate_zlevels(focuser, zrange, zstep):
 
     # find number of samples 
     n = (zrange[1] - zrange[0]) / abs(zstep) + 1
+    if n > MAX_ZLEVELS:
+        raise IndexError("The number of zlevels is too large. Reduce the zstep value.")
     # try the floor and ceil values for the number of samples, and 
     # take the one that give smaller error
-    step_f = (zrange[1] - zrange[0]) / (floor(n) - 1)
-    step_c = (zrange[1] - zrange[0]) / (ceil(n) - 1)
+    step_f = (zrange[1] - zrange[0]) / (numpy.floor(n) - 1)
+    step_c = (zrange[1] - zrange[0]) / (numpy.ceil(n) - 1)
     # errors 
     ef = abs(step_f - abs(zstep))
     ec = abs(step_c - abs(zstep))
-    n = floor(n) if ef < ec else ceil(n)
+    n = numpy.floor(n) if ef < ec else numpy.ceil(n)
 
     if zstep > 0:
-        zlevels = linspace(zrange[0], zrange[1], n)
-        return round(zlevels + focuser_pos, decimals=8)
+        return (numpy.linspace(zrange[0], zrange[1], n) + focuser_pos).tolist()
     elif zstep < 0:
-        zlevels = linspace(zrange[1], zrange[0], n)
-        return round(zlevels + focuser_pos, decimals=8)
+        return (numpy.linspace(zrange[1], zrange[0], n) + focuser_pos).tolist()

@@ -39,7 +39,7 @@ from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream, BrightfieldStream
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -660,7 +660,7 @@ class CryoAcquiController(object):
             self._panel.txt_cryosecom_est_time.Show()
             self._update_acquisition_time()
         else:
-            raise ValueError("The acquisition future state %s is unknown" %state)
+            raise ValueError("The acquisition future state %s is unknown" % state)
 
     def _display_acquired_data(self, data):
         """
@@ -758,9 +758,8 @@ class CryoAcquiController(object):
         ]
         self._sort_streams(item_streams)
 
-        # update the zlevels dictionary with the added/removed stream, if required
-        if self._zStackActive.value:
-            self._on_zstack()
+        # update the zlevels dictionary with the added/removed stream
+        self._on_zstack()
 
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
@@ -822,9 +821,8 @@ class CryoAcquiController(object):
         self._panel.param_Zmin.Enable(active)
         self._panel.param_Zmax.Enable(active)
         self._panel.param_Zstep.Enable(active)
-        if active:
-            self._on_zstack()
-        else:
+        self._on_zstack()
+        if not active:
             self._update_acquisition_time()
 
     def _on_zstack(self):
@@ -832,34 +830,34 @@ class CryoAcquiController(object):
         Takes care of preparing for the zstack by generating the zlevels,
         and making the streams-zlevel dictionary that will be passed to the acquisition manager 
         """
+        if not self._zStackActive.value:
+            return
         self._zlevels = {}
         for s in self._acquiStreams.value:
-            if isinstance(s, FluoStream):
+            # the other possible streams are SEM which are generally not wanted by the user to be zstacked  
+            if isinstance(s, (FluoStream, BrightfieldStream)):  
                 if not self._tab_data.main.focus:
                     raise LookupError("Focuser was not found in the tab data")
                 levels = generate_zlevels(
                     self._tab_data.main.focus,
                     [self._tab_data.zMin.value, self._tab_data.zMax.value],
                     self._tab_data.zStep.value)
-                self._zlevels[s] = list(levels)
+                self._zlevels[s] = levels
 
         # update the time, taking the zstack into account 
         self._update_acquisition_time()
 
     def _on_z_min(self, zmin):
         self._tab_data.zMin.value = zmin
-        if self._zStackActive.value: # during init, don't call _on_zstack()
-            self._on_zstack()
+        self._on_zstack()
 
     def _on_z_max(self, zmax):
         self._tab_data.zMax.value = zmax
-        if self._zStackActive.value: # during init, don't call _on_zstack()
-            self._on_zstack()
+        self._on_zstack()
 
     def _on_z_step(self, zstep):
         self._tab_data.zStep.value = zstep
-        if self._zStackActive.value: # during init, don't call _on_zstack()
-            self._on_zstack()
+        self._on_zstack()
 
     def _on_check_list(self, _):
         """
@@ -881,9 +879,8 @@ class CryoAcquiController(object):
             ):
                 self._acquiStreams.value.remove(item)
         
-        # update the zlevels dictionary, if required
-        if self._zStackActive.value:
-            self._on_zstack()
+        # update the zlevels dictionary
+        self._on_zstack()
         self._update_acquisition_time()
 
     def _on_cancel(self, _):
