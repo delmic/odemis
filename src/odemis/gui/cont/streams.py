@@ -217,7 +217,7 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
-        if tab_data_model.main.role == "mbsem":
+        if tab_data_model.main.role == "mbsem" and isinstance(stream, acqstream.SEMStream):  # don't show for CCD stream
             # It's a FastEM
             self._add_fastem_ctrls()
 

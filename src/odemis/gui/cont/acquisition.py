@@ -1602,6 +1602,9 @@ class FastEMOverviewAcquiController(object):
         self.selection_panel.create_controls(tab_data.main.scintillator_layout)
         for btn in self.selection_panel.buttons.values():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
+            btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
+
+        self._main_data_model.active_scintillators.subscribe(self._on_active_scintillators)
 
         # Link acquire/cancel buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -1631,13 +1634,28 @@ class FastEMOverviewAcquiController(object):
         self.check_acquire_button()
 
     @call_in_wx_main
+    def _on_active_scintillators(self, evt):
+        for num, b in self.selection_panel.buttons.items():
+            if num in self._main_data_model.active_scintillators.value:
+                b.Enable(True)
+            else:
+                b.Enable(False)
+                if num in self._tab_data_model.selected_scintillators.value:
+                    self._tab_data_model.selected_scintillators.value.remove(num)
+        self.update_acquisition_time()
+        self.check_acquire_button()
+
+    @call_in_wx_main
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if not self._tab_data_model.selected_scintillators.value:
+        if not self._main_data_model.active_scintillators.value:
+            lvl = logging.WARN
+            txt = "No scintillator loaded (go to Chamber tab)."
+        elif not self._tab_data_model.selected_scintillators.value:
             lvl = logging.WARN
             txt = "No scintillator selected for overview acquisition."
         else:
