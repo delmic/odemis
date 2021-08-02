@@ -304,8 +304,8 @@ class AcquisitionTask(object):
                     pass
 
             if not self._settings_obs:
-                logging.warning("Acquisition task has no SettingsObserver, not saving extra "
-                                "metadata.")
+                logging.info("Acquisition task has no SettingsObserver, not saving extra "
+                             "metadata.")
             for s in self._streams:
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):
