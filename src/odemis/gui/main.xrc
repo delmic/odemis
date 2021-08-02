@@ -4344,7 +4344,7 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ToolBar" name="sparc_acq_toolbar">
+              <object class="ToolBar" name="fastem_acq_toolbar">
                 <style>wxVERTICAL</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -4647,7 +4647,7 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ToolBar" name="sparc_acq_toolbar">
+              <object class="ToolBar" name="fastem_overview_toolbar">
                 <style>wxVERTICAL</style>
                 <XRCED>
                   <assign_var>1</assign_var>

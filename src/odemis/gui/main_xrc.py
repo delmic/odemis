@@ -497,7 +497,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
 
         # Define variables for the controls, bind event handlers
         self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
-        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.fastem_acq_toolbar = xrc.XRCCTRL(self, "fastem_acq_toolbar")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -541,7 +541,7 @@ class xrcpnl_tab_fastem_overview(wx.Panel):
 
         # Define variables for the controls, bind event handlers
         self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
-        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.fastem_overview_toolbar = xrc.XRCCTRL(self, "fastem_overview_toolbar")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -5195,7 +5195,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ToolBar" name="sparc_acq_toolbar">
+              <object class="ToolBar" name="fastem_acq_toolbar">
                 <style>wxVERTICAL</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -5498,7 +5498,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ToolBar" name="sparc_acq_toolbar">
+              <object class="ToolBar" name="fastem_overview_toolbar">
                 <style>wxVERTICAL</style>
                 <XRCED>
                   <assign_var>1</assign_var>

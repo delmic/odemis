@@ -1784,6 +1784,11 @@ class FastEMOverviewTab(Tab):
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
+        # Toolbar
+        self.tb = panel.fastem_overview_toolbar
+        # Add fit view to content to toolbar
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+
     @property
     def streambar_controller(self):
         return self._stream_controller
