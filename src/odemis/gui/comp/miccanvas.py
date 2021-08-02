@@ -1867,9 +1867,3 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
     def setView(self, view, tab_data):
         super(FastEMAcquisitionCanvas, self).setView(view, tab_data)
         view.show_crosshair.value = False
-
-    def fit_view_to_content(self, recenter=None):
-        # When the stream is playing for the first time, the view should be recentered to show the full image
-        if recenter is None:
-            recenter = True
-        super().fit_view_to_content(recenter)
