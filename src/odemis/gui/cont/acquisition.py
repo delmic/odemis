@@ -1513,6 +1513,9 @@ class FastEMAcquiController(object):
         """
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
+        self._projectbar_ctrl._project_bar.Enable(True)
+        self._calibration_ctrl._calibration_bar.Enable(True)
+        self._tab_panel.btn_align.Enable(True)
         self._tab_panel.Layout()
 
         if text is not None:
@@ -1531,6 +1534,11 @@ class FastEMAcquiController(object):
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self._show_status_icons(None)
+
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self._projectbar_ctrl._project_bar.Enable(False)
+        self._calibration_ctrl._calibration_bar.Enable(False)
+        self._tab_panel.btn_align.Enable(False)
 
         self.gauge_acq.Range = self.roa_count
         self.gauge_acq.Value = 0
@@ -1570,6 +1578,7 @@ class FastEMAcquiController(object):
         self._main_data_model.is_acquiring.value = False
         try:
             future.result()
+            self._reset_acquisition_gui()
         except CancelledError:
             self._reset_acquisition_gui()
             return
@@ -2202,14 +2211,14 @@ class FastEMAlignmentController:
 
         self._panel.align_gauge_progress.Hide()
         panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
-
-        self._is_aligning = False
+        tab_data.main.is_aligned.subscribe(self._on_align_state, init=True)
 
     def _on_btn_align(self, evt):
-        if self._is_aligning:
+        # TODO: implement cancellation
+        if self._tab_data.main.is_acquiring.value:
             logging.error("Cancelling alignment currently not supported.")
             return
-        self._is_aligning = True
+        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
 
         # Change button to "cancel", show progress bar
         self._panel.align_gauge_progress.Show()
@@ -2219,7 +2228,7 @@ class FastEMAlignmentController:
         self._panel.align_spacer_panel.Hide()
         self._panel.align_lbl_gauge.Hide()
         self._panel.btn_align.SetLabel("Cancel")
-        self._panel.Parent.Layout()
+        self._panel.Layout()
 
         # Start alignment
         f = align.fastem.align(self._tab_data.main)
@@ -2228,12 +2237,18 @@ class FastEMAlignmentController:
     @call_in_wx_main
     def _on_alignment_done(self, future):
         self._tab_data.main.is_aligned.value = True
-        self._is_aligning = False
+        self._tab_data.main.is_acquiring.value = False
 
         # Enable button, hide progress bar
         self._panel.align_gauge_progress.Hide()
         self._panel.align_spacer_panel.Show()
         self._panel.align_lbl_gauge.Show()
-        self._panel.align_lbl_gauge.SetLabel("Alignment done.")
         self._panel.btn_align.SetLabel("Alignment...")
         self._panel.Parent.Layout()
+
+    def _on_align_state(self, aligned):
+        if aligned:
+            self._panel.align_lbl_gauge.SetLabel("System is aligned.")
+        else:
+            # TODO: time estimation
+            self._panel.align_lbl_gauge.SetLabel("~ 2 seconds")
