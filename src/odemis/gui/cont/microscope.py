@@ -270,7 +270,7 @@ class SecomStateController(object):
 
         # Manage the chamber
         if self._main_data.chamber:
-            pressures = self._main_data.chamber.axes["pressure"].choices
+            pressures = self._main_data.chamber.axes["vacuum"].choices
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
 
@@ -293,7 +293,7 @@ class SecomStateController(object):
 
             # at init, if chamber is in overview position, start by pumping
             # (which will indirectly first acquire an image)
-            if ch_pos.value["pressure"] == self._overview_pressure:
+            if ch_pos.value["vacuum"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
 
         # disable optical and SEM buttons while there is a preparation process running
@@ -471,10 +471,10 @@ class SecomStateController(object):
     def _start_chamber_pumping(self):
         if self._overview_pressure is not None:
             # _on_overview_position() will take care of going further
-            f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+            f = self._main_data.chamber.moveAbs({"vacuum": self._overview_pressure})
             f.add_done_callback(self._on_overview_position)
         else:
-            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f = self._main_data.chamber.moveAbs({"vacuum": self._vacuum_pressure})
             f.add_done_callback(self._on_vacuum)
 
         # TODO: if the future is a progressiveFuture, it will provide info
@@ -494,7 +494,7 @@ class SecomStateController(object):
             s.should_update.value = False
 
         self._set_ebeam_power(False)
-        self._chamber_vent_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        self._chamber_vent_future = self._main_data.chamber.moveAbs({"vacuum": self._vented_pressure})
         # Will actually be displayed only if the hw_info is shown
         self._press_btn_ctrl.Enable(False)
         self._chamber_fc = ProgressiveFutureConnector(
@@ -519,8 +519,8 @@ class SecomStateController(object):
         or from CHAMBER_VENTING to CHAMBER_VENTED.
         """
         # Note, this can be called even if the pressure value hasn't changed.
-        currentp = position["pressure"]
-        pressures = self._main_data.chamber.axes["pressure"].choices
+        currentp = position["vacuum"]
+        pressures = self._main_data.chamber.axes["vacuum"].choices
         logging.debug("Chamber reached pressure %s (%g Pa)",
                       pressures.get(currentp, "unknown"), currentp)
 
@@ -598,7 +598,7 @@ class SecomStateController(object):
             ovs.is_active.value = True
         except Exception:
             logging.exception("Failed to start overview image acquisition")
-            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f = self._main_data.chamber.moveAbs({"vacuum": self._vacuum_pressure})
             f.add_done_callback(self._on_vacuum)
 
         # TODO: have a timer to detect if no image ever comes, give up and move
@@ -622,7 +622,7 @@ class SecomStateController(object):
             return  # don't ask for vacuum
 
         # move further to fully under vacuum (should do nothing if already there)
-        f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        f = self._main_data.chamber.moveAbs({"vacuum": self._vacuum_pressure})
         f.add_done_callback(self._on_vacuum)
 
 
@@ -677,7 +677,7 @@ class DelphiStateController(SecomStateController):
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
-        if ch_pos.value["pressure"] == self._vacuum_pressure:
+        if ch_pos.value["vacuum"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done. Otherwise request
             # ejecting the sample holder
@@ -1234,7 +1234,7 @@ class DelphiStateController(SecomStateController):
         calib_dialog.ShowModal()
 
     def _pressure_changed(self, value):
-        if value["pressure"] == self._overview_pressure:
+        if value["vacuum"] == self._overview_pressure:
             self._in_overview.set()
 
     # Rough approximation of the times of each loading action:
@@ -1298,7 +1298,7 @@ class DelphiStateController(SecomStateController):
 
             # Move to overview (NavCam) mode
             future._actions_time.pop(0)
-            pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+            pf = self._main_data.chamber.moveAbs({"vacuum": self._overview_pressure})
             future._delphi_load_state = pf
             pf.add_update_callback(self._update_load_time)
             pf.result()
@@ -1365,7 +1365,7 @@ class DelphiStateController(SecomStateController):
             wx.CallAfter(self._press_btn_ctrl.Enable, False)
             # move further to fully under vacuum (should do nothing if already there)
             future._actions_time.pop(0)
-            pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            pf = self._main_data.chamber.moveAbs({"vacuum": self._vacuum_pressure})
             future._delphi_load_state = pf
             pf.add_update_callback(self._update_load_time)
             pf.result()
