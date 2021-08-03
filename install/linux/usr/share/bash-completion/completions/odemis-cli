@@ -31,7 +31,7 @@ _odemis_cli()
                 --kill kill --check check --scan scan --list list --list-prop list-prop \
                 --set-attr set-attr --update-metadata update-metadata \
                 --move move --position position --reference reference --stop stop \
-                --acquire acquire --output --live live --version version --big-distance' -- "$cur") )
+                --acquire acquire --output --live live --version version --big-distance --degrees' -- "$cur") )
             return 0
             ;;
     esac

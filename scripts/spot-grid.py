@@ -27,7 +27,9 @@ from odemis.driver import ueye
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 
 MAX_WIDTH = 2000  # px
-PIXEL_SIZE_UM = 3.45 / 50.
+PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
+DEFAULT_MAGNIFICATION = 50
+PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
 
 
 class VideoDisplayerGrid(VideoDisplayer):
@@ -36,14 +38,15 @@ class VideoDisplayerGrid(VideoDisplayer):
     It should be pretty much platform independent.
     """
 
-    def __init__(self, title="Live image", size=(640, 480), gridsize=None):
+    def __init__(self, title="Live image", size=(640, 480), gridsize=None, pxsize=PIXEL_SIZE):
         """
         Displays the window on the screen
         size (2-tuple int,int): X and Y size of the window at initialisation
+        px_size (float): pixelsize in m
         Note that the size of the window automatically adapts afterwards to the
         coming pictures
         """
-        self.app = ImageWindowApp(title, size)
+        self.app = ImageWindowApp(title, size, pxsize)
         self.gridsize = (8, 8) if gridsize is None else gridsize
 
     def new_image(self, data):
@@ -68,7 +71,7 @@ class VideoDisplayerGrid(VideoDisplayer):
 
 
 class ImageWindowApp(wx.App):
-    def __init__(self, title, size):
+    def __init__(self, title, size, pxsize):
         wx.App.__init__(self, redirect=False)
         self.AppName = "Spot Grid CLI"
         self.frame = wx.Frame(None, title=title, size=size)
@@ -91,6 +94,8 @@ class ImageWindowApp(wx.App):
             self.imageCtrlText = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
         self.panel.SetFocus()
         self.frame.Show()
+
+        self.pixelsize = pxsize
 
     def update_view(self):
         logging.debug("Received a new image of %d x %d", *self.img.GetSize())
@@ -135,10 +140,10 @@ class ImageWindowApp(wx.App):
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         info = [
             "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
-            "pitch-x: {:.2f} um".format(PIXEL_SIZE_UM * self.scale[0]),
-            "pitch-y: {:.2f} um".format(PIXEL_SIZE_UM * self.scale[1]),
-            "translation-x: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[0]),
-            "translation-y: {:.1f} um".format(PIXEL_SIZE_UM * self.translation[1]),
+            "pitch-x: {:.2f} um".format(self.pixelsize * self.scale[0] * 1e6),
+            "pitch-y: {:.2f} um".format(self.pixelsize * self.scale[1] * 1e6),
+            "translation-x: {:.1f} um".format(self.pixelsize * self.translation[0] * 1e6),
+            "translation-y: {:.1f} um".format(self.pixelsize * self.translation[1] * 1e6),
             "shear: {:.5f} ".format(self.shear),
         ]
         ctx2 = cairo.Context(text_surface)
@@ -211,16 +216,17 @@ class StaticImageDataFlow(model.DataFlow):
         self.notify(self._detector.array)
 
 
-def live_display(ccd, dataflow, kill_ccd=True, gridsize=None):
+def live_display(ccd, dataflow, pxsize, kill_ccd=True, gridsize=None):
     """
     Acquire an image from one (or more) dataflow and display it with a spot grid overlay.
     ccd: a camera object
     dataflow_name: name of the dataflow to access
     kill_ccd: True if it is required to terminate the ccd after closing the window
     gridsize: size of the grid of spots.
+    px_size (float): pixelsize in m
     """
     # create a window
-    window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize)
+    window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize, pxsize)
     im_passer = ImagePasser()
     t = threading.Thread(target=image_update, args=(im_passer, window))
     t.daemon = True
@@ -257,6 +263,8 @@ def main(args):
                        help="display and update an image on the screen")
     parser.add_argument("--gridsize", dest="gridsize", nargs=2, metavar="<gridsize>", type=int, default=None,
                         help="size of the grid of spots in x y, default 8 8")
+    parser.add_argument("--magnification", dest="magnification", type=float,
+                        help="magnification (typically 40 or 50)")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
                         default=0, help="set verbosity level (0-2, default = 0)")
     options = parser.parse_args(args[1:])
@@ -270,21 +278,42 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
+    # Magnification: use cli input value. If none is specified, try to read out lens magnification.
+    try:
+        lens = model.getComponent(role="lens")
+        lens_mag = lens.magnification.value
+    except Exception as ex:
+        logging.debug("Failed to read magnification from lens, ex: %s", ex)
+        lens_mag = None
+
+    if options.magnification:
+        magnification = options.magnification
+        if lens_mag and lens_mag != magnification:
+            logging.warning("Requested magnification %s differs from lens magnification %s.",
+                            magnification, lens_mag)
+    elif lens_mag:
+        magnification = lens_mag
+        logging.debug("No magnification specified, using lens magnification %s.", lens_mag)
+    else:
+        magnification = DEFAULT_MAGNIFICATION
+        logging.warning("No magnification specified, falling back to %s.", magnification)
+    pxsize = PIXEL_SIZE_SAMPLE_PLANE / magnification
+
     if options.filename:
         logging.info("Will process image file %s" % options.filename)
         converter = dataio.find_fittest_converter(options.filename, default=None, mode=os.O_RDONLY)
         data = converter.read_data(options.filename)[0]
         fakeccd = StaticCCD(options.filename, "fakeccd", data)
-        live_display(fakeccd, fakeccd.data, gridsize=options.gridsize)
+        live_display(fakeccd, fakeccd.data, pxsize, gridsize=options.gridsize)
     elif options.role:
         if get_backend_status() != BACKEND_RUNNING:
             raise ValueError("Backend is not running while role command is specified.")
         ccd = model.getComponent(role=options.role)
-        live_display(ccd, ccd.data, kill_ccd=False, gridsize=options.gridsize)
+        live_display(ccd, ccd.data, pxsize, kill_ccd=False, gridsize=options.gridsize)
     else:
         ccd = ueye.Camera("camera", "ccd", device=None)
         ccd.SetFrameRate(2)
-        live_display(ccd, ccd.data, gridsize=options.gridsize)
+        live_display(ccd, ccd.data, pxsize, gridsize=options.gridsize)
     return 0
 
 
