@@ -162,7 +162,7 @@ class TestSEM(unittest.TestCase):
 
         # TODO: a way to group tests, so that all the ones that need to be in
         # SEM mode are together, and all the one for navcam are together?
-        f = self.pressure.moveAbs({"pressure":1e-02})  # move to SEM
+        f = self.pressure.moveAbs({"vacuum":1e-02})  # move to SEM
         f.result()
 
     def tearDown(self):
@@ -438,7 +438,7 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to acquire a navcam image
         """
-        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f = self.pressure.moveAbs({"vacuum":1e04})  # move to NavCam
         f.result()
         # Exposure time is fixed, time is mainly spent on the image transfer
         expected_duration = 0.5  # s
@@ -452,7 +452,7 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to change the overview focus
         """
-        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f = self.pressure.moveAbs({"vacuum":1e04})  # move to NavCam
         f.result()
         pos = self.navcam_focus.position.value
         f = self.navcam_focus.moveRel({"z":0.1e-3})  # 1 mm
@@ -471,17 +471,17 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to change the pressure state
         """
-        f = self.pressure.moveAbs({"pressure":1e-02})  # move to SEM
+        f = self.pressure.moveAbs({"vacuum":1e-02})  # move to SEM
         f.result()
-        new_pos = self.pressure.position.value["pressure"]
+        new_pos = self.pressure.position.value["vacuum"]
         self.assertEqual(1e-02, new_pos)
-        f = self.pressure.moveAbs({"pressure":1e05})  # Unload
+        f = self.pressure.moveAbs({"vacuum":1e05})  # Unload
         f.result()
-        new_pos = self.pressure.position.value["pressure"]
+        new_pos = self.pressure.position.value["vacuum"]
         self.assertEqual(1e05, new_pos)
-        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f = self.pressure.moveAbs({"vacuum":1e04})  # move to NavCam
         f.result()
-        new_pos = self.pressure.position.value["pressure"]
+        new_pos = self.pressure.position.value["vacuum"]
         self.assertEqual(1e04, new_pos)
 
 #     @skip("skip")
