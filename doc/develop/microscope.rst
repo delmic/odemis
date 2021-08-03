@@ -73,7 +73,8 @@ Emitters:
 Actuators:
  * stage: Moves the sample. It can have up to 3 linear axes (x, y, z) and 3 rotational axes (rx, ry, rz).
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z.
- * chamber: Manages the pressure and/or sample loading. It must have a "pressure" axis.
+ * chamber: Manages the pressure and/or sample loading. It must have a "vacuum" axis to switch between the different vacuum states.
+   If it also has a sensor to read the actual pressure, it should be provided on the .pressure VA.
  * pinhole: To change the size of the pinhole in a confocal microscope. It has one axis: d.
  * sem-stage: The stage of the DELPHI that moves the (whole) sample holder.
  * align: Alignment actuator for the SECOM and DELPHI microscopes.
