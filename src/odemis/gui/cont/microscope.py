@@ -1471,8 +1471,11 @@ class FastEMStateController(object):
                                                        self._main_data.chamberState,
                                                        self._main_data)
         self._main_data.chamberState.subscribe(self.on_chamber_state)
-        ch_pos = self._main_data.chamber.position
-        ch_pos.subscribe(self.on_chamber_pos, init=True)
+
+        vacuum_values = self._main_data.chamber.axes["vacuum"].choices
+        self._vacuum_pos = min(vacuum_values.keys())
+        self._vented_pos = max(vacuum_values.keys())
+        self._main_data.chamber.position.subscribe(self.on_chamber_pos, init=True)
 
     def _on_ebeam_state(self, _):
         self._main_data.ebeam.power.value = (self._main_data.emState.value == STATE_ON)
@@ -1490,11 +1493,11 @@ class FastEMStateController(object):
         chamber = self._main_data.chamber
         if state == CHAMBER_PUMPING:
             wx.CallAfter(self._press_btn_ctrl.Enable, False)
-            f = chamber.moveAbs({"vacuum": 1})
+            f = chamber.moveAbs({"vacuum": self._vacuum_pos})
             f.add_done_callback(self._on_future_done)
         elif state == CHAMBER_VENTING:
             wx.CallAfter(self._press_btn_ctrl.Enable, False)
-            f = chamber.moveAbs({"vacuum": 0})
+            f = chamber.moveAbs({"vacuum": self._vented_pos})
             f.add_done_callback(self._on_future_done)
 
     def _on_future_done(self, f):
@@ -1502,12 +1505,13 @@ class FastEMStateController(object):
             f.result()
         except Exception as ex:
             logging.error("Future of chamber move failed with exception '%s'.", ex)
-        position = self._main_data.chamber.position.value
-        state = self._main_data.chamber.axes["vacuum"].choices[position["vacuum"]]
+
         self._main_data.emState.value = STATE_ON if self._main_data.ebeam.power.value else STATE_OFF
-        if state == "vacuum":
+
+        current_vacuum = self._main_data.chamber.position.value["vacuum"]
+        if current_vacuum == self._vacuum_pos:
             self._main_data.chamberState.value = CHAMBER_VACUUM
-        elif state == "vented":
+        elif current_vacuum == self._vented_pos:
             self._main_data.chamberState.value = CHAMBER_VENTED
         else:
             self._main_data.chamberState.value = CHAMBER_UNKNOWN
@@ -1522,10 +1526,10 @@ class FastEMStateController(object):
             # don't update the state while a pump/vent process is in progress.
             return
 
-        vacuum_state = self._main_data.chamber.axes["vacuum"].choices[position["vacuum"]]
-        if vacuum_state == "vacuum":
+        current_vacuum = position["vacuum"]
+        if current_vacuum == self._vacuum_pos:
             self._main_data.chamberState.value = CHAMBER_VACUUM
-        elif vacuum_state == "vented":
+        elif current_vacuum == self._vented_pos:
             self._main_data.chamberState.value = CHAMBER_VENTED
         else:
             self._main_data.chamberState.value = CHAMBER_UNKNOWN
