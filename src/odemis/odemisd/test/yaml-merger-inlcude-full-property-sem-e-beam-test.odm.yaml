@@ -1,0 +1,5 @@
+properties: {
+    scale: [8, 8], # (ratio) : start with a pretty fast scan
+    dwellTime: 10.e-6, # s
+    magnification: 100, # (ratio)
+}

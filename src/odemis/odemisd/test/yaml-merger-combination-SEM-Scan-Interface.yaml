@@ -1,0 +1,9 @@
+{
+    class: semcomedi.SEMComedi,
+    role: null,
+    !extend yaml-merger-extend-complete-init-SEM-Scan-Interface-test.odm.yaml,
+    children: {
+       detector0: "CL PMT",
+       scanner: "SEM E-beam",
+    }
+}

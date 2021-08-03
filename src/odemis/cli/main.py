@@ -32,6 +32,7 @@ import collections
 import importlib
 import inspect
 import logging
+import math
 import numbers
 from odemis import model, dataio, util
 import odemis
@@ -282,7 +283,14 @@ def print_events(component, pretty):
         print_event(name, value, pretty)
 
 
-def print_vattribute(name, va, pretty):
+def print_vattribute(component, name, va, pretty):
+    """
+    Print on one line the information about a VigilantAttribute
+    component (Component): the component containing the VigilantAttribute
+    name (str): the name of the VigilantAttribute
+    va (VigilantAttribute): the VigilantAttribute to display
+    pretty (bool): whether to display for the user (True) or for a machine (False)
+    """
     if va.unit:
         if pretty:
             unit = u" (unit: %s)" % va.unit
@@ -331,6 +339,33 @@ def print_vattribute(name, va, pretty):
                 logging.info("Failed to convert %s to component names")
                 # Leave the value as-is
 
+        # Convert to nicer unit for user
+        if va.unit and va.unit == "rad" and isinstance(val, numbers.Real):
+            try:
+                val_converted = u" = %s°" % (math.degrees(val),)
+            except Exception:
+                logging.warning("Failed to convert %s to degrees", name)
+                val_converted = u""
+        else:
+            val_converted = u""
+
+        # For position, it's trickier, as the unit is on .axes
+        if (name == "position" and isinstance(va.value, dict) and
+            hasattr(component, "axes") and isinstance(component.axes, dict)
+           ):
+            pos_deg = {}
+            for an, pos in va.value.items():
+                try:
+                    axis_def = component.axes[an]
+                except KeyError:
+                    logging.warning("axes is missing axis '%s' from .position", an)
+                    continue
+                if axis_def.unit == "rad":
+                    pos_deg[an] = math.degrees(pos)
+
+            if pos_deg:
+                val_converted = u"\t{%s}" % (u", ".join(u"%r: %r°" % (k, pos_deg[k]) for k in sorted(pos_deg.keys())),)
+
         # Display set/dict sorted, so that they always look the same.
         # Especially handy for VAs such as .position, which show axis names.
         if isinstance(val, dict):
@@ -339,18 +374,18 @@ def print_vattribute(name, va, pretty):
             sval = u"{%s}" % (u", ".join(u"%r" % v for v in sorted(val)),)
         else:
             sval = str(val)
-        print(u"\t" + name + u" (%sVigilant Attribute)\t value: %s%s%s%s" %
-              (readonly, sval, unit, str_range, str_choices))
+        print(u"\t" + name + u" (%sVigilant Attribute)\t value: %s%s%s%s%s" %
+              (readonly, sval, unit, str_range, str_choices, val_converted))
     else:
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
 
 def print_vattributes(component, pretty):
-    for name, value in model.getVAs(component).items():
+    for name, va in model.getVAs(component).items():
         if name in VAS_HIDDEN:
             continue
-        print_vattribute(name, value, pretty)
+        print_vattribute(component, name, va, pretty)
 
 
 def map_metadata_names():
@@ -537,13 +572,17 @@ def merge_moves(actions):
     return moves
 
 MAX_DISTANCE = 0.01 # m
-def move(comp_name, moves, check_distance=True):
+
+
+def move(comp_name, moves, check_distance=True, to_radians=False):
     """
     move (relatively) the axis of the given component by the specified amount of µm
     comp_name (str): name of the component
+    moves (dict str -> str): axis -> distance (as text, and in µm for distances)
     check_distance (bool): if the axis is in meters, check that the move is not
       too big.
-    moves (dict str -> str): axis -> distance (as text, and in µm for distances)
+    to_radians (bool): will convert from degrees to radians if the axis is in radians,
+      otherwise will fail
     """
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
@@ -573,6 +612,12 @@ def move(comp_name, moves, check_distance=True):
         else:
             distance = convert_to_object(str_distance)
 
+        if to_radians:
+            if ad.unit == "rad":
+                distance = math.radians(distance)
+            else:
+                raise ValueError("Axis %s is in %s, doesn't support value in degrees" % (axis_name, ad.unit))
+
         act_mv[axis_name] = distance
         logging.info(u"Will move %s.%s by %s", comp_name, axis_name,
                      units.readable_str(distance, ad.unit, sig=3))
@@ -590,13 +635,15 @@ def move(comp_name, moves, check_distance=True):
                       (comp_name, act_mv, exc))
 
 
-def move_abs(comp_name, moves, check_distance=True):
+def move_abs(comp_name, moves, check_distance=True, to_radians=False):
     """
     move (in absolute) the axis of the given component to the specified position
     comp_name (str): name of the component
+    moves (dict str -> str): axis -> position (as text)
     check_distance (bool): if the axis is in meters, check that the move is not
       too big.
-    moves (dict str -> str): axis -> position (as text)
+    to_radians (bool): will convert from degrees to radians if the axis is in radians,
+      otherwise will fail
     """
     component = get_component(comp_name)
 
@@ -634,6 +681,12 @@ def move_abs(comp_name, moves, check_distance=True):
                                   (abs(cur_pos - position), MAX_DISTANCE))
             else:
                 position = convert_to_object(str_position)
+
+            if to_radians:
+                if ad.unit == "rad":
+                    position = math.radians(position)
+                else:
+                    raise ValueError("Axis %s is in %s, doesn't support value in degrees" % (axis_name, ad.unit))
 
             # If only a couple of positions are possible, and asking for a float,
             # avoid the rounding error by looking for the closest possible
@@ -919,6 +972,8 @@ def main(args):
                          help=u"move the axis to the given position.")
     dm_grp.add_argument("--big-distance", dest="bigdist", action="store_true", default=False,
                         help=u"flag needed to allow any move bigger than 10 mm.")
+    dm_grp.add_argument("--degrees", dest="degrees", action="store_true", default=False,
+                        help=u"indicate the position is in degrees, it will be converted to radians.")
     dm_grpe.add_argument("--reference", dest="reference", nargs=2, action="append",
                          metavar=("<component>", "<axis>"),
                          help="runs the referencing procedure for the given axis.")
@@ -1038,11 +1093,11 @@ def main(args):
         elif options.position is not None:
             moves = merge_moves(options.position)
             for c, m in moves.items():
-                move_abs(c, m, check_distance=(not options.bigdist))
+                move_abs(c, m, check_distance=(not options.bigdist), to_radians=options.degrees)
         elif options.move is not None:
             moves = merge_moves(options.move)
             for c, m in moves.items():
-                move(c, m, check_distance=(not options.bigdist))
+                move(c, m, check_distance=(not options.bigdist), to_radians=options.degrees)
         elif options.stop:
             stop_move()
         elif options.acquire is not None:

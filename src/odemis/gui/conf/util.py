@@ -89,10 +89,10 @@ def resolution_from_range_plus_point(comp, va, conf):
 
 
 def binning_1d_from_2d(comp, va, conf):
-    """ Find simple binnings available in one dimension
+    """ Find simple binnings/scale available in one dimension
 
     We assume pixels are always square. The binning provided by a camera is normally a 2-tuple of
-    integers.
+    integers. It also works with the scale of a scanner (eg, e-beam).
 
     Note: conf can have a special parameter "range_1d" to limit the choices generated
     """
@@ -101,36 +101,52 @@ def binning_1d_from_2d(comp, va, conf):
         logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
 
     try:
-        nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
-        choices = {cur_val[0]}
-        minbin = max(1, max(va.range[0]))  # Force minimum binning 1 (for scanners with scale < 1)
-        maxbin = min(va.range[1])
-        if "range_1d" in conf:
-            conf_rng = conf["range_1d"]
-            minbin = max(conf_rng[0], minbin)
-            maxbin = min(conf_rng[1], maxbin)
+        if hasattr(va, "choices"):
+            # Pass all available choices which are same in both dimensions
+            choices = sorted(x for x, y in va.choices if x==y)
+            ret = OrderedDict()
+            for v in choices:
+                label = str(int(v) if int(v) == v else v)  # Remove any .0 if it's an integer (very likely)
+                ret[(v, v)] = label
+            return ret
 
-        # add up to 5 binnings
-        b = int(math.ceil(minbin))  # in most cases, that's 1
-        for _ in range(6):
-            # does it still make sense to add such a small binning?
-            if b > cur_val[0]:
-                nbpx = nbpx_full / (b ** 2)
-                if nbpx < MIN_RES: # too small resolution
+        elif hasattr(va, "range"):
+            nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
+            choices = {cur_val[0]}
+            minbin = max(1, max(va.range[0]))  # Force minimum binning 1 (for scanners with scale < 1)
+            maxbin = min(va.range[1])
+            if "range_1d" in conf:
+                conf_rng = conf["range_1d"]
+                minbin = max(conf_rng[0], minbin)
+                maxbin = min(conf_rng[1], maxbin)
+
+            # add up to 5 binnings
+            b = int(math.ceil(minbin))  # in most cases, that's 1
+            for _ in range(6):
+                # does it still make sense to add such a small binning?
+                if b > cur_val[0]:
+                    nbpx = nbpx_full / (b ** 2)
+                    if nbpx < MIN_RES: # too small resolution
+                        break
+                    if len(choices) >= 5: # too many choices
+                        break
+
+                if b > maxbin:
                     break
-                if len(choices) >= 5: # too many choices
-                    break
 
-            if b > maxbin:
-                break
+                choices.add(b)
+                b *= 2
 
-            choices.add(b)
-            b *= 2
+            choices = sorted(list(choices))
+            return OrderedDict(tuple(((v, v), str(int(v))) for v in choices))
 
-        choices = sorted(list(choices))
-        return OrderedDict(tuple(((v, v), str(int(v))) for v in choices))
-    except AttributeError:
-        return {cur_val: str(cur_val[0])}
+        else:
+            logging.info("Couldn't list the binnings of %s as it has no range nor choices", comp.name)
+    except AttributeError as ex:
+        logging.info("Couldn't list the binnings of %s: %s", comp.name, ex)
+
+    # Fallback
+    return {cur_val: str(cur_val[0])}
 
 
 def binning_firstd_only(comp, va, conf):
@@ -297,9 +313,8 @@ def determine_control_type(hw_comp, va, choices_formatted, conf):
     """ Determine the control type for the given VA """
 
     # Get the defined type of control or assign a default one
-    try:
-        control_type = conf['control_type']
-    except KeyError:
+    control_type = conf.get('control_type', None)
+    if control_type is None:
         control_type = determine_default_control(va)
 
     if callable(control_type):
@@ -310,7 +325,7 @@ def determine_control_type(hw_comp, va, choices_formatted, conf):
         if len(choices_formatted) <= 1:  # only one choice => force label
             control_type = odemis.gui.CONTROL_READONLY
             logging.info("Radio control changed to read only because of lack of choices!")
-        elif len(choices_formatted) > 10:  # too many choices => combo
+        elif len(choices_formatted) >= 8:  # too many choices => combo
             control_type = odemis.gui.CONTROL_COMBO
             logging.info("Radio control changed to combo box because of number of choices!")
         else:

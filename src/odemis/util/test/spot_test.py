@@ -190,7 +190,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         """
         coords = numpy.array(list(map(spot.FindCenterCoordinates, self.imgdata)))
         delta = coords - self.coords0
-        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
+        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 1])
         self.assertTrue(pvalue > 0.05)
 
     def test_accuracy(self):
@@ -232,9 +232,9 @@ class TestRadialSymmetryCenter(unittest.TestCase):
         shape = (9, 9)
         refractive_index = 1
         numerical_aperture = 0.95
-        wavelength = 0.55  # [um]
+        wavelength = 550e-9  # [m]
         magnification = 40
-        pixel_size = 6.5  # [um]
+        pixel_size = 6.5e-6  # [m]
 
         # Ensure that each time when the test case is run we have the same
         # 'random' numbers.

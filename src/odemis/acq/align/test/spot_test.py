@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 15 Apr 2014
 
 @author: Kimon Tsitsikas
@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import logging
@@ -28,13 +28,13 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq.align import spot
+from odemis.acq.align.spot import GRID_SIMILARITY, GRID_AFFINE
 from odemis.dataio import hdf5, tiff
 from odemis.driver.actuator import ConvertStage
 from odemis.util import test, mock
 import os
 import time
 import unittest
-
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -78,7 +78,6 @@ class TestSpotAlignment(unittest.TestCase):
                                       dependencies={"orig": cls.align},
                                       axes=["b", "a"],
                                       rotation=math.radians(45))
-
 
     @classmethod
     def tearDownClass(cls):
@@ -192,24 +191,114 @@ class TestFindGridSpots(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
                                                 decimal=1)
 
-    def test_find_grid(self):
+    def test_find_grid_affine(self):
         """
         Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
-        that the rotation, scaling and translation are correct.
+        that the rotation, scaling, translation and shear are correct when using the affine transformation method.
         """
         image = numpy.zeros((256, 256))
         # set a grid of 8 by 8 points to 1
         image[54:150:12, 54:150:12] = 1
-        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8))
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8), method=GRID_AFFINE)
         self.assertAlmostEqual(rotation, 0, places=4)
         self.assertEqual(shear, 0)
         # create a grid that contains the coordinates of the spots
         xv = numpy.arange(54, 150, 12)
         xx, yy = numpy.meshgrid(xv, xv)
         grid = numpy.column_stack((xx.ravel(), yy.ravel()))
-        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=2)
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=2)
         numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
         numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_find_grid_similarity(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct when using the similarity transformation method.
+        """
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8),
+                                                                                     method=GRID_SIMILARITY)
+        self.assertAlmostEqual(rotation, 0, places=4)
+        self.assertIsNone(shear)
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(54, 150, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=2)
+        numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_find_grid_with_shear(self):
+        """
+        Create an images with grids of 3 by 2 spots. The grid in each image has a different amount of shear.
+        Test that the amount of shear found for each image is as expected.
+        """
+        image_no_shear = numpy.array(
+            [[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
+
+        # Test that for an image without shear the shear and rotation are almost zero, when using the affine method.
+        *_, rotation, shear = spot.FindGridSpots(image_no_shear, (3, 2), spot_size=4, method=GRID_AFFINE)
+        self.assertAlmostEqual(rotation, 0, places=8)
+        self.assertAlmostEqual(shear, 0, places=8)
+
+        # Test that for an image without shear the rotation is almost zero,
+        # and shear is None when using the similarity method.
+        *_, rotation, shear = spot.FindGridSpots(image_no_shear, (3, 2), spot_size=4, method=GRID_SIMILARITY)
+        self.assertAlmostEqual(rotation, 0, places=8)
+        self.assertIsNone(shear)
+
+        image_shear = numpy.array(
+            [[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0.],
+             [0., 0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
+
+        image_more_shear = numpy.array(
+            [[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0.],
+             [0., 0., 0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 1., 1., 0., 0., 1., 1., 0., 0., 0., 1., 1., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+             [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]])
+
+        # Test that the image with more shear returns a higher absolute shear component, when using the affine method.
+        *_, shear = spot.FindGridSpots(image_shear, (3, 2), spot_size=4, method=GRID_AFFINE)
+        *_, more_shear = spot.FindGridSpots(image_more_shear, (3, 2), spot_size=4, method=GRID_AFFINE)
+        self.assertGreater(abs(more_shear), abs(shear))
+        # Since both images have a grid with shear, the shear in both cases should not be equal to zero.
+        self.assertNotEqual(shear, 0)
+        self.assertNotEqual(more_shear, 0)
+
+    def test_wrong_method(self):
+        """Test that an error is raised when a wrong method is passed."""
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        with self.assertRaises(ValueError):
+            spot.FindGridSpots(image, (8, 8), method='scaling')
 
     def test_find_grid_on_image(self):
         """

@@ -304,6 +304,19 @@ class TestWithBackend(unittest.TestCase):
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
+    def test_position_deg_fail(self):
+        """converting position into degrees shouldn't be possible for axes in meters"""
+        try:
+            # change the stdout
+            out = BytesIO()
+            sys.stdout = out
+
+            cmdline = ["cli", "--position", "Sample Stage", "x", "50e-6", "--degrees"]
+            ret = main.main(cmdline)
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertNotEqual(ret, 0, "trying to run '%s' should fail" % cmdline)
+
     def test_reference(self):
         # On this simulated hardware, no component supports referencing, so
         # just check that referencing correctly reports this

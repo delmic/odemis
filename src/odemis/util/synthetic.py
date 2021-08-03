@@ -1,5 +1,9 @@
 # -*- encoding: utf-8 -*-
 """
+synthetic.py : To obtain the characteristic size of the point spread function
+(PSF) of a microscope system, and to generate simulated images containing one
+or multiple spots (PSF's).
+
 Copyright (C) 2021  Andries Effting, Delmic
 
 This program is free software; you can redistribute it and/or
@@ -21,7 +25,7 @@ USA.
 import math
 from typing import List, Tuple, Union
 
-import numpy as np
+import numpy
 
 
 Shape2D = Tuple[int, int]
@@ -29,7 +33,7 @@ Coordinate = Tuple[float, float]
 CoordinateList = List[Coordinate]
 
 
-UINT16_MAX = np.iinfo(np.uint16).max
+UINT16_MAX = numpy.iinfo(numpy.uint16).max
 
 
 def psf_sigma_wffm(
@@ -52,7 +56,7 @@ def psf_sigma_wffm(
     -------
     sigma : float
         The standard deviation of the Gaussian approximation of a fluorescence
-        microscope point spread function.
+        microscope point spread function. Same units as `wavelength`.
 
     References
     ----------
@@ -75,15 +79,15 @@ def psf_sigma_wffm(
     k = 2 * math.pi / wavelength
     nk = refractive_index * k
     sa = numerical_aperture / refractive_index
-    ca = math.sqrt(1 - sa * sa)
-    t = pow(ca, 1.5)
-    sigma = 1 / (nk * math.sqrt((4 - 7 * t + 3 * pow(ca, 3.5)) / (7 * (1 - t))))
+    ca = math.sqrt(1 - sa ** 2)
+    t = ca ** 1.5
+    sigma = 1 / (nk * math.sqrt((4 - 7 * t + 3 * ca ** 3.5) / (7 * (1 - t))))
     return sigma
 
 
 def psf_gaussian(
     shape: Shape2D, loc: Union[Coordinate, CoordinateList], sigma: float
-) -> np.ndarray:
+) -> numpy.ndarray:
     """
     Return a synthetic spot image of a point-spread function (PSF) approximated
     by a 2-dimensional Gaussian function.
@@ -92,7 +96,7 @@ def psf_gaussian(
     ----------
     shape : tuple of ints
         Shape of the array, e.g. ``(9, 9)``.
-    loc : tuple of floats
+    loc : tuple of floats, or list of tuple of floats
         Position of the maximum in pixel coordinates `(j0, i0)` relative to the
         center of the spot image.
     sigma : float, positive
@@ -100,7 +104,7 @@ def psf_gaussian(
 
     Returns
     -------
-    image : ndarray, dtype=np.uint16
+    image : ndarray, dtype=numpy.uint16
         Array with the image of the point spread function with the given shape
         and size and at the given location.
 
@@ -109,15 +113,15 @@ def psf_gaussian(
         raise ValueError("sigma should be positive")
 
     n, m = shape
-    j = np.arange(n, dtype=np.float64)
-    i = np.arange(m, dtype=np.float64)
-    out = np.zeros((n, m), dtype=np.float64)
-    for j0, i0 in np.atleast_2d(loc):
-        kj = np.exp(-0.5 * np.square((j - j0) / sigma))
-        ki = np.exp(-0.5 * np.square((i - i0) / sigma))
-        out += np.outer(kj, ki)
+    j = numpy.arange(n, dtype=numpy.float64)
+    i = numpy.arange(m, dtype=numpy.float64)
+    out = numpy.zeros((n, m), dtype=numpy.float64)
+    for j0, i0 in numpy.atleast_2d(loc):
+        kj = numpy.exp(-0.5 * numpy.square((j - j0) / sigma))
+        ki = numpy.exp(-0.5 * numpy.square((i - i0) / sigma))
+        out += numpy.outer(kj, ki)
 
     # convert to uint16
-    np.clip(out, 0, 1, out=out)
-    np.rint(UINT16_MAX * out, out=out)
-    return out.astype(np.uint16)
+    numpy.clip(out, 0, 1, out=out)
+    numpy.rint(UINT16_MAX * out, out=out)
+    return out.astype(numpy.uint16)
