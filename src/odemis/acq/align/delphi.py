@@ -203,7 +203,7 @@ def _DoDelphiCalibration(future, main_data):
 
     hw_settings = list_hw_settings(main_data.ebeam, main_data.ccd)
 
-    pressures = main_data.chamber.axes["pressure"].choices
+    pressures = main_data.chamber.axes["vacuum"].choices
     vacuum_pressure = min(pressures.keys())  # Pressure to go to SEM mode
     # vented_pressure = max(pressures.keys())
     for p, pn in pressures.items():
@@ -222,7 +222,7 @@ def _DoDelphiCalibration(future, main_data):
         opt_stage = model.getComponent(role="align")
 
         # Move to the overview position first
-        f = main_data.chamber.moveAbs({"pressure": overview_pressure})
+        f = main_data.chamber.moveAbs({"vacuum": overview_pressure})
         f.result()
         if future._task_state == CANCELLED:
             raise CancelledError()
@@ -271,7 +271,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Move to SEM
-        f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
+        f = main_data.chamber.moveAbs({"vacuum": vacuum_pressure})
         f.result()
         if future._task_state == CANCELLED:
             raise CancelledError()
