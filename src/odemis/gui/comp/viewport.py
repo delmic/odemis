@@ -769,7 +769,7 @@ class LiveViewport(MicroscopeViewport):
 
 
 class FeatureViewport(LiveViewport):
-    left_legend_class = AxisLegend
+    bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
         super(FeatureViewport, self).__init__(*args, **kwargs)
@@ -778,7 +778,7 @@ class FeatureViewport(LiveViewport):
         super(FeatureViewport, self).setView(view, tab_data)
         if hasattr(view, "showFeatures"):
             view.showFeatures.subscribe(self._show_hide_feature_overlay)
-            self.left_legend.feature_toggle_va = view.showFeatures
+            self.bottom_legend_class.feature_toggle_va = view.showFeatures
 
     def _show_hide_feature_overlay(self, va_val):
         # show/hide feature overlay based on the legend toggle button
