@@ -809,7 +809,7 @@ class FeatureOverviewViewport(FeatureViewport):
 
         # Only create a feature overlay in chamber tab as the canvas would create the one shown on localization tab
         if isinstance(tab_data, CryoChamberGUIData):
-            slol = CryoFeatureOverlay(self.canvas, tab_data.features, tab_data.currentFeature)
+            slol = CryoFeatureOverlay(self.canvas, tab_data)
             slol.active.value = True
             self.canvas.add_world_overlay(slol)
 

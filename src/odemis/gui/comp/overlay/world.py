@@ -124,18 +124,18 @@ FEATURE_DIAMETER = 30  # pixels
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     """ Overlay for handling showing interesting features of cryo projects """
-    def __init__(self, cnvs, features_va, current_feature_va, tool_va=None):
+
+    def __init__(self, cnvs, tab_data):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
-        :param features_va: (ListVA of CryoFeature) list of the interesting cryo features in the project
-        :param current_feature_va: (VigilantAttribute of CryoFeature) currently selected feature VA
-        :param tool_va: (IntEnumerated or None) the feature tool if found
+        :param tab_data: (model.MicroscopyGUIData) tab data model
         """
         StagePointSelectOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
         self._mode = MODE_SHOW_FEATURES
+        self.tab_data = tab_data
 
-        self._selected_tool_va = tool_va
+        self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         if self._selected_tool_va:
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
@@ -147,12 +147,15 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._icon_w_adjust = self._feature_icon_active.get_width() / 2
         self._icon_h_adjust = self._feature_icon_active.get_height() / 2
 
-        if features_va:
-            self._features_va = features_va
-            features_va.subscribe(self._on_features_changes, init=True)
-        if current_feature_va:
-            self._current_feature_va = current_feature_va
-            current_feature_va.subscribe(self._on_current_feature_va, init=True)
+        if hasattr(self.tab_data, "features"):
+            self.tab_data.features.subscribe(self._on_features_changes, init=True)
+        else:
+            raise ValueError("CryoFeatureOverlay requires tab data to have features VA.")
+        if hasattr(self.tab_data, "currentFeature"):
+            self.tab_data.currentFeature.subscribe(self._on_current_feature_va, init=True)
+        else:
+            raise ValueError("CryoFeatureOverlay requires tab data to have currentFeature VA.")
+
         self._selected_feature = None
         self._hover_feature = None
 
@@ -183,12 +186,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
                 pos = feature.pos.value
+                logging.info("moving to feature {}".format(feature.name.value))
                 self.cnvs.view.moveStageTo((pos[0], pos[1]))
+                self.tab_data.currentFeature.value = feature
             else:
                 # Move to selected point
                 StagePointSelectOverlay.on_dbl_click(self, evt)
         else:
-            WorldOverlay.on_dbl_click(self, evt)
+            super().on_dbl_click(self, evt)
 
     def on_left_down(self, evt):
         """
@@ -206,14 +211,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 else:
                     # create new feature based on the physical position then disable the feature tool
                     p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    self.cnvs.on_new_feature_pos(p_pos)
+                    self.tab_data.add_new_feature(p_pos[0], p_pos[1])
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
-                    self._current_feature_va.value = feature
-                self.cnvs.on_left_down(evt)
+                    self.tab_data.currentFeature.value = feature
+                evt.Skip()
         else:
-            WorldOverlay.on_left_down(self, evt)
+            super().on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """
@@ -223,17 +228,21 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if self.active:
             if self.left_dragging:
                 if self._selected_feature:
-                    self._move_selected_feature(evt)
+                    self._update_selected_feature_position(evt.Position)
                 DragMixin._on_left_up(self, evt)
             else:
-                self.cnvs.on_left_up(evt)
+                evt.Skip()
         else:
             WorldOverlay.on_left_up(self, evt)
 
-    def _move_selected_feature(self, evt):
-        v_pos = evt.Position
+    def _update_selected_feature_position(self, v_pos):
+        """
+        Update the selected feature with the newly moved position
+        :param v_pos: (int, int) the coordinates in the view
+        """
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+        # Reset the selected tool to signal end of feature moving operation
         self._selected_feature = None
         self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
@@ -241,14 +250,15 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     def _detect_point_inside_feature(self, v_pos):
         """
         Detect if a given point is over a feature
-        :param v_pos: (int, int) Point in pixels
+        :param v_pos: (int, int) Point in view coordinates 
         :return: (CryoFeature or None) Found feature, None if not found
         """
+
         def in_radius(c_x, c_y, r, x, y):
             return math.hypot(c_x - x, c_y - y) <= r
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
-        for feature in self._features_va.value:
+        for feature in self.tab_data.features.value:
             pos = feature.pos.value
             fvsp = self.cnvs.phys_to_view(pos, offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
@@ -275,18 +285,16 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self.cnvs.reset_dynamic_cursor()
                 self._hover_feature = None
                 WorldOverlay.on_motion(self, evt)
-            self.cnvs.update_drawing()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
-        Draw the features list show each status and whether it's selected or hovered on
+        Draw all the features, on their location, indicating their status and whether it's selected or hovered on.
         """
         if not self.show:
             return
 
-        self.clear_labels()
         # Show each feature icon and label if applicable
-        for feature in self._features_va.value:
+        for feature in self.tab_data.features.value:
             pos = feature.pos.value
             half_size_offset = self.cnvs.get_half_buffer_size()
 

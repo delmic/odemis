@@ -246,7 +246,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
 
         if guimodel.TOOL_FEATURE in tools_possible:
-            self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data.features, tab_data.currentFeature, tab_data.tool)
+            self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data)
             self.add_world_overlay(self.cryofeature_overlay)
             self.cryofeature_overlay.active.value = True
             # Add showFeatures boolean to the view to toggle showing/hiding the features
@@ -982,12 +982,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.driftcor_overlay:
             self.driftcor_overlay.on_roa(self._dc_region.value)
 
-    def on_new_feature_pos(self, pos):
-        """
-        Create new feature given physical x,y position
-        :param pos: (float, float) the x,y position of the new feature
-        """
-        self._tab_data_model.add_new_feature(pos[0], pos[1])
 
 class OverviewCanvas(DblMicroscopeCanvas):
     """ Canvas for displaying the overview stream """
