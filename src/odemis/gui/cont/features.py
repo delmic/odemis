@@ -36,6 +36,13 @@ class CryoFeatureController(object):
 
         self._tab_data_model.features.subscribe(self._on_features_changes, init=True)
         self._tab_data_model.currentFeature.subscribe(self._on_current_feature_changes, init=True)
+
+        # values for feature status combobox
+        self._panel.cmb_feature_status.Append(FEATURE_ACTIVE)
+        self._panel.cmb_feature_status.Append(FEATURE_ROUGH_MILLED)
+        self._panel.cmb_feature_status.Append(FEATURE_POLISHED)
+        self._panel.cmb_feature_status.Append(FEATURE_DEACTIVE)
+
         # Event binding
         self._panel.cmb_features.Bind(wx.EVT_COMBOBOX, self._on_cmb_features_change)
         self._panel.btn_create_move_feature.Bind(wx.EVT_BUTTON, self._on_btn_create_move_feature)
@@ -86,13 +93,13 @@ class CryoFeatureController(object):
         :param feature: (CryoFeature or None) the newly selected current feature
         """
         if self._feature_name_va_connector:
-            self._feature_name_va_connector.pause()
+            self._feature_name_va_connector.disconnect()
 
         if self._feature_status_va_connector:
-            self._feature_status_va_connector.pause()
+            self._feature_status_va_connector.disconnect()
 
         if self._feature_z_va_connector:
-            self._feature_z_va_connector.pause()
+            self._feature_z_va_connector.disconnect()
 
         def enable_feature_ctrls(enable):
             self._panel.cmb_feature_status.Enable(enable)
@@ -150,11 +157,6 @@ class CryoFeatureController(object):
         Update the feature status dropdown with the feature status
         :param feature_status: (string) the updated feature status
         """
-        self._panel.cmb_feature_status.Clear()
-        self._panel.cmb_feature_status.Append(FEATURE_ACTIVE)
-        self._panel.cmb_feature_status.Append(FEATURE_ROUGH_MILLED)
-        self._panel.cmb_feature_status.Append(FEATURE_POLISHED)
-        self._panel.cmb_feature_status.Append(FEATURE_DEACTIVE)
         self._panel.cmb_feature_status.SetValue(feature_status)
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
 
@@ -164,6 +166,7 @@ class CryoFeatureController(object):
         """
         index = self._panel.cmb_features.GetSelection()
         if index == -1:
+            logging.warning("cmb_features selection = -1.")
             return
         selected_feature = self._panel.cmb_features.GetClientData(index)
         self._tab_data_model.currentFeature.value = selected_feature
@@ -183,6 +186,8 @@ class CryoFeatureController(object):
         :return: (tuple of 3 floats) the full position including the Z ctrl value
         """
         feature = self._tab_data_model.currentFeature.value
-        if feature:
-            pos = feature.pos.value
-            return pos[0], pos[1], float(self._panel.ctrl_feature_z.Value)
+        if not feature:
+            logging.error("No feature connected, but Z position changed!")
+            return None, None, float(self._panel.ctrl_feature_z.Value)
+        pos = feature.pos.value
+        return pos[0], pos[1], float(self._panel.ctrl_feature_z.Value)
