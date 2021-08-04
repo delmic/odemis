@@ -409,7 +409,7 @@ class LocalizationTab(Tab):
         )
 
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
-        self.tab_data_model.currentFeature.subscribe(self._on_current_feature_changes)
+        self.tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
 
@@ -703,7 +703,7 @@ class LocalizationTab(Tab):
         """
         # Get all acquired streams from features list and overview streams
         acquired_streams = set()
-        for feature in self.tab_data_model.features.value:
+        for feature in self.tab_data_model.main.features.value:
             [acquired_streams.add(s) for s in feature.streams.value]
         [acquired_streams.add(s) for s in self.tab_data_model.overviewStreams.value]
 
@@ -716,7 +716,7 @@ class LocalizationTab(Tab):
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_stream(st)
             else:
-                feature = next((f for f in self.tab_data_model.features.value if st in f.streams.value), None)
+                feature = next((f for f in self.tab_data_model.main.features.value if st in f.streams.value), None)
                 if feature:
                     feature.streams.value.remove(st)
 
@@ -730,9 +730,9 @@ class LocalizationTab(Tab):
         view = self.tab_data_model.views.value[1]
         self.tab_data_model.select_current_position_feature()
         for s in data_to_static_streams(data):
-            if self.tab_data_model.currentFeature.value:
-                s.name.value = self.tab_data_model.currentFeature.value.name.value + " - " + s.name.value
-                self.tab_data_model.currentFeature.value.streams.value.append(s)
+            if self.tab_data_model.main.currentFeature.value:
+                s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
+                self.tab_data_model.main.currentFeature.value.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
             self._show_acquired_stream(s, view)
 

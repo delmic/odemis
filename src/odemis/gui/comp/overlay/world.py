@@ -161,14 +161,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/feature_discarded_selected.png').name)}
 
-        if hasattr(self.tab_data, "features"):
-            self.tab_data.features.subscribe(self._on_features_changes, init=True)
+        if hasattr(self.tab_data.main, "features"):
+            self.tab_data.main.features.subscribe(self._on_features_changes, init=True)
         else:
-            raise ValueError("CryoFeatureOverlay requires tab data to have features VA.")
-        if hasattr(self.tab_data, "currentFeature"):
-            self.tab_data.currentFeature.subscribe(self._on_current_feature_va, init=True)
+            raise ValueError("CryoFeatureOverlay requires features VA.")
+        if hasattr(self.tab_data.main, "currentFeature"):
+            self.tab_data.main.currentFeature.subscribe(self._on_current_feature_va, init=True)
         else:
-            raise ValueError("CryoFeatureOverlay requires tab data to have currentFeature VA.")
+            raise ValueError("CryoFeatureOverlay requires currentFeature VA.")
 
         self._selected_feature = None
         self._hover_feature = None
@@ -203,7 +203,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 pos = feature.pos.value
                 logging.info("moving to feature {}".format(feature.name.value))
                 self.cnvs.view.moveStageTo((pos[0], pos[1]))
-                self.tab_data.currentFeature.value = feature
+                self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point
                 StagePointSelectOverlay.on_dbl_click(self, evt)
@@ -230,7 +230,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
-                    self.tab_data.currentFeature.value = feature
+                    self.tab_data.main.currentFeature.value = feature
                 evt.Skip()
         else:
             super().on_left_down(self, evt)
@@ -273,7 +273,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             return math.hypot(c_x - x, c_y - y) <= r
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
-        for feature in self.tab_data.features.value:
+        for feature in self.tab_data.main.features.value:
             pos = feature.pos.value
             fvsp = self.cnvs.phys_to_view(pos, offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
@@ -309,7 +309,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             return
 
         # Show each feature icon and label if applicable
-        for feature in self.tab_data.features.value:
+        for feature in self.tab_data.main.features.value:
             pos = feature.pos.value
             half_size_offset = self.cnvs.get_half_buffer_size()
 
@@ -322,7 +322,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
             # Show proper feature icon based on selected feature + status
             if feature.status.value in self._feature_icons.keys():
-                if feature == self.tab_data.currentFeature.value:
+                if feature == self.tab_data.main.currentFeature.value:
                     set_icon(self._feature_icons_selected[feature.status.value])
                 else:
                     set_icon(self._feature_icons[feature.status.value])

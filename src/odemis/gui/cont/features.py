@@ -18,10 +18,10 @@ class CryoFeatureController(object):
         panel (wx._windows.Panel): the panel containing the UI controls
         tab: (Tab): the tab which should show the data
         """
-        if not hasattr(tab_data, 'features'):
+        if not hasattr(tab_data.main, 'features'):
             raise ValueError("features list VA is required.")
 
-        if not hasattr(tab_data, 'currentFeature'):
+        if not hasattr(tab_data.main, 'currentFeature'):
             raise ValueError("currentFeature VA is required.")
 
         self._tab_data_model = tab_data
@@ -34,8 +34,8 @@ class CryoFeatureController(object):
         self._feature_status_va_connector = None
         self._feature_z_va_connector = None
 
-        self._tab_data_model.features.subscribe(self._on_features_changes, init=True)
-        self._tab_data_model.currentFeature.subscribe(self._on_current_feature_changes, init=True)
+        self._tab_data_model.main.features.subscribe(self._on_features_changes, init=True)
+        self._tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
         # values for feature status combobox
         self._panel.cmb_feature_status.Append(FEATURE_ACTIVE)
@@ -56,7 +56,7 @@ class CryoFeatureController(object):
 
     def _on_btn_use_current_z(self, _):
         # Use current focus to set currently selected feature
-        feature = self._tab_data_model.currentFeature.value
+        feature = self._tab_data_model.main.currentFeature.value
         if feature:
             pos = feature.pos.value
             current_focus = self._main_data_model.focus.position.value['z']
@@ -66,7 +66,7 @@ class CryoFeatureController(object):
         """
         Move the stage and focus to the currently selected feature
         """
-        feature = self._tab_data_model.currentFeature.value
+        feature = self._tab_data_model.main.currentFeature.value
         if not feature:
             return
         pos = feature.pos.value
@@ -81,7 +81,7 @@ class CryoFeatureController(object):
         """
         if not features:
             return
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
         self._panel.cmb_features.Clear()
         for i, feature in enumerate(features):
             self._panel.cmb_features.Insert(feature.name.value, i, feature)
@@ -111,11 +111,11 @@ class CryoFeatureController(object):
             enable_feature_ctrls(False)
             self._panel.cmb_features.SetValue("No Feature Selected")
             return
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 
         enable_feature_ctrls(True)
         # Set feature list with the current feature
-        index = self._tab_data_model.features.value.index(feature)
+        index = self._tab_data_model.main.features.value.index(feature)
         self._panel.cmb_features.SetSelection(index)
 
         # Disconnect and reconnect the VA connectors to the newly selected feature
@@ -140,13 +140,13 @@ class CryoFeatureController(object):
     def _on_feature_pos(self, feature_pos):
         # Set the feature Z ctrl with the 3rd (focus) element of the feature position
         self._panel.ctrl_feature_z.SetValue(feature_pos[2])
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 
     def _on_feature_name(self, _):
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 
     def _on_cmb_feature_name_change(self, ):
-        feature = self._tab_data_model.currentFeature.value
+        feature = self._tab_data_model.main.currentFeature.value
         value= self._panel.cmb_features.GetValue()
         for stream in feature.streams.value:
             stream.name.value = stream.name.value.replace(feature.name.value, value)
@@ -158,7 +158,7 @@ class CryoFeatureController(object):
         :param feature_status: (string) the updated feature status
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 
     def _on_cmb_features_change(self, evt):
         """
@@ -169,14 +169,14 @@ class CryoFeatureController(object):
             logging.warning("cmb_features selection = -1.")
             return
         selected_feature = self._panel.cmb_features.GetClientData(index)
-        self._tab_data_model.currentFeature.value = selected_feature
+        self._tab_data_model.main.currentFeature.value = selected_feature
 
     def _on_cmb_feature_status_change(self):
         """
         Get current feature status dropdown value
         :return: (string) feature status dropdown value
         """
-        feature = self._tab_data_model.currentFeature.value
+        feature = self._tab_data_model.main.currentFeature.value
         if feature:
             return self._panel.cmb_feature_status.GetValue()
 
@@ -185,7 +185,7 @@ class CryoFeatureController(object):
         Get the current feature Z ctrl value to set feature Z position
         :return: (tuple of 3 floats) the full position including the Z ctrl value
         """
-        feature = self._tab_data_model.currentFeature.value
+        feature = self._tab_data_model.main.currentFeature.value
         if not feature:
             logging.error("No feature connected, but Z position changed!")
             return None, None, float(self._panel.ctrl_feature_z.Value)

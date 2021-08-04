@@ -339,7 +339,9 @@ class MainGUIData(object):
                 self.fineAlignDwellTime.value = 0.5
 
             if "cryo" in microscope.role:
+                # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
+                # VA for the currently selected feature
                 self.currentFeature = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
@@ -609,22 +611,18 @@ class CryoGUIData(MicroscopyGUIData):
             raise ValueError(
                 "Expected a cryo microscope role but found it to be %s." % main.role)
         MicroscopyGUIData.__init__(self, main)
-        # List VA contains all the CryoFeatures (for the current project).
-        self.features = main.features
-        # VA for the currently selected feature
-        self.currentFeature = main.currentFeature
 
     def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=DEFAULT_MILLING_ANGLE):
         """
         Create a new feature and add it to the features list
         """
         if not f_name:
-            existing_names = [f.name.value for f in self.features.value]
+            existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
         if pos_z is None:
             pos_z = self.main.focus.position.value['z']
         feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
-        self.features.value.append(feature)
+        self.main.features.value.append(feature)
         return feature
 
     # Todo: find the right margin
@@ -636,7 +634,7 @@ class CryoGUIData(MicroscopyGUIData):
         :return: (CryoFeature) the feature selected for the current position
         """
         current_position = self.main.stage.position.value
-        for feature in self.features.value:
+        for feature in self.main.features.value:
             feature_dist = math.hypot(feature.pos.value[0] - current_position["x"],
                                       feature.pos.value[1] - current_position["y"])
             if feature_dist <= self.ATOL_FEATURE_POS:
@@ -646,7 +644,7 @@ class CryoGUIData(MicroscopyGUIData):
             # create new feature if no close feature found
             feature = self.add_new_feature(current_position["x"], current_position["y"],
                                                           self.main.focus.position.value["z"])
-            self.currentFeature.value = feature
+            self.main.currentFeature.value = feature
 
 class CryoLocalizationGUIData(CryoGUIData):
     """ Represent an interface used to only show the current data from the microscope.
