@@ -3,8 +3,6 @@ import logging
 import math
 import os
 
-from numpy import long
-
 from odemis import model
 
 # The current state of the feature
@@ -33,30 +31,30 @@ class CryoFeature(object):
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
         # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(long, float), )
+        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), )
         # TODO: Check if negative milling angle is allowed
         if milling_angle <= 0:
             milling_angle = DEFAULT_MILLING_ANGLE
             logging.warning(
                 f"Given milling angle {milling_angle} is negative, setting it to default {DEFAULT_MILLING_ANGLE}")
         self.milling_angle = model.FloatVA(milling_angle)
-        self.status = model.StringVA(FEATURE_ACTIVE, )
+        self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
 
 
-class FeaturesEncoder(json.JSONEncoder):
+def get_features_dict(features):
     """
-    Json encoder for the CryoFeature class and its attributes
+    Convert list of features to JSON serializable list of dict
+    :param features: (list) list of CryoFeature
+    :return: (dict) list of JSON serializable features
     """
-
-    def default(self, features):
-        flist = []
-        for feature in features.value:
-            feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                            'milling_angle': feature.milling_angle.value, 'status': feature.status.value}
-            flist.append(feature_item)
-        return {'feature_list': flist}
+    flist = []
+    for feature in features:
+        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
+                        'milling_angle': feature.milling_angle.value, 'status': feature.status.value}
+        flist.append(feature_item)
+    return {'feature_list': flist}
 
 
 class FeaturesDecoder(json.JSONDecoder):
@@ -82,11 +80,11 @@ def save_features(project_dir, features):
     """
     Save the whole features list directly to the file
     :param project_dir: (string) directory to save the file to (typically project directory)
-    :param features: (list of CryoFeature) list of features to serialize
+    :param features: (list) list of features to serialize
     """
     filename = os.path.join(project_dir, "features.json")
     with open(filename, 'w') as jsonfile:
-        json.dump(features, jsonfile, cls=FeaturesEncoder)
+        json.dump(get_features_dict(features.value), jsonfile)
 
 
 def read_features(project_dir):
