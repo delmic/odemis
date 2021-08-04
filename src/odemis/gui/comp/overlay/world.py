@@ -24,9 +24,18 @@ This file is part of Odemis.
 
 from __future__ import division
 
-import cairo
 import logging
 import math
+from abc import ABCMeta, abstractmethod
+
+import cairo
+import wx
+from future.utils import with_metaclass
+
+import odemis.gui as gui
+import odemis.gui.img as guiimg
+import odemis.util.conversion as conversion
+import odemis.util.units as units
 from odemis import model, util
 from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE
 from odemis.acq.stream import UNDEFINED_ROI
@@ -38,14 +47,8 @@ from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
-import wx
-from abc import ABCMeta, abstractmethod
-from future.utils import with_metaclass
-import odemis.gui as gui
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
-import odemis.util.conversion as conversion
-import odemis.util.units as units
-import odemis.gui.img as guiimg
+
 
 class CurrentPosCrossHairOverlay(WorldOverlay):
     """ Render a static cross hair to the current position of the stage"""
@@ -88,6 +91,7 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
         center = self._get_current_stage_buffer_pos()
         CrossHairOverlay.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
 
+
 class StagePointSelectOverlay(WorldOverlay):
     """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
 
@@ -121,6 +125,7 @@ class StagePointSelectOverlay(WorldOverlay):
 MODE_EDIT_FEATURES = 1
 MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
+FEATURE_ICON_CENTER = 17  # pixels
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     """ Overlay for handling showing interesting features of cryo projects """
@@ -139,13 +144,22 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if self._selected_tool_va:
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
-        # TODO: Find a better icon
-        self._feature_icon_active = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_active.png').name)
-        self._feature_icon_current = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_current.png').name)
-        self._feature_icon_milled = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_milled.png').name)
-        self._feature_icon_discarded = cairo.ImageSurface.create_from_png(guiimg.getStream('/icon/feature_discarded.png').name)
-        self._icon_w_adjust = self._feature_icon_active.get_width() / 2
-        self._icon_h_adjust = self._feature_icon_active.get_height() / 2
+        self._feature_icons = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/feature_active_unselected.png').name),
+            FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_rough_unselected.png').name),
+            FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_polished_unselected.png').name),
+            FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_discarded_unselected.png').name)}
+        self._feature_icons_selected = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/feature_active_selected.png').name),
+            FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_rough_selected.png').name),
+            FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_polished_selected.png').name),
+            FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_discarded_selected.png').name)}
 
         if hasattr(self.tab_data, "features"):
             self.tab_data.features.subscribe(self._on_features_changes, init=True)
@@ -158,6 +172,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         self._selected_feature = None
         self._hover_feature = None
+        self._label = self.add_label("")
 
     def _on_tool(self, selected_tool):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
@@ -303,26 +318,24 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                                                 offset=half_size_offset)
 
             def set_icon(feature_icon):
-                ctx.set_source_surface(feature_icon, bpos[0] - self._icon_w_adjust, bpos[1] - self._icon_h_adjust)
+                ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
             # Show proper feature icon based on selected feature + status
-            if feature == self._current_feature_va.value:
-                set_icon(self._feature_icon_current)
-            elif feature.status.value == FEATURE_ACTIVE:
-                set_icon(self._feature_icon_active)
-            elif feature.status.value == FEATURE_ROUGH_MILLED:
-                set_icon(self._feature_icon_milled)
-            elif feature.status.value == FEATURE_POLISHED:
-                set_icon(self._feature_icon_milled)
-            elif feature.status.value == FEATURE_DEACTIVE:
-                set_icon(self._feature_icon_discarded)
-
-            ctx.paint()
+            if feature.status.value in self._feature_icons.keys():
+                if feature == self.tab_data.currentFeature.value:
+                    set_icon(self._feature_icons_selected[feature.status.value])
+                else:
+                    set_icon(self._feature_icons[feature.status.value])
+            else:
+                logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
 
             if feature == self._hover_feature:
                 # show feature name on hover
-                self.add_label(feature.name.value, (bpos[0], bpos[1]))
-                self._write_labels(ctx)
+                self._label.text = feature.name.value
+                self._label.pos = (bpos[0], bpos[1])
+                self._label.draw(ctx)
+
+            ctx.paint()
 
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):

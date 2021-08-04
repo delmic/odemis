@@ -153,7 +153,7 @@ TOOLS = {
     model.TOOL_FEATURE:
         ModeTool(
             # TODO: pick a new icon
-            "btn_view_pick",
+            "btn_feature_toolbox_icon",
             model.TOOL_FEATURE,
             model.TOOL_NONE,
             "Create/Move feature"
