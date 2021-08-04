@@ -506,7 +506,7 @@ class LocalizationTab(Tab):
 
         return vpv
 
-    def load_overivew_data(self, data):
+    def load_overview_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
 
@@ -515,9 +515,9 @@ class LocalizationTab(Tab):
             s.name.value = "Overview" + " " + s.name.value
             self.clear_overview_streams(s.name.value)
             self._show_acquired_stream(s, view)
-            # Add the static stream to the streams list of the model and also to the tiledAreaStreams to easily
+            # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
-            self.tab_data_model.tiledAreaStreams.value.append(s)
+            self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
 
             # Display the same acquired data in the chamber tab view
@@ -543,7 +543,7 @@ class LocalizationTab(Tab):
         Remove overview map (Static) streams and clear them from view and panel.
         @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
         """
-        for stream in self.tab_data_model.tiledAreaStreams.value:
+        for stream in self.tab_data_model.overviewStreams.value:
             if filter_stream_name and stream.name.value != filter_stream_name:
                 continue
             self._acquired_stream_controller.removeStreamPanel(stream)
@@ -684,7 +684,7 @@ class LocalizationTab(Tab):
         Handle switching the acquired streams appropriate to the current feature
         :param feature: (CryoFeature or None) the newly selected current feature
         """
-        self._acquired_stream_controller.clear_panel()
+        self._acquired_stream_controller.clear(clear_model=False)
         # show the feature streams on the acquired view
         view = self.tab_data_model.views.value[1]
         acquired_streams = feature.streams.value if feature else []
@@ -693,7 +693,7 @@ class LocalizationTab(Tab):
 
         # show the overview maps (if any) on the overview view
         view = self.tab_data_model.views.value[0]
-        for stream in self.tab_data_model.tiledAreaStreams.value:
+        for stream in self.tab_data_model.overviewStreams.value:
             self._show_acquired_stream(stream, view)
 
     def _on_acquired_streams(self, streams):
@@ -705,13 +705,13 @@ class LocalizationTab(Tab):
         acquired_streams = set()
         for feature in self.tab_data_model.features.value:
             [acquired_streams.add(s) for s in feature.streams.value]
-        [acquired_streams.add(s) for s in self.tab_data_model.tiledAreaStreams.value]
+        [acquired_streams.add(s) for s in self.tab_data_model.overviewStreams.value]
 
         filter_streams = acquired_streams.difference(set(streams))
 
         for st in filter_streams:
-            if st in self.tab_data_model.tiledAreaStreams.value:
-                self.tab_data_model.tiledAreaStreams.value.remove(st)
+            if st in self.tab_data_model.overviewStreams.value:
+                self.tab_data_model.overviewStreams.value.remove(st)
                 # Remove from chamber tab too
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_stream(st)

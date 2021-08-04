@@ -102,9 +102,6 @@ TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False
 
-
-
-
 class MainGUIData(object):
     """
     Contains all the data corresponding to the entire GUI.
@@ -617,17 +614,15 @@ class CryoGUIData(MicroscopyGUIData):
         # VA for the currently selected feature
         self.currentFeature = main.currentFeature
 
-    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=None):
+    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=DEFAULT_MILLING_ANGLE):
         """
         Create a new feature and add it to the features list
         """
         if not f_name:
             existing_names = [f.name.value for f in self.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
-        if not pos_z:
+        if pos_z is None:
             pos_z = self.main.focus.position.value['z']
-        if not milling_angle:
-            milling_angle = DEFAULT_MILLING_ANGLE
         feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
         self.features.value.append(feature)
         return feature
@@ -650,7 +645,7 @@ class CryoGUIData(MicroscopyGUIData):
         else:
             # create new feature if no close feature found
             feature = self.add_new_feature(current_position["x"], current_position["y"],
-                                                          self.main.focus.position.value)
+                                                          self.main.focus.position.value["z"])
             self.currentFeature.value = feature
 
 class CryoLocalizationGUIData(CryoGUIData):
@@ -686,7 +681,7 @@ class CryoLocalizationGUIData(CryoGUIData):
         # the streams to acquire among all streams in .streams
         self.acquisitionStreams = model.ListVA()
         # the static overview map streams
-        self.tiledAreaStreams = model.ListVA()
+        self.overviewStreams = model.ListVA()
         # for the filename
         config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
