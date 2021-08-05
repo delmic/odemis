@@ -52,11 +52,7 @@ The code can be extended to include weighted estimations and/or to support
    (Vol. 2). Spie Press.
 
 """
-
-from __future__ import division
-
 from abc import ABCMeta, abstractmethod
-from future.utils import with_metaclass
 import numbers
 import numpy
 import scipy.optimize
@@ -81,15 +77,16 @@ def _assertRotationMatrix(matrix):
 
     """
     if matrix.ndim != 2:
-        raise LinAlgError('%d-dimensional array given. Array must be '
-                          'two-dimensional' % matrix.ndim)
+        raise LinAlgError(
+            "%d-dimensional array given. Array must be two-dimensional" % matrix.ndim
+        )
     m, n = matrix.shape
     if m != n:
-        raise LinAlgError('Array must be square')
+        raise LinAlgError("Array must be square")
     if not numpy.allclose(numpy.dot(matrix.T, matrix), numpy.eye(n)):
-        raise LinAlgError('Matrix is not orthogonal')
+        raise LinAlgError("Matrix is not orthogonal")
     if not numpy.allclose(numpy.linalg.det(matrix), 1.0):
-        raise LinAlgError('Matrix is not a proper rotation matrix')
+        raise LinAlgError("Matrix is not a proper rotation matrix")
 
 
 def _rotation_matrix_from_angle(angle):
@@ -115,8 +112,7 @@ def _rotation_matrix_from_angle(angle):
     """
     ct = numpy.cos(angle)
     st = numpy.sin(angle)
-    return numpy.array([(ct, -st),
-                        (st, ct)])
+    return numpy.array([(ct, -st), (st, ct)])
 
 
 def _rotation_matrix_to_angle(matrix):
@@ -149,7 +145,7 @@ def _rotation_matrix_to_angle(matrix):
     """
     _assertRotationMatrix(matrix)
     if matrix.shape != (2, 2):
-        raise NotImplementedError('Can only handle 2x2 matrices')
+        raise NotImplementedError("Can only handle 2x2 matrices")
     return numpy.arctan2(matrix[1, 0], matrix[0, 0])
 
 
@@ -278,7 +274,7 @@ def to_physical_space(ji, shape=None, pixel_size=None):
         raise ValueError("Indices must be 2-dimensional.")
 
     xy = numpy.empty(ji.shape, dtype=float)
-    xy[..., 0] = ji[..., 1]   # map column-index `i` to x-axis
+    xy[..., 0] = ji[..., 1]  # map column-index `i` to x-axis
     xy[..., 1] = -ji[..., 0]  # map row-index `j` to y-axis
 
     if shape:
@@ -352,7 +348,7 @@ def to_pixel_index(xy, shape=None, pixel_size=None):
 
     ji = numpy.empty(xy.shape, dtype=float)
     ji[..., 0] = -xy[..., 1]  # map y-axis to row-index `j`
-    ji[..., 1] = xy[..., 0]   # map x-axis to column-index `i`
+    ji[..., 1] = xy[..., 0]  # map x-axis to column-index `i`
 
     if shape:
         n, m = shape
@@ -362,7 +358,7 @@ def to_pixel_index(xy, shape=None, pixel_size=None):
     return ji
 
 
-class GeometricTransform(with_metaclass(ABCMeta, object)):
+class GeometricTransform(metaclass=ABCMeta):
     """Base class for geometric transformations."""
 
     def __init__(self, matrix=None, **kwargs):
@@ -383,41 +379,58 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
         translation : (tx, ty) as array, list, or tuple, optional
             x, y translation parameters.
         """
-        params = any(kwargs.get(param) is not None
-                     for param in ("rotation", "scale", "shear"))
+        params = any(
+            kwargs.get(param) is not None for param in ("rotation", "scale", "shear")
+        )
 
         if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
+            raise ValueError(
+                "You cannot specify the transformation matrix "
+                "and the implicit parameters at the same time."
+            )
         elif matrix is not None:
             matrix = numpy.asarray(matrix)
             if matrix.shape != (2, 2):
-                raise ValueError("Transformation matrix should be 2x2, but got %s" % (matrix,))
+                raise ValueError(
+                    "Transformation matrix should be 2x2, but got %s" % (matrix,)
+                )
             self.transformation_matrix = matrix
         else:
             if "rotation" in kwargs:
                 rotation = kwargs.get("rotation")
                 self.rotation = 0 if rotation is None else rotation
                 if not isinstance(self.rotation, numbers.Real):
-                    raise ValueError("Rotation should be a number, but got %s" % (self.rotation,))
+                    raise ValueError(
+                        "Rotation should be a number, but got %s" % (self.rotation,)
+                    )
 
             if "scale" in kwargs:
                 scale = kwargs.get("scale")
                 self.scale = (1, 1) if scale is None else scale
-                if len(self.scale) != 2 or not all(isinstance(a, numbers.Real) for a in self.scale):
-                    raise ValueError("Scale should be 2 floats, but got %s" % (self.scale,))
+                if len(self.scale) != 2 or not all(
+                    isinstance(a, numbers.Real) for a in self.scale
+                ):
+                    raise ValueError(
+                        "Scale should be 2 floats, but got %s" % (self.scale,)
+                    )
 
             if "shear" in kwargs:
                 shear = kwargs.get("shear")
                 self.shear = 0 if shear is None else shear
                 if not isinstance(self.shear, numbers.Real):
-                    raise ValueError("Shear should be a number, but got %s" % (self.shear,))
+                    raise ValueError(
+                        "Shear should be a number, but got %s" % (self.shear,)
+                    )
 
         if "translation" in kwargs:
             translation = kwargs.get("translation")
             self.translation = (0, 0) if translation is None else translation
-            if len(self.translation) != 2 or not all(isinstance(a, numbers.Real) for a in self.translation):
-                raise ValueError("Translation should be 2 floats, but got %s" % (self.translation,))
+            if len(self.translation) != 2 or not all(
+                isinstance(a, numbers.Real) for a in self.translation
+            ):
+                raise ValueError(
+                    "Translation should be 2 floats, but got %s" % (self.translation,)
+                )
 
     def apply(self, x):
         """
@@ -435,12 +448,15 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
 
         """
         x = numpy.asarray(x)
-        return numpy.einsum('ik,...k->...i', self.transformation_matrix, x) + self.translation
+        return (
+            numpy.einsum("ik,...k->...i", self.transformation_matrix, x)
+            + self.translation
+        )
 
     def __call__(self, x):
-        warnings.warn("__call__ is deprecated, use apply instead",
-                      DeprecationWarning)
+        warnings.warn("__call__ is deprecated, use apply instead", DeprecationWarning)
         return self.apply(x)
+
     __call__.__doc__ = apply.__doc__
 
     def fre(self, x, y):
@@ -532,8 +548,9 @@ class RigidTransform(GeometricTransform):
     """
 
     def __init__(self, matrix=None, rotation=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    translation=translation)
+        GeometricTransform.__init__(
+            self, matrix=matrix, rotation=rotation, translation=translation
+        )
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -640,18 +657,23 @@ class SimilarityTransform(RigidTransform):
     """
 
     def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    translation=translation)
+        GeometricTransform.__init__(
+            self, matrix=matrix, rotation=rotation, translation=translation
+        )
 
         # It's special as .scale is a single float, instead of 2 floats typically
         if matrix is not None:
             if scale is not None:
-                raise ValueError("You cannot specify the transformation matrix "
-                                 "and the implicit parameters at the same time.")
+                raise ValueError(
+                    "You cannot specify the transformation matrix "
+                    "and the implicit parameters at the same time."
+                )
         else:
             self.scale = 1 if scale is None else scale
             if not isinstance(self.scale, numbers.Real):
-                raise ValueError("Scale should be a single number, but got %s" % (self.scale,))
+                raise ValueError(
+                    "Scale should be a single number, but got %s" % (self.scale,)
+                )
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -683,7 +705,7 @@ class SimilarityTransform(RigidTransform):
         dx = x - x0
         dy = y - y0
         R = _optimal_rotation(dx, dy)
-        s = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
+        s = numpy.einsum("ik,jk,ji", R, dx, dy) / numpy.einsum("ij,ij", dx, dx)
         A = s * R
         t = y0 - numpy.dot(A, x0)
         return cls(matrix=A, translation=t)
@@ -699,7 +721,7 @@ class SimilarityTransform(RigidTransform):
 
         """
         Rinv = numpy.transpose(self.rotation_matrix)  # R is orthogonal
-        sinv = 1. / self.scale
+        sinv = 1.0 / self.scale
         Ainv = sinv * Rinv
         tinv = -numpy.dot(Ainv, self.translation)
         return self.__class__(matrix=Ainv, translation=tinv)
@@ -762,8 +784,9 @@ class ScalingTransform(RigidTransform):
     """
 
     def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    scale=scale, translation=translation)
+        GeometricTransform.__init__(
+            self, matrix=matrix, rotation=rotation, scale=scale, translation=translation
+        )
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -796,7 +819,7 @@ class ScalingTransform(RigidTransform):
         dy = y - y0
         R = _optimal_rotation(dx, dy)
         # Use the similarity transform as initial guess to start the search.
-        sx = sy = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
+        sx = sy = numpy.einsum("ik,jk,ji", R, dx, dy) / numpy.einsum("ij,ij", dx, dx)
 
         def _fre(s, x, y):
             """
@@ -824,7 +847,7 @@ class ScalingTransform(RigidTransform):
             s = numpy.abs(s)
             _x = s * x
             R = _optimal_rotation(_x, y)
-            delta = numpy.einsum('ik,jk->ji', R, _x) - y
+            delta = numpy.einsum("ik,jk->ji", R, _x) - y
             return delta.ravel()
 
         # Find the non-isotropic scaling using an optimization search.
@@ -848,7 +871,7 @@ class ScalingTransform(RigidTransform):
         R, S = qrp(matrix)
         s = numpy.diag(S)
         if not numpy.allclose(S, numpy.diag(s)):
-            raise LinAlgError('Array must be diagonal')
+            raise LinAlgError("Array must be diagonal")
         self.rotation_matrix = R
         self.scale = s
 
@@ -920,10 +943,17 @@ class AffineTransform(RigidTransform):
 
     """
 
-    def __init__(self, matrix=None, rotation=None, scale=None, shear=None,
-                 translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    scale=scale, shear=shear, translation=translation)
+    def __init__(
+        self, matrix=None, rotation=None, scale=None, shear=None, translation=None
+    ):
+        GeometricTransform.__init__(
+            self,
+            matrix=matrix,
+            rotation=rotation,
+            scale=scale,
+            shear=shear,
+            translation=translation,
+        )
 
     @classmethod
     def from_pointset(cls, x, y):
@@ -956,7 +986,7 @@ class AffineTransform(RigidTransform):
         dy = y - y0
         R = _optimal_rotation(dx, dy)
         # Use the similarity transform as initial guess to start the search.
-        sx = sy = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
+        sx = sy = numpy.einsum("ik,jk,ji", R, dx, dy) / numpy.einsum("ij,ij", dx, dx)
 
         def _fre(p, x, y):
             """
@@ -985,14 +1015,14 @@ class AffineTransform(RigidTransform):
             m = p[2]
             SL = numpy.diag(s)
             SL[0, 1] = m * s[0]
-            _x = numpy.einsum('ik,jk->ji', SL, x)
+            _x = numpy.einsum("ik,jk->ji", SL, x)
             R = _optimal_rotation(_x, y)
-            delta = numpy.einsum('ik,jk->ji', R, _x) - y
+            delta = numpy.einsum("ik,jk->ji", R, _x) - y
             return delta.ravel()
 
         # Find the shear and non-isotropic scaling using an optimization
         # search.
-        p, ier = scipy.optimize.leastsq(_fre, x0=(sx, sy, 0.), args=(dx, dy))
+        p, ier = scipy.optimize.leastsq(_fre, x0=(sx, sy, 0.0), args=(dx, dy))
         assert ier in (1, 2, 3, 4)
         s = numpy.abs(p[0:2])
         m = p[2]
@@ -1000,7 +1030,7 @@ class AffineTransform(RigidTransform):
         SL[0, 1] = m * s[0]
 
         # Rotation is now the rigid transform of the scaled input
-        _x = numpy.einsum('ik,jk->ji', SL, dx)
+        _x = numpy.einsum("ik,jk->ji", SL, dx)
         R = _optimal_rotation(_x, dy)
         A = numpy.dot(R, SL)
         t = y0 - numpy.dot(A, x0)
@@ -1011,7 +1041,7 @@ class AffineTransform(RigidTransform):
         """The 2x2 transformation matrix. Does not include translation."""
         R = self.rotation_matrix
         S = self.scale * numpy.eye(2)
-        L = numpy.array([(1., self.shear), (0., 1.)])
+        L = numpy.array([(1.0, self.shear), (0.0, 1.0)])
         return numpy.dot(numpy.dot(R, S), L)
 
     @transformation_matrix.setter
@@ -1032,7 +1062,7 @@ class AffineTransform(RigidTransform):
 
         """
         S = self.scale * numpy.eye(2)
-        L = numpy.array([(1., self.shear), (0., 1.)])
+        L = numpy.array([(1.0, self.shear), (0.0, 1.0)])
         SL = numpy.dot(S, L)
         Ainv = numpy.dot(tri_inv(SL), numpy.transpose(self.rotation_matrix))
         tinv = -numpy.dot(Ainv, self.translation)
@@ -1097,24 +1127,45 @@ class AnamorphosisTransform(AffineTransform):
 
     """
 
-    def __init__(self, coeffs=None, rotation=None, scale=None, shear=None,
-                 nlcoeffs=None, translation=None):
+    def __init__(
+        self,
+        coeffs=None,
+        rotation=None,
+        scale=None,
+        shear=None,
+        nlcoeffs=None,
+        translation=None,
+    ):
 
-        params = any(param is not None
-                     for param in (rotation, scale, shear, nlcoeffs, translation))
+        params = any(
+            param is not None
+            for param in (rotation, scale, shear, nlcoeffs, translation)
+        )
 
         if params and coeffs is not None:
-            raise ValueError("You cannot specify the transformation "
-                             "coefficients and the implicit parameters at the "
-                             "same time.")
+            raise ValueError(
+                "You cannot specify the transformation coefficients and the "
+                "implicit parameters at the same time."
+            )
         elif coeffs is not None:
             self.coeffs = coeffs
         else:
-            GeometricTransform.__init__(self, rotation=rotation, scale=scale,
-                                        shear=shear, translation=translation)
-            self.nlcoeffs = (0., 0., 0., 0., 0., 0., 0.) if nlcoeffs is None else nlcoeffs
-            if len(self.nlcoeffs) != 7 or not all(isinstance(a, numbers.Real) for a in self.nlcoeffs):
-                raise ValueError("nlcoeffs should be 7 floats, but got %s" % (self.nlcoeffs,))
+            GeometricTransform.__init__(
+                self,
+                rotation=rotation,
+                scale=scale,
+                shear=shear,
+                translation=translation,
+            )
+            self.nlcoeffs = (
+                (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) if nlcoeffs is None else nlcoeffs
+            )
+            if len(self.nlcoeffs) != 7 or not all(
+                isinstance(a, numbers.Real) for a in self.nlcoeffs
+            ):
+                raise ValueError(
+                    "nlcoeffs should be 7 floats, but got %s" % (self.nlcoeffs,)
+                )
 
     @staticmethod
     def _vandermonde(w):
@@ -1147,9 +1198,9 @@ class AnamorphosisTransform(AffineTransform):
         return numpy.column_stack((v.real, v.imag))
 
     def __call__(self, x):
-        warnings.warn("__call__ is deprecated, use apply instead",
-                      DeprecationWarning)
+        warnings.warn("__call__ is deprecated, use apply instead", DeprecationWarning)
         return self.apply(x)
+
     __call__.__doc__ = apply.__doc__
 
     @classmethod
@@ -1187,7 +1238,7 @@ class AnamorphosisTransform(AffineTransform):
         v = y[:, 0] + 1.0j * y[:, 1]
 
         M = cls._vandermonde(w)
-        coeffs = numpy.linalg.lstsq(M, v)[0]
+        coeffs = numpy.linalg.lstsq(M, v, rcond=None)[0]
         return cls(coeffs=coeffs)
 
     @property
@@ -1215,5 +1266,7 @@ class AnamorphosisTransform(AffineTransform):
         self.translation = (a.real, a.imag)
 
     def inverse(self):
-        raise NotImplementedError("The inverse of the AnamorphosisTransform "
-                                  "is not an Anamorphosis transform itself.")
+        raise NotImplementedError(
+            "The inverse of the AnamorphosisTransform is not an Anamorphosis "
+            "transform itself."
+        )
