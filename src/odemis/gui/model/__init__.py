@@ -153,6 +153,7 @@ class MainGUIData(object):
         "overview-ccd": "overview_ccd",
         "stage": "stage",
         "scan-stage": "scan_stage",
+        "stage-bare": "stage_bare",
         "focus": "focus",
         "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
@@ -206,6 +207,7 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
+        self.stage_bare = None # stage in the chamber referential 
         self.focus = None  # actuator to change the camera focus
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
