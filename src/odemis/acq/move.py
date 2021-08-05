@@ -37,9 +37,94 @@ MAX_SUBMOVE_DURATION = 60  # s
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2 = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8
 target_pos_str = {LOADING: "LOADING", IMAGING: "IMAGING", COATING: "COATING", ALIGNMENT: "ALIGNMENT",
                   LOADING_PATH: "LOADING PATH", UNKNOWN: "UNKNOWN", SEM_IMAGING: "SEM IMAGING"}
+meteor_labels = {SEM_IMAGING: "SEM IMAGING", FM_IMAGING: "FM IMAGING", GRID_1: "GRID 1", GRID_2: "GRID 2", LOADING: "LOADING"}
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
+
+
+def getCurrentGridLabel(current_pos):
+    current_pos_label = getCurrentPositionLabel(current_pos)
+    stage = model.getComponent(role='stage-bare')
+    stage_md = stage.getMetadata()
+    if current_pos_label == SEM_IMAGING:
+        distance_to_grid1 = _getDistance(current_pos, stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]])
+        distance_to_grid2 = _getDistance(current_pos, stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]])
+        return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1 
+    elif current_pos_label == FM_IMAGING:
+        distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]], stage.axes))
+        distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]], stage.axes))
+        return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
+    else: 
+        return
+
+
+def getCurrentEnzelPositionLabel(current_pos):
+    stage  = model.getComponent(role='stage')
+    stage_md = stage.getMetadata()
+    stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
+    stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
+    stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
+    stage_coating = stage_md[model.MD_FAV_POS_COATING]
+    stage_alignment = stage_md[model.MD_FAV_POS_ALIGN]
+    stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING]
+    # If stage is not referenced, set position as unknown (to only allow loading position)
+    if not all(stage.referenced.value.values()):
+        return UNKNOWN
+    # If stage is not referenced, set position as unknown (to only allow loading position)
+    # Check the stage is near the coating position
+    if _isNearPosition(current_pos, stage_coating, stage.axes):
+        return COATING
+    # Check the stage is near the alignment position
+    if _isNearPosition(current_pos, stage_alignment, stage.axes):
+        return ALIGNMENT
+    # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
+    if _isInRange(
+        current_pos, stage_active_range, {'x', 'y', 'z'}
+    ):
+        if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
+            return IMAGING
+        elif _isNearPosition(current_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):
+            return SEM_IMAGING
+    # Check the stage is near the loading position
+    if _isNearPosition(current_pos, stage_deactive, stage.axes):
+        return LOADING
+
+    # TODO: refine loading path to be between any move from loading to active range?
+    # Check the current position is near the line between DEACTIVE and ACTIVE
+    imaging_progress = getMovementProgress(current_pos, stage_deactive, stage_active)
+    if imaging_progress is not None:
+        return LOADING_PATH
+
+    # Check the current position is near the line between DEACTIVE and COATING
+    coating_progress = getMovementProgress(current_pos, stage_deactive, stage_coating)
+    if coating_progress is not None:
+        return LOADING_PATH
+
+    # Check the current position is near the line between DEACTIVE and COATING
+    alignment_path = getMovementProgress(current_pos, stage_deactive, stage_alignment)
+    if alignment_path is not None:
+        return LOADING_PATH
+    # None of the above -> unknown position
+    return UNKNOWN
+
+
+def getCurrentMeteorPositionLabel(current_pos):
+    stage = model.getComponent(role='stage-bare')
+    # meta data of meteor stage positions 
+    stage_md = stage.getMetadata()
+    stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
+    stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE] 
+    stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE] 
+    # Check the stage is near the loading position
+    if _isNearPosition(current_pos, stage_deactive, stage.axes):
+        return LOADING
+    if _isInRange(current_pos, stage_fm_imaging_rng, {'x', 'y', 'z'}):
+        return FM_IMAGING
+    if _isInRange(current_pos, stage_sem_imaging_rng, {'x', 'y', 'z'}):
+        return SEM_IMAGING
+    # None of the above -> unknown position
+    return UNKNOWN
 
 
 def getCurrentPositionLabel(current_pos):
@@ -48,68 +133,12 @@ def getCurrentPositionLabel(current_pos):
     :param current_pos: (dict str->float) Current position of the stage
     :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
     """
-    if model.getMicroscope().role == 'enzel':
-        stage_md = stage.getMetadata()
-        stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
-        stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
-        stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
-        stage_coating = stage_md[model.MD_FAV_POS_COATING]
-        stage_alignment = stage_md[model.MD_FAV_POS_ALIGN]
-        stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING]
-        # If stage is not referenced, set position as unknown (to only allow loading position)
-        if not all(stage.referenced.value.values()):
-            return UNKNOWN
-        # If stage is not referenced, set position as unknown (to only allow loading position)
-        # Check the stage is near the coating position
-        if _isNearPosition(current_pos, stage_coating, stage.axes):
-            return COATING
-        # Check the stage is near the alignment position
-        if _isNearPosition(current_pos, stage_alignment, stage.axes):
-            return ALIGNMENT
-        # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
-        if _isInRange(
-            current_pos, stage_active_range, {'x', 'y', 'z'}
-        ):
-            if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
-                return IMAGING
-            elif _isNearPosition(current_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):
-                return SEM_IMAGING
-        # Check the stage is near the loading position
-        if _isNearPosition(current_pos, stage_deactive, stage.axes):
-            return LOADING
-
-        # TODO: refine loading path to be between any move from loading to active range?
-        # Check the current position is near the line between DEACTIVE and ACTIVE
-        imaging_progress = getMovementProgress(current_pos, stage_deactive, stage_active)
-        if imaging_progress is not None:
-            return LOADING_PATH
-
-        # Check the current position is near the line between DEACTIVE and COATING
-        coating_progress = getMovementProgress(current_pos, stage_deactive, stage_coating)
-        if coating_progress is not None:
-            return LOADING_PATH
-
-        # Check the current position is near the line between DEACTIVE and COATING
-        alignment_path = getMovementProgress(current_pos, stage_deactive, stage_alignment)
-        if alignment_path is not None:
-            return LOADING_PATH
-        # None of the above -> unknown position
-        return UNKNOWN
-
-    elif model.getMicroscope().role == 'meteor':
-        stage = model.getComponent(role='stage-bare')
-        stage_md = stage.getMetadata()
-        # meta data of meteor stage positions 
-        stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
-        stage_fm_imaging = stage_md[model.MD_FAV_POS_FM_IMAGING] 
-        stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING] 
-        # Check the stage is near the loading position
-        if _isNearPosition(current_pos, stage_deactive, stage.axes):
-            return LOADING
-        if _isNearPosition(current_pos, stage_fm_imaging, stage.axes):
-            return FM_IMAGING
-        if _isNearPosition(current_pos, stage_sem_imaging, stage.axes):
-            return SEM_IMAGING
+    role = model.getMicroscope().role
+    if role == 'enzel':
+        return getCurrentEnzelPositionLabel(current_pos)
+    
+    elif role == 'meteor':
+        return getCurrentMeteorPositionLabel(current_pos)
 
 
 def getCurrentAlignerPositionLabel(current_pos, align):
@@ -150,6 +179,14 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     return UNKNOWN
 
 
+def _getDistance(start, end):
+    # Calculate the euclidean distance between two 3D points
+    axes = start.keys() & end.keys()  # only the axes found on both points
+    sp = numpy.array([start[a] for a in axes])
+    ep = numpy.array([end[a] for a in axes])
+    return scipy.spatial.distance.euclidean(ep, sp)
+    
+
 def getMovementProgress(current_pos, start_pos, end_pos):
     """
     Compute the position on the path between start and end positions of a stage movement (such as LOADING to IMAGING)
@@ -159,18 +196,10 @@ def getMovementProgress(current_pos, start_pos, end_pos):
     :param end_pos: (dict str->float) A position to end the movement to
     :return:(0<=float<=1, or None) Ratio of the progress, None if it's far away from of the path
     """
-
-    def get_distance(start, end):
-        # Calculate the euclidean distance between two 3D points
-        axes = start.keys() & end.keys()  # only the axes found on both points
-        sp = numpy.array([start[a] for a in axes])
-        ep = numpy.array([end[a] for a in axes])
-        return scipy.spatial.distance.euclidean(ep, sp)
-
     # Get distance for current point in respect to start and end
-    from_start = get_distance(start_pos, current_pos)
-    to_end = get_distance(current_pos, end_pos)
-    total_length = get_distance(start_pos, end_pos)
+    from_start = _getDistance(start_pos, current_pos)
+    to_end = _getDistance(current_pos, end_pos)
+    total_length = _getDistance(start_pos, end_pos)
     if total_length == 0:  # same value
         return 1
     # Check if current position is on the line from start to end position
@@ -335,7 +364,8 @@ def _doCryoSwitchSamplePosition(future, target):
     :param align: focus for optical lens
     :param target: target position either one of the constants LOADING, IMAGING, ALIGNMENT and COATING
     """
-    if model.getMicroscope().role == "enzel":
+    role = model.getMicroscope().role
+    if role == "enzel":
         try:
             stage_md = stage.getMetadata()
             align_md = align.getMetadata()
@@ -437,20 +467,18 @@ def _doCryoSwitchSamplePosition(future, target):
                     raise CancelledError()
                 future._task_state = FINISHED
 
-    elif model.getMicroscope().role == "meteor":
+    elif role == "meteor":
         try:
             # get the meteor stage 
             stage = model.getComponent(role='stage-bare')
             # get the meta data 
-            stage_md = stage.getMetadata()
             focus_md = focus.getMetadata()
+            stage_md = stage.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
-            stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING]
-            stage_fm_imaging = stage_md[model.MD_FAV_POS_FM_IMAGING]
             # Fail early when required axes are not found on the positions metadata
             required_axes = {'x', 'y', 'z', 'rx', 'rz'}
-            for stage_position in [stage_fm_imaging, stage_sem_imaging]:
+            for stage_position in []:
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
             current_pos = stage.position.value
@@ -458,30 +486,54 @@ def _doCryoSwitchSamplePosition(future, target):
             sub_moves = []
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
-            # Initial submoves for all procedures is to park focus to safe position
-            if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                sub_moves.append((focus, focus_deactive))
             # get the current label 
-            current_label = getCurrentPositionLabel(current_pos)
-            # TODO add the state machine of the meteor 
-            if target == SEM_IMAGING:
-                target_pos = stage_sem_imaging
-                # TODO put the correct order of moves 
-                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                sub_moves.append((focus, focus_active))
-            elif target == FM_IMAGING:
-                target_pos = stage_fm_imaging
-                # TODO put the correct order of moves 
-                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                sub_moves.append((focus, focus_active))
-            elif target == GRID_1:
-                pass 
-            elif target == GRID_2:
-                pass 
+            current_pos_label = getCurrentPositionLabel(current_pos)
+            # add the state machine of the meteor 
+            if current_pos_label == LOADING:
+                # if unknown/loading, and one of the imaging modes is pressed, then choose grid1 by default
+                if target == SEM_IMAGING:  
+                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+                    # TODO put the correct order of moves 
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                elif target == FM_IMAGING:
+                    target_pos = transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]], stage.axes)
+                    # park focus for safety 
+                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
+                        sub_moves.append((focus, focus_deactive))
+                    # TODO put the correct order of moves 
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                    sub_moves.append((focus, focus_active))
+            elif current_pos_label == SEM_IMAGING:
+                if target == GRID_1:
+                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_1])
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                elif target == GRID_2:
+                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_2])
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                elif target == FM_IMAGING:
+                    target_pos = transformFromSEMToMeteor(current_pos, stage.axes)
+                    # park focus for safety 
+                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
+                        sub_moves.append((focus, focus_deactive))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
+                    sub_moves.append((focus, focus_active))
+            elif current_pos_label == FM_IMAGING:
+                if target == GRID_1:
+                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_1])
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                elif target == GRID_2:
+                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_2])
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                elif target == SEM_IMAGING:
+                    # park focus for safety 
+                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
+                        sub_moves.append((focus, focus_deactive))
+                    target_pos = transformFromMeteorToSEM(current_pos, stage.axes)
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))  
             else:
-                pass
+                return
             # run the moves 
             try:
                 for component, sub_move in sub_moves:
@@ -500,6 +552,41 @@ def _doCryoSwitchSamplePosition(future, target):
                 if future._task_state == CANCELLED:
                     raise CancelledError()
                 future._task_state = FINISHED
+
+
+def transformFromSEMToMeteor(pos, axes):
+    if not {"x", "y"}.issubset(axes):
+        raise KeyError("The stage misses 'x' and 'y' axes")
+    transformed_pos = pos.copy()
+    # TODO put here the formula's for calculating the meteor positions from sem position
+    transformed_pos["x"]=pos['x']+0.03
+    transformed_pos['y']=pos["y"]+0.005
+    return transformed_pos
+
+
+def transformFromMeteorToSEM(pos, axes):
+    if not {"x", "y"}.issubset(axes):
+        raise KeyError("The stage %s misses 'x' and 'y' axes")
+    transformed_pos = pos.copy()
+    # TODO put here the formula's for calculating the sem positions from meteor position 
+    transformed_pos = pos.copy()
+    transformed_pos["x"]=pos['x']-0.03
+    transformed_pos['y']=pos["y"]-0.005
+    return transformed_pos
+
+
+def switchGrid(stage, axis, to_grid):
+    if not axis in stage.position.value.keys():
+        raise KeyError("The stage misses the %s axis" % axis)
+    stage_md = stage.getMetadata()
+    switched_pos = stage.position.value.copy()
+    for a in stage.position.value:
+        if a == axis:
+            if to_grid == meteor_labels[GRID_1]:
+                switched_pos[axis] = stage.position.value[axis] - stage_md[model.MD_GRID_SHIFT]["x"]
+            elif to_grid == meteor_labels[GRID_2]:
+                switched_pos[axis] = stage.position.value[axis] + stage_md[model.MD_GRID_SHIFT]["x"]
+    return switched_pos 
 
 
 def cryoTiltSample(rx, rz=0):
