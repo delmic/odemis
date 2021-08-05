@@ -187,8 +187,10 @@ MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float)
 MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
 MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
 MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
-MD_FAV_POS_SEM_IMAGING = "Favourite position SEM imaging" 
-MD_FAV_POS_FM_IMAGING = "Favourite position FM imaging"
+MD_SAMPLE_CENTERS = "Centers position of grids"
+MD_GRID_SHIFT = "Shift value between grids"
+MD_SEM_IMAGING_RANGE = "SEM imaging range"
+MD_FM_IMAGING_RANGE = "FM imaging range"
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
