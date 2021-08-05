@@ -179,7 +179,8 @@ def _get_high_intensity_peaks(
         Binary array defining the region of `image` to evaluate.
     num_peaks : int, optional
         Maximum number of peaks. When the number of peaks exceeds `num_peaks`,
-        return `num_peaks` peaks based on highest peak intensity.
+        return `num_peaks` peaks based on highest peak intensity. If
+        `num_peaks` is None, return all peaks.
     min_distance : float
         The maximum allowed spacing between the points.
     p_norm : float
