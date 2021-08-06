@@ -1694,6 +1694,11 @@ class Detector(model.Detector):
         return scanner_name
 
 
+# Very approximate values
+PRESSURE_VENTED = 100e3  # Pa
+PRESSURE_PUMPED = 10e-3  # Pa
+
+
 class Chamber(model.Actuator):
     """
     Component representing the vacuum chamber. Changing the pressure is possible by moving the "vacuum" axis,
@@ -1701,12 +1706,15 @@ class Chamber(model.Actuator):
     """
 
     def __init__(self, name, role, parent, **kwargs):
-        axes = {"vacuum": model.Axis(choices={0: "vented", 1: "vacuum"})}
+        axes = {"vacuum": model.Axis(choices={PRESSURE_VENTED: "vented",
+                                              PRESSURE_PUMPED: "vacuum"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
-        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
+        self.position = model.VigilantAttribute({}, readonly=True)
         info = self.parent.pressure_info()
-        self.pressure = model.FloatContinuous(self.parent.get_pressure(), info["range"], readonly=True, unit=info["unit"])
+        self.pressure = model.FloatContinuous(info["range"][0], info["range"], readonly=True, unit=info["unit"])
+        self._refreshPressure()
+
         self._polling_thread = util.RepeatingTimer(5, self._refreshPressure, "Pressure polling")
         self._polling_thread.start()
 
@@ -1735,20 +1743,21 @@ class Chamber(model.Actuator):
             logging.info("Chamber state already %s, doing nothing.", target)
             return
 
-        self.parent.pump() if target == 1 else self.parent.vent()
+        if target == PRESSURE_PUMPED:
+            self.parent.pump()
+        else:
+            self.parent.vent()
         self._refreshPressure()
 
     def _refreshPressure(self):
-        # Position (0/1 vacuum state)
+        # Position (vacuum state)
         state = self.parent.get_vacuum_state()
-        val = {"vacuum": 1 if state == "vacuum" else 0}
+        val = {"vacuum": PRESSURE_PUMPED if state == "vacuum" else PRESSURE_VENTED}
         self.position._set_value(val, force_write=True)
-        self.position.notify(val)
 
         # Pressure
         pressure = self.parent.get_pressure()
         self.pressure._set_value(pressure, force_write=True)
-        self.pressure.notify(pressure)
 
         logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
 
