@@ -20,13 +20,15 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from odemis import model
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from ConsoleClient.Communication.Connection import Connection
-
+import logging
+from odemis import model, util
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, \
+    InstantaneousFuture
 import threading
 import time
-import logging
+
+from ConsoleClient.Communication.Connection import Connection
+
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -409,6 +411,14 @@ class pneumaticSuspension(model.HwComponent):
             self._gauge = None
 
 
+# Very approximate values
+PRESSURE_VENTED = 120e3  # Pa
+PRESSURE_VACUUM = 20  # Pa
+PRESSURE_HV = 50e-3  # Pa
+
+VACUUM_STATUS_TO_PRESSURE = {0: PRESSURE_VENTED, 1: PRESSURE_VACUUM, 2: PRESSURE_HV}
+
+
 class vacuumChamber(model.Actuator):
     """
     This represents the vacuum chamber from Orsay Physics
@@ -425,13 +435,15 @@ class vacuumChamber(model.Actuator):
                     value is _chamber.Pressure.Actual)
         """
 
-        axes = {"vacuum": model.Axis(unit=None, choices={0: "vented", 1: "primary vacuum", 2: "high vacuum"})}
+        axes = {"vacuum": model.Axis(unit=None, choices={PRESSURE_VENTED: "vented",
+                                                         PRESSURE_VACUUM: "primary vacuum",
+                                                         PRESSURE_HV: "high vacuum"})}
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
 
         self._chamber = None
 
-        self.position = model.VigilantAttribute({"vacuum": 0}, readonly=True)
+        self.position = model.VigilantAttribute({}, readonly=True)
         self.pressure = model.FloatContinuous(VACUUM_CHAMBER_PRESSURE_RNG[0], range=VACUUM_CHAMBER_PRESSURE_RNG,
                                               readonly=True, unit="Pa")
 
@@ -482,8 +494,15 @@ class vacuumChamber(model.Actuator):
         if attributeName != "Actual":
             return
         currentVacuum = int(parameter.Actual)
-        logging.debug("Vacuum status changed to %f." % currentVacuum)
-        self.position._set_value({"vacuum": currentVacuum}, force_write=True)
+        logging.debug("Vacuum status changed to %s.", currentVacuum)
+
+        try:
+            vac = VACUUM_STATUS_TO_PRESSURE[currentVacuum]
+        except KeyError:
+            logging.error("Unexpected vacuum status %s", currentVacuum)
+            return
+
+        self.position._set_value({"vacuum": vac}, force_write=True)
 
     def _updatePressure(self, parameter=None, attributeName="Actual"):
         """
@@ -511,7 +530,7 @@ class vacuumChamber(model.Actuator):
         :return (int): actual state of the vacuum at the end of this function: (0: "vented", 1: "primary vacuum",
                       2: "high vacuum")
         """
-        logging.debug("Setting vacuum status to %s." % self.axes["vacuum"].choices[goal])
+        logging.debug("Setting vacuum status to %s.", goal)
         self._vacuumStatusReached.clear()  # to make sure it will wait
         self._chamber.VacuumStatus.Target = goal
         if not self._vacuumStatusReached.wait(1800):  # wait maximally 30 minutes (generally takes no more than 10)
@@ -524,7 +543,12 @@ class vacuumChamber(model.Actuator):
         Move the axis of this actuator to pos.
         """
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._changeVacuum, goal=pos["vacuum"])
+
+        if "vacuum" in pos:
+            vac_status = util.index_closest(pos["vacuum"], VACUUM_STATUS_TO_PRESSURE)
+            return self._executor.submit(self._changeVacuum, goal=vac_status)
+        else:
+            return InstantaneousFuture()
 
     @isasync
     def moveRel(self, shift):
