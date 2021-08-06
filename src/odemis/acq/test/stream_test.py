@@ -491,6 +491,9 @@ class SECOMTestCase(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
+        self._image = None
+        self._image_received = threading.Event()
+
     def test_default_fluo(self):
         """
         Check the default values for the FluoStream are fitting the current HW
@@ -550,6 +553,8 @@ class SECOMTestCase(unittest.TestCase):
 
         # Check we manage to get at least one image
         self._image = None
+        guessed_fov = s1.guessFoV()
+        logging.info("Expecting FoV = %s", guessed_fov)
         s1.image.subscribe(self._on_image)
 
         s1.should_update.value = True
@@ -564,13 +569,46 @@ class SECOMTestCase(unittest.TestCase):
             exp_intens[i] = min(self.light.power.range[1][i], s1.power.value)
             self.assertEqual(self.light.power.value, exp_intens)
 
-        time.sleep(2)
+        self._image_received.wait(2)
         s1.is_active.value = False
 
         self.assertFalse(self._image is None, "No image received after 2s")
 
+        # Check the actual FoV matched the expected one
+        im_bbox = img.getBoundingBox(self._image)
+        im_fov = im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
+        self.assertAlmostEqual(guessed_fov, im_fov)
+
+    def test_sem(self):
+
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"scale"})
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        # Try to trick the guessFoV by setting a different scale on the e-beam than in the local VA
+        self.ebeam.scale.value = (1, 1)
+        sems.emtScale.value = (3, 3)
+
+        self._image = None
+        guessed_fov = sems.guessFoV()
+        logging.info("Expecting FoV = %s", guessed_fov)
+        sems.image.subscribe(self._on_image)
+
+        sems.should_update.value = True
+        sems.is_active.value = True
+
+        self._image_received.wait(10)
+        sems.is_active.value = False
+        self.assertFalse(self._image is None, "No image received after 10s")
+
+        im_bbox = img.getBoundingBox(self._image)
+        im_fov = im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
+        logging.info("Image has bounding box = %s => FoV = %s", im_bbox, im_fov)
+        test.assert_tuple_almost_equal(guessed_fov, im_fov)
+
     def _on_image(self, im):
         self._image = im
+        self._image_received.set()
 
     def test_hwvas(self):
         ccd = self.ccd
@@ -709,6 +747,9 @@ class SECOMConfocalTestCase(unittest.TestCase):
         self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
         exp_shape = self.laser_mirror.resolution.value
 
+        guessed_fov = s1.guessFoV()
+        logging.info("Expecting FoV = %s", guessed_fov)
+
         # Check we manage to get at least one image
         s1.image.subscribe(self._on_image)
 
@@ -727,6 +768,11 @@ class SECOMConfocalTestCase(unittest.TestCase):
 
         rgb = s1.image.value
         self.assertEqual(rgb.shape, exp_shape + (3,))
+
+        im_bbox = img.getBoundingBox(self._image)
+        im_fov = im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
+        logging.info("Image has bounding box = %s => FoV = %s", im_bbox, im_fov)
+        test.assert_tuple_almost_equal(guessed_fov, im_fov)
 
     def test_acq_conf_one_det(self):
         """
