@@ -41,11 +41,22 @@ def pytofail(f):
     def wrapped(*args):
         try:
             ans = f(*args)
-            fail = False
+            fail = None
         except Exception as ex:
             ans = None
             fail = ex
         return ans, fail
+    return wrapped
+
+
+def pytofailmethod(f):
+    def wrapped(self, *args):
+        try:
+            self.ans = f(self, *args)
+            self.fail = None
+        except Exception as ex:
+            self.ans = None
+            self.fail = ex
     return wrapped
 
 
@@ -54,26 +65,37 @@ def log(msg, level=DEBUG):
     logging.log(level, msg)
 
 
-# get some hardware components
-stage = model.getComponent(name="5DOF Stage")
-cooler = model.getComponent(role="cooler")
+class AllHardware:
+    def __init__(self):
+        self.ans = None  # updated after every call/setter
+        self.fail = None  # updated after every call/setter
+
+        # get some hardware components
+        self.cooler = model.getComponent(role="cooler")
+        self.stage = model.getComponent(name="5DOF Stage")
+
+    @property
+    def heating(self):
+        return self.cooler.heating.value
+
+    @heating.setter
+    @pytofailmethod
+    def heating(self, v):
+        self.cooler.heating.value = v
+
+    @pytofailmethod
+    def move_x_to(self, pos):
+        f = self.stage.moveAbs({'x': pos})
+        f.result()
+        msg = "X moved to %f" % self.stage.position.value['x']
+        print(msg)
+        return msg
+
+    @pytofailmethod
+    def reference_stage(self):
+        f = self.stage.reference()
+        return f.result()
 
 
-@pytofail
-def movexto(pos):
-    f = stage.moveAbs({'x': pos})
-    f.result()
-    msg = "X moved to %f" % stage.position.value['x']
-    print(msg)
-    return msg
 
-
-@pytofail
-def reference_stage():
-    f = stage.reference()
-    f.result()
-
-
-@pytofail
-def set_heating(mode):
-    cooler.heating.value = mode
+hw = AllHardware()
