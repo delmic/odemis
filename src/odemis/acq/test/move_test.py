@@ -23,8 +23,9 @@ import unittest
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS
-from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, LOADING_PATH
+from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS, cryoSwitchAlignPosition, \
+    getCurrentAlignerPositionLabel, SEM_IMAGING
+from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
 from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util import test
 
@@ -234,6 +235,39 @@ class TestCryoMove(unittest.TestCase):
         progress = getMovementProgress(current_point, start_point, end_point)
         self.assertIsNone(progress)
 
+    def test_get_current_aligner_position(self):
+        """
+        Test getCurrentPositionLabel function behaves as expected
+        """
+        aligner = self.aligner
+        # Move to loading position
+        f = cryoSwitchAlignPosition(LOADING)
+        f.result()
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertEqual(pos_label, LOADING)
+
+        # Move to imaging position and cancel the movement before reaching there
+        f = cryoSwitchAlignPosition(IMAGING)
+        # abit long wait for the loading-imaging referencing to finish
+        time.sleep(2)
+        f.cancel()
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertEqual(pos_label, LOADING_PATH)
+
+        # Move to alignment position
+        f = cryoSwitchAlignPosition(LOADING)
+        f.result()
+        f = cryoSwitchAlignPosition(ALIGNMENT)
+        f.result()
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertEqual(pos_label, ALIGNMENT)
+
+        # Move to imaging position
+        f = cryoSwitchAlignPosition(IMAGING)
+        f.result()
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertEqual(pos_label, IMAGING)
+
     def test_get_current_position(self):
         """
         Test getCurrentPositionLabel function behaves as expected
@@ -261,11 +295,17 @@ class TestCryoMove(unittest.TestCase):
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, IMAGING)
 
-        # Move to tilting
-        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
+        # Move to alignment
+        f = cryoSwitchSamplePosition(ALIGNMENT)
         f.result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
-        self.assertEqual(pos_label, MILLING)
+        self.assertEqual(pos_label, ALIGNMENT)
+
+        # Move to SEM imaging
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        pos_label = getCurrentPositionLabel(stage.position.value, stage)
+        self.assertEqual(pos_label, SEM_IMAGING)
 
         # Move to coating position
         f = cryoSwitchSamplePosition(LOADING)

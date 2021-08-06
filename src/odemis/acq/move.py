@@ -34,9 +34,9 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
-LOADING, IMAGING, MILLING, COATING, LOADING_PATH, UNKNOWN = 0, 1, 2, 3, 4, 5
-target_pos_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating", MILLING: "milling",
-                  LOADING_PATH: "loading path", UNKNOWN: "unknown"}
+LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, UNKNOWN, SEM_IMAGING = 0, 1, 2, 3, 4, 5, 6
+target_pos_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating", ALIGNMENT: "alignment",
+                  LOADING_PATH: "loading path", UNKNOWN: "unknown", SEM_IMAGING: "SEM imaging"}
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
@@ -54,6 +54,8 @@ def getCurrentPositionLabel(current_pos, stage):
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
     stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
     stage_coating = stage_md[model.MD_FAV_POS_COATING]
+    stage_alignment = stage_md[model.MD_FAV_POS_ALIGN]
+    stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING]
     # If stage is not referenced, set position as unknown (to only allow loading position)
     if not all(stage.referenced.value.values()):
         return UNKNOWN
@@ -61,16 +63,22 @@ def getCurrentPositionLabel(current_pos, stage):
     # Check the stage is near the coating position
     if _isNearPosition(current_pos, stage_coating, stage.axes):
         return COATING
-    # Check that the stage X,Y,Z are within the active range
-    if _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
-        if _isNearPosition(current_pos, {'rx': 0}, {'rx'}):
+    # Check the stage is near the alignment position
+    if _isNearPosition(current_pos, stage_alignment, stage.axes):
+        return ALIGNMENT
+    # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
+    if _isInRange(
+        current_pos, stage_active_range, {'x', 'y', 'z'}
+    ):
+        if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
             return IMAGING
-        else:
-            return MILLING
+        elif _isNearPosition(current_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):
+            return SEM_IMAGING
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
 
+    # TODO: refine loading path to be between any move from loading to active range?
     # Check the current position is near the line between DEACTIVE and ACTIVE
     imaging_progress = getMovementProgress(current_pos, stage_deactive, stage_active)
     if imaging_progress is not None:
@@ -81,6 +89,48 @@ def getCurrentPositionLabel(current_pos, stage):
     if coating_progress is not None:
         return LOADING_PATH
 
+    # Check the current position is near the line between DEACTIVE and COATING
+    alignment_path = getMovementProgress(current_pos, stage_deactive, stage_alignment)
+    if alignment_path is not None:
+        return LOADING_PATH
+    # None of the above -> unknown position
+    return UNKNOWN
+
+
+def getCurrentAlignerPositionLabel(current_pos, align):
+    """
+    Determine where lies the current stage position
+    :param current_pos: (dict str->float) Current position of the stage
+    :param align: Sample stage that's being controlled
+    :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
+    """
+    align_md = align.getMetadata()
+    align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
+    align_active = align_md[model.MD_FAV_POS_ACTIVE]
+    align_alignment = align_md[model.MD_FAV_POS_ALIGN]
+    # If align is not referenced, set position as unknown (to only allow loading position)
+    if not all(align.referenced.value.values()):
+        return UNKNOWN
+
+    if _isNearPosition(current_pos, align_alignment, align.axes):
+        return ALIGNMENT
+
+    if _isNearPosition(current_pos, align_active, align.axes):
+        return IMAGING
+
+    # Check the stage is near the loading position
+    if _isNearPosition(current_pos, align_deactive, align.axes):
+        return LOADING
+
+    # Check the current position is near the line between DEACTIVE and ACTIVE
+    imaging_progress = getMovementProgress(current_pos, align_deactive, align_active)
+    if imaging_progress is not None:
+        return LOADING_PATH
+
+    # Check the current position is near the line between DEACTIVE and ALIGNMENT
+    alignment_path = getMovementProgress(current_pos, align_deactive, align_alignment)
+    if alignment_path is not None:
+        return LOADING_PATH
     # None of the above -> unknown position
     return UNKNOWN
 
