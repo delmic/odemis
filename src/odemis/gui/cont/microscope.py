@@ -94,12 +94,13 @@ class HardwareButtonController(object):
 class ChamberButtonController(HardwareButtonController):
     """ Controller that allows for the more complex state updates required by the chamber button """
 
-    def __init__(self, btn_ctrl, va, main_data):
+    def __init__(self, btn_ctrl, va, main_data, show_pressure=True):
         """
 
         :param btn_ctrl: (ImageTextToggleButton) Button that controls and displays the chamber state
         :param va: (VigillantAttribute) The chamber state
         :param main_data: (MainGUIData) GUI microscope model
+        :param show_pressure (bool): whether to show the numerical pressure value on the button
 
         """
         self.main_data = main_data
@@ -137,6 +138,9 @@ class ChamberButtonController(HardwareButtonController):
 
         if model.hasVA(main_data.chamber, "pressure"):
             main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
+
+        # TODO: support alternative pressure label (e.g. TextControl below button)?
+        self.show_pressure = show_pressure
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state """
@@ -178,11 +182,12 @@ class ChamberButtonController(HardwareButtonController):
     def _on_pressure_change(self, pressure_val):
         """ Set a formatted pressure value as the label of the button """
 
-        str_value = units.readable_str(pressure_val, sig=2,
-                                       unit=self.main_data.chamber.pressure.unit)
-        if self.btn.Label != str_value:
-            self.btn.Label = str_value
-            self.btn.Refresh()
+        if self.show_pressure:
+            str_value = units.readable_str(pressure_val, sig=2,
+                                           unit=self.main_data.chamber.pressure.unit)
+            if self.btn.Label != str_value:
+                self.btn.Label = str_value
+                self.btn.Refresh()
 
 
 class SecomStateController(object):
@@ -1474,7 +1479,8 @@ class FastEMStateController(object):
         if self._main_data.chamber:
             self._press_btn_ctrl = ChamberButtonController(tab_panel.btn_pressure,
                                                            self._main_data.chamberState,
-                                                           self._main_data)
+                                                           self._main_data,
+                                                           show_pressure=False)
             self._main_data.chamberState.subscribe(self.on_chamber_state)
 
             vacuum_values = self._main_data.chamber.axes["vacuum"].choices

@@ -4973,8 +4973,8 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img/icon/ico_pause.png</icon>
-                          <icon_on>img/icon/arr_right.png</icon_on>
+                          <icon>img/icon/ico_sem.png</icon>
+                          <icon_on>img/icon/ico_sem_green.png</icon_on>
                           <height>48</height>
                           <size>120,48</size>
                           <face_colour>def</face_colour>
