@@ -133,8 +133,6 @@ def generate_zlevels(focuser, zrange, zstep):
         raise ZeroDivisionError("The step size 'Zstep' can not be zero")
     if zrange[0] > zrange[1]:
         raise ValueError("The given range is not correct. zmin should be first and zmax second")
-    if zrange[0] == zrange[1] == 0:
-        raise ValueError("'zmax' and 'zmin' can not be both zeros")
     if "z" not in focuser.axes.keys():
         raise KeyError("The focus actuator %s does not have z axis" %focuser)
 
@@ -143,8 +141,10 @@ def generate_zlevels(focuser, zrange, zstep):
     # clip the zMax and zMin to the actuator limits if necessary 
     if zrange[1] + focuser_pos > focuser_rng[1]:
         zrange[1] = focuser_rng[1] - focuser_pos
-    elif focuser_pos + zrange[0] < focuser_rng[0]:
+    if focuser_pos + zrange[0] < focuser_rng[0]:
         zrange[0] = focuser_rng[0] - focuser_pos
+    if zrange[0] == zrange[1]:
+        return focuser_pos + zrange[0]
 
     # find number of samples 
     n = (zrange[1] - zrange[0]) / abs(zstep) + 1
