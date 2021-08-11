@@ -1649,7 +1649,12 @@ class FastEMOverviewAcquiController(object):
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
-    @wxlimit_invocation(1)  # max 1/s
+    # Don't call wxlimit_invocation, it causes problems with resetting the label after an acquisition failed
+    # in .on_acquisition(). This happens when the acquisition fails immediately (e.g. stage not referenced).
+    # Then, the failure message will not be shown since not enough time has passed from the previous label
+    # update (which in turn is necessary to make sure that the previous failure message disappears when a new
+    # acquisition is successfully started).
+    #@wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
         if not self._main_data_model.active_scintillators.value:
@@ -1703,6 +1708,7 @@ class FastEMOverviewAcquiController(object):
         """
         Start the acquisition (really)
         """
+        self.update_acquisition_time()  # make sure we show the right label if the previous acquisition failed
         self._main_data_model.is_acquiring.value = True
         self.btn_acquire.Enable(False)
         self.btn_cancel.Enable(True)
