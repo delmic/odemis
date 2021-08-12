@@ -8,10 +8,8 @@ ENZEL-Sim: {
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective",
         "Objective Aligner", "Optical Focus",
-        "Linked Stage",
     ],
 }
-
 
 # Lakeshore 335, which controls the temperature
 "Sample Thermostat": {
@@ -242,175 +240,171 @@ ENZEL-Sim: {
          FAV_POS_ACTIVE: {'z': 0.002},  # focus position at init
     },
 }
-
-# Special component to ensure the lens (moved by the 3DoF) never collides into the sample (controller by the 5DoF)
-"Linked Stage": {
-    class: actuator.LinkedHeightActuator,
-    role: stage,
-    affects: ["Camera", "SEM E-beam Full"],
-    children: {
-        "focus": "Optical Focus",
-    },
-    dependencies: {
-        "stage": "5DOF Stage",
-        "lensz": "3DOF Stage",
-    },
-    metadata: {
-        # Allowed range when in FM/SEM imaging mode. The X/Y ranges are also used
-        # as default area for the overview acquisition.
-        # X/Y range is small, to fit the limited simulated range of the camera
-        POS_ACTIVE_RANGE: {'x':  [-23.e-6, 23.e-6], 'y':  [-33.e-6, 33.e-6], 'z':  [-0.003, 0.0], } ,
-        OVERVIEW_RANGE: {'x':  [0, 3.2448e-05], 'y':  [0, 4.34304e-05]} ,
-        # Initial position when going to FM/SEM imaging.
-        # It should be within the ACTIVE_RANGE
-        FAV_POS_ACTIVE: {'rx': 0, 'rz': 0, 'x':  0.0, 'y':  0.00, 'z':  0.00},
-        # Loading position
-        FAV_POS_DEACTIVE:  {'rx': 0, 'rz': 0, 'x':  0.015, 'y':  0.0052, 'z':  -0.0068},
-        # GIS coating position
-        FAV_POS_COATING: {'rx': 0.4363, 'rz': 0.0, 'x':  0.01, 'y':  0.001, 'z':  0.00},
-        # Angle of the ion-beam with the sample (when rx = 0°)
-        # Used to compute the milling angle: milling angle = rx - ION_BEAM_TO_SAMPLE_ANGLE
-        ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
-  },
-}
-
-# Note: Z goes up, so the bigger the value, the closer the lens is from the sample.
 "Optical Focus": {
-    # Child of Linked Stage, so no class
-    role: focus,
-    affects: ["Camera"],
-    init: {
-        # The minimum position is arbitrarily set at 0
-        # The maximum position corresponds to the whole range of useful movement
-        # At the maximum position, lens Z is set so that: stage Z - lens Z == MD_POS_COR
-        rng: [0, 4.2e-3],  # min/max positions in m
-    },
-    metadata: {
-        POS_COR: {'z':  -0.003} , # stage Z - lens Z, when the lens Z is the closest (highest) from the stage (ie, at rng max)
-        # The "good focus" of the simulator is at z = 0 on the 3DoF stage.
-        # So on the focus, that's z = 0.0012.
-    },
-    persistent: {
-         metadata: [FAV_POS_ACTIVE],  # Store "good focus" position between run
-    },
+  class: actuator.MultiplexActuator,
+  role: focus,
+  dependencies: { "z": "5DOF Stage" },
+  affects: [ "Camera" ],
+  init: {
+    axes_map: { "z": "z" },
+  },
+  metadata: {
+    FAV_POS_ACTIVE: { 'z': 0.0 }
+      # The "good focus" of the simulator is at z = 0 on the 3DoF stage.
+      # So on the focus, that's z = 0.0012.
+  },
+  persistent: {
+    metadata: [ FAV_POS_ACTIVE ],  # Store "good focus" position between run
+  },
 }
 
 # Special component to only provide the X/Y axis of the optical lens to align it with the e-beam lens
 "Objective Aligner": {
-    class: actuator.MultiplexActuator,
-    role: align,
-    affects: ["Camera"],
-    dependencies: {"x": "3DOF Stage", "y": "3DOF Stage"},
-    init: {
-        axes_map: {"x": "x", "y": "y"},
-# TODO: If the X/Y axes are not aligned with the image axis, swap the axes in the
-# mapping here + use "inverted", if it's just a matter of 90° rotation. If the
-# angle is not such a multiple, use ConverterStage.
-#        inverted: ["x"]
-    },
-    metadata: {
-        # Default position at init corresponding to (approximately) aligned
-        # It must have both x and y.
-        FAV_POS_ACTIVE: {'x': 0.0, 'y': -0.0},  # TODO: put correct position
-        # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
-        # It must have both x and y. It should be at least 0.1 mm away from ACTIVE
-        # Note: most likely, these values should be the same as for 3DOF Stage.
-        FAV_POS_DEACTIVE: {'x': -0.01, 'y': -0.01},  # TODO: put correct position
-    },
-    # Note: we don't make the FAV_POS_ACTIVE persistent, as if the lens is mis-aligned
-    # once, it may be very hard for the user to find again the alignment position.
-    # Instead, every time Odemis is restarted, the default "okayish" position is
-    # used.
+  class: actuator.MultiplexActuator,
+  role: align,
+  affects: [ "Camera" ],
+  dependencies: { "x": "3DOF Stage", "y": "Tilted 3DoF", "z": "Tilted 3DoF" },
+  init: {
+    axes_map: { "x": "x", "y": "x", "z": "y" },
+    # TODO: If the X/Y axes are not aligned with the image axis, swap the axes in the
+    # mapping here + use "inverted", if it's just a matter of 90° rotation. If the
+    # angle is not such a multiple, use ConverterStage.
+    #        inverted: ["x"]
+  },
+  metadata: {
+    # Default position at init corresponding to (approximately) aligned
+    # It must have both x,y and z.
+    FAV_POS_ACTIVE: { 'x': 0.001190970565, 'y': 0.000655087788, 'z': 0.002 },
+    FAV_POS_ALIGN: { 'x': 0.001190970565, 'y': 0.000655087788, 'z': 0.001 },
+    # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
+    # It must have both x and y. It should be at least 0.1 mm away from ACTIVE
+    # Note: most like, these values should be the same as for 3DOF Stage.
+    FAV_POS_DEACTIVE: { 'x': -0.010, 'y': -0.007, 'z': -6.e-3 },  # Helios 20210201
+  },
+  # Note: we don't make the FAV_POS_ACTIVE persistent, as if the lens is mis-aligned
+  # once, it may be very hard for the user to find again the alignment position.
+  # Instead, every time Odemis is restarted, the default "okayish" position is
+  # used.
 }
 
 # Axes should be synchronized with the camera
 # Stage axes are moving the sample, so they have opposite direction than convention
 # (so the stage "position" is the current position observed)
 "5DOF Stage": {
-    class: smaract.MC_5DOF,
-    role: null,
-    init: {
-        locator: "fake",
-        ref_on_init: False, # TODO: needs to happen *after* the optical stage has been referenced and moved down
-        hold_time: 1,  # s, default = infinite (.inf)
-        settle_time: 1,  # s, extra time for the sample to stop vibrating after movement
-        linear_speed: 0.003,  # m/s
-        rotary_speed: 0.087,  # rad/s = 5 deg/s
-        pos_deactive_after_ref: False,  # Set to True to automatically go to DEACTIVE position after succesful referencing
-        # TODO: check the ranges
-        axes: {
-            'x': {
-                range: [-1.6e-2, 1.6e-2],
-                unit: 'm',
-            },
-            'y': {
-                range: [-1.5e-2, 1.5e-2],
-                unit: 'm',
-            },
-            'z': {
-                range: [-1.e-2, 0.002],
-                unit: 'm',
-            },
-            'rx': {
-                range: [-0.49, 0.49],
-                unit: 'rad',
-            },
-            'rz': {
-                range: [-0.49, 0.49],
-                unit: 'rad',
-            },
-        },
+  class: smaract.MC_5DOF,
+  role: stage,
+  affects: [ "Camera", "SEM E-beam Full" ],
+  init: {
+    locator: "fake",
+    ref_on_init: False, # TODO: needs to happen *after* the optical stage has been referenced and moved down
+    hold_time: 1,  # s, default = infinite (.inf)
+    settle_time: 1,  # s, extra time for the sample to stop vibrating after movement
+    linear_speed: 0.003,  # m/s
+    rotary_speed: 0.087,  # rad/s = 5 deg/s
+    pos_deactive_after_ref: False,  # Set to True to automatically go to DEACTIVE position after succesful referencing
+    # TODO: check the ranges
+    axes: {
+      'x': {
+        range: [ -1.6e-2, 1.6e-2 ],
+        unit: 'm',
+      },
+      'y': {
+        range: [ -1.5e-2, 1.5e-2 ],
+        unit: 'm',
+      },
+      'z': {
+        range: [ -1.e-2, 0.002 ],
+        unit: 'm',
+      },
+      'rx': {
+        range: [ -0.49, 0.49 ],
+        unit: 'rad',
+      },
+      'rz': {
+        range: [ -0.49, 0.49 ],
+        unit: 'rad',
+      },
     },
-    metadata: {
-        # Center of rotation for rx, so that tilting the stage shows the same center in FIB and SEM/FM.
-        # Note that the origin is arbitrarily hard-coded in the controller.
-        # Current values are correct for Helios FIB SEM
-        PIVOT_POS: {
-            # Default values:
-            'x': -0.10, # X has no effect, but the controller wants a value
-            'y': -0.00695913,
-            'z': 0.04112563,
-        },
+  },
+  metadata: {
+    # Center of rotation for rx, so that tilting the stage shows the same center in FIB and SEM/FM.
+    # Note that the origin is arbitrarily hard-coded in the controller.
+    # Current values are correct for Helios FIB SEM
+    PIVOT_POS: {
+      # Default values:
+      'x': -0.10, # X has no effect, but the controller wants a value
+      'y': -0.00695913,
+      'z': 0.04112563,
     },
+    # Allowed range when in FM/SEM imaging mode. The X/Y ranges are also used
+    # as default area for the overview acquisition.
+    # X/Y range is small, to fit the limited simulated range of the camera
+    POS_ACTIVE_RANGE: { 'x': [ -23.e-6, 23.e-6 ], 'y': [ -33.e-6, 33.e-6 ], 'z': [ -0.003, 0.0 ], } ,
+    OVERVIEW_RANGE: { 'x': [ 0, 3.2448e-05 ], 'y': [ 0, 4.34304e-05 ] } ,
+    # Initial position to start alignment from
+    FAV_POS_ALIGN: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.001 },
+    # Initial position when going to FM/SEM imaging.
+    # It should be within the ACTIVE_RANGE
+    FAV_POS_ACTIVE: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
+    # SEM Imaging position
+    FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
+    # Loading position
+    FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 0, 'x': 0.015, 'y': 0.0052, 'z': -0.0068 },
+    # GIS coating position
+    FAV_POS_COATING: { 'rx': 0.4363, 'rz': 0.0, 'x': 0.01, 'y': 0.001, 'z': 0.00 },
+    ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
+  },
 }
-
+# Y/Z axes only, as X is as-is
+"Tilted 3DoF": {
+  class: actuator.ConvertStage,
+  role: null,
+  dependencies: {
+    "under": "3DOF Stage"
+  },
+  init: {
+    axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    rotation: -0.4887, # rad , -28°
+  },
+  affects: [ "Camera" ],
+}
 "3DOF Stage": {
-    class: smaract.MCS2,
-    role:  null,
-    init: {
-        locator: "fake",
-        ref_on_init: True,
-        speed: 0.003,  # m/s
-        accel: 0.003,  # m/s²
-        hold_time: 1,  # s, default = infinite (.inf)
-        pos_deactive_after_ref: True,  # Automatically go to safe position after succesful referencing
-        axes: {
-            'x': {
-                range: [-0.0114001, 0.0112466],
-                unit: 'm',
-                channel: 0,
-            },
-            'y': {
-                range: [-0.0111003, 0.0111334],
-                unit: 'm',
-                channel: 2,
-            },
-            'z': {
-                # When Z is inverted, the range will be inverted too, as this describes the
-                # the range as seen by the device. IOW, expect to read the opposite values when
-                # using odemis --list-prop.
-                range: [-0.0126437, 0.0075529],
-                unit: 'm',
-                channel: 1,
-            },
-        },
-        inverted: ["z"],
+  class: smaract.MCS2,
+  role: null,
+  init: {
+    locator: "fake",
+    ref_on_init: True,
+    speed: 0.003,  # m/s
+    accel: 0.003,  # m/s²
+    hold_time: 1,  # s, default = infinite (.inf)
+    pos_deactive_after_ref: True,  # Automatically go to safe position after succesful referencing
+    axes: {
+      'x': {
+        range: [ -0.0114001, 0.0112466 ],
+        unit: 'm',
+        channel: 0,
+      },
+      'y': {
+        range: [ -0.0111003, 0.0111334 ],
+        unit: 'm',
+        channel: 2,
+      },
+      'z': {
+        # When Z is inverted, the range will be inverted too, as this describes the
+        # the range as seen by the device. IOW, expect to read the opposite values when
+        # using odemis --list-prop.
+        range: [ -0.0126437, 0.0075529 ],
+        unit: 'm',
+        channel: 1,
+      },
     },
-    metadata: {
-        # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
-        # Used after referencing.
-        # Z is used for the focus, when FM is not in use.
-        # X/Y can be ommitted, but should typically be the same as in Objective Aligner.
-        FAV_POS_DEACTIVE: {'x': -0.01, 'y': -0.01, 'z': -6.e-3},
-    },
+    inverted: [ "z" ],
+  },
+  metadata: {
+    # "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.
+    # Used after referencing.
+    # Z is used for the focus, when FM is not in use.
+    # X/Y can be omitted, but should typically be the same as in Objective Aligner.
+    FAV_POS_DEACTIVE: { 'x': -0.01, 'y': -0.01, 'z': -6.e-3 },
+  },
 }
