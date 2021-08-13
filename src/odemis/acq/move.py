@@ -491,7 +491,7 @@ def _doCryoSwitchSamplePosition(future, target):
             # add the state machine of the meteor 
             if current_pos_label == LOADING:
                 # if unknown/loading, and one of the imaging modes is pressed, then choose grid1 by default
-                if target == SEM_IMAGING:  
+                if target in [SEM_IMAGING, GRID_1]:  
                     target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
@@ -503,13 +503,17 @@ def _doCryoSwitchSamplePosition(future, target):
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                     sub_moves.append((focus, focus_active))
+                elif target == GRID_2:
+                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+                    # TODO put the correct order of moves 
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
             elif current_pos_label == SEM_IMAGING:
                 if target == GRID_1:
-                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_1])
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == GRID_2:
-                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_2])
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == FM_IMAGING:
                     target_pos = transformFromSEMToMeteor(current_pos, stage.axes)
                     # park focus for safety 
@@ -520,11 +524,15 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_moves.append((focus, focus_active))
             elif current_pos_label == FM_IMAGING:
                 if target == GRID_1:
-                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_1])
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    # transform  the grid1 center, then use it as set point  
+                    sem_grid1 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+                    fm_grid1 = transformFromSEMToMeteor(sem_grid1, stage.axes)
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, fm_grid1)))
                 elif target == GRID_2:
-                    target_pos = switchGrid(stage, axis="x", to_grid=meteor_labels[GRID_2])
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    # transform the grid2 center then use it as target position 
+                    sem_grid2 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+                    fm_grid2 = transformFromSEMToMeteor(sem_grid2, stage.axes)
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, fm_grid2)))
                 elif target == SEM_IMAGING:
                     # park focus for safety 
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
@@ -573,20 +581,6 @@ def transformFromMeteorToSEM(pos, axes):
     transformed_pos["x"]=pos['x']-0.03
     transformed_pos['y']=pos["y"]-0.005
     return transformed_pos
-
-
-def switchGrid(stage, axis, to_grid):
-    if not axis in stage.position.value.keys():
-        raise KeyError("The stage misses the %s axis" % axis)
-    stage_md = stage.getMetadata()
-    switched_pos = stage.position.value.copy()
-    for a in stage.position.value:
-        if a == axis:
-            if to_grid == meteor_labels[GRID_1]:
-                switched_pos[axis] = stage.position.value[axis] - stage_md[model.MD_GRID_SHIFT]["x"]
-            elif to_grid == meteor_labels[GRID_2]:
-                switched_pos[axis] = stage.position.value[axis] + stage_md[model.MD_GRID_SHIFT]["x"]
-    return switched_pos 
 
 
 def cryoTiltSample(rx, rz=0):
