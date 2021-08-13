@@ -73,7 +73,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, transformFromSEMToMeteor, switchGrid, transformFromMeteorToSEM
+from odemis.acq.move import GRID_1, LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, transformFromSEMToMeteor, transformFromMeteorToSEM
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -434,21 +434,21 @@ class LocalizationTab(Tab):
             else:
                 hwemtvas.add(vaname)
 
-        # This stream is used both for rendering and acquisition
-        sem_stream = acqstream.SEMStream(
-            "Secondary electrons",
-            main_data.sed,
-            main_data.sed.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=None,
-            emtvas=emtvas,
-            detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
-        )
-
         # The sem stream is visible for enzel, but not for meteor 
         if self.main_data.role == 'enzel': 
+            # This stream is used both for rendering and acquisition
+            sem_stream = acqstream.SEMStream(
+                "Secondary electrons",
+                main_data.sed,
+                main_data.sed.data,
+                main_data.ebeam,
+                focuser=main_data.ebeam_focus,
+                hwemtvas=hwemtvas,
+                hwdetvas=None,
+                emtvas=emtvas,
+                detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
+            )
+    
             sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
             sem_stream_cont.stream_panel.show_remove_btn(False)
 
@@ -2389,6 +2389,14 @@ class CryoChamberTab(Tab):
             panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
+            # Determine and show current position of the stage
+            self._current_position, self._target_position = None, None
+            self._enable_movement_controls()
+            if self._current_position in self.position_btns.keys():
+                pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
+                self._toggle_switch_buttons(pos_button)
+            self._show_cancel_warning_msg(None)
+
         elif self._role == 'meteor':
             self._stage  = self.tab_data_model.main.stage_bare
             # start and end position are used for the gauge progress bar
@@ -2400,15 +2408,13 @@ class CryoChamberTab(Tab):
             # metadata 
             # check for the metadata of meteor stage positions
             if not model.MD_SAMPLE_CENTERS in self._stage.getMetadata():
-                raise ValueError("The stage is misses the 'SAMPLE_CENTERS' metadata.")
+                raise ValueError("The stage misses the 'SAMPLE_CENTERS' metadata.")
             if not model.MD_FAV_POS_DEACTIVE in self._stage.getMetadata():
-                raise ValueError("The stage is misses the 'FAV_POS_DEACTIVE' metadata.")
+                raise ValueError("The stage misses the 'FAV_POS_DEACTIVE' metadata.")
             if not model.MD_SEM_IMAGING_RANGE in self._stage.getMetadata():
-                raise ValueError("The stage is misses the 'SEM_IMAGING_RANGE' metadata.")
+                raise ValueError("The stage misses the 'SEM_IMAGING_RANGE' metadata.")
             if not model.MD_FM_IMAGING_RANGE in self._stage.getMetadata():
-                raise ValueError("The stage is misses the 'FM_IMAGING_RANGE' metadata.")
-            if not model.MD_GRID_SHIFT in self._stage.getMetadata():
-                raise ValueError("The stage is misses the 'GRID_SHIFT' metadata.")
+                raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
             # the meteor buttons 
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
@@ -2434,13 +2440,10 @@ class CryoChamberTab(Tab):
             panel.btn_switch_grid2.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-        # Determine and show current position of the stage
-        self._current_position, self._target_position = None, None
-        self._enable_movement_controls()
-        if self._current_position in self.position_btns.keys():
-            pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
-            self._toggle_switch_buttons(pos_button)
-        self._show_cancel_warning_msg(None)
+            # Determine and show current position of the stage
+            self._enable_movement_controls()
+            self._toggle_switch_buttons()
+            self._show_cancel_warning_msg(None)
 
     def load_overview_data(self, streams):
         """
@@ -2577,28 +2580,13 @@ class CryoChamberTab(Tab):
         if self._role == 'meteor':
             current_pos_label = getCurrentPositionLabel(pos)
             if current_pos_label == LOADING:
-                self.panel.btn_switch_sem_imaging.Enable()
-                self.panel.btn_switch_fm_imaging.Enable()
-                self.panel.btn_switch_grid2.Disable()
-                self.panel.btn_switch_grid1.Disable()
-            elif current_pos_label != self._current_position and current_pos_label != UNKNOWN:
-                current_grid_label = getCurrentGridLabel(pos)
-                if current_grid_label == GRID_1:
-                    self.position_btns[GRID_1].SetValue(True)
-                    self.position_btns[GRID_2].SetValue(False)
-                elif current_grid_label == GRID_2:
-                    self.position_btns[GRID_2].SetValue(True)
-                    self.position_btns[GRID_1].SetValue(False)
-                if current_pos_label == SEM_IMAGING:
-                    self.position_btns[SEM_IMAGING].SetValue(True)
-                    self.position_btns[FM_IMAGING].SetValue(False)
-                elif current_pos_label == FM_IMAGING:
-                    self.position_btns[SEM_IMAGING].SetValue(False)
-                    self.position_btns[FM_IMAGING].SetValue(True)
-                self._enable_movement_controls()
+                for _, button in self.position_btns.items():
+                    button.Enable()
+                    button.SetValue(False)
+            elif current_pos_label in [FM_IMAGING, SEM_IMAGING]:
+                self._toggle_switch_buttons()
         elif self._role == 'enzel':
             pass 
-
 
     def _toggle_switch_buttons(self, currently_pressed=None):
         """
@@ -2608,53 +2596,30 @@ class CryoChamberTab(Tab):
             for button in self.position_btns.values():
                 button.SetValue(1) if button == currently_pressed else button.SetValue(0)
         elif self._role == "meteor":
-            # inital case 
-            if self.position_btns[GRID_1].GetValue() == 0 and self.position_btns[GRID_2].GetValue() == 0:
-                # if user pressed button for the first time after loading
-                if self.position_btns[SEM_IMAGING].GetValue() == 1 or self.position_btns[FM_IMAGING].GetValue() == 1:
-                    # initially, choose grid1 by default 
-                    if currently_pressed.Label == meteor_labels[FM_IMAGING]:
-                        self.position_btns[FM_IMAGING].SetValue(True)
-                        self.position_btns[GRID_1].Enable()
-                        self.position_btns[GRID_1].SetValue(True)
-                    elif currently_pressed.Label == meteor_labels[SEM_IMAGING]:
-                        self.position_btns[SEM_IMAGING].SetValue(True) 
-                        self.position_btns[GRID_1].Enable()
-                        self.position_btns[GRID_1].SetValue(True)
-                else: # if user closed the gui, and opened it again
-                    current_pos_label = getCurrentPositionLabel(self._stage.position.value)
-                    current_grid_label = getCurrentGridLabel(self._stage.position.value)
-                    # if grid already selected
-                    if current_grid_label == GRID_1:
-                        self.position_btns[GRID_1].SetValue(True)
-                        self.position_btns[GRID_2].SetValue(False)
-                    elif current_grid_label == GRID_2:
-                        self.position_btns[GRID_2].SetValue(True)
-                        self.position_btns[GRID_1].SetValue(False)
-                    if current_pos_label == SEM_IMAGING:
-                        self.position_btns[SEM_IMAGING].SetValue(True)
-                        self.position_btns[FM_IMAGING].SetValue(False)
-                    elif current_pos_label == FM_IMAGING:
-                        self.position_btns[SEM_IMAGING].SetValue(False)
-                        self.position_btns[FM_IMAGING].SetValue(True)
-            # if user already pressed a button, and now presses a new button
-            elif self.position_btns[GRID_2].GetValue() == 1 or self.position_btns[GRID_1].GetValue() == 1:
-                # if user switches grids, keep imaging modes same. 
-                if currently_pressed.Label == meteor_labels[GRID_1]:
-                    self.position_btns[GRID_1].SetValue(True)
-                    self.position_btns[GRID_2].SetValue(False)
-                # if user switches grids, keep imaging modes same.
-                elif currently_pressed.Label == meteor_labels[GRID_2]:
-                    self.position_btns[GRID_2].SetValue(True)
-                    self.position_btns[GRID_1].SetValue(False)
-                # if user switches imaging modes, keep grids the same. 
-                elif currently_pressed.Label == meteor_labels[SEM_IMAGING]:
-                    self.position_btns[SEM_IMAGING].SetValue(True)
-                    self.position_btns[FM_IMAGING].SetValue(False)
-                # if user switches imaging modes, keep grids the same. 
-                elif currently_pressed.Label == meteor_labels[FM_IMAGING]:
-                    self.position_btns[SEM_IMAGING].SetValue(False)
+            # the initial case (both imaging buttons unpressed or both grid buttons unpressed)
+            if ((self.position_btns[GRID_1].GetValue() == 0 and self.position_btns[GRID_2].GetValue() == 0) or \
+                (self.position_btns[SEM_IMAGING].GetValue() == 0 and self.position_btns[FM_IMAGING].GetValue() == 0)) and \
+                currently_pressed is not None:
+                # initially, choose grid1 by default 
+                if currently_pressed.Label == meteor_labels[FM_IMAGING]:
                     self.position_btns[FM_IMAGING].SetValue(True)
+                    self.position_btns[GRID_1].SetValue(True)
+                elif currently_pressed.Label == meteor_labels[SEM_IMAGING]:
+                    self.position_btns[SEM_IMAGING].SetValue(True) 
+                    self.position_btns[GRID_1].SetValue(True)
+                elif currently_pressed.Label == meteor_labels[GRID_1]:
+                    self.position_btns[SEM_IMAGING].SetValue(True)
+                    self.position_btns[GRID_1].SetValue(True)
+                elif currently_pressed.Label == meteor_labels[GRID_2]:
+                    self.position_btns[SEM_IMAGING].SetValue(True)
+                    self.position_btns[GRID_2].SetValue(True)
+            else:
+                current_pos_label = getCurrentPositionLabel(self._stage.position.value)
+                current_grid_label = getCurrentGridLabel(self._stage.position.value)
+                self.position_btns[GRID_1].SetValue(current_grid_label == GRID_1)
+                self.position_btns[GRID_2].SetValue(current_grid_label == GRID_2)
+                self.position_btns[SEM_IMAGING].SetValue(current_pos_label == SEM_IMAGING)
+                self.position_btns[FM_IMAGING].SetValue(current_pos_label == FM_IMAGING)
 
     def _enable_movement_controls(self, cancelled=False):
         """
@@ -2694,22 +2659,13 @@ class CryoChamberTab(Tab):
         elif self._role == 'meteor':
             # enabling/disabling meteor buttons based on the new pressed button 
             if current_position == UNKNOWN:
-                # at unknown position: SEM=0, FM=0, G1=0, G2=0, Loc=0
+                # at unknown position: SEM=0, FM=0, G1=0, G2=0
                 for _, button in self.position_btns.items():
                     button.SetValue(False)
                     button.Disable()
-            elif current_position == LOADING:
-                # at loading/coating/milling position: G1=0, G2=0, FM=1, SEM=1, Loc=0
-                self.panel.btn_switch_sem_imaging.Enable()
-                self.panel.btn_switch_fm_imaging.Enable()
-                self.panel.btn_switch_grid2.Disable()
-                self.panel.btn_switch_grid1.Disable()
-            elif current_position in [SEM_IMAGING, FM_IMAGING]:
-                # at SEM/FM position: G1=1, G2=1, FM=1, Loc=1 
-                self.panel.btn_switch_grid2.Enable()
-                self.panel.btn_switch_grid1.Enable()
-                self.panel.btn_switch_fm_imaging.Enable()
-                self.panel.btn_switch_sem_imaging.Enable()
+            else:   # SEM_IMAGING, FM_IMAGING or LOADING
+                for _, button in self.position_btns.items():
+                    button.Enable(current_position != UNKNOWN)
             # turn on the leds on 2 buttons: imaging button and one of the grids button
             current_grid_label = getCurrentGridLabel(self._stage.position.value)
             if current_position in self.position_btns.keys() and current_grid_label in self.position_btns.keys():
@@ -2906,8 +2862,6 @@ class CryoChamberTab(Tab):
             # determine the end position for the gauge 
             stage_md = self._stage.getMetadata()
             if self._current_position == LOADING:
-                if not self._display_insertion_stick_warning_msg():
-                    return
                 # if at loading, set the end poisiton to grid1 center by default 
                 sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                 if target_button.Label == meteor_labels[SEM_IMAGING]:
@@ -2917,19 +2871,25 @@ class CryoChamberTab(Tab):
                     self._end_pos = fm_grid1
                     if not self._display_meteor_pos_warning_msg(self._end_pos):
                         return 
+                elif target_button.Label == meteor_labels[GRID_1]:
+                    self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]] 
+                elif target_button.Label == meteor_labels[GRID_2]:
+                    self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
             elif self._current_position in [SEM_IMAGING, FM_IMAGING]:
                 if self._current_position == FM_IMAGING:
                     if target_button.Label == meteor_labels[GRID_1]:
-                        self._end_pos = switchGrid(self._stage, axis="x", to_grid=meteor_labels[GRID_1])
+                        sem_grid1 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+                        self._end_pos = transformFromSEMToMeteor(sem_grid1, self._stage.axes)
                     elif target_button.Label == meteor_labels[GRID_2]:
-                        self._end_pos = switchGrid(self._stage, axis="x", to_grid=meteor_labels[GRID_2])
+                        sem_grid2 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+                        self._end_pos = transformFromSEMToMeteor(sem_grid2, self._stage.axes)
                     elif target_button.Label == meteor_labels[SEM_IMAGING]:
                         self._end_pos = transformFromMeteorToSEM(self._stage.position.value, self._stage.axes)
                 elif self._current_position == SEM_IMAGING:
                     if target_button.Label == meteor_labels[GRID_1]:
-                        self._end_pos = switchGrid(self._stage, axis="x", to_grid=meteor_labels[GRID_1])
+                        self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                     elif target_button.Label == meteor_labels[GRID_2]:
-                        self._end_pos = switchGrid(self._stage, axis="x", to_grid=meteor_labels[GRID_2])
+                        self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
                     elif target_button.Label == meteor_labels[FM_IMAGING]:
                         self._end_pos = transformFromSEMToMeteor(self._stage.position.value, self._stage.axes)
             else:
@@ -4279,7 +4239,7 @@ class SecomAlignTab(Tab):
         """
         if self.tab_data_model.main.role == "meteor":
             pos = self.tab_data_model.main.stage_bare.position.value 
-        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING, FM_IMAGING])
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING])
 
     def _on_align_pos(self, pos):
         """
