@@ -43,9 +43,8 @@ ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
 
 
-def getCurrentGridLabel(current_pos):
-    current_pos_label = getCurrentPositionLabel(current_pos)
-    stage = model.getComponent(role='stage-bare')
+def getCurrentGridLabel(current_pos, stage):
+    current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
     if current_pos_label == SEM_IMAGING:
         distance_to_grid1 = _getDistance(current_pos, stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]])
@@ -59,8 +58,7 @@ def getCurrentGridLabel(current_pos):
         return
 
 
-def getCurrentEnzelPositionLabel(current_pos):
-    stage  = model.getComponent(role='stage')
+def getCurrentEnzelPositionLabel(current_pos, stage):
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
@@ -109,8 +107,7 @@ def getCurrentEnzelPositionLabel(current_pos):
     return UNKNOWN
 
 
-def getCurrentMeteorPositionLabel(current_pos):
-    stage = model.getComponent(role='stage-bare')
+def getCurrentMeteorPositionLabel(current_pos, stage):
     # meta data of meteor stage positions 
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -127,7 +124,7 @@ def getCurrentMeteorPositionLabel(current_pos):
     return UNKNOWN
 
 
-def getCurrentPositionLabel(current_pos):
+def getCurrentPositionLabel(current_pos, stage):
     """
     Determine where lies the current stage position
     :param current_pos: (dict str->float) Current position of the stage
@@ -135,10 +132,10 @@ def getCurrentPositionLabel(current_pos):
     """
     role = model.getMicroscope().role
     if role == 'enzel':
-        return getCurrentEnzelPositionLabel(current_pos)
+        return getCurrentEnzelPositionLabel(current_pos, stage)
     
     elif role == 'meteor':
-        return getCurrentMeteorPositionLabel(current_pos)
+        return getCurrentMeteorPositionLabel(current_pos, stage)
 
 
 def getCurrentAlignerPositionLabel(current_pos, align):
@@ -367,6 +364,8 @@ def _doCryoSwitchSamplePosition(future, target):
     role = model.getMicroscope().role
     if role == "enzel":
         try:
+            # get the aligner object
+            align = model.getComponent(role='align')
             stage_md = stage.getMetadata()
             align_md = align.getMetadata()
             target_pos = {LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
@@ -469,8 +468,6 @@ def _doCryoSwitchSamplePosition(future, target):
 
     elif role == "meteor":
         try:
-            # get the meteor stage 
-            stage = model.getComponent(role='stage-bare')
             # get the meta data 
             focus_md = focus.getMetadata()
             stage_md = stage.getMetadata()
@@ -487,7 +484,7 @@ def _doCryoSwitchSamplePosition(future, target):
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
             # get the current label 
-            current_pos_label = getCurrentPositionLabel(current_pos)
+            current_pos_label = getCurrentPositionLabel(current_pos, stage)
             # add the state machine of the meteor 
             if current_pos_label == LOADING:
                 # if unknown/loading, and one of the imaging modes is pressed, then choose grid1 by default

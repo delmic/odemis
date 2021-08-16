@@ -636,7 +636,10 @@ class LocalizationTab(Tab):
         """
         if self.main_data.role == 'meteor':
             pos = self.main_data.stage_bare.position.value 
-        guiutil.enable_tab_on_stage_position(self.button, pos, target=[IMAGING, FM_IMAGING])
+            stage = self.tab_data_model.main.stage_bare
+        elif self.main_data.role == "enzel":
+            stage = self.stage
+        guiutil.enable_tab_on_stage_position(self.button, stage, pos, target=[IMAGING, FM_IMAGING])
 
     def _on_stream_update(self, updated):
         """
@@ -2670,7 +2673,7 @@ class CryoChamberTab(Tab):
     @call_in_wx_main
     def _on_stage_pos(self, pos):
         if self._role == 'meteor':
-            current_pos_label = getCurrentPositionLabel(pos)
+            current_pos_label = getCurrentPositionLabel(pos, self._stage)
             if current_pos_label == LOADING:
                 for _, button in self.position_btns.items():
                     button.Enable()
@@ -2706,8 +2709,8 @@ class CryoChamberTab(Tab):
                     self.position_btns[SEM_IMAGING].SetValue(True)
                     self.position_btns[GRID_2].SetValue(True)
             else:
-                current_pos_label = getCurrentPositionLabel(self._stage.position.value)
-                current_grid_label = getCurrentGridLabel(self._stage.position.value)
+                current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage)
+                current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
                 self.position_btns[GRID_1].SetValue(current_grid_label == GRID_1)
                 self.position_btns[GRID_2].SetValue(current_grid_label == GRID_2)
                 self.position_btns[SEM_IMAGING].SetValue(current_pos_label == SEM_IMAGING)
@@ -2719,7 +2722,7 @@ class CryoChamberTab(Tab):
         :param cancelled: (bool) if the move is cancelled
         """
         # Get current movement (including unknown and on the path)
-        self._current_position = getCurrentPositionLabel(self._stage.position.value)
+        self._current_position = getCurrentPositionLabel(self._stage.position.value, self._stage)
         # Enable stage advanced controls on milling, only for enzel 
         if self._role == 'enzel':
             self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(False)
@@ -2759,7 +2762,7 @@ class CryoChamberTab(Tab):
                 for _, button in self.position_btns.items():
                     button.Enable(current_position != UNKNOWN)
             # turn on the leds on 2 buttons: imaging button and one of the grids button
-            current_grid_label = getCurrentGridLabel(self._stage.position.value)
+            current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
             if current_position in self.position_btns.keys() and current_grid_label in self.position_btns.keys():
                 self.position_btns[current_position].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_position]][1])
                 self.position_btns[current_position].Refresh()
@@ -2940,7 +2943,7 @@ class CryoChamberTab(Tab):
             return
         # define the start position 
         self._start_pos = current_pos = self._stage.position.value
-        self._current_position = getCurrentPositionLabel(current_pos)
+        self._current_position = getCurrentPositionLabel(current_pos, self._stage)
 
         if self._role == 'enzel': 
             # target_position metadata has the end positions for all movements except milling
