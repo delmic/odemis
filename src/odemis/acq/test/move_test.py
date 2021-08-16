@@ -24,16 +24,19 @@ import unittest
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS, cryoSwitchAlignPosition, \
-    getCurrentAlignerPositionLabel, SEM_IMAGING, UNKNOWN
+from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel
 from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
-from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
-from odemis.util import test
+from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel, RUNNING
+from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
+from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, run_sub_move
+from odemis.util import driver, test
+import threading
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 
 class TestCryoMove(unittest.TestCase):
@@ -366,6 +369,217 @@ class TestCryoMove(unittest.TestCase):
         cryoSwitchSamplePosition(LOADING).result()
         test.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
+
+
+class TestMeteorMove(unittest.TestCase):
+    """
+    Test the function cryoSwitchSamplePosition stage movements of meteor 
+    """
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(METEOR_CONFIG)
+        except LookupError:
+            logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
+            test.stop_backend()
+            test.start_backend(METEOR_CONFIG)
+        except Exception:
+            raise
+
+        # get the stage components
+        cls.stage = model.getComponent(role="stage-bare")
+
+        # get the metadata
+        stage_md = cls.stage.getMetadata()
+        cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
+        cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
+
+    @classmethod
+    def tearDownClass(cls):
+        if driver.get_backend_status in [BACKEND_STARTING, BACKEND_RUNNING]:
+            test.stop_backend()
+
+    def move_to_loading_position(self):
+        f = model.CancellableFuture()
+        f._task_lock = threading.Lock()
+        f._task_state = RUNNING
+        f._running_subf = model.InstantaneousFuture()
+        filter_dict = lambda keys, d: {key: d[key] for key in keys}
+        sub_moves = []
+        sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, self.stage_loading)))
+        for component, sub_move in sub_moves:
+            run_sub_move(f, component, sub_move)
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(current_imaging_mode, LOADING)
+
+    def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
+        # move the stage to the loading position  
+        self.move_to_loading_position()
+        # move the stage to the sem imaging area, and grid1 will be chosen by default.
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
+        # move the stage to the loading position  
+        self.move_to_loading_position()
+        # move the stage to grid1, and sem imaging area will be chosen by default. 
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
+        # move the stage to the loading position  
+        self.move_to_loading_position()
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, FM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
+        # move the stage to the loading position  
+        self.move_to_loading_position()
+        # move the stage to grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_2)
+
+    def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
+        # move to loading position
+        self.move_to_loading_position()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # now the selected grid is already the grid1
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # move the stage to grid2 
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # make sure we are still in sem  imaging area 
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
+        # move to loading position
+        self.move_to_loading_position()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move the stage to grid2 
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # move the stage back to grid1
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # make sure we are still in the sem imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+    
+    def test_moving_from_sem_to_fm(self):
+        # move to loading position
+        self.move_to_loading_position()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
+        self.move_to_loading_position()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # now the grid is grid1 by default
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # move to the grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # make sure we are still in fm imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
+        self.move_to_loading_position()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move to the grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # move back to the grid1 
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # make sure we are still in fm imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_to_sem_from_fm(self):
+        self.move_to_loading_position()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move to sem
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+
+    def test_unknown_label_at_initialization(self):
+        f = model.CancellableFuture()
+        f._task_lock = threading.Lock()
+        f._task_state = RUNNING
+        f._running_subf = model.InstantaneousFuture()
+        filter_dict = lambda keys, d: {key: d[key] for key in keys}
+        sub_moves = []
+        arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0}
+        sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, arbitrary_position)))
+        for component, sub_move in sub_moves:
+            run_sub_move(f, component, sub_move)
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(UNKNOWN, current_imaging_mode)
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(current_grid, None)
 
 
 if __name__ == "__main__":
