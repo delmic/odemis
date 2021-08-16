@@ -34,7 +34,7 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
-LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, UNKNOWN, SEM_IMAGING = 0, 1, 2, 3, 4, 5, 6
+UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, SEM_IMAGING = -1, 0, 1, 2, 3, 4, 5
 target_pos_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating", ALIGNMENT: "alignment",
                   LOADING_PATH: "loading path", UNKNOWN: "unknown", SEM_IMAGING: "SEM imaging"}
 ATOL_LINEAR_POS = 100e-6  # m
@@ -99,9 +99,9 @@ def getCurrentPositionLabel(current_pos, stage):
 
 def getCurrentAlignerPositionLabel(current_pos, align):
     """
-    Determine where lies the current stage position
+    Determine the current aligner position
     :param current_pos: (dict str->float) Current position of the stage
-    :param align: Sample stage that's being controlled
+    :param align: Lens stage (aligner) that's being controlled
     :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
     """
     align_md = align.getMetadata()
@@ -216,8 +216,8 @@ def cryoSwitchAlignPosition(target):
     """
     Provide the ability to switch between loading, imaging and alignment position, without bumping into anything.
     :param target: (int) target position either one of the constants LOADING, IMAGING or ALIGNMENT
-    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the
-   raise ValueError exception
+    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the raise
+    ValueError exception
     """
     # Get the aligner from backend components
     align = model.getComponent(role='align')
@@ -298,8 +298,8 @@ def cryoSwitchSamplePosition(target):
     """
     Provide the ability to switch between loading, imaging and coating position, without bumping into anything.
     :param target: (int) target position either one of the constants LOADING, IMAGING, COATING AND ALIGNMENT
-    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the
-   raise ValueError exception
+    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control raising the
+    ValueError exception
     """
     # Get the stage and align components from the backend components
     stage = model.getComponent(role='stage')
@@ -430,8 +430,7 @@ def cryoTiltSample(rx, rz=0):
     Imaging position is considered when rx and rz are equal 0, otherwise it's considered tilting
     :param rx: (float) rotation movement in x axis
     :param rz: (float) rotation movement in z axis
-    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the
-   raise ValueError exception
+    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control raising the ValueError exception
     """
     # Get the stage and align components from the backend components
     stage = model.getComponent(role='stage')

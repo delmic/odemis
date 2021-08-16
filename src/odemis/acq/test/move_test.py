@@ -15,6 +15,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import copy
 import logging
 import os
 import time
@@ -24,7 +25,7 @@ import odemis
 from odemis import model
 from odemis import util
 from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS, cryoSwitchAlignPosition, \
-    getCurrentAlignerPositionLabel, SEM_IMAGING
+    getCurrentAlignerPositionLabel, SEM_IMAGING, UNKNOWN
 from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
 from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util import test
@@ -266,6 +267,9 @@ class TestCryoMove(unittest.TestCase):
         Test getCurrentPositionLabel function behaves as expected
         """
         aligner = self.aligner
+        # at start the aligner wouldn't be in one of the predefined positions
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertTrue(pos_label in (LOADING_PATH, UNKNOWN))
         # Move to loading position
         f = cryoSwitchAlignPosition(LOADING)
         f.result()
@@ -274,11 +278,24 @@ class TestCryoMove(unittest.TestCase):
 
         # Move to imaging position and cancel the movement before reaching there
         f = cryoSwitchAlignPosition(IMAGING)
-        # abit long wait for the loading-imaging referencing to finish
-        time.sleep(2)
+        time.sleep(5)
         f.cancel()
         pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
         self.assertEqual(pos_label, LOADING_PATH)
+
+        # simulate moving to unknown position by moving in opposite to deactive-active line
+        unknown_pos = copy.copy(self.align_active)
+        unknown_pos['y'] += 0.005
+        unknown_pos['z'] += 0.005
+        self.aligner.moveAbs(unknown_pos).result()
+        # moving to either imaging/alignment positions shouldn't be allowed
+        with self.assertRaises(ValueError):
+            f = cryoSwitchAlignPosition(IMAGING)
+            f.result()
+
+        with self.assertRaises(ValueError):
+            f = cryoSwitchAlignPosition(ALIGNMENT)
+            f.result()
 
         # Move to alignment position
         f = cryoSwitchAlignPosition(LOADING)
@@ -287,6 +304,10 @@ class TestCryoMove(unittest.TestCase):
         f.result()
         pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
         self.assertEqual(pos_label, ALIGNMENT)
+
+        # from alignment to loading
+        f = cryoSwitchAlignPosition(LOADING)
+        f.result()
 
         # Move to imaging position
         f = cryoSwitchAlignPosition(IMAGING)
