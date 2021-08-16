@@ -250,8 +250,6 @@ ENZEL-Sim: {
   },
   metadata: {
     FAV_POS_ACTIVE: { 'z': 0.0 }
-      # The "good focus" of the simulator is at z = 0 on the 3DoF stage.
-      # So on the focus, that's z = 0.0012.
   },
   persistent: {
     metadata: [ FAV_POS_ACTIVE ],  # Store "good focus" position between run
@@ -353,6 +351,19 @@ ENZEL-Sim: {
     # GIS coating position
     FAV_POS_COATING: { 'rx': 0.4363, 'rz': 0.0, 'x': 0.01, 'y': 0.001, 'z': 0.00 },
     ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
+  },
+}
+# to control the stage Z in global reference frame while the stage is tilted
+"Stage Z Global": {
+  class: actuator.ConvertStage,
+  role: null,
+  dependencies: {
+    "under": "5DOF Stage"
+  },
+  init: {
+    axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    # TODO: Check the correct angle sign
+    rotation: 0.4887, # rad , 28°
   },
 }
 # Y/Z axes only, as X is as-is
