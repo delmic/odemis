@@ -2586,7 +2586,7 @@ class CryoChamberTab(Tab):
                 for _, button in self.position_btns.items():
                     button.Enable()
                     button.SetValue(False)
-            elif current_pos_label in [FM_IMAGING, SEM_IMAGING]:
+            else:   # SEM, FM or UNKNOWN
                 self._toggle_switch_buttons()
         elif self._role == 'enzel':
             pass 
@@ -2830,6 +2830,7 @@ class CryoChamberTab(Tab):
                 txt_warning = "Stage stopped between {} and {} positions".format(meteor_labels[self._current_position],
                                                                                     meteor_labels[self._target_position])
             self._show_cancel_warning_msg(txt_warning)
+            self._tab_panel.Layout()
             self._target_position = None
             self._current_position = None 
         self._enable_movement_controls(cancelled=True)
