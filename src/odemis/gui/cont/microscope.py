@@ -1459,23 +1459,31 @@ class FastEMStateController(object):
         self._tab_panel = tab_panel
 
         # E-beam management
-        tooltips = {STATE_OFF: "Turn E-beam on", STATE_ON: "Turn E-beam off"}
-        self._ebeam_btn_ctrl = HardwareButtonController(tab_panel.btn_ebeam,
-                                                        self._main_data.emState,
-                                                        tooltips)
-        self._main_data.emState.subscribe(self._on_ebeam_state)
-        self._main_data.ebeam.power.subscribe(self._on_ebeam_power, init=True)
+        if model.hasVA(self._main_data.ebeam, "power"):
+            tooltips = {STATE_OFF: "Turn E-beam on", STATE_ON: "Turn E-beam off"}
+            self._ebeam_btn_ctrl = HardwareButtonController(tab_panel.btn_ebeam,
+                                                            self._main_data.emState,
+                                                            tooltips)
+            self._main_data.emState.subscribe(self._on_ebeam_state)
+            self._main_data.ebeam.power.subscribe(self._on_ebeam_power, init=True)
+        else:
+            tab_panel.btn_ebeam.Show(False)
+            logging.warning("Ebeam doesn't have 'power' VA.")
 
         # Chamber management
-        self._press_btn_ctrl = ChamberButtonController(tab_panel.btn_pressure,
-                                                       self._main_data.chamberState,
-                                                       self._main_data)
-        self._main_data.chamberState.subscribe(self.on_chamber_state)
+        if self._main_data.chamber:
+            self._press_btn_ctrl = ChamberButtonController(tab_panel.btn_pressure,
+                                                           self._main_data.chamberState,
+                                                           self._main_data)
+            self._main_data.chamberState.subscribe(self.on_chamber_state)
 
-        vacuum_values = self._main_data.chamber.axes["vacuum"].choices
-        self._vacuum_pos = min(vacuum_values.keys())
-        self._vented_pos = max(vacuum_values.keys())
-        self._main_data.chamber.position.subscribe(self.on_chamber_pos, init=True)
+            vacuum_values = self._main_data.chamber.axes["vacuum"].choices
+            self._vacuum_pos = min(vacuum_values.keys())
+            self._vented_pos = max(vacuum_values.keys())
+            self._main_data.chamber.position.subscribe(self.on_chamber_pos, init=True)
+        else:
+            tab_panel.btn_pressure.Show(False)
+            logging.warning("Microscope doesn't have a chamber component.")
 
     def _on_ebeam_state(self, _):
         self._main_data.ebeam.power.value = (self._main_data.emState.value == STATE_ON)
