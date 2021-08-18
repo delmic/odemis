@@ -73,7 +73,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
+    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
 from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -858,6 +858,17 @@ class SecomStreamsTab(Tab):
             else:
                 logging.error("No EM detector found")
 
+        if main_data.ion_beam:
+            fib_stream = acqstream.FIBStream("Fib scanner",
+                                             main_data.sed,
+                                             main_data.sed.data,
+                                             main_data.ion_beam,
+                                             forcemd={model.MD_POS: (0, 0)},
+                                            )
+            tab_data.fib_stream = fib_stream
+            self._streambar_controller.addStream(fib_stream, add_to_view=True, visible=True, play=False)
+
+
         # Create streams before state controller, so based on the chamber state,
         # the streams will be enabled or not.
         self._ensure_base_streams()
@@ -987,6 +998,12 @@ class SecomStreamsTab(Tab):
                 if v.get("stream_classes") == EMStream:
                     v["fov_hw"] = main_data.ebeam
                     vp.canvas.fit_view_to_next_image = False
+
+        if main_data.ion_beam:
+            # Don't add stage control since the pixel size/magnification is unknown for the XT client FIB.
+            vpv[viewports[1]] = {"name"          : "FIB",
+                                 "stream_classes": FIBStream,
+                                 }
 
         return vpv
 

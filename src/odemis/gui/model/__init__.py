@@ -183,6 +183,7 @@ class MainGUIData(object):
         "tc-filter": "tc_filter",
         "slit-in-big": "slit_in_big",
         "sample-thermostat": "sample_thermostat",
+        "ion-beam": "ion_beam",
     }
 
     def __init__(self, microscope):
@@ -249,6 +250,7 @@ class MainGUIData(object):
         self.tc_filter = None
         self.slit_in_big = None
         self.sample_thermostat = None  # thermostat for temperature control of cryosecom
+        self.ion_beam = None
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)

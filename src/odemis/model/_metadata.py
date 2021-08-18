@@ -91,6 +91,7 @@ MD_ACQ_TYPE = "Acquisition type"  # the type of acquisition contained in the Dat
 MD_AT_SPECTRUM = "Spectrum"
 MD_AT_AR = "Angle-resolved"
 MD_AT_EM = "Electron microscope"
+MD_AT_FIB = "Focused ion beam"
 MD_AT_FLUO = "Fluorescence"
 MD_AT_ANCHOR = "Anchor region"
 MD_AT_CL = "Cathodoluminescence"

@@ -1373,6 +1373,7 @@ class StreamBar(wx.Panel):
         acq.stream.FluoStream,
         acq.stream.CLStream,
         acq.stream.CameraStream,
+        acq.stream.FIBStream,
         acq.stream.ARSettingsStream,
         acq.stream.SpectrumSettingsStream,
         acq.stream.ScannedTemporalSettingsStream,
