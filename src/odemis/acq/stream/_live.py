@@ -293,7 +293,8 @@ class ScannerStream(LiveStream):
 
     def _applyROI(self):
         """
-        Update the scanning area of the SEM according to the roi
+        Update the scanning area of the SEM according to the roi.
+        Doesn't do anything if no writable resolution/translation VA's are defined on the scanner.
         Note: should only be called when active (because it directly modifies
           the hardware settings)
         """

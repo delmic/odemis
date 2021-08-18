@@ -47,7 +47,7 @@ from odemis.gui import conf, img
 from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
-from odemis.model import getVAs
+from odemis.model import getVAs, VAEnumerated
 from odemis.util.filename import guess_pattern, create_projectname
 
 import odemis.acq.stream as acqstream
@@ -63,7 +63,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
-from odemis.acq.move import getCurrentPositionLabel, IMAGING
+from odemis.acq.move import getCurrentPositionLabel, IMAGING, ALIGNMENT
 from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
@@ -73,8 +73,8 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
+    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
+from odemis.acq.move import LOADING, IMAGING, COATING, UNKNOWN, LOADING_PATH, target_pos_str
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -102,6 +102,9 @@ from odemis.util.dataio import data_to_static_streams, open_acquisition
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
               TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
+
+# TODO K.K. remove this hack when Bassim fixed this with a new commit
+MILLING = ALIGNMENT  # Hack to deal with Bassim his updates
 
 
 class Tab(object):
@@ -858,17 +861,6 @@ class SecomStreamsTab(Tab):
             else:
                 logging.error("No EM detector found")
 
-        if main_data.ion_beam:
-            fib_stream = acqstream.FIBStream("Fib scanner",
-                                             main_data.sed,
-                                             main_data.sed.data,
-                                             main_data.ion_beam,
-                                             forcemd={model.MD_POS: (0, 0)},
-                                            )
-            tab_data.fib_stream = fib_stream
-            self._streambar_controller.addStream(fib_stream, add_to_view=True, visible=True, play=False)
-
-
         # Create streams before state controller, so based on the chamber state,
         # the streams will be enabled or not.
         self._ensure_base_streams()
@@ -998,12 +990,6 @@ class SecomStreamsTab(Tab):
                 if v.get("stream_classes") == EMStream:
                     v["fov_hw"] = main_data.ebeam
                     vp.canvas.fit_view_to_next_image = False
-
-        if main_data.ion_beam:
-            # Don't add stage control since the pixel size/magnification is unknown for the XT client FIB.
-            vpv[viewports[1]] = {"name"          : "FIB",
-                                 "stream_classes": FIBStream,
-                                 }
 
         return vpv
 
@@ -3681,7 +3667,6 @@ class SecomAlignTab(Tab):
             logging.error("No optical detector found for SECOM alignment")
 
         opt_stream.should_update.value = True
-        self.tab_data_model.streams.value.insert(0, opt_stream) # current stream
         self._opt_stream = opt_stream
         # To ensure F6 (play/pause) works: very simple stream scheduler
         opt_stream.should_update.subscribe(self._on_ccd_should_update)
@@ -4131,7 +4116,437 @@ class SecomAlignTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("secom", "cryo-secom"):
+        if main_data.role in ("secom",):
+            return 1
+        else:
+            return None
+
+
+class EnzelAlignTab(Tab):
+    """
+    Tab to perform the alignment of Enzel so that the FIB, SEM and FLM look at the same point.
+    """
+    def __init__(self, name, button, panel, main_frame, main_data):
+        tab_data = guimod.EnzelAlignGUIData(main_data)
+        super(EnzelAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ALIGNMENT")
+        self._stream_controllers = []
+        self._stage = main_data.stage
+        self._stage_global = main_data.stage_global
+        # TODO K.K. remove this by setting role properly or adjusting the metadata place.
+        self._3_DOF = model.getComponent("3DOF Stage")
+        self._tilted_3_DOF = main_data.aligner
+        # Check stage FAV positions in its metadata, and store them in respect to their movement
+        for stage in (self._stage, self._3_DOF):
+            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE}.issubset(stage.getMetadata()):
+                raise ValueError('The stage %s is missing FAV_POS_DEACTIVE and/or FAV_POS_ACTIVE metadata.' % stage)
+
+        viewports = panel.pnl_two_streams_grid.viewports
+        # Even though we have 3 viewports defined in main.xrc only 2 should be shown by default.
+        for vp in viewports[2:]:
+            vp.Shown = False
+
+        vpv = collections.OrderedDict([
+            (
+                viewports[0],
+                {
+                    "name"          : "FIB image",
+                    "cls"           : guimod.MicroscopeView,
+                    "stream_classes": acqstream.FIBStream,
+                }
+            ),
+            (
+                viewports[1],
+                {
+                    "name"          : "SEM image",
+                    "cls"           : guimod.MicroscopeView,
+                    "stage"         : main_data.stage,
+                    "stream_classes": acqstream.EMStream,
+                },
+            ),
+            (
+                viewports[2],
+                {
+                    "name"          : "FLM image",
+                    "cls"           : guimod.MicroscopeView,
+                    "stage"         : main_data.stage,
+                    "stream_classes": acqstream.CameraStream,
+                },
+            ),
+        ])
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Create CCD stream
+        # Force the "temperature" VA to be displayed by making it a hw VA
+        # TODO K.K. is this temperature VA is needed?
+        hwdetvas = set()
+        if model.hasVA(main_data.ccd, "temperature"):
+            hwdetvas.add("temperature")
+        # Don't include a focuser because it could ruin the alignment.
+        # TODO K.K. test/add filter anjd light to camerastream
+        self._opt_stream = acqstream.CameraStream("Optical CL",
+                                                  main_data.ccd,
+                                                  main_data.ccd.data,
+                                                  emitter=None,
+                                                  # emitter=main_data.light,
+                                                  # main_data.filter,
+                                                  hwdetvas=hwdetvas,
+                                                  detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
+                                                  forcemd={model.MD_ROTATION: 0,
+                                                           model.MD_SHEAR   : 0},
+                                                  )
+        # TODO K.K. why set the following settings?
+        # Synchronise the fine alignment dwell time with the CCD settings
+        self._opt_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
+        self._opt_stream.detBinning.value = self._opt_stream.detBinning.range[0]
+        self._opt_stream.detResolution.value = self._opt_stream.detResolution.range[1]
+        self.tab_data_model.streams.value.append(self._opt_stream)
+
+        # Create sem stream
+        self._sem_stream = acqstream.SEMStream("SEM",
+                                               main_data.sed,
+                                               main_data.sed.data,
+                                               main_data.ebeam,
+                                               hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
+                                               hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
+                                               acq_type=model.MD_AT_EM,
+                                               blanker=None
+                                               )
+        # TODO K.K. remove with analog stream is implemented.
+        self.tab_data_model.views.value[1].interpolate_content.value = True
+        self.tab_data_model.streams.value.append(self._sem_stream)
+
+        # Create fib stream
+        self._fib_stream = acqstream.FIBStream("FIB",
+                                               main_data.ion_sed,
+                                               main_data.ion_sed.data,
+                                               main_data.ion_beam,
+                                               forcemd={model.MD_POS: (0, 0)}, )
+        self.tab_data_model.streams.value.append(self._fib_stream)
+
+        # Create scheduler/stream bar controller
+        self.stream_bar_controller = streamcont.EnzelAlignmentStreamsBarController(self.tab_data_model)
+
+        self._FIB_view_and_control = {"viewport": self.panel.pnl_two_streams_grid.viewports[0],
+                                      "stream"  : self._fib_stream}
+        self._SEM_view_and_control = {"viewport": self.panel.pnl_two_streams_grid.viewports[1],
+                                      "stream"  : self._sem_stream}
+        self._FLM_view_and_control = {"viewport": self.panel.pnl_two_streams_grid.viewports[2],
+                                      "stream"  : self._opt_stream}
+
+        # Enable all controls but by default show none
+        self.panel.pnl_z_align.Enable(True)
+        self.panel.pnl_sem_align.Enable(True)
+        self.panel.pnl_flm_xyz_align.Enable(True)
+        self.panel.pnl_z_align.Show(False)
+        self.panel.pnl_sem_align.Show(False)
+        self.panel.pnl_flm_xyz_align.Show(False)
+
+        # Used to link the buttons to the accompanying setter for each mode.
+        self._align_btn_functions = {
+            panel.btn_align_z  : self._set_z_alignment_mode,
+            panel.btn_align_sem: self._set_sem_alignment_mode,
+            panel.btn_align_flm: self._set_flm_alignment_mode,
+        }
+
+        self._current_align_mode = VAEnumerated(panel.btn_align_z,
+                                                self._align_btn_functions,
+                                                setter=self._set_current_align_mode)
+        # TODO K.K. replace line below with init=True somehow
+        self._set_current_align_mode(self._current_align_mode.value)  # Start with the default mode
+
+        # Bind the buttons to the align mode VA
+        def __on_click_align_mode_buttons(evt):
+            self._current_align_mode.value = evt.theButton
+
+        for btn in self._align_btn_functions:
+            btn.Bind(wx.EVT_BUTTON, __on_click_align_mode_buttons)
+
+        # TODO K.K. If the stage movement calls are blocking the button will remain unclickable as long as the stage is
+        #  moving.
+        # Vigilant attribute connectors for the slider
+        self._step_size_controls_va_connector = VigilantAttributeConnector(tab_data.step_size,
+                                                                           self.panel.controls_step_size_slider,
+                                                                           events=wx.EVT_SCROLL_CHANGED)
+
+        z_aligner_control_functions = {panel.stage_align_btn_m_aligner_z:
+                                           lambda evt: self._z_alignment_controls("z", -1, evt),
+                                       panel.stage_align_btn_p_aligner_z:
+                                           lambda evt: self._z_alignment_controls("z", 1, evt),
+                                       }
+        sem_aligner_control_functions = {panel.beam_shift_btn_m_aligner_x:
+                                             lambda evt: self._sem_alignment_controls("x", -1, evt),
+                                         panel.beam_shift_btn_p_aligner_x:
+                                             lambda evt: self._sem_alignment_controls("x", 1, evt),
+                                         panel.beam_shift_btn_m_aligner_y:
+                                             lambda evt: self._sem_alignment_controls("y", -1, evt),
+                                         panel.beam_shift_btn_p_aligner_y:
+                                             lambda evt: self._sem_alignment_controls("y", 1, evt),
+                                         }
+        flm_aligner_control_functions = {panel.flm_align_btn_m_aligner_x:
+                                             lambda evt: self._flm_alignment_controls("x", -1, evt),
+                                         panel.flm_align_btn_p_aligner_x:
+                                             lambda evt: self._flm_alignment_controls("x", 1, evt),
+                                         panel.flm_align_btn_m_aligner_y:
+                                             lambda evt: self._flm_alignment_controls("y", -1, evt),
+                                         panel.flm_align_btn_p_aligner_y:
+                                             lambda evt: self._flm_alignment_controls("y", 1, evt),
+                                         panel.flm_align_btn_m_aligner_z:
+                                             lambda evt: self._flm_alignment_controls("z", -1, evt),
+                                         panel.flm_align_btn_p_aligner_z:
+                                             lambda evt: self._flm_alignment_controls("z", 1, evt),
+                                         }
+
+        self._combined_aligner_control_functions = {**z_aligner_control_functions,
+                                                    **sem_aligner_control_functions,
+                                                    **flm_aligner_control_functions}
+        # TODO K.K. if due to lack of referencing no stage movement can be done no error/warning is raised.....
+        # Bind alignment control keys to defined control functions
+        for btn, function in self._combined_aligner_control_functions.items():
+            btn.Bind(wx.EVT_BUTTON, function)
+
+        # Set the conditions on which the tab is enabled.
+        # self._stage.position.subscribe(self._on_stage_pos, init=True)
+
+    def terminate(self):
+        super(SecomAlignTab, self).terminate()
+        self._stage.position.unsubscribe(self._on_stage_pos)
+        # make sure the streams are stopped
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
+
+    def _set_current_align_mode(self, clicked_align_mode):
+        """
+        Setter for the current alignment mode. Changes the mode with the corresponding streams to be displayed, the
+        instructions and the controls. Also takes care of the toggling of the buttons.
+
+        :param clicked_align_mode (GraphicRadioButton): Button pressed by the user.
+        """
+        clicked_align_mode.SetToggle(True)
+        # Untoggle all the other buttons.
+        for btn in self._align_btn_functions:
+            if btn is not clicked_align_mode:
+                btn.SetToggle(False)
+
+        self._align_btn_functions[clicked_align_mode]()  # Calls the setter of the correct mode
+        return clicked_align_mode
+
+    def _set_z_alignment_mode(self):
+        """
+        Sets the Z alignment mode with he correct streams, stream controllers, instructions and alignment controls.
+        """
+        self.stream_bar_controller.pauseAllStreams()
+        self._set_top_and_bottom_stream_and_settings(self._FIB_view_and_control,
+                                                     self._SEM_view_and_control)
+
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_z_alignment.html")
+        self.panel.html_alignment_doc.LoadPage(doc_path)
+
+        self.panel.pnl_z_align.Show(True)
+        self.panel.pnl_sem_align.Show(False)
+        self.panel.pnl_flm_xyz_align.Show(False)
+        fix_static_text_clipping(self.panel)
+
+    def _z_alignment_controls(self, axis, proportion, evt):
+        """
+        Links the Z alignment mode control buttons to the stage.
+
+        :param axis (str): axis which is controlled by the button.
+        :param proportion (int): direction of the movement represented by the button (-1/1)
+        :param evt (GenButtonEvent): Clicked event
+        """
+        # Only proceed if there is no currently running target_position
+        if hasattr(self, "_z_move_future") and self._z_move_future._state == RUNNING:
+            logging.debug("The stage is still moving, this movement isn't performed.")
+            return
+        # TODO K.K. maybe disabling both/all buttons per mode is better. Also because of possible asynchronous problem
+        #  with the stream refresher.
+        evt.theButton.Enabled = False  # Disable the button to prevent queuing of movements and unnecessary refreshing.
+
+        def move_done(future):
+            self.stream_bar_controller.refreshStreams((self._FIB_view_and_control["stream"],
+                                                       self._SEM_view_and_control["stream"]))
+            future.button.Enabled = True
+            new_pos = self._stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
+            new_pos.update({"z": self._stage.position.value["z"]})  # Add current Z position
+            self._stage.updateMetadata({model.MD_FAV_POS_ACTIVE: new_pos})
+
+        self._z_move_future = self._stage_global.moveRel(
+                {axis: proportion * self.tab_data_model.step_size.value})
+        self._z_move_future.button = evt.theButton
+        self._z_move_future.add_done_callback(move_done)
+
+    def _set_sem_alignment_mode(self):
+        """
+        Sets the SEM alignment mode with he correct streams, stream controllers, instructions and alignment controls.
+        """
+        self.stream_bar_controller.pauseAllStreams()
+        self._set_top_and_bottom_stream_and_settings(self._SEM_view_and_control,
+                                                     self._FIB_view_and_control)
+
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_sem_alignment.html")
+        self.panel.html_alignment_doc.LoadPage(doc_path)
+
+        self.panel.pnl_z_align.Show(False)
+        self.panel.pnl_sem_align.Show(True)
+        self.panel.pnl_flm_xyz_align.Show(False)
+        fix_static_text_clipping(self.panel)
+
+    def _sem_alignment_controls(self, axis, proportion, evt):
+        """
+        Links the SEM alignments mode control buttons to the stage.
+
+        :param axis (str): axis which is controlled by the button.
+        :param proportion (int): direction of the movement represented by the button (-1/1)
+        :param evt (GenButtonEvent): Clicked event
+        """
+        # TODO K.K. implement moving + refreshing/blocking thing with or without a future remove time.sleep(0.5)
+        # Beam shift control
+        self._sem_move_beam_shift_rel({axis: proportion * self.tab_data_model.step_size.value})
+        time.sleep(0.5)
+        self.stream_bar_controller.refreshStreams((self._SEM_view_and_control["stream"],
+                                                   self._FIB_view_and_control["stream"]))
+
+    def _sem_move_beam_shift_rel(self, shift):
+        """
+        Provides relative control of the beam shift similar to the MoveRel functionality of the stages.
+
+        :param shift (dict --> float): Relative movement of the beam shift with the axis as keys (x/y)
+        """
+        beamShiftVA = self._sem_stream.emitter.beamShift
+        try:
+            if "x" in shift:
+                beamShiftVA.value = (beamShiftVA.value[0] + shift["x"], beamShiftVA.value[1])
+        except IndexError:
+            logging.error("Reached the limits of the beam shift, cannot move any further in x direction.")
+
+        try:
+            if "y" in shift:
+                beamShiftVA.value = (beamShiftVA.value[0], beamShiftVA.value[1] + shift["y"])
+        except IndexError:
+            logging.error("Reached the limits of the beam shift, cannot move any further in y direction.")
+
+    def _set_flm_alignment_mode(self):
+        """
+        Sets the FLM alignment mode with he correct streams, stream controllers, instructions and alignment controls.
+        """
+        self.stream_bar_controller.pauseAllStreams()
+        self._set_top_and_bottom_stream_and_settings(self._FLM_view_and_control,
+                                                     self._SEM_view_and_control)
+
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_flm_alignment.html")
+        self.panel.html_alignment_doc.LoadPage(doc_path)
+
+        self.panel.pnl_z_align.Show(False)
+        self.panel.pnl_sem_align.Show(False)
+        self.panel.pnl_flm_xyz_align.Show(True)
+        fix_static_text_clipping(self.panel)
+
+    def _flm_alignment_controls(self, axis, proportion, evt):
+        """
+        Links the FLM alignments mode control buttons to the stage.
+
+        :param axis (str): axis which is controlled by the button.
+        :param proportion (int): direction of the movement represented by the button (-1/1)
+        :param evt (GenButtonEvent): Clicked event
+        """
+        # Only proceed if there is no currently running target_position
+        if hasattr(self, "_flm_move_future") and self._flm_move_future._state == RUNNING:
+            logging.debug("The stage is still moving, this movement isn't performed.")
+            return
+        # TODO K.K. button disabling doesn't work here - it crashes now because stage movements are to fast.
+        # evt.theButton.Enabled = False
+        #
+        def move_done(future):
+            # future.button.Enabled = True
+            self._3_DOF.updateMetadata({model.MD_FAV_POS_ACTIVE: self._3_DOF.position.value})
+
+        self._flm_move_future = self._tilted_3_DOF.moveRel(
+                {axis: proportion * self.tab_data_model.step_size.value})
+        self._flm_move_future.button = evt.theButton
+        self._flm_move_future.add_done_callback(move_done)
+
+    @call_in_wx_main
+    def _set_top_and_bottom_stream_and_settings(self, top, bottom):
+        """
+        Sets the top and bottom view and stream bar in a 2*1 viewport.
+
+        :param top (dict): The top stream and corresponding viewport accessible via the keys 'stream'/'viewport'
+        :param bottom(dict): The bottom stream and corresponding viewport accessible via the keys 'stream'/'viewport'
+        """
+        # TODO K.K. check/discuss if parts/entire function should be moved to the stream scheduler.
+        if top is bottom:
+            raise ValueError("The bottom stream is equal to the top stream, this isn't allowed in a 2*1 mode.")
+
+        # Pause all streams
+        self._opt_stream.is_active.value = False
+        self._sem_stream.is_active.value = False
+        self._fib_stream.is_active.value = False
+
+        for view in self.panel.pnl_two_streams_grid.viewports:
+            if view is top['viewport'] or view is bottom['viewport']:
+                view.Shown = True
+            else:
+                view.Shown = False
+        self.view_controller._grid_panel.set_shown_viewports(top['viewport'], bottom['viewport'])
+        self.tab_data_model.visible_views.value = [top['viewport'].view, bottom['viewport'].view]
+
+        # Alter the order of the view_ports so that the correct stream is displayed at top/bottom
+        viewport_list = self.panel.pnl_two_streams_grid.viewports
+        viewport_list.remove(top['viewport'])
+        viewport_list.insert(0, top['viewport'])
+        viewport_list.remove(bottom['viewport'])
+        viewport_list.insert(1, bottom['viewport'])
+
+        self.panel.pnl_two_streams_grid._layout_viewports()
+
+        # TODO K.K. Why save/update self._stream_controllers if it seems to remain unused?
+        self._stream_controllers = []
+        # Replace the settings of the top stream controller with the new StreamController
+        for stream_settings in self.panel.top_settings.stream_panels:
+            self.panel.top_settings.remove_stream_panel(stream_settings)
+        new_top_stream_controller = StreamController(self.panel.top_settings,
+                                                     top["stream"],
+                                                     self.tab_data_model,
+                                                     view=top['viewport'].view)
+        new_top_stream_controller.stream_panel.show_remove_btn(False)
+        self._stream_controllers.append(new_top_stream_controller)
+
+        # Replace the settings of the bottom stream controller with the new StreamController
+        for stream_settings in self.panel.bottom_settings.stream_panels:
+            self.panel.bottom_settings.remove_stream_panel(stream_settings)
+        new_bottom_stream_controller = StreamController(self.panel.bottom_settings,
+                                                        bottom["stream"],
+                                                        self.tab_data_model,
+                                                        view=bottom['viewport'].view)
+        new_bottom_stream_controller.stream_panel.show_remove_btn(False)
+        self._stream_controllers.append(new_bottom_stream_controller)
+
+        for v in self.tab_data_model.visible_views.value:
+            if hasattr(v, "stream_classes") and isinstance(top["stream"], v.stream_classes):
+                v.addStream(top["stream"])
+                new_top_stream_controller.stream_panel.show_visible_btn(False)
+            elif hasattr(v, "stream_classes") and isinstance(bottom["stream"], v.stream_classes):
+                v.addStream(bottom["stream"])
+                new_bottom_stream_controller.stream_panel.show_visible_btn(False)
+
+    @call_in_wx_main
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(self.button, self._stage, pos, target=IMAGING)
+        # Display a tooltip whenever the tab cannot be clicked.
+        if getCurrentPositionLabel(self._stage.position.value, self._stage)!= IMAGING:
+            self.button.SetToolTip("Alignment can only be performed in the imaging mode")
+        else:
+            self.button.SetToolTip(None)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        if main_data.role in ("cryo-secom"):
             return 1
         else:
             return None

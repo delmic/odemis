@@ -198,6 +198,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_secom_align
                 },
                 {
+                    "name"      : "enzel_align",
+                    "controller": tabs.EnzelAlignTab,
+                    "button"    : self.main_frame.btn_tab_align_enzel,
+                    "panel"     : main_xrc.xrcpnl_tab_enzel_align
+                },
+                {
                     "name": "sparc_align",
                     "controller": tabs.SparcAlignTab,
                     "button": self.main_frame.btn_tab_align,

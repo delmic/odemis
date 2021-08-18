@@ -3,10 +3,11 @@ ENZEL-Sim: {
     role: cryo-secom,
     children: [
         "Sample Thermostat", "Cooler Controller",
-        "SEM E-beam Full", "SEM Detector",
-        "EBeam Focus", "Fib Scanner",
+        "SEM E-beam Full", "SEM Detector", "EBeam Scanner",
+        "EBeam Focus", "EBeam Detector",
         "Light Source", "Filter Wheel", "Stigmator",
-        "Camera", "Optical Objective", "Global 5DOF Aligner",
+        "Camera", "Optical Objective",
+        "5DOF Stage", "Stage Global",
         "Objective Aligner", "Optical Focus",
     ],
 }
@@ -46,11 +47,11 @@ ENZEL-Sim: {
 # Merges the scan interface e-beam and the e-beam control (via API)
 "SEM E-beam Full": {
     class: scanner.CompositedScanner,
-    role: e-beam,
+    role: null,
     affects: ["SEM Detector", "Camera"], # affects the CCD in case of cathodoluminescence
     dependencies: {
         external: "SEM E-beam",
-        internal: "EBeam Control"
+        internal: "EBeam Scanner"
     },
     init: {},
     properties: {
@@ -99,7 +100,7 @@ ENZEL-Sim: {
 # Must be connected on AI1/AI9 (differential)
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
-    role: se-detector,
+    role: null,
     init: {
         channel: 1,
         limits: [-3, 3], # V
@@ -108,47 +109,51 @@ ENZEL-Sim: {
 
 # Fake SEM connection
 "SEM XT connection": {
-    class: simsem.SimSEM,
+    class: xt_client.SEM,
     role: null,
     init: {
-        image: "simsem-fake-output.h5", # any large 16 bit image is fine
+      address: "PYRO:Microscope@0.0.0.0:4242",
     },
     children: {
-        scanner: "EBeam Control",
+        scanner: "EBeam Scanner",
         fib-scanner: "Fib Scanner",
         focus: "EBeam Focus",
-        detector0: "SED via API",
+        detector: "EBeam Detector",
     },
 }
 
 "Fib Scanner": {
     # Internal child of "SEM XT connection", so no class
-    role: "fib-scanner",
+    role: "ion-beam",
     init: {
       #        hfw_nomag: 0.2293,  # Must be the same as in SEM E-beam
     },
 }
 
 
-"EBeam Control": {
+"EBeam Scanner": {
     # Internal child of "SEM XT connection", so no class
-    role: null,
+    role:  e-beam,
     init: {
-#        hfw_nomag: 0.2293,  # Must be the same as in SEM E-beam
+        hfw_nomag: 0.2293,  # Must be the same as in SEM E-beam
     },
 }
 
-# Not used, just to make the SimSEM happy
-"SED via API": {
-    # Internal child of SimSEM, so no class
-    role: null,
-    init: {},
+"EBeam Detector": {
+  role: se-detector,
 }
+
+## Not used, just to make the SimSEM happy
+#"SED via API": {
+#    # Internal child of SimSEM, so no class
+#    role: null,
+#    init: {},
+#}
 
 "EBeam Focus": {
     # Internal child of "SEM XT connection", so no class
     role: ebeam-focus,
-    affects: ["SEM Detector"],
+#    affects: ["SEM Detector"],
 }
 
 "Light Source": {
@@ -204,7 +209,7 @@ ENZEL-Sim: {
     dependencies: {"band": "Optical Actuators"},
     init: {
         axis_name: "fw",
-        # TODO: a way to indicate the best filter to use during alignement?
+        # TODO: a way to indicate the best filter to use during alignment?
         # It supports 4 filters
         positions: {
             # pos (rad) -> m,m
@@ -246,7 +251,7 @@ ENZEL-Sim: {
     },
     metadata: {
         # To change what the "good" focus position is on the simulator
-        # It's needed for not using the initial value, which is at deactive position.
+        # It's needed for not using the initial value, which isn't an active position.
          FAV_POS_ACTIVE: {'z': 0.002},  # focus position at init
     },
 }
@@ -271,7 +276,7 @@ ENZEL-Sim: {
   class: actuator.MultiplexActuator,
   role: align,
   affects: [ "Camera" ],
-  dependencies: { "x": "3DOF Stage", "y": "Tilted 3DoF", "z": "Tilted 3DoF" },
+  dependencies: { "x": "3DOF Stage", "y": "Tilted 3DOF YZ", "z": "Tilted 3DOF YZ" },
   init: {
     axes_map: { "x": "x", "y": "x", "z": "y" },
     # TODO: If the X/Y axes are not aligned with the image axis, swap the axes in the
@@ -294,13 +299,12 @@ ENZEL-Sim: {
   # Instead, every time Odemis is restarted, the default "okayish" position is
   # used.
 }
-
-# Special component to only provide the X/Y axis of the 5DOF to be controlled in a global reference frame
-"Global 5DOF Aligner": {
+# Special component to provide control of the 5DOF in a global reference frame (works only with rx = 28 degrees)
+"Stage Global": {
   class: actuator.MultiplexActuator,
-  role: global5DOF,
+  role: stage-global,
   affects: [ "Camera", "SEM E-beam Full" ],
-  dependencies: { "x": "5DOF Stage", "y": "Stage Z Global", "z": "Stage Z Global" },
+  dependencies: { "x": "5DOF Stage", "y": "Stage YZ Global", "z": "Stage YZ Global" },
   init: {
     axes_map: { "x": "x", "y": "x", "z": "y" },
   }
@@ -320,7 +324,7 @@ ENZEL-Sim: {
     settle_time: 1,  # s, extra time for the sample to stop vibrating after movement
     linear_speed: 0.003,  # m/s
     rotary_speed: 0.087,  # rad/s = 5 deg/s
-    pos_deactive_after_ref: False,  # Set to True to automatically go to DEACTIVE position after succesful referencing
+    pos_deactive_after_ref: False,  # Set to True to automatically go to DEACTIVE position after successful referencing
     # TODO: check the ranges
     axes: {
       'x': {
@@ -374,8 +378,8 @@ ENZEL-Sim: {
     ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
   },
 }
-# to control the stage Z in global reference frame while the stage is tilted
-"Stage Z Global": {
+# Provides control of the stage in a global reference frame for the axis Y and Z when the stage is tilted
+"Stage YZ Global": {
   class: actuator.ConvertStage,
   role: null,
   dependencies: {
@@ -387,8 +391,9 @@ ENZEL-Sim: {
     rotation: 0.4887, # rad , 28°
   },
 }
+
 # Y/Z axes only, as X is as-is
-"Tilted 3DoF": {
+"Tilted 3DOF YZ": {
   class: actuator.ConvertStage,
   role: null,
   dependencies: {
@@ -409,7 +414,7 @@ ENZEL-Sim: {
     speed: 0.003,  # m/s
     accel: 0.003,  # m/s²
     hold_time: 1,  # s, default = infinite (.inf)
-    pos_deactive_after_ref: True,  # Automatically go to safe position after succesful referencing
+    pos_deactive_after_ref: True,  # Automatically go to safe position after successful referencing
     axes: {
       'x': {
         range: [ -0.0114001, 0.0112466 ],
@@ -423,7 +428,7 @@ ENZEL-Sim: {
       },
       'z': {
         # When Z is inverted, the range will be inverted too, as this describes the
-        # the range as seen by the device. IOW, expect to read the opposite values when
+        # range as seen by the device. IOW, expect to read the opposite values when
         # using odemis --list-prop.
         range: [ -0.0126437, 0.0075529 ],
         unit: 'm',
@@ -438,5 +443,8 @@ ENZEL-Sim: {
     # Z is used for the focus, when FM is not in use.
     # X/Y can be omitted, but should typically be the same as in Objective Aligner.
     FAV_POS_DEACTIVE: { 'x': -0.01, 'y': -0.01, 'z': -6.e-3 },
+    # Initial position when going to FM/SEM imaging.
+    # It should be within the ACTIVE_RANGE
+    FAV_POS_ACTIVE: {'x': 0.0, 'y': 0.00, 'z': 0.00 },
   },
 }

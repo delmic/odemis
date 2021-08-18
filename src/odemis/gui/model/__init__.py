@@ -60,6 +60,7 @@ CHAMBER_VENTING = 4  # Pressurizing chamber (set it to request venting)
 VIEW_LAYOUT_ONE = 0  # one big view
 VIEW_LAYOUT_22 = 1  # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2  # Fullscreen view (not yet supported)
+VIEW_LAYOUT_VERTICAL = 3  # 2x1 layout
 
 # The different tools (selectable in the tool bar). First, the "mode" ones:
 TOOL_NONE = 0  # No tool (normal)
@@ -184,6 +185,9 @@ class MainGUIData(object):
         "slit-in-big": "slit_in_big",
         "sample-thermostat": "sample_thermostat",
         "ion-beam": "ion_beam",
+        "se-detector-ion": "ion_sed",
+        "stage-global": "stage_global",
+
     }
 
     def __init__(self, microscope):
@@ -251,6 +255,8 @@ class MainGUIData(object):
         self.slit_in_big = None
         self.sample_thermostat = None  # thermostat for temperature control of cryosecom
         self.ion_beam = None
+        self.ion_sed = None
+        self.stage_global = None
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
@@ -534,7 +540,7 @@ class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
         # See class docstring for more info.
         self.focussedView = VigilantAttribute(None)
 
-        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN}
+        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_VERTICAL, VIEW_LAYOUT_FULLSCREEN}
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
         # The subset of views taken from `views` that *can* actually displayed,
@@ -920,6 +926,11 @@ class SecomAlignGUIData(ActuatorGUIData):
         # For dichotomic mode
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
 
+class EnzelAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.viewLayout.value = VIEW_LAYOUT_VERTICAL
+        self.step_size = model.FloatVA(1e-6)
 
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):

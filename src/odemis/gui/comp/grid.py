@@ -118,6 +118,35 @@ class ViewportGrid(wx.Panel):
 
         return viewports
 
+    def get_2_viewports(self):
+        """
+        Gets the first 2 valid viewports to display
+        return ([ViewPort])
+        """
+        viewports = []
+        if [view.Shown for view in self.viewports].count(True) > 2:
+            logging.warning("Found more than two viewports to show, only the first 2 are displayed in this layout.")
+
+        for v in self.viewports:
+            try:
+                if v.view is not None and v.Shown:
+                    viewports.append(v)
+            except AttributeError:
+                # Should never happen, unless it's not really a ViewPort.
+                # If so, let's not go completely bad
+                logging.exception("View has no view")
+                viewports.append(v)
+            if len(viewports) >= 2:
+                break
+
+        return viewports
+
+    def show_2_vert_stacked_viewports(self):
+        """ Show the first two viewports in a 2x1 grid"""
+        self.visible_viewports = self.get_2_viewports()
+        self._layout_viewports()
+        self._show_hide_viewports()
+
     def show_grid_viewports(self):
         """ Show all grid viewports """
         self.visible_viewports = self.get_4_viewports()
@@ -158,10 +187,11 @@ class ViewportGrid(wx.Panel):
         """ Grab the child windows and perform layout when the size changes """
         if self.viewports is None:
             self.viewports = list(self.Children)
-            if len(self.viewports) < 4:
-                # Cannot put them on a grid => default to full screen for the 1st one
+            if len(self.viewports) == 1 or len(self.viewports) == 3:
+                # Cannot put uneven numbers on a grid => default to full screen for the 1st one
                 self.visible_viewports = self.viewports[:1]
-
+            elif len(self.viewports) == 2:
+                self.visible_viewports = self.get_2_viewports()
             else:
                 self.visible_viewports = self.get_4_viewports()
 
@@ -205,7 +235,8 @@ class ViewportGrid(wx.Panel):
         0 - Set all sizes of the viewports to 400x400
         1 - Display the visible viewport 'full screen', completely covering it's parent. The other
             viewports are resized to their default hidden size of 400x400 pixels
-        X - If there is more than one visible viewports, we start looking at their positions,
+        2 - Display the visible viewports in a 2*1 vertically stacked grid.
+        X - If there is more than 2 visible viewports, we start looking at their positions,
             because we only consider the first 4 to be in the 2x2 view.
 
         Number of visible viewports in the first 4 positions:
@@ -232,6 +263,38 @@ class ViewportGrid(wx.Panel):
             vvps[0].SetSize(self.ClientSize)
             vvps[0].SetPosition((0, 0))
             # TODO: Make invisible ones small!
+
+        elif num_vis_total == 2:
+            gvps = self.get_2_viewports()
+            num_vis_grid = sum(vp in vvps for vp in gvps)
+            if num_vis_grid != num_vis_total:
+                raise ValueError("If viewports are set to be visible in a 2x1 grid, they should all reside within this "
+                                 "2x1 grid! (%d shown, %d in grid)" % (num_vis_total, num_vis_grid))
+
+            top, bottom = gvps
+            top_view, bottom_view = [vp in vvps for vp in gvps]
+
+            gl = self.grid_layout
+
+            if top_view:
+                pos = gl.tl.pos
+                size = (gl.tl.size.x + (gl.tr.size.x),
+                        gl.tl.size.y)
+                top.SetPosition(pos)
+                top.SetSize(size)
+            elif top.Size != self.hidden_size:
+                top.SetSize(self.hidden_size)
+
+            if bottom_view:
+                pos = (0, gl.bl.pos[1])
+                size = (gl.bl.size.x + (gl.br.size.x),
+                        gl.bl.size.y)
+
+                bottom.SetPosition(pos)
+                bottom.SetSize(size)
+            elif bottom.Size != self.hidden_size:
+                bottom.SetSize(self.hidden_size)
+
         else:
             gvps = self.get_4_viewports()
             num_vis_grid = sum(vp in vvps for vp in gvps)

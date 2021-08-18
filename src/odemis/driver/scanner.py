@@ -77,6 +77,10 @@ class CompositedScanner(model.Emitter):
         elif model.hasVA(self._external, "magnification"):
             self.magnification = self._external.magnification
 
+        if model.hasVA(self._internal, "beamShift"):
+            va = getattr(self._internal, "beamShift")
+            setattr(self, "beamShift", va)
+
         # TODO: just pick every VAs which are not yet on self?
         for vaname in ("accelVoltage", "probeCurrent", "depthOfField", "spotSize"):
             if model.hasVA(self._internal, vaname):
@@ -112,3 +116,126 @@ class CompositedScanner(model.Emitter):
 
     def getMetadata(self):
         return self._external.getMetadata()
+
+    # TODO K.K. improve naming
+    def blankBeamDirectly(self):
+        '''
+        Used to blank the beam on the XT client SEM directly when the blanker mode is set to automatic (blanker.value =
+        None)
+        '''
+        if hasattr(self, "blanker"):
+            # TODO K.K. check if blanker needs to be included in the tabs.py or we need to change something here.
+            if self.blanker.value is None:
+                self._internal.parent.blank_beam()
+
+    # TODO K.K. improve naming
+    def unblankBeamDirectly(self):
+        '''
+        Used to unblank the beam on the XT client SEM directly when the blanker mode is set to automatic (
+        blanker.value = None)
+        '''
+        if hasattr(self, "blanker"):
+            # TODO K.K. check if blanker needs to be included in the tabs.py or we need to change something here.
+            if self.blanker.value is None:
+                self._internal.parent.unblank_beam()
+
+class CompositedDetector(model.Detector):
+    '''
+    A generic Detector which takes 2 dependencies to create a one detector. It's
+    essentially a wrapper to an Detector to generate data using the "external"
+    detector while manipulating the "internal" detector.
+    '''
+    def __init__(self, name, role, dependencies, **kwargs):
+        '''
+        dependencies (dict string->model.HwComponent): the dependencies
+            There must be exactly two dependencies "external" and "internal".
+        Raise:
+          ValueError: if the dependencies are not compatible
+        '''
+        # we will fill the set of dependencies with Components later in ._dependencies
+        model.Emitter.__init__(self, name, role, dependencies=dependencies, **kwargs)
+
+        # Check the dependencies
+        extnl = dependencies["external"]
+        if not isinstance(extnl, ComponentBase):
+            raise ValueError("Dependency external is not a component.")
+        if not hasattr(extnl, "data") and not hasattr(extnl, "shape"):
+            raise ValueError("Dependency external is not a Detector component.")
+        self._external = extnl
+
+        intnl = dependencies["internal"]
+        if not isinstance(intnl, ComponentBase):
+            raise ValueError("Dependency internal is not a component.")
+        if not hasattr(extnl, "data") or not hasattr(extnl, "parent"):
+            # Note: the internal component doesn't need to provide pixelSize
+            raise ValueError("Dependency internal is not a Detector component.")
+        self._internal = intnl
+
+        comp_scanner = dependencies["comp_scanner"]
+        if not isinstance(comp_scanner, ComponentBase):
+            raise ValueError("Dependency internal_scanner is not a component.")
+        if not hasattr(comp_scanner, "shape"):
+            # Note: the internal component doesn't need to provide pixelSize
+            raise ValueError("Dependency internal_scanner is not a Emitter component.")
+        if not model.hasVA(comp_scanner, "external"):
+            # Note: the internal component doesn't need to provide pixelSize
+            raise ValueError("Dependency internal_scanner doesn't contain the necessary external VA")
+        self._comp_scanner = comp_scanner
+
+        # TODO K.K. we can probably not need it. Because we just need to unblank the SEM stopping fib is assumed to
+        #  be done already by scheduler. Change blanker of compisted scanner.
+        # Only if composited scanner VA is None then in stat/stop generate we update the internal scanner external VA
+        # to True/False if not None we don't touch it. The same for the blanker.
+        # if model.hasVA(self._internal, "scanner"):
+        #     va = getattr(self._internal, "scanner")
+        #     self.scanner = va  # VA to set the scanner type (FIB/SEM)
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = self._external.softwareTrigger
+        self._shape = self._external.shape
+
+        self.data = CompositedDataflow(self._external, self._comp_scanner)
+
+    # Share the metadata with the external, which is the one that will actually
+    # generate the data (with the metadata)
+    # TODO: merge the metadata from the internal
+    def updateMetadata(self, md):
+        self._external.updateMetadata(md)
+
+    def getMetadata(self):
+        return self._external.getMetadata()
+
+class CompositedDataflow(model.DataFlow):
+    def __init__(self, external_detector, composited_scanner):
+        """
+        Combines an external dataflow and before it starts sets the correct mode on the internal sem ("external")
+
+        :param external_dataflow (DataFlow): The external detector that the dataflow corresponds to
+        :param internal_sem(xt_client.SEM): The SEM which can be used to set the scan mode to external/full_frame
+        """
+        model.DataFlow.__init__(self)
+        self._external_dataflow = external_detector.data
+        self._composited_scanner = composited_scanner
+
+    def start_generate(self):
+        """
+        Sets the scan mode to "external" and subscribes self.notify to the external dataflow
+        :return:
+        """
+        self._composited_scanner.external.value = True
+        self._composited_scanner.unblankBeamDirectly()
+        self._external_dataflow.subscribe(self.notify)
+
+    def stop_generate(self):
+        """
+        Unsubscribes self.notify of the external dataflow and sets the scan mode to "full_frame"
+        """
+        self._external_dataflow.unsubscribe(self.notify)
+        self._composited_scanner.blankBeamDirectly()
+        self._composited_scanner.external.value = False
+
+    def notify(self, dataflow, data):
+        """
+        Wrapper to only pass data to the notify of the base class.
+        """
+        super().notify(data)
