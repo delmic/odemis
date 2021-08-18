@@ -36,10 +36,13 @@ FASTEM-sim: {
         # stage movement and SEM image *AT LOW MAGNIFICATIONS*.
         # This is useful for the overview image acquisition.
         PIXEL_SIZE_COR: [1.05, 1.05], # ratio
+        SINGLE_BEAM_ROTATION: 0,  # rad
+        MULTI_BEAM_ROTATION: 0.015707963  # rad = 0.9 degrees
     },
     persistent: {
         metadata: [PIXEL_SIZE_COR],
     },
+    #affects: ["MultiBeam Scanner"],  # simulator doesn't have multibeam scanner component
 }
 
 "EBeam Focus": {

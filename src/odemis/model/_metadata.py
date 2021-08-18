@@ -207,3 +207,7 @@ MD_EXTRA_SETTINGS = "Extra settings"
 # Constant for TINT
 TINT_FIT_TO_RGB = "fitrgb"
 TINT_RGB_AS_IS = "rgbasis"
+
+# Rotation for FastEM multi-beam and single-beam scanner
+MD_SINGLE_BEAM_ROTATION = "Single-beam rotation"
+MD_MULTI_BEAM_ROTATION = "Multi-beam rotation"

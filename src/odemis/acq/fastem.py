@@ -27,6 +27,9 @@ from odemis.acq.stream import SEMStream
 import time
 
 
+SINGLE_BEAM_ROTATION_DEFAULT = 0  # 0 is typically a good guess (better than multibeam rotation of ~0.0157 rad)
+MULTI_BEAM_ROTATION_DEFAULT = 0.015707963  # 0.9 degrees
+
 # The executor is a single object, independent of how many times the module is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
@@ -75,6 +78,16 @@ def acquire(roa, path):
     f = model.ProgressiveFuture()
     _executor.submitf(f, _run_fake_acquisition)
     return f
+
+
+def _configure_multibeam_hw(scanner):
+    md = scanner.getMetadata()
+    if model.MD_MULTI_BEAM_ROTATION in md:
+        scanner.rotation.value = md[model.MD_MULTI_BEAM_ROTATION]
+    else:
+        scanner.rotation.value = MULTI_BEAM_ROTATION_DEFAULT
+        logging.warning("Scanner doesn't have MULTI_BEAM_ROTATION metadata, using %s rad.",
+                        scanner.rotation.value)
 
 
 def _run_fake_acquisition():
@@ -196,6 +209,14 @@ def _configure_overview_hw(scanner):
     if scanner.resolution.value != TILE_RES:
         logging.warning("Unexpected resolution %s on e-beam scanner, expected %s",
                         scanner.resolution.value, TILE_RES)
+
+    md = scanner.getMetadata()
+    if model.MD_SINGLE_BEAM_ROTATION in md:
+        scanner.rotation.value = md[model.MD_SINGLE_BEAM_ROTATION]
+    else:
+        scanner.rotation.value = SINGLE_BEAM_ROTATION_DEFAULT
+        logging.warning("Scanner doesn't have SINGLE_BEAM_ROTATION metadata, using %s rad.",
+                        scanner.rotation.value)
 
 
 def _run_overview_acquisition(f, stream, stage, area, live_stream):
