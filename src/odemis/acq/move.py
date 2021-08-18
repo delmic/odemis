@@ -365,17 +365,19 @@ def _doCryoSwitchSamplePosition(future, stage, align, target):
             fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[LOADING])))
             fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, target_pos[LOADING])))
             # Add the sub moves to perform the loading move
-            sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[LOADING])))
             if current_label is UNKNOWN and not stage_referenced:
                 # After referencing the stage could move near the maximum axes range,
                 # and moving single axes may result in an invalid/reachable position error,
                 # so all axes will moved together for this special case.
                 sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[LOADING])))
             else:
-                sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos[LOADING])))
+                sub_moves.append((stage, filter_dict({'x'}, target_pos[LOADING])))
                 sub_moves.append((stage, filter_dict({'z'}, target_pos[LOADING])))
+                sub_moves.append((stage, filter_dict({'y'}, target_pos[LOADING])))
 
-        elif target in (ALIGNMENT, IMAGING, SEM_IMAGING, COATING):
+            sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[LOADING])))
+
+        elif target in (ALIGNMENT, IMAGING):
             if current_label is LOADING:
                 # Automatically run the referencing procedure as part of the
                 # first step of the movement loading → imaging/coating position
@@ -390,11 +392,21 @@ def _doCryoSwitchSamplePosition(future, stage, align, target):
             if current_label == LOADING:
                 # As moving from loading position requires re-referencing the stage, move all axes together to
                 # prevent invalid/reachable position error
-                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[target])))
-            else:
+                sub_moves.append((stage, filter_dict({'y'}, target_pos[target])))
                 sub_moves.append((stage, filter_dict({'z'}, target_pos[target])))
-                sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos[target])))
-            sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
+                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
+                sub_moves.append((stage, filter_dict({'x'}, target_pos[target])))
+            else:
+                sub_moves.append((stage, filter_dict({'x'}, target_pos[target])))
+                sub_moves.append((stage, filter_dict({'y'}, target_pos[target])))
+                sub_moves.append((stage, filter_dict({'z'}, target_pos[target])))
+                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
+
+        elif target in (COATING, SEM_IMAGING):
+            # TODO This should be implemented such that the Rx movement isn't done under the pole piece. Meaning
+            #  the 5DOF is first moved away and then moved back.
+            raise NotImplementedError
+
         else:
             raise ValueError("Unknown target value %s." % target)
 
