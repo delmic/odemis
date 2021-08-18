@@ -189,6 +189,7 @@ class MainGUIData(object):
         "multibeam": "multibeam",
         "descanner": "descanner",
         "mppc": "mppc",
+        "ion-beam": "ion_beam",
     }
 
     def __init__(self, microscope):
@@ -259,6 +260,7 @@ class MainGUIData(object):
         self.multibeam = None  # multibeam scanner of the fastem microscope
         self.descanner = None  # descan mirrors of the fastem microscope
         self.mppc = None  # detector of the fastem microscope
+        self.ion_beam = None
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
@@ -1756,7 +1758,7 @@ class StreamView(View):
 
     def _updateStageLimits(self, stage_limits, new_limits):
         """
-        Updates the stage limits dictionary with the intersection of both the existing and new limits. So that the 
+        Updates the stage limits dictionary with the intersection of both the existing and new limits. So that the
         updated limits comply with both defined limits.
 
         :param stage_limits (dict): Contains the limits for each axis of the stage which is limited.

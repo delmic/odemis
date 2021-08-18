@@ -11,14 +11,21 @@ SEM: {
   class: xt_client.SEM,
   role: null,
   init: {
-    address: "PYRO:Microscope@192.168.31.150:4242",
+    address: "PYRO:Microscope@localhost:4242",
   },
   children: {
     scanner: "EBeam Scanner",
+    fib-scanner: "FIB Scanner",
     focus: "EBeam Focus",
     stage: "EBeam Stage",
     detector: "EBeam Detector",
   }
+}
+
+"FIB Scanner": {
+  role: ion-beam,
+  init: {
+  },
 }
 
 "EBeam Scanner": {

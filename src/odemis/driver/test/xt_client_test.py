@@ -95,6 +95,8 @@ CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.1
 
 if TEST_NOHW == "sim":
     CONFIG_SEM["address"] = "PYRO:Microscope@localhost:4242"
+    CONFIG_FIB_SCANNER["address"] = "PYRO:Microscope@localhost:4242"
+    CONFIG_DUAL_MODE_SEM["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_MB_SEM["address"] = "PYRO:Microscope@localhost:4242"
 
 

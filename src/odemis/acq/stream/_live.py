@@ -27,7 +27,7 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.acq.align import FindEbeamCenter
-from odemis.model import MD_POS_COR, VigilantAttributeBase
+from odemis.model import MD_POS_COR, VigilantAttributeBase, hasVA
 from odemis.util import img, conversion, fluo
 import threading
 import time
@@ -240,10 +240,10 @@ class LiveStream(Stream):
         raise NotImplementedError("Stream %s doesn't support guessFoV()" % self.__class__.__name__)
 
 
-class SEMStream(LiveStream):
-    """ Stream containing images obtained via Scanning electron microscope.
+class ScannerStream(LiveStream):
+    """ Stream containing images obtained via a Scanning microscope.
 
-    It basically knows how to activate the scanning electron and the detector.
+    It basically knows how to activate the scanning and the detector.
     Warning: do not use local .resolution and .translation, but use the ROI.
     Local VA .resolution is supported, but only as read-only.
     """
@@ -260,10 +260,7 @@ class SEMStream(LiveStream):
         blanker (BooleanVA or None): to control the blanker (False = disabled,
           when acquiring, and True = enabled, when stream is paused).
         """
-
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_EM
-        super(SEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
 
         # To restart directly acquisition if settings change
         try:
@@ -297,7 +294,11 @@ class SEMStream(LiveStream):
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # resolution is the maximum resolution at the scale in proportion of the width
-        scale = self._getEmitterVA("scale").value
+        try:
+            scale = self._getEmitterVA("scale").value
+        except AttributeError:
+            logging.debug("Cannot find a scale defined for the %s, using (1, 1) instead" % self)
+            scale = (1, 1)
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
 
@@ -317,13 +318,17 @@ class SEMStream(LiveStream):
         Note: should only be called when active (because it directly modifies
           the hardware settings)
         """
-        res, trans = self._computeROISettings(self.roi.value)
+        need_res = hasVA(self._emitter, "resolution") and not self._emitter.resolution.readonly  # Boolean
+        need_trans = hasVA(self._emitter, "translation") and not self._emitter.translation.readonly  # Boolean
+
+        if need_res or need_trans:
+            res, trans = self._computeROISettings(self.roi.value)
 
         # always in this order
-        if not self._emitter.resolution.readonly:
+        if need_res:
             self._emitter.resolution.value = res
 
-        if not self._emitter.translation.readonly:
+        if need_trans:
             self._emitter.translation.value = trans
 
     def _onROI(self, roi):
@@ -373,10 +378,10 @@ class SEMStream(LiveStream):
         except Exception:
             logging.exception("Failed to disable the blanker")
 
-        return super(SEMStream, self)._prepare_opm()
+        return super()._prepare_opm()
 
     def _onActive(self, active):
-        super(SEMStream, self)._onActive(active)
+        super()._onActive(active)
         if not active:
             # blank the beam
             try:
@@ -386,10 +391,14 @@ class SEMStream(LiveStream):
                 logging.exception("Failed to enable the blanker")
 
     def _startAcquisition(self, future=None):
+        # If multiple emitters are connected to a detector switch to the correct one (e.g. both a FIB and a SEM)
+        if hasVA(self._detector, "scanner") and self._detector.scanner.value != self._emitter.name:
+            self._detector.scanner.value = self._emitter.name
+
         # update Hw settings to our own ROI
         self._applyROI()
 
-        super(SEMStream, self)._startAcquisition()
+        super()._startAcquisition()
 
     def _onDwellTime(self, value):
         self._updateAcquisitionTime()
@@ -444,6 +453,24 @@ class SEMStream(LiveStream):
         pxs_cor = md_det.get(model.MD_PIXEL_SIZE_COR, md_emt.get(model.MD_PIXEL_SIZE_COR, (1, 1)))
         return fov[0] * pxs_cor[0], fov[1] * pxs_cor[1]
 
+class SEMStream(ScannerStream):
+    """ Stream containing images obtained via Scanning electron microscope.
+
+    It basically knows how to activate the scanning electron and the detector.
+    Warning: do not use local .resolution and .translation, but use the ROI.
+    Local VA .resolution is supported, but only as read-only.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+
+class FIBStream(ScannerStream):
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FIB
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
