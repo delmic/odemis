@@ -67,14 +67,14 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.
               }
 
 CONFIG_FIB_SCANNER = {"name": "fib-scanner", "role": "ion", "channel": "ion2"}
-CONFIG_FIB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
+CONFIG_FIB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@0.0.0.0:4242",
                   "children": {"fib-scanner": CONFIG_FIB_SCANNER,
                                "stage": CONFIG_STAGE,
                                "detector": CONFIG_DETECTOR,
                                }
                   }
 
-CONFIG_DUAL_MODE_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
+CONFIG_DUAL_MODE_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@0.0.0.0:4242",
                     "children": {"scanner": CONFIG_SCANNER,
                                 "fib-scanner": CONFIG_FIB_SCANNER,
                                 "focus": CONFIG_FOCUS,
@@ -92,6 +92,8 @@ CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.1
                  }
 
 if TEST_NOHW == "sim":
+    CONFIG_FIB_SEM["address"] = "PYRO:Microscope@localhost:4242"
+    CONFIG_DUAL_MODE_SEM["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_SEM["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_MB_SEM["address"] = "PYRO:Microscope@localhost:4242"
 
