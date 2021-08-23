@@ -3366,6 +3366,10 @@ class FastEMCalibrationController(object):
 
         for btn in self.panel.buttons.values():
             btn.Bind(wx.EVT_BUTTON, self._on_button)
+            btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
+
+        # Only enable buttons for scintillators which have been selected in the chamber tab
+        tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
 
     def _on_button(self, evt):
         btn = evt.GetEventObject()
@@ -3382,6 +3386,14 @@ class FastEMCalibrationController(object):
             # Zoom to existing calibration region
             roc_ctrl = self.roc_ctrls[num]
         roc_ctrl.fit_view_to_bbox()
+
+    @call_in_wx_main
+    def _on_active_scintillators(self, evt):
+        for num, b in self.panel.buttons.items():
+            if num in self._tab_data.main.active_scintillators.value:
+                b.Enable(True)
+            else:
+                b.Enable(False)
 
 
 class FastEMROCController(object):
