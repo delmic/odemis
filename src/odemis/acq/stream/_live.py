@@ -27,7 +27,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq.align import FindEbeamCenter
-from odemis.model import MD_POS_COR, VigilantAttributeBase
+from odemis.model import MD_POS_COR, VigilantAttributeBase, StringEnumerated
 from odemis.util import img, conversion, fluo
 import threading
 import time
@@ -365,6 +365,11 @@ class SEMStream(LiveStream):
                 logging.exception("Failed to enable the blanker")
 
     def _startAcquisition(self, future=None):
+        if hasattr(self._detector.scanner, "value") and\
+                self._detector.scanner.value is not self._emitter.name:
+                    self._detector.scanner.value = self._emitter.name
+                    # TODO K.K. add waiting on switch complete or not?
+                    time.sleep(0.5)
         # update Hw settings to our own ROI
         self._applyROI()
 
@@ -376,6 +381,76 @@ class SEMStream(LiveStream):
     def _onResolution(self, value):
         self._updateAcquisitionTime()
 
+class FIBStream(LiveStream):
+    """ Stream containing images obtained via Scanning electron microscope.
+
+    It basically knows how to activate the FIB and the detector.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        # TODO K.K. update docstring and check if not extra args are inputted
+        """
+        detector (Detector):
+        emitter (Emitter): this is the fib scanner
+        """
+        super(FIBStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        # Actually use the ROI
+        self.roi.subscribe(self._onROI)
+
+    def _computeROISettings(self, roi):
+        """
+        roi (4 0<=floats<=1)
+        return:
+            res (2 int)
+            trans (2 floats)
+        """
+        # We should remove res setting from the GUI when this ROI is used.
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        shape = self._emitter.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        # resolution is the maximum resolution at the scale in proportion of the width
+        scale = self._getEmitterVA("scale").value
+        res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+               max(1, int(round(shape[1] * width[1] / scale[1]))))
+
+        return res, trans
+
+    def _applyROI(self):
+        """
+        Update the scanning area of the SEM according to the roi
+        Note: should only be called when active (because it directly modifies
+          the hardware settings)
+        """
+        res, trans = self._computeROISettings(self.roi.value)
+
+        # always in this order
+        if not self._emitter.resolution.readonly:
+            self._emitter.resolution.value = res
+
+        if not self._emitter.translation.readonly:
+            self._emitter.translation.value = trans
+
+    def _onROI(self, roi):
+        """
+        Called when the roi VA is updated
+        """
+        # only change hw settings if stream is active
+        # Note: we could also (un)subscribe whenever this changes, but it's
+        # simple like this.
+        if self.is_active.value:
+            self._applyROI()
+            self._updateAcquisitionTime()
+
+    def _startAcquisition(self):
+        # TODO K.K. add waiting on switch complete
+        if hasattr(self._detector.scanner, "value") and\
+                self._detector.scanner.value is not self._emitter.name:
+                    self._detector.scanner.value = self._emitter.name
+                    time.sleep(0.5)
+        super(FIBStream, self)._startAcquisition()
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"

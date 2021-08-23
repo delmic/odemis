@@ -1563,15 +1563,15 @@ class Detector(model.Detector):
 
                     # Wait for the acquisition to be received
                     logging.debug("Starting one image acquisition")
-                    try:
-                        if self._acq_wait_data(est_acq_time + 20):
-                            logging.debug("Stopping measurement early")
-                            self.stop_acquisition()
-                            break
-                    except TimeoutError as err:
-                        logging.error(err)
-                        self.stop_acquisition()
-                        break
+                    # try:
+                    #     if self._acq_wait_data(est_acq_time + 20):
+                    #         logging.debug("Stopping measurement early")
+                    #         self.stop_acquisition()
+                    #         break
+                    # except TimeoutError as err:
+                    #     logging.error(err)
+                    #     self.stop_acquisition()
+                    #     break
 
                     # Retrieve the image
                     image = self.parent.get_latest_image(self._scanner.channel)

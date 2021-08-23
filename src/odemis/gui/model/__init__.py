@@ -183,6 +183,7 @@ class MainGUIData(object):
         "tc-filter": "tc_filter",
         "slit-in-big": "slit_in_big",
         "sample-thermostat": "sample_thermostat",
+        "ion": "fib_scanner",
     }
 
     def __init__(self, microscope):
@@ -603,6 +604,9 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         if main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
+        if main.fib_scanner:
+            self.fibState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
         # history list of visited stage positions, ordered with latest visited
         # as last entry.
