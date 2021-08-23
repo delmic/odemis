@@ -44,6 +44,12 @@ RTOL_PROGRESS = 0.3
 
 
 def getCurrentGridLabel(current_pos, stage):
+    """
+    Detects which grid on the sample shuttle of meteor being viewed
+    current_pos (dict str->float): position of the stage
+    stage (Actuator): the stage component  
+    returns a label GRID_1 or GRID_2 
+    """
     current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
     if current_pos_label == SEM_IMAGING:
@@ -59,6 +65,12 @@ def getCurrentGridLabel(current_pos, stage):
 
 
 def getCurrentEnzelPositionLabel(current_pos, stage):
+    """
+    Detects the current stage position of enzel. 
+    current_pos (dict str->float): position of the stage
+    stage (Actuator): the stage component 
+    returns a label UNKNOWN, COATING, IMAGING, MILLING, LOADING or LOADING_PATH
+    """
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
     stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
@@ -108,6 +120,12 @@ def getCurrentEnzelPositionLabel(current_pos, stage):
 
 
 def getCurrentMeteorPositionLabel(current_pos, stage):
+    """
+    Detects the current stage position of meteor 
+    current_pos (dict str->float): position of the stage 
+    stage (Actuator): the stage component 
+    returns a label LOADING, SEM_IMAGIN, FM_IMAGING or UNKNOWN
+    """
     # meta data of meteor stage positions 
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -128,6 +146,7 @@ def getCurrentPositionLabel(current_pos, stage):
     """
     Determine where lies the current stage position
     :param current_pos: (dict str->float) Current position of the stage
+    :param stage (Actuator): the stage component 
     :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
     """
     role = model.getMicroscope().role
@@ -474,10 +493,10 @@ def _doCryoSwitchSamplePosition(future, target):
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rz'}
-            for stage_position in []:
-                if not required_axes.issubset(stage_position.keys()):
-                    raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
+            required_axes = {'z'}
+            for focuser_position in [focus_active, focus_deactive]:
+                if not required_axes.issubset(focuser_position.keys()):
+                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axes))
             current_pos = stage.position.value
             # To hold the ordered sub moves list
             sub_moves = []
@@ -486,13 +505,14 @@ def _doCryoSwitchSamplePosition(future, target):
             # get the current label 
             current_pos_label = getCurrentPositionLabel(current_pos, stage)
             # add the state machine of the meteor 
-            if current_pos_label == LOADING:
-                # if unknown/loading, and one of the imaging modes is pressed, then choose grid1 by default
+            if current_pos_label in [LOADING, SEM_IMAGING]:
+                # if loading, and sem button is pressed, then choose grid1 by default
                 if target in [SEM_IMAGING, GRID_1]:  
                     target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == FM_IMAGING:
+                elif target == FM_IMAGING and current_pos_label == LOADING:
+                    # if loading, and fm button is pressed, then choose grid1 by default
                     target_pos = transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]], stage.axes)
                     # park focus for safety 
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
@@ -500,18 +520,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                     sub_moves.append((focus, focus_active))
-                elif target == GRID_2:
-                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
-                    # TODO put the correct order of moves 
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-            elif current_pos_label == SEM_IMAGING:
-                if target == GRID_1:
-                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == GRID_2:
-                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == FM_IMAGING:
+                elif target == FM_IMAGING and current_pos_label == SEM_IMAGING:
                     target_pos = transformFromSEMToMeteor(current_pos, stage.axes)
                     # park focus for safety 
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
@@ -519,6 +528,10 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
                     sub_moves.append((focus, focus_active))
+                elif target == GRID_2:
+                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+                    # TODO put the correct order of moves 
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
             elif current_pos_label == FM_IMAGING:
                 if target == GRID_1:
                     # transform  the grid1 center, then use it as set point  
@@ -560,6 +573,8 @@ def _doCryoSwitchSamplePosition(future, target):
 
 
 def transformFromSEMToMeteor(pos, axes):
+    # TODO add docstring
+    # TODO check for all the required axes
     if not {"x", "y"}.issubset(axes):
         raise KeyError("The stage misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
@@ -570,6 +585,8 @@ def transformFromSEMToMeteor(pos, axes):
 
 
 def transformFromMeteorToSEM(pos, axes):
+    # TODO add docstring
+    # TODO check for all the required axes
     if not {"x", "y"}.issubset(axes):
         raise KeyError("The stage %s misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
