@@ -3388,9 +3388,9 @@ class FastEMCalibrationController(object):
         roc_ctrl.fit_view_to_bbox()
 
     @call_in_wx_main
-    def _on_active_scintillators(self, evt):
+    def _on_active_scintillators(self, scintillators):
         for num, b in self.panel.buttons.items():
-            if num in self._tab_data.main.active_scintillators.value:
+            if num in scintillators:
                 b.Enable(True)
             else:
                 b.Enable(False)
