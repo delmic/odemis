@@ -217,6 +217,8 @@ def _configure_overview_hw(scanner):
         scanner.rotation.value = SINGLE_BEAM_ROTATION_DEFAULT
         logging.warning("Scanner doesn't have SINGLE_BEAM_ROTATION metadata, using %s rad.",
                         scanner.rotation.value)
+    md[model.MD_ROTATION_COR] = -scanner.rotation.value
+    scanner.updateMetadata(md)
 
 
 def _run_overview_acquisition(f, stream, stage, area, live_stream):
