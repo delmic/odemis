@@ -589,6 +589,7 @@ class xrcpnl_tab_fastem_chamber(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.btn_pressure = xrc.XRCCTRL(self, "btn_pressure")
         self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
+        self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
@@ -5888,6 +5889,31 @@ def __init_resources():
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Pressure: </label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>10</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="pressure_label">
+                              <size>150,20</size>
+                              <value>...</value>
+                              <fg>#DDDDDD</fg>
+                              <bg>#333333</bg>
+                          </object>
+                        </object>
+                      </object>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                   </object>
                   <object class="sizeritem">
                       <object class="wxTextCtrl">
