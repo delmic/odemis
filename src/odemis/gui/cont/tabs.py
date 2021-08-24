@@ -1802,8 +1802,10 @@ class FastEMOverviewTab(Tab):
         if is_acquiring:
             self._stream_controller.enable(False)
             self._stream_controller.pause()
+            self._stream_controller.pauseStreams()
         else:
             self._stream_controller.resume()
+            # don't automatically resume streams
             self._stream_controller.enable(True)
 
     @classmethod
@@ -1813,6 +1815,14 @@ class FastEMOverviewTab(Tab):
             return 2
         else:
             return None
+
+    def Show(self, show=True):
+        super().Show(show)
+        if not show:
+            self._stream_controller.pauseStreams()
+
+    def terminate(self):
+        self._stream_controller.pauseStreams()
 
 
 class FastEMChamberTab(Tab):

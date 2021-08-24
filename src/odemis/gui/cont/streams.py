@@ -307,6 +307,12 @@ class StreamController(object):
 
         self.stream_panel.enable(True)
 
+    def pauseStream(self):
+        """ Pause (deactivate and stop updating) the stream """
+        if self.stream.should_update.value:
+            self.stream.is_active.value = False
+            self.stream.should_update.value = False
+
     def enable(self, enabled):
         """ Enable or disable all SettingEntries
         """
@@ -1362,24 +1368,34 @@ class StreamController(object):
     @call_in_wx_main
     def _on_btn_autofocus(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.focuser.applyAutofocus(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autobc(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoContrastBrightness(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autostigmation(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_autofunction_done(self, f):
         self.stream_panel.Enable(True)
+        self.resume()
+        # Don't automatically resume stream, autofunctions can take a long time.
+        # The user might not be at the system after the functions complete, so the stream
+        # would play idly.
 
 
 class StreamBarController(object):
