@@ -43,6 +43,39 @@ ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
 
 
+def getTargetPosition(target_pos_lbl, stage):
+    """
+    
+    """
+    stage_md = stage.getMetadata()
+    sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+    sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+    current_position = getCurrentPositionLabel(stage.position.value, stage)
+    if current_position in [LOADING, SEM_IMAGING]: 
+        if target_pos_lbl in [SEM_IMAGING, GRID_1]:
+            # if at loading, and sem is pressed, choose grid1 by default
+            end_pos = sem_grid1_pos
+        elif target_pos_lbl == FM_IMAGING:
+            if current_position == LOADING:
+                # if at loading and fm is pressed, choose grid1 by default
+                fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage.axes)
+            elif current_position == SEM_IMAGING:
+                fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage.axes)
+            end_pos = fm_target_pos
+        elif target_pos_lbl == GRID_2:
+            end_pos = sem_grid2_pos
+    elif current_position == FM_IMAGING:
+        if target_pos_lbl == GRID_1:
+            end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage.axes)
+        elif target_pos_lbl == GRID_2:
+            end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage.axes)
+        elif target_pos_lbl == SEM_IMAGING:
+            end_pos = transformFromMeteorToSEM(stage.position.value, stage.axes)                    
+    else:
+        end_pos = None 
+    return end_pos
+
+
 def getCurrentGridLabel(current_pos, stage):
     """
     Detects which grid on the sample shuttle of meteor being viewed
@@ -64,7 +97,7 @@ def getCurrentGridLabel(current_pos, stage):
         return
 
 
-def getCurrentEnzelPositionLabel(current_pos, stage):
+def _getCurrentEnzelPositionLabel(current_pos, stage):
     """
     Detects the current stage position of enzel. 
     current_pos (dict str->float): position of the stage
@@ -119,7 +152,7 @@ def getCurrentEnzelPositionLabel(current_pos, stage):
     return UNKNOWN
 
 
-def getCurrentMeteorPositionLabel(current_pos, stage):
+def _getCurrentMeteorPositionLabel(current_pos, stage):
     """
     Detects the current stage position of meteor 
     current_pos (dict str->float): position of the stage 
@@ -151,10 +184,10 @@ def getCurrentPositionLabel(current_pos, stage):
     """
     role = model.getMicroscope().role
     if role == 'enzel':
-        return getCurrentEnzelPositionLabel(current_pos, stage)
+        return _getCurrentEnzelPositionLabel(current_pos, stage)
     
     elif role == 'meteor':
-        return getCurrentMeteorPositionLabel(current_pos, stage)
+        return _getCurrentMeteorPositionLabel(current_pos, stage)
 
 
 def getCurrentAlignerPositionLabel(current_pos, align):
@@ -489,65 +522,46 @@ def _doCryoSwitchSamplePosition(future, target):
         try:
             # get the meta data 
             focus_md = focus.getMetadata()
-            stage_md = stage.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
-            # Fail early when required axes are not found on the positions metadata
-            required_axes = {'z'}
-            for focuser_position in [focus_active, focus_deactive]:
-                if not required_axes.issubset(focuser_position.keys()):
-                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axes))
-            current_pos = stage.position.value
             # To hold the ordered sub moves list
             sub_moves = []
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
             # get the current label 
-            current_pos_label = getCurrentPositionLabel(current_pos, stage)
-            # add the state machine of the meteor 
+            current_pos_label = getCurrentPositionLabel(stage.position.value, stage)
+            # get the set point position
+            target_pos = getTargetPosition(target, stage)
+            # determine the order of moves for the stage and focuser
             if current_pos_label in [LOADING, SEM_IMAGING]:
-                # if loading, and sem button is pressed, then choose grid1 by default
                 if target in [SEM_IMAGING, GRID_1]:  
-                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == FM_IMAGING and current_pos_label == LOADING:
-                    # if loading, and fm button is pressed, then choose grid1 by default
-                    target_pos = transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]], stage.axes)
+                elif target == FM_IMAGING:
                     # park focus for safety 
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    # TODO put the correct order of moves 
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                    sub_moves.append((focus, focus_active))
-                elif target == FM_IMAGING and current_pos_label == SEM_IMAGING:
-                    target_pos = transformFromSEMToMeteor(current_pos, stage.axes)
-                    # park focus for safety 
-                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                        sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                    sub_moves.append((focus, focus_active))
+                    if current_pos_label == LOADING:
+                        # TODO put the correct order of moves 
+                        sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                        sub_moves.append((focus, focus_active))
+                    elif current_pos_label == SEM_IMAGING:
+                        # TODO put the correct order of moves
+                        sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
+                        sub_moves.append((focus, focus_active))
                 elif target == GRID_2:
-                    target_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
             elif current_pos_label == FM_IMAGING:
                 if target == GRID_1:
-                    # transform  the grid1 center, then use it as set point  
-                    sem_grid1 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-                    fm_grid1 = transformFromSEMToMeteor(sem_grid1, stage.axes)
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, fm_grid1)))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == GRID_2:
-                    # transform the grid2 center then use it as target position 
-                    sem_grid2 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
-                    fm_grid2 = transformFromSEMToMeteor(sem_grid2, stage.axes)
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, fm_grid2)))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == SEM_IMAGING:
                     # park focus for safety 
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    target_pos = transformFromMeteorToSEM(current_pos, stage.axes)
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))  
             else:

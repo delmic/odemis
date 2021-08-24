@@ -73,7 +73,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, transformFromSEMToMeteor, transformFromMeteorToSEM
+from odemis.acq.move import GRID_1, LOADING, IMAGING, MILLING, COATING, UNKNOWN, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -2502,6 +2502,13 @@ class CryoChamberTab(Tab):
                 raise ValueError("The stage misses the 'SEM_IMAGING_RANGE' metadata.")
             if not model.MD_FM_IMAGING_RANGE in self._stage.getMetadata():
                 raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
+            # Fail early when required axes are not found on the positions metadata
+            focuser = self.tab_data_model.main.focus
+            focus_md = focuser.getMetadata()
+            required_axes = {'z'}
+            for focuser_position in focus_md.values():
+                if not required_axes.issubset(focuser_position.keys()):
+                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axes))
             # the meteor buttons 
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
@@ -2937,36 +2944,12 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             # determine the end position for the gauge 
-            stage_md = self._stage.getMetadata()
-            if current_position in [LOADING, SEM_IMAGING]:
-                # if at loading, set the end poisiton to grid1 center by default 
-                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-                if self._target_position == SEM_IMAGING:
-                    self._end_pos = sem_grid1_pos
-                elif self._target_position == FM_IMAGING and current_position == LOADING:
-                    fm_grid1 = transformFromSEMToMeteor(sem_grid1_pos, self._stage.axes)
-                    self._end_pos = fm_grid1
-                    if not self._display_meteor_pos_warning_msg(self._end_pos):
-                        return 
-                elif self._target_position == FM_IMAGING and current_position == SEM_IMAGING:
-                    self._end_pos = transformFromSEMToMeteor(self._stage.position.value, self._stage.axes)
-                    if not self._display_meteor_pos_warning_msg(self._end_pos):
-                        return 
-                elif self._target_position == GRID_1:
-                    self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-                elif self._target_position == GRID_2:
-                    self._end_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
-            elif current_position == FM_IMAGING:
-                if self._target_position == GRID_1:
-                    sem_grid1 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-                    self._end_pos = transformFromSEMToMeteor(sem_grid1, self._stage.axes)
-                elif self._target_position == GRID_2:
-                    sem_grid2 = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
-                    self._end_pos = transformFromSEMToMeteor(sem_grid2, self._stage.axes)
-                elif self._target_position == SEM_IMAGING:
-                    self._end_pos = transformFromMeteorToSEM(self._stage.position.value, self._stage.axes)                    
-            else:
-                self._end_pos = None 
+            self._end_pos = getTargetPosition(self._target_position, self._stage)
+            if not self._end_pos:
+                return
+            if self._target_position == FM_IMAGING and current_position in [LOADING, SEM_IMAGING]:
+                if not self._display_meteor_pos_warning_msg(self._end_pos):
+                    return
         return cryoSwitchSamplePosition(self._target_position)
 
     def _display_insertion_stick_warning_msg(self):
