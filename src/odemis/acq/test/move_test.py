@@ -400,15 +400,7 @@ class TestMeteorMove(unittest.TestCase):
             test.stop_backend()
 
     def move_to_loading_position(self):
-        f = model.CancellableFuture()
-        f._task_lock = threading.Lock()
-        f._task_state = RUNNING
-        f._running_subf = model.InstantaneousFuture()
-        filter_dict = lambda keys, d: {key: d[key] for key in keys}
-        sub_moves = []
-        sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, self.stage_loading)))
-        for component, sub_move in sub_moves:
-            run_sub_move(f, component, sub_move)
+        self.stage.moveAbs(self.stage_loading).result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(current_imaging_mode, LOADING)
 
