@@ -96,16 +96,14 @@ class TestCryoMove(unittest.TestCase):
         stage = self.stage
         align = self.aligner
         # Get the stage to loading position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
         # Align should be parked
         test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
-        f = cryoSwitchSamplePosition(IMAGING)
-        f.result()
+        cryoSwitchSamplePosition(IMAGING).result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
         # align should be in active position
         test.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
@@ -132,8 +130,7 @@ class TestCryoMove(unittest.TestCase):
         test.assert_pos_almost_equal(stage.position.value, self.stage_sem_imaging, atol=ATOL_LINEAR_POS, match_all=False)
 
         # Switch back to loading position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
 
     def test_align_switch_procedures(self):
@@ -167,10 +164,8 @@ class TestCryoMove(unittest.TestCase):
         align = self.aligner
         # Test tilting from imaging
         # Get the stage to imaging position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
-        f = cryoSwitchSamplePosition(IMAGING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
+        cryoSwitchSamplePosition(IMAGING).result()
 
         # Tilt the stage on rx only
         f = cryoTiltSample(rx=self.rx_angle)
@@ -193,8 +188,7 @@ class TestCryoMove(unittest.TestCase):
         Test it's not possible to do some disallowed switch movements
         """
         # Test tilting from loading
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         with self.assertRaises(ValueError):
             f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
             f.result()
@@ -204,8 +198,7 @@ class TestCryoMove(unittest.TestCase):
         Test cryoSwitchSamplePosition movement cancellation is handled correctly
         """
         stage = self.stage
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         f = cryoSwitchSamplePosition(IMAGING)
         time.sleep(2)
         cancelled = f.cancel()
@@ -214,8 +207,7 @@ class TestCryoMove(unittest.TestCase):
                                          atol=ATOL_LINEAR_POS)
 
         stage = self.stage
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         f = cryoSwitchSamplePosition(COATING)
         time.sleep(2)
         cancelled = f.cancel()
@@ -228,10 +220,8 @@ class TestCryoMove(unittest.TestCase):
         Test cryoTiltSample movement cancellation is handled correctly
         """
         stage = self.stage
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
-        f = cryoSwitchSamplePosition(IMAGING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
+        cryoSwitchSamplePosition(IMAGING).result()
         f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
         time.sleep(2)
         cancelled = f.cancel()
@@ -271,10 +261,7 @@ class TestCryoMove(unittest.TestCase):
         pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
         self.assertTrue(pos_label in (LOADING_PATH, UNKNOWN))
         # Move to loading position
-        f = cryoSwitchAlignPosition(LOADING)
-        f.result()
-        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
-        self.assertEqual(pos_label, LOADING)
+        self.test_move_aligner_to_target(LOADING)
 
         # Move to imaging position and cancel the movement before reaching there
         f = cryoSwitchAlignPosition(IMAGING)
@@ -288,6 +275,8 @@ class TestCryoMove(unittest.TestCase):
         unknown_pos['y'] += 0.005
         unknown_pos['z'] += 0.005
         self.aligner.moveAbs(unknown_pos).result()
+        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
+        self.assertEqual(pos_label, UNKNOWN)
         # moving to either imaging/alignment positions shouldn't be allowed
         with self.assertRaises(ValueError):
             f = cryoSwitchAlignPosition(IMAGING)
@@ -298,22 +287,20 @@ class TestCryoMove(unittest.TestCase):
             f.result()
 
         # Move to alignment position
-        f = cryoSwitchAlignPosition(LOADING)
-        f.result()
-        f = cryoSwitchAlignPosition(ALIGNMENT)
-        f.result()
-        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
-        self.assertEqual(pos_label, ALIGNMENT)
+        cryoSwitchAlignPosition(LOADING).result()
+        self.test_move_aligner_to_target(ALIGNMENT)
 
         # from alignment to loading
-        f = cryoSwitchAlignPosition(LOADING)
-        f.result()
+        cryoSwitchAlignPosition(LOADING).result()
 
         # Move to imaging position
-        f = cryoSwitchAlignPosition(IMAGING)
+        self.test_move_aligner_to_target(IMAGING)
+
+    def test_move_aligner_to_target(self, target):
+        f = cryoSwitchAlignPosition(target)
         f.result()
-        pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
-        self.assertEqual(pos_label, IMAGING)
+        pos_label = getCurrentAlignerPositionLabel(self.aligner.position.value, self.aligner)
+        self.assertEqual(pos_label, target)
 
     def test_get_current_position(self):
         """
@@ -321,8 +308,7 @@ class TestCryoMove(unittest.TestCase):
         """
         stage = self.stage
         # Move to loading position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, LOADING)
 
@@ -335,10 +321,8 @@ class TestCryoMove(unittest.TestCase):
         self.assertEqual(pos_label, LOADING_PATH)
 
         # Move to imaging position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
-        f = cryoSwitchSamplePosition(IMAGING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
+        cryoSwitchSamplePosition(IMAGING).result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
         self.assertEqual(pos_label, IMAGING)
 
@@ -355,8 +339,7 @@ class TestCryoMove(unittest.TestCase):
         self.assertEqual(pos_label, SEM_IMAGING)
 
         # Move to coating position
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         f = cryoSwitchSamplePosition(COATING)
         f.result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
@@ -374,15 +357,13 @@ class TestCryoMove(unittest.TestCase):
         Test behaviour of smaract 5dof stage when the linear axes are near the maximum range
         """
         # 1. Move to imaging position
-        f = cryoSwitchSamplePosition(IMAGING)
-        f.result()
+        cryoSwitchSamplePosition(IMAGING).result()
         # 2. Move the stage linear axes to their max range + move rx from 0
         self.focus.moveAbs(self.focus_deactive).result()
         self.stage.moveAbs({'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1], 'rx': 0.15}).result()
         # 3. Move to loading where the ordered submoves would start from rx/rx, resulting in an invalid move
         # exception if it's not handled
-        f = cryoSwitchSamplePosition(LOADING)
-        f.result()
+        cryoSwitchSamplePosition(LOADING).result()
         test.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
 

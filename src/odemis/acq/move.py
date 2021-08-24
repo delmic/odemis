@@ -35,8 +35,8 @@ from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, SEM_IMAGING = -1, 0, 1, 2, 3, 4, 5
-target_pos_str = {LOADING: "loading", IMAGING: "imaging", COATING: "coating", ALIGNMENT: "alignment",
-                  LOADING_PATH: "loading path", UNKNOWN: "unknown", SEM_IMAGING: "SEM imaging"}
+target_pos_str = {LOADING: "LOADING", IMAGING: "IMAGING", COATING: "COATING", ALIGNMENT: "ALIGNMENT",
+                  LOADING_PATH: "LOADING PATH", UNKNOWN: "UNKNOWN", SEM_IMAGING: "SEM IMAGING"}
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
@@ -281,6 +281,7 @@ def _doCryoSwitchAlignPosition(future, align, target):
             raise ValueError("Unknown target value %s." % target)
 
         for component, sub_move in sub_moves:
+            logging.info("Starting aligner movement from {} -> {}...".format(target_pos_str[current_label], target_pos_str[target]))
             run_sub_move(future, component, sub_move)
     except CancelledError:
         logging.info("_doCryoSwitchAlignPosition cancelled.")
@@ -356,7 +357,7 @@ def _doCryoSwitchSamplePosition(future, stage, align, target):
                     "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
 
             # Check if stage is not referenced:
-            # park aligner then reference the stage
+            # park aligner (move it to loading position) then reference the stage
             if not stage_referenced:
                 cryoSwitchAlignPosition(LOADING).result()
                 run_reference(future, stage)
@@ -398,6 +399,7 @@ def _doCryoSwitchSamplePosition(future, stage, align, target):
             raise ValueError("Unknown target value %s." % target)
 
         try:
+            logging.info("Starting sample movement from {} -> {}...".format(target_pos_str[current_label], target_pos_str[target]))
             # Park aligner to safe position before any movement
             if not _isNearPosition(align.position.value, align_deactive, align.axes):
                 cryoSwitchAlignPosition(LOADING).result()
