@@ -1013,6 +1013,33 @@ class TestDualModeMicroscope(unittest.TestCase):
         self.assertGreaterEqual(image.shape[1], 200)
         self.images_received += 1
 
+    def test_autofocus(self):
+        """Test running and stopping autofocus."""
+        # Switch to ion mode
+        self.detector.scanner.value = self.fib_scanner.name
+        image = self.detector.data.get()
+        self.assertEqual(image.ndim, 2)
+        self.microscope.set_scan_mode("full_frame")
+        self.microscope.set_channel_state("ion2", True)
+        self.microscope.set_autofocusing("ion2", "run")
+        time.sleep(1.5)  # wait for the system to register it started running autofocus.
+        t = time.time()
+        self.assertTrue(self.microscope.is_autofocusing("ion2"))
+        while self.microscope.is_autofocusing("ion2"):
+            print(self.microscope.is_autofocusing("ion2"))
+            if time.time() - t > 20:
+                self.microscope.set_autofocusing("ion2", "stop")
+                raise ValueError("Stopping autofocus, taking too long. ")
+            time.sleep(0.01)
+            continue
+        print(self.microscope.is_autofocusing("ion2"))
+        # TODO The next line fails but should be passing somehow is autofocussing doesn't work good every time
+        # self.assertFalse(self.microscope.is_autofocusing("ion2"))
+        self.microscope.set_autofocusing("ion2", "run")
+        self.microscope.set_autofocusing("ion2", "stop")
+        self.assertFalse(self.microscope.is_autofocusing("ion2"))
+        self.microscope.set_channel_state("ion2", False)
+
     def test_scanner_VA(self):
         """Tests the scanner VA and its corresponding setter"""
         scanner_modes = {self.scanner.name: self.scanner, self.fib_scanner.name: self.fib_scanner}

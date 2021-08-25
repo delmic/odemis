@@ -370,6 +370,7 @@ class SEMStream(LiveStream):
                     self._detector.scanner.value = self._emitter.name
                     # TODO K.K. add waiting on switch complete or not?
                     time.sleep(0.5)
+                    logging.warning("changed to SEM")
         # update Hw settings to our own ROI
         self._applyROI()
 
@@ -387,15 +388,16 @@ class FIBStream(LiveStream):
     It basically knows how to activate the FIB and the detector.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        # TODO K.K. update docstring and check if not extra args are inputted
+        # TODO K.K. update docstring for extra args that are inputted
         """
         detector (Detector):
         emitter (Emitter): this is the fib scanner
         """
         super(FIBStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        self.intensityRange.value = (0, 1)
 
         # Actually use the ROI
-        self.roi.subscribe(self._onROI)
+        # self.roi.subscribe(self._onROI)
 
     def _computeROISettings(self, roi):
         """
@@ -412,7 +414,8 @@ class FIBStream(LiveStream):
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # resolution is the maximum resolution at the scale in proportion of the width
-        scale = self._getEmitterVA("scale").value
+        # scale = self._getEmitterVA("scale").value
+        scale = (1.0, 1.0)
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
 
@@ -450,6 +453,12 @@ class FIBStream(LiveStream):
                 self._detector.scanner.value is not self._emitter.name:
                     self._detector.scanner.value = self._emitter.name
                     time.sleep(0.5)
+                    logging.warning("changed to FIB")
+
+        # TODO CHeck if we can use this for the stage.
+        # # update Hw settings to our own ROI
+        self._applyROI()
+
         super(FIBStream, self)._startAcquisition()
 
 MTD_EBEAM_SHIFT = "Ebeam shift"

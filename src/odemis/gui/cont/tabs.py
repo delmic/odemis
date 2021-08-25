@@ -866,10 +866,19 @@ class SecomStreamsTab(Tab):
                                              main_data.fib_scanner
             )
             tab_data.fib_stream = fib_stream
-            def add_fib_stream(**kwargs):
-                self._streambar_controller.addStream(fib_stream, **kwargs)
-            self._add_fib_stream = add_fib_stream
-            self._add_fib_stream(add_to_view=True, visible=True)
+            self._streambar_controller.addStream(fib_stream, add_to_view=True, visible=True, play=False)
+
+            # tab_data.emState.subscribe(self.onFibState)
+            # fib_stream = acqstream.FIBStream("Fib scanner",
+            #                                  main_data.sed,
+            #                                  main_data.sed.data,
+            #                                  main_data.fib_scanner
+            # )
+            # tab_data.fib_stream = fib_stream
+            # def add_fib_stream(**kwargs):
+            #     self._streambar_controller.addStream(fib_stream, **kwargs)
+            # self._add_fib_stream = add_fib_stream
+            # self._add_fib_stream(add_to_view=True, visible=True)
 
         # Create streams before state controller, so based on the chamber state,
         # the streams will be enabled or not.
@@ -984,9 +993,6 @@ class SecomStreamsTab(Tab):
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
-        if main_data.fib_scanner:
-            vpv[viewports[1]]['stream_classes'] = FIBStream  # Put the FIB on the second quadrant
-
         # If there are 6 viewports, we'll assume that the last one is an overview camera stream
         if len(viewports) == 6:
             logging.debug("Inserting Overview viewport")
@@ -1003,6 +1009,10 @@ class SecomStreamsTab(Tab):
                 if v.get("stream_classes") == EMStream:
                     v["fov_hw"] = main_data.ebeam
                     vp.canvas.fit_view_to_next_image = False
+
+        if main_data.fib_scanner:
+            vpv[viewports[1]]['stream_classes'] = FIBStream
+            vpv[viewports[1]].pop('stage')  # Don't control the stage since the pixel size/magnification is unknown.
 
         return vpv
 
@@ -1186,19 +1196,36 @@ class SecomStreamsTab(Tab):
         if state == guimod.STATE_ON:
             # Use the last SEM stream played
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, acqstream.FIBStream):
-                    fib_stream = s
+                if isinstance(s, acqstream.EMStream):
+                    sems = s
                     break
             else:  # Could happen if the user has deleted all the EM streams
-                sp = self._add_fib_stream(add_to_view=True, visible=True)
-                # sp.show_remove_btn(False)
-                fib_stream = sp.stream
+                sp = self._add_em_stream(add_to_view=True)
+                sp.show_remove_btn(False)
+                sems = sp.stream
 
-            self._streambar_controller.resumeStreams({fib_stream})
+            self._streambar_controller.resumeStreams({sems})
             # focus the view
-            self.view_controller.focusViewWithStream(fib_stream)
+            self.view_controller.focusViewWithStream(sems)
         else:
-            self._streambar_controller.pauseStreams(acqstream.FIBStream)
+            self._streambar_controller.pauseStreams(acqstream.EMStream)
+
+        # if state == guimod.STATE_ON:
+        #     # Use the last SEM stream played
+        #     for s in self.tab_data_model.streams.value:
+        #         if isinstance(s, acqstream.FIBStream):
+        #             fib_stream = s
+        #             break
+        #     else:  # Could happen if the user has deleted all the EM streams
+        #         sp = self._add_fib_stream(add_to_view=True, visible=True)
+        #         # sp.show_remove_btn(False)
+        #         fib_stream = sp.stream
+        #
+        #     self._streambar_controller.resumeStreams({fib_stream})
+        #     # focus the view
+        #     self.view_controller.focusViewWithStream(fib_stream)
+        # else:
+        #     self._streambar_controller.pauseStreams(acqstream.FIBStream)
 
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed

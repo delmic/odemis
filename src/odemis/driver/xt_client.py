@@ -1562,7 +1562,7 @@ class Detector(model.Detector):
                         est_acq_time = 5 * 60  # 5 minutes
 
                     # Wait for the acquisition to be received
-                    logging.debug("Starting one image acquisition")
+                    # logging.debug("Starting one image acquisition")
                     # try:
                     #     if self._acq_wait_data(est_acq_time + 20):
                     #         logging.debug("Stopping measurement early")
