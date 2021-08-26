@@ -456,7 +456,10 @@ class LocalizationTab(Tab):
             sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
             sem_stream_cont.stream_panel.show_remove_btn(False)
 
-        self.stage = self.tab_data_model.main.stage
+        if self.main_data.role == "enzel":
+            self.stage = self.tab_data_model.main.stage
+        elif self.main_data.role == "meteor":
+            self.stage = self.tab_data_model.main.stage_bare
         self.stage.position.subscribe(self._on_stage_pos, init=True)
 
     @property
@@ -634,12 +637,7 @@ class LocalizationTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        if self.main_data.role == 'meteor':
-            pos = self.main_data.stage_bare.position.value 
-            stage = self.tab_data_model.main.stage_bare
-        elif self.main_data.role == "enzel":
-            stage = self.stage
-        guiutil.enable_tab_on_stage_position(self.button, stage, pos, target=[IMAGING, FM_IMAGING])
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING, FM_IMAGING])
 
     def _on_stream_update(self, updated):
         """
@@ -2494,10 +2492,14 @@ class CryoChamberTab(Tab):
             # Fail early when required axes are not found on the positions metadata
             focuser = self.tab_data_model.main.focus
             focus_md = focuser.getMetadata()
-            required_axes = {'z'}
+            # take only the active and deactive position of the focuser
+            for md in focus_md.keys():
+                if md not in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE]:
+                    focus_md.pop(md)
+            required_axis = {'z'}
             for focuser_position in focus_md.values():
-                if not required_axes.issubset(focuser_position.keys()):
-                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axes))
+                if not required_axis.issubset(focuser_position.keys()):
+                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axis))
             # the meteor buttons 
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
@@ -2946,14 +2948,14 @@ class CryoChamberTab(Tab):
                             caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
         box.SetYesNoLabels("&Load", "&Cancel")
         ans = box.ShowModal()  # Waits for the window to be closed
-        return False if ans == wx.ID_NO else True 
+        return ans != wx.ID_NO
 
     def _display_meteor_pos_warning_msg(self, end_pos):
         x, y, z = end_pos.get('x'), end_pos.get('y'), end_pos.get('z')
         box = wx.MessageDialog(self.main_frame, "the sample stage will move to x_meteor = {x}, y_meteor = {y}, z_meteor = {z}, is this safe?".format(x=x, y=y, z=z),
                             caption="Moving to METEOR", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
-        return False if ans == wx.ID_NO else True 
+        return ans != wx.ID_NO
 
     def _perform_axis_relative_movement(self, target_button):
         """

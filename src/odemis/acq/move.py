@@ -45,7 +45,10 @@ RTOL_PROGRESS = 0.3
 
 def getTargetPosition(target_pos_lbl, stage):
     """
-    
+    Returns the position that the stage would go to.
+    target_pos_lbl (int): a lable representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+    stage (Actuator): a stage component 
+    returns (dict->float): the end position of the stage
     """
     stage_md = stage.getMetadata()
     sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
@@ -179,7 +182,7 @@ def getCurrentPositionLabel(current_pos, stage):
     """
     Determine where lies the current stage position
     :param current_pos: (dict str->float) Current position of the stage
-    :param stage (Actuator): the stage component 
+    :param stage: (Actuator) the stage component 
     :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
     """
     role = model.getMicroscope().role
@@ -535,6 +538,9 @@ def _doCryoSwitchSamplePosition(future, target):
             # determine the order of moves for the stage and focuser
             if current_pos_label in [LOADING, SEM_IMAGING]:
                 if target in [SEM_IMAGING, GRID_1]:  
+                    # park the focuser for safety 
+                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
+                        sub_moves.append((focus, focus_deactive))
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == FM_IMAGING:
@@ -554,9 +560,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # TODO put the correct order of moves 
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
             elif current_pos_label == FM_IMAGING:
-                if target == GRID_1:
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == GRID_2:
+                if target in (GRID_1, GRID_2):
                     sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 elif target == SEM_IMAGING:
                     # park focus for safety 
@@ -605,7 +609,6 @@ def transformFromMeteorToSEM(pos, axes):
         raise KeyError("The stage %s misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
     # TODO put here the formula's for calculating the sem positions from meteor position 
-    transformed_pos = pos.copy()
     transformed_pos["x"]=pos['x']-0.03
     transformed_pos['y']=pos["y"]-0.005
     return transformed_pos

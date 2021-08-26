@@ -189,7 +189,6 @@ MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle betwee
 MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
 MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
 MD_SAMPLE_CENTERS = "Centers position of grids"
-MD_GRID_SHIFT = "Shift value between grids"
 MD_SEM_IMAGING_RANGE = "SEM imaging range"
 MD_FM_IMAGING_RANGE = "FM imaging range"
 
