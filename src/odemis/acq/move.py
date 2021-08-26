@@ -61,19 +61,19 @@ def getTargetPosition(target_pos_lbl, stage):
         elif target_pos_lbl == FM_IMAGING:
             if current_position == LOADING:
                 # if at loading and fm is pressed, choose grid1 by default
-                fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage.axes)
+                fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
             elif current_position == SEM_IMAGING:
-                fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage.axes)
+                fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage)
             end_pos = fm_target_pos
         elif target_pos_lbl == GRID_2:
             end_pos = sem_grid2_pos
     elif current_position == FM_IMAGING:
         if target_pos_lbl == GRID_1:
-            end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage.axes)
+            end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
         elif target_pos_lbl == GRID_2:
-            end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage.axes)
+            end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
-            end_pos = transformFromMeteorToSEM(stage.position.value, stage.axes)                    
+            end_pos = transformFromMeteorToSEM(stage.position.value, stage)                    
     else:
         end_pos = None 
     return end_pos
@@ -88,13 +88,15 @@ def getCurrentGridLabel(current_pos, stage):
     """
     current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
+    grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+    grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
     if current_pos_label == SEM_IMAGING:
-        distance_to_grid1 = _getDistance(current_pos, stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]])
-        distance_to_grid2 = _getDistance(current_pos, stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]])
+        distance_to_grid1 = _getDistance(current_pos, grid1_pos)
+        distance_to_grid2 = _getDistance(current_pos, grid2_pos)
         return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1 
     elif current_pos_label == FM_IMAGING:
-        distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]], stage.axes))
-        distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]], stage.axes))
+        distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
+        distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
     else: 
         return
@@ -590,27 +592,29 @@ def _doCryoSwitchSamplePosition(future, target):
                 future._task_state = FINISHED
 
 
-def transformFromSEMToMeteor(pos, axes):
+def transformFromSEMToMeteor(pos, stage):
     # TODO add docstring
     # TODO check for all the required axes
-    if not {"x", "y"}.issubset(axes):
+    if not {"x", "y"}.issubset(stage.axes):
         raise KeyError("The stage misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
+    pos_cor = stage.getMetadata()[model.MD_POS_COR]
     # TODO put here the formula's for calculating the meteor positions from sem position
-    transformed_pos["x"]=pos['x']+0.03
-    transformed_pos['y']=pos["y"]+0.005
+    transformed_pos["x"] = pos['x']+pos_cor["x"]
+    transformed_pos['y'] = pos["y"]+pos_cor["y"]
     return transformed_pos
 
 
-def transformFromMeteorToSEM(pos, axes):
+def transformFromMeteorToSEM(pos, stage):
     # TODO add docstring
     # TODO check for all the required axes
-    if not {"x", "y"}.issubset(axes):
+    if not {"x", "y"}.issubset(stage.axes):
         raise KeyError("The stage %s misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
-    # TODO put here the formula's for calculating the sem positions from meteor position 
-    transformed_pos["x"]=pos['x']-0.03
-    transformed_pos['y']=pos["y"]-0.005
+    pos_cor = stage.getMetadata()[model.MD_POS_COR]
+    # TODO put here the formula's for calculating the sem positions from meteor position
+    transformed_pos["x"] = pos['x']-pos_cor["x"]
+    transformed_pos['y'] = pos["y"]-pos_cor["y"]
     return transformed_pos
 
 
