@@ -330,7 +330,6 @@ class AxisLegend(wx.Panel):
         self._lo_ellipsis = False
         self._hi_ellipsis = False
         self._lock_va = None
-        self._feature_toggle_va = None
 
         # Explicitly set the min size
         if self._orientation == wx.HORIZONTAL:
