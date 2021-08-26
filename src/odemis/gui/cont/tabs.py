@@ -2414,6 +2414,8 @@ class CryoChamberTab(Tab):
                 raise ValueError("The stage misses the 'SEM_IMAGING_RANGE' metadata.")
             if not model.MD_FM_IMAGING_RANGE in self._stage.getMetadata():
                 raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
+            if not model.MD_POS_COR in self._stage.getMetadata():
+                raise ValueError("The stage misses the 'POS_COR' metadata.")
             # Fail early when required axes are not found on the positions metadata
             focuser = self.tab_data_model.main.focus
             focus_md = focuser.getMetadata()
