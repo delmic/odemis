@@ -7,6 +7,7 @@ ENZEL-Sim: {
         "EBeam Focus",
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective",
+        "5DOF Stage", "Global 5DOF Aligner",
         "Objective Aligner", "Optical Focus",
     ],
 }
@@ -283,6 +284,17 @@ ENZEL-Sim: {
   # once, it may be very hard for the user to find again the alignment position.
   # Instead, every time Odemis is restarted, the default "okayish" position is
   # used.
+}
+
+# Special component to provide control of the 5DOF in a global reference frame
+"Global 5DOF Aligner": {
+  class: actuator.MultiplexActuator,
+  role: global5DOF,
+  affects: [ "Camera", "SEM E-beam Full" ],
+  dependencies: { "x": "5DOF Stage", "y": "Stage Z Global", "z": "Stage Z Global" },
+  init: {
+    axes_map: { "x": "x", "y": "x", "z": "y" },
+  }
 }
 
 # Axes should be synchronized with the camera
