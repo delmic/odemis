@@ -421,7 +421,8 @@ def _doCryoSwitchSamplePosition(future, target):
     role = model.getMicroscope().role
     if role == "enzel":
         try:
-            # get the aligner object
+            # get the stage and aligner objects
+            stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
             stage_md = stage.getMetadata()
             align_md = align.getMetadata()
@@ -525,6 +526,9 @@ def _doCryoSwitchSamplePosition(future, target):
 
     elif role == "meteor":
         try:
+            # get the focus and stage components 
+            focus = model.getComponent(role='focus')
+            stage = model.getComponent(role='stage-bare')
             # get the meta data 
             focus_md = focus.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
