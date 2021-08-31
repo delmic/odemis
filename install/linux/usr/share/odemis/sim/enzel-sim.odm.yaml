@@ -7,7 +7,7 @@ ENZEL-Sim: {
         "EBeam Focus",
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective",
-        "5DOF Stage", "Global 5DOF Aligner",
+        "5DOF Stage", "Stage Global",
         "Objective Aligner", "Optical Focus",
     ],
 }
@@ -286,12 +286,12 @@ ENZEL-Sim: {
   # used.
 }
 
-# Special component to provide control of the 5DOF in a global reference frame
-"Global 5DOF Aligner": {
+# Special component to provide control of the 5DOF in a global reference frame (works only with rx = 28 degrees)
+"Stage Global": {
   class: actuator.MultiplexActuator,
-  role: global5DOF,
+  role: stage-global,
   affects: [ "Camera", "SEM E-beam Full" ],
-  dependencies: { "x": "5DOF Stage", "y": "Stage Z Global", "z": "Stage Z Global" },
+  dependencies: { "x": "5DOF Stage", "y": "Stage YZ Global", "z": "Stage YZ Global" },
   init: {
     axes_map: { "x": "x", "y": "x", "z": "y" },
   }
@@ -365,8 +365,8 @@ ENZEL-Sim: {
     ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
   },
 }
-# to control the stage Z in global reference frame while the stage is tilted
-"Stage Z Global": {
+# Provides control of the stage in a global reference frame for the axis Y and Z when the stage is tilted
+"Stage YZ Global": {
   class: actuator.ConvertStage,
   role: null,
   dependencies: {
