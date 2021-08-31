@@ -208,6 +208,11 @@ class Scanner(model.Emitter):
                           unit="A")
         self.accelVoltage = model.FloatContinuous(10e3, (1e3, 30e3), unit="V")
 
+        # Pretend it's ready to acquire an image
+        self.power = model.BooleanVA(True)
+        # Blanker has a None = "auto" mode which automatically blanks when not scanning
+        self.blanker = model.VAEnumerated(None, choices={True: 'blanked', False: 'unblanked', None: 'auto'})
+
     def _onHFV(self, hfv):
         self._updatePixelSize()
         self._updateDepthOfField()
@@ -496,6 +501,12 @@ class Detector(model.Detector):
                 pos = self.parent._focus.position.value['z']
                 dist = abs(pos - self.parent._focus._good_focus) * 1e4
                 sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
+
+            if not scanner.power.value:
+                sim_img[:] = 0
+            elif scanner.blanker.value:  # None (auto) and False (unblank) are handled the same here
+                # Leave a tiny bit of signal
+                numpy.multiply(sim_img, 0.001, out=sim_img, casting="unsafe")
 
             # update fake output metadata
             metadata[model.MD_POS] = updated_phy_pos

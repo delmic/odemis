@@ -89,9 +89,9 @@ class TestCalibration(unittest.TestCase):
             self.skipTest("Running backend found")
 
     def _move_to_vacuum(self):
-        pressures = self.chamber.axes["pressure"].choices
+        pressures = self.chamber.axes["vacuum"].choices
         vacuum_pressure = min(pressures.keys())
-        f = self.chamber.moveAbs({"pressure": vacuum_pressure})
+        f = self.chamber.moveAbs({"vacuum": vacuum_pressure})
         f.result()
 
     # @unittest.skip("skip")
