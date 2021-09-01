@@ -184,35 +184,53 @@ class TestAcquisitionServer(unittest.TestCase):
                 1 / clock_freq)
 
     def test_externalStorageURL_VA(self):
-        # Set default URL
+        """Test the external storage URL VA.
+        Note: Try to choose examples that are only triggering one of the checks and none of the others!"""
+
         test_url = 'ftp://username:password@127.0.0.1:5000/directory/sub-directory'
         self.ASM_manager.externalStorageURL.value = test_url
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
-        # Test illegal scheme
+        # Special cases that parser does not handle correctly - incorrect splits (1st if statement)
+        # Test incorrect characters in host
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'wrong://username:password@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.?1:5000/directory'
+        # Test '@' duplicated in url
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.hostname to be None
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000@/directory'
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.username to be None
+            self.ASM_manager.externalStorageURL.value = 'ftp:@//username:password@127.0.0.1:5000/directory'
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.scheme to be an empty string
+            self.ASM_manager.externalStorageURL.value = 'ftp@://username:password@127.0.0.1:5000/directory'
+        # TODO: example below not captured yet! There is no check yet, that verifies the host being 4 numbers
+        # with self.assertRaises(ValueError):
+        #     self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0:.1:5000/directory'
+        # Test additional '/' in host (captured by 6th if statement)
+        with self.assertRaises(ValueError):
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0/.1:5000/directory'
 
-        # Test illegal character in user
+        # Test incorrect scheme (2nd if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:password@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL.value = 'incorrectscheme://username:password@127.0.0.1:5000/directory'
 
-        # Test illegal characters in password
+        # Test incorrect character in user name (3rd  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:testwrong%$word@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL.value = 'ftp://incorrect()user:password@127.0.0.1:5000/directory'
 
-        # Test illegal character in host
+        # Test incorrect character in password (4th  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@non-test-%-able/Test_images'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:incorrect()password@127.0.0.1:5000/directory'
 
-        # Test illegal characters in path
+        # Test incorrect character in host (5th  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000/Inval!d~Path'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@incorrecthost.().0.0/directory'
+
+        # Test incorrect character in path (6th  if statement)
+        with self.assertRaises(ValueError):
+            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000/incorrect:path'
 
     def test_assembleCalibrationMetadata(self):
         MAX_NMBR_POINTS = 4000  # Constant maximum number of setpoints
@@ -341,37 +359,32 @@ class TestAcquisitionServer(unittest.TestCase):
         self.ASM_manager.calibrationMode.value = False
 
     def test_checkMegaFieldExists(self):
-        """
-        Testing basics of checkMegaFieldExists functionality.
-        """
-        ASM = self.ASM_manager
-        # Set dwell time to minimum so scanning of an image is as fast.
+        """Check if a megafield exists on the external storage or not."""
+
+        # Set dwell time to minimum so scanning of an image is fast.
         self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
-        # In the "setUp" method the megafield id is (re)set everytime when te test is stared to a string which contains
-        # the current time i.e. time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S").
-        mega_field_id = self.MPPC.filename.value
-        folder_of_image = urlparse(ASM.externalStorageURL.value).path
+
+        file_name = self.MPPC.filename.value  # file name (megafield id)
+        path = urlparse(self.ASM_manager.externalStorageURL.value).path
 
         dataflow = self.MPPC.data
-        image = dataflow.get()  # Get an image so it can be check if that megafield exists
+        image = dataflow.get()  # acquire a small megafield (it is just a single field)
+        time.sleep(1)  # wait a bit until image is offloaded to the external storage
 
-        starting_time = time.time()
-        image_received = False
-        while not image_received:
-            image_received = ASM.checkMegaFieldExists(mega_field_id, folder_of_image)
-            time.sleep(1.0)
-            if time.time() - starting_time > 45:
-                # Wait a while for the image to be taken and saved. Break if saving image takes too much time.
-                break
-
+        # check if just acquired megafield exists on external storage
+        image_received = self.ASM_manager.checkMegaFieldExists(file_name, path)
         self.assertTrue(image_received)
 
-        # This image name contains invalid characters and should therefore not exist.
-        image_received = ASM.checkMegaFieldExists("wrong_mega_field_id_#@$", folder_of_image)
-        self.assertFalse(image_received)
+        # request to check for filename containing invalid characters
+        with self.assertRaises(ValueError):
+            self.ASM_manager.checkMegaFieldExists("wrong_mega_field_id_#@$", path)
 
-        # This storage directory contains invalid characters and should therefore not exist.
-        image_received = ASM.checkMegaFieldExists(mega_field_id, "wrong_storage_dir_@#$")
+        # request to check for path on external storage containing invalid characters
+        with self.assertRaises(ValueError):
+            self.ASM_manager.checkMegaFieldExists(file_name, "wrong_storage_dir_@#$")
+
+        # check for a megafield which should not be on external storage
+        image_received = self.ASM_manager.checkMegaFieldExists("1900-13-40-100-1000-10", "test-from-last-century/test")
         self.assertFalse(image_received)
 
     def test_AsmApiException(self):
@@ -893,6 +906,15 @@ class TestMPPC(unittest.TestCase):
         # Raise an error if invalid filename is provided
         with self.assertRaises(ValueError):
             self.MPPC.filename.value = "@testing_file_name"
+
+    def test_subdirectory_VA(self):
+        """Testing the sub-directory on external storage VA."""
+        self.MPPC.subdirectory.value = "test_dir/another_test_dir"
+        self.assertEqual(self.MPPC.subdirectory.value, "test_dir/another_test_dir")
+
+        # Raise an error if invalid sub-directories are provided
+        with self.assertRaises(ValueError):
+            self.MPPC.subdirectory.value = "@testing_sub_directory"
 
     def test_acqDelay_VA(self):
         max_acqDelay = self.MPPC.acqDelay.range[1]
