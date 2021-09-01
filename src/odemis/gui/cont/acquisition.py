@@ -1411,6 +1411,8 @@ class FastEMAcquiController(object):
         self.txt_num_rois = self._tab_panel.txt_num_rois
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.acq_future = None  # ProgressiveBatchFuture
+        self._fs_connector = None  # ProgressiveFutureConnector
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -1542,17 +1544,17 @@ class FastEMAcquiController(object):
         self.gauge_acq.Value = 0
 
         # Acquire ROAs for all projects
+        fs = {}
         for p in self._tab_data_model.projects.value:
             ppath = os.path.join(self.path, p.name.value)
             for roa in p.roas.value:
                 f = fastem.acquire(roa, ppath)
-                f.add_done_callback(self.increase_acq_progress)
+                t = fastem.estimateTime([roa])  # TODO: replace with new time estimate once acquisition is implemented
+                fs[f] = t
 
-        f.add_done_callback(self.on_acquisition_done)
-
-    def increase_acq_progress(self, f):
-        # TODO: improve progress estimation
-        self.gauge_acq.Value += 1
+        self.acq_future = model.ProgressiveBatchFuture(fs)
+        self._fs_connector = ProgressiveFutureConnector(self.acq_future, self.gauge_acq, self.lbl_acqestimate)
+        self.acq_future.add_done_callback(self.on_acquisition_done)
 
     def on_cancel(self, evt):
         """
@@ -1573,6 +1575,8 @@ class FastEMAcquiController(object):
         self._tab_panel.Layout()
         self.lbl_acqestimate.SetLabel("Acquisition done.")
         self._main_data_model.is_acquiring.value = False
+        self.acq_future = None
+        self._fs_connector = None
         try:
             future.result()
             self._reset_acquisition_gui()
@@ -1603,7 +1607,8 @@ class FastEMOverviewAcquiController(object):
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_sparc_acquire
         self.btn_cancel = self._tab_panel.btn_sparc_cancel
-        self.acq_futures = []  # All acquisitions running
+        self.acq_future = None  # ProgressiveBatchFuture
+        self._fs_connector = None  # ProgressiveFutureConnector
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
         self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
@@ -1726,6 +1731,7 @@ class FastEMOverviewAcquiController(object):
         self.gauge_acq.Value = 0
 
         # Acquire ROAs for all projects
+        acq_futures = {}
         for num in self._tab_data_model.selected_scintillators.value:
             center = self._tab_data_model.main.scintillator_positions[num]
             sz = self._tab_data_model.main.scintillator_size
@@ -1733,49 +1739,39 @@ class FastEMOverviewAcquiController(object):
                       center[0] + sz[0] / 2, center[1] + sz[1] / 2)
             try:
                 f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+                t = fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
             except Exception:
                 logging.exception("Failed to start overview acquisition")
                 # Try acquiring the other
                 continue
 
-            def acq_done(future, num=num):
-                if future in self.acq_futures:
-                    self.acq_futures.remove(future)
-                self.on_acquisition_done(future, num)
+            f.add_done_callback(lambda f: self.on_acquisition_done(f, num=num))
+            acq_futures[f] = t
 
-            f.add_done_callback(acq_done)
-
-            self.acq_futures.append(f)
-
-        if self.acq_futures:
-            self.acq_futures[-1].add_done_callback(self.full_acquisition_done)
+        if acq_futures:
+            self.acq_future = model.ProgressiveBatchFuture(acq_futures)
+            self.acq_future.add_done_callback(self.full_acquisition_done)
+            self._fs_connector = ProgressiveFutureConnector(self.acq_future, self.gauge_acq, self.lbl_acqestimate)
         else:  # In case all acquisitions failed to start
             self._main_data_model.is_acquiring.value = False
             self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
-
-    @call_in_wx_main
-    def increase_acq_progress(self, f):
-        # TODO: improve progress estimation
-        self.gauge_acq.Value += 1
 
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
         """
-        if not self.acq_futures:
+        if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
             return
 
-        for f in self.acq_futures:
-            f.cancel()
+        self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
     def on_acquisition_done(self, future, num):
         """
         Callback called when the one overview image acquisition is finished.
         """
-        self.increase_acq_progress(None)
         try:
             da = future.result()
         except CancelledError:
