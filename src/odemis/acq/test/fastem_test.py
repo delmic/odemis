@@ -72,7 +72,7 @@ class TestFASTEMAcquisition(unittest.TestCase):
     def test_overview_acquisition(self):
         s = stream.SEMStream("Single beam", self.sed, self.sed.data, self.ebeam,
                              focuser=self.efocuser,  # Not used during acquisition, but done by the GUI
-                             hwemtvas={"scale", "resolution", "dwellTime", "horizontalFoV"})
+                             hwemtvas={"scale", "dwellTime", "horizontalFoV"})
         # This should be used by the acquisition
         s.dwellTime.value = 1e-6  # s
 
@@ -82,8 +82,8 @@ class TestFASTEMAcquisition(unittest.TestCase):
 
         # Known position of the center scintillator
         scintillator5_area = (-0.007, -0.007, 0.007, 0.007)  # l, b, r, t
-        # Small area for DEBUG (2x2)
-        # scintillator5_area = (-0.001, -0.001, 0.001, 0.001)  # l, b, r, t
+        # Small area for DEBUG (3x3)
+        # scintillator5_area = (-0.002, -0.002, 0.002, 0.002)  # l, b, r, t
 
         est_time = fastem.estimateTiledAcquisitionTime(s, self.stage, scintillator5_area)
         # self.assertGreater(est_time, 10)  # It should take more than 10s! (expect ~5 min)
