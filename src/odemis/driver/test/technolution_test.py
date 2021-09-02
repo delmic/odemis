@@ -243,6 +243,29 @@ class TestAcquisitionServer(unittest.TestCase):
             self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0.1:5000/incorrect:path',
                                                            force_write=True)
 
+    def test_getTotalLineScanTime(self):
+        """Check that the time for scanning one line of pixels in a single field image is calculated correctly."""
+
+        # choose example value so that line scan time is not integer multiple of descanner clock period
+        self.EBeamScanner.dwellTime.value = 430e-09
+        acq_dwell_time = self.EBeamScanner.dwellTime.value
+        resolution = self.MPPC.cellCompleteResolution.value[0]  # including overscanned pixels
+        flyback_time = self.MirrorDescanner.physicalFlybackTime
+
+        # calculate the expected time for one line scan with the above HW settings
+        line_scan_time = acq_dwell_time * resolution
+        # check if line scan time is integer multiple of descanner clock period
+        remainder_scanning_time = line_scan_time % self.MirrorDescanner.clockPeriod.value
+        if remainder_scanning_time is not 0:
+            # make line scan time an integer multiple of the clock period by adding the extra time needed
+            flyback_time = flyback_time + (self.MirrorDescanner.clockPeriod.value - remainder_scanning_time)
+        exp_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # round to prevent floating point errors
+
+        # get the time for one line scan for the current HW settings
+        line_scan_time = self.ASM_manager.getTotalLineScanTime()
+
+        self.assertEqual(exp_line_scan_time, line_scan_time)
+
     def test_assembleCalibrationMetadata(self):
         MAX_NMBR_POINTS = 4000  # Constant maximum number of setpoints
         # TODO MAX_NMBR_POINT value of 4000 is sufficient for the entire range of the dwell time because the maximum
@@ -252,86 +275,77 @@ class TestAcquisitionServer(unittest.TestCase):
         descanner = self.MirrorDescanner
         scanner = self.EBeamScanner
         ASM = self.ASM_manager
-        mppc = self.MPPC
 
-        # Test repeatably and randomly over the range so possible floating point error are found.
-        for test_repetition in range(0, 1000):
-            # Check randomly all the options of the dwell time allowed.
-            minimum_dwell_time = scanner.dwellTime.range[0]
-            random_dwell_time = numpy.round(numpy.random.random() * scanner.dwellTime.range[1], 9)
-            scanner.dwellTime.value = max(random_dwell_time, minimum_dwell_time)
+        # choose example value so that line scan time is not integer multiple of descanner clock period
+        scanner.dwellTime.value = 430e-09
+        minimum_dwell_time = scanner.dwellTime.range[0]
+        random_dwell_time = numpy.round(numpy.random.random() * scanner.dwellTime.range[1], 9)
+        scanner.dwellTime.value = max(random_dwell_time, minimum_dwell_time)
 
-            line_scan_time = scanner.dwellTime.value * mppc.cellCompleteResolution.value[0]
-            remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
-            if remainder_scanning_time is not 0:
-                # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
-                # line scan time is equal to a equal to a whole multiple of the descan clock period
-                flyback_time = descanner.physicalFlybackTime + (descanner.clockPeriod.value - remainder_scanning_time)
+        # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
+        total_line_scan_time = self.ASM_manager.getTotalLineScanTime()
 
-            # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
-            total_line_scan_time = line_scan_time + flyback_time
+        calibration_parameters = ASM._assembleCalibrationMetadata()
 
-            calibration_parameters = ASM._assembleCalibrationMetadata()
+        # Check types of calibration parameters (output send to the ASM)
+        self.assertIsInstance(calibration_parameters, CalibrationLoopParameters)
+        self.assertIsInstance(calibration_parameters.descan_rotation, float)
+        self.assertIsInstance(calibration_parameters.x_descan_offset, int)
+        self.assertIsInstance(calibration_parameters.y_descan_offset, int)
+        self.assertIsInstance(calibration_parameters.dwell_time, int)
+        self.assertIsInstance(calibration_parameters.scan_rotation, float)
+        self.assertIsInstance(calibration_parameters.x_scan_delay, int)
+        self.assertIsInstance(calibration_parameters.x_scan_offset, float)
+        self.assertIsInstance(calibration_parameters.y_scan_offset, float)
 
-            # Check types of calibration parameters (output send to the ASM)
-            self.assertIsInstance(calibration_parameters, CalibrationLoopParameters)
-            self.assertIsInstance(calibration_parameters.descan_rotation, float)
-            self.assertIsInstance(calibration_parameters.x_descan_offset, int)
-            self.assertIsInstance(calibration_parameters.y_descan_offset, int)
-            self.assertIsInstance(calibration_parameters.dwell_time, int)
-            self.assertIsInstance(calibration_parameters.scan_rotation, float)
-            self.assertIsInstance(calibration_parameters.x_scan_delay, int)
-            self.assertIsInstance(calibration_parameters.x_scan_offset, float)
-            self.assertIsInstance(calibration_parameters.y_scan_offset, float)
+        # Check descan setpoints
+        self.assertIsInstance(calibration_parameters.x_descan_setpoints, list)
+        self.assertIsInstance(calibration_parameters.y_descan_setpoints, list)
+        for x_setpoint, y_setpoint in zip(calibration_parameters.x_descan_setpoints,
+                                          calibration_parameters.y_descan_setpoints):
+            self.assertIsInstance(x_setpoint, int)
+            self.assertIsInstance(y_setpoint, int)
 
-            # Check descan setpoints
-            self.assertIsInstance(calibration_parameters.x_descan_setpoints, list)
-            self.assertIsInstance(calibration_parameters.y_descan_setpoints, list)
-            for x_setpoint, y_setpoint in zip(calibration_parameters.x_descan_setpoints,
-                                              calibration_parameters.y_descan_setpoints):
-                self.assertIsInstance(x_setpoint, int)
-                self.assertIsInstance(y_setpoint, int)
+        # Check if the time interval used for the calculation of the descanner setpoints is equal to the
+        # descanner clock period.
+        x_descan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_descan_setpoints)
+        self.assertEqual(numpy.round(x_descan_setpoints_time_interval, 10) % descanner.clockPeriod.value, 0,
+                         "Time interval used for the descanner setpoints is not equal to the descanner clock "
+                         "period")
 
-            # Check if the time interval used for the calculation of the descanner setpoints is equal to the
-            # descanner clock period.
-            x_descan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_descan_setpoints)
-            self.assertEqual(numpy.round(x_descan_setpoints_time_interval, 10) % descanner.clockPeriod.value, 0,
-                             "Time interval used for the descanner setpoints is not equal to the descanner clock "
-                             "period")
+        # Check if the total scanning time is equal to the total scanning time send to the ASM
+        descan_derived_total_scanning_time = descanner.clockPeriod.value \
+                                             * len(calibration_parameters.x_descan_setpoints)
+        if not almost_equal(descan_derived_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
+            raise ValueError("Total descan time implied by the setpoints send to the ASM is not equal to the "
+                             "scanning time set by the VA's.")
 
-            # Check if the total scanning time is equal to the total scanning time send to the ASM
-            descan_derived_total_scanning_time = descanner.clockPeriod.value * \
-                                                 len(calibration_parameters.x_descan_setpoints)
-            if not almost_equal(descan_derived_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
-                raise ValueError("Total descan time implied by the setpoints send to the ASM is not equal to the "
-                                 "scanning time set by the VA's.")
+        # Check scan setpoints
+        self.assertLessEqual(len(calibration_parameters.x_scan_setpoints), MAX_NMBR_POINTS)
+        self.assertLessEqual(len(calibration_parameters.y_scan_setpoints), MAX_NMBR_POINTS)
+        self.assertEqual(len(calibration_parameters.x_scan_setpoints), len(calibration_parameters.y_scan_setpoints))
+        self.assertIsInstance(calibration_parameters.x_scan_setpoints, list)
+        self.assertIsInstance(calibration_parameters.y_scan_setpoints, list)
+        for x_setpoint, y_setpoint in zip(calibration_parameters.x_scan_setpoints,
+                                          calibration_parameters.y_scan_setpoints):
+            self.assertIsInstance(x_setpoint, float)
+            self.assertIsInstance(y_setpoint, float)
 
-            # Check scan setpoints
-            self.assertLessEqual(len(calibration_parameters.x_scan_setpoints), MAX_NMBR_POINTS)
-            self.assertLessEqual(len(calibration_parameters.y_scan_setpoints), MAX_NMBR_POINTS)
-            self.assertEqual(len(calibration_parameters.x_scan_setpoints), len(calibration_parameters.y_scan_setpoints))
-            self.assertIsInstance(calibration_parameters.x_scan_setpoints, list)
-            self.assertIsInstance(calibration_parameters.y_scan_setpoints, list)
-            for x_setpoint, y_setpoint in zip(calibration_parameters.x_scan_setpoints,
-                                              calibration_parameters.y_scan_setpoints):
-                self.assertIsInstance(x_setpoint, float)
-                self.assertIsInstance(y_setpoint, float)
+        x_scan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_scan_setpoints)
+        # Check if the a whole number of clock periods fits in the time interval
+        self.assertEqual(numpy.round(x_scan_setpoints_time_interval / ASM.clockPeriod.value, 10) % 1, 0,
+                         "Implied sampling period is not a whole multiple of the scanner clock period.")
 
-            x_scan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_scan_setpoints)
-            # Check if the a whole number of clock periods fits in the time interval
-            self.assertEqual(numpy.round(x_scan_setpoints_time_interval / ASM.clockPeriod.value, 10) % 1, 0,
-                             "Implied sampling period is not a whole multiple of the scanner clock period.")
+        if not almost_equal(calibration_parameters.dwell_time % ASM.clockPeriod.value, 0, rtol=0, atol=1e-9):
+            raise ValueError("Total scanning time implied by the setpoints send to the ASM is not equal to the "
+                             "scanning time set by the VA's.")
 
-            if not almost_equal(calibration_parameters.dwell_time % ASM.clockPeriod.value, 0, rtol=0, atol=1e-9):
-                raise ValueError("Total scanning time implied by the setpoints send to the ASM is not equal to the "
-                                 "scanning time set by the VA's.")
+        # Check if the total scanning time is equal to the total scanning time send to the ASM
+        scan_total_scanning_time = len(calibration_parameters.x_scan_setpoints) * calibration_parameters.dwell_time\
+                                                                                * ASM.clockPeriod.value
 
-            # Check if the total scanning time is equal to the total scanning time send to the ASM
-            scan_total_scanning_time = len(calibration_parameters.x_scan_setpoints) * calibration_parameters.dwell_time\
-                                                                                    * ASM.clockPeriod.value
-
-            if not almost_equal(scan_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
-                raise ValueError("Total scanning time is not equal to the defined total scanning time.")
+        if not almost_equal(scan_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
+            raise ValueError("Total scanning time is not equal to the defined total scanning time.")
 
     @unittest.skip  # Skip plotting of calibration setpoints, these plots are made for debugging.
     def test_plot_calibration_setpoints(self):

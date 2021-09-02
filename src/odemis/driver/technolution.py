@@ -455,12 +455,12 @@ class AcquisitionServer(model.HwComponent):
         response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200)
         return response
 
-    def _assembleCalibrationMetadata(self):
+    def getTotalLineScanTime(self):
         """
-        Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
-
-        :return calibration_data (CalibrationLoopParameters object): calibration data object which can be send to the
-        ASM API
+        Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
+        pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
+        position for the next line scan).
+        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback time.
         """
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
@@ -488,7 +488,19 @@ class AcquisitionServer(model.HwComponent):
             flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)
 
         # Total line scan time is the period of the calibration signal.
-        total_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
+        return numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
+
+    def _assembleCalibrationMetadata(self):
+        """
+        Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
+
+        :return calibration_data (CalibrationLoopParameters object): calibration data object which can be send to the
+        ASM API
+        """
+        descanner = self._mirror_descanner
+        scanner = self._ebeam_scanner
+
+        total_line_scan_time = self.getTotalLineScanTime()
 
         # Get the scanner and descanner setpoints
         x_descan_setpoints, y_descan_setpoints = self._mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
@@ -1029,6 +1041,7 @@ class MPPC(model.Detector):
         # Acquisition queue with commands of actions that need to be executed. The queue should hold "(str,
         # *)" containing "(command, data corresponding to the call)".
         self.acq_queue = queue.Queue()
+
         self._acq_thread = None
 
         self.data = ASMDataFlow(self)
