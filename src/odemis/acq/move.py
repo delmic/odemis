@@ -34,7 +34,7 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
-UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2 = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8
+UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2 = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 target_pos_str = {LOADING: "LOADING", IMAGING: "IMAGING", COATING: "COATING", ALIGNMENT: "ALIGNMENT",
                   LOADING_PATH: "LOADING PATH", UNKNOWN: "UNKNOWN", SEM_IMAGING: "SEM IMAGING"}
 meteor_labels = {SEM_IMAGING: "SEM IMAGING", FM_IMAGING: "FM IMAGING", GRID_1: "GRID 1", GRID_2: "GRID 2", LOADING: "LOADING", UNKNOWN: "UNKNOWN"}
@@ -45,7 +45,8 @@ RTOL_PROGRESS = 0.3
 
 def getTargetPosition(target_pos_lbl, stage):
     """
-    Returns the position that the stage would go to.
+    Returns the position that the stage would go to. It might return None in case the target
+        position has not been determined. 
     target_pos_lbl (int): a lable representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
     stage (Actuator): a stage component 
     returns (dict->float): the end position of the stage
@@ -580,14 +581,12 @@ def _doCryoSwitchSamplePosition(future, target):
             try:
                 for component, sub_move in sub_moves:
                     run_sub_move(future, component, sub_move)
-            except IndexError:
-                # In case the required movement is invalid/unreachable with the smaract 5dof stage
-                # Move all linear axes first then rotational ones using the fallback_submoves
-                logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
+            except Exception:
+                raise
         except CancelledError:
-            logging.info("_doCryoLoadSample cancelled.")
+            logging.info("The movement was cancelled.")
         except Exception as exp:
-            logging.exception("Failure to move to {} position.".format(target_pos_str.get(target, lambda: "unknown")))
+            logging.exception("Failure to move to {} position.".format(meteor_labels.get(target)))
             raise
         finally:
             with future._task_lock:
@@ -613,7 +612,7 @@ def transformFromMeteorToSEM(pos, stage):
     # TODO add docstring
     # TODO check for all the required axes
     if not {"x", "y"}.issubset(stage.axes):
-        raise KeyError("The stage %s misses 'x' and 'y' axes")
+        raise KeyError("The stage misses 'x' and 'y' axes")
     transformed_pos = pos.copy()
     pos_cor = stage.getMetadata()[model.MD_POS_COR]
     # TODO put here the formula's for calculating the sem positions from meteor position

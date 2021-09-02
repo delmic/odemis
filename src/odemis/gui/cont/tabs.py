@@ -73,7 +73,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -2491,17 +2491,13 @@ class CryoChamberTab(Tab):
                 raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
             if not model.MD_POS_COR in self._stage.getMetadata():
                 raise ValueError("The stage misses the 'POS_COR' metadata.")
-            # Fail early when required axes are not found on the positions metadata
+            # Fail early when required axes are not found on the focuser positions metadata
             focuser = self.tab_data_model.main.focus
             focus_md = focuser.getMetadata()
-            # take only the active and deactive position of the focuser
-            for md in focus_md.keys():
-                if md not in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE]:
-                    focus_md.pop(md)
             required_axis = {'z'}
-            for focuser_position in focus_md.values():
-                if not required_axis.issubset(focuser_position.keys()):
-                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(focuser_position)], required_axis))
+            for fmd_key, fmd_value in focus_md.items():
+                if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
+                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(fmd_value)], required_axis))
             # the meteor buttons 
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
