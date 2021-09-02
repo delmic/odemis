@@ -3,7 +3,7 @@ FASTEM-sim: {
     class: Microscope,
     role: mbsem,
     children: ["MultiBeam Scanner XT", "EBeam Focus", "EBeam Detector",
-               "Sample Stage",
+               "Chamber", "Sample Stage",
                "Stage Fine Position", "Metrology Module",
                "Beam Shift Controller", "Focus Tracker",
                "Detector Rotator", "Optical Objective",
@@ -31,6 +31,15 @@ FASTEM-sim: {
     properties: {
         dwellTime: 1.e-6, # s
     },
+    metadata: {
+        # Compensation to the pixel size (ie, the FoV) needed to have a good match between
+        # stage movement and SEM image *AT LOW MAGNIFICATIONS*.
+        # This is useful for the overview image acquisition.
+        PIXEL_SIZE_COR: [1.05, 1.05], # ratio
+    },
+    persistent: {
+        metadata: [PIXEL_SIZE_COR],
+    },
 }
 
 "EBeam Focus": {
@@ -42,14 +51,14 @@ FASTEM-sim: {
     # Internal child of SEM, so no class
     role: se-detector,
     init: {},
-    metadata: {
-        # Compensation to the pixel size (ie, the FoV) needed to have a good match between
-        # stage movement and SEM image *AT LOW MAGNIFICATIONS*.
-        # This is useful for the overview image acquisition.
-        PIXEL_SIZE_COR: [1.05, 1.05], # ratio
-    },
-    persistent: {
-        metadata: [PIXEL_SIZE_COR],
+}
+
+# Allows to change pressure in the chamber, normally via the SEM API
+"Chamber": {
+    class: simulated.Chamber,
+    role: chamber,
+    init: {
+        positions: ["vented", "vacuum"],
     },
 }
 

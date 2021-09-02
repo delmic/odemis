@@ -329,24 +329,17 @@ class TestVacuumChamber(unittest.TestCase):
         if not TEST_NOHW == "sim":
             self.skipTest("Perform tests with the vacuum status manually on the hardware.")
 
-        self.pressure.moveAbs({"vacuum": 1})
-        sleep(1)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 1)
-        self.pressure.stop()
-
-        self.pressure.moveAbs({"vacuum": 2})
-        sleep(1)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 2)
-        self.pressure.stop()
-
-        self.pressure.moveAbs({"vacuum": 0})
-        sleep(1)
-        self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), 0)
-        self.pressure.stop()
+        # Vacuum levels are conveniently internally named 0, 1, 2, in the decreasing order of pressure
+        vac_choices = self.pressure.axes["vacuum"].choices.keys()
+        for vac_status, vac_pos in enumerate(sorted(vac_choices, reverse=True)):
+            self.pressure.moveAbs({"vacuum": vac_pos})
+            sleep(1)
+            self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), vac_status)
+            self.pressure.stop()
 
     def test_updatePressure(self):
         """
-        Check that the pressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the pressure VA is updated correctly
         """
         with self.assertRaises(ValueError):
             self.pressure._updatePressure(self.datamodel.HybridPlatform.Cancel)
@@ -372,10 +365,12 @@ class TestVacuumChamber(unittest.TestCase):
             self.skipTest("TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server "
                           "outside of simulation.")
         init_state = self.pressure._chamber.VacuumStatus.Actual
-        test_value = 1
-        self.pressure._chamber.VacuumStatus.Actual = test_value
+
+        vac_choices = self.pressure.axes["vacuum"].choices
+        pvac_pos = next(p for p, n in vac_choices.items() if n == "primary vacuum")
+        self.pressure._chamber.VacuumStatus.Actual = 1
         sleep(1)
-        self.assertEqual(int(self.pressure.position.value['vacuum']), test_value)
+        self.assertEqual(self.pressure.position.value['vacuum'], pvac_pos)
         self.pressure._chamber.VacuumStatus.Actual = init_state
 
 

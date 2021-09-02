@@ -221,40 +221,40 @@ class ChamberTest(unittest.TestCase):
 
     def test_simple(self):
         self.assertGreaterEqual(len(self.dev.axes), 1, "Actuator has no axis")
-        press_axis = self.dev.axes["pressure"]
+        press_axis = self.dev.axes["vacuum"]
         self.assertGreaterEqual(len(press_axis.choices), 2)
 
         # if not moving pressure VA and position should be the same
         cur_press = self.dev.pressure.value
-        pos_press = self.dev.position.value["pressure"]
+        pos_press = self.dev.position.value["vacuum"]
         self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
 
     def test_moveAbs(self):
-        pos_press = self.dev.position.value["pressure"]
+        pos_press = self.dev.position.value["vacuum"]
         logging.info("Device is currently at position %s", pos_press)
 
         # don't change position
-        f = self.dev.moveAbs({"pressure": pos_press})
+        f = self.dev.moveAbs({"vacuum": pos_press})
         f.result()
 
-        self.assertEqual(self.dev.position.value["pressure"], pos_press)
+        self.assertEqual(self.dev.position.value["vacuum"], pos_press)
 
         # try every other position
-        axis_def = self.dev.axes["pressure"]
+        axis_def = self.dev.axes["vacuum"]
         for p in axis_def.choices:
             if p != pos_press:
                 logging.info("Testing move to pressure %s", p)
-                f = self.dev.moveAbs({"pressure": p})
+                f = self.dev.moveAbs({"vacuum": p})
                 # Should still be close from the original pressure
                 cur_press = self.dev.pressure.value
                 self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
 
                 f.result()
-                self.assertEqual(self.dev.position.value["pressure"], p)
+                self.assertEqual(self.dev.position.value["vacuum"], p)
                 cur_press = self.dev.pressure.value
                 self.assertTrue(p * 0.95 <= cur_press <= p * 1.05) # ±5%
 
-        if self.dev.position.value["pressure"] == pos_press:
+        if self.dev.position.value["vacuum"] == pos_press:
             self.fail("Failed to find a position different from %d" % pos_press)
 
     def test_stop(self):
@@ -288,7 +288,8 @@ class ChamberTest(unittest.TestCase):
 
         # wrong position
         with self.assertRaises(ValueError):
-            self.dev.moveAbs({"pressure":-5})
+            self.dev.moveAbs({"vacuum":-5})
+
 
 if __name__ == "__main__":
     unittest.main()

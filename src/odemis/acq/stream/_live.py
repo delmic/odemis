@@ -25,13 +25,14 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import gc
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR, VigilantAttributeBase
 from odemis.util import img, conversion, fluo
 import threading
 import time
 import weakref
+
 
 from ._base import Stream
 
@@ -226,6 +227,18 @@ class LiveStream(Stream):
         self._shouldUpdateHistogram()
         super(LiveStream, self)._onBackground(data)
 
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+        It uses the local settings if they are present.
+        See also getBoundingBox(), which return the position and size of the last
+          image acquired. This is to guess the size of the next image.
+
+        return (float, float): width, height in meters
+        """
+
+        raise NotImplementedError("Stream %s doesn't support guessFoV()", self.__class__.__name__)
+
 
 class SEMStream(LiveStream):
     """ Stream containing images obtained via Scanning electron microscope.
@@ -287,6 +300,14 @@ class SEMStream(LiveStream):
         scale = self._getEmitterVA("scale").value
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
+
+        # If resolution is enumerated, find the closest one
+        if hasattr(self._emitter.resolution, "choices"):
+            # Pick the closest X (there might be several), and then the closest Y
+            res_choices = self._emitter.resolution.choices
+            resx = util.find_closest(res[0], [x for x, y in res_choices])
+            resy = util.find_closest(res[1], [y for x, y in res_choices if x == resx])
+            res = resx, resy
 
         return res, trans
 
@@ -375,6 +396,53 @@ class SEMStream(LiveStream):
 
     def _onResolution(self, value):
         self._updateAcquisitionTime()
+
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+        It uses the local settings if they are present.
+        See also getBoundingBox(), which return the position and size of the last
+          image acquired. This is to guess the size of the next image.
+
+        return (float, float): width, height in meters
+        """
+        # In theory, it could be simple: horizontalFoV * roi.
+        # However, there are many variations. In particular, some e-beam do not
+        # have horizontalFoV. Others do not support arbitrary resolutions, but
+        # only a subset. So instead, we use fov = img_pixel_size * resolution.
+
+        scale = self._getEmitterVA("scale").value
+        try:
+            # When there is a horizontalFoV, it's almost obvious.
+            # We just need to guess the Y size, based on the shape.
+            hfov = self._getEmitterVA("horizontalFoV").value
+            shape = self.emitter.shape
+            hpxs = (hfov / shape[0]) * scale[0]
+        except AttributeError:
+            # Alternative: Use the "base pixel size", which corresponds to the
+            # pixel size if the scale is set to 1.
+            # If there is no horizontalFoV, it's because it's not possible to
+            # control it from Odemis. In this case, the user has to type the
+            # current magnification in, which directly sets the pixelSize.
+            # The stream never has a local version of any of them.
+            base_pxs = self.emitter.pixelSize.value  # It's read-only and always present on the emitter
+            hpxs = base_pxs[0] * scale[0]
+
+        vpxs = hpxs * scale[1] / scale[0]
+
+        # In case we don't acquire the entire area (set by the .roi), take it into account.
+        # Also, to handle cases where the resolution only accepts specific values,
+        # we don't directly read .roi, but compute the final resolution, and derive
+        # back the width and height of the
+        res, _ = self._computeROISettings(self.roi.value)
+        fov = res[0] * hpxs, res[1] * vpxs
+
+        # Compensate in case there is MD_PIXEL_SIZE_COR that will change the size of the image.
+        # It can be either on the detector or the emitter, so look on both.
+        md_det = self.detector.getMetadata()
+        md_emt = self.emitter.getMetadata()
+        pxs_cor = md_det.get(model.MD_PIXEL_SIZE_COR, md_emt.get(model.MD_PIXEL_SIZE_COR, (1, 1)))
+        return fov[0] * pxs_cor[0], fov[1] * pxs_cor[1]
 
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
@@ -739,6 +807,28 @@ class CameraStream(LiveStream):
         # light source when just switching between FluoStreams. => have a
         # global acquisition manager which takes care of switching on/off
         # the emitters which are used/unused.
+
+    def guessFoV(self):
+        # The FoV is the res * pixel size.
+        # However, the pixel size depends on the binning, which can be changed on
+        # the stream, so use the definition: pxs = sensor pxs * binning / mag
+        res = self._getDetectorVA("resolution").value
+        try:
+            binning = self._getDetectorVA("binning").value
+        except AttributeError:
+            binning = 1, 1
+
+        sensor_pxs = self.detector.pixelSize.value  # It's read-only and always present on the detector
+
+        md = self.detector.getMetadata()
+        mag = md.get(model.MD_LENS_MAG, 1)
+
+        fov = (res[0] * sensor_pxs[0] * binning[0] / mag,
+               res[1] * sensor_pxs[1] * binning[1] / mag)
+
+        # Compensate in case there is MD_PIXEL_SIZE_COR that will change the size of the image
+        pxs_cor = md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+        return fov[0] * pxs_cor[0], fov[1] * pxs_cor[1]
 
 
 class BrightfieldStream(CameraStream):
@@ -1332,6 +1422,24 @@ class ScannedFluoStream(FluoStream):
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
+
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+
+        return (float, float): width, height in meters
+        """
+        pxs = self.scanner.pixelSize.value
+        shape = self.scanner.shape
+        roi = self.roi.value
+
+        full_fov = shape[0] * pxs[0], shape[0] * pxs[1]
+        fov = full_fov[0] * (roi[2] - roi[0]), full_fov[0] * (roi[3] - roi[1])
+
+        # Compensate in case there is MD_PIXEL_SIZE_COR that will change the size of the image
+        md = self.scanner.getMetadata()
+        pxs_cor = md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+        return fov[0] * pxs_cor[0], fov[1] * pxs_cor[1]
 
 
 class RGBCameraStream(CameraStream):

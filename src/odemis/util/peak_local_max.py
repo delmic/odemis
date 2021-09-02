@@ -179,7 +179,8 @@ def _get_high_intensity_peaks(
         Binary array defining the region of `image` to evaluate.
     num_peaks : int, optional
         Maximum number of peaks. When the number of peaks exceeds `num_peaks`,
-        return `num_peaks` peaks based on highest peak intensity.
+        return `num_peaks` peaks based on highest peak intensity. If
+        `num_peaks` is None, return all peaks.
     min_distance : float
         The maximum allowed spacing between the points.
     p_norm : float
@@ -365,7 +366,7 @@ def peak_local_max(
     p_norm: float = np.inf,
 ) -> np.ndarray:
     """
-    Find peaks in an image as coordinate list or boolean mask.
+    Find peaks in an image as coordinate list.
 
     Peaks are the local maxima in a region of `2 * min_distance + 1`
     (i.e. peaks are separated by at least `min_distance`).
@@ -416,8 +417,8 @@ def peak_local_max(
     The peak local maximum function returns the coordinates of local peaks
     (maxima) in an image. Internally, a maximum filter is used for finding local
     maxima. This operation dilates the original image. After comparison of the
-    dilated and original image, this function returns the coordinates or a mask
-    of the peaks where the dilated image equals the original image.
+    dilated and original image, this function returns the coordinates of the
+    peaks where the dilated image equals the original image.
 
     Examples
     --------
