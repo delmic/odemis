@@ -460,7 +460,8 @@ class AcquisitionServer(model.HwComponent):
         Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
         pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
         position for the next line scan).
-        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback time.
+        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback
+                 time in seconds.
         """
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
@@ -493,9 +494,8 @@ class AcquisitionServer(model.HwComponent):
     def _assembleCalibrationMetadata(self):
         """
         Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
-
-        :return calibration_data (CalibrationLoopParameters object): calibration data object which can be send to the
-        ASM API
+        :return calibration_data: (CalibrationLoopParameters object) Calibration data object which can be sent
+                                  to the ASM API.
         """
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
