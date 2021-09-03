@@ -46,13 +46,20 @@ _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
 
 class FastEMROA(object):
-    """Representation of a FastEM ROA (region of acquisition)."""
+    """
+    Representation of a FastEM ROA (region of acquisition).
+    The region of acquisition is a megafield image, which consists of a sequence of single field images. Each single
+    field image itself consists of cell images. The number of cell images is defined by the shape of the multiprobe
+    and detector.
+    """
 
     def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector):
         """
-        :param name: (str) Name of the region of acquisition (ROA).
+        :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
+                     the external storage.
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box
-                            coordinates of the ROA in [m].
+                            coordinates of the ROA in [m]. The coordinates are in the sample carrier coordinate
+                            system, which corresponds to the component with role='stage'.
         :param roc: (FastEMROC) Corresponding region of calibration (ROC).
         :param asm: (technolution.AcquisitionServer) The acquisition server module component.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -74,11 +81,15 @@ class FastEMROA(object):
         self.field_indices = self.calculate_field_indices()
         self.coordinates.subscribe(self.on_coordinates)
 
+        # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
+        #  it should be checked
+
     def on_coordinates(self, coordinates):
         """Recalculate the field indices when the coordinates of the region of acquisition (ROA) have changed
         (e.g. resize, moving).
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
-                            ROA in [m].
+                            ROA in [m]. The coordinates are in the sample carrier coordinate system, which
+                            corresponds to the component with role='stage'.
         """
         self.field_indices = self.calculate_field_indices()
 
@@ -109,7 +120,8 @@ class FastEMROA(object):
         by an integer number of single field images, the number of single field images is increased to cover the
         full region. An ROA is a rectangle.
 
-        :return: (nested tuple (col, row)) The tuples need to be ordered so that the single field images resembling the
+        :return: (list of nested tuples (col, row)) The column and row field indices of the field images in the order
+                 they should be acquired. The tuples are re-ordered so that the single field images resembling the
                  ROA are acquired first rows then columns.
         """
         l, t, r, b = self.coordinates.value  # tuple of floats: l, t, r, b coordinates in m
@@ -125,24 +137,33 @@ class FastEMROA(object):
         # Create the field indices based on the number of horizontal and vertical fields.
         field_indices = numpy.ndindex(n_vert_fields, n_hor_fields)
 
-        # ndindex returns an iterator - need the values returned as a list.
+        # ndindex returns an iterator, the values need to be returned as a list.
         # The fields should be acquired per row, therefore when looping over the field indices the vertical fields
         # should initially stay constant. The indices are swapped, because the dataflow expects first the column
         # index, then the row index. ((0,0), (1,0), (2,0), ...., (0,2), (1,2), ...)
+        field_indices = [f[::-1] for f in field_indices]
 
-        return [f[::-1] for f in field_indices]
+        return field_indices
 
 
-# TODO add ROC acquisition to ROA acquisition
+# TODO add ROC acquisition to acquisition task
 
 class FastEMROC(object):
-    """Representation of a FastEM ROC (region of calibration)."""
+    """
+    Representation of a FastEM ROC (region of calibration).
+    The region of calibration is a single field image acquired with the acquisition server component and typically
+    acquired at a region with no sample section on the scintillator. The calibration image serves for the dark
+    offset and digital gain calibration for the megafield acquisition. Typically, one calibration region per
+    scintillator is acquired and assigned with all ROAs on the respective scintillator.
+    """
 
     def __init__(self, name, coordinates):
         """
-        :param name: (str) Name of the region of calibration (ROC).
+        :param name: (str) Name of the region of calibration (ROC). It is the name of the megafield (id) as stored on
+                     the external storage.
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
-                            ROC in [m].
+                            ROC in [m]. The coordinates are in the sample carrier coordinate system, which
+                            corresponds to the component with role='stage'.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -156,7 +177,7 @@ class FastEMROC(object):
 
 def acquire(roa, path, multibeam, descanner, detector, stage):
     """
-    Start an acquisition task for a given detector.
+    Start a megafield acquisition task for a given region of acquisition (ROA).
 
     :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
     :param path: (str) Path on the external storage where the image data is stored. Here, it is possible
@@ -171,8 +192,8 @@ def acquire(roa, path, multibeam, descanner, detector, stage):
         aligned with the x and y axes of the multiprobe and the multibeam scanner.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
-            a tuple that contains:
-                (model.DataArray): The raw acquisition data.
+             a tuple that contains:
+                (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
                 (Exception or None): Exception raised during the acquisition or None.
     """
     f = model.ProgressiveFuture()
@@ -184,12 +205,10 @@ def acquire(roa, path, multibeam, descanner, detector, stage):
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
     # Connect the future to the task and run it in a thread.
-    # task.run is executed by the executor and run as soon as no other task is executed
+    # task.run is executed by the executor and runs as soon as no other task is executed
     _executor.submitf(f, task.run)
 
     return f
-
-# TODO need to check if megafield already exists, otherwise overwritten
 
 
 def _configure_multibeam_hw(scanner):
@@ -221,7 +240,8 @@ class AcquisitionTask(object):
                     if they do not exist.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
-                            (model.DataArray): The raw acquisition data.
+                            (model.DataArray): The acquisition data, which depends on the value of the
+                                               detector.dataContent VA.
                             (Exception or None): Exception raised during the acquisition or None.
         """
         self._multibeam = multibeam
@@ -230,7 +250,6 @@ class AcquisitionTask(object):
         self._stage = stage
         self._roa = roa  # region of acquisition object
         self._roc = roa.roc  # region of calibration object
-        self._path = path  # sub-directories on external storage
         self._future = future
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
@@ -240,10 +259,11 @@ class AcquisitionTask(object):
         # TODO the .dataContent might need to be set somewhere else in future when using a live stream for
         #  display of thumbnail images -> .dataContent = "thumbnail"
         # set size of returned data array
-        self._detector.dataContent.value = "empty"
+        # The full image data is directly stored via the asm on the external storage.
+        self._detector.dataContent.value = "empty"  # dataArray of shape (0,0) is returned with some MD
 
         # set the path for additional sub-directories (<acquisition date>/<project name>)
-        self._detector.subdirectory.value = self._path
+        self._detector.subdirectory.value = path
         # set the megafield id as specified by the ROA name
         self._detector.filename.value = self._roa.name.value
 
@@ -285,7 +305,7 @@ class AcquisitionTask(object):
             # Acquire the single field images.
             self.acquire_roa(dataflow)
 
-            # In case the acquisition was cancelled, before the future returned (f.result), raise cancellation error
+            # In case the acquisition was cancelled, before the future returned, raise cancellation error
             # after unsubscribing from the dataflow
             if self._cancelled:
                 self._future.cancel()

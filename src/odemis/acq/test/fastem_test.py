@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on 10th February 2021
+Created on 15th July 2021
 
 @author: Sabrina Rossberger, Thera Pals, Éric Piel
 
@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import math
 import os
 import time
 import unittest
@@ -115,7 +116,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         self.assertGreaterEqual(bbox[3], scintillator5_area[3])  # Top
 
 
-class FastEMROA(unittest.TestCase):
+class TestFastEMROA(unittest.TestCase):
     """Test region of acquisition (ROA) class methods."""
 
     # Don't need the GUI, but a working backend
@@ -185,8 +186,10 @@ class FastEMROA(unittest.TestCase):
 
     def test_estimate_roa_time(self):
         """Check that the estimated time for one ROA (megafield) is calculated correctly."""
-        x_fields = 3
-        y_fields = 4
+        # Use float for number of fields, in order to not end up with additional fields scanned and thus an
+        # incorrectly estimated roa acquisition time.
+        x_fields = 2.9
+        y_fields = 3.2
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
         coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
@@ -204,60 +207,24 @@ class FastEMROA(unittest.TestCase):
         dwell_time = self.multibeam.dwellTime.value
         flyback = self.descanner.physicalFlybackTime  # extra time per line scan
 
-        # FIXME take field indices into account, if ROA not an integer multiple ROA time incorrect!
         # calculate expected roa (megafield) acquisition time
         # (number of pixels per line * dwell time + flyback time) * number of lines * number of cells in x and y
-        estimated_roa_acq_time = (cell_res[0] * dwell_time + flyback) * cell_res[1] * x_fields * y_fields
+        estimated_roa_acq_time = (cell_res[0] * dwell_time + flyback) * cell_res[1] \
+                                 * math.ceil(x_fields) * math.ceil(y_fields)
         # get roa acquisition time
         roa_acq_time = roa.estimate_roa_time()
 
         self.assertAlmostEqual(estimated_roa_acq_time, roa_acq_time)
 
-    def test_calculate_field_indices_int(self):
-        """Acquire a megafield (ROA), which matches an integer multiple of fields."""
-        x_fields = 2
-        y_fields = 3
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-        # Note: Do not change those values; calculate_field_indices handles floating point errors the same way
-        # as an ROA that does not match an integer number of field indices by just adding an additional row or column
-        # of field images.
-        top = -0.002  # top corner coordinate of ROA in stage coordinates in meter
-        left = +0.001  # left corner coordinate of ROA in stage coordinates in meter
-        coordinates = (top, left,
-                       top + res_x * px_size_x * x_fields,
-                       left + res_y * px_size_y * y_fields)  # in m
-        roc = fastem.FastEMROC("roc_name", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
-        roa = fastem.FastEMROA(roa_name,
-                               coordinates,
-                               roc,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc
-                               )
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices_int")
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
-        data, e = f.result()
-
-        self.assertIsNone(e)  # check no exceptions were returned
-        # check data returned contains the correct number of field images
-        self.assertEqual(len(data), x_fields * y_fields)
-        self.assertIsInstance(data[(0, 0)], model.DataArray)
-
     def test_calculate_field_indices(self):
-        """Acquire a megafield (ROA), which does not match an integer multiple of fields.
-        Check that the acquired ROA exceeds the requested ROA."""
+        """Check that the correct number and order of field indices is returned and that row and column are in the
+        correct order."""
         x_fields = 3
-        y_fields = 4
+        y_fields = 2
+        self.multibeam.resolution.value = (6400, 6400)  # don't change
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
-        # some extra pixels (< 1 field) to be added to the ROA
-        x_margin, y_margin = (res_x/10, res_y/20)
-        coordinates = (0, 0,
-                       res_x * px_size_x * x_fields + x_margin * px_size_x,
-                       res_y * px_size_y * y_fields + y_margin * px_size_y)  # in m
+        coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m, don't change
         roc = fastem.FastEMROC("roc_name", coordinates)
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
         roa = fastem.FastEMROA(roa_name,
@@ -268,15 +235,12 @@ class FastEMROA(unittest.TestCase):
                                self.descanner,
                                self.mppc
                                )
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
-        data, e = f.result()
 
-        self.assertIsNone(e)  # check no exceptions were returned
-        # check data returned contains the correct number of field images
-        # expect plus 1 field in x and y respectively
-        self.assertEqual(len(data), (x_fields + 1) * (y_fields + 1))
-        self.assertIsInstance(data[(0, 0)], model.DataArray)
+        expected_indices = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]  # (col, row)
+
+        field_indices = roa.calculate_field_indices()
+
+        self.assertListEqual(expected_indices, field_indices)
 
 
 class TestFastEMAcquisition(unittest.TestCase):
@@ -316,12 +280,20 @@ class TestFastEMAcquisition(unittest.TestCase):
             self.skipTest("Running backend found")
 
     def test_acquire_ROA(self):
-        """Acquire a small mega field image."""
-        x_fields = 3
-        y_fields = 4
+        """Acquire a small mega field image with ROA matching integer multiple of single field size."""
+        x_fields = 2
+        y_fields = 3
+        self.multibeam.resolution.value = (6400, 6400)  # don't change
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
-        coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
+        # Note: Do not change those values; calculate_field_indices handles floating point errors the same way
+        # as an ROA that does not match an integer number of field indices by just adding an additional row or column
+        # of field images.
+        top = -0.002  # top corner coordinate of ROA in stage coordinates in meter
+        left = +0.001  # left corner coordinate of ROA in stage coordinates in meter
+        coordinates = (top, left,
+                       top + res_x * px_size_x * x_fields,
+                       left + res_y * px_size_y * y_fields)  # in m
         roc = fastem.FastEMROC("roc_name", coordinates)
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
         roa = fastem.FastEMROA(roa_name,
@@ -339,6 +311,39 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.assertIsNone(e)  # check no exceptions were returned
         # check data returned contains the correct number of field images
         self.assertEqual(len(data), x_fields * y_fields)
+        self.assertIsInstance(data[(0, 0)], model.DataArray)
+
+    def test_coverage_ROA(self):
+        """Acquire a megafield (ROA), which does not match an integer multiple of fields.
+        Check that the acquired ROA exceeds the requested ROA."""
+        x_fields = 3
+        y_fields = 4
+        self.multibeam.resolution.value = (6400, 6400)  # don't change
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+        # some extra pixels (< 1 field) to be added to the ROA
+        x_margin, y_margin = (res_x / 10, res_y / 20)
+        coordinates = (0, 0,
+                       res_x * px_size_x * x_fields + x_margin * px_size_x,
+                       res_y * px_size_y * y_fields + y_margin * px_size_y)  # in m
+        roc = fastem.FastEMROC("roc_name", coordinates)
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa = fastem.FastEMROA(roa_name,
+                               coordinates,
+                               roc,
+                               self.asm,
+                               self.multibeam,
+                               self.descanner,
+                               self.mppc
+                               )
+        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
+        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        data, e = f.result()
+
+        self.assertIsNone(e)  # check no exceptions were returned
+        # check data returned contains the correct number of field images
+        # expect plus 1 field in x and y respectively
+        self.assertEqual(len(data), (x_fields + 1) * (y_fields + 1))
         self.assertIsInstance(data[(0, 0)], model.DataArray)
 
     def test_progress_ROA(self):
@@ -360,9 +365,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_progress")
 
-        self.start = None
-        self.end = None
-        self.updates = 0
+        self.updates = 0  # updated in callback on_progress_update
 
         f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
@@ -394,10 +397,9 @@ class TestFastEMAcquisition(unittest.TestCase):
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_cancel")
 
-        self.start = None
-        self.end = None
-        self.updates = 0
-        self.done = False
+        self.end = None  # updated in callback on_progress_update
+        self.updates = 0  # updated in callback on_progress_update
+        self.done = False  # updated in callback on_done
 
         f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
