@@ -130,14 +130,13 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         self.assertGreaterEqual(bbox[3], scintillator5_area[3])  # Top
 
 
-@unittest.skipIf(TEST_NOHW, "No simulator running or HW present. Skip fastem ROA tests.")
 class TestFastEMROA(unittest.TestCase):
     """Test region of acquisition (ROA) class methods."""
 
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW is True:
-            raise unittest.SkipTest("No hardware available.")
+            raise unittest.SkipTest("No simulator running or HW present. Skip fastem ROA tests.")
 
         # get the hardware components
         cls.microscope = model.getMicroscope()
@@ -243,14 +242,13 @@ class TestFastEMROA(unittest.TestCase):
         self.assertListEqual(expected_indices, field_indices)
 
 
-@unittest.skipIf(TEST_NOHW, "No simulator running or HW present. Skip fastem acquisition tests.")
 class TestFastEMAcquisition(unittest.TestCase):
     """Test multibeam acquisition."""
 
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW is True:
-            raise unittest.SkipTest("No hardware available.")
+            raise unittest.SkipTest("No simulator running or HW present. Skip fastem acquisition tests.")
 
         # get the hardware components
         cls.asm = model.getComponent(role="asm")
