@@ -37,6 +37,20 @@ from odemis import model
 from odemis.acq import fastem, stream
 from odemis.util import test, img
 
+# Accept three values for TEST_NOHW
+# * TEST_NOHW = 1: not connected to anything => skip most of the tests
+# * TEST_NOHW = sim: technolution_asm_simulator/simulator2/run_the_simulator.py
+# * TEST_NOHW = 0 (or anything else): connected to the real hardware
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+if TEST_NOHW == "sim":
+    pass
+elif TEST_NOHW == "0":
+    TEST_NOHW = False
+elif TEST_NOHW == "1":
+    TEST_NOHW = True
+else:
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
+
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
@@ -116,23 +130,14 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         self.assertGreaterEqual(bbox[3], scintillator5_area[3])  # Top
 
 
+@unittest.skipIf(TEST_NOHW, "No simulator running or HW present. Skip fastem ROA tests.")
 class TestFastEMROA(unittest.TestCase):
     """Test region of acquisition (ROA) class methods."""
 
-    # Don't need the GUI, but a working backend
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        # try:
-        #     test.start_backend(FASTEM_CONFIG)  # TODO this backend will not work yet as not ASM component
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
 
         # get the hardware components
         cls.microscope = model.getMicroscope()
@@ -145,14 +150,9 @@ class TestFastEMROA(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
+        pass
 
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
         self.descanner.physicalFlybackTime = 250e-6  # TODO why is this necessary??
 
     def test_estimate_single_field_time(self):
@@ -243,23 +243,14 @@ class TestFastEMROA(unittest.TestCase):
         self.assertListEqual(expected_indices, field_indices)
 
 
+@unittest.skipIf(TEST_NOHW, "No simulator running or HW present. Skip fastem acquisition tests.")
 class TestFastEMAcquisition(unittest.TestCase):
     """Test multibeam acquisition."""
 
-    # Don't need the GUI, but a working backend
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        # try:
-        #     test.start_backend(FASTEM_CONFIG)  # TODO this backend will not work yet as not ASM component
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
 
         # get the hardware components
         cls.asm = model.getComponent(role="asm")
@@ -271,13 +262,7 @@ class TestFastEMAcquisition(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
+        pass
 
     def test_acquire_ROA(self):
         """Acquire a small mega field image with ROA matching integer multiple of single field size."""
