@@ -19,7 +19,7 @@ from __future__ import division
 import collections
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, \
-    PENDING, RUNNING
+    PENDING, RUNNING, CancelledError
 from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
@@ -514,13 +514,24 @@ class ProgressiveBatchFuture(ProgressiveFuture):
             f.add_done_callback(self._on_future_done)
 
     def _on_future_update(self, f, start, end):
-        if f._state == RUNNING:  # only care about future which are running, start/end estimates for others not reliable
+        if f.running():  # only care about future which are running, start/end estimates for others not reliable
             self.futures[f] = end - start
             self.set_progress(end=self._estimate_end())
 
     def _on_future_done(self, f):
         self.set_progress(end=self._estimate_end())
-        if not any(f._state in (RUNNING, PENDING) for f in self.futures):
+
+        # Set exception if future failed and cancel all other futures
+        try:
+            ex = f.exception()
+            if ex:
+                self.cancel()
+                self.set_exception(ex)
+        except CancelledError:
+            pass
+
+        # Set result if all futures are done
+        if all(f.done() for f in self.futures):
             # always return None, it's not clear what the return value of a batch of tasks should be
             # alternative would be the return value of the last task, but that is also ambiguous because
             # we don't require the futures to be carried out sequentially
@@ -528,8 +539,11 @@ class ProgressiveBatchFuture(ProgressiveFuture):
 
     def _estimate_end(self):
         start, end = self.get_progress()
-        return start + sum(self.futures[f] for f in self.futures if f._state in (RUNNING, PENDING))
+        return start + sum(self.futures[f] for f in self.futures if not f.done())
 
     def cancel(self):
-        [f.cancel() for f in self.futures]
+        fs = [f for f in self.futures if not f.done()]
+        logging.debug("Canceling %s futures.", len(fs))
+        for f in fs:
+            f.cancel()
         super().cancel()
