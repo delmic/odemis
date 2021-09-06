@@ -1138,6 +1138,14 @@ class FastEMMainGUIData(MainGUIData):
         hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
         self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
+        # Alignment status, reset to "not aligned" every time the emState or chamberState is changed
+        self.is_aligned = model.BooleanVA(False)
+        self.emState.subscribe(self._reset_is_aligned)
+        self.chamberState.subscribe(self._reset_is_aligned)
+
+    def _reset_is_aligned(self, _):
+        self.is_aligned.value = False
+
 
 class FastEMAcquisitionGUIData(MicroscopyGUIData):
     """

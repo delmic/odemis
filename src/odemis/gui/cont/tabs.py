@@ -1678,6 +1678,12 @@ class FastEMAcquisitionTab(Tab):
             view_ctrl=self.view_controller,
         )
 
+        # Controller for alignment panel
+        self._alignment_controller = acqcont.FastEMAlignmentController(
+            tab_data,
+            panel
+        )
+
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,
@@ -1685,7 +1691,6 @@ class FastEMAcquisitionTab(Tab):
             self._projectbar_controller,
             self._calibrationbar_controller
         )
-        main_data.is_acquiring.subscribe(self.on_acquisition)
 
     @property
     def streams_controller(self):
@@ -1702,11 +1707,6 @@ class FastEMAcquisitionTab(Tab):
     @property
     def calibrationbar_controller(self):
         return self._calibrationbar_controller
-
-    def on_acquisition(self, is_acquiring):
-        # Don't allow changes to acquisition/calibration ROIs during acquisition
-        self.projectbar_controller._project_bar.Enable(not is_acquiring)
-        self.calibrationbar_controller._calibration_bar.Enable(not is_acquiring)
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)

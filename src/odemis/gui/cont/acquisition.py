@@ -1427,7 +1427,9 @@ class FastEMAcquiController(object):
         self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
         tab_data.projects.subscribe(self._on_projects, init=True)
         for roc in self._tab_data_model.calibration_regions.value.values():
-            roc.coordinates.subscribe(self._on_roc)
+            roc.coordinates.subscribe(self._on_va_change)
+
+        self._main_data_model.is_aligned.subscribe(self._on_va_change, init=True)
 
     def _on_projects(self, projects):
         for p in projects:
@@ -1437,23 +1439,27 @@ class FastEMAcquiController(object):
         # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
         for roa in roas:
             if roa not in self.roa_subscribers:
-                roa.roc.subscribe(self._on_roc)
+                roa.roc.subscribe(self._on_va_change)
                 self.roa_subscribers.append(roa)
         self._update_roa_count()
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
-    def _on_roc(self, _):
+    def _on_va_change(self, _):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self.roa_count and not self._get_undefined_calibrations())
+        self.btn_acquire.Enable(self._main_data_model.is_aligned and self.roa_count
+                                and not self._get_undefined_calibrations())
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if self.roa_count == 0:
+        if not self._main_data_model.is_aligned.value:
+            lvl = logging.WARN
+            txt = "System is not aligned."
+        elif self.roa_count == 0:
             lvl = logging.WARN
             txt = "No region of acquisition selected."
         elif self._get_undefined_calibrations():
@@ -1507,6 +1513,9 @@ class FastEMAcquiController(object):
         """
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
+        self._projectbar_ctrl._project_bar.Enable(True)
+        self._calibration_ctrl._calibration_bar.Enable(True)
+        self._tab_panel.btn_align.Enable(True)
         self._tab_panel.Layout()
 
         if text is not None:
@@ -1525,6 +1534,11 @@ class FastEMAcquiController(object):
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self._show_status_icons(None)
+
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self._projectbar_ctrl._project_bar.Enable(False)
+        self._calibration_ctrl._calibration_bar.Enable(False)
+        self._tab_panel.btn_align.Enable(False)
 
         self.gauge_acq.Range = self.roa_count
         self.gauge_acq.Value = 0
@@ -1564,6 +1578,7 @@ class FastEMAcquiController(object):
         self._main_data_model.is_acquiring.value = False
         try:
             future.result()
+            self._reset_acquisition_gui()
         except CancelledError:
             self._reset_acquisition_gui()
             return
@@ -2187,3 +2202,53 @@ class AutoCenterController(object):
         self._tab_panel.lbl_auto_center.Show()
         self._tab_panel.gauge_auto_center.Hide()
         self._sizer.Layout()
+
+
+class FastEMAlignmentController:
+    def __init__(self, tab_data, panel):
+        self._tab_data = tab_data
+        self._panel = panel
+
+        self._panel.align_gauge_progress.Hide()
+        panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
+        tab_data.main.is_aligned.subscribe(self._on_align_state, init=True)
+
+    def _on_btn_align(self, evt):
+        # TODO: implement cancellation
+        if self._tab_data.main.is_acquiring.value:
+            logging.error("Cancelling alignment currently not supported.")
+            return
+        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
+
+        # Change button to "cancel", show progress bar
+        self._panel.align_gauge_progress.Show()
+        # Label is displayed on the right, but during the acquisition, we want the gauge bar to occupy the
+        # full available space --> use a panel instead of a spacer which can be hidden (spacers cannot) to
+        # make it look nice.
+        self._panel.align_spacer_panel.Hide()
+        self._panel.align_lbl_gauge.Hide()
+        self._panel.btn_align.SetLabel("Cancel")
+        self._panel.Layout()
+
+        # Start alignment
+        f = align.fastem.align(self._tab_data.main)
+        f.add_done_callback(self._on_alignment_done)
+
+    @call_in_wx_main
+    def _on_alignment_done(self, future):
+        self._tab_data.main.is_aligned.value = True
+        self._tab_data.main.is_acquiring.value = False
+
+        # Enable button, hide progress bar
+        self._panel.align_gauge_progress.Hide()
+        self._panel.align_spacer_panel.Show()
+        self._panel.align_lbl_gauge.Show()
+        self._panel.btn_align.SetLabel("Alignment...")
+        self._panel.Parent.Layout()
+
+    def _on_align_state(self, aligned):
+        if aligned:
+            self._panel.align_lbl_gauge.SetLabel("System is aligned.")
+        else:
+            # TODO: time estimation
+            self._panel.align_lbl_gauge.SetLabel("~ 2 seconds")
