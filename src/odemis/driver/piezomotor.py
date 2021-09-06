@@ -1125,6 +1125,6 @@ class PMDSimulator(object):
 
     def _do_move(self):
         self.is_moving = True
-        time.sleep(1)
+        time.sleep(0.1)
         self.current_pos = copy.deepcopy(self.target_pos)
         self.is_moving = False
