@@ -25,6 +25,7 @@ from __future__ import division
 
 import logging
 import math
+import os
 import threading
 import time
 from concurrent.futures import CancelledError
@@ -250,6 +251,7 @@ class AcquisitionTask(object):
         self._stage = stage
         self._roa = roa  # region of acquisition object
         self._roc = roa.roc  # region of calibration object
+        self._path = path  # sub-directories on external storage
         self._future = future
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
@@ -261,11 +263,6 @@ class AcquisitionTask(object):
         # set size of returned data array
         # The full image data is directly stored via the asm on the external storage.
         self._detector.dataContent.value = "empty"  # dataArray of shape (0,0) is returned with some MD
-
-        # set the path for additional sub-directories (<acquisition date>/<project name>)
-        self._detector.subdirectory.value = path
-        # set the megafield id as specified by the ROA name
-        self._detector.filename.value = self._roa.name.value
 
         # list of field image indices that still need to be acquired {(0,0), (1,0), (0,1), ...}
         self._fields_remaining = set(self._roa.field_indices)  # Used for progress update.
@@ -287,6 +284,9 @@ class AcquisitionTask(object):
         :raise:
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
+
+        # set the sub-directories (<acquisition date>/<project name>) and megafield id
+        self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
 
         exceptions = None
 
