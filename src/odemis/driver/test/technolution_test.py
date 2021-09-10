@@ -65,7 +65,7 @@ CHILDREN_ASM = {"EBeamScanner"   : CONFIG_SCANNER,
 EXTRNAL_STORAGE = {"host"     : "localhost",
                    "username" : "username",
                    "password" : "password",
-                   "directory": "image_dir"}
+                   "directory": "asm_service"}
 
 
 class TestAuxilaryFunc(unittest.TestCase):
@@ -135,7 +135,7 @@ class TestAcquisitionServer(unittest.TestCase):
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
         pass
@@ -184,35 +184,64 @@ class TestAcquisitionServer(unittest.TestCase):
                 1 / clock_freq)
 
     def test_externalStorageURL_VA(self):
-        # Set default URL
-        test_url = 'ftp://username:password@127.0.0.1:5000/directory/sub-directory'
-        self.ASM_manager.externalStorageURL.value = test_url
+        """Test the external storage URL VA.
+        Note: Try to choose examples that are only triggering one of the checks and none of the others!"""
+
+        test_url = 'ftp://username:password@127.0.0.1:5000/asm_service'
+        self.ASM_manager.externalStorageURL._set_value(test_url, force_write=True)
         self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
 
-        # Test illegal scheme
+        # Special cases that parser does not handle correctly - incorrect splits (1st if statement)
+        # Test incorrect characters in host
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'wrong://username:password@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0.?1:5000/directory',
+                                                           force_write=True)
+        # Test '@' duplicated in url
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.hostname to be None
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0.1:5000@/directory',
+                                                           force_write=True)
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.username to be None
+            self.ASM_manager.externalStorageURL._set_value('ftp:@//username:password@127.0.0.1:5000/directory',
+                                                           force_write=True)
+        with self.assertRaises(ValueError):
+            # the '@' at this very specific position triggers the url.scheme to be an empty string
+            self.ASM_manager.externalStorageURL._set_value('ftp@://username:password@127.0.0.1:5000/directory',
+                                                           force_write=True)
+        # TODO: example below not captured yet! There is no check yet, that verifies the host being 4 numbers
+        # with self.assertRaises(ValueError):
+        #     self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0:.1:5000/directory',
+        #                                                            force_write=True)
+        # Test additional '/' in host (captured by 6th if statement)
+        with self.assertRaises(ValueError):
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0/.1:5000/directory',
+                                                           force_write=True)
 
-        # Test illegal character in user
+        # Test incorrect scheme (2nd if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://wrong%user:password@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL._set_value('incorscheme://username:password@127.0.0.1:5000/directory',
+                                                           force_write=True)
 
-        # Test illegal characters in password
+        # Test incorrect character in user name (3rd  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:testwrong%$word@127.0.0.1:5000/directory'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL._set_value('ftp://incorrect()user:password@127.0.0.1:5000/directory',
+                                                           force_write=True)
 
-        # Test illegal character in host
+        # Test incorrect character in password (4th  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@non-test-%-able/Test_images'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:incor()password@127.0.0.1:5000/directory',
+                                                           force_write=True)
 
-        # Test illegal characters in path
+        # Test incorrect character in host (5th  if statement)
         with self.assertRaises(ValueError):
-            self.ASM_manager.externalStorageURL.value = 'ftp://username:password@127.0.0.1:5000/Inval!d~Path'
-        self.assertEqual(self.ASM_manager.externalStorageURL.value, test_url)
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:password@incorrecthost.().0.0/directory',
+                                                           force_write=True)
+
+        # Test incorrect character in path (6th  if statement)
+        with self.assertRaises(ValueError):
+            self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0.1:5000/incorrect:path',
+                                                           force_write=True)
 
     def test_assembleCalibrationMetadata(self):
         MAX_NMBR_POINTS = 4000  # Constant maximum number of setpoints
@@ -341,37 +370,31 @@ class TestAcquisitionServer(unittest.TestCase):
         self.ASM_manager.calibrationMode.value = False
 
     def test_checkMegaFieldExists(self):
-        """
-        Testing basics of checkMegaFieldExists functionality.
-        """
-        ASM = self.ASM_manager
-        # Set dwell time to minimum so scanning of an image is as fast.
+        """Check if a megafield exists on the external storage or not."""
+
+        # Set dwell time to minimum so scanning of an image is fast.
         self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
-        # In the "setUp" method the megafield id is (re)set everytime when te test is stared to a string which contains
-        # the current time i.e. time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S").
-        mega_field_id = self.MPPC.filename.value
-        folder_of_image = urlparse(ASM.externalStorageURL.value).path
+
+        filename = self.MPPC.filename.value  # sub-directories and file name (megafield id)
 
         dataflow = self.MPPC.data
-        image = dataflow.get()  # Get an image so it can be check if that megafield exists
+        image = dataflow.get()  # acquire a small megafield (it is just a single field)
+        time.sleep(1)  # wait a bit until image is offloaded to the external storage
 
-        starting_time = time.time()
-        image_received = False
-        while not image_received:
-            image_received = ASM.checkMegaFieldExists(mega_field_id, folder_of_image)
-            time.sleep(1.0)
-            if time.time() - starting_time > 45:
-                # Wait a while for the image to be taken and saved. Break if saving image takes too much time.
-                break
-
+        # check if just acquired megafield exists on external storage
+        image_received = self.ASM_manager.checkMegaFieldExists(filename)
         self.assertTrue(image_received)
 
-        # This image name contains invalid characters and should therefore not exist.
-        image_received = ASM.checkMegaFieldExists("wrong_mega_field_id_#@$", folder_of_image)
-        self.assertFalse(image_received)
+        # request filename containing invalid characters
+        with self.assertRaises(ValueError):
+            self.ASM_manager.checkMegaFieldExists("sub-dir/wrong_mega_field_id_#@$")
 
-        # This storage directory contains invalid characters and should therefore not exist.
-        image_received = ASM.checkMegaFieldExists(mega_field_id, "wrong_storage_dir_@#$")
+        # request path on external storage containing invalid characters
+        with self.assertRaises(ValueError):
+            self.ASM_manager.checkMegaFieldExists("wrong_storage_dir_@#$/megafield_id")
+
+        # check for a megafield which should not be on external storage
+        image_received = self.ASM_manager.checkMegaFieldExists("test-from-last-century/test/1900-13-40-100-1000-10")
         self.assertFalse(image_received)
 
     def test_AsmApiException(self):
@@ -405,7 +428,7 @@ class TestEBeamScanner(unittest.TestCase):
 
     def setUp(self):
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
         pass
@@ -621,7 +644,7 @@ class TestMirrorDescanner(unittest.TestCase):
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
         pass
@@ -879,16 +902,17 @@ class TestMPPC(unittest.TestCase):
                 self.MirrorDescanner = child
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
         self.ASM_manager.terminate()
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
-    def test_file_name_VA(self):
-        """Testing the filename VA"""
-        self.MPPC.filename.value = "testing_file_name"
-        self.assertEqual(self.MPPC.filename.value, "testing_file_name")
+    def test_filenameVA(self):
+        """Testing the filename VA, which contains the path to the image data on the external storage
+        (sub-directories) and the filename, which represents the megafield id."""
+        self.MPPC.filename.value = "date/project/megafield_id"
+        self.assertEqual(self.MPPC.filename.value, "date/project/megafield_id")
 
         # Raise an error if invalid filename is provided
         with self.assertRaises(ValueError):
@@ -1249,7 +1273,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.MPPC.dataContent.value = "empty"
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
         self._data_received = threading.Event()
         time.sleep(5)  # give the ASM some extra time to empty the offload queue
@@ -1309,8 +1333,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         return data_content_size[dataContentString]
 
     def test_get_field(self):
-        # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        """Test acquiring a single field image."""
         dataflow = self.MPPC.data
 
         image = dataflow.get()
