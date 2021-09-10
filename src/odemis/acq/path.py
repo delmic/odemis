@@ -690,7 +690,7 @@ class OpticalPathManager(object):
             except IOError as e:
                 logging.warning("Actuator move failed giving the error %s", e)
             except:
-                logging.exception("Actuator move failed!")
+                logging.exception("Actuator %s move %s failed!", comp.name, mv)
                 raise
 
         # When going to chamber view, store the current focus position, and
