@@ -1959,11 +1959,12 @@ class StreamBarController(object):
         # => need more ways to change current stream (at least pick one from the
         # current view?)
 
+        # Get the spot Stream, if the model has one, otherwise None
+        spots = getattr(self._tab_data_model, "spotStream", None)
         # Don't mess too much with the spot stream => just copy "should_update"
-        if hasattr(self._tab_data_model, "spotStream"):
-            if stream is self._tab_data_model.spotStream:
-                stream.is_active.value = updated
-                return
+        if stream is spots:
+            stream.is_active.value = updated
+            return
 
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
@@ -1972,7 +1973,7 @@ class StreamBarController(object):
                 # the other streams might or might not be updated, we don't care
             else:
                 # FIXME: hack to not stop the spot stream => different scheduling policy?
-                spots = getattr(self._tab_data_model, "spotStream", None)
+
                 # Make sure that other streams are not updated (and it also
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
@@ -2001,16 +2002,14 @@ class StreamBarController(object):
             # Activate or deactivate spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
-            if isinstance(stream, self._spot_incompatible):
+            if isinstance(stream, self._spot_incompatible) and spots:
                 if self._tab_data_model.tool.value == TOOL_SPOT:
                     logging.info("Stopping spot mode because %s starts", stream)
                     self._tab_data_model.tool.value = TOOL_NONE
-                    spots = self._tab_data_model.spotStream
                     spots.is_active.value = False
 
-            elif isinstance(stream, self._spot_required):
+            elif isinstance(stream, self._spot_required) and spots:
                 logging.info("Starting spot mode because %s starts", stream)
-                spots = self._tab_data_model.spotStream
                 was_active = spots.is_active.value
                 self._tab_data_model.tool.value = TOOL_SPOT
 
@@ -2039,10 +2038,9 @@ class StreamBarController(object):
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
         else:
-            # Deactivate spot mode if spot stream was just paused
-            if isinstance(stream, self._spot_required):
+            # The stream is now paused. If it used the spot stream, pause that one too.
+            if isinstance(stream, self._spot_required) and spots:
                 self._tab_data_model.tool.value = TOOL_NONE
-                spots = self._tab_data_model.spotStream
                 spots.is_active.value = False
 
     def on_tool_change(self, tool):
