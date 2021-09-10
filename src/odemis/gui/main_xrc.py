@@ -73,6 +73,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
         self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
+        self.btn_tab_align_enzel = xrc.XRCCTRL(self, "btn_tab_align_enzel")
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
@@ -156,6 +157,76 @@ class xrcpnl_tab_secom_align(wx.Panel):
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
+
+
+
+class xrcpnl_tab_enzel_align(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_enzel_align.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_enzel_align.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_enzel_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_enzel_align")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
+        self.btn_align_z = xrc.XRCCTRL(self, "btn_align_z")
+        self.btn_align_sem = xrc.XRCCTRL(self, "btn_align_sem")
+        self.btn_align_flm = xrc.XRCCTRL(self, "btn_align_flm")
+        self.controls_step_size_slider = xrc.XRCCTRL(self, "controls_step_size_slider")
+        self.pnl_z_align = xrc.XRCCTRL(self, "pnl_z_align")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
+        self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
+        self.pnl_sem_align = xrc.XRCCTRL(self, "pnl_sem_align")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.beam_shift_btn_p_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_y")
+        self.beam_shift_btn_m_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_y")
+        self.beam_shift_btn_m_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_x")
+        self.beam_shift_btn_p_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_x")
+        self.pnl_flm_xyz_align = xrc.XRCCTRL(self, "pnl_flm_xyz_align")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.flm_align_btn_p_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_y")
+        self.flm_align_btn_m_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_y")
+        self.flm_align_btn_m_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_x")
+        self.flm_align_btn_p_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_x")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
+        self.flm_align_btn_p_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_z")
+        self.flm_align_btn_m_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_z")
+        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
+        self.btn_auto_center = xrc.XRCCTRL(self, "btn_auto_center")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_two_streams_grid = xrc.XRCCTRL(self, "pnl_two_streams_grid")
+        self.view_FIB = xrc.XRCCTRL(self, "view_FIB")
+        self.view_SEM = xrc.XRCCTRL(self, "view_SEM")
+        self.view_FLM = xrc.XRCCTRL(self, "view_FLM")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.top_settings = xrc.XRCCTRL(self, "top_settings")
+        self.bottom_settings = xrc.XRCCTRL(self, "bottom_settings")
 
 
 
@@ -1136,6 +1207,26 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
+
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_align_enzel">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ALIGNMENT</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
@@ -2057,6 +2148,706 @@ def __init_resources():
     <bg>#333333</bg>
     <style>wxWANTS_CHARS</style>
   </object>
+  <object class="wxPanel" name="pnl_tab_enzel_align">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_alignment_btns">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_z">
+                      <icon>img_icon_ico_spec_png</icon>
+                      <icon_on>img_icon_ico_spec_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Align the Z position of the stage</tooltip>
+                      <label>Z</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>2</assign_var>
+                      </XRCED>
+                      <flag>wxALL|wxEXPAND</flag>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_sem">
+                      <icon>img_icon_ico_sem_png</icon>
+                      <icon_on>img_icon_ico_sem_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Align the SEM relative to the FIB</tooltip>
+                      <label>SEM</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>2</assign_var>
+                      </XRCED>
+                      <flag>wxALL|wxEXPAND</flag>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_flm">
+                      <icon>img_icon_ico_optical_png</icon>
+                      <icon_on>img_icon_ico_optical_green_png</icon_on>
+                      <height>48</height>
+                      <label>FLM</label>
+                      <tooltip>Align the FLM relative to the FIB</tooltip>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>2</assign_var>
+                      </XRCED>
+                      <flag>wxALL|wxEXPAND</flag>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+            </object>
+
+
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>Step size</label>
+              </object>
+              <flag>wxBOTTOM</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="UnitFloatSlider" name="controls_step_size_slider">
+                <size>-1,20</size>
+                <value>0.000001</value>
+                <min>0.0000001</min>
+                <max>0.001</max>
+                <unit>m</unit>
+                <scale>log</scale>
+                <accuracy>2</accuracy>
+                <fg>#E5E5E5</fg>
+                <style>wxBORDER_NONE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_z_align">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pz">
+                      <label>+Z</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="stage_align_btn_p_aligner_z">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↑</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM</flag>
+                    <border>20</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="stage_align_btn_m_aligner_z">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↓</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP</flag>
+                    <border>20</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mz">
+                      <label>-Z</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_CENTRE</flag>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_sem_align">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_y">
+                      <label>+Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>0,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_y">
+                      <label>-Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>4,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_x">
+                      <label>+X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_LEFT</style>
+                    </object>
+                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,4</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_x">
+                      <label>-X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↑</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>1,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↓</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>3,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>←</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>→</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,3</cellpos>
+                  </object>
+                  <vgap>0</vgap>
+                  <hgap>5</hgap>
+                  <growablecols/>
+                  <growablerows/>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_CENTRE</flag>
+            </object>
+
+            <object class="sizeritem">
+                <object class="wxPanel" name="pnl_flm_xyz_align">
+                    <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                            <object class="wxGridBagSizer">
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_y">
+                                        <label>+Y</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                                    <border>5</border>
+                                    <cellpos>0,2</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_y">
+                                        <label>-Y</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                                    <border>5</border>
+                                    <cellpos>4,2</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_x">
+                                        <label>+X</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_LEFT</style>
+                                    </object>
+                                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                                    <border>5</border>
+                                    <cellpos>2,4</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_x">
+                                        <label>-X</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                                    <border>5</border>
+                                    <cellpos>2,0</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_p_aligner_y">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>↑</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT</flag>
+                                    <border>7</border>
+                                    <cellpos>1,2</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_m_aligner_y">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>↓</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT</flag>
+                                    <border>7</border>
+                                    <cellpos>3,2</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_m_aligner_x">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>←</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <cellpos>2,1</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_p_aligner_x">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>→</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <cellpos>2,3</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_pz">
+                                        <label>+Z</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                                    <border>5</border>
+                                    <cellpos>0,5</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_mz">
+                                        <label>-Z</label>
+                                        <fg>#E5E5E5</fg>
+                                        <font>
+                                            <size>16</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                    </object>
+                                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                                    <border>5</border>
+                                    <cellpos>4,5</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_p_aligner_z">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>↑</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT</flag>
+                                    <border>7</border>
+                                    <cellpos>1,5</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="ImageTextButton" name="flm_align_btn_m_aligner_z">
+                                        <size>64,-1</size>
+                                        <height>48</height>
+                                        <label>↓</label>
+                                        <font>
+                                            <size>24</size>
+                                            <weight>bold</weight>
+                                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                            <assign_var>1</assign_var>
+                                        </XRCED>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT</flag>
+                                    <border>7</border>
+                                    <cellpos>3,5</cellpos>
+                                </object>
+                                <vgap>0</vgap>
+                                <hgap>5</hgap>
+                                <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                            </object>
+                            <fg>#E5E5E5</fg>
+                            <bg>#333333</bg>
+                            <hidden>0</hidden>
+                            <XRCED>
+                                <assign_var>1</assign_var>
+                            </XRCED>
+                            <flag>wxALIGN_CENTRE</flag>
+                        </object>
+                        <flag>wxALIGN_CENTRE</flag>
+                    </object>
+                    <fg>#E5E5E5</fg>
+                    <bg>#333333</bg>
+                    <hidden>0</hidden>
+                    <XRCED>
+                        <assign_var>2</assign_var>
+                    </XRCED>
+                    <border>10</border>
+                    <flag>wxALIGN_CENTRE</flag>
+                </object>
+                <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                <border>5</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxHtmlWindow" name="html_alignment_doc">
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <border>5</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_auto_center">
+                <height>24</height>
+                <label>Reset to factory alignment position</label>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND|wxALL</flag>
+              <border>10</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <fg>#E5E5E5</fg>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_two_streams_grid">
+          <object class="LiveViewport" name="view_FIB">
+            <size>400,-1</size>
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="view_SEM">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="view_FLM">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="top_settings">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                        </object>
+                        <label>TOP VIEW SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="bottom_settings">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                        </object>
+                        <label>BOTTOM VIEW SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <flag>wxEXPAND</flag>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>512,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+    <style>wxWANTS_CHARS</style>
+  </object>
+
   <object class="wxPanel" name="pnl_tab_sparc_align">
     <object class="wxBoxSizer">
       <object class="sizeritem">
@@ -4232,6 +5023,7 @@ def __init_resources():
 									<flag>wxALL</flag>
 									<border>10</border>
 								</object>
+
 								<object class="sizeritem">
 									<object class="wxPanel" name="pnl_advanced_align">
 										<object class="wxBoxSizer">
@@ -4503,6 +5295,7 @@ def __init_resources():
 									<flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
 									<border>5</border>
 								</object>
+
 							</object>
 							<fg>#E5E5E5</fg>
 							<bg>#444444</bg>
@@ -8458,6 +9251,101 @@ Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
 \x96~\xe5\x1e\x052\x07\xbahT\xb7\xbf\xe8\xb1F\xdc\xe8\xe8\xaak\x00\x00\x00\
 \x00IEND\xaeB`\x82'''
 
+    img_icon_ico_spec_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x27\x00\x00\x00&\x08\x06\x00\x00\x00G\
+\xff\x82\x90\x00\x00\x02\x92IDATX\xc3\xed\x98\xb9\x8b\x13a\x18\x87\x13\x0f\
+\x94\x05\x05-\x14\xb4\xd9\x0d\x88\x9dM\xee\xfb\xbe\xef\xfb\xbe\x8fm\x16\
+;\xb1Y\xd8Jl\x04+\xb1\x12\xecl\x05\x0b\xff\x05+\xad\xec\xb4\x10\x0b\x05\
+\x11\x04E\xf1\xfc\xfc\xbd\x83\x13&\xb3\x995\xc9N\x92Y\x98\xc0\x8f\x10\xc8\
+d\x9ey\xbe\xf7\xfd\xbe\x97h\x18c\x1a\xa5F\xa3\xc2\xa9pG\x19N\xaf\xd7\x1f\
+S,\x9c\xc9dj!A\xc5\xc1Y,\x96\x93^\xaf\xf7\xb5\xc7\xe3y\xa688@mg\xb3Y\x96\
+\xc9d\x98\xcb\xe5J*\x06\x0e\xd6N\xc7b\xb1\xb7\xcdf\x935\x1a\x0d\x16\x89\
+D^\x98\xcdf\xad"\xe0`\xedz\xa9Tb\xfd~\x9fK>\x9f\x27{\xc5\xb5\xc3Y\xad\xd6\
+\x8dx<\xfe\xbe\xd5j\xb1\xd1h\xc4\x86\xc3!#\x83\xd1h\xf4%\x8c\x1e_+\x1c\x9a\
+\xe0&Y\x1b\x0c\x06\x1c\x1c\x85\xec\x15
+\x05\xe6v\xbb\x9bk\x83\x83\xb5\xb3\x89D\xe2c\xbb\xdd\x1e\x83\x89\xec\xbd\
+\x82\xbd\x13k\x81\x83\xb5\xbdr\xb9<aMh\xafX,\x92\xbd\xe1\xca\xe1l6\xdby\
+X\xfb$\xb6&\x0c\xd5!\xba\xf8\x0d\xec\x9dZ)\x9c\xcf\xe7\xbb-eMl\x0f\xdd\xbc\
+\xb328X\xbb\x98L&\xbft:\x1dI0\xa1=t\xf3;\xea\xea\x95\xc0\xf9\xfd\xfe\xbb\
+\x95J\xe5@k|\xe8;\xd4\xcd\xa8\xcf\x1bK\x87\x83\xb5\xcb\xa9T\xea\xdb,\xd6\
+\xf8P]\xc2\xde\x07\xd8;#\x0b\x9c\xd4\x0b\xd6\xeeW\xab\xd5\x99\xac\x09\xed\
+Q}\xc2\xde\xee\xb4\xdf\x94\x05\xcen\xb7o\xc1\xda\x0f)k\xb4\xbf\x1dd\x8f\
+\xba\x1b\xe6\xcf-\x05.\x10\x08<$k\xd3 h\xd3u8\x1c\xb4\xaf\xb1i\xdb\x0bo\
+\x0f]~Kv8X\xbb\x9aN\xa7v\xbb\xdd}\xb6`\x93\x19\x0c\x06\x86I\x98\x8b\xd1\
+hd\xb9\\n\xaa=t\xf9g\xd8\xbb +\x1c\xac=\xaa\xd5j\x13\xd6h\x9b\xc0\xf41\x86\
+\x12\x075\xc6\x84\x0fC\xf6\xa8\xcba\xef\x8elpX\xaek\x18"\x0bo\x04\x8b\x13\
+\xb6\xa4\x82\xb1\x9d\x1b\x02\xf8\xeb\xa8^a\xfa+\xec]\x92\x05.\x18\x0c>\xe6\
+\xad\xd1\xd2P]\xfd\x0fJ\x1ct9\xeb\xf5zc{\xf8|\xef\xd0p\xb0f\xc4\xf8\xfd\
+\x87\xac\xd1\x18N\xf54/\x18\x1fL\xc7\xdcq\xf6\xcf\xdew\xd4\xf1\xe6\xa1\xe0\
+B\xa1\xd0S\xda\xe1q>.\x0c%\x0e\xea\x97;5\xf0\xfe`a8\xa7\xd3\xe9@\xf1\xce\
+T[\xf3\x86V\x00p\xbf`\xef\xca"pZ@=G\xe1r\xd6\x96\x11\x1cg\xf4\xe0O\xe6\x86\
+\xc3\x85ZL\xb2:l\x9c\xbaz\xbd\xbe\x94`iu\xe1pxS\xfd\xafD\x85S\xe1\x8e:\xdc\
+_hO\xb65\xb6X\xbc\x88\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_spec_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x27\x00\x00\x00&\x08\x06\x00\x00\x00G\
+\xff\x82\x90\x00\x00\x05\x04IDATX\xc3\xbd\x98\xcf\x8b\x1cE\x14\xc7\xab^\
+\xfd\xe8\x9en\xa3\x09f1z\x08\x12A\xbcx\xf0\xe4!
+{\x88\x98\x80\xc1\xd5\x0dnP\x83\x87\x8fA\xa2\x12\x88\xe0\xc1\x83z\x11\
+\x02
+\x82 \x88\xa0\x11\x11\x95@\xc8\xba\x9b\xdd\x9d\x9d\xe9\xe9\xae\xf2UOU\xfb\
+\xa6\xb6{vzv\x93\x1a\x1e\xddL\xd7\x8fO}\xeb\xbd\xfa\xc5\x99eGI<z\xd2d\xa3\
+g\xef$\x8f\x00\xd5e\x01\xc8\x99!\xef\xf6Q\xc2\x094\xf0\xcf\xf0\xce\x09\x94\
+\xb3\xca\x9b!\xa0\x0f\x15.\x80\xb9\xb2\xca\x9b\xf4\x06\x1e\xa0\xf46!O\xfb\
+(\xe0\xc0\x97K\xd0R4\xedMEp\x05\xda\xd8[<\xc4\x0f\x05.\x0c\xa3\x03\x19\xa0\
+e\x1e\xd0\x81Jn\xb9\xb4\xdcV\x04\x8e\x02W}\x87V.\x11\x04A5\x07\x96{H\xa7\
+\x9c\xcc\xef\xe6\xaf\x1bi\xee\x0fW\x86\xdfy0\xe1\xcb\x1a?\xb4U\x1f\xf5\xe4\
+\x12\xbe\xa6=\x10UNq\xc3\xb5\xb2\xea\x03D\xd8\x1a\xb2\xe1\x8f$H\xe80\x97\
+}\xd4\x83%U\x0bpi\xa3\xdaf~\x11r8\x03\x19\xbc\x80\xef\xe7\xfd\xff)\xe9D\
+B\xd4\xe4\xc7\x0d\x27H\x83\xc1\xea\xc6\xa0\x82D3}5\xa0\xe8J_#\xbe\x99\x10\
+H}\xdcp\xdc\xe7SD\xb5F1\xf7=\xff7\xbf\xc8S~\x9a+\xce\xb8\xe4\x0c\x128\x97\
+\xdf\xcf_!\xe5RRna\xf5\xa0\x87j\x8a(\x96\x040(!QLmp\xcd\xff\x8fe\xfc\xaa\
+\x8d~\x0f\xa37\xcc\x87:*+\x16i\x1b\x16TM\xb6\xf4\xbe.\x8b\xaa]F\xd5N\xd2\
+\xd0r
+B
+g\xd1\xf7V\xa3yq@|\x0f\x0eS\x0fz\xfa\xda\x80\xaa&
+\x91)PWx\xc2gk\xc2w\xee\xd4\xb3\xfa]\x8cb1\xa7\x0eX\x16\x8e\x1f\xd2k\x96\
+o\xe7k\xa8\xda\x89f6\x9b\x99\xa4\xd0\xff\x12\xfe4\xaa\xf7\xda!\xea\xf3e\
+\xe1D\x87\xbfp9\x96\x27$\xc8\xb5\xc6\xd7Zjv\x8a\xba(\xc6hV\x91\xdf\x0eH\
+@A_8>\x27\xd2\xea2\xd9\x83l\x1dU\xcb\xe7N\xe3\xf8\x0d\xf3\xac\xb8h\x8e"\
+>]D=\xe8\xe1kMO\xe5H\x9e\x92B^\xae\xff\xe1n\xba?\xf8kj\xd7n\xf9P\x1b\x18\
+\xd5i_\xdf\x83\x05\xe7\xb5\x99\x08\xcbv\xb2wP\x91\xd4Uk;V\xa2\x06R\xd6\xc3\
+{*\xdf\xca\xdfh\xf1\xe1\xb9\xea\xc1\x02khJ\xe1\xd4\xbeZ\x91R^
+\xaaQ\x90N\xf5\x92Z\xbdu1\x11y\xb4\xdd\x9a\xab\x1e,\xe0ktH\xc5`o\xb0\x81\
+_\x94\x15\x11\xc4<\xf5D]\xdb\xe3\xd9v\xf6fK`t.kmp\xf1\xe2\x9e\x84\xc2j\xa8\
+\x9e\x11R\\\xa8\xabnqa[!\x8a=\x08k\xc1\xd65\xb8\xe8\xc6\xb9\xf1\x89\xc8\
+e:\xd5\x839\xcbT\x16\xf9\x85\x1a\xec\x0f\xaeb5\x82\xcekA\x1ds\xcf\xb0\xc9\
+\x8d\x09+o\x96\xcc>hQt\x1a\xb9\x19\xfa\xeb\xdb\x11\\\x16\xa9\x07mpde\xac\
+\x0bd4\x18P\xb5\xb3\xa8\xda\xf9\xa0Z3d\xb8;\xab\xbe\xafj0{\x0f!\xffB\xc8\
+\xeb\x13f~2\xb3\xc3\xceYP\xef\x12\xce\x91O\x12\xbf\xcb\xe8\xbe\x90\x8e\x09\
+D\xbe\xa6Ioh\x01\x89\xaa]\x09\xaa\x85\x06\xed\xa6e\xe5\xa7%\xabnW\xd3=n\
+P\xb3\xc0\xff\xbf.Yy\x0b\xf7\x96\xbb$\xa2\xa7\xbe\x97\x0ev\x07k\xd1\x8a\
+\x91\xb5\xf9\x1et,U4B\xa5\xde\xd3\xcf\x82\x82\x97\x9b~9\xc1~@\x85>F\x85\
+\xee\x9a\xce\x800`\x9e\x8f0\xcf/^En\xeb\x1a\x85\x10\x17P\xbd\xd3\x1d\xed\
+\x1d\x80c$J\x15\x89\xce\xdaI\xd3Q\xba\x8e\xcb\x14\xafsl\xe3^\xfb3T\xe5\xdb\
+r\xba\xe9>$\xd91\xaa\xf8%\xe6\xff\x023\x0f\xa7M\xe3\xbc\xa7\xbdztK\xa5\xbb\
+\xe0xt\xb2j\x0e\xca\xc9n\xf2\x9cP\xe2%\xf7\xaf\xf3\xa3\xe2z\xc1\xcc?\xa6\
+\xf7y\xd2\xfc\xe6}\xf1\x8e\x09\xea\xad\xaa\x91z\x8a\xb4E\xcf\xbe\xd0\x05\
+\x07\xc4x2N\xd6\xd1\x87x\xf99\xf6\xfe\x9brz\x86Z2\xd9\xa1\xad\x15,\xbf*\
+\x99\xdb3\xa7{\xe9[\x1dm\xd7L\xd0r)\xd3\xd4\x95\xec$\xcf\xb3;\xec\xc5\xc9\
+\x27\xd8\xe3?\x0d;\xae\xe4|\xd0\xd5\x09\xc3\xabz\xa8\xcf\x90\xfb\x95\x99\
+;\x17\x19\xdd
+\x85\xc3/NV\xacT\xb7\xd5\xfbv\xcb2<S-x$\xe9##B\xfel@o\xeak\xc5j\xf1a\xdb\
+\xa1\x9b\xfb\xd7\x105\x8f\xa1\xb9\x19\xfc\xa4{\xea\xb1>g\xa5\xd5\x98K\x12\
+G\xe5GCj\xae&J\xdc%\x17\x884,\x92\xe2\xd7i\xa8\xd5\xb6\x83\xb6\xef\xbeK\
+R\xc8\xf8C\xaf\xbb\xdbpq%\xb1\xd0\xef-\x1b\xc3\xb6\x1d\x04\x9f\x03\xd36\
+2U}\xc8\x066\xc2Z\x87\x1ef\xe4\x0f\xde\xcd\xad@\x0c7\xf1\x99\x82J\xe1\xbf\
+\xb0\xf6\xc5N\xdbW5\xd3\xb8\xcd\x14d\xe4\x85\xd8\xf5\x80\xf4\xca\x82Q\xb8\
+\xca\x0c*T\xbe\x82\x84\xeeJ"\xe5\xf8\x12\xc3i\xc8\xb5\xd8\xd8\x03\xee\xfb\
+\xf7\xa2\x0d\x8e\x91B\x96\x80\xed\xb7\xcc?\xd0\x13\xac\x0d\xb0"
+N\xc8=\xdeLPp\xe2\x15\xf1\xf5)DO\xbe\x84b]\x80\x8c@\x98\xae+Z\xbe\xc0}\
+\xcfqO"]\x01s \xfd\x07:\x1f\xd4I\x80\xca\x08\xd0\x00\x00\x00\x00IEND\xae\
+B`\x82'''
+
     img_icon_ico_cam_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -9512,6 +10400,8 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', bytearray(img_icon_ico_sem_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', bytearray(img_icon_ico_optical_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_green_png', bytearray(img_icon_ico_optical_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_spec_png', bytearray(img_icon_ico_spec_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_spec_green_png', bytearray(img_icon_ico_spec_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_png', bytearray(img_icon_ico_cam_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_green_png', bytearray(img_icon_ico_cam_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_png', bytearray(img_icon_ico_ang_png))
