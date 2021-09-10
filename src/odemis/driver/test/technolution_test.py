@@ -1273,7 +1273,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.MPPC.dataContent.value = "empty"
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
-        self.MPPC.filename.value = time.strftime("test_images/project/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
+        self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
         self._data_received = threading.Event()
         time.sleep(5)  # give the ASM some extra time to empty the offload queue

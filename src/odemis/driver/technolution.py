@@ -163,7 +163,7 @@ class AcquisitionServer(model.HwComponent):
                                                   externalStorage["host"],
                                                   externalStorage["directory"]),
                                                  setter=self._setURL, readonly=True)
-        self.externalStorageURL._set_value(self.externalStorageURL.value, force_write=True)
+        self.externalStorageURL._set_value(self.externalStorageURL.value, force_write=True)  # check URL ok
 
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
