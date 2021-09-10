@@ -455,42 +455,6 @@ class AcquisitionServer(model.HwComponent):
         response = self.asmApiGetCall("/monitor/item?item_name=" + item_name, 200)
         return response
 
-    def getTotalLineScanTime(self):
-        """
-        Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
-        pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
-        position for the next line scan).
-        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback
-                 time in seconds.
-        """
-        descanner = self._mirror_descanner
-        scanner = self._ebeam_scanner
-        acq_dwell_time = scanner.dwellTime.value
-
-        resolution = self._mppc.cellCompleteResolution.value[0]
-        line_scan_time = acq_dwell_time * resolution
-        flyback_time = descanner.physicalFlybackTime
-
-        # Check if the descanner clock period is still a multiple of the system clock period, otherwise raise an
-        # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
-        # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
-        # number of ticks.
-        if not almost_equal(descanner.clockPeriod.value % self.clockPeriod.value, 0):
-            logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
-                          "the system clock period. The calculation of the scanner calibration setpoints need "
-                          "to be adjusted.")
-            raise ValueError("Descanner clock period is no longer a whole multiple of the system clock period.")
-
-        # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
-        remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
-        if remainder_scanning_time is not 0:
-            # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
-            # line scan time is equal to a whole multiple of the descanner clock period
-            flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)
-
-        # Total line scan time is the period of the calibration signal.
-        return numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
-
     def _assembleCalibrationMetadata(self):
         """
         Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
@@ -500,7 +464,7 @@ class AcquisitionServer(model.HwComponent):
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
 
-        total_line_scan_time = self.getTotalLineScanTime()
+        total_line_scan_time = self._mppc.getTotalLineScanTime()
 
         # Get the scanner and descanner setpoints
         x_descan_setpoints, y_descan_setpoints = self._mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
@@ -1027,6 +991,11 @@ class MPPC(model.Detector):
 
         # The minimum of the cell resolution cannot be lower than the minimum effective cell size.
         self.cellCompleteResolution = model.ResolutionVA((900, 900), ((12, 12), (1000, 1000)))
+        self.cellCompleteResolution.subscribe(self._updateFrameDuration)
+        self.parent._ebeam_scanner.dwellTime.subscribe(self._updateFrameDuration)
+        # acquisition time for a single field image including overscanned pixels and flyback time
+        acq_time = self.getTotalFieldScanTime()
+        self.frameDuration = model.FloatContinuous(acq_time, range=(0, 100), unit='s', readonly=True)
 
         # Setup hw and sw version
         self._swVersion = self.parent.swVersion
@@ -1594,6 +1563,63 @@ class MPPC(model.Detector):
         cellDarkOffset = tuple(tuple(item) for item in cellDarkOffset)
 
         return cellDarkOffset
+
+    def getTotalLineScanTime(self):
+        """
+        Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
+        pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
+        position for the next line scan).
+        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback
+                 time in seconds.
+        """
+        descanner = self.parent._mirror_descanner
+        scanner = self.parent._ebeam_scanner
+        acq_dwell_time = scanner.dwellTime.value
+
+        resolution_x = self.cellCompleteResolution.value[0]
+        line_scan_time = acq_dwell_time * resolution_x
+        flyback_time = descanner.physicalFlybackTime
+
+        # Check if the descanner clock period is still a multiple of the system clock period, otherwise raise an
+        # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
+        # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
+        # number of ticks.
+        if not almost_equal(descanner.clockPeriod.value % self.parent.clockPeriod.value, 0):
+            logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
+                          "the system clock period. The calculation of the scanner calibration setpoints need "
+                          "to be adjusted.")
+            raise ValueError("Descanner clock period is no longer a whole multiple of the system clock period.")
+
+        # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
+        remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
+        if remainder_scanning_time is not 0:
+            # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
+            # line scan time is equal to a whole multiple of the descanner clock period
+            flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)
+
+        # Total line scan time is the period of the calibration signal.
+        return numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
+
+    def getTotalFieldScanTime(self):
+        """
+        Calculate the time for scanning a single field image including over-scanned pixels (cell complete resolution)
+        and flyback time (time the descanner needs to move back to the start position for the next line scan).
+        :return: (float) Estimated time to scan a single field image including over-scanned pixels and the flyback
+                 time in seconds.
+        """
+        line_scan_time = self.getTotalLineScanTime()
+        resolution_y = self.cellCompleteResolution.value[1]
+        field_scan_time = line_scan_time * resolution_y
+
+        return field_scan_time
+
+    def _updateFrameDuration(self, _):
+        """
+        Update everytime when one of the settings that affect the acquisition time for a
+        single field image (frame), has changed.
+        """
+        field_scan_time = self.getTotalFieldScanTime()
+        self.frameDuration._set_value(field_scan_time, force_write=True)
 
 
 class ASMDataFlow(model.DataFlow):

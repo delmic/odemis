@@ -243,29 +243,6 @@ class TestAcquisitionServer(unittest.TestCase):
             self.ASM_manager.externalStorageURL._set_value('ftp://username:password@127.0.0.1:5000/incorrect:path',
                                                            force_write=True)
 
-    def test_getTotalLineScanTime(self):
-        """Check that the time for scanning one line of pixels in a single field image is calculated correctly."""
-
-        # choose example value so that line scan time is not integer multiple of descanner clock period
-        self.EBeamScanner.dwellTime.value = 430e-09
-        acq_dwell_time = self.EBeamScanner.dwellTime.value
-        resolution = self.MPPC.cellCompleteResolution.value[0]  # including overscanned pixels
-        flyback_time = self.MirrorDescanner.physicalFlybackTime
-
-        # calculate the expected time for one line scan with the above HW settings
-        line_scan_time = acq_dwell_time * resolution
-        # check if line scan time is integer multiple of descanner clock period
-        remainder_scanning_time = line_scan_time % self.MirrorDescanner.clockPeriod.value
-        if remainder_scanning_time is not 0:
-            # make line scan time an integer multiple of the clock period by adding the extra time needed
-            flyback_time = flyback_time + (self.MirrorDescanner.clockPeriod.value - remainder_scanning_time)
-        exp_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # round to prevent floating point errors
-
-        # get the time for one line scan for the current HW settings
-        line_scan_time = self.ASM_manager.getTotalLineScanTime()
-
-        self.assertEqual(exp_line_scan_time, line_scan_time)
-
     def test_assembleCalibrationMetadata(self):
         MAX_NMBR_POINTS = 4000  # Constant maximum number of setpoints
         # TODO MAX_NMBR_POINT value of 4000 is sufficient for the entire range of the dwell time because the maximum
@@ -283,7 +260,7 @@ class TestAcquisitionServer(unittest.TestCase):
         scanner.dwellTime.value = max(random_dwell_time, minimum_dwell_time)
 
         # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
-        total_line_scan_time = self.ASM_manager.getTotalLineScanTime()
+        total_line_scan_time = self.MPPC.getTotalLineScanTime()
 
         calibration_parameters = ASM._assembleCalibrationMetadata()
 
@@ -1185,6 +1162,57 @@ class TestMPPC(unittest.TestCase):
         # Check if setter allows setting of non-square resolutions.
         self.MPPC.cellCompleteResolution.value = (int(0.2 * max_res), int(0.5 * max_res))
         self.assertEqual(self.MPPC.cellCompleteResolution.value, (int(0.2 * max_res), int(0.5 * max_res)))
+
+    def test_getTotalLineScanTime(self):
+        """Check that the time for scanning one line of pixels in a single field image is calculated correctly."""
+
+        # choose example value so that line scan time is not integer multiple of descanner clock period
+        self.EBeamScanner.dwellTime.value = 430e-09
+        acq_dwell_time = self.EBeamScanner.dwellTime.value
+        resolution = self.MPPC.cellCompleteResolution.value[0]  # including overscanned pixels
+        flyback_time = self.MirrorDescanner.physicalFlybackTime
+
+        # calculate the expected time for one line scan with the above HW settings
+        line_scan_time = acq_dwell_time * resolution
+        # check if line scan time is integer multiple of descanner clock period
+        remainder_scanning_time = line_scan_time % self.MirrorDescanner.clockPeriod.value
+        if remainder_scanning_time is not 0:
+            # make line scan time an integer multiple of the clock period by adding the extra time needed
+            flyback_time = flyback_time + (self.MirrorDescanner.clockPeriod.value - remainder_scanning_time)
+        exp_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # round to prevent floating point errors
+
+        # get the time for one line scan for the current HW settings
+        line_scan_time = self.MPPC.getTotalLineScanTime()
+
+        self.assertEqual(exp_line_scan_time, line_scan_time)
+
+    def test_frameDurationVA(self):
+        """Testing the frame duration (single field acquisition time) VA."""
+
+        # check that the frame duration changes, when the cell complete resolution changes
+        # set the cell complete resolution to some good value
+        self.MPPC.cellCompleteResolution.value = (self.MPPC.cellCompleteResolution.range[1][0],
+                                                  self.MPPC.cellCompleteResolution.range[1][1])
+        # get the frame duration
+        orig_frame_dur = self.MPPC.frameDuration.value
+        curr_cell_complete_res = self.MPPC.cellCompleteResolution.value
+        # change the cell complete resolution, which should trigger the frame duration to be adjusted
+        self.MPPC.cellCompleteResolution.value = (curr_cell_complete_res[0] - 100, curr_cell_complete_res[1] - 100)
+        # get the new frame duration
+        new_frame_dur = self.MPPC.frameDuration.value
+        # check that the previous frame duration is greater than the new frame duration
+        self.assertGreater(orig_frame_dur, new_frame_dur)
+
+        # check that the frame duration changes, when dwell time changes
+        orig_frame_dur = self.MPPC.frameDuration.value
+        # set the dwell time to minimum
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
+        # set dwell time to maximum
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[1]
+        # get the new value
+        new_frame_dur = self.MPPC.frameDuration.value
+        # check that the new frame duration is greater than the previous frame duration
+        self.assertGreater(new_frame_dur, orig_frame_dur)
 
     def test_assemble_megafield_metadata(self):
         """
