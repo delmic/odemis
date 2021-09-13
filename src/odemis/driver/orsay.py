@@ -1418,7 +1418,7 @@ class OrsayParameterConnector:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
 
         self._factor = None
-        if self._va_value_type == float and factor != 0:
+        if self._va_value_type == float:
             self._factor = factor
 
         # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
@@ -1457,7 +1457,7 @@ class OrsayParameterConnector:
                 if upperbound is not None:  # if an upperbound is defined in the server
                     new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
 
-            if len(new_range[0]) == 1:
+            if self._va_is_tuple:
                 new_range = (new_range[0][0], new_range[1][0])
             else:
                 new_range = (tuple(new_range[0]), tuple(new_range[1]))
@@ -1557,8 +1557,7 @@ class OrsayParameterConnector:
             try:
                 return self._conversion[va_value]
             except KeyError:
-                logging.warning("Conversion dictionary does not contain key %s. Sticking to value %s" %
-                                (va_value, va_value))
+                logging.warning("Conversion dictionary does not contain key %s, using it as-is." % va_value)
         elif self._factor:
             return va_value / self._factor
         return va_value
@@ -1575,6 +1574,7 @@ class OrsayParameterConnector:
             for key, value in self._conversion.items():
                 if value == type(value)(par_value):
                     return key
+            logging.warning("Conversion dictionary does not contain a key for value %s, using it as-is." % par_value)
 
         # Assure that the returned value is of the same type as the VA, even if the par_value is a string
         if self._va_value_type == float:
@@ -2422,8 +2422,7 @@ class FIBBeam(model.HwComponent):
 
         :param ((int, int)) target_resolution: intended resolution to set
         :param ((float, float)) target_translation: intended translation to set
-        :return: ((int, int)) new_resolution, ((float, float)) new_translation: actual resolution and
-                 translation set
+        :return: ((float, float)) new_translation: actual translation set
         """
         target_translation = list(target_translation)  # make the entries mutable
         # find the current limits for translation and clip the new value
@@ -2448,7 +2447,7 @@ class FIBBeam(model.HwComponent):
 
         logging.debug("Updating imageArea to %s." % target)
 
-        return target_resolution, tuple(target_translation)
+        return tuple(target_translation)
 
     def _translation_setter(self, value):
         """
@@ -2474,7 +2473,7 @@ class FIBBeam(model.HwComponent):
             if self.resolution.value[1] % 2 != 0:  # if vertical resolution is odd
                 new_translation[1] += 0.5  # prefer adding a pixel to the top
 
-            _, clipped_translation = self._clip_and_set_image_area(self.resolution.value, new_translation)
+            clipped_translation = self._clip_and_set_image_area(self.resolution.value, new_translation)
 
             # wait for the Orsay server to have updated the image area based on the new translation (or timeout)
             self.imageAreaUpdated.wait(10)
@@ -2494,7 +2493,7 @@ class FIBBeam(model.HwComponent):
         with self.updatingImageArea:  # translation and resolution cannot be updated simultaniously
             self.imageAreaUpdated.clear()
 
-            new_resolution, _ = self._clip_and_set_image_area(value, self.translation.value)
+            self._clip_and_set_image_area(value, self.translation.value)
             # no need to set the clipped translation, because the clipped translation is used to calculate the new image
             # area, which is set to the Orsay server, which will call _updateTranalstionResolution, which will write the
             # clipped translation to the translation VA.
@@ -2502,7 +2501,7 @@ class FIBBeam(model.HwComponent):
             # wait for the Orsay server to have updated the image area based on the new resolution (or timeout)
             self.imageAreaUpdated.wait(10)
 
-            return new_resolution
+            return value
 
     def _updateTranslationResolution(self, parameter=None, attr_name="Actual"):
         """
