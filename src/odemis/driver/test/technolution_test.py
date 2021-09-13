@@ -39,7 +39,6 @@ import pickle
 import threading
 import time
 import unittest
-from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
 from technolution_asm.models import CalibrationLoopParameters
@@ -111,34 +110,35 @@ class TestAuxilaryFunc(unittest.TestCase):
         out = numpy.floor(convert2Bits((0, 0.5, 1), (0, 1)))
         self.assertEqual(tuple(out), (-2 ** 15, -1, 2 ** 15 - 1))
 
+
 class TestAcquisitionServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
+
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_exception_pickling(self):
         """
@@ -397,32 +397,33 @@ class TestAcquisitionServer(unittest.TestCase):
         with self.assertRaises(AsmApiException):
             self.ASM_manager.asmApiPostCall("/fake/function/error", 200, raw_response=True)
 
+
 class TestEBeamScanner(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
+
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)
 
     def test_resolution_VA(self):
         """
@@ -617,28 +618,27 @@ class TestMirrorDescanner(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_rotation_VA(self):
         max_rotation = self.MirrorDescanner.rotation.range[1]
