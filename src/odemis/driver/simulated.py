@@ -65,20 +65,32 @@ class Stage(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.
     """
-    def __init__(self, name, role, axes, ranges=None, **kwargs):
+    def __init__(self, name, role, axes, ranges=None, choices=None, **kwargs):
         """
         axes (set of string): names of the axes
         ranges (dict string -> float,float): min/max of the axis
+        choices (dict string -> set): alternative to ranges, these are the choices of the axis
         """
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
+        if choices is None:
+            choices = {}
 
         axes_def = {}
         self._position = {}
         init_speed = {}
         for a in axes:
-            rng = ranges.get(a, (-0.1, 0.1))
+            rng = ranges.get(a, None)
+            if rng is None:  # for this axis, no range was defined
+                chs = choices.get(a, None)
+                if chs is None:  # if no choice is defined either
+                    rng = (-0.1, 0.1)  # use the default range
+                else:
+                    axes_def[a] = model.Axis(unit="m", choices=chs)
+                    self._position[a] = list(chs.values())[0]  # start at the first value
+                    init_speed[a] = 1.0  # we are fast!
+                    continue
             axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
             # start at the centre
             self._position[a] = (rng[0] + rng[1]) / 2
@@ -132,10 +144,13 @@ class Stage(model.Actuator):
     def _doMoveAbs(self, pos):
         maxtime = 0
         for axis, new_pos in pos.items():
-            change = self._position[axis] - new_pos
+            if isinstance(new_pos, float):
+                change = self._position[axis] - new_pos
+                maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+            else:  # for axes which are not of type float
+                maxtime = max(maxtime, 1 / self.speed.value[axis])
             self._position[axis] = new_pos
             logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
         time.sleep(maxtime)
         self._updatePosition()
@@ -339,3 +354,86 @@ class PhenomChamber(Chamber):
         # TODO: set to None/None when the sample is ejected
         self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL),
                                          readonly=True)
+
+
+class VAStack(model.HwComponent):
+    """
+    Simulated component to hold a set of VA's. Just pretends to have a couple of values.
+    """
+    def __init__(self, name, role, vanames, types=None, values=None, readonly=None, units=None, ranges=None, **kwargs):
+        """
+        vanames (set of string): names of the va's
+        types (dict string -> class): optional, types of the va's, for each va defaults to VigilantAttribute
+        values (dict string -> any): optional, initial values of the va's, for each va defaults to 0.0
+        readonly (dict string -> bool): optional, True for read only va's, for each va defaults to False
+        units (dict string -> str): optional, the units of the va's
+        ranges (dict string -> float,float): min/max of the va's
+        """
+        if types is None:
+            types = {}
+        if values is None:
+            values = {}
+        if readonly is None:
+            readonly = {}
+        if units is None:
+            units = {}
+        if ranges is None:
+            ranges = {}
+
+        for n in vanames:
+            vatype = types.get(n, "model.VigilantAttribute")
+            vavalue = values.get(n, 0.0)
+            ro = readonly.get(n, False)
+            vaunit = units.get(n, "")
+            varange = ranges.get(n, None)
+            va_command = f"{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
+            if varange:
+                va_command += f", range={varange}"
+            va_command += ")"
+            setattr(self, n, eval(va_command))
+
+        model.HwComponent.__init__(self, name, role, **kwargs)
+
+
+class GeneralActuator(Stage):
+    """
+    Simulated actuator, capable of holding both axes and VA's
+    """
+    def __init__(self, name, role, vanames, axes, types=None, values=None, readonly=None, units=None, varanges=None,
+                 axisranges=None, axischoices=None, **kwargs):
+        """
+        vanames (set of string): names of the va's
+        axes (set of string): names of the axes
+        types (dict string -> class): optional, types of the va's, for each va defaults to VigilantAttribute
+        values (dict string -> any): optional, initial values of the va's, for each va defaults to 0.0
+        readonly (dict string -> bool): optional, True for read only va's, for each va defaults to False
+        units (dict string -> str): optional, the units of the va's
+        varanges (dict string -> float,float): optional, min/max of the va's, defaults to None
+        axisranges (dict string -> float,float): optional, min/max of the axis, defaults to (-0.1, 0.1)
+        axischoices (dict string -> set): optional, alternative to ranges, these are the choices of the axis, defaults
+                                          to (True, False)
+        """
+        if types is None:
+            types = {}
+        if values is None:
+            values = {}
+        if readonly is None:
+            readonly = {}
+        if units is None:
+            units = {}
+        if varanges is None:
+            varanges = {}
+
+        for n in vanames:
+            vatype = types.get(n, "model.VigilantAttribute")
+            vavalue = values.get(n, 0.0)
+            ro = readonly.get(n, False)
+            vaunit = units.get(n, "")
+            varange = varanges.get(n, None)
+            va_command = f"{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
+            if varange:
+                va_command += f", range={varange}"
+            va_command += ")"
+            setattr(self, n, eval(va_command))
+
+        Stage.__init__(self, name, role, axes, ranges=axisranges, choices=axischoices, **kwargs)
