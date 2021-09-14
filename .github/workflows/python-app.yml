@@ -15,6 +15,9 @@ jobs:
     - name: Install dependencies
       run: |
         python3 -m pip install --upgrade pip
+        pip3 install -r requirements-py3.txt
+        sudo add-apt-repository ppa:delmic-soft/odemis
+        sudo apt install python-pyro4-delmic
     - name: Test with pytest
       run: |
-        # python3 -m unittest src/odemis/model/test/vattributes_test.py
+        python3 -m unittest src/odemis/model/test/vattributes_test.py
