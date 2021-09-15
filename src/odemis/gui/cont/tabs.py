@@ -4133,7 +4133,13 @@ class EnzelAlignTab(Tab):
         self.set_label("ALIGNMENT")
         self._stage = main_data.stage
         self._stage_global = main_data.stage_global
+        # TODO K.K. remove this by setting role properly or adjusting the metadata place.
+        self._3_DOF = model.getComponent("3DOF Stage")
         self._tilted_3_DOF = main_data.aligner
+        # Check stage FAV positions in its metadata, and store them in respect to their movement
+        for stage in (self._stage, self._3_DOF):
+            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE}.issubset(stage.getMetadata()):
+                raise ValueError('The stage %s is missing FAV_POS_DEACTIVE and/or FAV_POS_ACTIVE metadata.' % stage)
         self._stream_controllers = []
 
         viewports = panel.pnl_two_streams_grid.viewports
@@ -4295,7 +4301,6 @@ class EnzelAlignTab(Tab):
 
         # Combine the to tab conditions
         self._stage.position.subscribe(self._on_stage_pos, init=True)
-        main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -4356,6 +4361,9 @@ class EnzelAlignTab(Tab):
             self.stream_bar_controller.refreshStreams((self._FIB_view_and_control["stream"],
                                                        self._SEM_view_and_control["stream"]))
             future.button.Enabled = True
+            new_pos = self._stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
+            new_pos.update({"z": self._stage.position.value["z"]})  # Add current Z position
+            self._stage.updateMetadata({model.MD_FAV_POS_ACTIVE: new_pos})
 
         self._z_move_future = self._stage_global.moveRel(
                 {axis: proportion * self.tab_data_model.step_size_controls_va.value})
@@ -4442,17 +4450,17 @@ class EnzelAlignTab(Tab):
         if hasattr(self, "_flm_move_future") and self._flm_move_future._state == RUNNING:
             logging.debug("The stage is still moving, this movement isn't performed.")
             return
-        # TODO K.K. button disabling doesn't work here - it crashes now.
+        # TODO K.K. button disabling doesn't work here - it crashes now because stage movements is to fast.
         # evt.theButton.Enabled = False
         #
-        # def move_done(future):
-        #     time.sleep(0.5)
-        #     future.button.Enabled = True
+        def move_done(future):
+            # future.button.Enabled = True
+            self._3_DOF.updateMetadata({model.MD_FAV_POS_ACTIVE: self._3_DOF.position.value})
 
         self._flm_move_future = self._tilted_3_DOF.moveRel(
                 {axis: proportion * self.tab_data_model.step_size_controls_va.value})
         self._flm_move_future.button = evt.theButton
-        # self._flm_move_future.add_done_callback(move_done)
+        self._flm_move_future.add_done_callback(move_done)
 
     @call_in_wx_main
     def _set_top_and_bottom_stream_and_settings(self, top, bottom):
@@ -4517,19 +4525,6 @@ class EnzelAlignTab(Tab):
             elif hasattr(v, "stream_classes") and isinstance(bottom["stream"], v.stream_classes):
                 v.addStream(bottom["stream"])
                 new_bottom_stream_controller.stream_panel.show_visible_btn(False)
-
-    @call_in_wx_main
-    def on_chamber_state(self, state):
-        """
-        Sets the condition of to enable to click the tab
-
-        :param state (int): The state of the chamber (options are: CHAMBER_UNKNOWN, CHAMBER_VENTED,
-        CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING)
-        """
-        # Lock or enable lens alignment
-        in_vacuum = state in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN}
-        self.button.Enable(in_vacuum)
-        self.highlight(in_vacuum)
 
     @call_in_wx_main
     def _on_stage_pos(self, pos):

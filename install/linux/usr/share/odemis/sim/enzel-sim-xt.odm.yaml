@@ -443,5 +443,8 @@ ENZEL-Sim: {
     # Z is used for the focus, when FM is not in use.
     # X/Y can be omitted, but should typically be the same as in Objective Aligner.
     FAV_POS_DEACTIVE: { 'x': -0.01, 'y': -0.01, 'z': -6.e-3 },
+    # Initial position when going to FM/SEM imaging.
+    # It should be within the ACTIVE_RANGE
+    FAV_POS_ACTIVE: {'x': 0.0, 'y': 0.00, 'z': 0.00 },
   },
 }

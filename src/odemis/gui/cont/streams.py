@@ -3072,6 +3072,12 @@ class EnzelAlignmentStreamsBarController:
                 logging.warning("Stopping stream %s", stream)
                 stream.should_update.subscribe(cb)
 
+        # TODO K.K. see if such an implementation wroks.
+        if activated_stream is acqstream.FIBStream:
+            self._refreshStream((activated_stream))
+            logging.warning("Preventing wear on the sample by stopping the FIB stream directly after starting it.")
+            return
+
         for stream, cb in self._scheduler_subscriptions.items():
             if stream is activated_stream:
                 stream.is_active.value = updated
