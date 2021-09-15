@@ -58,11 +58,13 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
                 }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_DETECTOR = {"name": "detector", "role": "se-detector"}
+CONFIG_CHAMBER = {"name": "Chamber", "role": "chamber"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
                            "stage": CONFIG_STAGE,
                            "detector": CONFIG_DETECTOR,
+                           "chamber": CONFIG_CHAMBER,
                            }
               }
 
@@ -117,12 +119,15 @@ class TestMicroscope(unittest.TestCase):
                 cls.stage = child
             elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
+            elif child.name == CONFIG_CHAMBER["name"]:
+                cls.chamber = child
 
     @classmethod
     def tearDownClass(cls):
         cls.detector.terminate()
 
     def setUp(self):
+        # if self.chamber.position.value["vacuum"] > 100e-3:
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
@@ -396,6 +401,21 @@ class TestMicroscope(unittest.TestCase):
         """Callback for dataflow of acquisition tests."""
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         dataflow.unsubscribe(self.receive_data)
+
+    @unittest.skipIf(not TEST_NOHW, "Microscope chamber not tested, too dangerous.")
+    def test_chamber(self):
+        # Only via XTToolKit (MBScanner)
+        # self.scanner.power.value = False
+
+        self.chamber.stop()
+
+        prev_press = None
+        for vac in self.chamber.axes["vacuum"].choices.keys():
+            f = self.chamber.moveAbs({"vacuum": vac})
+            f.result()
+            self.assertEqual(self.chamber.position.value["vacuum"], vac)
+            press = self.chamber.pressure.value
+            self.assertNotEqual(prev_press, press)
 
 
 class TestMicroscopeInternal(unittest.TestCase):

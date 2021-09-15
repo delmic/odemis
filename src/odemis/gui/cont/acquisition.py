@@ -1427,7 +1427,9 @@ class FastEMAcquiController(object):
         self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
         tab_data.projects.subscribe(self._on_projects, init=True)
         for roc in self._tab_data_model.calibration_regions.value.values():
-            roc.coordinates.subscribe(self._on_roc)
+            roc.coordinates.subscribe(self._on_va_change)
+
+        self._main_data_model.is_aligned.subscribe(self._on_va_change, init=True)
 
     def _on_projects(self, projects):
         for p in projects:
@@ -1437,23 +1439,27 @@ class FastEMAcquiController(object):
         # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
         for roa in roas:
             if roa not in self.roa_subscribers:
-                roa.roc.subscribe(self._on_roc)
+                roa.roc.subscribe(self._on_va_change)
                 self.roa_subscribers.append(roa)
         self._update_roa_count()
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
-    def _on_roc(self, _):
+    def _on_va_change(self, _):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self.roa_count and not self._get_undefined_calibrations())
+        self.btn_acquire.Enable(self._main_data_model.is_aligned and self.roa_count
+                                and not self._get_undefined_calibrations())
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if self.roa_count == 0:
+        if not self._main_data_model.is_aligned.value:
+            lvl = logging.WARN
+            txt = "System is not aligned."
+        elif self.roa_count == 0:
             lvl = logging.WARN
             txt = "No region of acquisition selected."
         elif self._get_undefined_calibrations():
@@ -1507,6 +1513,9 @@ class FastEMAcquiController(object):
         """
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
+        self._projectbar_ctrl._project_bar.Enable(True)
+        self._calibration_ctrl._calibration_bar.Enable(True)
+        self._tab_panel.btn_align.Enable(True)
         self._tab_panel.Layout()
 
         if text is not None:
@@ -1525,6 +1534,11 @@ class FastEMAcquiController(object):
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self._show_status_icons(None)
+
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self._projectbar_ctrl._project_bar.Enable(False)
+        self._calibration_ctrl._calibration_bar.Enable(False)
+        self._tab_panel.btn_align.Enable(False)
 
         self.gauge_acq.Range = self.roa_count
         self.gauge_acq.Value = 0
@@ -1564,6 +1578,7 @@ class FastEMAcquiController(object):
         self._main_data_model.is_acquiring.value = False
         try:
             future.result()
+            self._reset_acquisition_gui()
         except CancelledError:
             self._reset_acquisition_gui()
             return
@@ -1591,6 +1606,7 @@ class FastEMOverviewAcquiController(object):
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_sparc_acquire
         self.btn_cancel = self._tab_panel.btn_sparc_cancel
+        self.acq_futures = []  # All acquisitions running
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
         self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
@@ -1601,6 +1617,9 @@ class FastEMOverviewAcquiController(object):
         self.selection_panel.create_controls(tab_data.main.scintillator_layout)
         for btn in self.selection_panel.buttons.values():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
+            btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
+
+        self._main_data_model.active_scintillators.subscribe(self._on_active_scintillators)
 
         # Link acquire/cancel buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -1630,17 +1649,40 @@ class FastEMOverviewAcquiController(object):
         self.check_acquire_button()
 
     @call_in_wx_main
+    def _on_active_scintillators(self, evt):
+        for num, b in self.selection_panel.buttons.items():
+            if num in self._main_data_model.active_scintillators.value:
+                b.Enable(True)
+            else:
+                b.Enable(False)
+                if num in self._tab_data_model.selected_scintillators.value:
+                    self._tab_data_model.selected_scintillators.value.remove(num)
+        self.update_acquisition_time()
+        self.check_acquire_button()
+
+    @call_in_wx_main
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if not self._tab_data_model.selected_scintillators.value:
+        if not self._main_data_model.active_scintillators.value:
+            lvl = logging.WARN
+            txt = "No scintillator loaded (go to Chamber tab)."
+        elif not self._tab_data_model.selected_scintillators.value:
             lvl = logging.WARN
             txt = "No scintillator selected for overview acquisition."
         else:
-            acq_time = len(self._tab_data_model.selected_scintillators.value) * 2
+            acq_time = 0
+            # Add up the acquisition time of all the selected scintillators
+            for num in self._tab_data_model.selected_scintillators.value:
+                center = self._tab_data_model.main.scintillator_positions[num]
+                sz = self._tab_data_model.main.scintillator_size
+                coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
+                          center[0] + sz[0] / 2, center[1] + sz[1] / 2)
+                acq_time += fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -1690,13 +1732,28 @@ class FastEMOverviewAcquiController(object):
         for num in self._tab_data_model.selected_scintillators.value:
             center = self._tab_data_model.main.scintillator_positions[num]
             sz = self._tab_data_model.main.scintillator_size
-            coords = (center[0] - sz[0], center[1] - sz[1], center[0] + sz[0], center[1] + sz[1])
-            f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+            coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
+                      center[0] + sz[0] / 2, center[1] + sz[1] / 2)
+            try:
+                f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+            except Exception:
+                logging.exception("Failed to start overview acquisition")
+                # Try acquiring the other
+                continue
 
             def acq_done(future, num=num):
-                return self.on_acquisition_done(future, num)
+                if future in self.acq_futures:
+                    self.acq_futures.remove(future)
+                self.on_acquisition_done(future, num)
+
             f.add_done_callback(acq_done)
-        f.add_done_callback(self.full_acquisition_done)
+
+            self.acq_futures.append(f)
+
+        if self.acq_futures:
+            self.acq_futures[-1].add_done_callback(self.full_acquisition_done)
+        else:  # In case all acquisitions failed to start
+            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
 
     def increase_acq_progress(self, f):
         # TODO: improve progress estimation
@@ -1706,7 +1763,13 @@ class FastEMOverviewAcquiController(object):
         """
         Called during acquisition when pressing the cancel button
         """
-        fastem._executor.cancel()
+        if not self.acq_futures:
+            msg = "Tried to cancel acquisition while it was not started"
+            logging.warning(msg)
+            return
+
+        for f in self.acq_futures:
+            f.cancel()
         # all the rest will be handled by on_acquisition_done()
 
     @call_in_wx_main
@@ -1727,18 +1790,16 @@ class FastEMOverviewAcquiController(object):
             return
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
+        # TODO: pick a different name from previous acquisition?
         fn = os.path.join(get_picture_folder(), "fastem_overview_%s.ome.tiff" % num)
         dataio.tiff.export(fn, da, pyramid=True)
         da = open_acquisition(fn)
-        sz = self._tab_data_model.main.scintillator_size
-        md = {model.MD_POS: self._tab_data_model.main.scintillator_positions[num],
-              model.MD_PIXEL_SIZE: [sz[0] / da[0].shape[0], sz[1] / da[0].shape[1]]}
-        da[0].metadata = md
         s = data_to_static_streams(da)[0]
         s = FastEMOverviewStream(s.name.value, s.raw[0])
-        self._main_data_model.overview_streams.value[num] = s
-        # Dict VA needs to be notified explicitly
-        self._main_data_model.overview_streams.notify(self._main_data_model.overview_streams.value)
+        # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
+        ovv_ss = self._main_data_model.overview_streams.value.copy()
+        ovv_ss[num] = s
+        self._main_data_model.overview_streams.value = ovv_ss
 
     @call_in_wx_main
     def full_acquisition_done(self, future):
@@ -2141,3 +2202,53 @@ class AutoCenterController(object):
         self._tab_panel.lbl_auto_center.Show()
         self._tab_panel.gauge_auto_center.Hide()
         self._sizer.Layout()
+
+
+class FastEMAlignmentController:
+    def __init__(self, tab_data, panel):
+        self._tab_data = tab_data
+        self._panel = panel
+
+        self._panel.align_gauge_progress.Hide()
+        panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
+        tab_data.main.is_aligned.subscribe(self._on_align_state, init=True)
+
+    def _on_btn_align(self, evt):
+        # TODO: implement cancellation
+        if self._tab_data.main.is_acquiring.value:
+            logging.error("Cancelling alignment currently not supported.")
+            return
+        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
+
+        # Change button to "cancel", show progress bar
+        self._panel.align_gauge_progress.Show()
+        # Label is displayed on the right, but during the acquisition, we want the gauge bar to occupy the
+        # full available space --> use a panel instead of a spacer which can be hidden (spacers cannot) to
+        # make it look nice.
+        self._panel.align_spacer_panel.Hide()
+        self._panel.align_lbl_gauge.Hide()
+        self._panel.btn_align.SetLabel("Cancel")
+        self._panel.Layout()
+
+        # Start alignment
+        f = align.fastem.align(self._tab_data.main)
+        f.add_done_callback(self._on_alignment_done)
+
+    @call_in_wx_main
+    def _on_alignment_done(self, future):
+        self._tab_data.main.is_aligned.value = True
+        self._tab_data.main.is_acquiring.value = False
+
+        # Enable button, hide progress bar
+        self._panel.align_gauge_progress.Hide()
+        self._panel.align_spacer_panel.Show()
+        self._panel.align_lbl_gauge.Show()
+        self._panel.btn_align.SetLabel("Alignment...")
+        self._panel.Parent.Layout()
+
+    def _on_align_state(self, aligned):
+        if aligned:
+            self._panel.align_lbl_gauge.SetLabel("System is aligned.")
+        else:
+            # TODO: time estimation
+            self._panel.align_lbl_gauge.SetLabel("~ 2 seconds")
