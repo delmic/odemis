@@ -699,7 +699,7 @@ class FixedOverviewViewport(MicroscopeViewport):
         # we have to allow (and in the worst case the user will be able to move
         # while the chamber is opened)
         if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
-                self._view.has_stage()):
+                CAN_MOVE_STAGE in self.canvas.abilities):
             self.canvas.point_select_overlay.active.value = True
         else:
             self.canvas.point_select_overlay.active.value = False
@@ -708,7 +708,7 @@ class FixedOverviewViewport(MicroscopeViewport):
         """ Set the physical view position
         """
         if self._tab_data_model:
-            if self._view.has_stage():
+            if CAN_MOVE_STAGE in self.canvas.abilities:
                 self._view.moveStageTo(p_pos)
 
 
@@ -737,7 +737,8 @@ class LiveViewport(MicroscopeViewport):
         Used to update the drag/focus capabilities
         """
         self.canvas.play_overlay.hide_pause(is_playing)
-        if CAN_DRAG in self._orig_abilities and self._view.has_stage():
+        # If normally user can drag to move the stage, disable if no stream is playing
+        if CAN_DRAG in self._orig_abilities and CAN_MOVE_STAGE in self.canvas.abilities:
             # disable/enable move
             if is_playing:
                 self.canvas.abilities.add(CAN_DRAG)
@@ -771,7 +772,8 @@ class LiveViewport(MicroscopeViewport):
 class FeatureOverviewViewport(LiveViewport):
     """
     LiveViewport dedicated to show overview map area with bookmarked features.
-    Never allow to move the stage while dragging
+    Do not move the stage by dragging, and instead show the stage position via
+    a crosshair.
     """
     def __init__(self, *args, **kwargs):
         super(FeatureOverviewViewport, self).__init__(*args, **kwargs)
@@ -1924,7 +1926,3 @@ class FastEMOverviewViewport(FeatureOverviewViewport):
         super().setView(view, tab_data)
         self.canvas.add_background_overlay(self._tab_data_model.main.background)
 
-    def _on_stream_play(self, is_playing):
-        # same as superclass function, except allow dragging if stream is paused
-        super()._on_stream_play(is_playing)
-        self.canvas.abilities.add(CAN_DRAG)

@@ -33,6 +33,7 @@ import time
 import unittest
 from unittest.case import skip
 
+import numpy
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -121,6 +122,8 @@ class TestSEM(unittest.TestCase):
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = (512, 256)
+        self.scanner.blanker.value = False
+        self.scanner.power.value = True
         self.sed.bpp.value = max(self.sed.bpp.choices)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
@@ -162,6 +165,34 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_blanker(self):
+        self.scanner.dwellTime.value = 1e-6  # s
+        expected_duration = self.compute_expected_duration()
+        self.scanner.blanker.value = True
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+
+        numpy.testing.assert_array_less(im, 100)
+
+    def test_power(self):
+        self.scanner.dwellTime.value = 1e-6  # s
+        expected_duration = self.compute_expected_duration()
+        self.scanner.power.value = False
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+
+        numpy.testing.assert_array_equal(im, 0)
 
     def test_acquire_8bpp(self):
         self.sed.bpp.value = 8

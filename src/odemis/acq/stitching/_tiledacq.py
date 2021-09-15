@@ -34,7 +34,7 @@ from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream,
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
 from odemis.model import DataArray
-from odemis.util import dataio as udataio
+from odemis.util import dataio as udataio, img
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.util.img import assembleZCube
 import os
@@ -153,24 +153,15 @@ class TiledAcquisitionTask(object):
         """
         if isinstance(sd, model.DataArray):
             # The actual FoV, as the data recorded it
-            return (sd.shape[0] * sd.metadata[model.MD_PIXEL_SIZE][0],
-                    sd.shape[1] * sd.metadata[model.MD_PIXEL_SIZE][1])
+            im_bbox = img.getBoundingBox(sd)
+            logging.debug("Bounding box of stream data: %s", im_bbox)
+            return im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
         elif isinstance(sd, Stream):
-            # Estimate the FoV, based on the emitter/detector settings
-            if isinstance(sd, SEMStream):
-                return compute_scanner_fov(sd.emitter)
-            elif isinstance(sd, CameraStream):
-                return compute_camera_fov(sd.detector)
-            elif isinstance(sd, RepetitionStream):
-                # CL, Spectrum, AR
-                ebeam = sd.emitter
-                global_fov = (ebeam.shape[0] * ebeam.pixelSize.value[0],
-                              ebeam.shape[1] * ebeam.pixelSize.value[1])
-                l, t, r, b = sd.roi.value
-                fov = abs(r - l) * global_fov[0], abs(b - t) * global_fov[1]
-                return fov
-            else:
-                raise TypeError("Unsupported Stream %s" % (sd,))
+            # Ask the stream, which estimates based on the emitter/detector settings
+            try:
+                return sd.guessFoV()
+            except (NotImplementedError, AttributeError):
+                raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (sd,))
         else:
             raise TypeError("Unsupported object")
 
@@ -358,8 +349,8 @@ class TiledAcquisitionTask(object):
         :returns same fov or updated from the data arrays
         """
         afovs = [self._getFov(d) for d in das]
-        asfov = (min(f[1] for f in afovs),
-                 min(f[0] for f in afovs))
+        asfov = (min(f[0] for f in afovs),
+                 min(f[1] for f in afovs))
         if not all(util.almost_equal(e, a) for e, a in zip(sfov, asfov)):
             logging.warning("Unexpected min FoV = %s, instead of %s", asfov, sfov)
             sfov = asfov
@@ -683,9 +674,9 @@ class TiledAcquisitionTask(object):
         except Exception as ex:
             logging.exception("Acquisition failed.")
             self._future.running_subf.cancel()
+            raise
         finally:
             logging.info("Tiled acquisition ended")
-            self._stage.moveAbs(self._starting_pos)
             with self._future._task_lock:
                 self._future._task_state = FINISHED
         return st_data

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Jan 2014
 
 @author: Kimon Tsitsikas
@@ -13,14 +13,14 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import math
 import numpy
 from odemis import model
 from odemis.dataio import tiff, hdf5
-from odemis.util import spot
+from odemis.util import spot, synthetic
 import os
 import scipy.stats
 import unittest
@@ -216,6 +216,84 @@ class TestFindCenterCoordinates(unittest.TestCase):
                         xc, yc = spot.FindCenterCoordinates(img)
                         self.assertAlmostEqual(j, xc + 0.5 * (m - 1))
                         self.assertAlmostEqual(i, yc + 0.5 * (n - 1))
+
+
+class TestRadialSymmetryCenter(unittest.TestCase):
+    """
+    Unit test class to test the behavior of radial_symmetry_center in
+    odemis.util.spot.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a synthetic dataset of 1000 spot images."""
+        n = 1000
+        shape = (9, 9)
+        refractive_index = 1
+        numerical_aperture = 0.95
+        wavelength = 550e-9  # [m]
+        magnification = 40
+        pixel_size = 6.5e-6  # [m]
+
+        # Ensure that each time when the test case is run we have the same
+        # 'random' numbers.
+        numpy.random.seed(0)
+
+        sigma = (magnification / pixel_size) * synthetic.psf_sigma_wffm(
+            refractive_index, numerical_aperture, wavelength
+        )
+        coords0 = 0.5 * numpy.asarray(shape) - numpy.random.random_sample((n, 2))
+        imgdata = numpy.empty((n,) + shape)
+        for i in range(n):
+            imgdata[i] = synthetic.psf_gaussian(shape, coords0[i], sigma)
+        coords = numpy.array(list(map(spot.radial_symmetry_center, imgdata)))
+
+        # Make the dataset available as an immutable array
+        cls.delta = coords - coords0
+        cls.delta.flags.writeable = False
+
+    def test_zero_bias(self):
+        """
+        radial_symmetry_center should estimate the center position without any
+        bias; i.e. the expectation value of the difference between the actual
+        position and the estimated position should be zero.
+        """
+        n = len(self.delta)
+        bias = numpy.average(self.delta, axis=0)
+        stdev = numpy.std(self.delta, axis=0)
+        self.assertTrue(all(numpy.abs(bias) < (stdev / numpy.sqrt(n))))
+        self.assertTrue(all(numpy.abs(bias) < 5.0e-4))
+
+    def test_anisotropic_accuracy(self):
+        """
+        radial_symmetry_center should have equal accuracy in all directions.
+        Perform Bartlett's test for equal variances on the residuals in `j` and
+        `i` at a significance level of 5%.
+        """
+        _, pvalue = scipy.stats.bartlett(self.delta[:, 0], self.delta[:, 1])
+        self.assertTrue(pvalue > 0.05)
+
+    def test_accuracy(self):
+        """
+        radial_symmetry_center should have an accuracy of better than 0.05 px.
+        """
+        stdev = numpy.std(self.delta.ravel())
+        self.assertLess(stdev, 0.05)
+
+    def test_sanity(self):
+        """
+        Create an image consisting of all zeros and a single pixel with value
+        one. radial_symmetry_center should return the pixel index of this pixel.
+        """
+        for n in range(5, 12):
+            for m in range(5, 12):
+                for j in range(2, n - 2):
+                    for i in range(2, m - 2):
+                        img = numpy.zeros((n, m))
+                        img[j, i] = 1
+                        jc, ic = spot.radial_symmetry_center(img)
+                        self.assertAlmostEqual(j, jc)
+                        self.assertAlmostEqual(i, ic)
 
 
 if __name__ == "__main__":

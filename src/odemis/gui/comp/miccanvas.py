@@ -195,6 +195,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._calc_bg_offset(phys_pos)
         self.requested_phys_pos = tuple(phys_pos)
 
+        # Disable the linking of the view <> stage position if there is no stage
+        if not self.view.has_stage():
+            self.abilities.discard(CAN_MOVE_STAGE)
+
         # any image changes
         self.view.lastUpdate.subscribe(self._on_view_image_update, init=True)
 
@@ -635,8 +639,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: this method should be on the View, and it'd update the view_pos
         # and mpp according to the streams (and stage)
         if recenter is None:
-            # recenter only if there is no stage attached
-            recenter = not self.view.has_stage()
+            # Do not recenter if the  view position is linked to the stage position
+            recenter = CAN_MOVE_STAGE not in self.abilities
 
         self.fit_to_content(recenter=recenter)
 

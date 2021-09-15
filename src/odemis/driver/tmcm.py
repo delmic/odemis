@@ -3184,6 +3184,7 @@ class CANController(model.Actuator):
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
         last_axes = moving_axes.copy()
+        time.sleep(0.2)  # wait until it starts moving (onTarget bit needs to be reset)
         try:
             while not future._must_stop.is_set():
                 for aid in moving_axes.copy():  # need copy to remove during iteration

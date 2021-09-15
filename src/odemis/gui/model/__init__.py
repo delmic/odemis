@@ -1076,14 +1076,23 @@ class FastEMMainGUIData(MainGUIData):
                    [2, 5, 8],
                    [1, 4, 7]],  # grid positions of scintillators
         "scintillator_offsets": {
-            1: (42e-3, 42e-3), 4: (60e-3, 42e-3), 7: (78e-3, 42e-3),
-            2: (42e-3, 60e-3), 5: (60e-3, 60e-3), 8: (78e-3, 60e-3),
-            3: (42e-3, 78e-3), 6: (60e-3, 78e-3), 9: (78e-3, 78e-3),
-        },  # center position of the scintillators relative to bottom left (physical coordinates) of sample carrier
+            # center position of the scintillators relative to the most bottom-left position with a sample
+            1: (7e-3, 7e-3), 4: (25e-3, 7e-3), 7: (43e-3, 7e-3),
+            2: (7e-3, 25e-3), 5: (25e-3, 25e-3), 8: (43e-3, 25e-3),
+            3: (7e-3, 43e-3), 6: (25e-3, 43e-3), 9: (43e-3, 43e-3),
+        },
         "scintillator_size": (14e-3, 14e-3),
-        "background": [(0, 0, 35e-3, 120e-3), (49e-3, 0, 53e-3, 120e-3), (67e-3, 0, 71e-3, 120e-3), (85e-3, 0, 120e-3, 120e-3),
-                       (0, 0, 120e-3, 35e-3), (0, 49e-3, 120e-3, 53e-3), (0, 67e-3, 120e-3, 71e-3), (0, 85e-3, 120e-3, 120e-3)]
-                       # minx, miny, maxx, maxy positions of rectangles for background, from bottom left
+        "background": [
+            # minx, miny, maxx, maxy positions of rectangles for background, from bottom-left position with a sample
+            (-35e-3, -35e-3, 0, 85e-3),
+            (14e-3, -35e-3, 18e-3, 85e-3),
+            (32e-3, -35e-3, 36e-3, 85e-3),
+            (50e-3, -35e-3, 85e-3, 85e-3),
+            (-35e-3, -35e-3, 85e-3, 0e-3),
+            (-35e-3, 14e-3, 85e-3, 18e-3),
+            (-35e-3, 32e-3, 85e-3, 36e-3),
+            (-35e-3, 50e-3, 85e-3, 85e-3),
+        ]
     }
 
     def __init__(self, microscope):
@@ -1096,8 +1105,9 @@ class FastEMMainGUIData(MainGUIData):
         md = self.stage.getMetadata()
         if model.MD_POS_ACTIVE_RANGE not in md:
             raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
+        # POS_ACTIVE_RANGE contains the bounding-box of the positions with a sample
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
-        minx, miny = float(carrier_range["x"][0]), float(carrier_range["y"][0])  # top left carrier position in m
+        minx, miny = carrier_range["x"][0], carrier_range["y"][0]  # bottom-left of carrier 1 in m
 
         # TODO: in the future, there could be an additional argument in the configuration file to specify
         #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
@@ -1120,6 +1130,21 @@ class FastEMMainGUIData(MainGUIData):
 
         # Overview streams
         self.overview_streams = model.VigilantAttribute({})  # dict: int --> stream or None
+
+        # Scintillators containing sample (manual selection in chamber tab)
+        self.active_scintillators = model.ListVA([])
+
+        # Indicate state of ebeam button
+        hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
+        self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
+        # Alignment status, reset to "not aligned" every time the emState or chamberState is changed
+        self.is_aligned = model.BooleanVA(False)
+        self.emState.subscribe(self._reset_is_aligned)
+        self.chamberState.subscribe(self._reset_is_aligned)
+
+    def _reset_is_aligned(self, _):
+        self.is_aligned.value = False
 
 
 class FastEMAcquisitionGUIData(MicroscopyGUIData):

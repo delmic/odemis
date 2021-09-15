@@ -1762,7 +1762,7 @@ class ChamberPressure(model.Actuator):
     between the NavCam and SEM areas or even unload it.
     """
     def __init__(self, name, role, parent, ranges=None, **kwargs):
-        axes = {"pressure": model.Axis(unit="Pa",
+        axes = {"vacuum": model.Axis(unit="Pa",
                                        choices={PRESSURE_UNLOADED: "vented",
                                                 PRESSURE_NAVCAM: "overview",
                                                 PRESSURE_SEM: "vacuum"})}
@@ -1789,7 +1789,7 @@ class ChamberPressure(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    {"pressure": self._position},
+                                    {"vacuum": self._position},
                                     unit="Pa", readonly=True)
         logging.debug("Chamber in position: %s", self._position)
 
@@ -1818,7 +1818,7 @@ class ChamberPressure(model.Actuator):
             self.parent._detector.update_parameters()
         self._updateSampleHolder()
 
-        # Lock taken while "pressure" (= sample loader) is changing, to prevent
+        # Lock taken while "vacuum" (= sample loader) is changing, to prevent
         # position update too early
         self._pressure_changing = threading.Lock()
         # Event to prevent move to start while another move initiated from the
@@ -1841,7 +1841,7 @@ class ChamberPressure(model.Actuator):
 
     def _updatePosition(self):
         """
-        update the position VA and .pressure VA
+        update the position VA
         """
         logging.debug("Updating chamber position...")
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
@@ -1858,7 +1858,7 @@ class ChamberPressure(model.Actuator):
 
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
-        self.position._set_value({"pressure": self._position}, force_write=True)
+        self.position._set_value({"vacuum": self._position}, force_write=True)
         logging.debug("Chamber in position: %s", self._position)
 
     def _updateSampleHolder(self):
@@ -1924,7 +1924,7 @@ class ChamberPressure(model.Actuator):
         f.task_canceller = self._CancelMove
         f._move_lock = threading.Lock()
 
-        return self._executor.submitf(f, self._changePressure, f, pos["pressure"])
+        return self._executor.submitf(f, self._changePressure, f, pos["vacuum"])
 
     def stop(self, axes=None):
         # Empty the queue for the given axes

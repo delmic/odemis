@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 11 May 2020
 
 @author: Sabrina Rossberger, Kornee Kleijwegt
@@ -18,12 +18,15 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
+
 # Driver/wrapper for the ASP API in Odemis which can connect Odemis to the ASM API made by Technolution for the
 # multi-beam project
 from __future__ import division
 
 import math
+import os
+
 import numpy
 import base64
 import json
@@ -52,6 +55,14 @@ DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
 RUNNING = "installation in progress"
 FINISHED = "last installation successful"
 FAILED = "last installation failed"
+
+ASM_USER_CHARS = r'[A-Za-z0-9]+'  # + -> should be at least one character
+ASM_PASSWORD_CHARS = r'[A-Za-z0-9]+'
+ASM_HOST_CHARS = r'[A-Za-z0-9.]+'
+ASM_PATH_CHARS = r'[A-Za-z0-9/_()-]+'
+ASM_SUBDIR_CHARS = r'[A-Za-z0-9/_()-]*'  # * -> subdirectories can also be empty string
+ASM_FILE_CHARS = r'[A-Za-z0-9_()-]+'
+
 
 def convertRange(value, value_range, output_range):
     """
@@ -144,14 +155,15 @@ class AcquisitionServer(model.HwComponent):
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # NOTE: Do not write real username/password here since this is published on github in plain text!
-        # example = ftp://username:password@127.0.0.1:5000/directory/sub-directory
+        # example = ftp://username:password@127.0.0.1:5000/directory/
+        # fixed url of the external storage configuration
         self.externalStorageURL = model.StringVA('ftp://%s:%s@%s/%s' %
                                                  (externalStorage["username"],
                                                   externalStorage["password"],
                                                   externalStorage["host"],
                                                   externalStorage["directory"]),
-                                                 setter=self._setURL)
-        self._setURL(self.externalStorageURL.value)  # Check and set the external storage URL to the ASM.
+                                                 setter=self._setURL, readonly=True)
+        self.externalStorageURL._set_value(self.externalStorageURL.value, force_write=True)  # check URL ok
 
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
@@ -323,27 +335,30 @@ class AcquisitionServer(model.HwComponent):
         except Exception:
             logging.exception("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
 
-    def checkMegaFieldExists(self, mega_field_id, storage_dir):
+    def checkMegaFieldExists(self, filename):
         """
-        Check if filename complies with set allowed characters.
-        :param mega_field_id (string): name of the mega field.
-        :param storage_dir (string): path to the mega field.
-        :return (bool): True if mega field exists.
+        Checks if a megafield image already exists on the external storage for a given path and file name
+        (megafield id).
+        :param filename: (str) Sub-directories and name of the mega field (id).
+        :return: (bool) True if the mega field exists on external storage. False if it does not exist yet.
+        :raises: (ValueError) When the input arguments contain invalid characters.
         """
-        ASM_FILE_ILLEGAL_CHARS = r'[^a-z0-9_()-]'
-        ASM_PATH_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-]'
-        if re.search(ASM_PATH_ILLEGAL_CHARS, storage_dir):
-            logging.error("The specified storage directory contains invalid characters, cannot check if mega field "
-                          "exists (only the characters '%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return False
+        path = os.path.dirname(filename)
+        file = os.path.basename(filename)
 
-        if re.search(ASM_FILE_ILLEGAL_CHARS, mega_field_id):
-            logging.error("The specified mega_field_id contains invalid characters, cannot check if mega field exists"
-                          "(only the characters '%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return False
+        # dirname is equivalent to subdirectories on external storage
+        if not re.fullmatch(ASM_SUBDIR_CHARS, path):
+            raise ValueError("Path %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (path, ASM_SUBDIR_CHARS[1:-2]))
+
+        # filename is megafield id
+        if not re.fullmatch(ASM_FILE_CHARS, file):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (file, ASM_FILE_CHARS[1:-2]))
 
         response = self.asmApiPostCall("/scan/check_mega_field?mega_field_id=%s&storage_directory=%s" %
-                                       (mega_field_id, storage_dir), 200, raw_response=True)
+                                       (file, path), 200, raw_response=True)
+
         return json.loads(response.content)["exists"]
 
     def getSamServiceVersion(self):
@@ -534,60 +549,42 @@ class AcquisitionServer(model.HwComponent):
 
     def _setURL(self, url):
         """
-        Setter which checks for correctness of FTP url and otherwise returns old value.
-
-        :param url(str): e.g. ftp://username:password@127.0.0.1:5000/directory/sub-directory
-        :return: correct ftp url_parser
+        Set the external storage URL. Check if the requested url complies with the allowed pattern and characters.
+        :param url: (str) The requested external storage url
+                          e.g. ftp://username:password@127.0.0.1:5000/directory/sub-directory
+        :return: (str) The new external storage url.
         """
-        ASM_GENERAL_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-:@]'
-        ASM_USER_ILLEGAL_CHARS = r'[^A-Za-z0-9]'
-        ASM_PASSWORD_ILLEGAL_CHARS = r'[^A-Za-z0-9]'
-        ASM_HOST_ILLEGAL_CHARS = r'[^A-Za-z0-9.]'
-        ASM_PATH_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-]'
 
         url_parser = urlparse(url)  # Transform input string to url_parse object
 
-        # Perform general check on valid characters (parses works incorrectly for some invalid characters
-        if re.search(ASM_GENERAL_ILLEGAL_CHARS, urlunparse(url_parser)):
-            raise ValueError("Invalid character in ftp url is provided, allowed characters are %s placed in the form:"
-                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
-                             "(Only use the @ to separate the password and the host." % ASM_GENERAL_ILLEGAL_CHARS[2:-1])
+        # check that all sub-elements exist. There are special cases where the parser fails splitting correctly.
+        # This can happen, when for example an extra '@' is used after the first one. Then the parser works
+        # incorrectly and sub-elements are NoneType objects.
+        if not url_parser.scheme or not url_parser.username or not url_parser.password \
+           or not url_parser.hostname or not url_parser.path:
+            raise ValueError("URL %s scheme is incorrect. Must be of format: "
+                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'." % url)
 
-        # Perform detailed checks on input
-        if url_parser.scheme != 'ftp' \
-                or not url_parser.scheme or not url_parser.username or not url_parser.password \
-                or not url_parser.hostname or not url_parser.path:
-            # Check both the scheme as well if all sub-elements are non-empty
-            # Note that if an extra @ is used (e.g. in the password) the parser works incorrectly and sub-elements
-            # are empty after splitting the url input
-            raise ValueError("Incorrect ftp url is provided, please use form: "
-                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
-                             "(Only use the @ to separate the password and the host.")
+        # check the scheme is correct
+        if url_parser.scheme != 'ftp':
+            raise ValueError("URL %s scheme is incorrect. Must be: 'ftp'." % url_parser.scheme)
 
-        if re.search(ASM_USER_ILLEGAL_CHARS, url_parser.username):
-            raise ValueError(
-                    "Username contains invalid characters, username remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_USER_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_USER_CHARS, url_parser.username):
+            raise ValueError("Username %s contains invalid characters. Only the following characters are allowed: "
+                             " '%s'." % (url_parser.username, ASM_USER_CHARS[1:-2]))
 
-        if re.search(ASM_PASSWORD_ILLEGAL_CHARS, url_parser.password):
-            raise ValueError(
-                    "Password contains invalid characters, password remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_PASSWORD_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_PASSWORD_CHARS, url_parser.password):
+            raise ValueError("Password %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.password, ASM_PASSWORD_CHARS[1:-2]))
 
-        if re.search(ASM_HOST_ILLEGAL_CHARS, url_parser.hostname):
-            raise ValueError(
-                    "Host contains invalid characters, host remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_HOST_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_HOST_CHARS, url_parser.hostname):
+            raise ValueError("Host %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.hostname, ASM_HOST_CHARS[1:-2]))
 
-        if re.search(ASM_PATH_ILLEGAL_CHARS, url_parser.path):
-            raise ValueError("Path on ftp server contains invalid characters, path remains unchanged "
-                             "(only the characters '%s' are allowed)." % ASM_PATH_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_PATH_CHARS, url_parser.path):
+            raise ValueError("Path %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.path, ASM_PATH_CHARS[1:-2]))
 
-        # TODO: Commented out because not present on EA
-        # self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
-        #                     (urlparse(self.externalStorageURL.value).hostname,
-        #                      urlparse(self.externalStorageURL.value).username,
-        #                      urlparse(self.externalStorageURL.value).password), 204)
         return url
 
 
@@ -999,7 +996,8 @@ class MPPC(model.Detector):
         self._descanner = self.parent._mirror_descanner
 
         self._shape = MPPC.SHAPE
-        self.filename = model.StringVA("unnamed_acquisition", setter=self._setFilename)
+        # subdirectory + filename (megafield id) - adjustable part of the path on the external storage
+        self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
@@ -1072,8 +1070,8 @@ class MPPC(model.Detector):
 
         megafield_metadata = \
             MegaFieldMetaData(
-                    mega_field_id=self.filename.value,
-                    storage_directory=urlparse(self.parent.externalStorageURL.value).path,
+                    mega_field_id=os.path.basename(self.filename.value),
+                    storage_directory=os.path.dirname(self.filename.value),
                     custom_data="No_custom_data",
                     stage_position_x=float(stage_position[0]),
                     stage_position_y=float(stage_position[1]),
@@ -1432,18 +1430,26 @@ class MPPC(model.Detector):
                          "mppc is %s" % (delay, self._scanner.scanDelay.value[0]))
             return delay
 
-    def _setFilename(self, file_name):
+    def _setFilename(self, filename):
         """
-        Check if filename complies with the set of allowed characters.
-        :param file_name: (str) The requested filename for the image data to be acquired.
-        :return: (str) The set filename for the image data to be acquired.
+        Set the requested sub-directories, where the image data should be stored on the external storage,
+        and the filename (megafield id). Note: Name stored in filename will be also a directory on the external
+        storage containing the tiles of the respective megafield.
+        Check if the file name complies with the set of allowed characters.
+        :param filename: (str) The requested sub-directories and filename for the image data to be acquired.
+        :return: (str) The set sub-directories and filename for the image data to be acquired.
         """
-        ASM_FILE_CHARS = r'[^a-z0-9_()-]'
-        if re.search(ASM_FILE_CHARS, file_name):
-            raise ValueError("Filename contains invalid characters. Only the following characters are allowed: "
-                             "'%s'. Please choose a new filename." % ASM_FILE_CHARS[2:-1])
-        else:
-            return file_name
+        # basename is equivalent to megafield id
+        if not re.fullmatch(ASM_FILE_CHARS, os.path.basename(filename)):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (filename, ASM_FILE_CHARS[1:-2]))
+
+        # dirname is equivalent to subdirectories on external storage
+        if not re.fullmatch(ASM_SUBDIR_CHARS, os.path.dirname(filename)):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (filename, ASM_SUBDIR_CHARS[1:-2]))
+
+        return filename
 
     def _setCellTranslation(self, cellTranslation):
         """

@@ -1408,7 +1408,7 @@ class ChamberPressure(model.Actuator):
     vent the chamber and get the current pressure of it.
     """
     def __init__(self, name, role, parent, ranges=None, **kwargs):
-        axes = {"pressure": model.Axis(unit="Pa",
+        axes = {"vacuum": model.Axis(unit="Pa",
                                        choices={PRESSURE_VENTED: "vented",
                                                 PRESSURE_PUMPED: "vacuum"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
@@ -1459,7 +1459,7 @@ class ChamberPressure(model.Actuator):
 
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
-        self.position._value = {"pressure": self._position}
+        self.position._value = {"vacuum": self._position}
         self.position.notify(self.position.value)
 
     @isasync
@@ -1478,14 +1478,14 @@ class ChamberPressure(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._changePressure, pos["pressure"])
+        return self._executor.submit(self._changePressure, pos["vacuum"])
 
     def _changePressure(self, p):
         """
         Synchronous change of the pressure
         p (float): target pressure
         """
-        if p["pressure"] == PRESSURE_VENTED:
+        if p["vacuum"] == PRESSURE_VENTED:
             self.parent._device.VacVent()
         else:
             self.parent._device.VacPump()
