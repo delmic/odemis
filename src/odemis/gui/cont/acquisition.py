@@ -1649,12 +1649,6 @@ class FastEMOverviewAcquiController(object):
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
-    # Don't call wxlimit_invocation, it causes problems with resetting the label after an acquisition failed
-    # in .on_acquisition(). This happens when the acquisition fails immediately (e.g. stage not referenced).
-    # Then, the failure message will not be shown since not enough time has passed from the previous label
-    # update (which in turn is necessary to make sure that the previous failure message disappears when a new
-    # acquisition is successfully started).
-    #@wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
         if not self._main_data_model.active_scintillators.value:
@@ -1677,15 +1671,9 @@ class FastEMOverviewAcquiController(object):
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
         logging.debug("Updating status message %s, with level %s", txt, lvl)
-        self.lbl_acqestimate.SetLabel(txt)
-        self._show_status_icons(lvl)
+        self._set_status_message(txt, lvl)
 
-    def _show_status_icons(self, lvl):
-        # update status icon to show the logging level
-        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
-        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
-        self._tab_panel.Layout()
-
+    @call_in_wx_main
     def _reset_acquisition_gui(self, text=None, level=None):
         """
         Set back every GUI elements to be ready for the next acquisition
@@ -1699,10 +1687,17 @@ class FastEMOverviewAcquiController(object):
         self._tab_panel.Layout()
 
         if text is not None:
-            self.lbl_acqestimate.SetLabel(text)
-            self._show_status_icons(level)
+            self._set_status_message(text, level)
         else:
             self.update_acquisition_time()
+
+    @wxlimit_invocation(1)
+    def _set_status_message(self, text, level):
+        self.lbl_acqestimate.SetLabel(text)
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(level in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(level == logging.WARN)
+        self._tab_panel.Layout()
 
     def on_acquisition(self, evt):
         """
@@ -1714,7 +1709,6 @@ class FastEMOverviewAcquiController(object):
         self.btn_cancel.Enable(True)
         self.btn_cancel.Show()
         self.gauge_acq.Show()
-        self._show_status_icons(None)
 
         self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
         self.gauge_acq.Value = 0
@@ -1744,8 +1738,10 @@ class FastEMOverviewAcquiController(object):
         if self.acq_futures:
             self.acq_futures[-1].add_done_callback(self.full_acquisition_done)
         else:  # In case all acquisitions failed to start
+            self._main_data_model.is_acquiring.value = False
             self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
 
+    @call_in_wx_main
     def increase_acq_progress(self, f):
         # TODO: improve progress estimation
         self.gauge_acq.Value += 1
@@ -1763,7 +1759,6 @@ class FastEMOverviewAcquiController(object):
             f.cancel()
         # all the rest will be handled by on_acquisition_done()
 
-    @call_in_wx_main
     def on_acquisition_done(self, future, num):
         """
         Callback called when the one overview image acquisition is finished.
@@ -1802,7 +1797,7 @@ class FastEMOverviewAcquiController(object):
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
         self._tab_panel.Layout()
-        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._set_status_message("Acquisition done.")
         self._main_data_model.is_acquiring.value = False
 
 
