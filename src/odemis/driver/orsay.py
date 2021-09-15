@@ -1557,7 +1557,7 @@ class OrsayParameterConnector:
             try:
                 return self._conversion[va_value]
             except KeyError:
-                logging.warning("Conversion dictionary does not contain key %s, using it as-is." % va_value)
+                logging.warning("Conversion dictionary does not contain key %s, using it as-is.", va_value)
         elif self._factor:
             return va_value / self._factor
         return va_value
@@ -1574,7 +1574,7 @@ class OrsayParameterConnector:
             for key, value in self._conversion.items():
                 if value == type(value)(par_value):
                     return key
-            logging.warning("Conversion dictionary does not contain a key for value %s, using it as-is." % par_value)
+            logging.warning("Conversion dictionary does not contain a key for value %s, using it as-is.", par_value)
 
         # Assure that the returned value is of the same type as the VA, even if the par_value is a string
         if self._va_value_type == float:
