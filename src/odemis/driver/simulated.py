@@ -2,9 +2,9 @@
 '''
 Created on 29 Mar 2012
 
-@author: Éric Piel
+@author: Éric Piel, Arthur Helsloot
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2021 Éric Piel, Arthur Helsloot, Delmic
 
 This file is part of Odemis.
 
@@ -34,6 +34,7 @@ import random
 import time
 from past.builtins import long
 
+
 class Light(model.Emitter):
     """
     Simulated bright light component. Just pretends to be generating one source.
@@ -59,123 +60,6 @@ class Light(model.Emitter):
     def _setPower(self, value):
         logging.info("Light is at %g W", value[0])
         return value
-
-
-class Stage(model.Actuator):
-    """
-    Simulated stage component. Just pretends to be able to move all around.
-    """
-    def __init__(self, name, role, axes, ranges=None, choices=None, **kwargs):
-        """
-        axes (set of string): names of the axes
-        ranges (dict string -> float,float): min/max of the axis
-        choices (dict string -> set): alternative to ranges, these are the choices of the axis
-        """
-        assert len(axes) > 0
-        if ranges is None:
-            ranges = {}
-        if choices is None:
-            choices = {}
-
-        axes_def = {}
-        self._position = {}
-        init_speed = {}
-        for a in axes:
-            rng = ranges.get(a, None)
-            if rng is None:  # for this axis, no range was defined
-                chs = choices.get(a, None)
-                if chs is None:  # if no choice is defined either
-                    rng = (-0.1, 0.1)  # use the default range
-                else:
-                    axes_def[a] = model.Axis(unit="m", choices=chs)
-                    self._position[a] = list(chs.values())[0]  # start at the first value
-                    init_speed[a] = 1.0  # we are fast!
-                    continue
-            axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
-            # start at the centre
-            self._position[a] = (rng[0] + rng[1]) / 2
-            init_speed[a] = 1.0  # we are fast!
-
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
-        # Special file "stage.fail" => will cause simulation of hardware error
-        if os.path.exists("stage.fail"):
-            raise HwError("stage.fail file present, simulating error")
-
-        self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
-
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        self._updatePosition()
-
-        self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
-
-    def terminate(self):
-        if self._executor:
-            self.stop()
-            self._executor.shutdown()
-            self._executor = None
-
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
-        pos = self._applyInversion(self._position)
-        self.position._set_value(pos, force_write=True)
-
-    def _doMoveRel(self, shift):
-        maxtime = 0
-        for axis, change in shift.items():
-            rng = self.axes[axis].range
-            if axis in self._inverted:
-                rng = (-rng[1], -rng[0])  # user -> internal range
-            if not rng[0] <= self._position[axis] + change <= rng[1]:
-                raise ValueError("moving axis %s to %f, outside of range %r" %
-                                 (axis, self._position[axis] + change, rng))
-
-            self._position[axis] += change
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
-
-        logging.debug("Sleeping %g s", maxtime)
-        time.sleep(maxtime)
-        self._updatePosition()
-
-    def _doMoveAbs(self, pos):
-        maxtime = 0
-        for axis, new_pos in pos.items():
-            if isinstance(new_pos, float):
-                change = self._position[axis] - new_pos
-                maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-            else:  # for axes which are not of type float
-                maxtime = max(maxtime, 1 / self.speed.value[axis])
-            self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-
-        time.sleep(maxtime)
-        self._updatePosition()
-
-    @isasync
-    def moveRel(self, shift):
-        if not shift:
-            return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
-        shift = self._applyInversion(shift)
-
-        return self._executor.submit(self._doMoveRel, shift)
-
-    @isasync
-    def moveAbs(self, pos):
-        if not pos:
-            return model.InstantaneousFuture()
-        self._checkMoveAbs(pos)
-        pos = self._applyInversion(pos)
-
-        return self._executor.submit(self._doMoveAbs, pos)
-
-    def stop(self, axes=None):
-        self._executor.cancel()
-        logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
 
 PRESSURE_VENTED = 100e3 # Pa
@@ -356,84 +240,193 @@ class PhenomChamber(Chamber):
                                          readonly=True)
 
 
-class VAStack(model.HwComponent):
+class GenericComponent(model.Actuator):
     """
-    Simulated component to hold a set of VA's. Just pretends to have a couple of values.
+    Simulated component, capable of simulating both axes and VA's.
+    This component allows for communication with it, asif it were a real component with axes and VA's, but does not do
+    anything else.
     """
-    def __init__(self, name, role, vanames, types=None, values=None, readonly=None, units=None, ranges=None, **kwargs):
+    def __init__(self, name, role, vanames=None, axes=None, vavalues=None, readonly=None, units=None, varanges=None,
+                 vachoices=None, axisranges=None, axischoices=None, **kwargs):
         """
-        vanames (set of string): names of the va's
-        types (dict string -> class): optional, types of the va's, for each va defaults to VigilantAttribute
-        values (dict string -> any): optional, initial values of the va's, for each va defaults to 0.0
-        readonly (dict string -> bool): optional, True for read only va's, for each va defaults to False
-        units (dict string -> str): optional, the units of the va's
-        ranges (dict string -> float,float): min/max of the va's
-        """
-        if types is None:
-            types = {}
-        if values is None:
-            values = {}
-        if readonly is None:
-            readonly = {}
-        if units is None:
-            units = {}
-        if ranges is None:
-            ranges = {}
+        Only VA's specified in vanames are created. Their type is determined based on the initial value supplied in
+        vavalues, and the presence of a range or choices in varanges and vachoices respectively.
+        Both the presence of VA's and the presence of axes are optional.
 
-        for n in vanames:
-            vatype = types.get(n, "model.VigilantAttribute")
-            vavalue = values.get(n, 0.0)
-            ro = readonly.get(n, False)
-            vaunit = units.get(n, "")
-            varange = ranges.get(n, None)
-            va_command = f"{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
-            if varange:
-                va_command += f", range={varange}"
-            va_command += ")"
-            setattr(self, n, eval(va_command))
-
-        model.HwComponent.__init__(self, name, role, **kwargs)
-
-
-class GeneralActuator(Stage):
-    """
-    Simulated actuator, capable of holding both axes and VA's
-    """
-    def __init__(self, name, role, vanames, axes, types=None, values=None, readonly=None, units=None, varanges=None,
-                 axisranges=None, axischoices=None, **kwargs):
-        """
-        vanames (set of string): names of the va's
+        vanames (set of string): names of the VA's
         axes (set of string): names of the axes
-        types (dict string -> class): optional, types of the va's, for each va defaults to VigilantAttribute
-        values (dict string -> any): optional, initial values of the va's, for each va defaults to 0.0
-        readonly (dict string -> bool): optional, True for read only va's, for each va defaults to False
-        units (dict string -> str): optional, the units of the va's
-        varanges (dict string -> float,float): optional, min/max of the va's, defaults to None
+        vavalues (dict string -> any): optional, initial values of the VA's, for each VA defaults to 0.0
+        readonly (dict string -> bool): optional, True for read only VA's, for each VA defaults to False
+        units (dict string -> str): optional, the units of the VA's
+        varanges (dict string -> float,float): optional, min/max of the VA's, defaults to None
+        vachoices (dict string -> dict): optional, possible values available to the VA, defaults to None
         axisranges (dict string -> float,float): optional, min/max of the axis, defaults to (-0.1, 0.1)
         axischoices (dict string -> set): optional, alternative to ranges, these are the choices of the axis, defaults
                                           to (True, False)
         """
-        if types is None:
-            types = {}
-        if values is None:
-            values = {}
-        if readonly is None:
-            readonly = {}
-        if units is None:
-            units = {}
-        if varanges is None:
-            varanges = {}
+        # Create desired VA's
+        if vanames:
+            if vavalues is None:
+                vavalues = {}
+            if readonly is None:
+                readonly = {}
+            if units is None:
+                units = {}
+            if varanges is None:
+                varanges = {}
+            if vachoices is None:
+                vachoices = {}
+            for n in vanames:
+                if n in vavalues:
+                    vavaluetype = vavalues[n].__class__.__name__.capitalize()
+                    if vavaluetype == "Bool":
+                        vavaluetype = "Boolean"
+                else:
+                    vavaluetype = "VA"
+                if n in varanges:
+                    varangetype = "Continuous"
+                elif n in vachoices:
+                    varangetype = "Enumerated"
+                else:
+                    varangetype = "VA"
+                if vavaluetype == "VA" and varangetype == "VA":
+                    vatype = "VigilantAttribute"
+                elif vavaluetype == "VA":  # and varangetype != "VA"
+                    vatype = varangetype + vavaluetype
+                else:
+                    vatype = vavaluetype + varangetype
 
-        for n in vanames:
-            vatype = types.get(n, "model.VigilantAttribute")
-            vavalue = values.get(n, 0.0)
-            ro = readonly.get(n, False)
-            vaunit = units.get(n, "")
-            varange = varanges.get(n, None)
-            va_command = f"{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
-            if varange:
-                va_command += f", range={varange}"
-            va_command += ")"
-            setattr(self, n, eval(va_command))
+                vavalue = vavalues.get(n, 0.0)
+                ro = readonly.get(n, False)
+                vaunit = units.get(n, "")
+                varange = varanges.get(n, None)
+                vachoice = vachoices.get(n, None)
+                va_command = f"model.{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
+                if varange:
+                    va_command += f", range={varange}"
+                elif vachoice:
+                    va_command += f", choice={vachoice}"
+                va_command += ")"
+                setattr(self, n, eval(va_command))
 
-        Stage.__init__(self, name, role, axes, ranges=axisranges, choices=axischoices, **kwargs)
+        # Create desired axes
+        axes_def = {}
+        if axes:
+            if axisranges is None:
+                axisranges = {}
+            if axischoices is None:
+                axischoices = {}
+            self._position = {}
+            init_speed = {}
+            for a in axes:
+                init_speed[a] = 1.0  # we are fast!
+                rng = axisranges.get(a, None)
+                if rng is None:  # for this axis, no range was defined
+                    chs = axischoices.get(a, None)
+                    if chs is None:  # if no choice is defined either
+                        rng = (-0.1, 0.1)  # use the default range
+                    else:
+                        axes_def[a] = model.Axis(unit="m", choices=chs)
+                        self._position[a] = list(chs.values())[0]  # start at the first value
+                        continue
+                axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
+                self._position[a] = (rng[0] + rng[1]) / 2  # start at the centre
+
+            self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+            # RO, as to modify it the client must use .moveRel() or .moveAbs()
+            self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+
+            self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        if hasattr(self, "position"):
+            self._updatePosition()
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
+
+    def _doMoveRel(self, shift):
+        maxtime = 0
+        for axis, change in shift.items():
+            rng = self.axes[axis].range
+            if axis in self._inverted:
+                rng = (-rng[1], -rng[0])  # user -> internal range
+            if not rng[0] <= self._position[axis] + change <= rng[1]:
+                raise ValueError("moving axis %s to %f, outside of range %r" %
+                                 (axis, self._position[axis] + change, rng))
+
+            self._position[axis] += change
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
+
+        logging.debug("Sleeping %g s", maxtime)
+        time.sleep(maxtime)
+        self._updatePosition()
+
+    def _doMoveAbs(self, pos):
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            if isinstance(new_pos, float):
+                change = self._position[axis] - new_pos
+                maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+            else:  # for axes which are not of type float
+                maxtime = max(maxtime, 1 / self.speed.value[axis])
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+
+        time.sleep(maxtime)
+        self._updatePosition()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        shift = self._applyInversion(shift)
+
+        return self._executor.submit(self._doMoveRel, shift)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+        logging.info("Stopping all axes: %s", ", ".join(self.axes))
+
+
+class Stage(GenericComponent):
+    """
+    Simulated stage component. Just pretends to be able to move all around.
+    """
+    def __init__(self, name, role, axes, ranges=None, choices=None, **kwargs):
+        """
+        axes (set of string): names of the axes
+        ranges (dict string -> float,float): min/max of the axis
+        choices (dict string -> set): alternative to ranges, these are the choices of the axis
+        """
+        assert len(axes) > 0
+
+        # Special file "stage.fail" => will cause simulation of hardware error
+        if os.path.exists("stage.fail"):
+            raise HwError("stage.fail file present, simulating error")
+
+        GenericComponent.__init__(self, name, role, vanames=None, axes=axes, axisranges=ranges, axischoices=choices,
+                                  **kwargs)
