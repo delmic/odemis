@@ -39,7 +39,6 @@ import pickle
 import threading
 import time
 import unittest
-from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
 from technolution_asm.models import CalibrationLoopParameters
@@ -111,34 +110,35 @@ class TestAuxilaryFunc(unittest.TestCase):
         out = numpy.floor(convert2Bits((0, 0.5, 1), (0, 1)))
         self.assertEqual(tuple(out), (-2 ** 15, -1, 2 ** 15 - 1))
 
+
 class TestAcquisitionServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
+
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_exception_pickling(self):
         """
@@ -252,86 +252,77 @@ class TestAcquisitionServer(unittest.TestCase):
         descanner = self.MirrorDescanner
         scanner = self.EBeamScanner
         ASM = self.ASM_manager
-        mppc = self.MPPC
 
-        # Test repeatably and randomly over the range so possible floating point error are found.
-        for test_repetition in range(0, 1000):
-            # Check randomly all the options of the dwell time allowed.
-            minimum_dwell_time = scanner.dwellTime.range[0]
-            random_dwell_time = numpy.round(numpy.random.random() * scanner.dwellTime.range[1], 9)
-            scanner.dwellTime.value = max(random_dwell_time, minimum_dwell_time)
+        # choose example value so that line scan time is not integer multiple of descanner clock period
+        scanner.dwellTime.value = 430e-09
+        minimum_dwell_time = scanner.dwellTime.range[0]
+        random_dwell_time = numpy.round(numpy.random.random() * scanner.dwellTime.range[1], 9)
+        scanner.dwellTime.value = max(random_dwell_time, minimum_dwell_time)
 
-            line_scan_time = scanner.dwellTime.value * mppc.cellCompleteResolution.value[0]
-            remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
-            if remainder_scanning_time is not 0:
-                # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
-                # line scan time is equal to a equal to a whole multiple of the descan clock period
-                flyback_time = descanner.physicalFlybackTime + (descanner.clockPeriod.value - remainder_scanning_time)
+        # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
+        total_line_scan_time = self.MPPC.getTotalLineScanTime()
 
-            # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
-            total_line_scan_time = line_scan_time + flyback_time
+        calibration_parameters = ASM._assembleCalibrationMetadata()
 
-            calibration_parameters = ASM._assembleCalibrationMetadata()
+        # Check types of calibration parameters (output send to the ASM)
+        self.assertIsInstance(calibration_parameters, CalibrationLoopParameters)
+        self.assertIsInstance(calibration_parameters.descan_rotation, float)
+        self.assertIsInstance(calibration_parameters.x_descan_offset, int)
+        self.assertIsInstance(calibration_parameters.y_descan_offset, int)
+        self.assertIsInstance(calibration_parameters.dwell_time, int)
+        self.assertIsInstance(calibration_parameters.scan_rotation, float)
+        self.assertIsInstance(calibration_parameters.x_scan_delay, int)
+        self.assertIsInstance(calibration_parameters.x_scan_offset, float)
+        self.assertIsInstance(calibration_parameters.y_scan_offset, float)
 
-            # Check types of calibration parameters (output send to the ASM)
-            self.assertIsInstance(calibration_parameters, CalibrationLoopParameters)
-            self.assertIsInstance(calibration_parameters.descan_rotation, float)
-            self.assertIsInstance(calibration_parameters.x_descan_offset, int)
-            self.assertIsInstance(calibration_parameters.y_descan_offset, int)
-            self.assertIsInstance(calibration_parameters.dwell_time, int)
-            self.assertIsInstance(calibration_parameters.scan_rotation, float)
-            self.assertIsInstance(calibration_parameters.x_scan_delay, int)
-            self.assertIsInstance(calibration_parameters.x_scan_offset, float)
-            self.assertIsInstance(calibration_parameters.y_scan_offset, float)
+        # Check descan setpoints
+        self.assertIsInstance(calibration_parameters.x_descan_setpoints, list)
+        self.assertIsInstance(calibration_parameters.y_descan_setpoints, list)
+        for x_setpoint, y_setpoint in zip(calibration_parameters.x_descan_setpoints,
+                                          calibration_parameters.y_descan_setpoints):
+            self.assertIsInstance(x_setpoint, int)
+            self.assertIsInstance(y_setpoint, int)
 
-            # Check descan setpoints
-            self.assertIsInstance(calibration_parameters.x_descan_setpoints, list)
-            self.assertIsInstance(calibration_parameters.y_descan_setpoints, list)
-            for x_setpoint, y_setpoint in zip(calibration_parameters.x_descan_setpoints,
-                                              calibration_parameters.y_descan_setpoints):
-                self.assertIsInstance(x_setpoint, int)
-                self.assertIsInstance(y_setpoint, int)
+        # Check if the time interval used for the calculation of the descanner setpoints is equal to the
+        # descanner clock period.
+        x_descan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_descan_setpoints)
+        self.assertEqual(numpy.round(x_descan_setpoints_time_interval, 10) % descanner.clockPeriod.value, 0,
+                         "Time interval used for the descanner setpoints is not equal to the descanner clock "
+                         "period")
 
-            # Check if the time interval used for the calculation of the descanner setpoints is equal to the
-            # descanner clock period.
-            x_descan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_descan_setpoints)
-            self.assertEqual(numpy.round(x_descan_setpoints_time_interval, 10) % descanner.clockPeriod.value, 0,
-                             "Time interval used for the descanner setpoints is not equal to the descanner clock "
-                             "period")
+        # Check if the total scanning time is equal to the total scanning time send to the ASM
+        descan_derived_total_scanning_time = descanner.clockPeriod.value \
+                                             * len(calibration_parameters.x_descan_setpoints)
+        if not almost_equal(descan_derived_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
+            raise ValueError("Total descan time implied by the setpoints send to the ASM is not equal to the "
+                             "scanning time set by the VA's.")
 
-            # Check if the total scanning time is equal to the total scanning time send to the ASM
-            descan_derived_total_scanning_time = descanner.clockPeriod.value * \
-                                                 len(calibration_parameters.x_descan_setpoints)
-            if not almost_equal(descan_derived_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
-                raise ValueError("Total descan time implied by the setpoints send to the ASM is not equal to the "
-                                 "scanning time set by the VA's.")
+        # Check scan setpoints
+        self.assertLessEqual(len(calibration_parameters.x_scan_setpoints), MAX_NMBR_POINTS)
+        self.assertLessEqual(len(calibration_parameters.y_scan_setpoints), MAX_NMBR_POINTS)
+        self.assertEqual(len(calibration_parameters.x_scan_setpoints), len(calibration_parameters.y_scan_setpoints))
+        self.assertIsInstance(calibration_parameters.x_scan_setpoints, list)
+        self.assertIsInstance(calibration_parameters.y_scan_setpoints, list)
+        for x_setpoint, y_setpoint in zip(calibration_parameters.x_scan_setpoints,
+                                          calibration_parameters.y_scan_setpoints):
+            self.assertIsInstance(x_setpoint, float)
+            self.assertIsInstance(y_setpoint, float)
 
-            # Check scan setpoints
-            self.assertLessEqual(len(calibration_parameters.x_scan_setpoints), MAX_NMBR_POINTS)
-            self.assertLessEqual(len(calibration_parameters.y_scan_setpoints), MAX_NMBR_POINTS)
-            self.assertEqual(len(calibration_parameters.x_scan_setpoints), len(calibration_parameters.y_scan_setpoints))
-            self.assertIsInstance(calibration_parameters.x_scan_setpoints, list)
-            self.assertIsInstance(calibration_parameters.y_scan_setpoints, list)
-            for x_setpoint, y_setpoint in zip(calibration_parameters.x_scan_setpoints,
-                                              calibration_parameters.y_scan_setpoints):
-                self.assertIsInstance(x_setpoint, float)
-                self.assertIsInstance(y_setpoint, float)
+        x_scan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_scan_setpoints)
+        # Check if the a whole number of clock periods fits in the time interval
+        self.assertEqual(numpy.round(x_scan_setpoints_time_interval / ASM.clockPeriod.value, 10) % 1, 0,
+                         "Implied sampling period is not a whole multiple of the scanner clock period.")
 
-            x_scan_setpoints_time_interval = total_line_scan_time / len(calibration_parameters.x_scan_setpoints)
-            # Check if the a whole number of clock periods fits in the time interval
-            self.assertEqual(numpy.round(x_scan_setpoints_time_interval / ASM.clockPeriod.value, 10) % 1, 0,
-                             "Implied sampling period is not a whole multiple of the scanner clock period.")
+        if not almost_equal(calibration_parameters.dwell_time % ASM.clockPeriod.value, 0, rtol=0, atol=1e-9):
+            raise ValueError("Total scanning time implied by the setpoints send to the ASM is not equal to the "
+                             "scanning time set by the VA's.")
 
-            if not almost_equal(calibration_parameters.dwell_time % ASM.clockPeriod.value, 0, rtol=0, atol=1e-9):
-                raise ValueError("Total scanning time implied by the setpoints send to the ASM is not equal to the "
-                                 "scanning time set by the VA's.")
+        # Check if the total scanning time is equal to the total scanning time send to the ASM
+        scan_total_scanning_time = len(calibration_parameters.x_scan_setpoints) * calibration_parameters.dwell_time\
+                                                                                * ASM.clockPeriod.value
 
-            # Check if the total scanning time is equal to the total scanning time send to the ASM
-            scan_total_scanning_time = len(calibration_parameters.x_scan_setpoints) * calibration_parameters.dwell_time\
-                                                                                    * ASM.clockPeriod.value
-
-            if not almost_equal(scan_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
-                raise ValueError("Total scanning time is not equal to the defined total scanning time.")
+        if not almost_equal(scan_total_scanning_time, total_line_scan_time, rtol=0, atol=1e-9):
+            raise ValueError("Total scanning time is not equal to the defined total scanning time.")
 
     @unittest.skip  # Skip plotting of calibration setpoints, these plots are made for debugging.
     def test_plot_calibration_setpoints(self):
@@ -406,32 +397,33 @@ class TestAcquisitionServer(unittest.TestCase):
         with self.assertRaises(AsmApiException):
             self.ASM_manager.asmApiPostCall("/fake/function/error", 200, raw_response=True)
 
+
 class TestEBeamScanner(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
+
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)
 
     def test_resolution_VA(self):
         """
@@ -626,28 +618,27 @@ class TestMirrorDescanner(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
-        cls.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
-        for child in cls.ASM_manager.children.value:
-            if child.name == CONFIG_MPPC["name"]:
-                cls.MPPC = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.EBeamScanner = child
-            elif child.name == CONFIG_DESCANNER["name"]:
-                cls.MirrorDescanner = child
-
     @classmethod
     def tearDownClass(cls):
-        cls.ASM_manager.terminate()
-        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
+        pass
 
     def setUp(self):
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        for child in self.ASM_manager.children.value:
+            if child.name == CONFIG_MPPC["name"]:
+                self.MPPC = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                self.EBeamScanner = child
+            elif child.name == CONFIG_DESCANNER["name"]:
+                self.MirrorDescanner = child
         numpy.random.seed(0)  # Reset seed to have reproducibility of testcases.
 
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.MPPC.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
     def tearDown(self):
-        pass
+        self.ASM_manager.terminate()
+        time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_rotation_VA(self):
         max_rotation = self.MirrorDescanner.rotation.range[1]
@@ -1171,6 +1162,57 @@ class TestMPPC(unittest.TestCase):
         # Check if setter allows setting of non-square resolutions.
         self.MPPC.cellCompleteResolution.value = (int(0.2 * max_res), int(0.5 * max_res))
         self.assertEqual(self.MPPC.cellCompleteResolution.value, (int(0.2 * max_res), int(0.5 * max_res)))
+
+    def test_getTotalLineScanTime(self):
+        """Check that the time for scanning one line of pixels in a single field image is calculated correctly."""
+
+        # choose example value so that line scan time is not integer multiple of descanner clock period
+        self.EBeamScanner.dwellTime.value = 430e-09
+        acq_dwell_time = self.EBeamScanner.dwellTime.value
+        resolution = self.MPPC.cellCompleteResolution.value[0]  # including overscanned pixels
+        flyback_time = self.MirrorDescanner.physicalFlybackTime
+
+        # calculate the expected time for one line scan with the above HW settings
+        line_scan_time = acq_dwell_time * resolution
+        # check if line scan time is integer multiple of descanner clock period
+        remainder_scanning_time = line_scan_time % self.MirrorDescanner.clockPeriod.value
+        if remainder_scanning_time is not 0:
+            # make line scan time an integer multiple of the clock period by adding the extra time needed
+            flyback_time = flyback_time + (self.MirrorDescanner.clockPeriod.value - remainder_scanning_time)
+        exp_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # round to prevent floating point errors
+
+        # get the time for one line scan for the current HW settings
+        line_scan_time = self.MPPC.getTotalLineScanTime()
+
+        self.assertEqual(exp_line_scan_time, line_scan_time)
+
+    def test_frameDurationVA(self):
+        """Testing the frame duration (single field acquisition time) VA."""
+
+        # check that the frame duration changes, when the cell complete resolution changes
+        # set the cell complete resolution to some good value
+        self.MPPC.cellCompleteResolution.value = (self.MPPC.cellCompleteResolution.range[1][0],
+                                                  self.MPPC.cellCompleteResolution.range[1][1])
+        # get the frame duration
+        orig_frame_dur = self.MPPC.frameDuration.value
+        curr_cell_complete_res = self.MPPC.cellCompleteResolution.value
+        # change the cell complete resolution, which should trigger the frame duration to be adjusted
+        self.MPPC.cellCompleteResolution.value = (curr_cell_complete_res[0] - 100, curr_cell_complete_res[1] - 100)
+        # get the new frame duration
+        new_frame_dur = self.MPPC.frameDuration.value
+        # check that the previous frame duration is greater than the new frame duration
+        self.assertGreater(orig_frame_dur, new_frame_dur)
+
+        # check that the frame duration changes, when dwell time changes
+        orig_frame_dur = self.MPPC.frameDuration.value
+        # set the dwell time to minimum
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
+        # set dwell time to maximum
+        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[1]
+        # get the new value
+        new_frame_dur = self.MPPC.frameDuration.value
+        # check that the new frame duration is greater than the previous frame duration
+        self.assertGreater(new_frame_dur, orig_frame_dur)
 
     def test_assemble_megafield_metadata(self):
         """
