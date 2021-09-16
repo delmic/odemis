@@ -136,9 +136,9 @@ class AcquisitionServer(model.HwComponent):
 
         except Exception as error:
             logging.warning("First try to connect with the ASM host was not successful.\n"
-                          "This is possible because of an incorrect starting sequence, first the SAM should be "
-                          "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
-                          "Received error:\n %s" % error)
+                            "This is possible because of an incorrect starting sequence, first the SAM should be "
+                            "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
+                            "Received error:\n %s" % error)
             try:
                 self.asmApiPostCall("/scan/finish_mega_field", 204)  # Stop acquisition
                 self.asmApiGetCall("/scan/clock_frequency", 200)  # Test connection from ASM to SAM
@@ -165,14 +165,14 @@ class AcquisitionServer(model.HwComponent):
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
 
-        # CalibrationParameters contains the current calibration parameters
+        # contains the current calibration settings
         self._calibrationParameters = None
 
         # TODO: Commented out because not present on EA
         # self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
 
-        # Setup hw and sw version
-        # TODO make call set_system_sw_name too new simulator (if implemented)
+        # Read HW and SW version from ASM and SAM
+        # TODO make call set_system_sw_name to new simulator (if implemented)
         self._swVersion = "ASM service version '%s' " % (self.getAsmServiceVersion())
         self._hwVersion = "SAM firmware version '%s', SAM service version '%s'" % (self.getSamFirmwareVersion(),
                                                                                    self.getSamServiceVersion())
@@ -202,7 +202,7 @@ class AcquisitionServer(model.HwComponent):
     def terminate(self):
         """
         Stops the calibration method, calls the terminate command on all the children,
-         and closes the connection (via the request session) to the ASM.
+        and closes the connection (via the request session) to the ASM.
         """
         self.calibrationMode.value = False
         # terminate children
@@ -330,7 +330,8 @@ class AcquisitionServer(model.HwComponent):
                 logging.error(response)
 
         except Exception:
-            logging.exception("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
+            logging.exception("Performing system checks failed. Could not perform a successful call to %s ."
+                              % item_name)
 
     def checkMegaFieldExists(self, filename):
         """
@@ -589,6 +590,7 @@ class EBeamScanner(model.Emitter):
         # Making the minimum resolution (12*8) , because 12/4 is an integer (3.0)
         # Since the maximum cell size is 1000 (dividable by 4) the maximum resolution is (1000*8)
         mppcDetectorShape = MPPC.SHAPE
+        # size of a single field image (excluding overscanned pixels)
         self.resolution = model.ResolutionVA((6400, 6400),
                                              ((12*mppcDetectorShape[0], 12*mppcDetectorShape[1]),
                                               (1000*mppcDetectorShape[0], 1000*mppcDetectorShape[1])),
@@ -599,10 +601,15 @@ class EBeamScanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s')
         self.pixelSize = model.TupleContinuous((4e-9, 4e-9), range=((1e-9, 1e-9), (1e-3, 1e-3)), unit='m',
                                                setter=self._setPixelSize)
+        # direction of the executed scan
         self.rotation = model.FloatContinuous(0.0, range=(0.0, 2 * math.pi), unit='rad')
 
+        # the start of the sawtooth scanning signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)))
+        # the end (amplitude) of the sawtooth scanning signal
         self.scanGain = model.TupleContinuous((0.3, 0.3), range=((-1.0, -1.0), (1.0, 1.0)))
+        # delay between the trigger signal to start the acquisition and the scanner to start scanning
+        # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
         # TODO: y scan delay is y prescan lines which is currently unused an can probably be deleted.
         # The scanDelay in x direction maximum (200e-6) is experimentally determined.
         self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (200e-6, 10.0)), unit='s',
@@ -824,17 +831,19 @@ class MirrorDescanner(model.Emitter):
         """
         super(MirrorDescanner, self).__init__(name, role, parent=parent, **kwargs)
 
+        # direction of the executed descan
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
+        # start of the sawtooth descanner signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
+        # end (height) of the sawtooth descanner signal
         self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
         # period (=1/frequency) of the descanner; update frequency for setpoints upload
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
-        # TODO: Adapt value of physical flyback time after testing on HW. --> Wilco/Andries
-        # Physical time for the mirror descanner to perform a flyback, assumed constant [s].
-        self.physicalFlybackTime = 250e-6
+        # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
+        self.physicalFlybackTime = 250e-6  # assumed constant [s]
 
     def getXAcqSetpoints(self):
         """
@@ -950,6 +959,7 @@ class MirrorDescanner(model.Emitter):
         # not uniformly distributed.
         return numpy.floor(x_setpoints).astype(int).tolist(), numpy.floor(y_setpoints).astype(int).tolist()
 
+
 class MPPC(model.Detector):
     """
     Represents the camera (mppc sensor) for acquiring the image data.
@@ -974,7 +984,9 @@ class MPPC(model.Detector):
         # subdirectory + filename (megafield id) - adjustable part of the path on the external storage
         self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
+        # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
+        # regulates the sensitivity of the mppc sensor
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
 
         # Cell acquisition parameters
@@ -1073,7 +1085,6 @@ class MPPC(model.Detector):
                     y_scan_gain=self._scanner.getScanGainVolts()[1],
                     x_scan_offset=self._scanner.getScanOffsetVolts()[0],
                     y_scan_offset=self._scanner.getScanOffsetVolts()[1],
-                    # TODO API gives error for values < 0 but YAML does not specify so
                     x_descan_setpoints=X_descan_setpoints,
                     y_descan_setpoints=Y_descan_setpoints,
                     # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
