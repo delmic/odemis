@@ -1472,7 +1472,10 @@ class FastEMAcquiController(object):
                 return
             # Display acquisition time
             projects = self._tab_data_model.projects.value
-            acq_time = fastem.estimateTime([roa for p in projects for roa in p.roas.value])
+            acq_time = 0
+            for p in projects:
+                for roa in p.roas.value:
+                    acq_time += roa.estimate_acquisition_time()
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -1546,10 +1549,11 @@ class FastEMAcquiController(object):
         # Acquire ROAs for all projects
         fs = {}
         for p in self._tab_data_model.projects.value:
-            ppath = os.path.join(self.path, p.name.value)
+            ppath = os.path.join(self.path, p.name.value)  # <acquisition date>/<project name>
             for roa in p.roas.value:
-                f = fastem.acquire(roa, ppath)
-                t = fastem.estimateTime([roa])  # TODO: replace with new time estimate once acquisition is implemented
+                f = fastem.acquire(roa, ppath, self._main_data_model.multibeam, self._main_data_model.descanner,
+                                   self._main_data_model.mppc, self._main_data_model.stage)
+                t = roa.estimate_acquisition_time()
                 fs[f] = t
 
         self.acq_future = model.ProgressiveBatchFuture(fs)

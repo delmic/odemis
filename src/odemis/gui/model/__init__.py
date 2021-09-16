@@ -184,6 +184,9 @@ class MainGUIData(object):
         "slit-in-big": "slit_in_big",
         "sample-thermostat": "sample_thermostat",
         "asm": "asm",
+        "multibeam": "multibeam",
+        "descanner": "descanner",
+        "mppc": "mppc",
     }
 
     def __init__(self, microscope):
@@ -250,7 +253,10 @@ class MainGUIData(object):
         self.tc_filter = None
         self.slit_in_big = None
         self.sample_thermostat = None  # thermostat for temperature control of cryosecom
-        self.asm = None  # acquisition server (for FastEM)
+        self.asm = None  # acquisition server module of the fastem microscope
+        self.multibeam = None  # multibeam scanner of the fastem microscope
+        self.descanner = None  # descan mirrors of the fastem microscope
+        self.mppc = None  # detector of the fastem microscope
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
