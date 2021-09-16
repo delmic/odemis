@@ -991,11 +991,12 @@ class MPPC(model.Detector):
 
         # The minimum of the cell resolution cannot be lower than the minimum effective cell size.
         self.cellCompleteResolution = model.ResolutionVA((900, 900), ((12, 12), (1000, 1000)))
-        self.cellCompleteResolution.subscribe(self._updateFrameDuration)
-        self.parent._ebeam_scanner.dwellTime.subscribe(self._updateFrameDuration)
+
         # acquisition time for a single field image including overscanned pixels and flyback time
-        acq_time = self.getTotalFieldScanTime()
-        self.frameDuration = model.FloatContinuous(acq_time, range=(0, 100), unit='s', readonly=True)
+        self.frameDuration = model.FloatContinuous(0, range=(0, 100), unit='s', readonly=True)
+        # listen to changes to settings that affect the frame duration
+        self.cellCompleteResolution.subscribe(self._updateFrameDuration, init=True)
+        self.parent._ebeam_scanner.dwellTime.subscribe(self._updateFrameDuration)
 
         # Setup hw and sw version
         self._swVersion = self.parent.swVersion
