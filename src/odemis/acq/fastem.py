@@ -94,22 +94,12 @@ class FastEMROA(object):
         """
         self.field_indices = self.calculate_field_indices()
 
-    def estimate_single_field_time(self):
-        """
-        Computes the approximate time it will take to acquire a single field image.
-        :return: (0 <= float) The estimated time for a single field image (tile) acquisition in s.
-        """
-        cell_res = self._detector.cellCompleteResolution.value
-        total_line_scan_time = self._asm.getTotalLineScanTime()
-
-        return total_line_scan_time * cell_res[1]
-
     def estimate_roa_time(self):
         """
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
         :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
         """
-        field_time = self.estimate_single_field_time()
+        field_time = self._detector.frameDuration.value
         tot_time = len(self.field_indices) * field_time
 
         return tot_time
@@ -342,7 +332,7 @@ class AcquisitionTask(object):
                                        or zero array) represents one single field image within the ROA (megafield).
         """
 
-        total_field_time = self._roa.estimate_single_field_time()
+        total_field_time = self._detector.frameDuration.value
         timeout = total_field_time + 5  # TODO what margin should be used?
 
         # Acquire all single field images, which are automatically offloaded to the external storage.

@@ -154,35 +154,6 @@ class TestFastEMROA(unittest.TestCase):
     def setUp(self):
         self.descanner.physicalFlybackTime = 250e-6  # TODO why is this necessary??
 
-    def test_estimate_single_field_time(self):
-        """Check that the estimated time for a single field image is calculated correctly."""
-        x_fields = 3
-        y_fields = 4
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-        coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
-        roc = fastem.FastEMROC("roc_name", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
-        roa = fastem.FastEMROA(roa_name,
-                               coordinates,
-                               roc,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc
-                               )
-        cell_res = self.mppc.cellCompleteResolution.value
-        dwell_time = self.multibeam.dwellTime.value
-        flyback = self.descanner.physicalFlybackTime  # extra time per line scan
-
-        # calculate expected field acquisition time
-        # (number of pixels per line * dwell time + flyback time) * number of lines
-        estimated_field_acq_time = (cell_res[0] * dwell_time + flyback) * cell_res[1]
-        # get field acquisition time
-        field_acq_time = roa.estimate_single_field_time()
-
-        self.assertAlmostEqual(estimated_field_acq_time, field_acq_time)
-
     def test_estimate_roa_time(self):
         """Check that the estimated time for one ROA (megafield) is calculated correctly."""
         # Use float for number of fields, in order to not end up with additional fields scanned and thus an
