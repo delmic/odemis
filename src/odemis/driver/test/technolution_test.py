@@ -169,20 +169,6 @@ class TestAcquisitionServer(unittest.TestCase):
         status_code = self.ASM_manager.asmApiPostCall("/scan/finish_mega_field", expected_status_code)
         self.assertEqual(status_code, expected_status_code)
 
-    def test_clockVA(self):
-        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 200)
-        # Check if clockFrequencyData contains the proper key
-        if 'frequency' not in clockFrequencyData:
-            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
-                          "key: 'frequency'.")
-        clock_freq = clockFrequencyData['frequency']
-
-        self.assertIsInstance(clock_freq, int)
-
-        self.assertEqual(
-                self.ASM_manager.clockPeriod.value,
-                1 / clock_freq)
-
     def test_externalStorageURL_VA(self):
         """Test the external storage URL VA.
         Note: Try to choose examples that are only triggering one of the checks and none of the others!"""
@@ -425,6 +411,18 @@ class TestEBeamScanner(unittest.TestCase):
         self.ASM_manager.terminate()
         time.sleep(0.2)
 
+    def test_clockPeriod_VA(self):
+        """Testing the clock period VA. It reads the clock period from the ASM."""
+        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 200)
+        # Check if clockFrequencyData contains the proper key
+        if 'frequency' not in clockFrequencyData:
+            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
+                          "key: 'frequency'.")
+        clock_freq = clockFrequencyData['frequency']
+
+        self.assertIsInstance(clock_freq, int)
+        self.assertEqual(self.EBeamScanner.clockPeriod.value, 1 / clock_freq)
+
     def test_resolution_VA(self):
         """
         The setter allows only to enter resolutions with an effective cell size which are a whole multiple of 4.
@@ -489,7 +487,7 @@ class TestEBeamScanner(unittest.TestCase):
         dwellTime = 0.9 * self.EBeamScanner.dwellTime.range[1]
         self.EBeamScanner.dwellTime.value = dwellTime
         self.assertIsInstance(self.EBeamScanner.getTicksDwellTime(), int)
-        self.assertEqual(self.EBeamScanner.getTicksDwellTime(), int(dwellTime / self.ASM_manager.clockPeriod.value))
+        self.assertEqual(self.EBeamScanner.getTicksDwellTime(), int(dwellTime / self.EBeamScanner.clockPeriod.value))
 
     def test_pixelSizeVA(self):
         min_pixelSize = self.EBeamScanner.pixelSize.range[0][0]
@@ -639,6 +637,18 @@ class TestMirrorDescanner(unittest.TestCase):
     def tearDown(self):
         self.ASM_manager.terminate()
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
+
+    def test_clockPeriod_VA(self):
+        """Testing the clock period VA. It reads the clock period for the descanner mirrors."""
+        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/descan_control_frequency", 200)
+        # Check if clockFrequencyData contains the proper key
+        if 'frequency' not in clockFrequencyData:
+            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
+                          "key: 'frequency'.")
+        clock_freq = clockFrequencyData['frequency']
+
+        self.assertIsInstance(clock_freq, int)
+        self.assertEqual(self.MirrorDescanner.clockPeriod.value, 1 / clock_freq)
 
     def test_rotation_VA(self):
         max_rotation = self.MirrorDescanner.rotation.range[1]

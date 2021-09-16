@@ -151,9 +151,6 @@ class AcquisitionServer(model.HwComponent):
                               "Check if the connection with the host is available and if the host URL is entered "
                               "correctly.")
 
-        clockFrequencyData = self.asmApiGetCall("/scan/clock_frequency", 200)
-        self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
-
         # NOTE: Do not write real username/password here since this is published on github in plain text!
         # example = ftp://username:password@127.0.0.1:5000/directory/
         # fixed url of the external storage configuration
@@ -580,6 +577,7 @@ class EBeamScanner(model.Emitter):
         super(EBeamScanner, self).__init__(name, role, parent=parent, **kwargs)
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/clock_frequency", 200)
+        # period (=1/frequency) of the ASM clock
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # Minimum resolution is determined by:
@@ -629,7 +627,7 @@ class EBeamScanner(model.Emitter):
         # Calculate the sampling period and number of setpoints (the sampling period in seconds is not needed here)
         calibration_dwell_time_ticks, _, nmbr_scanner_points = self._calc_calibration_sampling_period(
                                                                         total_line_scan_time,
-                                                                        self.parent.clockPeriod.value,
+                                                                        self.parent._ebeam_scanner.clockPeriod.value,
                                                                         self.parent._mirror_descanner.clockPeriod.value)
 
         # Determine the amplitude of the setpoints function in bits.
@@ -705,14 +703,14 @@ class EBeamScanner(model.Emitter):
         """
         :return: Scan delay in multiple of ticks of the ebeam scanner clock frequency
         """
-        return (int(self.scanDelay.value[0] / self.parent.clockPeriod.value),
-                int(self.scanDelay.value[1] / self.parent.clockPeriod.value))
+        return (int(self.scanDelay.value[0] / self.clockPeriod.value),
+                int(self.scanDelay.value[1] / self.clockPeriod.value))
 
     def getTicksDwellTime(self):
         """
         :return: Dwell time in multiple of ticks of the system clock period
         """
-        return int(self.dwellTime.value / self.parent.clockPeriod.value)
+        return int(self.dwellTime.value / self.clockPeriod.value)
 
     def getScanOffsetVolts(self):
         """
@@ -831,6 +829,7 @@ class MirrorDescanner(model.Emitter):
         self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
+        # period (=1/frequency) of the descanner; update frequency for setpoints upload
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # TODO: Adapt value of physical flyback time after testing on HW. --> Wilco/Andries
@@ -1045,8 +1044,9 @@ class MPPC(model.Detector):
         eff_cell_size = (int(self._scanner.resolution.value[0] / self._shape[0]),
                          int(self._scanner.resolution.value[1] / self._shape[1]))
 
+        # Calculate and convert from seconds to ticks
         scan_to_acq_delay = int((self.acqDelay.value - self._scanner.scanDelay.value[0]) /
-                                self.parent.clockPeriod.value)  # Calculate and convert from seconds to ticks
+                                self.parent._ebeam_scanner.clockPeriod.value)
 
         X_descan_setpoints = self._descanner.getXAcqSetpoints()
         Y_descan_setpoints = self._descanner.getYAcqSetpoints()
@@ -1372,7 +1372,7 @@ class MPPC(model.Detector):
         """
         :return: Acq delay in multiple of ticks of the system clock period
         """
-        return int(self.acqDelay.value / self.parent.clockPeriod.value)
+        return int(self.acqDelay.value / self.parent._ebeam_scanner.clockPeriod.value)
 
     def _mergeMetadata(self):
         """
@@ -1585,7 +1585,7 @@ class MPPC(model.Detector):
         # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
         # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
         # number of ticks.
-        if not almost_equal(descanner.clockPeriod.value % self.parent.clockPeriod.value, 0):
+        if not almost_equal(descanner.clockPeriod.value % self.parent._ebeam_scanner.clockPeriod.value, 0):
             logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
                           "the system clock period. The calculation of the scanner calibration setpoints need "
                           "to be adjusted.")
