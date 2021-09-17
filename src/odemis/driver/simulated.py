@@ -246,46 +246,40 @@ class GenericComponent(model.Actuator):
     This component allows for communication with it, asif it were a real component with axes and VA's, but does not do
     anything else.
     """
-    def __init__(self, name, role, vanames=None, axes=None, vavalues=None, readonly=None, units=None, varanges=None,
-                 vachoices=None, axisranges=None, axischoices=None, **kwargs):
+    def __init__(self, name, role, vas=None, axes=None, **kwargs):
         """
-        Only VA's specified in vanames are created. Their type is determined based on the initial value supplied in
-        vavalues, and the presence of a range or choices in varanges and vachoices respectively.
+        Only VA's specified in vas are created. Their type is determined based on the supplied initial value, and the
+        presence of range or choices in.
         Both the presence of VA's and the presence of axes are optional.
 
-        vanames (set of string): names of the VA's
-        axes (set of string): names of the axes
-        vavalues (dict string -> any): optional, initial values of the VA's, for each VA defaults to 0.0
-        readonly (dict string -> bool): optional, True for read only VA's, for each VA defaults to False
-        units (dict string -> str): optional, the units of the VA's
-        varanges (dict string -> float,float): optional, min/max of the VA's, defaults to None
-        vachoices (dict string -> dict): optional, possible values available to the VA, defaults to None
-        axisranges (dict string -> float,float): optional, min/max of the axis, defaults to (-0.1, 0.1)
-        axischoices (dict string -> set): optional, alternative to ranges, these are the choices of the axis, defaults
-                                          to (True, False)
+        vas (dict (string -> dict (string -> any))): This dict maps desired VA names to a dict with VA properties. The
+        VA property dict can contain the following keys:
+            "value" (any): optional, initial values of the VA, defaults to 0.0
+            "readonly" (bool): optional, True for read only VA, defaults to False
+            "unit" (str): optional, the unit of the VA, defaults to ""
+            "range" (float, float): optional, min/max of the VA, defaults to None
+            "choices" (dict): optional, possible values available to the VA, defaults to None, will be ignored if range
+                              is defined
+        axes (dict (string -> dict (string -> any))): dict mapping desired axis names to dicts with axis properties. The
+        axis property dict can contain the following keys:
+            "unit" (str): optional, unit of the axis, defaults to "m"
+            "range" (float, float): optional, min/max of the axis, defaults to (-0.1, 0.1)
+            "choices" (dict): optional, alternative to ranges, these are the choices of the axis
+            "speed" (float, float): optional, allowable range of speeds, defaults to (0., 10.)
+
         """
         # Create desired VA's
-        if vanames:
-            if vavalues is None:
-                vavalues = {}
-            if readonly is None:
-                readonly = {}
-            if units is None:
-                units = {}
-            if varanges is None:
-                varanges = {}
-            if vachoices is None:
-                vachoices = {}
-            for n in vanames:
-                if n in vavalues:
-                    vavaluetype = vavalues[n].__class__.__name__.capitalize()
+        if vas:
+            for n in vas:
+                if "value" in vas[n]:
+                    vavaluetype = vas[n]["value"].__class__.__name__.capitalize()
                     if vavaluetype == "Bool":
                         vavaluetype = "Boolean"
                 else:
                     vavaluetype = "VA"
-                if n in varanges:
+                if "range" in vas[n]:
                     varangetype = "Continuous"
-                elif n in vachoices:
+                elif "choices" in vas[n]:
                     varangetype = "Enumerated"
                 else:
                     varangetype = "VA"
@@ -296,41 +290,31 @@ class GenericComponent(model.Actuator):
                 else:
                     vatype = vavaluetype + varangetype
 
-                vavalue = vavalues.get(n, 0.0)
-                ro = readonly.get(n, False)
-                vaunit = units.get(n, "")
-                varange = varanges.get(n, None)
-                vachoice = vachoices.get(n, None)
-                va_command = f"model.{vatype}({vavalue}, readonly={ro}, unit=\"{vaunit}\""
-                if varange:
-                    va_command += f", range={varange}"
-                elif vachoice:
-                    va_command += f", choice={vachoice}"
-                va_command += ")"
-                setattr(self, n, eval(va_command))
+                if "value" not in vas[n]:
+                    vas[n]["value"] = 0.0  # default value
+                if "unit" not in vas[n]:
+                    vas[n]["unit"] = ""  # default unit
+
+                vaclass = getattr(model, vatype)
+                va = vaclass(**vas[n])
+                setattr(self, n, va)
 
         # Create desired axes
         axes_def = {}
         if axes:
-            if axisranges is None:
-                axisranges = {}
-            if axischoices is None:
-                axischoices = {}
             self._position = {}
             init_speed = {}
             for a in axes:
                 init_speed[a] = 1.0  # we are fast!
-                rng = axisranges.get(a, None)
-                if rng is None:  # for this axis, no range was defined
-                    chs = axischoices.get(a, None)
-                    if chs is None:  # if no choice is defined either
-                        rng = (-0.1, 0.1)  # use the default range
-                    else:
-                        axes_def[a] = model.Axis(unit="m", choices=chs)
-                        self._position[a] = list(chs.values())[0]  # start at the first value
-                        continue
-                axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
-                self._position[a] = (rng[0] + rng[1]) / 2  # start at the centre
+                if "range" not in axes[a] and "choices" not in axes[a]:  # if no range nor choices are defined
+                    axes[a]["range"] = (-0.1, 0.1)  # use the default range
+                if "speed" not in axes[a]:
+                    axes[a]["speed"] = (0., 10.)  # default speed
+                axes_def[a] = model.Axis(**axes[a])
+                if "range" in axes[a]:
+                    self._position[a] = (axes[a]["range"][0] + axes[a]["range"][1]) / 2  # start at the centre
+                else:
+                    self._position[a] = list(axes[a]["choices"].values())[0]  # start at the first value
 
             self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
@@ -428,5 +412,19 @@ class Stage(GenericComponent):
         if os.path.exists("stage.fail"):
             raise HwError("stage.fail file present, simulating error")
 
-        GenericComponent.__init__(self, name, role, vanames=None, axes=axes, axisranges=ranges, axischoices=choices,
-                                  **kwargs)
+        # Transform the input style of the Stage to the style of the GenericComponent
+        if ranges is None:
+            ranges = {}
+        if choices is None:
+            choices = {}
+
+        axes_dict = {}
+        for a in axes:
+            d = {}
+            if a in ranges:
+                d["range"] = ranges[a]
+            elif a in choices:
+                d["choices"] = choices[a]
+            axes_dict[a] = d
+
+        GenericComponent.__init__(self, name, role, vas=None, axes=axes_dict, **kwargs)
