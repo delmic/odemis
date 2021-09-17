@@ -86,7 +86,7 @@ def register(tiles, method=REGISTER_GLOBAL_SHIFT):
     return updatedTiles
 
 
-def weave(tiles, method=WEAVER_MEAN):
+def weave(tiles, method=WEAVER_MEAN, adjust_brightness=False):
     """
     tiles (list of DataArray of shape YX): The tiles to draw
     method (WEAVER_*): WEAVER_MEAN → MeanWeaver, WEAVER_COLLAGE → CollageWeaver
@@ -95,11 +95,11 @@ def weave(tiles, method=WEAVER_MEAN):
     """
 
     if method == WEAVER_MEAN:
-        weaver = MeanWeaver()
+        weaver = MeanWeaver(adjust_brightness)
     elif method == WEAVER_COLLAGE:
-        weaver = CollageWeaver()
+        weaver = CollageWeaver(adjust_brightness)
     elif method == WEAVER_COLLAGE_REVERSE:
-        weaver = CollageWeaverReverse()
+        weaver = CollageWeaverReverse(adjust_brightness)
     else:
         raise ValueError("Invalid weaver %s" % (method,))
 
