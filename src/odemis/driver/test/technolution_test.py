@@ -44,7 +44,8 @@ import matplotlib.pyplot as plt
 from technolution_asm.models import CalibrationLoopParameters
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
 
-from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, DATA_CONTENT_TO_ASM
+from odemis.driver.technolution import AcquisitionServer, convert2Bits, convertRange, AsmApiException, \
+    DATA_CONTENT_TO_ASM
 
 # Set logger level to debug to observe all the output (useful when a test fails)
 logging.getLogger().setLevel(logging.DEBUG)
@@ -55,19 +56,19 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 URL = "http://localhost:8080/v2"
 
 # Configuration of the children of the AcquisitionServer object
-CONFIG_SCANNER = {"name": "EBeamScanner", "role": "multibeam"}
-CONFIG_DESCANNER = {"name": "MirrorDescanner", "role": "galvo"}
+CONFIG_SCANNER = {"name": "MultiBeam Scanner", "role": "multibeam"}
+CONFIG_DESCANNER = {"name": "Mirror Descanner", "role": "descanner"}
 CONFIG_MPPC = {"name": "MPPC", "role": "mppc"}
 CHILDREN_ASM = {"EBeamScanner"   : CONFIG_SCANNER,
                 "MirrorDescanner": CONFIG_DESCANNER,
                 "MPPC"           : CONFIG_MPPC}
-EXTRNAL_STORAGE = {"host"     : "localhost",
+EXTERNAL_STORAGE = {"host"     : "localhost",
                    "username" : "username",
                    "password" : "password",
                    "directory": "asm_service"}
 
 
-class TestAuxilaryFunc(unittest.TestCase):
+class TestAuxiliaryFunc(unittest.TestCase):
     def test_convertRange(self):
         # Test input value of zero on even range
         out = tuple(convertRange((0, 0), (-1, 1), (-100, 100)))
@@ -112,6 +113,7 @@ class TestAuxilaryFunc(unittest.TestCase):
 
 
 class TestAcquisitionServer(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
@@ -122,7 +124,7 @@ class TestAcquisitionServer(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTERNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -141,9 +143,7 @@ class TestAcquisitionServer(unittest.TestCase):
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
     def test_exception_pickling(self):
-        """
-        Check the exception can be pickled and unpickled (for Pyro4)
-        """
+        """Check the exception can be pickled and unpickled (for Pyro4)."""
         # Get an execption by expecting a wrong status
         try:
             resp = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 666, raw_response=True)
@@ -158,30 +158,17 @@ class TestAcquisitionServer(unittest.TestCase):
         self.assertEqual(str(ex), str(ep))
 
     def test_get_API_call(self):
+        """Testing get call to ASM API."""
         expected_status_code = 200
         clockFrequencyResponse = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 200, raw_response=True)
         self.assertEqual(clockFrequencyResponse.status_code, expected_status_code)
 
     def test_post_API_call(self):
-        # Tests most basic post call to see if making a post call works correctly.
+        """Testing post call to ASM API."""
         # finish_mega_field (can be called multiple times without causing a problem)
         expected_status_code = 204
         status_code = self.ASM_manager.asmApiPostCall("/scan/finish_mega_field", expected_status_code)
         self.assertEqual(status_code, expected_status_code)
-
-    def test_clockVA(self):
-        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 200)
-        # Check if clockFrequencyData contains the proper key
-        if 'frequency' not in clockFrequencyData:
-            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
-                          "key: 'frequency'.")
-        clock_freq = clockFrequencyData['frequency']
-
-        self.assertIsInstance(clock_freq, int)
-
-        self.assertEqual(
-                self.ASM_manager.clockPeriod.value,
-                1 / clock_freq)
 
     def test_externalStorageURL_VA(self):
         """Test the external storage URL VA.
@@ -244,6 +231,7 @@ class TestAcquisitionServer(unittest.TestCase):
                                                            force_write=True)
 
     def test_assembleCalibrationMetadata(self):
+        """Check that the calibration metadata is correctly assembled."""
         MAX_NMBR_POINTS = 4000  # Constant maximum number of setpoints
         # TODO MAX_NMBR_POINT value of 4000 is sufficient for the entire range of the dwell time because the maximum
         #  dwell_time is decreased. However, for the original maximum dwell time of 1e-4 seconds, this value
@@ -326,9 +314,7 @@ class TestAcquisitionServer(unittest.TestCase):
 
     @unittest.skip  # Skip plotting of calibration setpoints, these plots are made for debugging.
     def test_plot_calibration_setpoints(self):
-        """
-        Test case for inspecting global behaviour of the scan and descan calibration setpoint profiles.
-        """
+        """Test case for inspecting global behavior of the scan and descan calibration setpoint profiles."""
         import matplotlib.pyplot as plt
         self.MirrorDescanner.scanGain.value = (0.5, 0.5)
         self.EBeamScanner.scanGain.value = (0.5, 0.5)
@@ -389,6 +375,7 @@ class TestAcquisitionServer(unittest.TestCase):
         self.assertFalse(image_received)
 
     def test_AsmApiException(self):
+        """Test exceptions are raised for incorrect ASM API calls."""
         # Test if get call raises exceptions properly
         with self.assertRaises(AsmApiException):
             self.ASM_manager.asmApiGetCall("/fake/function/error", 200, raw_response=True)
@@ -399,17 +386,18 @@ class TestAcquisitionServer(unittest.TestCase):
 
 
 class TestEBeamScanner(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
+            raise unittest.SkipTest('No simulator for the ASM or Hw components present. Skipping tests.')
 
     @classmethod
     def tearDownClass(cls):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTERNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -425,10 +413,23 @@ class TestEBeamScanner(unittest.TestCase):
         self.ASM_manager.terminate()
         time.sleep(0.2)
 
+    def test_clockPeriod_VA(self):
+        """Testing the clock period VA. It reads the clock period from the ASM."""
+        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/clock_frequency", 200)
+        # Check if clockFrequencyData contains the proper key
+        if 'frequency' not in clockFrequencyData:
+            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
+                          "key: 'frequency'.")
+        clock_freq = clockFrequencyData['frequency']
+
+        self.assertIsInstance(clock_freq, int)
+        self.assertEqual(self.EBeamScanner.clockPeriod.value, 1 / clock_freq)
+
     def test_resolution_VA(self):
-        """
-        The setter allows only to enter resolutions with an effective cell size which are a whole multiple of 4.
-        """
+        """Testing the resolution VA. It is the resolution of a single field image. A single field is resembled by
+        the cell images. The number of the cell images is defined by the shape of the mppc detector. The resolution
+        (effective cell size) does not reflect overscanned pixels. The setter only allows to enter resolutions with
+        an effective cell size which are a whole multiple of 4."""
         min_res = self.EBeamScanner.resolution.range[0][0]
         max_res = self.EBeamScanner.resolution.range[1][0]
 
@@ -466,7 +467,8 @@ class TestEBeamScanner(unittest.TestCase):
         self.EBeamScanner.resolution.value = (6385, 6385)
         self.assertEqual(self.EBeamScanner.resolution.value, (6400, 6400))
 
-    def test_dwellTimeVA(self):
+    def test_dwellTime_VA(self):
+        """Testing the dwell time VA. It is the time for acquiring one pixel."""
         min_dwellTime = self.EBeamScanner.dwellTime.range[0]
         max_dwellTime = self.EBeamScanner.dwellTime.range[1]
 
@@ -486,12 +488,15 @@ class TestEBeamScanner(unittest.TestCase):
         self.assertEqual(self.EBeamScanner.dwellTime.value, min_dwellTime)
 
     def test_getTicksDwellTime(self):
+        """Check that the dwell time as specified on the corresponding VA is correctly translated into system
+        clock period ticks."""
         dwellTime = 0.9 * self.EBeamScanner.dwellTime.range[1]
         self.EBeamScanner.dwellTime.value = dwellTime
         self.assertIsInstance(self.EBeamScanner.getTicksDwellTime(), int)
-        self.assertEqual(self.EBeamScanner.getTicksDwellTime(), int(dwellTime / self.ASM_manager.clockPeriod.value))
+        self.assertEqual(self.EBeamScanner.getTicksDwellTime(), int(dwellTime / self.EBeamScanner.clockPeriod.value))
 
-    def test_pixelSizeVA(self):
+    def test_pixelSize_VA(self):
+        """Testing the pixel size VA. Physical size of one pixel."""
         min_pixelSize = self.EBeamScanner.pixelSize.range[0][0]
         max_pixelSize = self.EBeamScanner.pixelSize.range[1][0]
 
@@ -516,7 +521,8 @@ class TestEBeamScanner(unittest.TestCase):
         self.EBeamScanner.pixelSize.value = (6e-7, 5e-7)
         self.assertEqual(self.EBeamScanner.pixelSize.value, (6e-7, 6e-7))
 
-    def test_rotationVA(self):
+    def test_rotation_VA(self):
+        """Testing the rotation VA. Reflects the rotation of the scanning direction of the multibeam scanner."""
         max_rotation = self.EBeamScanner.rotation.range[1]
 
         # Check if small rotation values are allowed
@@ -536,7 +542,8 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.rotation.value = (-0.1 * max_rotation)
         self.assertEqual(self.EBeamScanner.rotation.value, 0.9 * max_rotation)
 
-    def test_scanOffsetVA(self):
+    def test_scanOffset_VA(self):
+        """Testing the scanner offset VA. It defines the start of the sawtooth scanning signal for the scanner."""
         min_scanOffset = self.EBeamScanner.scanOffset.range[0][0]
         max_scanOffset = self.EBeamScanner.scanOffset.range[1][0]
 
@@ -557,7 +564,8 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.scanOffset.value = (1.2 * min_scanOffset, 1.2 * min_scanOffset)
         self.assertEqual(self.EBeamScanner.scanOffset.value, (0.9 * max_scanOffset, 0.9 * max_scanOffset))
 
-    def test_scanGainVA(self):
+    def test_scanGain_VA(self):
+        """Testing the scanner gain VA. It defines the heights/end of the sawtooth scanning signal for the scanner."""
         min_scanGain = self.EBeamScanner.scanGain.range[0][0]
         max_scanGain = self.EBeamScanner.scanGain.range[1][0]
 
@@ -578,7 +586,9 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.scanGain.value = (1.2 * min_scanGain, 1.2 * min_scanGain)
         self.assertEqual(self.EBeamScanner.scanGain.value, (0.9 * max_scanGain, 0.9 * max_scanGain))
 
-    def test_scanDelayVA(self):
+    def test_scanDelay_VA(self):
+        """Testing of the scanner delay VA. It is the delay between the start the acquisition trigger and the
+        start of scanner to start scanning via the ebeam scanner."""
         min_scanDelay = self.EBeamScanner.scanDelay.range[0][0]
         max_scanDelay = self.EBeamScanner.scanDelay.range[1][0]
         min_y_prescan_lines = self.EBeamScanner.scanDelay.range[0][1]
@@ -613,6 +623,7 @@ class TestEBeamScanner(unittest.TestCase):
 
 
 class TestMirrorDescanner(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
@@ -623,7 +634,7 @@ class TestMirrorDescanner(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTERNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -640,7 +651,20 @@ class TestMirrorDescanner(unittest.TestCase):
         self.ASM_manager.terminate()
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
+    def test_clockPeriod_VA(self):
+        """Testing the clock period VA. It reads the clock period for the descanner mirrors."""
+        clockFrequencyData = self.ASM_manager.asmApiGetCall("/scan/descan_control_frequency", 200)
+        # Check if clockFrequencyData contains the proper key
+        if 'frequency' not in clockFrequencyData:
+            raise IOError("Could not obtain clock frequency, received data does not contain the proper key. Expected "
+                          "key: 'frequency'.")
+        clock_freq = clockFrequencyData['frequency']
+
+        self.assertIsInstance(clock_freq, int)
+        self.assertEqual(self.MirrorDescanner.clockPeriod.value, 1 / clock_freq)
+
     def test_rotation_VA(self):
+        """Testing the rotation VA. Reflects the rotation of the scanning direction of the descan mirror."""
         max_rotation = self.MirrorDescanner.rotation.range[1]
 
         # Check if small rotation values are allowed
@@ -661,6 +685,7 @@ class TestMirrorDescanner(unittest.TestCase):
         self.assertEqual(self.MirrorDescanner.rotation.value, 0.9 * max_rotation)
 
     def test_scanOffset_VA(self):
+        """Testing the descanner offset VA. It defines the start of the sawtooth scanning signal for the descanner."""
         min_scanOffset = self.MirrorDescanner.scanOffset.range[0][0]
         max_scanOffset = self.MirrorDescanner.scanOffset.range[1][0]
 
@@ -682,6 +707,8 @@ class TestMirrorDescanner(unittest.TestCase):
         self.assertEqual(self.MirrorDescanner.scanOffset.value, (0.9 * max_scanOffset, 0.9 * max_scanOffset))
 
     def test_scanGain_VA(self):
+        """Testing the descanner gain VA. It defines the heights/end of the sawtooth scanning signal for the
+        descanner."""
         min_scanGain = self.MirrorDescanner.scanGain.range[0][0]
         max_scanGain = self.MirrorDescanner.scanGain.range[1][0]
 
@@ -703,10 +730,8 @@ class TestMirrorDescanner(unittest.TestCase):
         self.assertEqual(self.MirrorDescanner.scanGain.value, (0.9 * max_scanGain, 0.9 * max_scanGain))
 
     def test_getXAcqSetpoints(self):
-        """
-        For multiple settings the x acquisition setpoints are checked on total number of setpoints (length) and the
-        expected range of the setpoints.
-        """
+        """For multiple settings the x acquisition setpoints are checked on total number of setpoints (length) and the
+        expected range of the setpoints."""
         descanner = self.MirrorDescanner
         scanner = self.EBeamScanner
         mppc = self.MPPC
@@ -737,6 +762,8 @@ class TestMirrorDescanner(unittest.TestCase):
                          numpy.floor(convert2Bits(descanner.scanGain.value,
                                                   numpy.array(descanner.scanGain.range)[:, 1])[0]))
 
+        # TODO find example for floating point error and use it, as with the current implementation there is still
+        #  a change, that there is never a floating point error triggered.
         # Check with randomly changing the dwell_time to also catch floating point errors.
         for test_repetition in range(0, 1000):
             minimum_dwell_time = scanner.dwellTime.range[0]
@@ -779,10 +806,8 @@ class TestMirrorDescanner(unittest.TestCase):
                                                   numpy.array(descanner.scanGain.range)[:, 1])[0]))
 
     def test_getYAcqSetpoints(self):
-        """
-        For multiple settings the y acquisition setpoints are checked on total number of setpoints (length) and the
-        expected range of the setpoints.
-        """
+        """For multiple settings the y acquisition setpoints are checked on total number of setpoints (length) and the
+        expected range of the setpoints."""
         descanner = self.MirrorDescanner
         mppc = self.MPPC
         # Change values such that it is easy to follow the calculation
@@ -801,6 +826,8 @@ class TestMirrorDescanner(unittest.TestCase):
                          )
         self.assertEqual(len(Y_descan_setpoints), mppc.cellCompleteResolution.value[1])
 
+        # TODO find example for floating point error and use it, as with the current implementation there is still
+        #  a change, that there is never a floating point error triggered.
         # Check with randomly changing the dwell_time to also catch floating point errors.
         for test_repetition in range(0, 1000):
             minimum_dwell_time = self.EBeamScanner.dwellTime.range[0]
@@ -855,9 +882,7 @@ class TestMirrorDescanner(unittest.TestCase):
 
     @unittest.skip  # Skip plotting of acq setpoints, these plots are made for debugging.
     def test_plot_getAcqSetpoints(self):
-        """
-        Test case for inspecting global behaviour of the acquistion descan setpoint profiles.
-        """
+        """Test case for inspecting global behavior of the acquisition descan setpoint profiles."""
         self.EBeamScanner.dwellTime.value = 4e-6  # Increase dwell time to see steps in the profile better
         self.MirrorDescanner.physicalFlybackTime = 25e-4  # Increase flybacktime to see its effect in the profile better
 
@@ -873,6 +898,7 @@ class TestMirrorDescanner(unittest.TestCase):
 
 
 class TestMPPC(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
@@ -883,7 +909,7 @@ class TestMPPC(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTRNAL_STORAGE)
+        self.ASM_manager = AcquisitionServer("ASM", "asm", URL, CHILDREN_ASM, EXTERNAL_STORAGE)
         for child in self.ASM_manager.children.value:
             if child.name == CONFIG_MPPC["name"]:
                 self.MPPC = child
@@ -899,7 +925,7 @@ class TestMPPC(unittest.TestCase):
         self.ASM_manager.terminate()
         time.sleep(0.2)  # wait a bit so that termination calls to the ASM are completed and session is properly closed.
 
-    def test_filenameVA(self):
+    def test_filename_VA(self):
         """Testing the filename VA, which contains the path to the image data on the external storage
         (sub-directories) and the filename, which represents the megafield id."""
         self.MPPC.filename.value = "date/project/megafield_id"
@@ -910,6 +936,8 @@ class TestMPPC(unittest.TestCase):
             self.MPPC.filename.value = "@testing_file_name"
 
     def test_acqDelay_VA(self):
+        """Testing the acquisition delay VA, which defines the delay between the trigger signal to start the
+        acquisition, and the start of the recording with the mppc detector."""
         max_acqDelay = self.MPPC.acqDelay.range[1]
         # Set scanner delay to minimum as the detector acquisition delay needs to be always bigger than the
         # scanner delay
@@ -934,7 +962,9 @@ class TestMPPC(unittest.TestCase):
         # Check if the scanner delay remains unchanged.
         self.assertEqual(self.EBeamScanner.scanDelay.value, self.EBeamScanner.scanDelay.range[1])
 
-    def test_overVoltageVA(self):
+    def test_overVoltage_VA(self):
+        """Testing the overvoltage VA. It regulates the sensitivity of the mppc sensor. The ASM then adds over voltage
+        to the breakdown voltage which increases the gain of the sensor output per photon received."""
         max_overVoltage = self.MPPC.overVoltage.range[1]
 
         # Check if small sensor over voltage values are allowed
@@ -956,7 +986,8 @@ class TestMPPC(unittest.TestCase):
         # Check that previous value is still set
         self.assertEqual(self.MPPC.overVoltage.value, 0.9 * max_overVoltage)
 
-    def test_dataContentVA(self):
+    def test_dataContent_VA(self):
+        """Testing the data content VA. It defines the size of the returned DataArray."""
         for key in DATA_CONTENT_TO_ASM:
             self.MPPC.dataContent.value = key
             self.assertEqual(self.MPPC.dataContent.value, key)
@@ -966,8 +997,8 @@ class TestMPPC(unittest.TestCase):
             self.MPPC.dataContent.value = "Incorrect input"
         self.assertEqual(self.MPPC.dataContent.value, key)  # Check if variable remains unchanged
 
-    def test_cellTranslationVA(self):
-        """ Testing the cell translation VA (position of the cell image within the overscanned cell image)"""
+    def test_cellTranslation_VA(self):
+        """Testing the cell translation VA (position of the cell image within the overscanned cell image)."""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of x values being from 10 to 17, and for y values from 100 to
         # 107. This allows to have a human readable check on the tuple structure created while testing input values.
@@ -1047,8 +1078,8 @@ class TestMPPC(unittest.TestCase):
                          tuple(tuple((50, 50) for i in range(0, self.MPPC.shape[0]))
                                for i in range(0, self.MPPC.shape[1])))
 
-    def test_cellDarkOffsetVA(self):
-        """ Testing the dark offset VA (background noise per cell)"""
+    def test_cellDarkOffset_VA(self):
+        """Testing the dark offset VA (background noise per cell)."""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of values being from 0 to 7. This allows to have a human
         # readable check on the tuple structure created while testing input values.
@@ -1092,8 +1123,8 @@ class TestMPPC(unittest.TestCase):
         self.assertEqual(self.MPPC.cellDarkOffset.value,
                          tuple(tuple(0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1])))
 
-    def test_cellDigitalGainVA(self):
-        """ Testing the digital gain VA (amplification value per cell)"""
+    def test_cellDigitalGain_VA(self):
+        """Testing the digital gain VA (amplification value per cell)."""
         # The test values below are also handy for debugging, these values are chosen such that their number corresponds
         # to a row based numbering with the first row of values being from 0.0 to 7.0. This allows to have a human
         # readable check on the tuple structure created while testing input values.
@@ -1137,7 +1168,8 @@ class TestMPPC(unittest.TestCase):
         self.assertEqual(self.MPPC.cellDigitalGain.value,
                          tuple(tuple(0.0 for i in range(0, self.MPPC.shape[0])) for i in range(0, self.MPPC.shape[1])))
 
-    def test_cellCompleteResolutionVA(self):
+    def test_cellCompleteResolution_VA(self):
+        """Testing the cell complete resolution VA (size of the cell image + overscanned pixels)."""
         min_res = self.MPPC.cellCompleteResolution.range[0][0]
         max_res = self.MPPC.cellCompleteResolution.range[1][0]
 
@@ -1215,10 +1247,8 @@ class TestMPPC(unittest.TestCase):
         self.assertGreater(new_frame_dur, orig_frame_dur)
 
     def test_assemble_megafield_metadata(self):
-        """
-        Test which checks the MegaFieldMetadata object and the correctly ordering (row/column conversions) from the
-        VA's to the MegaFieldMetadata object which is passed to the ASM
-        """
+        """Test which checks the MegaFieldMetadata object and the correctly ordering (row/column conversions) from the
+        VA's to the MegaFieldMetadata object which is passed to the ASM."""
         megafield_metadata = self.MPPC._assembleMegafieldMetadata()
         self.assertIsInstance(megafield_metadata, MegaFieldMetaData)
 
@@ -1382,10 +1412,8 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.assertIsInstance(image, model.DataArray)
 
     def test_dataContent_get_field(self):
-        """
-        Tests if the appropriate image size is returned after calling with empty, thumbnail or full image as
-        datacontent by using the get field image method.
-        """
+        """Tests if the correct image size is returned after requesting images with size "empty", "thumbnail"
+        or "full" image on the .dataContent VA."""
         for key, value in DATA_CONTENT_TO_ASM.items():
             dataflow = self.MPPC.data
             image = dataflow.get(dataContent=key)
@@ -1393,6 +1421,7 @@ class Test_ASMDataFlow(unittest.TestCase):
             self.assertEqual(image.shape, self.dataContent2Resolution(key))
 
     def test_subscribe_mega_field(self):
+        """Test acquiring a small megafield image."""
         field_images = (3, 4)
         self.counter = 0
         self.MPPC.dataContent.value = "thumbnail"
@@ -1418,7 +1447,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         time.sleep(1.5 * field_images[0] * field_images[1])  # Allow 1 second per field image to offload.
 
     def test_subscribe_mega_field_queued_next(self):
-        """ Test acquiring a megafield by queueing all next's"""
+        """Test acquiring a megafield by queueing all next's."""
         # The implementation supports calling next() multiple times in a row, and they
         # are sent to the ASM one at a time. It's probably not really useful
         # as typically we'd always want to wait for the stage to move before
@@ -1441,7 +1470,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.assertEqual(field_images[0] * field_images[1], self.counter)
 
     def test_next_error(self):
-        """ Test passing wrong value to next()"""
+        """Test passing incorrect field numbers in next() call."""
         self.counter = 0
         self.MPPC.dataContent.value = "empty"
 
@@ -1457,7 +1486,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         dataflow.unsubscribe(self.image_received)
 
     def test_termination(self):
-        """ Terminate detector and acquisition thread during acquisition and test if acquisition does not continue."""
+        """Terminate detector and acquisition thread during acquisition and test if acquisition does not continue."""
         field_images = (3, 4)
         termination_point = (1, 3)
         self.counter = 0
@@ -1484,6 +1513,7 @@ class Test_ASMDataFlow(unittest.TestCase):
         dataflow.unsubscribe(self.image_received)
 
     def test_multiple_subscriptions(self):
+        """Test acquiring a small megafield image with multiple listeners."""
         field_images = (3, 4)
         self.counter = 0
         self.counter2 = 0
@@ -1504,6 +1534,8 @@ class Test_ASMDataFlow(unittest.TestCase):
         self.assertEqual(self.counter, self.counter2)
 
     def test_late_second_subscription(self):
+        """Test acquiring a small megafield image with second listener starting to listen while the acquisition
+        is already on-going."""
         field_images = (3, 4)
         add_second_subscription = (1, 3)
         self.counter = 0
@@ -1531,9 +1563,8 @@ class Test_ASMDataFlow(unittest.TestCase):
                 self.counter2)  # Check late subscriber
 
     def test_get_and_subscribe(self):
-        """
-        Check it's not possible to do a .get() during a megafield acquisition
-        """
+        """Check it's not possible to do a .get() call during an on-going megafield acquisition. It should be not
+        possible to call get() and subscribe() at the same time."""
         field_images = (3, 4)
         self.counter = 0
         self.counter2 = 0

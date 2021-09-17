@@ -136,9 +136,9 @@ class AcquisitionServer(model.HwComponent):
 
         except Exception as error:
             logging.warning("First try to connect with the ASM host was not successful.\n"
-                          "This is possible because of an incorrect starting sequence, first the SAM should be "
-                          "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
-                          "Received error:\n %s" % error)
+                            "This is possible because of an incorrect starting sequence, first the SAM should be "
+                            "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
+                            "Received error:\n %s" % error)
             try:
                 self.asmApiPostCall("/scan/finish_mega_field", 204)  # Stop acquisition
                 self.asmApiGetCall("/scan/clock_frequency", 200)  # Test connection from ASM to SAM
@@ -150,9 +150,6 @@ class AcquisitionServer(model.HwComponent):
                 raise HwError("Could not connect with the ASM host.\n"
                               "Check if the connection with the host is available and if the host URL is entered "
                               "correctly.")
-
-        clockFrequencyData = self.asmApiGetCall("/scan/clock_frequency", 200)
-        self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # NOTE: Do not write real username/password here since this is published on github in plain text!
         # example = ftp://username:password@127.0.0.1:5000/directory/
@@ -168,14 +165,14 @@ class AcquisitionServer(model.HwComponent):
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
 
-        # CalibrationParameters contains the current calibration parameters
+        # contains the current calibration settings
         self._calibrationParameters = None
 
         # TODO: Commented out because not present on EA
         # self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
 
-        # Setup hw and sw version
-        # TODO make call set_system_sw_name too new simulator (if implemented)
+        # Read HW and SW version from ASM and SAM
+        # TODO make call set_system_sw_name to new simulator (if implemented)
         self._swVersion = "ASM service version '%s' " % (self.getAsmServiceVersion())
         self._hwVersion = "SAM firmware version '%s', SAM service version '%s'" % (self.getSamFirmwareVersion(),
                                                                                    self.getSamServiceVersion())
@@ -205,7 +202,7 @@ class AcquisitionServer(model.HwComponent):
     def terminate(self):
         """
         Stops the calibration method, calls the terminate command on all the children,
-         and closes the connection (via the request session) to the ASM.
+        and closes the connection (via the request session) to the ASM.
         """
         self.calibrationMode.value = False
         # terminate children
@@ -333,7 +330,8 @@ class AcquisitionServer(model.HwComponent):
                 logging.error(response)
 
         except Exception:
-            logging.exception("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
+            logging.exception("Performing system checks failed. Could not perform a successful call to %s ."
+                              % item_name)
 
     def checkMegaFieldExists(self, filename):
         """
@@ -580,6 +578,7 @@ class EBeamScanner(model.Emitter):
         super(EBeamScanner, self).__init__(name, role, parent=parent, **kwargs)
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/clock_frequency", 200)
+        # period (=1/frequency) of the ASM clock
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # Minimum resolution is determined by:
@@ -591,6 +590,7 @@ class EBeamScanner(model.Emitter):
         # Making the minimum resolution (12*8) , because 12/4 is an integer (3.0)
         # Since the maximum cell size is 1000 (dividable by 4) the maximum resolution is (1000*8)
         mppcDetectorShape = MPPC.SHAPE
+        # size of a single field image (excluding overscanned pixels)
         self.resolution = model.ResolutionVA((6400, 6400),
                                              ((12*mppcDetectorShape[0], 12*mppcDetectorShape[1]),
                                               (1000*mppcDetectorShape[0], 1000*mppcDetectorShape[1])),
@@ -601,10 +601,15 @@ class EBeamScanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s')
         self.pixelSize = model.TupleContinuous((4e-9, 4e-9), range=((1e-9, 1e-9), (1e-3, 1e-3)), unit='m',
                                                setter=self._setPixelSize)
+        # direction of the executed scan
         self.rotation = model.FloatContinuous(0.0, range=(0.0, 2 * math.pi), unit='rad')
 
+        # the start of the sawtooth scanning signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)))
+        # the end (amplitude) of the sawtooth scanning signal
         self.scanGain = model.TupleContinuous((0.3, 0.3), range=((-1.0, -1.0), (1.0, 1.0)))
+        # delay between the trigger signal to start the acquisition and the scanner to start scanning
+        # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
         # TODO: y scan delay is y prescan lines which is currently unused an can probably be deleted.
         # The scanDelay in x direction maximum (200e-6) is experimentally determined.
         self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (200e-6, 10.0)), unit='s',
@@ -629,7 +634,7 @@ class EBeamScanner(model.Emitter):
         # Calculate the sampling period and number of setpoints (the sampling period in seconds is not needed here)
         calibration_dwell_time_ticks, _, nmbr_scanner_points = self._calc_calibration_sampling_period(
                                                                         total_line_scan_time,
-                                                                        self.parent.clockPeriod.value,
+                                                                        self.parent._ebeam_scanner.clockPeriod.value,
                                                                         self.parent._mirror_descanner.clockPeriod.value)
 
         # Determine the amplitude of the setpoints function in bits.
@@ -705,14 +710,14 @@ class EBeamScanner(model.Emitter):
         """
         :return: Scan delay in multiple of ticks of the ebeam scanner clock frequency
         """
-        return (int(self.scanDelay.value[0] / self.parent.clockPeriod.value),
-                int(self.scanDelay.value[1] / self.parent.clockPeriod.value))
+        return (int(self.scanDelay.value[0] / self.clockPeriod.value),
+                int(self.scanDelay.value[1] / self.clockPeriod.value))
 
     def getTicksDwellTime(self):
         """
         :return: Dwell time in multiple of ticks of the system clock period
         """
-        return int(self.dwellTime.value / self.parent.clockPeriod.value)
+        return int(self.dwellTime.value / self.clockPeriod.value)
 
     def getScanOffsetVolts(self):
         """
@@ -826,16 +831,19 @@ class MirrorDescanner(model.Emitter):
         """
         super(MirrorDescanner, self).__init__(name, role, parent=parent, **kwargs)
 
+        # direction of the executed descan
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
+        # start of the sawtooth descanner signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
+        # end (height) of the sawtooth descanner signal
         self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
+        # period (=1/frequency) of the descanner; update frequency for setpoints upload
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
-        # TODO: Adapt value of physical flyback time after testing on HW. --> Wilco/Andries
-        # Physical time for the mirror descanner to perform a flyback, assumed constant [s].
-        self.physicalFlybackTime = 250e-6
+        # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
+        self.physicalFlybackTime = 250e-6  # assumed constant [s]
 
     def getXAcqSetpoints(self):
         """
@@ -951,6 +959,7 @@ class MirrorDescanner(model.Emitter):
         # not uniformly distributed.
         return numpy.floor(x_setpoints).astype(int).tolist(), numpy.floor(y_setpoints).astype(int).tolist()
 
+
 class MPPC(model.Detector):
     """
     Represents the camera (mppc sensor) for acquiring the image data.
@@ -975,7 +984,9 @@ class MPPC(model.Detector):
         # subdirectory + filename (megafield id) - adjustable part of the path on the external storage
         self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
+        # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
+        # regulates the sensitivity of the mppc sensor
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
 
         # Cell acquisition parameters
@@ -1045,8 +1056,9 @@ class MPPC(model.Detector):
         eff_cell_size = (int(self._scanner.resolution.value[0] / self._shape[0]),
                          int(self._scanner.resolution.value[1] / self._shape[1]))
 
+        # Calculate and convert from seconds to ticks
         scan_to_acq_delay = int((self.acqDelay.value - self._scanner.scanDelay.value[0]) /
-                                self.parent.clockPeriod.value)  # Calculate and convert from seconds to ticks
+                                self.parent._ebeam_scanner.clockPeriod.value)
 
         X_descan_setpoints = self._descanner.getXAcqSetpoints()
         Y_descan_setpoints = self._descanner.getYAcqSetpoints()
@@ -1073,7 +1085,6 @@ class MPPC(model.Detector):
                     y_scan_gain=self._scanner.getScanGainVolts()[1],
                     x_scan_offset=self._scanner.getScanOffsetVolts()[0],
                     y_scan_offset=self._scanner.getScanOffsetVolts()[1],
-                    # TODO API gives error for values < 0 but YAML does not specify so
                     x_descan_setpoints=X_descan_setpoints,
                     y_descan_setpoints=Y_descan_setpoints,
                     # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
@@ -1372,7 +1383,7 @@ class MPPC(model.Detector):
         """
         :return: Acq delay in multiple of ticks of the system clock period
         """
-        return int(self.acqDelay.value / self.parent.clockPeriod.value)
+        return int(self.acqDelay.value / self.parent._ebeam_scanner.clockPeriod.value)
 
     def _mergeMetadata(self):
         """
@@ -1585,7 +1596,7 @@ class MPPC(model.Detector):
         # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
         # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
         # number of ticks.
-        if not almost_equal(descanner.clockPeriod.value % self.parent.clockPeriod.value, 0):
+        if not almost_equal(descanner.clockPeriod.value % self.parent._ebeam_scanner.clockPeriod.value, 0):
             logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
                           "the system clock period. The calculation of the scanner calibration setpoints need "
                           "to be adjusted.")
