@@ -2470,7 +2470,7 @@ class CryoChamberTab(Tab):
             if self._current_position in self.position_btns.keys():
                 pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
                 self._toggle_switch_buttons(pos_button)
-            self._show_cancel_warning_msg(None)
+            self._show_warning_msg(None)
 
         elif self._role == 'meteor':
             self._stage  = self.tab_data_model.main.stage_bare
@@ -2523,10 +2523,11 @@ class CryoChamberTab(Tab):
             panel.btn_switch_grid2.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
+            self._cancel = False
             # Determine and show current position of the stage
             self._enable_movement_controls()
             self._toggle_switch_buttons()
-            self._show_cancel_warning_msg(None)
+            self._show_warning_msg(None)
 
     def _get_overview_view(self):
         overview_view = next(
@@ -2678,11 +2679,44 @@ class CryoChamberTab(Tab):
 
     @call_in_wx_main
     def _on_stage_pos(self, _):
+        # TODO add docstring
         if self._role == 'meteor':
             self._toggle_switch_buttons()
             self._enable_movement_controls()
+            self._control_warning_msg()
         elif self._role == 'enzel':
             pass 
+
+    def _control_warning_msg(self):
+        # show/hide the warning msg
+        current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage)
+        if current_pos_label == UNKNOWN:
+            txt_warning = "The stage position is unknown."
+            self._show_warning_msg(txt_warning)
+        else:
+            self._show_warning_msg(None)
+        if self._cancel:
+            txt_msg = self._get_cancel_warning_msg()
+            self._show_warning_msg(txt_msg)
+        self._tab_panel.Layout()
+
+    def _get_cancel_warning_msg(self):
+        """
+        Create and return a text message to show under the progress bar. 
+        return (str): the cancel message. It returns None if the target position is None.
+        """
+        # Show warning message if target position is indicated
+        if self._target_position is not None:
+            if self._role == 'enzel':
+                current_label, target_label = target_pos_str[self._current_position], target_pos_str[self._target_position]
+            elif self._role == 'meteor':
+                current_label, target_label = meteor_labels[self._previous_position], meteor_labels[self._target_position]
+            txt_warning = "Stage stopped between {} and {} positions".format(current_label, target_label)
+            # self._show_warning_msg(txt_warning)
+            self._tab_panel.Layout()
+            self._target_position = None
+            self._current_position = None 
+            return txt_warning
 
     def _toggle_switch_buttons(self, currently_pressed=None):
         """
@@ -2699,7 +2733,7 @@ class CryoChamberTab(Tab):
             self.position_btns[SEM_IMAGING].SetValue(current_pos_label == SEM_IMAGING)
             self.position_btns[FM_IMAGING].SetValue(current_pos_label == FM_IMAGING)
 
-    def _enable_movement_controls(self, cancelled=False):
+    def _enable_movement_controls(self):
         """
         Enable/disable chamber move controls (position and stage) based on current move
         :param cancelled: (bool) if the move is cancelled
@@ -2709,9 +2743,9 @@ class CryoChamberTab(Tab):
         # Enable stage advanced controls on milling, only for enzel 
         if self._role == 'enzel':
             self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(False)
-        self._enable_position_controls(self._current_position, cancelled)            
+        self._enable_position_controls(self._current_position)            
 
-    def _enable_position_controls(self, current_position=None, cancelled=False):
+    def _enable_position_controls(self, current_position=None):
         """
         Enable/disable switching position button based on current move
         """
@@ -2727,7 +2761,7 @@ class CryoChamberTab(Tab):
                 else:
                     button.Enable()
             # The move button should turn green only if current move is known and not cancelled
-            if current_position in self.position_btns.keys() and not cancelled:
+            if current_position in self.position_btns.keys() and not self._cancel:
                 currently_pressed = self.position_btns[current_position]
                 self._toggle_switch_buttons(currently_pressed)
                 currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
@@ -2776,7 +2810,7 @@ class CryoChamberTab(Tab):
         # Adjust the panel's static text controls
         fix_static_text_clipping(self.panel)
 
-    def _show_cancel_warning_msg(self, txt_warning):
+    def _show_warning_msg(self, txt_warning):
         """
         Show warning message under progress bar, hide if no message is indicated
         """
@@ -2840,13 +2874,14 @@ class CryoChamberTab(Tab):
         # Set the tab's move_future and attach its callback
         self._move_future = move_future
         self._move_future.add_done_callback(self._on_move_done)
-        self._show_cancel_warning_msg(None)
+        self._show_warning_msg(None)
         self.panel.btn_cancel.Enable()
 
     def _on_switch_btn(self, evt):
         """
         Event handling for the position panel buttons
         """
+        self._cancel = False
         self._previous_position = self._current_position
         target_button = evt.theButton
         target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
@@ -2859,7 +2894,7 @@ class CryoChamberTab(Tab):
         self._move_future.add_done_callback(self._on_move_done)
         # Toggle the current button (yellow) and enable cancel
         self._toggle_switch_buttons(target_button)
-        self._show_cancel_warning_msg(None)
+        self._show_warning_msg(None)
         self.panel.btn_cancel.Enable()
 
     @call_in_wx_main
@@ -2891,18 +2926,8 @@ class CryoChamberTab(Tab):
         # Cancel the running move
         self._move_future.cancel()
         self.panel.btn_cancel.Disable()
-        # Show warning message if target position is indicated
-        if self._target_position is not None:
-            if self._role == 'enzel':
-                current_label, target_label = target_pos_str[self._current_position], target_pos_str[self._target_position]
-            elif self._role == 'meteor':
-                current_label, target_label = meteor_labels[self._previous_position], meteor_labels[self._target_position]
-            txt_warning = "Stage stopped between {} and {} positions".format(current_label, target_label)
-            self._show_cancel_warning_msg(txt_warning)
-            self._tab_panel.Layout()
-            self._target_position = None
-            self._current_position = None 
-        self._enable_movement_controls(cancelled=True)
+        self._cancel = True
+        self._enable_movement_controls()
         logging.info("Stage move cancelled.")
 
     def _perform_switch_position_movement(self, target_button):
@@ -2976,7 +3001,7 @@ class CryoChamberTab(Tab):
         target_position = stage.position.value[axis] + shift
         if not self._is_in_range(target_position, active_range[axis]):
             warning_text = "Requested movement would go out of stage imaging range."
-            self._show_cancel_warning_msg(warning_text)
+            self._show_warning_msg(warning_text)
             return
         return stage.moveRel(shift={axis: shift})
 
