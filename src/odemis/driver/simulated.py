@@ -275,6 +275,8 @@ class GenericComponent(model.Actuator):
                     vavaluetype = vas[n]["value"].__class__.__name__.capitalize()
                     if vavaluetype == "Bool":
                         vavaluetype = "Boolean"
+                    elif vavaluetype == "Str":
+                        vavaluetype = "String"
                 else:
                     vavaluetype = "VA"
                 if "range" in vas[n]:
