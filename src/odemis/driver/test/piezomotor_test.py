@@ -80,6 +80,10 @@ class TestPMD401OpenLoop(unittest.TestCase):
         self.stage.moveRelSync({'x': 0.01})
         self.stage.moveRelSync({'x': -0.01})
 
+        # Small move
+        self.stage.moveRelSync({'x': 1e-6})
+        self.stage.moveRelSync({'x': -1e-6})
+
     def test_range(self):
         """
         Requesting a move outside the range should raise a ValueError.
