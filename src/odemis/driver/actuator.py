@@ -36,7 +36,7 @@ from past.builtins import basestring
 
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
-                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
+                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
 
 
 class MultiplexActuator(model.Actuator):
@@ -2896,17 +2896,28 @@ class DualChannelPositionSensor(model.HwComponent):
     .reference: call to sensor adjustment routine
     """
 
-    def __init__(self, name, role, dependencies, channels, distance, **kwargs):
+    def __init__(self, name, role, dependencies, channels, distance, ref_on_init=False, **kwargs):
         """
         dependencies: (dict str --> Component) dict with "sensor" key containing three-channel sensor component.
-            The three-channel sensor is required to have a .channels attribute, a .position VA and
+            The three-channel sensor is required to have a .axes attribute, a .position VA and
             .reference and .stop functions.
+            Optionally, a "stage" dependency can be passed. All its axes will be referenced when calling reference.
         channels: (dict str --> str, [str], or [str, str]) mapping of output channels to sensor channels, one output
             channel must be mapped to a single sensor channel and the other one to two sensor channels,
             e.g. {'x': ['x1', 'x2'], 'y': 'y1'}. The order of the elements in the list with two channels matters for
             the calculation of the rotation angle (in general the left or top sensor should come first).
         distance: (float > 0) distance in m between the sensor heads on the axis with two channels
             (for calculating the rotation).
+        ref_on_init: (True, False, "always", "if necessary", "never")
+            * "always": Run referencing procedure every time the driver is initialized, no matter the state it was in.
+            * True / "if necessary": If the channels are already in a valid state (i.e. the device was not turned off
+                since the last referencing), don't reference again. Only reference if the channels are not valid (i.e.
+                the device was turned off after the last referencing). In any case, the device can be used after
+                the referencing procedure is complete. It is recommended to reference the system frequently though.
+                In case the system has not been power cycled in a long time, the referencing parameters might become
+                outdated and the reported position values might not be accurate.
+            * False / "never": Never reference. This means that the device might not be able to produce position data,
+                if it was not previously referenced.
         """
         model.HwComponent.__init__(self, name, role, **kwargs)
 
@@ -2925,6 +2936,12 @@ class DualChannelPositionSensor(model.HwComponent):
         except KeyError:
             raise ValueError("DualChannelPositionSensor requires a 'sensor' dependency.")
 
+        try:
+            self.stage = dependencies["stage"]
+        except KeyError:
+            self.stage = None
+            logging.info("No stage in dependencies.")
+
         self.channels = {}
         for out_ch, in_chs in channels.items():
             # Convert to list (of 1 or 2 str), this makes looping through the channels easier
@@ -2932,9 +2949,12 @@ class DualChannelPositionSensor(model.HwComponent):
                 in_chs = [in_chs]
 
             for in_ch in in_chs:
-                if in_ch not in self.sensor._channels:
-                    raise ValueError("Sensor component '%s' does not have channel '%s'" % (self.sensor.name, in_ch,))
+                if in_ch not in self.sensor.axes:
+                    raise ValueError("Sensor component '%s' does not have axis '%s'" % (self.sensor.name, in_ch,))
+            if self.stage and out_ch not in self.stage.axes:
+                raise ValueError("Stage doesn't have axis %s", out_ch)
             self.channels[out_ch] = in_chs
+        self._axes = {out_ch: self.sensor.axes[in_chs[0]] for out_ch, in_chs in self.channels.items()}
 
         # Position and rotation VA
         self.position = model.VigilantAttribute({}, getter=self._get_sensor_position, readonly=True)
@@ -2943,11 +2963,59 @@ class DualChannelPositionSensor(model.HwComponent):
         # Subscribe to sensor position updates
         self.sensor.position.subscribe(self._on_sensor_position)
 
-    def reference(self):
+        # Executor for referencing
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+        if ref_on_init == "always":
+            f = self.reference(None, omit_referenced=False)
+        elif ref_on_init in (True, "if necessary"):
+            f = self.reference(None, omit_referenced=True)
+        elif ref_on_init in (False, "never"):
+            f = None
+        else:
+            raise ValueError("Invalid parameter %s for ref_on_init." % ref_on_init)
+
+        if f:
+            f.add_done_callback(self._on_referenced)
+
+    @roattribute
+    def axes(self):
+        """ dict str->Axis: name of each axis available -> their definition."""
+        return self._axes
+
+    @isasync
+    def reference(self, axes, omit_referenced=False):
         """
-        Calls .reference function of sensor.
+        Calls .reference function of stage (if available) and sensor.
+        axes (set of str): axes to be referenced
+        omit_referenced (bool): only reference axes if they are not referenced yet
+        returns (Future): object to control the reference request
         """
-        self.sensor.reference()
+        if not axes:
+            axes = self.channels.keys()
+        f = self._executor.submit(self._doReference, axes, omit_referenced)
+        return f
+
+    def _doReference(self, axes, omit_referenced):
+        if self.stage:
+            stage_axes = self.stage.axes.keys()
+            if omit_referenced:
+                # Skip axes which are already referenced or cannot be referenced
+                stage_axes = {ax for ax in stage_axes if not self.stage.referenced.value.get(ax, True)}
+            logging.debug("Referencing stage axes %s.", stage_axes)
+            f = self.stage.reference(stage_axes)
+            f.result()
+
+        # Convert from high-level axes to sensor axes
+        sensor_axes = set()
+        for ax in axes:
+            sensor_axes.update(self.channels[ax])
+        if omit_referenced:
+            # Skip axes which are already referenced or cannot be referenced
+            sensor_axes = {ax for ax in sensor_axes if not self.sensor.referenced.value.get(ax, True)}
+        logging.debug("Referencing sensor axes %s.", sensor_axes)
+        f = self.sensor.reference(sensor_axes)
+        f.result()
 
     def terminate(self):
         """
@@ -2993,6 +3061,13 @@ class DualChannelPositionSensor(model.HwComponent):
     def _get_rotation(self):
         _, rotation = self._calculate_position_rotation(self.sensor.position.value)
         return rotation
+
+    def _on_referenced(self, future):
+        try:
+            future.result()
+        except Exception as e:
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
 
 
 class LinkedAxesActuator(model.Actuator):

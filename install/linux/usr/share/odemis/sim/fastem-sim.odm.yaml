@@ -107,7 +107,6 @@ FASTEM-sim: {
     init: {
         locator: "fake",
         channels: {"x1": 0, "y1": 1, "y2": 2},
-        ref_on_init: "if necessary",  # use "always" to force referencing at init
     },
 }
 
@@ -116,10 +115,12 @@ FASTEM-sim: {
 "Stage Fine Position": {
     class: actuator.DualChannelPositionSensor,
     role: stage-pos,
-    dependencies: {"sensor": "Metrology Module"},
+    dependencies: {"sensor": "Metrology Module",
+                   "stage": "Sample Stage",},
     init: {
         channels: {"x": "x1", "y": ["y1", "y2"]},
         distance: 0.1, # (m)
+        ref_on_init: "if necessary",  # use "always" to force referencing at init
     },
 }
 
