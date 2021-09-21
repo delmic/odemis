@@ -1825,14 +1825,22 @@ class FixedOverviewView(StreamView):
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
 
+class FeatureView(StreamView):
+    """
+    A stream view with optional bookmarked features
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+        # booleanVA to toggle showing/hiding the features
+        self.showFeatures = model.BooleanVA(True)
+
 class FeatureOverviewView(StreamView):
     """
     A large FoV view which is used to display an overview map with optional bookmarked features
     """
     def __init__(self, name, stage=None, **kwargs):
-        StreamView.__init__(self, name, stage=stage, **kwargs)
+        FeatureView.__init__(self, name, stage=stage, **kwargs)
 
         self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
-        self.showFeatures = model.BooleanVA(True)
