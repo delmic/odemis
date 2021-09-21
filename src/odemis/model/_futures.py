@@ -523,7 +523,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
 
         # Set exception if future failed and cancel all other futures
         try:
-            ex = f.exception()
+            ex = f.exception()  # raises CancelledError if cancelled, otherwise returns error
             if ex:
                 self.cancel()
                 self.set_exception(ex)
@@ -542,8 +542,11 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         return start + sum(self.futures[f] for f in self.futures if not f.done())
 
     def cancel(self):
+        super().cancel()
         fs = [f for f in self.futures if not f.done()]
         logging.debug("Canceling %s futures.", len(fs))
+        if not fs:
+            return False  # nothing to cancel
         for f in fs:
             f.cancel()
-        super().cancel()
+        return True
