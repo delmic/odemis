@@ -1633,6 +1633,8 @@ class FIBVacuum(model.HwComponent):
 
         super().__init__(name, role, parent=parent, **kwargs)
 
+        # on_connect will fill these attributes with references to some components of the Orsay datamodel, for easier
+        # access.
         self._columnPump = None
         self._gunPump = None
         self._interlockInChamber = None
@@ -1794,6 +1796,7 @@ class FIBVacuum(model.HwComponent):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutHVPSTriggered VA
+        HVPS = High Voltage Power Supply
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -1817,6 +1820,7 @@ class FIBVacuum(model.HwComponent):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
         interlockOutSEDTriggered VA
+        SED = Secondary Electron Detector
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -1877,6 +1881,7 @@ class FIBVacuum(model.HwComponent):
     def _setInterlockOutHVPS(self, value):
         """
         setter for interlockOutHVPSTriggered VA
+        HVPS = High Voltage Power Supply
 
         :param (bool) value: The value attempted to be set to the VA
         :return (bool): The current value the VA already has
@@ -1896,6 +1901,7 @@ class FIBVacuum(model.HwComponent):
     def _setInterlockOutSED(self, value):
         """
         setter for interlockOutSEDTriggered VA
+        SED = Secondary Electron Detector
 
         :param (bool) value: The value attempted to be set to the VA
         :return (bool): The current value the VA already has
@@ -2137,7 +2143,8 @@ class FIBBeam(model.HwComponent):
 
         super().__init__(name, role, parent=parent, **kwargs)
 
-        # Variables for shorthand access to Orsay Parameters. They will get their value in on_connect()
+        # on_connect will fill these attributes with references to some components of the Orsay datamodel, for easier
+        # access.
         self._datamodel = None
         self._ionColumn = None
         self._hvps = None
