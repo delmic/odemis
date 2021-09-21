@@ -145,30 +145,28 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
         self._feature_icons = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_unselected.png').name),
+            guiimg.getStream('/icon/feature_active_unselected.png')),
             FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_rough_unselected.png').name),
+                guiimg.getStream('/icon/feature_rough_unselected.png')),
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_polished_unselected.png').name),
+                guiimg.getStream('/icon/feature_polished_unselected.png')),
             FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_discarded_unselected.png').name)}
+                guiimg.getStream('/icon/feature_discarded_unselected.png'))}
         self._feature_icons_selected = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_selected.png').name),
+            guiimg.getStream('/icon/feature_active_selected.png')),
             FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_rough_selected.png').name),
+                guiimg.getStream('/icon/feature_rough_selected.png')),
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_polished_selected.png').name),
+                guiimg.getStream('/icon/feature_polished_selected.png')),
             FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_discarded_selected.png').name)}
+                guiimg.getStream('/icon/feature_discarded_selected.png'))}
 
-        if hasattr(self.tab_data.main, "features"):
-            self.tab_data.main.features.subscribe(self._on_features_changes, init=True)
-        else:
+        if not hasattr(self.tab_data.main, "features"):
             raise ValueError("CryoFeatureOverlay requires features VA.")
-        if hasattr(self.tab_data.main, "currentFeature"):
-            self.tab_data.main.currentFeature.subscribe(self._on_current_feature_va, init=True)
-        else:
+        self.tab_data.main.features.subscribe(self._on_features_changes, init=True)
+        if not hasattr(self.tab_data.main, "currentFeature"):
             raise ValueError("CryoFeatureOverlay requires currentFeature VA.")
+        self.tab_data.main.currentFeature.subscribe(self._on_current_feature_va, init=True)
 
         self._selected_feature = None
         self._hover_feature = None
@@ -321,15 +319,15 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
             # Show proper feature icon based on selected feature + status
-            if feature.status.value in self._feature_icons.keys():
-                if feature == self.tab_data.main.currentFeature.value:
+            try:
+                if feature is self.tab_data.main.currentFeature.value:
                     set_icon(self._feature_icons_selected[feature.status.value])
                 else:
                     set_icon(self._feature_icons[feature.status.value])
-            else:
+            except KeyError:
                 logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
 
-            if feature == self._hover_feature:
+            if feature is self._hover_feature:
                 # show feature name on hover
                 self._label.text = feature.name.value
                 self._label.pos = (bpos[0], bpos[1])

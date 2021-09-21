@@ -515,7 +515,7 @@ class LocalizationTab(Tab):
 
         view = self.tab_data_model.views.value[0]  # overview map view
         for s in streams:
-            s.name.value = "Overview" + " " + s.name.value
+            s.name.value = "Overview " + s.name.value
             self.clear_overview_streams(s.name.value)
             self._show_acquired_stream(s, view)
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
@@ -707,21 +707,22 @@ class LocalizationTab(Tab):
         # Get all acquired streams from features list and overview streams
         acquired_streams = set()
         for feature in self.tab_data_model.main.features.value:
-            [acquired_streams.add(s) for s in feature.streams.value]
-        [acquired_streams.add(s) for s in self.tab_data_model.overviewStreams.value]
+            acquired_streams.update(feature.streams.value)
+        acquired_streams.update(self.tab_data_model.overviewStreams.value)
 
-        filter_streams = acquired_streams.difference(set(streams))
+        unused_streams = acquired_streams.difference(set(streams))
 
-        for st in filter_streams:
+        for st in unused_streams:
             if st in self.tab_data_model.overviewStreams.value:
                 self.tab_data_model.overviewStreams.value.remove(st)
                 # Remove from chamber tab too
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_stream(st)
             else:
-                feature = next((f for f in self.tab_data_model.main.features.value if st in f.streams.value), None)
-                if feature:
-                    feature.streams.value.remove(st)
+                # Remove the stream from all the features
+                for feature in self.tab_data_model.main.features.value:
+                    if st in feature.streams.value:
+                        feature.streams.value.remove(st)
 
     @call_in_wx_main
     def display_acquired_data(self, data):

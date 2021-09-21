@@ -631,19 +631,19 @@ class CryoGUIData(MicroscopyGUIData):
     def select_current_position_feature(self):
         """
         Given current stage position, either select one of the features closest to the position or create a new one with the position
-        :return: (CryoFeature) the feature selected for the current position
         """
         current_position = self.main.stage.position.value
         for feature in self.main.features.value:
             feature_dist = math.hypot(feature.pos.value[0] - current_position["x"],
                                       feature.pos.value[1] - current_position["y"])
             if feature_dist <= self.ATOL_FEATURE_POS:
-                self.currentFeature.value = feature
+                self.main.currentFeature.value = feature
                 break
         else:
             # create new feature if no close feature found
             feature = self.add_new_feature(current_position["x"], current_position["y"],
                                                           self.main.focus.position.value["z"])
+            logging.debug("A new feature is created at {} because none are close by.".format((current_position["x"], current_position["y"])))
             self.main.currentFeature.value = feature
 
 class CryoLocalizationGUIData(CryoGUIData):
