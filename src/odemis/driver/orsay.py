@@ -267,7 +267,8 @@ class OrsayComponent(model.HwComponent):
 
     def _updateProcessInfo(self, parameter=None, attr_name="Actual"):
         """
-        Reads the process information from the Orsay server and saves it in the processInfo VA
+        Reads the process information from the Orsay server and saves it in the processInfo VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -367,7 +368,8 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updatePower(self, parameter=None, attr_name="Actual"):
         """
-        Reads the power status from the Orsay server and saves it in the power VA
+        Reads the power status from the Orsay server and saves it in the power VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -395,7 +397,8 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updatePressure(self, parameter=None, attr_name="Actual"):
         """
-        Reads the pressure from the Orsay server and saves it in the pressure VA
+        Reads the pressure from the Orsay server and saves it in the pressure VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -412,7 +415,8 @@ class pneumaticSuspension(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -537,7 +541,8 @@ class vacuumChamber(model.Actuator):
 
     def _updatePosition(self, parameter=None, attr_name="Actual"):
         """
-        Reads the vacuum state from the Orsay server and saves it in the position VA
+        Reads the vacuum state from the Orsay server and saves it in the position VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -568,7 +573,8 @@ class vacuumChamber(model.Actuator):
 
     def _updatePressure(self, parameter=None, attr_name="Actual"):
         """
-        Reads the chamber pressure from the Orsay server and saves it in the pressure VA
+        Reads the chamber pressure from the Orsay server and saves it in the pressure VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -710,7 +716,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -739,7 +746,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateSpeed(self, parameter=None, attr_name="Actual"):
         """
-        Reads the turbopump's speed from the Orsay server and saves it in the speed VA
+        Reads the turbopump's speed from the Orsay server and saves it in the speed VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -756,7 +764,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateTemperature(self, parameter=None, attr_name="Actual"):
         """
-        Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA
+        Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -773,7 +782,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updatePower(self, parameter=None, attr_name="Actual"):
         """
-        Reads the turbopump's power from the Orsay server and saves it in the power VA
+        Reads the turbopump's power from the Orsay server and saves it in the power VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -790,7 +800,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateSpeedReached(self, parameter=None, attr_name="Actual"):
         """
-        Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA
+        Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -808,7 +819,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateTurboPumpOn(self, parameter=None, attr_name="Actual"):
         """
-        Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA
+        Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -827,7 +839,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updatePrimaryPumpOn(self, parameter=None, attr_name="Actual"):
         """
-        Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA
+        Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -846,7 +859,8 @@ class pumpingSystem(model.HwComponent):
 
     def _updateNitrogenPressure(self, parameter=None, attr_name="Actual"):
         """
-        Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA
+        Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -916,7 +930,8 @@ class UPS(model.HwComponent):
 
     def _updateLevel(self, parameter=None, attr_name="Actual"):
         """
-        Reads the battery level of the UPS from the Orsay server and saves it in the level VA
+        Reads the battery level of the UPS from the Orsay server and saves it in the level VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -998,7 +1013,8 @@ class GIS(model.Actuator):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1017,7 +1033,8 @@ class GIS(model.Actuator):
 
     def _updatePosition(self, parameter=None, attr_name="Actual"):
         """
-        Reads the position of the GIS from the Orsay server and saves it in the position VA
+        Reads the position of the GIS from the Orsay server and saves it in the position VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1179,7 +1196,8 @@ class GISReservoir(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1215,7 +1233,9 @@ class GISReservoir(model.HwComponent):
 
     def _updateTargetTemperature(self, parameter=None, attr_name="Target"):
         """
-        Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the targetTemperature VA
+        Reads the target temperature of the GIS reservoir from the Orsay server and saves it in the
+        targetTemperature VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1234,7 +1254,8 @@ class GISReservoir(model.HwComponent):
 
     def _updateTemperature(self, parameter=None, attr_name="Actual"):
         """
-        Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperature VA
+        Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperature VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1255,7 +1276,8 @@ class GISReservoir(model.HwComponent):
     def _updateTemperatureRegulation(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
-        temperatureRegulation VA
+        temperatureRegulation VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1280,7 +1302,8 @@ class GISReservoir(model.HwComponent):
 
     def _updateAge(self, parameter=None, attr_name="Actual"):
         """
-        Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA
+        Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1298,7 +1321,8 @@ class GISReservoir(model.HwComponent):
 
     def _updatePrecursorType(self, parameter=None, attr_name="Actual"):
         """
-        Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA
+        Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
@@ -1551,6 +1575,7 @@ class OrsayParameterConnector:
     def _update_parameter(self, goal):
         """
         Setter of the non-read-only VA. Unused for read-only VA's.
+        Gets called as callback by the Orsay server when the parameter changes value.
         :param (any) goal: value to write to the Orsay parameter's Target attribute. Type depends on the VA type
         :return (any): goal
         """
@@ -1719,7 +1744,8 @@ class FIBVacuum(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -1749,7 +1775,8 @@ class FIBVacuum(model.HwComponent):
     def _updateInterlockInChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
-        interlockInChamberTriggered VA
+        interlockInChamberTriggered VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -1772,7 +1799,8 @@ class FIBVacuum(model.HwComponent):
     def _updateInterlockOutChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
-        interlockOutChamberTriggered VA
+        interlockOutChamberTriggered VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -1795,7 +1823,8 @@ class FIBVacuum(model.HwComponent):
     def _updateInterlockOutHVPSTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
-        interlockOutHVPSTriggered VA
+        interlockOutHVPSTriggered VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
         HVPS = High Voltage Power Supply
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
@@ -1819,7 +1848,8 @@ class FIBVacuum(model.HwComponent):
     def _updateInterlockOutSEDTriggered(self, parameter=None, attr_name="Actual"):
         """
         Reads the state of a FIB related interlock from the Orsay server and saves it in the
-        interlockOutSEDTriggered VA
+        interlockOutSEDTriggered VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
         SED = Secondary Electron Detector
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
@@ -2031,7 +2061,8 @@ class FIBSource(model.HwComponent):
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
-        Reads the error state from the Orsay server and saves it in the state VA
+        Reads the error state from the Orsay server and saves it in the state VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -2056,7 +2087,8 @@ class FIBSource(model.HwComponent):
 
     def _updateHeater(self, parameter=None, attr_name="Actual"):
         """
-        Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA
+        Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -2426,7 +2458,8 @@ class FIBBeam(model.HwComponent):
 
     def _updateImageFormat(self, parameter=None, attr_name="Actual"):
         """
-        Reads the image format from the Orsay server and saves it in the imageFormat VA
+        Reads the image format from the Orsay server and saves it in the imageFormat VA.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
@@ -2536,6 +2569,7 @@ class FIBBeam(model.HwComponent):
         """
         Reads the position and size of the currently imaged area from the Orsay server and saves it in the translation
         and resolution VA's respectively.
+        Gets called as callback by the Orsay server when the parameter changes value.
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
