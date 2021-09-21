@@ -28,7 +28,7 @@ import time
 
 
 SINGLE_BEAM_ROTATION_DEFAULT = 0  # 0 is typically a good guess (better than multibeam rotation of ~0.0157 rad)
-MULTI_BEAM_ROTATION_DEFAULT = 0.015707963  # 0.9 degrees
+MULTI_BEAM_ROTATION_DEFAULT = 0
 
 # The executor is a single object, independent of how many times the module is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
