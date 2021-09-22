@@ -1586,7 +1586,7 @@ class StreamView(View):
 
     def clipToStageLimits(self, pos):
         """
-        Clip current a position in x/y direction to the maximum allowed stage limits.
+        Clip current position in x/y direction to the maximum allowed stage limits.
 
         :param pos (dict): Position to be clipped with keys "x" and "y"
         :return(dict): Position clipped to the stage limits with keys "x" and "y"
@@ -1594,13 +1594,13 @@ class StreamView(View):
         stage_limits = self._getStageLimitsXY()
         if not stage_limits["x"][0] <= pos["x"] <= stage_limits["x"][1]:
             pos["x"] = max(stage_limits["x"][0], min(pos["x"], stage_limits["x"][1]))
-            logging.info("Movements of the stage in x limited to %s mm, restricting movement to %s mm.",
-                         stage_limits["x"], pos["x"] * 1e3)
+            logging.info("Movements of the stage in x limited to %s m, restricting movement to %s m.",
+                         stage_limits["x"], pos["x"])
 
         if not stage_limits["y"][0] <= pos["x"] <= stage_limits["y"][1]:
             pos["y"] = max(stage_limits["y"][0], min(pos["y"], stage_limits["y"][1]))
-            logging.info("Movements of the stage in y limited to %s mm, restricting movement to %s mm.",
-                         stage_limits["y"], pos["y"] * 1e3)
+            logging.info("Movements of the stage in y limited to %s m, restricting movement to %s m.",
+                         stage_limits["y"], pos["y"])
         return pos
 
     def _getStageLimitsXY(self):
