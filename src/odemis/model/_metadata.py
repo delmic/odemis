@@ -191,6 +191,8 @@ MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe 
 MD_SAMPLE_CENTERS = "Centers position of grids" # dict str → float representing the centers positions of the 2 grids loaded on the meteor stage
 MD_SEM_IMAGING_RANGE = "SEM imaging range"  # dict str → [float, float] defining the volume of the SEM imaging area, along x, y and z axes. 
 MD_FM_IMAGING_RANGE = "FM imaging range"    # dict str → [float, float] defining the volume of the FM imaging area, along x, y and z axes.
+MD_FAV_FM_POS_ACTIVE = "Favourite FM position active"   # dict str->float representing the position required for FM imaging
+MD_FAV_SEM_POS_ACTIVE = "Favourite SEM position active"     # dict -> float representing the position required for SEM imaging 
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.

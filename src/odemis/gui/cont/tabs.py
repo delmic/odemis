@@ -2674,8 +2674,11 @@ class CryoChamberTab(Tab):
         val = getMovementProgress(pos, self._start_pos, self._end_pos)
         if val is None:
             return
+        val = min(max(0, int(round(val * 100))), 100)
+        logging.debug("Updating move progress to %s%%", val)
         # Set the move gauge with the movement progress percentage
-        self.panel.gauge_move.Value = val * 100
+        self.panel.gauge_move.Value = val
+        self.panel.gauge_move.Refresh()
 
     @call_in_wx_main
     def _on_stage_pos(self, _):
@@ -2691,7 +2694,7 @@ class CryoChamberTab(Tab):
         # show/hide the warning msg
         current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage)
         if current_pos_label == UNKNOWN:
-            txt_warning = "The stage position is unknown."
+            txt_warning = "To enable buttons, please move away from unknown position."
             self._show_warning_msg(txt_warning)
         else:
             self._show_warning_msg(None)
