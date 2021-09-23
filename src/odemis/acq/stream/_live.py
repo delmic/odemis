@@ -237,7 +237,7 @@ class LiveStream(Stream):
         return (float, float): width, height in meters
         """
 
-        raise NotImplementedError("Stream %s doesn't support guessFoV()", self.__class__.__name__)
+        raise NotImplementedError("Stream %s doesn't support guessFoV()" % self.__class__.__name__)
 
 
 class SEMStream(LiveStream):
