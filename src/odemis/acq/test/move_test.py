@@ -399,14 +399,10 @@ class TestMeteorMove(unittest.TestCase):
         if driver.get_backend_status in [BACKEND_STARTING, BACKEND_RUNNING]:
             test.stop_backend()
 
-    def move_to_loading_position(self):
-        self.stage.moveAbs(self.stage_loading).result()
-        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
-        self.assertEqual(current_imaging_mode, LOADING)
-
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # move the stage to the loading position  
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the sem imaging area, and grid1 will be chosen by default.
         f = cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
@@ -417,7 +413,8 @@ class TestMeteorMove(unittest.TestCase):
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
         # move the stage to the loading position  
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to grid1, and sem imaging area will be chosen by default. 
         f = cryoSwitchSamplePosition(GRID_1)
         f.result()
@@ -428,7 +425,8 @@ class TestMeteorMove(unittest.TestCase):
 
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
         # move the stage to the loading position  
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the fm imaging area, and grid1 will be chosen by default
         f = cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
@@ -439,7 +437,8 @@ class TestMeteorMove(unittest.TestCase):
 
     def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
         # move the stage to the loading position  
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to grid2
         f = cryoSwitchSamplePosition(GRID_2)
         f.result()
@@ -450,7 +449,8 @@ class TestMeteorMove(unittest.TestCase):
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the sem imaging area
         f = cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
@@ -470,7 +470,8 @@ class TestMeteorMove(unittest.TestCase):
 
     def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
         # move to loading position
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the sem imaging area
         f = cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
@@ -492,7 +493,8 @@ class TestMeteorMove(unittest.TestCase):
     
     def test_moving_from_sem_to_fm(self):
         # move to loading position
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the sem imaging area
         f = cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
@@ -505,7 +507,8 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move to the fm imaging area
         f = cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
@@ -524,7 +527,8 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move to the fm imaging area
         f = cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
@@ -545,7 +549,8 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_to_sem_from_fm(self):
-        self.move_to_loading_position()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move to the fm imaging area
         f = cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
