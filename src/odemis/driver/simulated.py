@@ -243,8 +243,16 @@ class PhenomChamber(Chamber):
 class GenericComponent(model.Actuator):
     """
     Simulated component, capable of simulating both axes and VA's.
-    This component allows for communication with it, asif it were a real component with axes and VA's, but does not do
+    This component allows for communication with it, as if it were a real component with axes and VA's, but does not do
     anything else.
+
+    This component inherits from Actuator instead of HwComponent, because this is the simplest way to allow the
+    component to have axes. The main drawbacks of this are that when it has no Axes (only VA's), it still inherits
+    from Actuator and still has methods like reference, moveAbs, moveRel, etc, even though those don't work at all
+    without defined axes. To solve this, you'd need something like conditional inheritance, which seems quite
+    difficult in Python without having to repeat pieces of code. Alternatively you could have a GenericComponent(
+    HwComponent) and a subclass GenericActuator(GenericComponent, Actuator), fix the diamond inheritance issues in
+    the model, and use a new() method in GenericComponent() to generate a GenericActuator if there are axes.
     """
     def __init__(self, name, role, vas=None, axes=None, **kwargs):
         """
@@ -254,7 +262,7 @@ class GenericComponent(model.Actuator):
 
         vas (dict (string -> dict (string -> any))): This dict maps desired VA names to a dict with VA properties. The
         VA property dict can contain the following keys:
-            "value" (any): optional, initial values of the VA, defaults to 0.0
+            "value" (any): initial values of the VA
             "readonly" (bool): optional, True for read only VA, defaults to False
             "unit" (str): optional, the unit of the VA, defaults to ""
             "range" (float, float): optional, min/max of the VA, defaults to None
@@ -270,53 +278,47 @@ class GenericComponent(model.Actuator):
         """
         # Create desired VA's
         if vas:
-            for n in vas:
-                if "value" in vas[n]:
-                    vavaluetype = vas[n]["value"].__class__.__name__.capitalize()
-                    if vavaluetype == "Bool":
-                        vavaluetype = "Boolean"
-                    elif vavaluetype == "Str":
-                        vavaluetype = "String"
-                else:
-                    vavaluetype = "VA"
-                if "range" in vas[n]:
+            for vaname, vaprop in vas.items():
+                # Guess an appropriate VA type based on the initial value and the presence of range or choices
+                vavaluetype = vaprop["value"].__class__.__name__.capitalize()
+                if vavaluetype == "Bool":
+                    vavaluetype = "Boolean"
+                elif vavaluetype == "Str":
+                    vavaluetype = "String"
+                if "range" in vaprop:
                     varangetype = "Continuous"
-                elif "choices" in vas[n]:
+                elif "choices" in vaprop:
                     varangetype = "Enumerated"
                 else:
                     varangetype = "VA"
-                if vavaluetype == "VA" and varangetype == "VA":
-                    vatype = "VigilantAttribute"
-                elif vavaluetype == "VA":  # and varangetype != "VA"
-                    vatype = varangetype + vavaluetype
-                else:
-                    vatype = vavaluetype + varangetype
+                vatype = vavaluetype + varangetype
 
-                if "value" not in vas[n]:
-                    vas[n]["value"] = 0.0  # default value
-                if "unit" not in vas[n]:
-                    vas[n]["unit"] = ""  # default unit
+                if "value" not in vaprop:
+                    vaprop["value"] = 0.0  # default value
 
-                vaclass = getattr(model, vatype)
-                va = vaclass(**vas[n])
-                setattr(self, n, va)
+                try:
+                    vaclass = getattr(model, vatype)
+                except KeyError:
+                    raise KeyError(f"VA type {vatype}, guessed for VA {vaname}, does not exist.")
+                va = vaclass(**vaprop)
+                setattr(self, vaname, va)
 
         # Create desired axes
         axes_def = {}
         if axes:
             self._position = {}
             init_speed = {}
-            for a in axes:
-                init_speed[a] = 1.0  # we are fast!
-                if "range" not in axes[a] and "choices" not in axes[a]:  # if no range nor choices are defined
-                    axes[a]["range"] = (-0.1, 0.1)  # use the default range
-                if "speed" not in axes[a]:
-                    axes[a]["speed"] = (0., 10.)  # default speed
-                axes_def[a] = model.Axis(**axes[a])
-                if "range" in axes[a]:
-                    self._position[a] = (axes[a]["range"][0] + axes[a]["range"][1]) / 2  # start at the centre
+            for axisname, axisprop in axes:
+                init_speed[axisname] = 1.0  # we are fast!
+                if "range" not in axisprop and "choices" not in axisprop:  # if no range nor choices are defined
+                    axisprop["range"] = (-0.1, 0.1)  # use the default range
+                if "speed" not in axisprop:
+                    axisprop["speed"] = (0., 10.)  # default speed
+                axes_def[axisname] = model.Axis(**axisprop)
+                if "range" in axisprop:
+                    self._position[axisname] = (axisprop["range"][0] + axisprop["range"][1]) / 2  # start at the centre
                 else:
-                    self._position[a] = list(axes[a]["choices"].values())[0]  # start at the first value
+                    self._position[axisname] = list(axisprop["choices"].values())[0]  # start at the first value
 
             self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
