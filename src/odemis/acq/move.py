@@ -239,6 +239,8 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     return UNKNOWN
 
 
+SCALING_FACTOR = 0.03
+
 def _getDifference(start, end):
     """
     Calculate the error/difference between two 3D points.
@@ -250,28 +252,31 @@ def _getDifference(start, end):
     rot_axes = axes & {'rx', 'rz'}  # only the axes found on both points
     if not lin_axes and not rot_axes:
         return
+    lin_error = rot_error = 0
     # for the linear error
-    sp = numpy.array([start[a] for a in lin_axes])
-    ep = numpy.array([end[a] for a in lin_axes])
-    lin_error = scipy.spatial.distance.euclidean(ep, sp)
+    if lin_axes:
+        sp = numpy.array([start[a] for a in lin_axes])
+        ep = numpy.array([end[a] for a in lin_axes])
+        lin_error = scipy.spatial.distance.euclidean(ep, sp)
     # for the rotation error
-    Rx_start = Rx_end = Rz_start = Rz_end = numpy.eye(3)
-    for a in rot_axes:
-        if a == "rx":
-            # find the elemental rotation around x axis
-            Rx_start = Rotation.from_euler('x', start["rx"], degrees=False).as_matrix()
-            Rx_end = Rotation.from_euler("x", end['rx']).as_matrix()
-        elif a == "rz":
-            # find the elemental rotation around z axis
-            Rz_end = Rotation.from_euler("z", end['rz']).as_matrix()
-            Rz_start = Rotation.from_euler('z', start["rz"], degrees=False).as_matrix()
-    # find the total rotations
-    R_start = numpy.matmul(Rz_start, Rx_start)
-    R_end = numpy.matmul(Rz_end, Rx_end)
-    # find the rotation error matrix
-    R_diff = numpy.matmul(numpy.transpose(R_start), R_end)
-    # map to scalar error
-    rot_error = 0.03*numpy.trace(numpy.eye(3)-R_diff)
+    if rot_axes:
+        Rx_start = Rx_end = Rz_start = Rz_end = numpy.eye(3)
+        for a in rot_axes:
+            if a == "rx":
+                # find the elemental rotation around x axis
+                Rx_start = Rotation.from_euler('x', start["rx"], degrees=False).as_matrix()
+                Rx_end = Rotation.from_euler("x", end['rx']).as_matrix()
+            elif a == "rz":
+                # find the elemental rotation around z axis
+                Rz_end = Rotation.from_euler("z", end['rz']).as_matrix()
+                Rz_start = Rotation.from_euler('z', start["rz"], degrees=False).as_matrix()
+        # find the total rotations
+        R_start = numpy.matmul(Rz_start, Rx_start)
+        R_end = numpy.matmul(Rz_end, Rx_end)
+        # find the rotation error matrix
+        R_diff = numpy.matmul(numpy.transpose(R_start), R_end)
+        # map to scalar error
+        rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-R_diff)
     return lin_error+rot_error
     
 
