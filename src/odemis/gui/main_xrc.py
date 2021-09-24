@@ -589,6 +589,7 @@ class xrcpnl_tab_fastem_chamber(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.btn_pressure = xrc.XRCCTRL(self, "btn_pressure")
         self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
+        self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
@@ -5864,8 +5865,8 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img_icon_ico_pause_png</icon>
-                          <icon_on>img_icon_arr_right_png</icon_on>
+                          <icon>img_icon_ico_sem_png</icon>
+                          <icon_on>img_icon_ico_sem_green_png</icon_on>
                           <height>48</height>
                           <size>120,48</size>
                           <face_colour>def</face_colour>
@@ -5888,6 +5889,31 @@ def __init_resources():
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Pressure: </label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>10</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="pressure_label">
+                              <size>150,20</size>
+                              <value>...</value>
+                              <fg>#DDDDDD</fg>
+                              <bg>#333333</bg>
+                          </object>
+                        </object>
+                      </object>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                   </object>
                   <object class="sizeritem">
                       <object class="wxTextCtrl">
@@ -9472,29 +9498,6 @@ b\xa7\xc3g\xc3\x86\x86!8.\xd0s\xf2\xe5\xe4xvU\xeck\xb2\x05\x92\xd4\x9a\
 k:\x02}g\xe89\xacnS1\xfb\xb2\xdf\x1a\xe2\xff\x897\xd9u\xe0\xeb\xaa\xbe\
 \x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_ico_pause_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x12\x00\x00\x00\x12\x08\x06\x00\x00\x00\
-V\xce\x8eW\x00\x00\x00.IDAT8\x8dc`\x18\x05d\x813g\xce\xec\x87a|b\xc4\x18\
-\xf4\x1f\x86\xf1\x89\x8d\x1a4j\x10]\x0c:w\xee\x9c=\x0c\xe3\x13\x1b!\x00\
-\x00\xc1\xd1\xd9\xabx\xad\xca>\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_icon_arr_right_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x00\xbcIDAT8\xcbc\xf8\xff\xff?\x03%\x98ap\x18@\x11\
-@2\x80\x09\x88\xad\x818\x0c\x88\x99\xc91\x80\x0d\x88cAB@|\x1c\x88M\xa0\x86\
-\x12m\x00\x27\x10gA\x0d\x00\xe1\xbf@<\x1f\x88%\x80\x98\x91\x18\x03\xb8\x80\
-8\x1f\xc9\x00\x18\xfe\x04\xc4E@\xccN\xae\x010|\x0b\x88\xbd0\xbcE\x82\x01\
-0oE\xa1\x042\x09\x06\\\x05\xe24 \x96\x05bVR\x0cx\x03\xc4\xd3\x81\xd8\x07\
-\x88\xb5\x81X\x80X\x17\xfc\x04\xe2\x0d@\x1c\x09\xc4f@,\x05\x8d)\xa2\xc2\
-\xe0\x04\x10g\x03\xb1\x1d\x10+\x021/\xce\xc4\x85\x96\x0e\x02\x80\xb8\x18\
-\x88\xdd\x80X\x03\x88\x05\x81\x98\x85\xd8\x84\x04
-\x181\xa8\x8db\xd0xg$\x94\x10\x01\xe0\xcc\xeb\x93A\xf4\x92}\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
     img_icon_ico_export_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -9601,8 +9604,6 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', bytearray(img_icon_ico_acqui_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', bytearray(img_icon_ico_press_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_green_png', bytearray(img_icon_ico_press_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_pause_png', bytearray(img_icon_ico_pause_png))
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_arr_right_png', bytearray(img_icon_arr_right_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', bytearray(img_icon_ico_export_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', bytearray(img_icon_dialog_error_png))
     __res.Load('memory:XRC/main/main_xrc')

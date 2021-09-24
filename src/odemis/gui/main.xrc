@@ -4973,8 +4973,8 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img/icon/ico_pause.png</icon>
-                          <icon_on>img/icon/arr_right.png</icon_on>
+                          <icon>img/icon/ico_sem.png</icon>
+                          <icon_on>img/icon/ico_sem_green.png</icon_on>
                           <height>48</height>
                           <size>120,48</size>
                           <face_colour>def</face_colour>
@@ -4997,6 +4997,31 @@
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Pressure: </label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>10</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="pressure_label">
+                              <size>150,20</size>
+                              <value>...</value>
+                              <fg>#DDDDDD</fg>
+                              <bg>#333333</bg>
+                          </object>
+                        </object>
+                      </object>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                   </object>
                   <object class="sizeritem">
                       <object class="wxTextCtrl">
