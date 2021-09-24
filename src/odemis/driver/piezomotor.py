@@ -1032,22 +1032,26 @@ class PMDSimulator(object):
                 else:
                     raise ValueError()
             elif cmd == "T":
+                # Absolute move
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
+                    steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
-                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
                     self.move(steps)
                 elif len(args) == 2:
+                    steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
                     self.speed = int(args[1])
-                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
                     self.move(steps)
                 else:
                     raise ValueError()
             elif cmd == "S":
                 self.is_moving = False
             elif cmd == "C":
+                # Relative move
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
@@ -1132,6 +1136,8 @@ class PMDSimulator(object):
         self.is_moving = True
         startt = time.time()
         dur = abs(steps / self.speed)
+        # be a bit faster than the real hardware because the real hardware can move multiple axes at the same time
+        dur /= 2
         while time.time() < startt + dur:
             if not self.is_moving:  # stopped
                 return
