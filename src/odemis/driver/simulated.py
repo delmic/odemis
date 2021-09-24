@@ -308,7 +308,7 @@ class GenericComponent(model.Actuator):
         if axes:
             self._position = {}
             init_speed = {}
-            for axisname, axisprop in axes:
+            for axisname, axisprop in axes.items():
                 init_speed[axisname] = 1.0  # we are fast!
                 if "range" not in axisprop and "choices" not in axisprop:  # if no range nor choices are defined
                     axisprop["range"] = (-0.1, 0.1)  # use the default range
