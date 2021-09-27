@@ -2860,7 +2860,7 @@ class FastEMROCOverlay(FastEMSelectOverlay):
     def on_left_up(self, evt):
         # Activate region if clicked
         self._view_to_phys()
-        rect = self.p_start_pos + self.p_end_pos
+        rect = self.get_physical_sel()
         pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
         # The calibration region often needs to be selected from a distant zoom level, so it is difficult
         # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"

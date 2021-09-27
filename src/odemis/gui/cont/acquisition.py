@@ -1396,10 +1396,8 @@ class FastEMAcquiController(object):
         self._calibration_ctrl = calibration_ctrl
 
         # Path to the acquisition
-        # <External storage>/<date>/<project name>/<roa name>
-        # TODO: display proper path to external storage (if mounted)
         self.path = datetime.today().strftime('%Y-%m-%d')
-        self._tab_panel.txt_destination.SetValue("<External Storage>/%s" % self.path)
+        self._tab_panel.txt_destination.SetValue(self.path)
 
         # ROA count
         self.roa_count = 0
@@ -1547,8 +1545,7 @@ class FastEMAcquiController(object):
         for p in self._tab_data_model.projects.value:
             ppath = os.path.join(self.path, p.name.value)
             for roa in p.roas.value:
-                fn = os.path.join(ppath, roa.name.value)
-                f = fastem.acquire(roa, fn)
+                f = fastem.acquire(roa, ppath)
                 f.add_done_callback(self.increase_acq_progress)
 
         f.add_done_callback(self.on_acquisition_done)
