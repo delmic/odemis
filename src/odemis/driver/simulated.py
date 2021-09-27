@@ -266,8 +266,8 @@ class GenericComponent(model.Actuator):
             "readonly" (bool): optional, True for read only VA, defaults to False
             "unit" (str): optional, the unit of the VA, defaults to ""
             "range" (float, float): optional, min/max of the VA, defaults to None
-            "choices" (dict): optional, possible values available to the VA, defaults to None, will be ignored if range
-                              is defined
+            "choices" (set or dict): optional, possible values available to the VA, defaults to None, will be ignored if
+                                     range is defined
         axes (dict (string -> dict (string -> any))): dict mapping desired axis names to dicts with axis properties. The
         axis property dict can contain the following keys:
             "unit" (str): optional, unit of the axis, defaults to "m"
@@ -318,7 +318,7 @@ class GenericComponent(model.Actuator):
                 if "range" in axisprop:
                     self._position[axisname] = (axisprop["range"][0] + axisprop["range"][1]) / 2  # start at the centre
                 else:
-                    self._position[axisname] = list(axisprop["choices"].values())[0]  # start at the first value
+                    self._position[axisname] = next(iter(axisprop["choices"]))  # start at an arbitrary value
 
             self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
 

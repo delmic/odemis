@@ -141,6 +141,7 @@ class ActuatorTest(object):
     #        expected_ratio = 100
     #        delta_ratio = 2 # no unit
     #
+    #        # TODO
     #        # fast move
     #        dev = self.actuator_type(*self.actuator_args)
     #        stage.speed.value = {"x":1, "y":1}
@@ -288,6 +289,30 @@ class ChamberTest(unittest.TestCase):
         # wrong position
         with self.assertRaises(ValueError):
             self.dev.moveAbs({"pressure": -5})
+
+
+class GenericComponentTest(unittest.TestCase):
+
+    def test_creation_complete(self):
+        simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
+                                                                                {"value": 0.1, "readonly": True,
+                                                                                 "unit": "", "range": [0, 1]},
+                                                                            "vaChoices":
+                                                                                {"value": 1,
+                                                                                 "choices": set(range(0, 10))},
+                                                                            "vaBool": {"value": True}},
+                                   axes={"x": {"range": (-0.2, 0.2), "unit": "m"},
+                                         "gripper": {"choices": {'open': False, 'closed': True}}})
+
+    def test_creation_vas_only(self):
+        simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
+                                                                                {"value": 0.1, "readonly": True,
+                                                                                 "unit": "", "range": [0, 1]},
+                                                                            "vaChoices":
+                                                                                {"value": 1,
+                                                                                 "choices": set(range(0, 10))},
+                                                                            "vaBool": {"value": True}})
+
 
 if __name__ == "__main__":
     unittest.main()
