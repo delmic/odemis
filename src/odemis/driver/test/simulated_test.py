@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 20 Apr 2012
 
 @author: Éric Piel
@@ -8,17 +8,17 @@ Copyright © 2012, 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division, print_function
 
 from concurrent.futures._base import CancelledError
@@ -30,8 +30,8 @@ import time
 import unittest
 from unittest.case import skip
 
-
 logging.getLogger().setLevel(logging.DEBUG)
+
 
 class LightTest(unittest.TestCase):
 
@@ -53,6 +53,7 @@ class ActuatorTest(object):
     """
     This abstract class should be able to test any type of actuator
     """
+
     # inheriting class should provide:
     # actuator_type (object): class of the actuator
     # actuator_args (tuple): argument to instantiate an actuator
@@ -103,7 +104,7 @@ class ActuatorTest(object):
             rng = self.dev.axes[axis].range
             move[axis] = (rng[0] + rng[1]) / 2
         f = self.dev.moveAbs(move)
-        f.result() # wait
+        f.result()  # wait
         test.assert_pos_almost_equal(move, self.dev.position.value, atol=1e-7)
 
     def test_moveRel(self):
@@ -118,7 +119,7 @@ class ActuatorTest(object):
             expected_pos[axis] = prev_pos[axis] + move[axis]
 
         f = self.dev.moveRel(move)
-        f.result() # wait
+        f.result()  # wait
         test.assert_pos_almost_equal(expected_pos, self.dev.position.value, atol=1e-7)
 
     def test_stop(self):
@@ -133,36 +134,34 @@ class ActuatorTest(object):
         self.dev.stop()
         # TODO use the time of a long move to see if it took less
 
-#    @skip("Simulated stage doesn't simulate the speed")
-#    def test_speed(self):
-#        # For moves big enough, a 1m/s move should take approximately 100 times less time
-#        # than a 0.01m/s move
-#        expected_ratio = 100
-#        delta_ratio = 2 # no unit
-#
-#        # TODO
-#        # fast move
-#        dev = self.actuator_type(*self.actuator_args)
-#        stage.speed.value = {"x":1, "y":1}
-#        move = {'x':100e-6, 'y':100e-6}
-#        start = time.time()
-#        stage.moveRel(move)
-#        stage.waitStop()
-#        dur_fast = time.time() - start
-#
-#        stage.speed.value = {"x":1.0/expected_ratio, "y":1.0/expected_ratio}
-#        move = {'x':-100e-6, 'y':-100e-6}
-#        start = time.time()
-#        stage.moveRel(move)
-#        stage.waitStop()
-#        dur_slow = time.time() - start
-#
-#        ratio = dur_slow / dur_fast
-#        print "ratio of", ratio
-#        if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
-#            self.fail("Speed not consistent: ratio of " + str(ratio) +
-#                         "instead of " + str(expected_ratio) + ".")
-
+    #    @skip("Simulated stage doesn't simulate the speed")
+    #    def test_speed(self):
+    #        # For moves big enough, a 1m/s move should take approximately 100 times less time
+    #        # than a 0.01m/s move
+    #        expected_ratio = 100
+    #        delta_ratio = 2 # no unit
+    #
+    #        # fast move
+    #        dev = self.actuator_type(*self.actuator_args)
+    #        stage.speed.value = {"x":1, "y":1}
+    #        move = {'x':100e-6, 'y':100e-6}
+    #        start = time.time()
+    #        stage.moveRel(move)
+    #        stage.waitStop()
+    #        dur_fast = time.time() - start
+    #
+    #        stage.speed.value = {"x":1.0/expected_ratio, "y":1.0/expected_ratio}
+    #        move = {'x':-100e-6, 'y':-100e-6}
+    #        start = time.time()
+    #        stage.moveRel(move)
+    #        stage.waitStop()
+    #        dur_slow = time.time() - start
+    #
+    #        ratio = dur_slow / dur_fast
+    #        print "ratio of", ratio
+    #        if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
+    #            self.fail("Speed not consistent: ratio of " + str(ratio) +
+    #                         "instead of " + str(expected_ratio) + ".")
 
     def test_reference(self):
         """
@@ -175,7 +174,7 @@ class ActuatorTest(object):
         # first try one by one
         axes = set(self.dev.referenced.value.keys())
         for a in axes:
-            self.dev.moveRel({a:-1e-3}) # move a bit to make it a bit harder
+            self.dev.moveRel({a: -1e-3})  # move a bit to make it a bit harder
             f = self.dev.reference({a})
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
@@ -190,9 +189,9 @@ class ActuatorTest(object):
             self.assertTrue(self.dev.referenced.value[a])
             self.assertAlmostEqual(self.dev.position.value[a], 0)
 
-#@skip("simple")
-class StageTest(unittest.TestCase, ActuatorTest):
 
+# @skip("simple")
+class StageTest(unittest.TestCase, ActuatorTest):
     actuator_type = simulated.Stage
     # name, role, children (must be None)
     _kwargs = dict(name="stage", role="test", axes={"x", "y"}, inverted=["y"])
@@ -204,8 +203,8 @@ class StageTest(unittest.TestCase, ActuatorTest):
     def tearDown(self):
         ActuatorTest.tearDown(self)
 
-class ChamberTest(unittest.TestCase):
 
+class ChamberTest(unittest.TestCase):
     actuator_type = simulated.Chamber
     # name, role, children (must be None)
     _kwargs = dict(name="c", role="chamber", positions=["vented", "vacuum"])
@@ -227,7 +226,7 @@ class ChamberTest(unittest.TestCase):
         # if not moving pressure VA and position should be the same
         cur_press = self.dev.pressure.value
         pos_press = self.dev.position.value["pressure"]
-        self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
+        self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05)  # ±5%
 
     def test_moveAbs(self):
         pos_press = self.dev.position.value["pressure"]
@@ -247,12 +246,12 @@ class ChamberTest(unittest.TestCase):
                 f = self.dev.moveAbs({"pressure": p})
                 # Should still be close from the original pressure
                 cur_press = self.dev.pressure.value
-                self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
+                self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05)  # ±5%
 
                 f.result()
                 self.assertEqual(self.dev.position.value["pressure"], p)
                 cur_press = self.dev.pressure.value
-                self.assertTrue(p * 0.95 <= cur_press <= p * 1.05) # ±5%
+                self.assertTrue(p * 0.95 <= cur_press <= p * 1.05)  # ±5%
 
         if self.dev.position.value["pressure"] == pos_press:
             self.fail("Failed to find a position different from %d" % pos_press)
@@ -278,17 +277,17 @@ class ChamberTest(unittest.TestCase):
         self.dev.stop()
 
         with self.assertRaises(CancelledError):
-            f1.result() # might not raise CancelledError, if the operation is not cancellable
+            f1.result()  # might not raise CancelledError, if the operation is not cancellable
             f2.result()
 
     def test_wrong_moveAbs(self):
         # wrong axis
         with self.assertRaises(ValueError):
-            self.dev.moveAbs({"ba":-2})
+            self.dev.moveAbs({"ba": -2})
 
         # wrong position
         with self.assertRaises(ValueError):
-            self.dev.moveAbs({"pressure":-5})
+            self.dev.moveAbs({"pressure": -5})
 
 if __name__ == "__main__":
     unittest.main()
