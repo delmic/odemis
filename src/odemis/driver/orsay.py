@@ -204,6 +204,33 @@ class OrsayComponent(model.HwComponent):
             self._fib_beam = FIBBeam(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_beam)
 
+        # create the Light child
+        try:
+            kwargs = children["light"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'light' child")
+        else:
+            self._light = Light(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._light)
+
+        # create the FIB Scanner child
+        try:
+            kwargs = children["scanner"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'scanner' child")
+        else:
+            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._scanner)
+
+        # create the FIB Focus child
+        try:
+            kwargs = children["focus"]
+        except (KeyError, TypeError):
+            logging.info("Orsay was not given a 'focus' child")
+        else:
+            self._focus = Focus(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._focus)
+
     def on_connect(self):
         """
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
@@ -2614,3 +2641,247 @@ class FIBBeam(model.HwComponent):
                 connector.disconnect()
             self._ionColumn = None
             self._hvps = None
+
+
+class Light(model.Emitter):
+    """
+    Chamber illumination component.
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        """
+        super().__init__(name, role, parent=parent, **kwargs)
+
+        self._parameter = None
+
+        self._shape = ()
+        self.power = model.ListContinuous([0.0], unit="W", range=((0.0, ), (1.0, )), setter=self._changePower)
+        self.spectra = model.ListVA([(0.7e-6, 1.02e-6, 1.05e-6, 1.08e-6, 1.4e-6)], unit="m", readonly=True)
+
+        self.on_connect()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+
+        self._parameter = self.parent.datamodel.HybridPlatform.AnalysisChamber.InfraredLight.State
+
+        self._parameter.Subscribe(self._updatePower)
+
+        self.update_VAs()
+
+    def update_VAs(self):
+        """
+        Update the VA's. Should be called after reconnection to the server
+        """
+        self._updatePower()
+
+    def _updatePower(self, parameter=None, attributeName="Actual"):
+        """
+        Reads the light's power status from the Orsay server and saves it in the power VA
+        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
+        :param (str) attributeName: the name of the attribute of parameter which was changed
+        """
+        if parameter is None:
+            parameter = self._parameter
+        if parameter is not self._parameter:
+            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
+                             "datamodel.HybridPlatform.AnalysisChamber.InfraredLight.State. Parameter passed is %s"
+                             % parameter.Name)
+        if attributeName != "Actual":
+            return
+        light_state = float(self._parameter.Actual in {True, "True", "true", "1", "ON"})
+        logging.debug("Chamber light turned %s." % "on" if light_state else "off")
+        self.power._value = [light_state]  # to not call the setter
+        self.power.notify([light_state])
+
+    def _changePower(self, goal):
+        """
+        Turns the light off if 0 is passed. Turns it on otherwise
+        :param (float) goal: goal state of the light. 0 is off, anything else is on
+        :param (float) return: goal
+        """
+        logging.debug("Turning Chamber light %s." % "on" if goal[0] else "off")
+        self._parameter.Target = goal[0] != 0.0
+        return goal
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        if self._parameter:
+            self._parameter.Unsubscribe(self._updatePower)
+            self._parameter = None
+
+
+class Scanner(model.Emitter):
+    """
+    Represents the Focused Ion Beam (FIB) from Orsay Physics.
+    This is an extension of the model.Emitter class. It contains Vigilant
+    Attributes and setters for magnification, pixel size, translation, resolution,
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
+    to update the pixel size.
+    """
+
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Defines the following VA's and links them to the callbacks from the Orsay server:
+        • power: IntEnumerated, choices={0: "off", 1: "on"}
+        • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
+        """
+
+        super().__init__(name, role, parent=parent, **kwargs)
+
+        self.fibbeam = self.parent._fib_beam  # reference to the FIBBeam object
+        self.fibsource = self.parent._fib_source  # reference to the FIBSource object
+        # In case there is no such sibling, let it raise an exception
+
+        self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"},
+                                          setter=self._blanker_setter)
+        self.fibbeam.blanker.subscribe(self._set_blanker)
+        self.power = model.IntEnumerated(0, choices={0: "off", 1: "on"}, setter=self._power_setter)
+        self.fibsource.gunOn.subscribe(self._set_power)
+
+    def _blanker_setter(self, value):
+        """
+        Setter of the blanker VA. Copies the value to the FIBBeam component
+        """
+        logging.debug("Blanker got set to %s." % str(value))
+        self.fibbeam.blanker.value = value
+        return value
+
+    def _set_blanker(self, value):
+        """
+        Sets the blanker VA to value
+        """
+        logging.debug("Setting blanker to %s." % str(value))
+        self.blanker._value = value  # to not call the setter
+        self.blanker.notify(value)
+        return value
+
+    def _power_setter(self, value):
+        """
+        Setter of the power VA. Sets the FIBSource gunOn VA to the corresponding value
+        """
+        gun_value = value == 1
+        logging.debug("Power set to %d, setting gunOn to %s." % (value, str(gun_value)))
+        self.fibsource.gunOn.value = gun_value
+        return value
+
+    def _set_power(self, value):
+        """
+        Takes the value of FIBSource gunOn VA and puts a corresponding value in power VA
+        """
+        new_value = int(value)
+        logging.debug("FIBSource gunOn set to %s, setting power to %d." % (str(value), new_value))
+        self.power._value = new_value  # to not call the setter
+        self.power.notify(new_value)
+
+    def terminate(self):
+        """
+        Called when Odemis is closed
+        """
+        pass
+
+
+class Focus(model.Actuator):
+    """
+    Represents the Focused Ion Beam (FIB) from Orsay Physics.
+    This is an extension of the model.Actuator class. It controls the depth position of the focus point of the FIB.
+    It uses the formula V2 = V1 + a * d, where V2 is the new voltage of the objective lens, V1 is the old voltage of the
+    objective lens a is a constant coefficient stored in MD_CALIB (should equal 0.18e6 V/m) and d is the relative change
+    in focus distance in meter.
+    """
+
+    def __init__(self, name, role, parent, rng, metadata, **kwargs):
+        """
+        Initialise Focus. Raises AttributeError exception if there is no _fib_beam sibling.
+        :param (tuple (float, float)) rng: the range of the z axis
+        """
+        axes_def = {"z": model.Axis(unit="m", range=rng)}
+        super().__init__(name, role, parent=parent, axes=axes_def, **kwargs)
+
+        self._metadata.update(metadata)  # store the metadata passed through the config file
+
+        self.position = model.VigilantAttribute({"z": 0.0}, readonly=True, unit="m")
+        self.parent._fib_beam.objectiveVoltage.subscribe(self._updatePosition)
+
+        self.baseLensVoltage = 0.0  # V1, the objective lens voltage corresponding to a focus distance of 0
+        # Changes during runtime
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+    def _updatePosition(self, value=None):
+        """
+        Calculates the current focus distance as d = (value - baseLensVoltage) / MD_CALIB
+        :param (float or None) value: the current value of the objective lens voltage. If value is None, this voltage
+        will be read from the FIBBeam sibling.
+        """
+        if value is None:
+            value = self.parent._fib_beam.objectiveVoltage.value
+        new_d = (value - self.baseLensVoltage) / self._metadata[model.MD_CALIB]
+        self.position._set_value({"z": new_d}, force_write=True)
+
+    def _doMoveRel(self, shift, timeout=60):
+        """
+        Calculate the new position of the focus and pass the result to _doMoveAbs
+        :param (dict {"z": value}) shift: value contains the desired change in focus position in meter.
+        :param (int or float) timeout: the maximum number of seconds to wait until a TimeoutError is raised.
+        """
+        shift["z"] += self.position.value["z"]
+        self._doMoveAbs(shift, timeout)
+
+    def _doMoveAbs(self, pos, timeout=60):
+        """
+        Calculated the new voltage as V = baseLensVoltage + MD_CALIB * (current_position + delta).
+        Blocking until the new position is reached or it times out.
+        :param (dict {"z": value}) pos: value contains the desired new focus position in meter.
+        :param (int or float) timeout: the maximum number of seconds to wait until a TimeoutError is raised.
+        """
+        new_voltage = self.baseLensVoltage + self._metadata[model.MD_CALIB] * pos["z"]
+        self.parent._fib_beam.objectiveVoltage.value = new_voltage
+
+        start = time.time()
+        while not self.position.value["z"] == pos['z']:
+            if time.time() - start >= timeout:
+                raise TimeoutError("Timed out changing the objective lens voltage")
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the focus point to pos["z"] meters
+        """
+        self._checkMoveAbs(pos)
+        logging.debug("Moving focus point to %f meter" % pos["z"])
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the focus point by shift["z"] meters
+        """
+        self._checkMoveRel(shift)
+        logging.debug("Moving focus point by %f meter" % shift["z"])
+        return self._executor.submit(self._doMoveRel, shift)
+
+    def stop(self, axes=None):
+        """
+        Cancel all queued calls in the executor
+        """
+        logging.debug("Cancelling the executor")
+        self._executor.cancel()
+
+    def terminate(self):
+        """
+        Stop and shut down the executor
+        """
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None

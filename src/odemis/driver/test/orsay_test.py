@@ -46,6 +46,10 @@ CONFIG_GISRES = {"name": "gis-reservoir", "role": "gis-reservoir"}
 CONFIG_FIBVACUUM = {"name": "fib-vacuum", "role": "fib-vacuum"}
 CONFIG_FIBSOURCE = {"name": "fib-source", "role": "fib-source"}
 CONFIG_FIBBEAM = {"name": "fib-beam", "role": "fib-beam"}
+CONFIG_LIGHT = {"name": "light", "role": "light"}
+CONFIG_SCANNER = {"name": "scanner", "role": "scanner"}
+CONFIG_FOCUS = {"name": "focus", "role": "focus", "rng": (-2e-3, 2e-3),
+                "metadata": {model.MD_CALIB: 0.18e6}}  # MD_CALIB is in [V/m]
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -58,7 +62,10 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
                              "gis-reservoir": CONFIG_GISRES,
                              "fib-vacuum": CONFIG_FIBVACUUM,
                              "fib-source": CONFIG_FIBSOURCE,
-                             "fib-beam": CONFIG_FIBBEAM}
+                             "fib-beam": CONFIG_FIBBEAM,
+                             "light": CONFIG_LIGHT,
+                             "scanner": CONFIG_SCANNER,
+                             "focus": CONFIG_FOCUS}
                 }
 
 NO_SERVER_MSG = "TEST_NOHW is set. No server to contact."
@@ -81,7 +88,7 @@ class TestOrsayStatic(unittest.TestCase):
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         except Exception as e:
             self.fail(e)
-        self.assertEqual(len(oserver.children.value), 9)
+        self.assertEqual(len(oserver.children.value), 12)
 
         oserver.terminate()
 
@@ -1771,6 +1778,230 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.imageFormat.value = init_format  # return to value of before test
         self.fibbeam.translation.value = map(float, init_trans)
         self.fibbeam.resolution.value = init_res
+
+
+class TestLight(unittest.TestCase):
+    """
+    Tests for the light inside the analysis chamber
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest(NO_SERVER_MSG)
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_LIGHT["name"]:
+                cls.light = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_power(self):
+        """Check that the power VA is updated correctly"""
+        connector_test(self, self.light.power, self.datamodel.HybridPlatform.AnalysisChamber.InfraredLight.State,
+                       [([0.0], "False"), ([1.0], "True")],
+                       hw_safe=True, settletime=1)
+
+
+class TestScanner(unittest.TestCase):
+    """
+    Tests for the Focused Ion Beam (FIB) Scanner
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest(NO_SERVER_MSG)
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_FIBBEAM["name"]:
+                cls.fibbeam = child
+            elif child.name == CONFIG_FIBSOURCE["name"]:
+                cls.fibsource = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.oserver.terminate()
+
+    def test_power(self):
+        """Test connection between power VA and FIBSource gunOn VA"""
+        init_value = self.scanner.power.value
+
+        self.scanner.power.value = 0
+        self.assertFalse(self.fibsource.gunOn.value)
+        self.scanner.power.value = 1
+        self.assertTrue(self.fibsource.gunOn.value)
+
+        self.fibsource.gunOn.value = False
+        self.assertEqual(0, self.scanner.power.value)
+        self.fibsource.gunOn.value = True
+        self.assertEqual(1, self.scanner.power.value)
+
+        self.scanner.power.value = init_value  # return to initial value
+
+    def test_blanker(self):
+        """Test communication between blanker VA's of fibbeam and scanner"""
+        init_value = self.fibbeam.blanker.value
+
+        self.fibbeam.blanker.value = True
+        self.assertTrue(self.scanner.blanker.value)
+        self.fibbeam.blanker.value = False
+        self.assertFalse(self.scanner.blanker.value)
+        self.fibbeam.blanker.value = None
+        self.assertIsNone(self.scanner.blanker.value)
+
+        self.scanner.blanker.value = True
+        self.assertTrue(self.fibbeam.blanker.value)
+        self.scanner.blanker.value = False
+        self.assertFalse(self.fibbeam.blanker.value)
+        self.scanner.blanker.value = None
+        self.assertIsNone(self.fibbeam.blanker.value)
+
+        self.fibbeam.blanker.value = init_value  # return to initial value
+
+
+class TestFocus(unittest.TestCase):
+    """
+    Tests for the Focused Ion Beam (FIB) Focus
+    """
+
+    oserver = None
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest(NO_SERVER_MSG)
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        cls.ov = cls.datamodel.HVPSFloatingIon.ObjectiveVoltage  # should only be needed in simulation
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_FIBBEAM["name"]:
+                cls.fibbeam = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+        # Set the objective voltage and base voltage to the same reasonable value
+        cls.init_lens_voltage = cls.ov.Target
+        cls.focus.baseLensVoltage = 10000
+        if TEST_NOHW == "sim":  # Actual stays 0 in simulation, so set it directly
+            cls.ov.Actual = 10000
+        else:
+            cls.fibbeam.objectiveVoltage.value = 10000
+        sleep(0.5)
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Terminate the Orsay client
+        """
+        cls.ov.Target = cls.init_lens_voltage  # return to initial value
+        cls.oserver.terminate()
+
+    def test_position_update(self):
+        """
+        Test that the position changes correctly when the objective lens voltage changes
+        """
+        deltaV = 1
+        deltap = 1e-6 * 50/9  # 1/0.18 == 50/9
+        if TEST_NOHW == "sim":
+            self.ov.Actual = int(self.ov.Actual) + deltaV
+        else:
+            self.fibbeam.objectiveVoltage.value += deltaV
+        sleep(0.5)
+        self.assertAlmostEqual(deltap, self.focus.position.value["z"])
+
+    def testbaseLensVoltage(self):
+        """
+        Test that setting the baseLensVoltage to a certain value and changing the objective lens voltage to the same
+        value, sets position to 0.0
+        """
+        testV = 15000
+        self.focus.baseLensVoltage = testV
+        if TEST_NOHW == "sim":
+            self.ov.Actual = testV
+        else:
+            self.fibbeam.objectiveVoltage.value = testV
+        sleep(0.5)
+        self.assertEqual(0.0, self.focus.position.value["z"])
+
+    def test_moveRel(self):
+        """
+        Test moveRel to see if it has the expected effect on the objective lens voltage
+        """
+        with self.assertRaises(ValueError):
+            self.focus.moveRel({"z": 1})  # try to move way outside the range
+
+        if not TEST_NOHW == 1:
+            self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
+                          "not copy the Target value to Actual. No way to test moveRel.")
+
+        initp = self.focus.position.value["z"]
+
+        deltaV1 = 2
+        deltap1 = 100/9e-6
+        old_voltage = self.fibbeam.objectiveVoltage.value
+        f = self.focus.moveRel({"z": deltap1})
+        f.result()
+        self.assertEqual(deltaV1, self.fibbeam.objectiveVoltage.value - old_voltage)
+        self.assertEqual(initp + deltap1, self.focus.position.value["z"])
+
+    def test_moveAbs(self):
+        """
+        Test moveAbs to see if it has the expected effect on the objective lens voltage
+        """
+        with self.assertRaises(ValueError):
+            self.focus.moveAbs({"z": 1})  # try to move way outside the range
+
+        if not TEST_NOHW == 1:
+            self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
+                          "not copy the Target value to Actual. No way to test moveAbs.")
+
+        position = -3e-6
+        expected_voltage = self.focus.baseLensVoltage + self.focus._metadata[model.MD_CALIB] * position
+        f = self.focus.moveAbs({"z": position})
+        f.result()
+        self.assertEqual(position, self.focus.position.value["z"])
+        self.assertEqual(expected_voltage, self.fibbeam.objectiveVoltage.value)
+
+    def test_stop(self):
+        """
+        Test that stop works
+        """
+        if not TEST_NOHW == 1:
+            self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
+                          "not copy the Target value to Actual. No way to test stop.")
+
+        self.focus.moveAbs({"z": 0.0})
+        self.focus.moveAbs({"z": 1e-4})
+        with self.assertLogs(logger=None, level=logging.DEBUG):
+            self.focus.stop()
 
 
 def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=0.5):

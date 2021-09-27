@@ -3,7 +3,7 @@ Orsay: {
     class: Microscope,
     role: orsaymic,
     children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS", "GIS", "GIS-reservoir", "FIB-vacuum",
-               "FIB-source", "FIB-beam"]
+               "FIB-source", "FIB-beam", "Light", "Scanner", "Focus"]
 }
 
 # Connection to the Orsay server
@@ -23,7 +23,10 @@ Orsay: {
                 gis-reservoir: "GIS-reservoir",
                 fib-vacuum: "FIB-vacuum",
                 fib-source: "FIB-source",
-                fib-beam: "FIB-beam"
+                fib-beam: "FIB-beam",
+                light: "Light",
+                scanner: "Scanner",
+                focus: "Focus"
     }
 }
 
@@ -70,4 +73,23 @@ Orsay: {
 "FIB-beam": {
     role: fib-beam,
     init: {}
+}
+
+"Light": {
+    role: light,
+    init: {}
+}
+
+"Scanner": {
+    role: scanner,
+    init: {}
+}
+
+"Focus": {
+    role: focus,
+    init: {}
+    rng: (-2e-3, 2e-3)  # range of the focus in meter
+    metadata: {
+        MD_CALIB: 0.18e6  # Volt per meter. Read the driver specifications for more details on this value
+    }
 }
