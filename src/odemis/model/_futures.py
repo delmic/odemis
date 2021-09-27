@@ -19,7 +19,7 @@ from __future__ import division
 import collections
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, \
-    PENDING, RUNNING
+    PENDING, RUNNING, CancelledError
 from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
@@ -486,6 +486,67 @@ class ProgressiveFuture(CancellableFuture):
         """
         running = futures.Future.set_running_or_notify_cancel(self)
         if running:
-            self.set_progress(start=time.time())
+            # Set start to current time and end to estimated endtime (difference between current end and start)
+            start, end = self.get_progress()
+            startt = time.time()
+            endt = startt + end - start
+            self.set_progress(start=startt, end=endt)
 
         return running
+
+
+class ProgressiveBatchFuture(ProgressiveFuture):
+    """
+    Representation of a set of ProgressiveFutures which have already been scheduled for execution. The class
+    takes care of time estimates/updates of the batch task. The result is always None.
+    """
+    def __init__(self, futures):
+        """
+        futures (ProgressiveFuture --> float): dict specifying futures and estimated times
+        """
+        self.futures = futures
+        start = time.time()
+        super().__init__(start=start, end=start + sum(self.futures.values()))
+        self.set_running_or_notify_cancel()
+
+        for f in self.futures:
+            f.add_update_callback(self._on_future_update)
+            f.add_done_callback(self._on_future_done)
+
+    def _on_future_update(self, f, start, end):
+        if f.running():  # only care about future which are running, start/end estimates for others not reliable
+            self.futures[f] = end - start
+            self.set_progress(end=self._estimate_end())
+
+    def _on_future_done(self, f):
+        self.set_progress(end=self._estimate_end())
+
+        # Set exception if future failed and cancel all other futures
+        try:
+            ex = f.exception()  # raises CancelledError if cancelled, otherwise returns error
+            if ex:
+                self.cancel()
+                self.set_exception(ex)
+        except CancelledError:
+            pass
+
+        # Set result if all futures are done
+        if all(f.done() for f in self.futures):
+            # always return None, it's not clear what the return value of a batch of tasks should be
+            # alternative would be the return value of the last task, but that is also ambiguous because
+            # we don't require the futures to be carried out sequentially
+            self.set_result(None)
+
+    def _estimate_end(self):
+        start, end = self.get_progress()
+        return start + sum(self.futures[f] for f in self.futures if not f.done())
+
+    def cancel(self):
+        super().cancel()
+        fs = [f for f in self.futures if not f.done()]
+        logging.debug("Canceling %s futures.", len(fs))
+        if not fs:
+            return False  # nothing to cancel
+        for f in fs:
+            f.cancel()
+        return True
