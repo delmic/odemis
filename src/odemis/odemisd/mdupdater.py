@@ -378,7 +378,7 @@ class MetadataUpdater(model.Component):
         """Add ebeam rotation to multibeam metadata to make sure that the thumbnails
         are displayed correctly."""
 
-        if not comp_affected.role == "multibeam":
+        if comp_affected.role != "multibeam":
             return False
 
         def updateRotation(rot, comp_affected=comp_affected):
