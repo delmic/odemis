@@ -1430,6 +1430,7 @@ class FastEMAcquiController(object):
             roc.coordinates.subscribe(self._on_va_change)
 
         self._main_data_model.is_aligned.subscribe(self._on_va_change, init=True)
+        self._main_data_model.is_acquiring.subscribe(self._on_va_change)
 
     def _on_projects(self, projects):
         for p in projects:
@@ -1450,8 +1451,9 @@ class FastEMAcquiController(object):
         self.update_acquisition_time()  # to update the message
 
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self._main_data_model.is_aligned and self.roa_count
-                                and not self._get_undefined_calibrations())
+        self.btn_acquire.Enable(self._main_data_model.is_aligned.value and self.roa_count
+                                and not self._get_undefined_calibrations() and
+                                not self._main_data_model.is_acquiring.value)  # is_acquiring is True during alignment
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
