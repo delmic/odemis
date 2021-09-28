@@ -294,24 +294,47 @@ class ChamberTest(unittest.TestCase):
 class GenericComponentTest(unittest.TestCase):
 
     def test_creation_complete(self):
-        simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
-                                                                                {"value": 0.1, "readonly": True,
-                                                                                 "unit": "", "range": [0, 1]},
-                                                                            "vaChoices":
-                                                                                {"value": 1,
-                                                                                 "choices": set(range(0, 10))},
-                                                                            "vaBool": {"value": True}},
-                                   axes={"x": {"range": (-0.2, 0.2), "unit": "m"},
-                                         "gripper": {"choices": {'open': False, 'closed': True}}})
+        comp = simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
+                                                                                       {"value": 0.1, "readonly": True,
+                                                                                        "unit": "", "range": [0, 1]},
+                                                                                   "vaChoices":
+                                                                                       {"value": 1,
+                                                                                        "choices": set(range(0, 10))},
+                                                                                   "vaBool": {"value": True}},
+                                          axes={"x": {"range": (-0.2, 0.2), "unit": "m"},
+                                                "gripper": {"choices": {'open': False, 'closed': True}}})
+        self.assertEqual(comp.vaRange.value, 0.1)  # check that it has the right value
+        self.assertTrue(comp.vaRange.readonly)  # check that it is readonly
+        self.assertEqual(comp.vaRange.unit, "")  # check the unit is correct
+        self.assertEqual(comp.vaRange.range, (0, 1))  # check the range is set correctly
+        comp.vaChoices.value = 4
+        self.assertEqual(comp.vaChoices.value, 4)  # check the VA can be written to
+        self.assertEqual(comp.vaChoices.choices, set(range(0, 10)))  # check the choices are set correctly
+        self.assertTrue(comp.vaBool)  # check this VA is present too
+
+        f = comp.moveAbs({'x': 0.1})
+        f.result()
+        self.assertEqual(comp.position.value['x'], 0.1)  # position should be exact for simulated component
+        f = comp.moveAbs({'gripper': 'closed'})
+        f.result()
+        self.assertTrue(comp.position.value['gripper'])  # assert the axes are accessible
 
     def test_creation_vas_only(self):
-        simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
-                                                                                {"value": 0.1, "readonly": True,
-                                                                                 "unit": "", "range": [0, 1]},
-                                                                            "vaChoices":
-                                                                                {"value": 1,
-                                                                                 "choices": set(range(0, 10))},
-                                                                            "vaBool": {"value": True}})
+        comp = simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
+                                                                                       {"value": 0.1, "readonly": True,
+                                                                                        "unit": "", "range": [0, 1]},
+                                                                                   "vaChoices":
+                                                                                       {"value": 1,
+                                                                                        "choices": set(range(0, 10))},
+                                                                                   "vaBool": {"value": True}})
+        self.assertEqual(comp.vaRange.value, 0.1)  # check that it has the right value
+        self.assertTrue(comp.vaRange.readonly)  # check that it is readonly
+        self.assertEqual(comp.vaRange.unit, "")  # check the unit is correct
+        self.assertEqual(comp.vaRange.range, (0, 1))  # check the range is set correctly
+        comp.vaChoices.value = 4
+        self.assertEqual(comp.vaChoices.value, 4)  # check the VA can be written to
+        self.assertEqual(comp.vaChoices.choices, set(range(0, 10)))  # check the choices are set correctly
+        self.assertTrue(comp.vaBool)  # check this VA is present too
 
 
 if __name__ == "__main__":

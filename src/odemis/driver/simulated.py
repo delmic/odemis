@@ -372,7 +372,7 @@ class GenericComponent(model.Actuator):
             else:  # for axes which are not of type float
                 maxtime = max(maxtime, 1 / self.speed.value[axis])
             self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
+            logging.info("moving axis %s to %s", axis, self._position[axis])
 
         time.sleep(maxtime)
         self._updatePosition()
