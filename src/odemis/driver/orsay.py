@@ -1914,7 +1914,7 @@ class FIBVacuum(model.HwComponent):
         if not value:
             self._interlockInChamber.Reset.Target = 0
             logging.debug("Attempting to reset the HybridInterlockInChamberVac interlock.")
-        return self.interlockOutChamberTriggered.value
+        return self.interlockInChamberTriggered.value
 
     def _setInterlockOutChamber(self, value):
         """
