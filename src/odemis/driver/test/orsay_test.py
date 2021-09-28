@@ -48,8 +48,7 @@ CONFIG_FIBSOURCE = {"name": "fib-source", "role": "fib-source"}
 CONFIG_FIBBEAM = {"name": "fib-beam", "role": "fib-beam"}
 CONFIG_LIGHT = {"name": "light", "role": "light"}
 CONFIG_SCANNER = {"name": "scanner", "role": "scanner"}
-CONFIG_FOCUS = {"name": "focus", "role": "focus", "rng": (-2e-3, 2e-3),
-                "metadata": {model.MD_CALIB: 0.18e6}}  # MD_CALIB is in [V/m]
+CONFIG_FOCUS = {"name": "focus", "role": "focus", "rng": (-2e-3, 2e-3)}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -1851,20 +1850,20 @@ class TestScanner(unittest.TestCase):
         """Test connection between power VA and FIBSource gunOn VA"""
         init_value = self.scanner.power.value
 
-        self.scanner.power.value = 0
+        self.scanner.power.value = False
         self.assertFalse(self.fibsource.gunOn.value)
-        self.scanner.power.value = 1
+        self.scanner.power.value = True
         self.assertTrue(self.fibsource.gunOn.value)
 
         self.fibsource.gunOn.value = False
-        self.assertEqual(0, self.scanner.power.value)
+        self.assertEqual(False, self.scanner.power.value)
         self.fibsource.gunOn.value = True
-        self.assertEqual(1, self.scanner.power.value)
+        self.assertEqual(True, self.scanner.power.value)
 
         self.scanner.power.value = init_value  # return to initial value
 
     def test_blanker(self):
-        """Test communication between blanker VA's of fibbeam and scanner"""
+        """Test communication between blanker VA's of _fib_beam and scanner"""
         init_value = self.fibbeam.blanker.value
 
         self.fibbeam.blanker.value = True
