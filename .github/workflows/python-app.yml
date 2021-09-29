@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install dependencies
+    - name: Install Odemis dependencies
       run: |
         sudo add-apt-repository ppa:delmic-soft/odemis
         sudo apt-get -y update
@@ -25,6 +25,10 @@ jobs:
         python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
         graphicsmagick cgroup-bin authbind python3-setuptools cython python3-pyro4-delmic
 
+    - name: Install linting dependency
+      run: |
+        sudo apt-get -y install python3-flake8
+
     - name: Run tests from odemis.model
       run: |
         export PYTHONPATH="/home/runner/work/odemis/odemis/src:$PYTHONPATH"
@@ -32,3 +36,7 @@ jobs:
         python3 -m unittest src/odemis/model/test/dataflow_test.py
         python3 -m unittest src/odemis/model/test/futures_test.py
         python3 -m unittest src/odemis/model/test/vattributes_test.py
+
+    - name: Run linting for xt_client driver
+      run: |
+        python3 -m flake8 src/odemis/driver/xt_client.py --max-line-length=120
