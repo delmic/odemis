@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 import copy
 
-import numpy
+import numpy, math
 from odemis import model
 from odemis.util import img
 
@@ -149,15 +149,15 @@ def generate_zlevels(focuser, zrange, zstep):
     # find number of samples 
     n = (zrange[1] - zrange[0]) / abs(zstep) + 1
     if n > MAX_ZLEVELS:
-        raise IndexError("The number of zlevels is too large. Reduce the zstep value.")
+        raise IndexError("The number of zlevels, %s, is too large. The max allowable number of zlevels is %s. Reduce the zstep value." %(n, MAX_ZLEVELS))
     # try the floor and ceil values for the number of samples, and 
     # take the one that give smaller error
-    step_f = (zrange[1] - zrange[0]) / (numpy.floor(n) - 1)
-    step_c = (zrange[1] - zrange[0]) / (numpy.ceil(n) - 1)
+    step_f = (zrange[1] - zrange[0]) / (math.floor(n) - 1)
+    step_c = (zrange[1] - zrange[0]) / (math.ceil(n) - 1)
     # errors 
     ef = abs(step_f - abs(zstep))
     ec = abs(step_c - abs(zstep))
-    n = numpy.floor(n) if ef < ec else numpy.ceil(n)
+    n = math.floor(n) if ef < ec else math.ceil(n)
 
     if zstep > 0:
         return (numpy.linspace(zrange[0], zrange[1], n) + focuser_pos).tolist()

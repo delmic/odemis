@@ -134,8 +134,9 @@ class ZStackAcquisitionTask(object):
         self._zlevels = zlevels
         self._settings_obs = settings_obs
         self._zstep_duration = {}
-        for s,z in zlevels.items():
-            self._zstep_duration[s] = guessActuatorMoveDuration(s.focuser, axis="z", distance=abs(z[0]-z[1]))
+        for s, z in zlevels.items():
+            if len(z) > 1:
+                self._zstep_duration[s] = guessActuatorMoveDuration(s.focuser, axis="z", distance=abs(z[0] - z[1]))
 
     def cancel(self, _):
         """
@@ -143,11 +144,8 @@ class ZStackAcquisitionTask(object):
         (but there might  be some delay (not instantly called) )
         return (Boolean): True if canceled, False otherwise
         """
-        self._future_lock.acquire()
-        if self._future_state is FINISHED: 
-            return False
-        self._future_state = CANCELLED
-        self._future_lock.release()
+        with self._future_lock:
+            self._future_state = CANCELLED
         # cancel the sub-futures
         if self._actuator_f:
             self._actuator_f.cancel()
@@ -176,7 +174,8 @@ class ZStackAcquisitionTask(object):
                     # acquire this single stream, and get the data
                     self._single_acqui_f = acquire([stream], self._settings_obs)
                     data, exp = self._single_acqui_f.result()
-
+                    if exp:
+                        return acquired_data, exp
                     # check if cancellation happened while the acquiring future is working
                     if self._future_state == CANCELLED:
                         raise CancelledError()
@@ -190,11 +189,12 @@ class ZStackAcquisitionTask(object):
                 except CancelledError:
                     raise 
                 except Exception as e:
-                    logging.exception("The acquisition failed because %s" %e)
+                    logging.exception("The acquisition of stream %s failed", stream.name.value)
                     # return what was acquired so far  
                     return acquired_data, e
-              
-                acquired_data.append(data[0])
+
+                if data:
+                    acquired_data.append(data[0])
                 # update the remaining time
                 remaining_t -= stream.estimateAcquisitionTime()
                 self._main_future.set_end_time(time.time() + remaining_t)
@@ -219,7 +219,8 @@ class ZStackAcquisitionTask(object):
                         # acquire this single stream, and get the data
                         self._single_acqui_f = acquire([stream], self._settings_obs)
                         data, exp = self._single_acqui_f.result()
-
+                        if exp:
+                            return acquired_data, exp
                         # check if cancellation happened while the acquiring future is working
                         if self._future_state == CANCELLED:
                             raise CancelledError()
@@ -236,8 +237,10 @@ class ZStackAcquisitionTask(object):
                         logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" %(i+1, stream, e))
                         # TODO handle zstack assembling in case of error 
                         return acquired_data, e
-                    
-                    zstack.append(data[0])
+                        
+                    # only if there is data acquired
+                    if data:
+                        zstack.append(data[0])
                     # update the remaining time
                     remaining_t -= stream.estimateAcquisitionTime()
                     self._main_future.set_end_time(time.time() + remaining_t)
@@ -246,9 +249,8 @@ class ZStackAcquisitionTask(object):
                 acquired_data.append(zcube)
 
         # state that the future has finished
-        self._future_lock.acquire() 
-        self._future_state = FINISHED
-        self._future_lock.release()
+        with self._future_lock:
+            self._future_state = FINISHED
 
         return acquired_data, exp
 
@@ -268,15 +270,12 @@ def estimateZStackAcquisitionTime(streams, zlevels):
             acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
         else:
             acq_time += s.estimateAcquisitionTime() 
-    # find the zstep, if applicable
-    z_pos = next((l for l in zlevels.values() if len(l) > 1), None)
-    if z_pos:
-        zstep = abs(z_pos[0]-z_pos[1])
-        # get the focuser of any of the FM streams
-        focuser = next((s.focuser for s in streams if isinstance(s, FluoStream)), None)
-        tot_zstep_time = (len(z_pos) - 1) * len(zlevels) * \
-            guessActuatorMoveDuration(focuser, axis="z", distance=zstep)
-        acq_time += tot_zstep_time
+    for s in streams:
+        zs = zlevels.get(s, [0])  # concider that streams without zlevels are acquired at a single z
+        if len(zs) > 1 and s.focuser:
+            zstep = abs(zs[0] - zs[1])
+            tot_zstep_time = (len(zs) - 1) *  guessActuatorMoveDuration(s.focuser, axis="z", distance=zstep)
+            acq_time += tot_zstep_time
 
     return acq_time
 

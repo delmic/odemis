@@ -155,7 +155,7 @@ def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATI
     """
     speed = None
     if not (hasattr(actuator, "axes") and isinstance(actuator.axes, dict)):
-        raise ValueError("The component %s is expected to have a dictionary of axes, but it does not." % actuator)  
+        raise ValueError("The component %s should be an actuator, but it is not." % actuator)  
     if not axis in actuator.axes:
         raise KeyError("The actuator component %s is expected to have %s axis, but it does not." % (actuator, axis))
     if model.hasVA(actuator, "speed"):

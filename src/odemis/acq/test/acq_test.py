@@ -506,17 +506,14 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.light_filter = model.getComponent(role="filter")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
-        cls.SEM_focuser = model.getComponent(role="ebeam-focus")
-        cls.FM_focuser = model.getComponent(role="focus")
+        cls.fm_focuser = model.getComponent(role="focus")
 
-        cls.FM_focus_pos = 0.5e-6  # arbitrary current focus position
-        cls.SEM_focus_pos = 0.1  # arbitrary current position
+        cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
 
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        del cls.light
         test.stop_backend()
 
     def setUp(self):
@@ -526,144 +523,32 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self._nb_updates = 0
         self.streams = []
 
-        self.FM_focuser.moveAbs({"z": self.FM_focus_pos}).result()
-        self.SEM_focuser.moveAbs({"z": self.SEM_focus_pos}).result()
-
-    @unittest.skip("Only zstack")
-    def test_only_FM_streams_without_zstack(self):
-        # create streams
-        s1 = stream.FluoStream(
-            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter
-        )
-        s1._focuser = self.FM_focuser
-        s1.excitation.value = sorted(s1.excitation.choices)[0]
-        s2 = stream.FluoStream(
-            "fluo2", self.ccd, self.ccd.data, self.light, self.light_filter
-        )
-        s2._focuser = self.FM_focuser
-        s2.excitation.value = sorted(s2.excitation.choices)[-1]
-        self.streams = [s1, s2]
-
-        # mock the zlevels dictionary
-        zlevels = {}
-        for s in self.streams:
-            zlevels[s] = [s.focuser.position.value["z"]]
-
-        # start the acquisition
-        f = acqmng.acquireZStack(self.streams, zlevels)
-        f.add_update_callback(self._on_progress_update)
-
-        # get the data
-        data, exp = f.result()
-        self.assertIsNone(exp)
-
-        for d in data:
-            self.assertIsInstance(d, model.DataArray)
-            # since no zstack, the center has 2 components
-            self.assertEqual(len(d.metadata[model.MD_POS]), 2)
-            # since no zstack, the pixel size has 2 components
-            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 2)
-
-        # 2 streams, then 2 acquisitions
-        self.assertEqual(len(data), 2)
-
-        # 2 streams, 1 updates per stream, so 2 updates
-        self.assertGreaterEqual(self._nb_updates, 2)
+        self.fm_focuser.moveAbs({"z": self.fm_focus_pos}).result()
 
     def _on_progress_update(self, f, s, e):
         self._nb_updates += 1
 
-    @unittest.skip("Only zstack")
-    def test_only_SEM_streams_without_zstack(self):
-        # create streams
-        sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
-        sems._focuser = self.SEM_focuser
-        self.streams = [sems]
-
-        # mock the zlevels dictionary
-        zlevels = {}
-        for s in self.streams:
-            zlevels[s] = [s.focuser.position.value["z"]]
-
-        # start the acquisition
-        f = acqmng.acquireZStack(self.streams, zlevels)
-        f.add_update_callback(self._on_progress_update)
-
-        # get the data
-        data, exp = f.result()
-        self.assertIsNone(exp)
-
-        for d in data:
-            self.assertIsInstance(d, model.DataArray)
-            # since no zstack, the center has 2 components
-            self.assertEqual(len(d.metadata[model.MD_POS]), 2)
-            # since no zstack, the pixel size has 2 components
-            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 2)
-
-        # 1 streams, so 1 acquisitions
-        self.assertEqual(len(data), 1)
-
-        # 1 streams, 1 updates per stream, so 1 updates
-        self.assertGreaterEqual(self._nb_updates, 1)
-
-    @unittest.skip("Only zstack")
-    def test_FM_and_SEM_without_zstack(self):
-        # create streams
-        s1 = stream.FluoStream(
-            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter
-        )
-        s1._focuser = self.FM_focuser
-        s1.excitation.value = sorted(s1.excitation.choices)[0]
-
-        sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
-        sems._focuser = self.SEM_focuser
-
-        self.streams = [s1, sems]
-
-        # mock the zlevels dictionary
-        zlevels = {}
-        for s in self.streams:
-            zlevels[s] = [s.focuser.position.value["z"]]
-
-        # start the acquisition
-        f = acqmng.acquireZStack(self.streams, zlevels)
-        f.add_update_callback(self._on_progress_update)
-
-        # get the data
-        data, exp = f.result()
-        self.assertIsNone(exp)
-
-        for d in data:
-            self.assertIsInstance(d, model.DataArray)
-            # since no zstack, the center has 2 components
-            self.assertEqual(len(d.metadata[model.MD_POS]), 2)
-            # since no zstack, the pixel size has 2 components
-            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 2)
-
-        # 2 streams, so 2 acquisitions
-        self.assertEqual(len(data), 2)
-
-        # 2 streams, 2 updates per stream, so 2 updates
-        self.assertGreaterEqual(self._nb_updates, 1)
-
     def test_only_FM_streams_with_zstack(self):
         # create streams
         s1 = stream.FluoStream(
-            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter
+            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
         )
-        s1._focuser = self.FM_focuser
         s1.excitation.value = sorted(s1.excitation.choices)[0]
         s2 = stream.FluoStream(
             "fluo2", self.ccd, self.ccd.data, self.light, self.light_filter
         )
-        s2._focuser = self.FM_focuser
+        s2._focuser = self.fm_focuser
         s2.excitation.value = sorted(s2.excitation.choices)[-1]
         self.streams = [s1, s2]
 
-        zlevels_list = generate_zlevels(self.FM_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
         zlevels = {}
         for s in self.streams:
             zlevels[s] = list(zlevels_list)
+
+        # there are about 5 zlevels, so should be greater than 2 seconds
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        self.assertGreaterEqual(est_time, 2)
 
         # start the acquisition
         f = acqmng.acquireZStack(self.streams, zlevels)
@@ -683,17 +568,18 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # 2 streams, so 2 acquisitions
         self.assertEqual(len(data), 2)
 
-        # 2 streams, 2 updates per stream, so 2 updates
+        # 2 streams, 2 updates per stream, so 2 updates at least
         self.assertGreaterEqual(self._nb_updates, 2)
 
     def test_only_SEM_streams_with_zstack(self):
         sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
-        sems._focuser = self.SEM_focuser
         self.streams = [sems]
 
         zlevels = {}
-        for s in self.streams:
-            zlevels[s] = [s.focuser.position.value["z"]]
+
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        # only one sem stream, so should be greater than or equal to 1 sec
+        self.assertGreaterEqual(est_time, 1)
 
         # start the acquisition
         f = acqmng.acquireZStack(self.streams, zlevels)
@@ -717,23 +603,24 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
     def test_FM_and_SEM_with_zstack(self):
         s1 = stream.FluoStream(
-            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter
+            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
         )
-        s1._focuser = self.FM_focuser
         s1.excitation.value = sorted(s1.excitation.choices)[0]
 
         sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
-        sems._focuser = self.SEM_focuser
 
         self.streams = [s1, sems]
 
-        zlevels_list = generate_zlevels(self.FM_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
         zlevels = {}
         for s in self.streams:
             if isinstance(s, stream.FluoStream):
                 zlevels[s] = list(zlevels_list)
-            elif isinstance(s, stream.SEMStream):
-                zlevels[s] = [s.focuser.position.value["z"]]
+
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        # about 5 seconds for fm streams, and 1 sec for sem stream, so should be 
+        # greater than or equal 5 sec
+        self.assertGreaterEqual(est_time, 4)
 
         # start the acquisition
         f = acqmng.acquireZStack(self.streams, zlevels)
@@ -765,11 +652,10 @@ class CRYOSECOMTestCase(unittest.TestCase):
         settings_observer = SettingsObserver(model.getComponents())
         vas = {"exposureTime"}
         s1 = stream.FluoStream(
-            "FM", self.ccd, self.ccd.data, self.light, self.light_filter, detvas=vas)
-        s1._focuser = self.FM_focuser
+            "FM", self.ccd, self.ccd.data, self.light, self.light_filter, detvas=vas, focuser=self.fm_focuser)
         s1.detExposureTime.value = 0.023  # 23 ms
 
-        zlevels_list = generate_zlevels(self.FM_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
         zlevels = {s1: list(zlevels_list)}
 
         f = acquireZStack([s1], zlevels, settings_observer)

@@ -836,8 +836,6 @@ class CryoAcquiController(object):
         for s in self._acquiStreams.value:
             # the other possible streams are SEM which are generally not wanted by the user to be zstacked  
             if isinstance(s, (FluoStream, BrightfieldStream)):  
-                if not self._tab_data.main.focus:
-                    raise LookupError("Focuser was not found in the tab data")
                 levels = generate_zlevels(
                     self._tab_data.main.focus,
                     [self._tab_data.zMin.value, self._tab_data.zMax.value],
