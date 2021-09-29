@@ -294,15 +294,12 @@ class ChamberTest(unittest.TestCase):
 class GenericComponentTest(unittest.TestCase):
 
     def test_creation_complete(self):
-        comp = simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
-                                                                                       {"value": 0.1, "readonly": True,
-                                                                                        "unit": "", "range": [0, 1]},
-                                                                                   "vaChoices":
-                                                                                       {"value": 1,
-                                                                                        "choices": set(range(0, 10))},
-                                                                                   "vaBool": {"value": True}},
+        comp = simulated.GenericComponent(name="test_component", role="test",
+                                          vas={"vaRange": {"value": 0.1, "readonly": True, "unit": "", "range": [0, 1]},
+                                               "vaChoices": {"value": 1, "choices": set(range(0, 10))},
+                                               "vaBool": {"value": True}},
                                           axes={"x": {"range": (-0.2, 0.2), "unit": "m"},
-                                                "gripper": {"choices": {'open': False, 'closed': True}}})
+                                                "gripper": {"choices": {False: 'open', True: 'closed'}}})
         self.assertEqual(comp.vaRange.value, 0.1)  # check that it has the right value
         self.assertTrue(comp.vaRange.readonly)  # check that it is readonly
         self.assertEqual(comp.vaRange.unit, "")  # check the unit is correct
@@ -315,18 +312,15 @@ class GenericComponentTest(unittest.TestCase):
         f = comp.moveAbs({'x': 0.1})
         f.result()
         self.assertEqual(comp.position.value['x'], 0.1)  # position should be exact for simulated component
-        f = comp.moveAbs({'gripper': 'closed'})
+        f = comp.moveAbs({'gripper': True})
         f.result()
         self.assertTrue(comp.position.value['gripper'])  # assert the axes are accessible
 
     def test_creation_vas_only(self):
-        comp = simulated.GenericComponent(name="test_component", role="test", vas={"vaRange":
-                                                                                       {"value": 0.1, "readonly": True,
-                                                                                        "unit": "", "range": [0, 1]},
-                                                                                   "vaChoices":
-                                                                                       {"value": 1,
-                                                                                        "choices": set(range(0, 10))},
-                                                                                   "vaBool": {"value": True}})
+        comp = simulated.GenericComponent(name="test_component", role="test",
+                                          vas={"vaRange": {"value": 0.1, "readonly": True, "unit": "", "range": [0, 1]},
+                                               "vaChoices": {"value": 1, "choices": set(range(0, 10))},
+                                               "vaBool": {"value": True}})
         self.assertEqual(comp.vaRange.value, 0.1)  # check that it has the right value
         self.assertTrue(comp.vaRange.readonly)  # check that it is readonly
         self.assertEqual(comp.vaRange.unit, "")  # check the unit is correct
