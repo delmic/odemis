@@ -1906,6 +1906,7 @@ class TestFocus(unittest.TestCase):
                 cls.fibbeam = child
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
+                cls.focus.updateMetadata({model.MD_CALIB: 0.18e6})  # Volt per meter
         # Set the objective voltage and base voltage to the same reasonable value
         cls.init_lens_voltage = cls.ov.Target
         cls.focus.baseLensVoltage = 10000

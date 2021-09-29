@@ -2780,12 +2780,6 @@ class Focus(model.Actuator):
 
         self._executor = CancellableThreadPoolExecutor(max_workers=1)
 
-        self.updateMetadata({})
-
-    def updateMetadata(self, md):
-        md[model.MD_CALIB] = 0.18e6
-        super().updateMetadata(md)
-
     def _updatePosition(self, value=None):
         """
         Calculates the current focus distance as d = (value - baseLensVoltage) / MD_CALIB
@@ -2814,15 +2808,16 @@ class Focus(model.Actuator):
         Blocking until the new position is reached or it times out.
         :param (dict {"z": value}) pos: value contains the desired new focus position in meter.
         """
+        self._position_changed.clear()
         self.position.subscribe(self._position_changed_event_handler)
 
         new_voltage = self.baseLensVoltage + self._metadata[model.MD_CALIB] * pos["z"]
         self.parent._fib_beam.objectiveVoltage.value = new_voltage
         logging.debug(f"Focus position set to {pos['z']}, setting objective voltage to {new_voltage}")
 
-        start = time.time()
+        endt = time.time() + FOCUS_CHANGE_TIMEOUT
         while not util.almost_equal(self.position.value['z'], pos['z']):
-            if not self._position_changed.wait(FOCUS_CHANGE_TIMEOUT - time.time() + start):
+            if not self._position_changed.wait(endt - time.time()):
                 raise TimeoutError(
                     f"Changing the objective voltage to {new_voltage} took more than {FOCUS_CHANGE_TIMEOUT}"
                     f"s and timed out. Current objective voltage is {self.parent._fib_beam.objectiveVoltage.value}")
