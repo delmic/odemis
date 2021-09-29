@@ -1655,6 +1655,9 @@ class StreamView(View):
         :param pos (dict): Position to be clipped with keys "x" and "y"
         :return(dict): Position clipped to the stage limits with keys "x" and "y"
         """
+        if not self._stage:
+            return pos
+
         stage_limits = self._getStageLimitsXY()
         if not stage_limits["x"][0] <= pos["x"] <= stage_limits["x"][1]:
             pos["x"] = max(stage_limits["x"][0], min(pos["x"], stage_limits["x"][1]))
