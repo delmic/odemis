@@ -618,6 +618,78 @@ def _step_from_range(min_val, max_val):
         logging.exception(msg)
 
 
+class PatternValidator(ValidatorClass):
+
+    def __init__(self, pattern):
+        """ pattern (str): regex pattern of allowed entries """
+        super().__init__()
+        self.Bind(wx.EVT_CHAR, self.on_char)
+        self.entry_pattern = pattern
+
+    def _is_valid_value(self, val):
+        """ Validate the given value
+
+        Args:
+            val (str):
+
+        Returns:
+            (boolean): True if the given string is valid
+
+        """
+
+        entry_pattern = re.compile(self.entry_pattern)
+        return bool(re.match(entry_pattern, val)) and entry_pattern.match(val).end() == len(val)
+
+    def _get_str_value(self):
+        """ Return the string value of the wx.Window to which this validator belongs """
+
+        # Special trick in case we are validating a NumberTextCtrl, which has it's
+        # default 'GetValue' method replaced with one that returns number instances
+
+        fld = self.GetWindow()
+
+        if hasattr(fld, "get_value_str"):
+            val = fld.get_value_str()
+        else:
+            val = fld.GetValue()
+        return val
+
+    def on_char(self, event):
+        """ This method prevents the entry of illegal characters """
+        ukey = event.GetUnicodeKey()
+        # Allow control keys to propagate (most of them are WXK_NONE in unicode)
+        if ukey < wx.WXK_SPACE:
+            event.Skip()
+            return
+
+        field_val = str(self._get_str_value())
+        start, end = self.GetWindow().GetSelection()
+        field_val = field_val[:start] + chr(ukey) + field_val[end:]
+
+        entry_pattern = re.compile(self.entry_pattern)
+        # Make sure the entire string matches the pattern (i.e. the match length equals the string length)
+        if entry_pattern.match(field_val) and entry_pattern.match(field_val).end() == len(field_val):
+            # logging.debug("Field value %s accepted using %s", field_val, self.entry_pattern)
+            event.Skip()
+        else:
+            logging.debug("Field value %s NOT accepted using %s", field_val, entry_pattern)
+
+    def Validate(self, win=None):
+        """ This method is called when the 'Validate()' method is called on the
+        parent of the TextCtrl to which this validator belongs. It can also
+        be called as a standalone validation method.
+
+        returns (boolean)
+        """
+        is_valid = self._is_valid_value(self._get_str_value())
+        # logging.debug("Value '%s' is %s valid", self._get_str_value(), "" if is_valid else "not")
+        return is_valid
+
+    def Clone(self):
+        """ Required method """
+        return PatternValidator(self.entry_pattern)
+
+
 class _NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data
 

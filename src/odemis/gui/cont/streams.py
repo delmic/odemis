@@ -3342,8 +3342,9 @@ class FastEMROAController(object):
         # technolution driver
         roa_project = [p for p in self._tab_data.projects.value if self.model in p.roas.value][0]
         all_project_roas = [roa.name.value for roa in roa_project.roas.value]
-        txt = txt.replace(" ", "-")  # replace spaces with dash
-        txt = re.sub(r'[^A-Za-z0-9_()-]+', '', txt)  # only allow characters from whitelist
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
             txt = make_unique_name(txt, all_project_roas)
             logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
