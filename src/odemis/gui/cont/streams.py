@@ -3170,6 +3170,9 @@ class FastEMProjectController(object):
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
             txt = make_unique_name(txt, [project.name.value for project in self._tab_data.projects.value])
             logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)

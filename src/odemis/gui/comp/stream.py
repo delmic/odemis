@@ -1630,7 +1630,8 @@ class FastEMProjectPanelHeader(wx.Control):
 
     def _add_text_ctrl(self, name):
         """ Add a label control to the header panel """
-        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, name, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE)
+        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, name, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE,
+                               validator=PatternValidator(r'[A-Za-z0-9_()-]+'))
         txt_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         txt_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(txt_ctrl, stretch=True)
