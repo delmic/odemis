@@ -668,6 +668,16 @@ class RepetitionStream(LiveStream):
         """
         return self.SETUP_OVERHEAD
 
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+        return (float, float): width, height in meters
+        """
+        shape = self._scanner.shape
+        pxs = self._scanner.pixelSize.value
+        full_fov = shape[0] * pxs[0], shape[0] * pxs[1]
+        roi = self.roi.value
+        return full_fov[0] * (roi[2] - roi[0]), full_fov[0] * (roi[3] - roi[1])
 
 class CCDSettingsStream(RepetitionStream):
 

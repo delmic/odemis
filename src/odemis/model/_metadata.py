@@ -181,6 +181,8 @@ MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration param
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
 MD_FAV_POS_DEACTIVE = "Favourite position deactive"  # dict of str -> float representing a good position for being "deactive" (eg, mirror parked, lens not in use)
 MD_FAV_POS_COATING = "Favourite position coating"  # dict of str -> float representing a good position for GIS coating
+MD_FAV_POS_ALIGN = "Favourite position alignment"  # dict of str -> float representing a good position to start 3 beam alignment procedure
+MD_FAV_POS_SEM_IMAGING = "Favourite position SEM imaging "  # dict of str -> float representing a good position for SEM imaging
 MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used during imaging
 MD_OVERVIEW_RANGE = "Range for overview map"  # dict str → (float, float): axis name → (min,max): the range of the axes within which overview map is acquired
 MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
@@ -205,3 +207,7 @@ MD_EXTRA_SETTINGS = "Extra settings"
 # Constant for TINT
 TINT_FIT_TO_RGB = "fitrgb"
 TINT_RGB_AS_IS = "rgbasis"
+
+# Rotation for FastEM multi-beam and single-beam scanner
+MD_SINGLE_BEAM_ROTATION = "Single-beam rotation"
+MD_MULTI_BEAM_ROTATION = "Multi-beam rotation"

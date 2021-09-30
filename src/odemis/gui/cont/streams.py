@@ -217,7 +217,7 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
-        if tab_data_model.main.role == "mbsem":
+        if tab_data_model.main.role == "mbsem" and isinstance(stream, acqstream.SEMStream):  # don't show for CCD stream
             # It's a FastEM
             self._add_fastem_ctrls()
 
@@ -306,6 +306,12 @@ class StreamController(object):
                 self._disabled_entries.remove(entry)
 
         self.stream_panel.enable(True)
+
+    def pauseStream(self):
+        """ Pause (deactivate and stop updating) the stream """
+        if self.stream.should_update.value:
+            self.stream.is_active.value = False
+            self.stream.should_update.value = False
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries
@@ -1362,24 +1368,34 @@ class StreamController(object):
     @call_in_wx_main
     def _on_btn_autofocus(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.focuser.applyAutofocus(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autobc(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoContrastBrightness(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autostigmation(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_autofunction_done(self, f):
         self.stream_panel.Enable(True)
+        self.resume()
+        # Don't automatically resume stream, autofunctions can take a long time.
+        # The user might not be at the system after the functions complete, so the stream
+        # would play idly.
 
 
 class StreamBarController(object):
@@ -3366,6 +3382,10 @@ class FastEMCalibrationController(object):
 
         for btn in self.panel.buttons.values():
             btn.Bind(wx.EVT_BUTTON, self._on_button)
+            btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
+
+        # Only enable buttons for scintillators which have been selected in the chamber tab
+        tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
 
     def _on_button(self, evt):
         btn = evt.GetEventObject()
@@ -3382,6 +3402,14 @@ class FastEMCalibrationController(object):
             # Zoom to existing calibration region
             roc_ctrl = self.roc_ctrls[num]
         roc_ctrl.fit_view_to_bbox()
+
+    @call_in_wx_main
+    def _on_active_scintillators(self, scintillators):
+        for num, b in self.panel.buttons.items():
+            if num in scintillators:
+                b.Enable(True)
+            else:
+                b.Enable(False)
 
 
 class FastEMROCController(object):

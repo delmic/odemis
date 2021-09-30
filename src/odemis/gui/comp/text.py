@@ -406,13 +406,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-if wx.MAJOR_VERSION <= 3:
-    ValidatorClass = wx.PyValidator
-else:
-    ValidatorClass = wx.Validator
-
-
-class _NumberValidator(ValidatorClass):
+class _NumberValidator(wx.Validator):
 
     def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
         """ Constructor """

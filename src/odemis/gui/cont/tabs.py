@@ -88,7 +88,7 @@ from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
-from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
+from odemis.gui.cont.microscope import SecomStateController, DelphiStateController, FastEMStateController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL, TOOL_AUTO_FOCUS, \
@@ -1678,6 +1678,12 @@ class FastEMAcquisitionTab(Tab):
             view_ctrl=self.view_controller,
         )
 
+        # Controller for alignment panel
+        self._alignment_controller = acqcont.FastEMAlignmentController(
+            tab_data,
+            panel
+        )
+
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,
@@ -1685,7 +1691,6 @@ class FastEMAcquisitionTab(Tab):
             self._projectbar_controller,
             self._calibrationbar_controller
         )
-        main_data.is_acquiring.subscribe(self.on_acquisition)
 
     @property
     def streams_controller(self):
@@ -1702,11 +1707,6 @@ class FastEMAcquisitionTab(Tab):
     @property
     def calibrationbar_controller(self):
         return self._calibrationbar_controller
-
-    def on_acquisition(self, is_acquiring):
-        # Don't allow changes to acquisition/calibration ROIs during acquisition
-        self.projectbar_controller._project_bar.Enable(not is_acquiring)
-        self.calibrationbar_controller._calibration_bar.Enable(not is_acquiring)
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
@@ -1784,6 +1784,11 @@ class FastEMOverviewTab(Tab):
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
+        # Toolbar
+        self.tb = panel.fastem_overview_toolbar
+        # Add fit view to content to toolbar
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+
     @property
     def streambar_controller(self):
         return self._stream_controller
@@ -1797,8 +1802,10 @@ class FastEMOverviewTab(Tab):
         if is_acquiring:
             self._stream_controller.enable(False)
             self._stream_controller.pause()
+            self._stream_controller.pauseStreams()
         else:
             self._stream_controller.resume()
+            # don't automatically resume streams
             self._stream_controller.enable(True)
 
     @classmethod
@@ -1806,6 +1813,109 @@ class FastEMOverviewTab(Tab):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
             return 2
+        else:
+            return None
+
+    def Show(self, show=True):
+        super().Show(show)
+        if not show:
+            self._stream_controller.pauseStreams()
+
+    def terminate(self):
+        self._stream_controller.pauseStreams()
+
+
+class FastEMChamberTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+        """ FastEM chamber view tab """
+
+        tab_data = guimod.MicroscopyGUIData(main_data)
+        self.main_data = main_data
+        super(FastEMChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("CHAMBER")
+
+        self.panel.selection_panel.create_controls(tab_data.main.scintillator_layout)
+        for btn in self.panel.selection_panel.buttons.values():
+            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
+
+        # Create stream & view
+        self._stream_controller = streamcont.StreamBarController(
+            tab_data,
+            panel.pnl_streams,
+            locked=True
+        )
+
+        # create a view on the microscope model
+        vpv = collections.OrderedDict((
+            (self.panel.vp_chamber,
+                {
+                    "name": "Chamber view",
+                }
+            ),
+        ))
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        view = self.tab_data_model.focussedView.value
+        view.interpolate_content.value = False
+        view.show_crosshair.value = False
+        view.show_pixelvalue.value = False
+
+        if main_data.chamber_ccd:
+            # Just one stream: chamber view
+            self._ccd_stream = acqstream.CameraStream("Chamber view",
+                                      main_data.chamber_ccd, main_data.chamber_ccd.data,
+                                      emitter=None,
+                                      focuser=None,
+                                      detvas=get_local_vas(main_data.chamber_ccd, main_data.hw_settings_config),
+                                      forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                               model.MD_ROTATION: 0}  # Force the CCD as-is
+                                      )
+            # Make sure image has square pixels and full FoV
+            if hasattr(self._ccd_stream, "detBinning"):
+                self._ccd_stream.detBinning.value = (1, 1)
+            if hasattr(self._ccd_stream, "detResolution"):
+                self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
+            ccd_spe = self._stream_controller.addStream(self._ccd_stream)
+            ccd_spe.stream_panel.flatten()  # No need for the stream name
+            self._ccd_stream.should_update.value = True
+        else:
+            logging.info("No CCD found, so chamber view will have no stream")
+
+        # Pump and ebeam state controller
+        self._state_controller = FastEMStateController(tab_data, panel)
+
+    def _on_selection_button(self, evt):
+        # update main_data.active_scintillators and toggle colour for better visibility
+        btn = evt.GetEventObject()
+        num = [num for num, b in self.panel.selection_panel.buttons.items() if b == btn][0]
+        if btn.GetValue():
+            btn.SetBackgroundColour(wx.GREEN)
+            if num not in self.main_data.active_scintillators.value:
+                self.main_data.active_scintillators.value.append(num)
+            else:
+                logging.warning("Scintillator %s has already been selected.", num)
+        else:
+            btn.SetBackgroundColour(odemis.gui.FG_COLOUR_BUTTON)
+            if num in self.main_data.active_scintillators.value:
+                self.main_data.active_scintillators.value.remove(num)
+            else:
+                logging.warning("Scintillator %s not found in list of active scintillators.", num)
+
+    def Show(self, show=True):
+        super().Show(show)
+
+        # Start chamber view when tab is displayed, and otherwise, stop it
+        if self.tab_data_model.main.chamber_ccd:
+            self._ccd_stream.should_update.value = show
+
+    def terminate(self):
+        if self.tab_data_model.main.chamber_ccd:
+            self._ccd_stream.is_active.value = False
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # Tab is used only for FastEM
+        if main_data.role in ("mbsem",):
+            return 3
         else:
             return None
 

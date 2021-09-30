@@ -955,6 +955,8 @@ class PMDSimulator(object):
         self.status = "0000"
         self.indexing = True
 
+        self.executor = CancellableThreadPoolExecutor(1)
+
     def write(self, data):
         self._input_buf += data.decode('ascii')
         msg = ""
@@ -1030,29 +1032,37 @@ class PMDSimulator(object):
                 else:
                     raise ValueError()
             elif cmd == "T":
+                # Absolute move
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
+                    steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
-                    self.move()
+                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    self.move(steps)
                 elif len(args) == 2:
+                    steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
                     self.speed = int(args[1])
-                    self.move()
+                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    self.move(steps)
                 else:
                     raise ValueError()
             elif cmd == "S":
                 self.is_moving = False
             elif cmd == "C":
+                # Relative move
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
                     self.target_pos[axis] += int(args[0])
-                    self.move()
+                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    self.move(steps)
                 elif len(args) == 2:
                     self.target_pos[axis] += int(args[0])
                     self.speed = int(args[1])
-                    self.move()
+                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
+                    self.move(steps)
                 else:
                     raise ValueError()
             elif cmd == "E":
@@ -1091,11 +1101,11 @@ class PMDSimulator(object):
                     elif int(args[0]) == 11:  # spc parameter
                         self._output_buf += ":70000"
             elif cmd == "U":
-                self._output_buf += ":%s" % self.status
                 if self.is_moving:
                     self.status = "0000"
                 else:
-                    self.status = "0010"
+                    self.status = "0050"
+                self._output_buf += ":%s" % self.status
             else:
                 # Syntax error is indicated by inserting _??_ in the response
                 self._output_buf = self._output_buf[:-len(msg)]
@@ -1109,10 +1119,9 @@ class PMDSimulator(object):
 
         self._output_buf += sEOL
 
-    def move(self):
+    def move(self, steps):
         # simple move, same duration for every length, don't care about speed
-        t = Thread(target=self._do_move)
-        t.start()
+        self.executor.submit(self._do_move, steps)
 
     def find_index(self):
         t = Thread(target=self._do_indexing)
@@ -1123,8 +1132,16 @@ class PMDSimulator(object):
         time.sleep(1)
         self.indexing = False
 
-    def _do_move(self):
+    def _do_move(self, steps):
         self.is_moving = True
-        time.sleep(1)
+        startt = time.time()
+        dur = abs(steps / self.speed)
+        # be a bit faster than the real hardware because the real hardware can move multiple axes at the same time
+        dur /= 2
+        while time.time() < startt + dur:
+            if not self.is_moving:  # stopped
+                return
+            else:
+                time.sleep(0.1)
         self.current_pos = copy.deepcopy(self.target_pos)
         self.is_moving = False

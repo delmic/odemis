@@ -95,7 +95,7 @@ class Chamber(model.Actuator):
                 chp[PRESSURES[p]] = p
             except KeyError:
                 raise ValueError("Pressure position %s is unknown" % (p,))
-        axes = {"pressure": model.Axis(unit="Pa", choices=chp)}
+        axes = {"vacuum": model.Axis(unit="Pa", choices=chp)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
         # For simulating moves
         self._position = PRESSURE_VENTED # last official position
@@ -105,7 +105,7 @@ class Chamber(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    {"pressure": self._position},
+                                    {"vacuum": self._position},
                                     unit="Pa", readonly=True)
         if has_pressure:
             # Almost the same as position, but gives the current position
@@ -160,7 +160,7 @@ class Chamber(model.Actuator):
         """
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
-        self.position._value = {"pressure": self._position}
+        self.position._value = {"vacuum": self._position}
         self.position.notify(self.position.value)
 
     @isasync
@@ -180,7 +180,7 @@ class Chamber(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
 
-        new_pres = pos["pressure"]
+        new_pres = pos["vacuum"]
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self._getDuration(new_pres))

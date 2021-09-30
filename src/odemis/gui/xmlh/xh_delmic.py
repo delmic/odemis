@@ -280,6 +280,33 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
 
 
+class FastEMAlignmentBarXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'FastEMAlignmentBar')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'FastEMAlignmentBar':
+            parent = self.GetParentAsWindow()
+            w = strm.FastEMAlignmentBar(parent,
+                                        self.GetID(),
+                                        self.GetPosition(),
+                                        self.GetSize(),
+                                        self.GetStyle(),
+                                        add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(FastEMAlignmentBarXmlHandler)
+
+
 class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -733,20 +760,6 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "UnitFloatSlider")
-
-    # TODO: can be removed once it's available in wxPython (3.0... ?)
-    def GetFloat(self, param, defaultv=0):
-        # there is a bug in wxPython, which doesn't export GetFloat
-        # => recreate in Python
-        # self, String param, long defaultv=0
-
-        string = self.GetParamValue(param)
-
-        try:
-            value = float(string)
-        except ValueError:
-            logging.error("Float param incorrect %s", string)
-        return value
 
     def DoCreateResource(self):
         assert self.GetInstance() is None

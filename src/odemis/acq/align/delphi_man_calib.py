@@ -218,7 +218,7 @@ def man_calib(logpath, keep_loaded=False):
 
     try:
         # Get pressure values
-        pressures = chamber.axes["pressure"].choices
+        pressures = chamber.axes["vacuum"].choices
         vacuum_pressure = min(pressures.keys())
         vented_pressure = max(pressures.keys())
         if overview_ccd:
@@ -273,11 +273,11 @@ def man_calib(logpath, keep_loaded=False):
         # Default value for the stage offset
         position = (offset[0] * scaling[0], offset[1] * scaling[1])
 
-        if keep_loaded and chamber.position.value["pressure"] == vacuum_pressure:
+        if keep_loaded and chamber.position.value["vacuum"] == vacuum_pressure:
             logging.info("Skipped optical lens detection, will use previous value %s", position)
         else:
             # Move to the overview position first
-            f = chamber.moveAbs({"pressure": overview_pressure})
+            f = chamber.moveAbs({"vacuum": overview_pressure})
             f.result()
 
             # Reference the (optical) stage
@@ -304,7 +304,7 @@ def man_calib(logpath, keep_loaded=False):
             f.result()
 
             # Move to SEM
-            f = chamber.moveAbs({"pressure": vacuum_pressure})
+            f = chamber.moveAbs({"vacuum": vacuum_pressure})
             f.result()
 
         # Set basic e-beam settings
@@ -674,7 +674,7 @@ def man_calib(logpath, keep_loaded=False):
         if not keep_loaded:
             # Eject the sample holder
             print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
-            f = chamber.moveAbs({"pressure": vented_pressure})
+            f = chamber.moveAbs({"vacuum": vented_pressure})
             f.result()
 
         ans = input_col(ANSI_MAGENTA, "Press Enter to close")
