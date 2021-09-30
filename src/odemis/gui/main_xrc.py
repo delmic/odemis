@@ -858,6 +858,9 @@ class xrcfr_overview_acq(wx.Dialog):
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
+        self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
+        self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
+        self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -7967,22 +7970,24 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <flag>wxTOP|wxEXPAND</flag>
-                    <border>20</border>
-                    <object class="wxBoxSizer">
+                    <object class="wxFlexGridSizer">
+                      <cols>2</cols>
+                      <rows>4</rows>
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>ZStack steps</label>
-                          <fg>#BFBFBF</fg>
+                          <fg>#DDDDDD</fg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                           <font>
-                            <size>11</size>
+                            <size>9</size>
                           </font>
                         </object>
                         <option>0</option>
-                        <flag>wxLEFT</flag>
+                        <flag>wxLEFT|wxTOP</flag>
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
@@ -8001,7 +8006,117 @@ def __init_resources():
                         <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                         <border>10</border>
                       </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Tiles number x</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                            <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerCtrl" name="tiles_number_x">
+                          <size>-1,15</size>
+                          <value>10</value>
+                          <key_step>0.1</key_step>
+                          <min>1</min>
+                          <max>1000</max>
+                          <unit/>
+                          <scale>linear</scale>
+                          <accuracy>4</accuracy>
+                          <font>
+                              <size>9</size>
+                              <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Tiles number y</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerCtrl" name="tiles_number_y">
+                          <size>-1,15</size>
+                          <value>10</value>
+                          <key_step>0.1</key_step>
+                          <min>1</min>
+                          <max>1000</max>
+                          <unit/>
+                          <scale>linear</scale>
+                          <accuracy>4</accuracy>
+                          <font>
+                              <size>9</size>
+                              <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Tiled area size</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="area_size_txt">
+                          <label>...</label>
+                          <fg>#777777</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <growablecols>1</growablecols>
                     </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>3</border>
                   </object>
                 </object>
                 <size>400,-1</size>
