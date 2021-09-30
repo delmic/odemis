@@ -31,8 +31,4 @@ jobs:
     - name: Run tests from odemis.model
       run: |
         export PYTHONPATH="/home/runner/work/odemis/odemis/src:$PYTHONPATH"
-        python3 -m unittest src/odemis/model/test/components_test.py
-        python3 -m unittest src/odemis/model/test/dataflow_test.py
-        python3 -m unittest src/odemis/model/test/futures_test.py
-        python3 -m unittest src/odemis/model/test/remote_test.py
-        python3 -m unittest src/odemis/model/test/vattributes_test.py
+        python3 -m unittest discover -s src/odemis/model/test -p "*_test.py" --verbose
