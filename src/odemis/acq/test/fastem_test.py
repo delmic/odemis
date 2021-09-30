@@ -37,19 +37,10 @@ from odemis import model
 from odemis.acq import fastem, stream
 from odemis.util import test, img
 
-# Accept three values for TEST_NOHW
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
-# * TEST_NOHW = sim: technolution_asm_simulator/simulator2/run_the_simulator.py
-# * TEST_NOHW = 0 (or anything else): connected to the real hardware
-TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
-if TEST_NOHW == "sim":
-    pass
-elif TEST_NOHW == "0":
-    TEST_NOHW = False
-elif TEST_NOHW == "1":
-    TEST_NOHW = True
-else:
-    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
+# * TEST_NOHW = 0: connected to the real hardware or simulator
+# technolution_asm_simulator/simulator2/run_the_simulator.py
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default is HW/simulator testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -154,7 +145,7 @@ class TestFastEMROA(unittest.TestCase):
     def setUp(self):
         self.descanner.physicalFlybackTime = 250e-6  # TODO why is this necessary??
 
-    def test_estimate_roa_time(self):
+    def test_estimate_acquisition_time(self):
         """Check that the estimated time for one ROA (megafield) is calculated correctly."""
         # Use float for number of fields, in order to not end up with additional fields scanned and thus an
         # incorrectly estimated roa acquisition time.
@@ -182,7 +173,7 @@ class TestFastEMROA(unittest.TestCase):
         estimated_roa_acq_time = (cell_res[0] * dwell_time + flyback) * cell_res[1] \
                                  * math.ceil(x_fields) * math.ceil(y_fields)
         # get roa acquisition time
-        roa_acq_time = roa.estimate_roa_time()
+        roa_acq_time = roa.estimate_acquisition_time()
 
         self.assertAlmostEqual(estimated_roa_acq_time, roa_acq_time)
 
@@ -208,7 +199,7 @@ class TestFastEMROA(unittest.TestCase):
 
         expected_indices = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]  # (col, row)
 
-        field_indices = roa.calculate_field_indices()
+        field_indices = roa._calculate_field_indices()
 
         self.assertListEqual(expected_indices, field_indices)
 
@@ -240,7 +231,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.multibeam.resolution.value = (6400, 6400)  # don't change
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
-        # Note: Do not change those values; calculate_field_indices handles floating point errors the same way
+        # Note: Do not change those values; _calculate_field_indices handles floating point errors the same way
         # as an ROA that does not match an integer number of field indices by just adding an additional row or column
         # of field images.
         top = -0.002  # top corner coordinate of ROA in stage coordinates in meter
@@ -363,7 +354,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.assertTrue(f.running())
         f.cancel()
 
-        self.assertRaises(CancelledError, f.result, 1)  # TODO what is the 1 for? @Eric
+        self.assertRaises(CancelledError, f.result, 1)  # add timeout = 1s in case cancellation error was not raised
         self.assertGreaterEqual(self.updates, 3)  # at least one update at cancellation
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
@@ -381,7 +372,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         # However, for fast em acquisitions we use stage-scan, which scans along the multiprobe axes.
         # FIXME: This test does not consider yet, that ROA coordinates need to be transformed into the
         #  correct coordinate system. Replace role='stage' with role='stage-scan' when function available.
-        # Note: Do not change those values; calculate_field_indices handles floating point errors the same way
+        # Note: Do not change those values; _calculate_field_indices handles floating point errors the same way
         # as an ROA that does not match an integer number of field indices by just adding an additional row or column
         # of field images.
         top = -0.002  # top corner coordinate of ROA in stage coordinates in meter

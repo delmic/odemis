@@ -21,8 +21,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 import logging
 import math
 import os
@@ -78,9 +76,10 @@ class FastEMROA(object):
         self._descanner = descanner
         self._detector = detector
 
-        # Calculate how many field images are needed to cover the full ROA.
-        self.field_indices = self.calculate_field_indices()
-        self.coordinates.subscribe(self.on_coordinates)
+        # List of tuples(int, int) containing the position indices of each field to be acquired.
+        # Automatically updated when the coordinates change.
+        self.field_indices = []
+        self.coordinates.subscribe(self.on_coordinates, init=True)
 
         # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
         #  it should be checked
@@ -92,9 +91,9 @@ class FastEMROA(object):
                             ROA in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
         """
-        self.field_indices = self.calculate_field_indices()
+        self.field_indices = self._calculate_field_indices()
 
-    def estimate_roa_time(self):
+    def estimate_acquisition_time(self):
         """
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
         :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
@@ -104,12 +103,13 @@ class FastEMROA(object):
 
         return tot_time
 
-    def calculate_field_indices(self):
+    def _calculate_field_indices(self):
         """
         Calculates the number of single field images needed to cover the ROA (region of acquisition). Determines the
-        corresponding indices of the field images in a matrix covering the ROA. If the ROA cannot be resembled
+        corresponding indices of the field images in a matrix covering the ROA. If the ROA cannot be covered
         by an integer number of single field images, the number of single field images is increased to cover the
-        full region. An ROA is a rectangle.
+        full region. An ROA is a rectangle. Its coordinates are defined in the role="stage" coordinate system and
+        is thus aligned with the axes of the sample carrier.
 
         :return: (list of nested tuples (col, row)) The column and row field indices of the field images in the order
                  they should be acquired. The tuples are re-ordered so that the single field images resembling the
@@ -124,6 +124,7 @@ class FastEMROA(object):
         # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
         n_hor_fields = math.ceil(abs(r - l) / field_size[0])
         n_vert_fields = math.ceil(abs(b - t) / field_size[1])
+        # Note: Megafields get asymmetrically extended towards the right and bottom.
 
         # Create the field indices based on the number of horizontal and vertical fields.
         field_indices = numpy.ndindex(n_vert_fields, n_hor_fields)
@@ -278,10 +279,10 @@ class AcquisitionTask(object):
         # set the sub-directories (<acquisition date>/<project name>) and megafield id
         self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
 
-        exceptions = None
+        exception = None
 
         # Get the estimated time for the roa.
-        total_roa_time = self._roa.estimate_roa_time()
+        total_roa_time = self._roa.estimate_acquisition_time()
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
         logging.info("Starting acquisition of mega field, with expected duration of %f s", total_roa_time)
@@ -295,13 +296,7 @@ class AcquisitionTask(object):
             # Acquire the single field images.
             self.acquire_roa(dataflow)
 
-            # In case the acquisition was cancelled, before the future returned, raise cancellation error
-            # after unsubscribing from the dataflow
-            if self._cancelled:
-                self._future.cancel()
-                raise CancelledError()
-
-        except CancelledError:
+        except CancelledError:  # raised in acquire_roa()
             logging.debug("Acquisition was cancelled.")
             raise
 
@@ -312,7 +307,7 @@ class AcquisitionTask(object):
             # If image data was already acquired, just log a warning.
             logging.warning("Exception during roa acquisition (after some data has already been acquired).",
                             exc_info=True)
-            exceptions = ex  # let the caller handle the exception
+            exception = ex  # let the caller handle the exception
 
         finally:
             # Remove references to the megafield once the acquisition is finished/cancelled.
@@ -322,7 +317,7 @@ class AcquisitionTask(object):
             logging.debug("Finish megafield acquisition.")
             dataflow.unsubscribe(self.image_received)
 
-        return self.megafield, exceptions
+        return self.megafield, exception
 
     def acquire_roa(self, dataflow):
         """
@@ -355,10 +350,10 @@ class AcquisitionTask(object):
 
             self._fields_remaining.discard(field_idx)
 
-            # Cancel the acquisition and return to the run function and handle the cancellation there.
+            # In case the acquisition was cancelled by a client, before the future returned, raise cancellation error.
             # Note: The acquisition of the current single field image (tile) is still finished though.
             if self._cancelled:
-                return
+                raise CancelledError()
 
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
@@ -420,8 +415,13 @@ class AcquisitionTask(object):
 
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
         f = self._stage.moveAbs({'x': pos_hor, 'y': pos_vert})  # move the stage
-        f.result()
-        logging.debug("Moved to stage position %s" % (self._stage.position.value,))
+        timeout = 100
+        try:
+            f.result(timeout=timeout)  # don't wait forever
+            logging.debug("Moved to stage position %s" % (self._stage.position.value,))
+        except TimeoutError:
+            raise TimeoutError("Stage movement to position (%s, %s) timed out after %s s."
+                               % (timeout, pos_hor, pos_vert))
 
 
 ########################################################################################################################
