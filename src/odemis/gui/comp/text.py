@@ -438,7 +438,7 @@ class _NumberValidator(wx.Validator):
         }
 
         if (
-                (min_val is None or min_val < 0) or
+                (min_val is not None and min_val < 0) or
                 (max_val is not None and max_val < 0) or
                 (choices and min(choices) < 0)
         ):
