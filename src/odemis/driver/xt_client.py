@@ -1018,7 +1018,7 @@ class SEM(model.HwComponent):
         Get the min/max values of the compound lens focus mode.
 
         :return (dict str -> Any): The range of the focusing mode for the key "range"
-           (as a tuple min/max). The unit for key "unit", as a string or None.
+           (as a tuple min/max). The unit for key "unit", as a string or None. 
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1182,7 +1182,7 @@ class Scanner(model.Emitter):
             resolution = tuple(self.parent.get_resolution())
             res_choices = set(r for r in RESOLUTIONS
                               if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
-                              )
+                             )
             self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
             self._resolution = resolution
 

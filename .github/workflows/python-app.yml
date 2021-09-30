@@ -27,9 +27,6 @@ jobs:
 
         sudo mkdir /var/run/odemisd
         sudo chmod a+rw /var/run/odemisd
-    - name: Install linting dependency
-      run: |
-        sudo apt-get -y install python3-flake8
 
     - name: Run tests from odemis.model
       run: |
@@ -39,7 +36,3 @@ jobs:
         python3 -m unittest src/odemis/model/test/futures_test.py
         python3 -m unittest src/odemis/model/test/remote_test.py
         python3 -m unittest src/odemis/model/test/vattributes_test.py
-
-    - name: Run linting for xt_client driver
-      run: |
-        python3 -m flake8 src/odemis/driver/xt_client.py --max-line-length=120
