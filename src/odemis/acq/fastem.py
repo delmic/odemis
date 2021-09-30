@@ -3,6 +3,8 @@
 """
 Created on 19 Apr 2021
 
+@author: Philip Winkler, Éric Piel, Thera Pals, Sabrina Rossberger
+
 Copyright © 2021 Philip Winkler, Delmic
 
 This file is part of Odemis.
@@ -18,30 +20,50 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
 import logging
 import math
+import os
+import threading
+import time
+from concurrent.futures import CancelledError
+
+import numpy
+
 from odemis import model, util
 from odemis.acq import stitching
 from odemis.acq.stitching import REGISTER_IDENTITY
 from odemis.acq.stream import SEMStream
-import time
+from odemis.util import TimeoutError
 
 
 SINGLE_BEAM_ROTATION_DEFAULT = 0  # 0 is typically a good guess (better than multibeam rotation of ~0.0157 rad)
 MULTI_BEAM_ROTATION_DEFAULT = 0
 
-# The executor is a single object, independent of how many times the module is loaded.
+# The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
 
 class FastEMROA(object):
-    """ Representation of a FastEM ROA (region of acquisition). """
+    """
+    Representation of a FastEM ROA (region of acquisition).
+    The region of acquisition is a megafield image, which consists of a sequence of single field images. Each single
+    field image itself consists of cell images. The number of cell images is defined by the shape of the multiprobe
+    and detector.
+    """
 
-    def __init__(self, name, coordinates, roc):
+    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector):
         """
-        :param name: (str) name of the ROA
-        :param coordinates: (float, float, float, float) l, t, r, b coordinates in m
-        :param roc: (FastEMROC) corresponding region of calibration
+        :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
+                     the external storage.
+        :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box
+                            coordinates of the ROA in [m]. The coordinates are in the sample carrier coordinate
+                            system, which corresponds to the component with role='stage'.
+        :param roc: (FastEMROC) Corresponding region of calibration (ROC).
+        :param asm: (technolution.AcquisitionServer) The acquisition server module component.
+        :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
+        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
+        :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -49,15 +71,91 @@ class FastEMROA(object):
                                                  cls=(int, float),
                                                  unit='m')
         self.roc = model.VigilantAttribute(roc)
+        self._asm = asm
+        self._multibeam = multibeam
+        self._descanner = descanner
+        self._detector = detector
 
+        # List of tuples(int, int) containing the position indices of each field to be acquired.
+        # Automatically updated when the coordinates change.
+        self.field_indices = []
+        self.coordinates.subscribe(self.on_coordinates, init=True)
+
+        # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
+        #  it should be checked
+
+    def on_coordinates(self, coordinates):
+        """Recalculate the field indices when the coordinates of the region of acquisition (ROA) have changed
+        (e.g. resize, moving).
+        :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
+                            ROA in [m]. The coordinates are in the sample carrier coordinate system, which
+                            corresponds to the component with role='stage'.
+        """
+        self.field_indices = self._calculate_field_indices()
+
+    def estimate_acquisition_time(self):
+        """
+        Computes the approximate time it will take to run the ROA (megafield) acquisition.
+        :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
+        """
+        field_time = self._detector.frameDuration.value
+        tot_time = len(self.field_indices) * field_time
+
+        return tot_time
+
+    def _calculate_field_indices(self):
+        """
+        Calculates the number of single field images needed to cover the ROA (region of acquisition). Determines the
+        corresponding indices of the field images in a matrix covering the ROA. If the ROA cannot be covered
+        by an integer number of single field images, the number of single field images is increased to cover the
+        full region. An ROA is a rectangle. Its coordinates are defined in the role="stage" coordinate system and
+        is thus aligned with the axes of the sample carrier.
+
+        :return: (list of nested tuples (col, row)) The column and row field indices of the field images in the order
+                 they should be acquired. The tuples are re-ordered so that the single field images resembling the
+                 ROA are acquired first rows then columns.
+        """
+        l, t, r, b = self.coordinates.value  # tuple of floats: l, t, r, b coordinates in m
+        px_size = self._multibeam.pixelSize.value
+        field_res = self._multibeam.resolution.value
+
+        # The size of a field consists of the effective cell images excluding overscanned pixels.
+        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])
+        # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
+        n_hor_fields = math.ceil(abs(r - l) / field_size[0])
+        n_vert_fields = math.ceil(abs(b - t) / field_size[1])
+        # Note: Megafields get asymmetrically extended towards the right and bottom.
+
+        # Create the field indices based on the number of horizontal and vertical fields.
+        field_indices = numpy.ndindex(n_vert_fields, n_hor_fields)
+
+        # ndindex returns an iterator, the values need to be returned as a list.
+        # The fields should be acquired per row, therefore when looping over the field indices the vertical fields
+        # should initially stay constant. The indices are swapped, because the dataflow expects first the column
+        # index, then the row index. ((0,0), (1,0), (2,0), ...., (0,2), (1,2), ...)
+        field_indices = [f[::-1] for f in field_indices]
+
+        return field_indices
+
+
+# TODO add ROC acquisition to acquisition task
 
 class FastEMROC(object):
-    """ Representation of a FastEM ROC (region of calibration). """
+    """
+    Representation of a FastEM ROC (region of calibration).
+    The region of calibration is a single field image acquired with the acquisition server component and typically
+    acquired at a region with no sample section on the scintillator. The calibration image serves for the dark
+    offset and digital gain calibration for the megafield acquisition. Typically, one calibration region per
+    scintillator is acquired and assigned with all ROAs on the respective scintillator.
+    """
 
     def __init__(self, name, coordinates):
         """
-        :param name: (str) name of the ROC
-        :param coordinates: (float, float, float, float) l, t, r, b coordinates in m
+        :param name: (str) Name of the region of calibration (ROC). It is the name of the megafield (id) as stored on
+                     the external storage.
+        :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
+                            ROC in [m]. The coordinates are in the sample carrier coordinate system, which
+                            corresponds to the component with role='stage'.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -65,18 +163,43 @@ class FastEMROC(object):
                                                  cls=(int, float),
                                                  unit='m')
         self.parameters = None  # calibration object with all relevant parameters
+        # TODO parameters are the darkOffset and digitalGain values for mppc VAs; set before starting acquisition
+        # if None -> acquire, if not None, don't acquire again
 
 
-# TODO: replace fake testing functions with actual acquisition
-def acquire(roa, path):
+def acquire(roa, path, multibeam, descanner, detector, stage):
     """
-    :param roa: (FastEMROA) acquisition region to be acquired
-    :param path: (str) path and filename of the acquisition on the server
-    :returns: (ProgressiveFuture): acquisition future
+    Start a megafield acquisition task for a given region of acquisition (ROA).
+
+    :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
+    :param path: (str) Path on the external storage where the image data is stored. Here, it is possible
+                to specify sub-directories (such as acquisition date and project name) additional to the main
+                path as specified in the component.
+                The ASM will create the directory on the external storage, including the parent directories,
+                if they do not exist.
+    :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
+    :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
+    :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+    :param stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
+        aligned with the x and y axes of the multiprobe and the multibeam scanner.
+
+    :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
+             a tuple that contains:
+                (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
+                (Exception or None): Exception raised during the acquisition or None.
     """
-    # TODO: pass path through attribute on ROA instead of second argument?
     f = model.ProgressiveFuture()
-    _executor.submitf(f, _run_fake_acquisition)
+
+    # TODO: pass path through attribute on ROA instead of argument?
+    # Create a task that acquires the megafield image.
+    task = AcquisitionTask(multibeam, descanner, detector, stage, roa, path, f)
+
+    f.task_canceller = task.cancel  # lets the future know how to cancel the task.
+
+    # Connect the future to the task and run it in a thread.
+    # task.run is executed by the executor and runs as soon as no other task is executed
+    _executor.submitf(f, task.run)
+
     return f
 
 
@@ -90,14 +213,218 @@ def _configure_multibeam_hw(scanner):
                         scanner.rotation.value)
 
 
-def _run_fake_acquisition():
-    time.sleep(2)
+class AcquisitionTask(object):
+    """
+    The acquisition task for a single region of acquisition (ROA, megafield).
+    An ROA consists of multiple single field images.
+    """
+
+    def __init__(self, multibeam, descanner, detector, stage, roa, path, future):
+        """
+        :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
+        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
+        :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
+        :param path: (str) Path on the external storage where the image data is stored. Here, it is possible
+                    to specify sub-directories (such as acquisition date and project name) additional to the main
+                    path as specified in the component.
+                    The ASM will create the directory on the external storage, including the parent directories,
+                    if they do not exist.
+        :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
+                        is a tuple that contains:
+                            (model.DataArray): The acquisition data, which depends on the value of the
+                                               detector.dataContent VA.
+                            (Exception or None): Exception raised during the acquisition or None.
+        """
+        self._multibeam = multibeam
+        self._descanner = descanner
+        self._detector = detector
+        self._stage = stage
+        self._roa = roa  # region of acquisition object
+        self._roc = roa.roc  # region of calibration object
+        self._path = path  # sub-directories on external storage
+        self._future = future
+
+        # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
+        self.megafield = {}
+        self.field_idx = (0, 0)
+
+        # TODO the .dataContent might need to be set somewhere else in future when using a live stream for
+        #  display of thumbnail images -> .dataContent = "thumbnail"
+        # set size of returned data array
+        # The full image data is directly stored via the asm on the external storage.
+        self._detector.dataContent.value = "empty"  # dataArray of shape (0,0) is returned with some MD
+
+        # list of field image indices that still need to be acquired {(0,0), (1,0), (0,1), ...}
+        self._fields_remaining = set(self._roa.field_indices)  # Used for progress update.
+
+        # keep track if future was cancelled or not
+        self._cancelled = False
+
+        # Threading event, which keeps track of when image data has been received from the detector.
+        self._data_received = threading.Event()
+
+    def run(self):
+        """
+        Runs the acquisition of one ROA (megafield).
+        :returns:
+            megafield: (list of DataArrays) A list of the raw image data. Each data array (entire field, thumbnail,
+                or zero array) represents one single field image within the roa (megafield).
+            exception: (Exception or None) Exception raised during the acquisition. If some single field image data has
+                already been acquired, exceptions are not raised, but returned.
+        :raise:
+            Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
+        """
+
+        # set the sub-directories (<acquisition date>/<project name>) and megafield id
+        self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
+
+        exception = None
+
+        # Get the estimated time for the roa.
+        total_roa_time = self._roa.estimate_acquisition_time()
+        # No need to set the start time of the future: it's automatically done when setting its state to running.
+        self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
+        logging.info("Starting acquisition of mega field, with expected duration of %f s", total_roa_time)
+
+        dataflow = self._detector.data
+
+        try:
+            logging.debug("Starting megafield acquisition.")
+            dataflow.subscribe(self.image_received)
+
+            # Acquire the single field images.
+            self.acquire_roa(dataflow)
+
+        except CancelledError:  # raised in acquire_roa()
+            logging.debug("Acquisition was cancelled.")
+            raise
+
+        except Exception as ex:
+            # Check if any field images have already been acquired; if not => just raise the exception.
+            if len(self._fields_remaining) == len(self._roa.field_indices):
+                raise
+            # If image data was already acquired, just log a warning.
+            logging.warning("Exception during roa acquisition (after some data has already been acquired).",
+                            exc_info=True)
+            exception = ex  # let the caller handle the exception
+
+        finally:
+            # Remove references to the megafield once the acquisition is finished/cancelled.
+            self._fields_remaining.clear()
+
+            # Finish the megafield also if an exception was raised, in order to enable a new acquisition.
+            logging.debug("Finish megafield acquisition.")
+            dataflow.unsubscribe(self.image_received)
+
+        return self.megafield, exception
+
+    def acquire_roa(self, dataflow):
+        """
+        Acquire the single field images that resemble the region of acquisition (ROA, megafield image).
+        :param dataflow: (model.DataFlow) The dataflow on the detector.
+        :return: (list of DataArrays): A list of the raw image data. Each data array (entire field, thumbnail,
+                                       or zero array) represents one single field image within the ROA (megafield).
+        """
+
+        total_field_time = self._detector.frameDuration.value
+        timeout = total_field_time + 5  # TODO what margin should be used?
+
+        # Acquire all single field images, which are automatically offloaded to the external storage.
+        for field_idx in self._roa.field_indices:
+            # Reset the event that waits for the image being received (puts flag to false).
+            self._data_received.clear()
+            self.field_idx = field_idx
+            logging.debug("Acquiring field with index: %s", field_idx)
+
+            self.move_stage_to_next_tile()  # move stage to next field image position
+
+            dataflow.next(field_idx)  # acquire the next field image.
+
+            # Wait until single field image data has been received (image_received sets flag to True).
+            if not self._data_received.wait(timeout):
+                # TODO here we often timeout when actually just the offload queue is full
+                #  need to handle offload queue error differently to just wait a bit instead of timing out
+                #   -> check if finish megafield is called in finally when hitting here
+                raise TimeoutError("Timeout while waiting for field image.")
+
+            self._fields_remaining.discard(field_idx)
+
+            # In case the acquisition was cancelled by a client, before the future returned, raise cancellation error.
+            # Note: The acquisition of the current single field image (tile) is still finished though.
+            if self._cancelled:
+                raise CancelledError()
+
+            # Update the time left for the acquisition.
+            expected_time = len(self._fields_remaining) * total_field_time
+            self._future.set_progress(end=time.time() + expected_time)
+
+        return self.megafield
+
+    def image_received(self, dataflow, data):
+        """
+        Function called by dataflow when data has been received from the detector.
+        :param dataflow: (model.DataFlow) The dataflow on the detector.
+        :param data: (model.DataArray) The data array containing the image data.
+        """
+        self.megafield[self.field_idx] = data
+        # When data is received notify the threading event, which keeps track of whether data was received.
+        self._data_received.set()
+
+    def cancel(self, future):
+        """
+        Cancels the ROA acquisition.
+        :param future: (future) The ROA (megafield) future.
+        :return: (bool) True if cancelled, False if too late to cancel as future is already finished.
+        """
+        self._cancelled = True
+
+        # Report if it's too late for cancellation (and the f.result() will return)
+        if not self._fields_remaining:
+            return False
+
+        return True
+
+    def get_abs_stage_movement(self):
+        """
+        Based on the field index calculate the stage position where the next tile (field image) should be acquired.
+        The position is always calculated with respect to the top/left tile (field image). The stage position returned
+        is the center of the respective tile.
+        :return: (float, float) The new absolute stage x and y position in meter.
+        """
+        px_size = self._multibeam.pixelSize.value
+        field_res = self._multibeam.resolution.value
+        pos_orig = self._roa.coordinates.value[:2]  # position of top/left corner of the ROA
+
+        # The position of the stage when acquiring the top/left tile needs to be matching the center of the tile.
+        pos_first_tile = (pos_orig[0] - field_res[0]/2. * px_size[0], pos_orig[1] + field_res[1]/2. * px_size[1])
+
+        rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
+        rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter
+
+        # Move in the negative x direction, because the second field should be right of the first.
+        # Move in positive y direction, because the second field should be bottom of the first.
+        # TODO verify that this results in the images being taken in the correct order (left to right, top to bottom).
+        pos_hor = pos_first_tile[0] - rel_move_hor
+        pos_vert = pos_first_tile[1] + rel_move_vert
+
+        return pos_hor, pos_vert
+
+    def move_stage_to_next_tile(self):
+        """Move the stage to the next tile (field image) position."""
+
+        pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
+        f = self._stage.moveAbs({'x': pos_hor, 'y': pos_vert})  # move the stage
+        timeout = 100
+        try:
+            f.result(timeout=timeout)  # don't wait forever
+            logging.debug("Moved to stage position %s" % (self._stage.position.value,))
+        except TimeoutError:
+            raise TimeoutError("Stage movement to position (%s, %s) timed out after %s s."
+                               % (timeout, pos_hor, pos_vert))
 
 
-def estimateTime(roas):
-    return len(roas) * 2
-
-
+########################################################################################################################
 # Overview acquisition
 
 # Fixed settings
