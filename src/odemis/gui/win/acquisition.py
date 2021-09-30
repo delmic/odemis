@@ -32,12 +32,14 @@ import math
 import numpy
 
 from odemis import model, dataio
+from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.acq import stream, path, acqmng, stitching
+from odemis.acq.stream import SEMStream, CameraStream, EMStream
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.conf import get_acqui_conf, get_chamber_conf
+from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
@@ -46,7 +48,7 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, \
     VigilantAttributeConnector
-from odemis.util import units
+from odemis.util import rect_intersect, units
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
 import wx
@@ -654,7 +656,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         )
 
         self.zsteps = model.IntContinuous(1, range=(1, 51))
-        self._zsteps_vac = VigilantAttributeConnector(self.zsteps, self.zstack_steps, events=wx.EVT_SLIDER)
+        self.tiles_nx = model.IntContinuous(5, range=(1, 1000))
+        self.tiles_ny = model.IntContinuous(5, range=(1, 1000))
+        self._zsteps_vac = VigilantAttributeConnector(
+            self.zsteps, self.zstack_steps, events=wx.EVT_SLIDER)
+        self._tiles_n_vacx = VigilantAttributeConnector(
+            self.tiles_nx, self.tiles_number_x, events=wx.EVT_COMMAND_ENTER)
+        self._tiles_n_vacy = VigilantAttributeConnector(
+            self.tiles_ny, self.tiles_number_y, events=wx.EVT_COMMAND_ENTER)
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -697,25 +706,30 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
 
+        # get smallest fov
+        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
+        if not fovs:
+            raise ValueError("No stream so no FoV")
+        # smallest fov
+        self.fov = (min(f[0] for f in fovs),
+                    min(f[1] for f in fovs))
+
         # Set parameters for tiled acq
         self.overlap = 0.2
         try:
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE,
             # which can be overridden by MD_OVERVIEW_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
-            stage_rng = {
+            self._tiling_rng = {
                 "x": self._main_data_model.stage.axes["x"].range,
                 "y": self._main_data_model.stage.axes["y"].range
             }
 
             stage_md = self._main_data_model.stage.getMetadata()
             if model.MD_POS_ACTIVE_RANGE in stage_md:
-                stage_rng.update(stage_md[model.MD_POS_ACTIVE_RANGE])
+                self._tiling_rng.update(stage_md[model.MD_POS_ACTIVE_RANGE])
             if model.MD_OVERVIEW_RANGE in stage_md:
-                stage_rng.update(stage_md[model.MD_OVERVIEW_RANGE])
-
-            # left, bottom, right, top
-            self.area = (stage_rng["x"][0], stage_rng["y"][0], stage_rng["x"][1], stage_rng["y"][1])
+                self._tiling_rng.update(stage_md[model.MD_OVERVIEW_RANGE])
         except (KeyError, IndexError):
             raise ValueError("Failed to find stage.MD_POS_ACTIVE_RANGE with x and y range")
 
@@ -724,7 +738,44 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         for s in streams:
             self._view.addStream(s)
 
-        self.update_acquisition_time()
+        self.on_tiles_number()
+
+    def update_area_size(self, w, h):
+        """
+        Calculates the requested tiling area size, and updates it on the GUI.
+        w (float): width of the tiling area
+        h (float): height of the tiling area
+        """
+        pos = self._tab_data_model.main.stage.position.value
+        rect_pts = self.get_ROA_rect(w, h, pos, self._tiling_rng)
+        if rect_pts:
+            # Note the area can accept LTRB or LBRT.
+            self.area = rect_pts
+            area_size = util.readable_str(value=(w, h), unit="m", sig=3)
+            self.area_size_txt.SetLabel(area_size)
+            self.update_acquisition_time()
+        else:
+            # there is no intersection
+            self.area_size_txt.SetLabel("Invalid stage position")
+            return 
+
+    @staticmethod
+    def get_ROA_rect(w, h, pos, tiling_rng):
+        """
+        Finds the intersection between the requested tiling area 
+            and the tiling range.
+        w (float): width of the tiling area
+        h (float): height of the tiling area
+        pos (dict -> float): current position of the stage
+        tiling_rng (dict -> list): the tiling range along x and y axes
+        """
+        tl = pos["x"] - w/2, pos["y"] + h/2
+        br = pos["x"] + w/2, pos["y"] - h/2
+        # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
+        # Note: the input is LTRB. The output is LBRT assuming y axis upwards, or LTRB assuming y axis downwards. 
+        rect_pts = rect_intersect((tl[0], tl[1], br[0], br[1]), 
+            (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
+        return rect_pts
 
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
@@ -733,6 +784,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 entry.vigilattr.subscribe(self.on_setting_change)
 
         self.zsteps.subscribe(self.on_setting_change)
+        self.tiles_nx.subscribe(self.on_tiles_number)
+        self.tiles_ny.subscribe(self.on_tiles_number)
 
     def stop_listening_to_va(self):
         for entry in self._orig_entries:
@@ -941,6 +994,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         zlevels = self._get_zstack_levels()
         logging.info("Acquisition tiles logged at %s", self.filename_tiles)
+        # store the stage position before the acquisition starts
+        self.pos_before = self._main_data_model.stage_bare.position.value
         self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
@@ -982,6 +1037,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.acq_future = None  # To avoid holding the ref in memory
         self._acq_future_connector = None
 
+        # restore the stage position before the acquisition started
+        self._main_data_model.stage_bare.moveAbs(self.pos_before)
+
         try:
             # TODO: Add code for getting the data from the acquisition future
             self.data = future.result(1)  # timeout is just for safety
@@ -1008,6 +1066,24 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.terminate_listeners()
         self.EndModal(wx.ID_OPEN)
 
+    def on_tiles_number(self, _=None):
+        """
+        Called when the user enters values for the tiles number in the GUI.
+        """
+        nx = self.tiles_nx.value - 1 
+        ny = self.tiles_ny.value - 1 
+        w = nx*self.fov[0]-(nx-1)*self.fov[0]*self.overlap
+        h = ny*self.fov[1]-(ny-1)*self.fov[1]*self.overlap
+        self.update_area_size(w, h)
+
+    def get_fov(self, s):
+        # Estimate the FoV, based on the emitter/detector settings
+        if isinstance(s, SEMStream):
+            return compute_scanner_fov(s.emitter)
+        elif isinstance(s, CameraStream):
+            return compute_camera_fov(s.detector)
+        else:
+            raise TypeError("Unsupported Stream %s" % (s,))
 
 def ShowAcquisitionFileDialog(parent, filename):
     """
