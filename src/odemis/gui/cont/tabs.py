@@ -666,9 +666,17 @@ class LocalizationTab(Tab):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
 
-        # pause streams when not displayed
-        if not show:
+        if not show: # if localization tab is not chosen
+            # pause streams when not displayed
             self._streambar_controller.pauseStreams()
+            # stop listening to the focus position
+            self.main_data.focus.position.unsubscribe(self._on_focus_pos_change)
+        else:   # if chosen
+            # start listening to the focus position
+            self.main_data.focus.position.subscribe(self._on_focus_pos_change)
+
+    def _on_focus_pos_change(self, pos):
+        self.main_data.focus.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
     @classmethod
     def get_display_priority(cls, main_data):
