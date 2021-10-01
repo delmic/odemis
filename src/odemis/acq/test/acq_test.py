@@ -36,14 +36,16 @@ from unittest.case import skip
 from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
-from odemis.acq.acqmng import SettingsObserver
+from odemis.acq.acqmng import SettingsObserver, acquireZStack
+from odemis.driver.tmcm import TMCLController
+from odemis.util.comp import generate_zlevels
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
-
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 class Fake0DDetector(model.Detector):
     """
@@ -55,7 +57,6 @@ class Fake0DDetector(model.Detector):
         self.data = Fake0DDataFlow()
         self._shape = (float("inf"),)
 
-
 class Fake0DDataFlow(model.DataFlow):
     """
     Mock object just sufficient for the ProbeCurrentAcquirer
@@ -64,14 +65,12 @@ class Fake0DDataFlow(model.DataFlow):
         da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
         return da
 
-
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
 
     # TODO
     pass
 
-# @skip("simple")
 class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
@@ -216,7 +215,6 @@ class SECOMTestCase(unittest.TestCase):
         self.end = end
         self.updates += 1
 
-#@skip("simple")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -485,6 +483,193 @@ class SPARCTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
+
+class CRYOSECOMTestCase(unittest.TestCase):
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+
+        try:
+            test.start_backend(ENZEL_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # create some streams connected to the backend
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.fm_focuser = model.getComponent(role="focus")
+
+        cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+        self._nb_updates = 0
+        self.streams = []
+
+        self.fm_focuser.moveAbs({"z": self.fm_focus_pos}).result()
+
+    def _on_progress_update(self, f, s, e):
+        self._nb_updates += 1
+
+    def test_only_FM_streams_with_zstack(self):
+        # create streams
+        s1 = stream.FluoStream(
+            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
+        )
+        s1.excitation.value = sorted(s1.excitation.choices)[0]
+        s2 = stream.FluoStream(
+            "fluo2", self.ccd, self.ccd.data, self.light, self.light_filter
+        )
+        s2._focuser = self.fm_focuser
+        s2.excitation.value = sorted(s2.excitation.choices)[-1]
+        self.streams = [s1, s2]
+
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels = {}
+        for s in self.streams:
+            zlevels[s] = list(zlevels_list)
+
+        # there are about 5 zlevels, so should be greater than 2 seconds
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        self.assertGreaterEqual(est_time, 2)
+
+        # start the acquisition
+        f = acqmng.acquireZStack(self.streams, zlevels)
+        f.add_update_callback(self._on_progress_update)
+
+        # get the data
+        data, exp = f.result()
+        self.assertIsNone(exp)
+
+        for d in data:
+            self.assertIsInstance(d, model.DataArray)
+            # since zstack, the center has 3 components
+            self.assertEqual(len(d.metadata[model.MD_POS]), 3)
+            # since zstack, the pixel size has 3 components
+            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 3)
+
+        # 2 streams, so 2 acquisitions
+        self.assertEqual(len(data), 2)
+
+        # 2 streams, 2 updates per stream, so 2 updates at least
+        self.assertGreaterEqual(self._nb_updates, 2)
+
+    def test_only_SEM_streams_with_zstack(self):
+        sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
+        self.streams = [sems]
+
+        zlevels = {}
+
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        # only one sem stream, so should be greater than or equal to 1 sec
+        self.assertGreaterEqual(est_time, 1)
+
+        # start the acquisition
+        f = acqmng.acquireZStack(self.streams, zlevels)
+        f.add_update_callback(self._on_progress_update)
+
+        data, exp = f.result()
+        self.assertIsNone(exp)
+
+        for d in data:
+            self.assertIsInstance(d, model.DataArray)
+            # even if zstack, it's only SEM, so the center has 2 components
+            self.assertEqual(len(d.metadata[model.MD_POS]), 2)
+            # even if zstack, it's SEM, so the pixel size has 2 components
+            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 2)
+
+        # 1 streams, so 1 acquisitions
+        self.assertEqual(len(data), 1)
+
+        # 1 streams, 1 updates per stream, so 1 updates
+        self.assertGreaterEqual(self._nb_updates, 1)
+
+    def test_FM_and_SEM_with_zstack(self):
+        s1 = stream.FluoStream(
+            "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
+        )
+        s1.excitation.value = sorted(s1.excitation.choices)[0]
+
+        sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
+
+        self.streams = [s1, sems]
+
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels = {}
+        for s in self.streams:
+            if isinstance(s, stream.FluoStream):
+                zlevels[s] = list(zlevels_list)
+
+        est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
+        # about 5 seconds for fm streams, and 1 sec for sem stream, so should be 
+        # greater than or equal 5 sec
+        self.assertGreaterEqual(est_time, 4)
+
+        # start the acquisition
+        f = acqmng.acquireZStack(self.streams, zlevels)
+        f.add_update_callback(self._on_progress_update)
+
+        data, exp = f.result()
+        self.assertIsNone(exp)
+
+        for i, d in enumerate(data):
+            self.assertIsInstance(d, model.DataArray)
+            if d.ndim > 2 and d.shape[-3] > 1: # 3D data (FM)
+                # if zstack, so the center has 3 components
+                self.assertEqual(len(d.metadata[model.MD_POS]), 3)
+                # if zstack, so the pixel size has 3 components
+                self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 3)
+            else:  # 2D data (SEM)
+                # even if zstack, it's SEM, so the center has 2 components
+                self.assertEqual(len(d.metadata[model.MD_POS]), 2)
+                # even if zstack, it's SEM, so the pixel size has 2 components
+                self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 2)
+
+        # 2 streams, so 2 acquisitions
+        self.assertEqual(len(data), 2)
+
+        # 2 streams, 2 updates per stream, so >= 2 updates
+        self.assertGreaterEqual(self._nb_updates, 2)
+
+    def test_settings_observer_metadata_with_zstack(self):
+        settings_observer = SettingsObserver(model.getComponents())
+        vas = {"exposureTime"}
+        s1 = stream.FluoStream(
+            "FM", self.ccd, self.ccd.data, self.light, self.light_filter, detvas=vas, focuser=self.fm_focuser)
+        s1.detExposureTime.value = 0.023  # 23 ms
+
+        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels = {s1: list(zlevels_list)}
+
+        f = acquireZStack([s1], zlevels, settings_observer)
+        # get the data
+        data, exp = f.result()
+        self.assertIsNone(exp)
+        for d in data:
+            self.assertTrue(model.MD_EXTRA_SETTINGS in d.metadata)
+            # if zstack, so the center has 3 components
+            self.assertEqual(len(d.metadata[model.MD_POS]), 3)
+            # if zstack, so the pixel size has 3 components
+            self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 3)
+        self.assertEqual(data[0].metadata[model.MD_EXTRA_SETTINGS]
+                         ["Camera"]["exposureTime"], [0.023, "s"])
 
 if __name__ == "__main__":
     unittest.main()

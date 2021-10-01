@@ -143,6 +143,28 @@ def estimateMoveDuration(distance, speed, accel):
         return t1 + t2
 
 
+DEFAULT_SPEED = 10e-6 # m/s
+DEFAULT_ACCELERATION = 0.01 # m/s²
+
+def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATION):
+    """
+    actuator (Actuator): actuator object 
+    axis (str): indicates along which axis the movement is. 
+    distance (float): the move for which the time to be estimated  
+    return (float >= 0): the estimated time (in s)
+    """
+    speed = None
+    if not (hasattr(actuator, "axes") and isinstance(actuator.axes, dict)):
+        raise ValueError("The component %s should be an actuator, but it is not." % actuator)  
+    if not axis in actuator.axes:
+        raise KeyError("The actuator component %s is expected to have %s axis, but it does not." % (actuator, axis))
+    if model.hasVA(actuator, "speed"):
+        speed = actuator.speed.value.get("z", None)
+    if speed is None:
+        speed = DEFAULT_SPEED  
+    return estimateMoveDuration(distance, speed, accel) 
+
+
 def checkLightBand(band):
     """
     Check that the given object looks like a light band. It should either be
