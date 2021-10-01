@@ -1765,7 +1765,7 @@ class FastEMOverviewAcquiController(object):
             self.update_acquisition_time()
 
     @wxlimit_invocation(1)
-    def _set_status_message(self, text, level):
+    def _set_status_message(self, text, level=None):
         self.lbl_acqestimate.SetLabel(text)
         # update status icon to show the logging level
         self.bmp_acq_status_info.Show(level in (logging.INFO, logging.DEBUG))
@@ -1861,7 +1861,7 @@ class FastEMOverviewAcquiController(object):
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
         self._tab_panel.Layout()
-        self._set_status_message("Acquisition done.")
+        self._set_status_message("Acquisition done.", logging.INFO)
         self._main_data_model.is_acquiring.value = False
 
 
