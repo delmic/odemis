@@ -44,7 +44,7 @@ import wx
 import wx.html
 
 from odemis.gui import conf, img
-from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
+from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.model import getVAs
@@ -92,7 +92,7 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL, TOOL_AUTO_FOCUS, \
-    TOOL_NONE, TOOL_DICHO
+    TOOL_NONE, TOOL_DICHO, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
@@ -101,7 +101,7 @@ from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
-              TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
+              TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_FEATURE)
 
 
 class Tab(object):
@@ -348,7 +348,7 @@ class LocalizationTab(Tab):
         :type main_data: odemis.gui.model.MainGUIData
         """
 
-        tab_data = guimod.LocalizationGUIData(main_data)
+        tab_data = guimod.CryoLocalizationGUIData(main_data)
         super(LocalizationTab, self).__init__(
             name, button, panel, main_frame, tab_data)
         self.set_label("LOCALIZATION")
@@ -403,12 +403,17 @@ class LocalizationTab(Tab):
         self._acquisition_controller = acqcont.CryoAcquiController(
             tab_data, panel, self)
 
-        self._overview_stream_controller = streamcont.StreamBarController(
+        self._acquired_stream_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
+
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self.tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes)
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.conf = conf.get_acqui_conf()
 
         # Toolbar
         self.tb = panel.secom_toolbar
@@ -423,7 +428,6 @@ class LocalizationTab(Tab):
         self.tb.enable_button(TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
-
         self._streambar_controller.addFluo(add_to_view=True, play=False)
 
         # Will create SEM stream with all settings local
@@ -481,15 +485,18 @@ class LocalizationTab(Tab):
               }),
             (viewports[1],
              {"name": "Acquired",
+              "cls": guimod.FeatureView,
               "stream_classes": StaticStream,
               }),
             (viewports[2],
              {"name": "Live 1",
+              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
+              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
@@ -504,26 +511,23 @@ class LocalizationTab(Tab):
 
         return vpv
 
-    def load_data(self, data):
+    def load_overview_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
 
+        view = self.tab_data_model.views.value[0]  # overview map view
         for s in streams:
+            s.name.value = "Overview " + s.name.value
             self.clear_overview_streams(s.name.value)
-            scont = self._overview_stream_controller.addStream(s, add_to_view=True)
-            scont.stream_panel.show_remove_btn(True)
+            self._show_acquired_stream(s, view)
+            # Add the static stream to the streams list of the model and also to the overviewStreams to easily
+            # distinguish between it and other acquired streams
+            self.tab_data_model.overviewStreams.value.append(s)
+            self.tab_data_model.streams.value.insert(0, s)
 
             # Display the same acquired data in the chamber tab view
             chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-            chamber_tab.load_overview_data(streams)
-
-    def _load_overview_data(self, stream):
-        """
-        Add the given stream to the overview view and stream panel
-        """
-        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
-        scont = self._overview_stream_controller.addStream(stream, add_to_view=overview_view)
-        scont.stream_panel.show_remove_btn(True)
+            chamber_tab.load_overview_streams(streams)
 
     def clear_live_streams(self):
         """
@@ -544,11 +548,10 @@ class LocalizationTab(Tab):
         Remove overview map (Static) streams and clear them from view and panel.
         @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
         """
-        static_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, StaticStream)]
-        for stream in static_streams:
+        for stream in self.tab_data_model.overviewStreams.value:
             if filter_stream_name and stream.name.value != filter_stream_name:
                 continue
-            self._overview_stream_controller.removeStreamPanel(stream)
+            self._acquired_stream_controller.removeStreamPanel(stream)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -633,7 +636,6 @@ class LocalizationTab(Tab):
         """
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=IMAGING)
 
-
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -668,27 +670,84 @@ class LocalizationTab(Tab):
         if not show:
             self._streambar_controller.pauseStreams()
 
+    def _show_acquired_stream(self, acquired_stream, selected_view):
+        """
+        Create a stream controller for the given stream and view and add it to the stream bar controller list of stream controllers
+        :param acquired_stream: the static stream to show
+        :param selected_view: the view to show it on
+        """
+        stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, acquired_stream, self.tab_data_model,
+                                       show_panel=True, view=selected_view, sb_ctrl=self._acquired_stream_controller)
+        selected_view.addStream(acquired_stream)
+
+        stream_cont.stream_panel.set_visible(True)
+        stream_cont.stream_panel.show_remove_btn(True)
+        self._acquired_stream_controller.stream_controllers.append(stream_cont)
+
+    def _on_current_feature_changes(self, feature):
+        """
+        Handle switching the acquired streams appropriate to the current feature
+        :param feature: (CryoFeature or None) the newly selected current feature
+        """
+        self._acquired_stream_controller.clear(clear_model=False)
+        # show the feature streams on the acquired view
+        view = self.tab_data_model.views.value[1]
+        acquired_streams = feature.streams.value if feature else []
+        for stream in acquired_streams:
+            self._show_acquired_stream(stream, view)
+
+        # show the overview maps (if any) on the overview view
+        view = self.tab_data_model.views.value[0]
+        for stream in self.tab_data_model.overviewStreams.value:
+            self._show_acquired_stream(stream, view)
+
+    def _on_acquired_streams(self, streams):
+        """
+        Filter out deleted acquired streams (features and overview) from their respective origin
+        :param streams: list(Stream) updated list of tab streams
+        """
+        # Get all acquired streams from features list and overview streams
+        acquired_streams = set()
+        for feature in self.tab_data_model.main.features.value:
+            acquired_streams.update(feature.streams.value)
+        acquired_streams.update(self.tab_data_model.overviewStreams.value)
+
+        unused_streams = acquired_streams.difference(set(streams))
+
+        for st in unused_streams:
+            if st in self.tab_data_model.overviewStreams.value:
+                self.tab_data_model.overviewStreams.value.remove(st)
+                # Remove from chamber tab too
+                chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab.remove_overview_stream(st)
+            else:
+                # Remove the stream from all the features
+                for feature in self.tab_data_model.main.features.value:
+                    if st in feature.streams.value:
+                        feature.streams.value.remove(st)
+
+    @call_in_wx_main
+    def display_acquired_data(self, data):
+        """
+        Display the acquired streams on the top right view
+        data (DataArray): the images/data acquired
+        """
+        # get the top right view port
+        view = self.tab_data_model.views.value[1]
+        self.tab_data_model.select_current_position_feature()
+        for s in data_to_static_streams(data):
+            if self.tab_data_model.main.currentFeature.value:
+                s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
+                self.tab_data_model.main.currentFeature.value.streams.value.append(s)
+            self.tab_data_model.streams.value.insert(0, s)
+            self._show_acquired_stream(s, view)
+
     @classmethod
     def get_display_priority(cls, main_data):
         if main_data.role in ("cryo-secom",):
             return 2
         else:
             return None
-
-    @call_in_wx_main
-    def display_acquired_data(self, data):
-        """
-        Displays the acquired streams on the top right view
-        data (DataArray): the images/data acquired 
-        """
-        # TODO adjust this code to fit the feature behavior
-        # get the top right view port
-        view = self.tab_data_model.views.value[1]
-        for s in data_to_static_streams(data):
-            stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, s, self.tab_data_model,
-                                           show_panel=True, view=view, sb_ctrl=self._overview_stream_controller)
-            stream_cont.stream_panel.collapse(True)
-
 
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -2277,8 +2336,6 @@ class ChamberTab(Tab):
 
         return None
 
-DEFAULT_MILLING_ANGLE = math.radians(10)
-MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
 
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -2301,12 +2358,11 @@ class CryoChamberTab(Tab):
              }), ])
 
         self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self._tab_panel = panel
         # For project selection
         self.conf = conf.get_acqui_conf()
-        self.btn_change_folder = self._tab_panel.btn_change_folder
+        self.btn_change_folder = self.panel.btn_change_folder
         self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
-        self.txt_projectpath = self._tab_panel.txt_projectpath
+        self.txt_projectpath = self.panel.txt_projectpath
 
         # Create new project directory on starting the GUI
         self._create_new_dir()
@@ -2331,13 +2387,14 @@ class CryoChamberTab(Tab):
             milling_range = [-(self.ion_to_sample - a) for a in rx_range]
             # sort milling range in case ion_to_sample made range values flip
             actual_rng = sorted(milling_range)
-            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
-            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
-                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+            ctrl_rng = max(actual_rng[0], guimod.MILLING_ANGLE_RANGE[0]), min(actual_rng[1], guimod.MILLING_ANGLE_RANGE[1])
+            if not ctrl_rng[0] <= guimod.DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (
+                guimod.DEFAULT_MILLING_ANGLE, ctrl_rng))
             panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
             # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
-            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
+            self._prev_milling_angle = guimod.DEFAULT_MILLING_ANGLE
+            self.panel.ctrl_milling.Value = readable_str(math.degrees(guimod.DEFAULT_MILLING_ANGLE), unit="°", sig=3)
         except KeyError:
             raise ValueError('The stage is missing an rx axis.')
         panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
@@ -2397,23 +2454,41 @@ class CryoChamberTab(Tab):
         panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-    def load_overview_data(self, streams):
+    def _get_overview_view(self):
+        overview_view = next(
+            (view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+        if not overview_view:
+            logging.warning("Could not find view of type FeatureOverviewView.")
+
+        return overview_view
+
+    def remove_overview_stream(self, overview_stream):
+        """
+       Remove the overview static stream from the view
+       :param overview_stream: (StaticStream) overview static stream to remove from view
+       """
+        try:
+            overview_view = self._get_overview_view()
+            overview_view.removeStream(overview_stream)
+        except AttributeError:
+            pass
+
+    def load_overview_streams(self, streams):
         """
         Load the overview view with the given list of acquired static streams
         :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
         """
-        # Replace the old streams with the newly acquired ones in the view
-
-        overview_view = next((view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
-        if not overview_view:
-            logging.warning("Could not find view of type FeatureOverviewView.")
-            return
-        existing_streams = overview_view.getStreams()
-        for stream in streams:
-            ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
-            if ex_st:
-                overview_view.removeStream(ex_st)
-            overview_view.addStream(stream)
+        try:
+            # Replace the old streams with the newly acquired ones in the view
+            overview_view = self._get_overview_view()
+            existing_streams = overview_view.getStreams()
+            for stream in streams:
+                ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
+                if ex_st:
+                    self.remove_overview_stream(ex_st)
+                overview_view.addStream(stream)
+        except AttributeError:
+            pass
 
     def _on_change_project_folder(self, evt):
         """
@@ -2435,7 +2510,7 @@ class CryoChamberTab(Tab):
         # Generate suggestion for the new project name to show it on the file dialog
         root_dir = os.path.dirname(self.conf.pj_last_path)
         np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
-        new_dir = ShowChamberFileDialog(self._tab_panel, np)
+        new_dir = ShowChamberFileDialog(self.panel, np)
         if new_dir is None: # Cancelled
             return
 
@@ -2805,30 +2880,27 @@ class CryoChamberTab(Tab):
         Called to perform action prior to terminating the tab
         :return: (bool) True to proceed with termination, False for canceling
         """
-        if self._current_position is not LOADING:
-            if self._move_future._state == RUNNING and self._target_position is LOADING:
-                box = wx.MessageDialog(self.main_frame,
-                                       "The sample is still moving to the loading position, are you sure you want to close Odemis?",
-                                       caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        if self._current_position is LOADING:
+            return True
+        if self._move_future._state == RUNNING and self._target_position is LOADING:
+            return self._confirm_terminate_dialog(
+                "The sample is still moving to the loading position, are you sure you want to close Odemis?"
+            )
 
-                box.SetYesNoLabels("&Close Window", "&Cancel")
-                ans = box.ShowModal()  # Waits for the window to be closed
-                if ans == wx.ID_YES:
-                    return True
-                else:
-                    return False
+        return self._confirm_terminate_dialog(
+            "The sample is still loaded, are you sure you want to close Odemis?"
+        )
 
-            box = wx.MessageDialog(self.main_frame,
-                                   "The sample is still loaded, are you sure you want to close Odemis?",
-                                   caption="Closing Odemis", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
-
-            box.SetYesNoLabels("&Close Window", "&Cancel")
-            ans = box.ShowModal()  # Waits for the window to be closed
-            if ans == wx.ID_YES:
-                return True
-            else:
-                return False
-        return True
+    def _confirm_terminate_dialog(self, message):
+        box = wx.MessageDialog(
+            self.main_frame,
+            message,
+            caption="Closing Odemis",
+            style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
+        )
+        box.SetYesNoLabels("&Close Window", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        return ans == wx.ID_YES
 
     @classmethod
     def get_display_priority(cls, main_data):

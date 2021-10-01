@@ -39,9 +39,9 @@ from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
-from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, StagePointSelectOverlay
+from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, CryoFeatureOverlay
 from odemis.gui.img import getBitmap
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
     release_mouse_on_drag
 from odemis.gui.util.raster import rasterize_line
@@ -769,7 +769,28 @@ class LiveViewport(MicroscopeViewport):
         else:
             self.canvas.abilities.discard(CAN_FOCUS)
 
-class FeatureOverviewViewport(LiveViewport):
+
+class FeatureViewport(LiveViewport):
+    bottom_legend_class = InfoLegend
+
+    def __init__(self, *args, **kwargs):
+        super(FeatureViewport, self).__init__(*args, **kwargs)
+
+    def setView(self, view, tab_data):
+        super(FeatureViewport, self).setView(view, tab_data)
+        if hasattr(view, "showFeatures"):
+            view.showFeatures.subscribe(self._show_hide_feature_overlay)
+            self.bottom_legend.feature_toggle_va = view.showFeatures
+
+    def _show_hide_feature_overlay(self, va_val):
+        # show/hide feature overlay based on the legend toggle button
+        foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
+        if foverlay:
+            foverlay.show = va_val
+            self.canvas.update_drawing()
+
+
+class FeatureOverviewViewport(FeatureViewport):
     """
     LiveViewport dedicated to show overview map area with bookmarked features.
     Do not move the stage by dragging, and instead show the stage position via
@@ -788,10 +809,12 @@ class FeatureOverviewViewport(LiveViewport):
         cpol = CurrentPosCrossHairOverlay(self.canvas)
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
-        slol = StagePointSelectOverlay(self.canvas)
-        slol.active.value = True
-        self.canvas.add_world_overlay(slol)
 
+        # Only create a feature overlay in chamber tab as the canvas would create the one shown on localization tab
+        if isinstance(tab_data, CryoChamberGUIData):
+            slol = CryoFeatureOverlay(self.canvas, tab_data)
+            slol.active.value = True
+            self.canvas.add_world_overlay(slol)
 
 class ARLiveViewport(LiveViewport):
     """

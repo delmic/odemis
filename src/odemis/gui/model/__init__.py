@@ -29,8 +29,10 @@ from abc import ABCMeta
 import collections
 import logging
 import math
+
+from odemis.acq.feature import CryoFeature, DEFAULT_MILLING_ANGLE, MILLING_ANGLE_RANGE
 from odemis.gui import conf
-from odemis.util.filename import create_filename
+from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
 from odemis.acq import path, acqmng, fastem
 import odemis.acq.stream as acqstream
@@ -75,6 +77,7 @@ TOOL_SPOT = 9  # Activate spot mode on the SEM
 TOOL_RO_ANCHOR = 10  # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
 TOOL_AUTO_FOCUS = 11  # Run auto focus procedure on the (active) stream
+TOOL_FEATURE = 12  # Create new feature or move selected one
 
 
 ALL_TOOL_MODES = {
@@ -98,7 +101,6 @@ TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
 # Autofocus state
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False
-
 
 class MainGUIData(object):
     """
@@ -360,6 +362,11 @@ class MainGUIData(object):
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
 
+            if "cryo" in microscope.role:
+                # List VA contains all the CryoFeatures
+                self.features = model.ListVA()
+                # VA for the currently selected feature
+                self.currentFeature = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
             self.settings_obs = acqmng.SettingsObserver(comps_with_role)
@@ -619,8 +626,51 @@ class LiveViewGUIData(MicroscopyGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
+class CryoGUIData(MicroscopyGUIData):
+    """
+    Represents an interface for handling cryo microscopes.
+    """
+    def __init__(self, main):
+        if "cryo" not in main.role:
+            raise ValueError(
+                "Expected a cryo microscope role but found it to be %s." % main.role)
+        MicroscopyGUIData.__init__(self, main)
 
-class LocalizationGUIData(MicroscopyGUIData):
+    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, milling_angle=DEFAULT_MILLING_ANGLE):
+        """
+        Create a new feature and add it to the features list
+        """
+        if not f_name:
+            existing_names = [f.name.value for f in self.main.features.value]
+            f_name = make_unique_name("Feature-1", existing_names)
+        if pos_z is None:
+            pos_z = self.main.focus.position.value['z']
+        feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
+        self.main.features.value.append(feature)
+        return feature
+
+    # Todo: find the right margin
+    ATOL_FEATURE_POS = 0.1e-3  # m
+
+    def select_current_position_feature(self):
+        """
+        Given current stage position, either select one of the features closest to the position or create a new one with the position
+        """
+        current_position = self.main.stage.position.value
+        for feature in self.main.features.value:
+            feature_dist = math.hypot(feature.pos.value[0] - current_position["x"],
+                                      feature.pos.value[1] - current_position["y"])
+            if feature_dist <= self.ATOL_FEATURE_POS:
+                self.main.currentFeature.value = feature
+                break
+        else:
+            # create new feature if no close feature found
+            feature = self.add_new_feature(current_position["x"], current_position["y"],
+                                                          self.main.focus.position.value["z"])
+            logging.debug("A new feature is created at {} because none are close by.".format((current_position["x"], current_position["y"])))
+            self.main.currentFeature.value = feature
+
+class CryoLocalizationGUIData(CryoGUIData):
     """ Represent an interface used to only show the current data from the microscope.
 
     It it used for handling CryoSECOM systems.
@@ -631,10 +681,10 @@ class LocalizationGUIData(MicroscopyGUIData):
         if main.role != "cryo-secom":
             raise ValueError(
                 "Microscope role was found to be %s, while expected 'cryo-secom'" % main.role)
-        MicroscopyGUIData.__init__(self, main)
+        CryoGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
         # VA for autofocus procedure mode
@@ -652,7 +702,9 @@ class LocalizationGUIData(MicroscopyGUIData):
         self.zStackActive = model.BooleanVA(value=False)
         # the streams to acquire among all streams in .streams
         self.acquisitionStreams = model.ListVA()
-        # for the filename 
+        # the static overview map streams
+        self.overviewStreams = model.ListVA()
+        # for the filename
         config = conf.get_acqui_conf()
         self.filename = model.StringVA(create_filename(
             config.pj_last_path, config.fn_ptn,
@@ -732,10 +784,10 @@ class ChamberGUIData(MicroscopyGUIData):
 #         self.autofocus_active = BooleanVA(False)
 
 
-class CryoChamberGUIData(MicroscopyGUIData):
+class CryoChamberGUIData(CryoGUIData):
 
     def __init__(self, main):
-        MicroscopyGUIData.__init__(self, main)
+        CryoGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         self._conf = get_acqui_conf()
@@ -1912,12 +1964,21 @@ class FixedOverviewView(StreamView):
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
 
+class FeatureView(StreamView):
+    """
+    A stream view with optional bookmarked features
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+        # booleanVA to toggle showing/hiding the features
+        self.showFeatures = model.BooleanVA(True)
+
 class FeatureOverviewView(StreamView):
     """
     A large FoV view which is used to display an overview map with optional bookmarked features
     """
     def __init__(self, name, stage=None, **kwargs):
-        StreamView.__init__(self, name, stage=stage, **kwargs)
+        FeatureView.__init__(self, name, stage=stage, **kwargs)
 
         self.show_crosshair.value = False
         self.mpp.value = 10e-6

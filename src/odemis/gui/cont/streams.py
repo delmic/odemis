@@ -2237,10 +2237,11 @@ class StreamBarController(object):
         # would prevent the Stream render thread from terminating.
         gc.collect()
 
-    def clear(self):
+    def clear(self, clear_model=True):
         """
         Remove all the streams (from the model and the GUI)
         Must be called in the main GUI thread
+        :param clear_model: (bool) if True, streams will be removed from model
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
@@ -2248,17 +2249,19 @@ class StreamBarController(object):
         # clear the graphical part
         self._stream_bar.clear()
 
-        # clear the interface model
-        # (should handle cases where a new stream is added simultaneously)
-        while self._tab_data_model.streams.value:
-            stream = self._tab_data_model.streams.value.pop()
-            self._unscheduleStream(stream)
-            self._disconnectROI(stream)
-
-            # Remove from the views
+        # Remove from the views
+        for stream in self._tab_data_model.streams.value:
             for v in self._tab_data_model.views.value:
                 if hasattr(v, "removeStream"):
                     v.removeStream(stream)
+
+        # clear the interface model
+        # (should handle cases where a new stream is added simultaneously)
+        if clear_model:
+            while self._tab_data_model.streams.value:
+                stream = self._tab_data_model.streams.value.pop()
+                self._unscheduleStream(stream)
+                self._disconnectROI(stream)
 
         # Clear the stream controller
         self.stream_controllers = []

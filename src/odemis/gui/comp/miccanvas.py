@@ -116,6 +116,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.line_overlay = None
         self.dicho_overlay = None
         self.gadget_overlay = None
+        self.cryofeature_overlay = None
 
         # play/pause icon
         self.play_overlay = view_overlay.PlayIconOverlay(self)
@@ -247,6 +248,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if guimodel.TOOL_LINE in tools_possible:
             self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
+
+        if guimodel.TOOL_FEATURE in tools_possible:
+            self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data)
+            self.add_world_overlay(self.cryofeature_overlay)
+            self.cryofeature_overlay.active.value = True
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 

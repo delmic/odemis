@@ -426,6 +426,56 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    def test_cryo_feature_overlay(self):
+        """
+        Test behavior of CryoFeatureOverlay
+        """
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        tab_mod = self.create_cryo_tab_model()
+        # Create a dummy stage & focus to attach to the view
+        stage = TMCLController(name="test_stage", role="stage",
+                               port="/dev/fake3",
+                               axes=["x", "y"],
+                               ustepsize=[1e-6, 1e-6],
+                               rng=[[-3e-3, 3e-3], [-3e-3, 3e-3]],
+                               refproc="Standard")
+
+        focus = TMCLController(name="test_focus", role="focus",
+                               port="/dev/fake3",
+                               axes=["z"],
+                               ustepsize=[1e-6],
+                               rng=[[-3e-3, 3e-3]],
+                               refproc="Standard")
+        tab_mod.main.stage = stage
+        tab_mod.main.focus = focus
+
+        fview = FeatureOverviewView("fakeview", stage=stage)
+        tab_mod.views.value.append(fview)
+        tab_mod.focussedView.value = fview
+        cnvs.setView(fview, tab_mod)
+        # Save current empty canvas
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        buffer_clear = wxImage2NDImage(img)
+
+        cryofeature_overlay = wol.CryoFeatureOverlay(cnvs, tab_mod)
+        cnvs.add_world_overlay(cryofeature_overlay)
+        cryofeature_overlay.active.value = True
+
+        # Add features to the tab's features list
+        tab_mod.add_new_feature(0, 0)
+        tab_mod.add_new_feature(0.001, 0.001)
+
+        cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
+        cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
+        buffer_feature = wxImage2NDImage(img)
+        # Compare empty canvas with the added _features_va
+        assert_array_not_equal(buffer_clear, buffer_feature,
+                               msg="Buffers are equal, which means the added _features_va didn't appear on the canvas.")
+        test.gui_loop()
+
     def test_stage_point_select_mode_overlay(self):
         """
         Test behavior of StagePointSelectOverlay

@@ -765,6 +765,14 @@ class xrcpnl_tab_localization(wx.Panel):
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_feature_panel = xrc.XRCCTRL(self, "fp_feature_panel")
+        self.pnl_features = xrc.XRCCTRL(self, "pnl_features")
+        self.cmb_features = xrc.XRCCTRL(self, "cmb_features")
+        self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
+        self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
+        self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
+        self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
+        self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
@@ -6605,10 +6613,10 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="FeatureOverviewViewport" name="vp_secom_tl">
+          <object class="FixedOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
-            <XRCED>
+            <XRCED>FixedOverviewViewport
               <assign_var>1</assign_var>
             </XRCED>
           </object>
@@ -7138,28 +7146,28 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="LiveViewport" name="vp_secom_tl">
+          <object class="FeatureOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_tr">
+          <object class="FeatureViewport" name="vp_secom_tr">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_bl">
+          <object class="FeatureViewport" name="vp_secom_bl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_br">
+          <object class="FeatureViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
@@ -7185,6 +7193,117 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
+					<object class="FoldPanelItem" name="fp_feature_panel">
+						<object class="wxPanel" name="pnl_features">
+							<object class="wxBoxSizer">				
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">										
+										<object class="sizeritem">
+											<object class="OwnerDrawnComboBox" name="cmb_features">
+											  <size>155,20</size>
+											  <fg>#2FA7D4</fg>
+											  <bg>#4D4D4D</bg>
+											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+											</object>
+									  </object>
+									  <object class="sizeritem">
+										<object class="ImageTextButton" name="btn_create_move_feature">
+										  <height>24</height>
+										    <bg>#000000</bg>
+										  <label>Create/Move</label>
+										  <style>wxALIGN_CENTRE</style>
+										</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+									</object>
+								<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+									<object class="wxBoxSizer">				
+										 <object class="sizeritem">
+												<object class="wxStaticText">
+												<label>Status</label>
+												<fg>#DDDDDD</fg>
+												</object>
+										</object>
+										<object class="sizeritem">
+												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
+												  <size>110,16</size>
+												  <fg>#2FA7D4</fg>
+												  <bg>#4D4D4D</bg>
+												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+												</object>
+												<flag>wxLEFT</flag>
+											<border>10</border>
+										  </object>
+										  <object class="sizeritem">
+												<object class="ImageTextButton" name="btn_go_to_feature">
+												  <height>24</height>
+												  <label>Go to feature</label>
+												  <style>wxALIGN_CENTRE</style>
+												    <bg>#000000</bg>
+												  <XRCED>
+													<assign_var>1</assign_var>
+												  </XRCED>
+												</object>
+												<flag>wxLEFT</flag>
+												<border>65</border>
+											</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">			
+									 <object class="sizeritem">
+											<object class="wxStaticText">
+											<label>Feature Z</label>
+											<fg>#DDDDDD</fg>
+											</object>
+										</object>
+										<object class="sizeritem">
+											<object class="UnitFloatCtrl" name="ctrl_feature_z">
+												<size>-1,20</size>
+												<accuracy>4</accuracy>
+												<key_step>0.001</key_step>
+												  <bg>#000000</bg>
+												<scale>linear</scale>
+												<accuracy>2</accuracy>
+											</object>
+											<flag>wxLEFT</flag>
+											<border>10</border>
+										</object>
+										 <object class="sizeritem">
+											<object class="ImageTextButton" name="btn_use_current_z">
+											  <height>24</height>
+											    <bg>#000000</bg>
+											  <label>Use Current Z</label>
+											  <style>wxALIGN_CENTRE</style>
+											</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+										</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+								<border>10</border>
+							</object>
+					   <flag>wxALIGN_RIGHT</flag>
+					   <orient>wxVERTICAL</orient>
+                      </object>
+							
+						</object>
+                        <label>FEATURES</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
