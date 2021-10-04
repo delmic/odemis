@@ -3117,7 +3117,7 @@ class FastEMProjectBarController(object):
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
         num = next(idx for idx, num in enumerate(sorted(self.project_ctrls.keys()) + [0], 1) if idx != num)
-        name = "Project %s" % num
+        name = "Project-%s" % num
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_bar, self._view_ctrl)
