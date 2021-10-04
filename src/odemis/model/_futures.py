@@ -489,7 +489,7 @@ class ProgressiveFuture(CancellableFuture):
             # Set start to current time and end to estimated endtime (difference between current end and start)
             start, end = self.get_progress()
             startt = time.time()
-            endt = startt + end - start
+            endt = startt + (end - start)  # Force the computation order to reduce floating point error
             self.set_progress(start=startt, end=endt)
 
         return running

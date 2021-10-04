@@ -313,7 +313,8 @@ class TestFutures(unittest.TestCase):
         f.set_running_or_notify_cancel()
         startf, endf = f.get_progress()
         self.assertLessEqual(startf, time.time())
-        self.assertEqual(end, endf)
+        self.assertAlmostEqual(startf + 1, endf)
+        self.assertAlmostEqual(endf, time.time() + 1, delta=0.1)
         time.sleep(0.1)
 
         # "finish" the task
