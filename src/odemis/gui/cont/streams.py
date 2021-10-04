@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import re
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict
@@ -3186,6 +3187,9 @@ class FastEMProjectController(object):
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
             txt = make_unique_name(txt, [project.name.value for project in self._tab_data.projects.value])
             logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)
@@ -3205,7 +3209,8 @@ class FastEMProjectController(object):
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.keys()) + [0], 1) if idx != n)
-        name = "ROA %s" % num
+        name = "ROA-%s" % num
+        name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
         roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
         self.roa_ctrls[num] = roa_ctrl
@@ -3354,12 +3359,20 @@ class FastEMROAController(object):
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
-        all_roas = [roa.name.value for project in self._tab_data.projects.value for roa in project.roas.value]
+
+        # Process input, make sure name is unique in project and complies with whitelisted characters of
+        # technolution driver
+        roa_project = [p for p in self._tab_data.projects.value if self.model in p.roas.value][0]
+        all_project_roas = [roa.name.value for roa in roa_project.roas.value]
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
-            txt = make_unique_name(txt, all_roas)
+            txt = make_unique_name(txt, all_project_roas)
             logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
             self.model.name.value = txt
             self.panel.txt_ctrl.SetValue(txt)
+
         evt.Skip()
 
 
