@@ -612,7 +612,7 @@ def _step_from_range(min_val, max_val):
         logging.exception(msg)
 
 
-class PatternValidator(ValidatorClass):
+class PatternValidator(wx.Validator):
 
     def __init__(self, pattern):
         """ pattern (str): regex pattern of allowed entries """
