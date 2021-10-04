@@ -2987,16 +2987,16 @@ class DualChannelPositionSensor(model.HwComponent):
     def reference(self, axes, omit_referenced=False):
         """
         Calls .reference function of stage (if available) and sensor.
-        axes (set of str): axes to be referenced
+        axes (set of str or None): sensor axes to be referenced, if empty or None, reference all axes
         omit_referenced (bool): only reference axes if they are not referenced yet
         returns (Future): object to control the reference request
         """
         if not axes:
             axes = self.channels.keys()
-        f = self._executor.submit(self._doReference, axes, omit_referenced)
-        return f
+        return self._executor.submit(self._doReference, axes, omit_referenced)
 
     def _doReference(self, axes, omit_referenced):
+        # Reference all stage axes (also those which are not in "axes", e.g. z axis)
         if self.stage:
             stage_axes = self.stage.axes.keys()
             if omit_referenced:
@@ -3063,6 +3063,7 @@ class DualChannelPositionSensor(model.HwComponent):
         return rotation
 
     def _on_referenced(self, future):
+        """ Set state after referencing. """
         try:
             future.result()
         except Exception as e:

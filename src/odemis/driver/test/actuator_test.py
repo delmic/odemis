@@ -2050,6 +2050,60 @@ class TestDualChannelPositionSensorWithStage(unittest.TestCase):
         self.assertTrue(all(self.stage.referenced.value.values()))
         self.assertTrue(all(self.sensor.referenced.value.values()))
 
+    def test_startup_referencing_if_necessary(self):
+        # Reference stage
+        self.dev.reference({"x", "y"}).result()
+
+        # Move stage
+        stage_pos_x = 10e-6
+        self.stage.moveAbsSync({"x": stage_pos_x})
+
+        # Now start wrapper class with ref_on_init argument
+        dev2 = DualChannelPositionSensor(name="TestDualChannelPositionSensor",
+                                         role="stage-position",
+                                         dependencies={"sensor": self.sensor,
+                                                       "stage": self.stage},
+                                         channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                         distance=1e-6,
+                                         ref_on_init="if necessary"
+                                         )
+
+        # Wait until it's referenced
+        time.sleep(20)
+
+        # It should not reference the stage again (so we expect the stage position to still be at 10e-6)
+        try:
+            self.assertAlmostEqual(self.stage.position.value["x"], stage_pos_x, delta=1e-8)
+        finally:
+            dev2.terminate()
+
+    def test_startup_referencing_always(self):
+        # Reference stage
+        self.stage.reference({"x"}).result()
+
+        # Move stage
+        stage_pos_x = 10e-6
+        self.stage.moveAbsSync({"x": stage_pos_x})
+
+        # Now start wrapper class with ref_on_init argument
+        dev2 = DualChannelPositionSensor(name="TestDualChannelPositionSensor",
+                                         role="stage-position",
+                                         dependencies={"sensor": self.sensor,
+                                                       "stage": self.stage},
+                                         channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                         distance=1e-6,
+                                         ref_on_init="always"
+                                         )
+
+        # Wait until it's referenced
+        time.sleep(20)
+
+        # It should reference the stage again (so we expect the stage position to be 0)
+        try:
+            self.assertEqual(self.stage.position.value["x"], 0)
+        finally:
+            dev2.terminate()
+
 
 if __name__ == "__main__":
     unittest.main()
