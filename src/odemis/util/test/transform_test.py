@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import inspect
 import numpy
 from numpy.linalg import LinAlgError
 import unittest
@@ -342,12 +343,12 @@ class TransformTestBase:
             if issubclass(cls, self.transform_type):
                 with self.subTest(**params):
                     tform = self.transform_type(matrix, translation)
-                    self.assertAlmostEqual(params.get("scale"), tform.scale)
+                    self.assertAlmostEqual(params.get("scale", 1), tform.scale)
                     self.assertAlmostEqual(
-                        0, _angle_diff(params.get("rotation"), tform.rotation)
+                        0, _angle_diff(params.get("rotation", 0), tform.rotation)
                     )
-                    self.assertAlmostEqual(params.get("squeeze"), tform.squeeze)
-                    self.assertAlmostEqual(params.get("shear"), tform.shear)
+                    self.assertAlmostEqual(params.get("squeeze", 1), tform.squeeze)
+                    self.assertAlmostEqual(params.get("shear", 0), tform.shear)
 
     def test_init_from_matrix_invalid_input(self):
         """
@@ -367,9 +368,8 @@ class TransformTestBase:
         result when instantiated with known input.
 
         """
-        for cls, matrix, translation, _params, src, dst in transform_known_values():
+        for cls, matrix, translation, params, src, dst in transform_known_values():
             if issubclass(cls, self.transform_type):
-                params = {key: _params[key] for key in self.params}
                 with self.subTest(**params):
                     tform = self.transform_type(translation=translation, **params)
                     numpy.testing.assert_array_almost_equal(matrix, tform.matrix)
@@ -382,9 +382,10 @@ class TransformTestBase:
         When instantiated with invalid input a ValueError should be raised.
 
         """
-        if "scale" in self.params:
+        sig = inspect.signature(self.transform_type)
+        if "scale" in sig.parameters:
             self.assertRaises(ValueError, self.transform_type, scale=-1)
-        if "squeeze" in self.params:
+        if "squeeze" in sig.parameters:
             self.assertRaises(ValueError, self.transform_type, squeeze=-1)
 
     def test_from_pointset_known_values(self):
@@ -441,17 +442,14 @@ class TransformTestBase:
 
 class AffineTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = AffineTransform
-    params = {"scale", "rotation", "squeeze", "shear"}
 
 
 class ScalingTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = ScalingTransform
-    params = {"scale", "rotation", "squeeze"}
 
 
 class SimilarityTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = SimilarityTransform
-    params = {"scale", "rotation"}
 
     def test_similarity_transform_from_pointset_umeyama(self):
         """
@@ -475,7 +473,6 @@ class SimilarityTransformTest(TransformTestBase, unittest.TestCase):
 
 class RigidTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = RigidTransform
-    params = {"rotation"}
 
 
 if __name__ == "__main__":

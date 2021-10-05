@@ -17,7 +17,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         RigidTransform,
         numpy.array([(1, 0), (0, 1)]),
-        dict(scale=1, rotation=0, squeeze=1, shear=0),
+        dict(rotation=0),
         [
             (T0, [(0, 0), (1, 0), (0, 1)]),
             (TX, [(1, 0), (2, 0), (1, 1)]),
@@ -30,7 +30,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         RigidTransform,
         numpy.array([(0, 1), (-1, 0)]),
-        dict(scale=1, rotation=numpy.deg2rad(-90), squeeze=1, shear=0),
+        dict(rotation=numpy.deg2rad(-90)),
         [
             (T0, [(0, 0), (0, -1), (1, 0)]),
             (TX, [(1, 0), (1, -1), (2, 0)]),
@@ -43,7 +43,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         RigidTransform,
         numpy.array([(0, -1), (1, 0)]),
-        dict(scale=1, rotation=numpy.deg2rad(90), squeeze=1, shear=0),
+        dict(rotation=numpy.deg2rad(90)),
         [
             (T0, [(0, 0), (0, 1), (-1, 0)]),
             (TX, [(1, 0), (1, 1), (0, 0)]),
@@ -56,7 +56,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         RigidTransform,
         numpy.array([(-1, 0), (0, -1)]),
-        dict(scale=1, rotation=numpy.deg2rad(180), squeeze=1, shear=0),
+        dict(rotation=numpy.deg2rad(180)),
         [
             (T0, [(0, 0), (-1, 0), (0, -1)]),
             (TX, [(1, 0), (0, 0), (1, -1)]),
@@ -69,7 +69,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         SimilarityTransform,
         numpy.array([(2, 0), (0, 2)]),
-        dict(scale=2, rotation=0, squeeze=1, shear=0),
+        dict(scale=2, rotation=0),
         [
             (T0, [(0, 0), (2, 0), (0, 2)]),
             (TX, [(1, 0), (3, 0), (1, 2)]),
@@ -82,7 +82,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         SimilarityTransform,
         numpy.array([(0, 2), (-2, 0)]),
-        dict(scale=2, rotation=numpy.deg2rad(-90), squeeze=1, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(-90)),
         [
             (T0, [(0, 0), (0, -2), (2, 0)]),
             (TX, [(1, 0), (1, -2), (3, 0)]),
@@ -95,7 +95,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         SimilarityTransform,
         numpy.array([(0, -2), (2, 0)]),
-        dict(scale=2, rotation=numpy.deg2rad(90), squeeze=1, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(90)),
         [
             (T0, [(0, 0), (0, 2), (-2, 0)]),
             (TX, [(1, 0), (1, 2), (-1, 0)]),
@@ -108,7 +108,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         SimilarityTransform,
         numpy.array([(-2, 0), (0, -2)]),
-        dict(scale=2, rotation=numpy.deg2rad(180), squeeze=1, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(180)),
         [
             (T0, [(0, 0), (-2, 0), (0, -2)]),
             (TX, [(1, 0), (-1, 0), (1, -2)]),
@@ -121,7 +121,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         SimilarityTransform,
         numpy.array([(1, -1), (1, 1)]),
-        dict(scale=numpy.sqrt(2), rotation=numpy.deg2rad(45), squeeze=1, shear=0),
+        dict(scale=numpy.sqrt(2), rotation=numpy.deg2rad(45)),
         [
             (T0, [(0, 0), (1, 1), (-1, 1)]),
             (TX, [(1, 0), (2, 1), (0, 1)]),
@@ -134,7 +134,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         ScalingTransform,
         numpy.array([(4, 0), (0, 1)]),
-        dict(scale=2, rotation=0, squeeze=2, shear=0),
+        dict(scale=2, rotation=0, squeeze=2),
         [
             (T0, [(0, 0), (4, 0), (0, 1)]),
             (TX, [(1, 0), (5, 0), (1, 1)]),
@@ -147,7 +147,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         ScalingTransform,
         numpy.array([(0, 1), (-4, 0)]),
-        dict(scale=2, rotation=numpy.deg2rad(-90), squeeze=2, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(-90), squeeze=2),
         [
             (T0, [(0, 0), (0, -4), (1, 0)]),
             (TX, [(1, 0), (1, -4), (2, 0)]),
@@ -160,7 +160,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         ScalingTransform,
         numpy.array([(0, -1), (4, 0)]),
-        dict(scale=2, rotation=numpy.deg2rad(90), squeeze=2, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(90), squeeze=2),
         [
             (T0, [(0, 0), (0, 4), (-1, 0)]),
             (TX, [(1, 0), (1, 4), (0, 0)]),
@@ -173,7 +173,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         ScalingTransform,
         numpy.array([(-4, 0), (0, -1)]),
-        dict(scale=2, rotation=numpy.deg2rad(180), squeeze=2, shear=0),
+        dict(scale=2, rotation=numpy.deg2rad(180), squeeze=2),
         [
             (T0, [(0, 0), (-4, 0), (0, -1)]),
             (TX, [(1, 0), (-3, 0), (1, -1)]),
@@ -186,7 +186,7 @@ TRANSFORM_KNOWN_VALUES = [
     (
         ScalingTransform,
         numpy.array([(4, -1), (4, 1)]),
-        dict(scale=numpy.sqrt(8), rotation=numpy.deg2rad(45), squeeze=2, shear=0),
+        dict(scale=numpy.sqrt(8), rotation=numpy.deg2rad(45), squeeze=2),
         [
             (T0, [(0, 0), (4, 4), (-1, 1)]),
             (TX, [(1, 0), (5, 4), (0, 1)]),
