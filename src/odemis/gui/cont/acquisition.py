@@ -1507,6 +1507,10 @@ class FastEMAcquiController(object):
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
+        # Update path (in case it's already the next day)
+        self.path = datetime.today().strftime('%Y-%m-%d')
+        self._tab_panel.txt_destination.SetValue(self.path)
+
         lvl = None  # icon status shown
         if not self._main_data_model.is_aligned.value:
             lvl = logging.WARN
@@ -1534,10 +1538,6 @@ class FastEMAcquiController(object):
         logging.debug("Updating status message %s, with level %s", txt, lvl)
         self.lbl_acqestimate.SetLabel(txt)
         self._show_status_icons(lvl)
-
-        # Update path (in case it's already the next day)
-        self.path = datetime.today().strftime('%Y-%m-%d')
-        self._tab_panel.txt_destination.SetValue(self.path)
 
     def _get_undefined_calibrations(self):
         """
