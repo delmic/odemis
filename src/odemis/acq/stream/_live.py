@@ -297,7 +297,7 @@ class ScannerStream(LiveStream):
         try:
             scale = self._getEmitterVA("scale").value
         except AttributeError:
-            logging.debug("Cannot find a scale defined for the %s, using (1, 1) instead" % self)
+            logging.debug("Cannot find a scale defined for the %s, using (1, 1) instead" % self.name)
             scale = (1, 1)
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
@@ -419,8 +419,11 @@ class ScannerStream(LiveStream):
         # However, there are many variations. In particular, some e-beam do not
         # have horizontalFoV. Others do not support arbitrary resolutions, but
         # only a subset. So instead, we use fov = img_pixel_size * resolution.
-
-        scale = self._getEmitterVA("scale").value
+        try:
+            scale = self._getEmitterVA("scale").value
+        except AttributeError:
+            logging.debug("Cannot find a scale defined for the %s, using (1, 1) instead" % self.name)
+            scale = (1, 1)
         try:
             # When there is a horizontalFoV, it's almost obvious.
             # We just need to guess the Y size, based on the shape.
@@ -434,8 +437,11 @@ class ScannerStream(LiveStream):
             # control it from Odemis. In this case, the user has to type the
             # current magnification in, which directly sets the pixelSize.
             # The stream never has a local version of any of them.
-            base_pxs = self.emitter.pixelSize.value  # It's read-only and always present on the emitter
-            hpxs = base_pxs[0] * scale[0]
+            if hasVA(self.emitter, "pixelSize"):
+                base_pxs = self.emitter.pixelSize.value  # It's read-only and present on almost every emitter
+                hpxs = base_pxs[0] * scale[0]
+            else:
+                raise AttributeError("Failed to estimate the field-of-view, the emitter has no pixelSize VA.")
 
         vpxs = hpxs * scale[1] / scale[0]
 
