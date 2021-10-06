@@ -1781,7 +1781,9 @@ class Chamber(model.Actuator):
             self.pressure._set_value(pressure, force_write=True)
             logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
         except IOError:
-            logging.warning("Couldn't read pressure value.")
+            pressure = 101325  # ambient pressure
+            self.pressure._set_value(pressure, force_write=True)
+            logging.warning("Couldn't read pressure value, assuming ambient pressure %s.", pressure)
 
     def terminate(self):
         self._polling_thread.cancel()
