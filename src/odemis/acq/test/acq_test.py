@@ -37,6 +37,8 @@ from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
+from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
+from odemis.util import driver 
 from odemis.driver.tmcm import TMCLController
 from odemis.util.comp import generate_zlevels
 
@@ -493,11 +495,10 @@ class CRYOSECOMTestCase(unittest.TestCase):
         try:
             test.start_backend(ENZEL_CONFIG)
         except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
+            logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
+            test.stop_backend()
+            test.start_backend(ENZEL_CONFIG)
+        except Exception:
             raise
 
         # create some streams connected to the backend
@@ -512,9 +513,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
+        if driver.get_backend_status in [BACKEND_STARTING, BACKEND_RUNNING]:
+            test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -523,6 +523,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self._nb_updates = 0
         self.streams = []
 
+        self.fm_focuser.reference({"z"}).result()
         self.fm_focuser.moveAbs({"z": self.fm_focus_pos}).result()
 
     def _on_progress_update(self, f, s, e):
