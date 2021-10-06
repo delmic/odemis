@@ -133,15 +133,6 @@ class TestGenerateZlevels(unittest.TestCase):
         with self.assertRaises(ZeroDivisionError):
             generate_zlevels(self.focus, zrange, zStep) 
 
-    def test_zmax_and_zmin_both_zeros(self):
-        self.focus.moveAbsSync({"z": 1300e-6})
-        zMin = -0e-6
-        zMax = 0e-6
-        zrange = [zMin, zMax]
-        zStep = 10e-6
-        with self.assertRaises(ValueError):
-            generate_zlevels(self.focus, zrange, zStep)
-
     def test_zrange_not_in_proper_order(self):
         self.focus.moveAbsSync({"z": 1300e-6})
         zMin = -10e-6
