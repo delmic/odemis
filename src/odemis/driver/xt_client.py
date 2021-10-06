@@ -438,10 +438,14 @@ class SEM(model.HwComponent):
             self.server.vent()
 
     def get_pressure(self):
-        """Returns: (float) the chamber pressure in pascal."""
+        """Returns: (float) the chamber pressure in pascal, raises IOError in case pressure could not be read."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_pressure()
+            pressure = self.server.get_pressure()
+            if pressure == -1:
+                raise IOError("Cannot read pressure.")
+            else:
+                return pressure
 
     def pressure_info(self):
         """Returns (dict): the unit and range of the pressure."""
@@ -1756,10 +1760,12 @@ class Chamber(model.Actuator):
         self.position._set_value(val, force_write=True)
 
         # Pressure
-        pressure = self.parent.get_pressure()
-        self.pressure._set_value(pressure, force_write=True)
-
-        logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
+        try:
+            pressure = self.parent.get_pressure()
+            self.pressure._set_value(pressure, force_write=True)
+            logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
+        except IOError:
+            logging.warning("Couldn't read pressure value.")
 
     def terminate(self):
         self._polling_thread.cancel()
