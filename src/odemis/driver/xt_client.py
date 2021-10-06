@@ -422,7 +422,15 @@ class SEM(model.HwComponent):
         """Pump the microscope's chamber. Note that pumping takes some time. This is blocking."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.pump()
+            # Pump/vent functions can take a long time, so change timeout
+            self.server._pyroTimeout = 300  # seconds
+            try:
+                self.server.pump()
+            except TimeoutError:
+                logging.warning("Pumping timed out after %s s. Check the xt user interface for the current status " +
+                                "of the chamber", self.server._pyroTimeout)
+            finally:
+                self.server._pyroTimeout = 30  # seconds
 
     def get_vacuum_state(self):
         """Returns: (str) the vacuum state of the microscope chamber to see if it is pumped or vented,
@@ -435,7 +443,15 @@ class SEM(model.HwComponent):
         """Vent the microscope's chamber. Note that venting takes time (appr. 3 minutes). This is blocking."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.vent()
+            # Pump/vent functions can take a long time, so change timeout
+            self.server._pyroTimeout = 300  # seconds
+            try:
+                self.server.vent()
+            except TimeoutError:
+                logging.warning("Venting timed out after %s s. Check the xt user interface for the current status " +
+                                "of the chamber", self.server._pyroTimeout)
+            finally:
+                self.server._pyroTimeout = 30  # seconds
 
     def get_pressure(self):
         """Returns: (float) the chamber pressure in pascal, raises IOError in case pressure could not be read."""
