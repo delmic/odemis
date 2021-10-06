@@ -32,8 +32,9 @@ from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
+from odemis.util.linalg import qrp
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
-from odemis.util.transform import AffineTransform, SimilarityTransform
+from odemis.util.transform import AffineTransform, SimilarityTransform, _rotation_matrix_to_angle
 import os
 from scipy.spatial import cKDTree as KDTree
 import threading
@@ -400,7 +401,7 @@ def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
 
     # Translation is the mean of the spots, which is the distance from the origin to the center of the grid of spots.
     translation = numpy.mean(spot_positions, axis=0)
-    transform_to_spot_positions = AffineTransform(matrix=transformation_matrix, translation=translation)
+    transform_to_spot_positions = AffineTransform(transformation_matrix, translation)
     # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
     grid = GridPoints(*repetition)
     spot_grid = transform_to_spot_positions.apply(grid)
@@ -411,13 +412,19 @@ def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
     # Find the transformation from a grid centered around the origin to the sorted positions.
     if method == GRID_AFFINE:
         transformation = AffineTransform.from_pointset(grid, pos_sorted)
+        R, S = qrp(transformation.matrix)
+        scale = numpy.tuple(numpy.diag(S))
+        rotation = _rotation_matrix_to_angle(R)
+        shear = S[0, 1] / S[0, 0]
     elif method == GRID_SIMILARITY:
         transformation = SimilarityTransform.from_pointset(grid, pos_sorted)
-        transformation.shear = None  # The similarity transform does not have a shear component.
+        scale = transformation.scale
+        rotation = transformation.rotation
+        shear = None  # The similarity transform does not have a shear component.
     else:
         raise ValueError("Method: %s is unknown, should be 'affine' or 'similarity'." % method)
     spot_coordinates = transformation.apply(grid)
-    return spot_coordinates, translation, transformation.scale, transformation.rotation, transformation.shear
+    return spot_coordinates, translation, scale, rotation, shear
 
 
 def CropFoV(ccd, dfbkg=None):

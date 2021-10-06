@@ -1252,13 +1252,14 @@ class Stream(object):
         shear = md.get(model.MD_SHEAR, 0)
         translation = md.get(model.MD_POS, (0, 0))
         size = raw.shape[-1], raw.shape[-2]
-        # The "shear" argument is not passed in the "AffineTransform" because the formula of the AffineTransform
-        # uses a horizontal shear, while MD_SHEAR defines a vertical shear. The shear is applied afterwards,
-        # by updating the transformation matrix.
-        tform = AffineTransform(rotation=rotation, scale=pxs, translation=translation)
-        L = numpy.array([(1, 0), (-shear, 1)])
-        tform.transformation_matrix = numpy.dot(tform.transformation_matrix, L)
-        pixel_pos_c = tform.inverse()(p_pos)
+        # The "squeeze" and "shear" arguments are not passed in the "AffineTransform" because MD_SHEAR defines a
+        # vertical shear, whereas AffineTransform applies a shear in both direction. Similarly MD_PIXEL_SIZE defines
+        # a scale in two directions, whereas this is separated in a isotropic scale and anisotropic squeeze for
+        # AffineTransform. Both squeeze and shear are applied afterwards by updating the transformation matrix.
+        tform = AffineTransform(rotation=rotation, translation=translation)
+        SL = pxs * numpy.array([(1, 0), (-shear, 1)])
+        tform.matrix = numpy.dot(tform.matrix, SL)
+        pixel_pos_c = tform.inverse().apply(p_pos)
         # a "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
         pixel_pos = int(pixel_pos_c[0] + size[0] / 2), - int(pixel_pos_c[1] - size[1] / 2)
         if 0 <= pixel_pos[0] < size[0] and 0 <= pixel_pos[1] < size[1]:
