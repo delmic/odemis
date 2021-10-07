@@ -25,6 +25,15 @@ Note that in order to separate streams from an acquisition type point-of-view,
 most of the streams are also inheriting from one of the extra abstract classes:
 OpticalStream, EMStream, CLStream, SpectrumStream, TemporalSpectrumStream, ARStream.
 
+**.name:**
+
+A string VA containing the name of the stream. It has no effect on the behaviour,
+it is just an indication for the user of what the stream is used for.
+
+**.acquisitionType:**
+A VA containing a ``MD_AT_*`` to describe in fine details the type of acquisition
+the stream is used for, from a user's perspective.
+
 **.raw:**
 
 List of DataArray containing the latest raw data acquired by the Stream.
@@ -32,22 +41,56 @@ List of DataArray containing the latest raw data acquired by the Stream.
 **.image:**
 
 It's a VA containing a DataArray representing the .raw in a form useful for the user.
-For a standard image, the data should be projected to a RGB 2D image (XYC).
+For a standard image, the data should be projected to an RGB 2D image (YXC).
+The streams projected to a standard image usually come with these 5
+attributes to control the projection:
 
-The basic stream class is *Stream* (/acq/stream/_base.py).
+    - **.tint:**
+
+      to change the default colour. It can be either an RGB value (as
+      a tuple of 3 integers between 0 and 255, or a ``matplotlib.colors.Colormap``
+      to convert intensity to RGB using an arbitrary mapping.
+
+    -  **.intensityRange:**
+
+      2 values representing the smallest and largest value
+      to be mapped to. Intensities outside of this range are clipped.
+      When ``auto_bc`` is ``True``, it is automatically updated based on the raw data.
+
+    - **.auto_bc:**
+
+      a boolean VA to select whether the intensityRange is automatically
+      computed or not.
+
+    - **.auto_bc_outliers:**
+
+      a Float VA to select the amount of pixels which are
+      outside of the intensity range, when auto_bc is selected. The value is a
+      ratio, so between 0 and 1 (and typically close to 0).
+
+    - **.histogram:**
+
+      a VA containing a 1D numpy array representing the distribution
+      of intensities in the current raw data.
+
+The basic stream class is *Stream* (``/acq/stream/_base.py``).
 
 The following subclasses exist:
 
-    1. **LiveStream(Stream)** (/acq/stream/_live.py)
-    2. **MultipleDetectorStream(Stream)** (/acq/stream/_sync.py)
-    3. **RepetitionStream(LiveStream)** (/acq/stream/_helper.py)
-    4. **StaticStream(Stream)** (/acq/stream/_static.py)
+    1. **LiveStream(Stream)** (``/acq/stream/_live.py``)
+    2. **MultipleDetectorStream(Stream)** (``/acq/stream/_sync.py``)
+    3. **RepetitionStream(LiveStream)** (``/acq/stream/_helper.py``)
+    4. **StaticStream(Stream)** (``/acq/stream/_static.py``)
 
 LiveStream(Stream)
 ------------------
 
    Abstract class for any stream that can do continuous acquisition. It is mainly used for displaying detector data.
-   For every acquisition type it always has an equivalent in *_static.py*
+   For every acquisition type it always has an equivalent in ``_static.py``.
+   They all require at least a *detector* and *emitter* at initialization.
+   They often accept more components, such as a *focuser* (an actuator with a *z*
+   axis), or *filter* (an actuator with a *band* axis). All these components are
+   later accessible via the corresponding attributes ``.detector``, ``.emitter``...
 
    It uses the *is_active* VA.
 
@@ -60,19 +103,28 @@ LiveStream(Stream)
 
       This is a special SEM stream which automatically first aligns with the
       CCD (using spot alignment) every time the stage position changes.
-    
+
       Alignment correction can either be done via beam shift (=translation), or
       by just updating the image position.
 
     - **SpotSEMStream(LiveStream):**
 
-      Stream which forces the SEM to be in spot mode when active.
-	  
+      Stream which forces the SEM to be in spot mode when active. It has a ``.roi``
+      to select the position of the spot (as a ratio of the field of view).
+      It is used by the Odemis GUI to allow the user to move the e-beam spot.
+
+    - **SpotScannerStream(LiveStream):**
+
+      Stream which forces a scanner (eg, on a confocal microscope) to spot mode, when active.
+      It has the same behaviour as SpotSEMStream.
+
     - **ScannedRemoteTCStream(LiveStream):**
 
-      Stream used to run a FLIM acquisition. Requires a time correlator to operate. 
-	  
-	  Works in coordination with a helper stream (ScannedTCSettingsStream) which is used to set up the measurement. 
+      Stream used to run a Fluorescence-Lifetime Imaging Microscopy (FLIM) acquisition.
+      Requires a confocal microscope and a time correlator to operate.
+
+      Works in coordination with a helper stream (ScannedTCSettingsStream) which
+      is used to set up the measurement.
 
     - **CameraStream(LiveStream):**
 
@@ -82,21 +134,19 @@ LiveStream(Stream)
         - *BrightfieldStream(CameraStream):*
 
           Stream containing images obtained via optical brightfield illumination.
-      
-          It basically knows how to select white light and disable any filter.
-  
-        - *CameraCountStream(CameraStream):*
 
-          Special stream dedicated to count the entire data, and represent it over
-          time.
-      
-          The .image is a one dimension DataArray with the mean of the whole sensor
-          data over time. The last acquired data is the last value in the array.
+          It basically knows how to select white light and disable any filter.
+
+        - *RGBCameraStream(CameraStream):*
+
+          Stream for RGB camera.
+
+          If a light is given, it will turn it on during acquisition.
 
         - *FluoStream(CameraStream):*
 
           Stream containing images obtained via epifluorescence.
-      
+
           It basically knows how to select the right emission/filtered wavelengths,
           and how to taint the image.
           Note: Excitation is (filtered) light coming from a light source and
@@ -107,11 +157,25 @@ LiveStream(Stream)
           Stream containing images obtained via epifluorescence using a "scanner"
           (ie, a confocal microscope).
 
-        - *RGBCameraStream(CameraStream):*
+        - *CameraCountStream(CameraStream):*
 
-          Stream for RGB camera.
+          Special stream to average the entire data of a camera image into a single
+          value, and represent it over time (default is 30s). This is used in some alignment
+          procedures to obtain a chronogram of the light intensity received by the camera.
+
+          The .image is a one dimensional DataArray with the mean of the whole sensor
+          data over time. The last acquired data is the last value in the array.
+
+        - *StreakCamStream(CameraStream):*
+
+          Stream for streak camera, projecting the image as wavelength vs time.
+          The .image is a two dimensional DataArray with wavelength and time.
+          If known, the metadata contains ``MD_WL_LIST`` and ``MD_TIME_LIST`` to
+          indicate the actual wavelength and time that each pixel represents.
+
+          It also automatically lowers the camera gain to zero when not playing,
+          for safety.
       
-          If a light is given, it will turn it on during acquisition.
 
 MultipleDetectorStream(Stream)
 ------------------------------
