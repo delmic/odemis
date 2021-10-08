@@ -922,8 +922,7 @@ class SecomStreamsTab(Tab):
                                              main_data.sed,
                                              main_data.sed.data,
                                              main_data.ion_beam,
-                                             forcemd={model.MD_POS: (0, 0)},
-                                            )
+                                             )
             tab_data.fib_stream = fib_stream
             self._streambar_controller.addStream(fib_stream, add_to_view=True, visible=True, play=False)
 
@@ -1060,8 +1059,9 @@ class SecomStreamsTab(Tab):
 
         if main_data.ion_beam:
             # Don't add stage control since the pixel size/magnification is unknown for the XT client FIB.
-            vpv[viewports[1]] = {"name"          : "FIB",
+            vpv[viewports[3]] = {"name"          : "FIB",
                                  "stream_classes": FIBStream,
+                                 "stage": main_data.stage,
                                  }
 
         return vpv
