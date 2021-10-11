@@ -1774,11 +1774,11 @@ class Chamber(model.Actuator):
 
         # Pressure
         pressure = self.parent.get_pressure()
-        if pressure != -1:
+        if pressure != -1:  # -1 is returned when the chamber is vented
             self.pressure._set_value(pressure, force_write=True)
             logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
         else:
-            pressure = 101325  # ambient pressure
+            pressure = 100e3  # ambient pressure, Pa
             self.pressure._set_value(pressure, force_write=True)
             logging.warning("Couldn't read pressure value, assuming ambient pressure %s.", pressure)
 
