@@ -380,14 +380,20 @@ class TestMeteorMove(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(METEOR_CONFIG)
-        except LookupError:
-            logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
-            test.stop_backend()
-            test.start_backend(METEOR_CONFIG)
-        except Exception:
-            raise
+        if driver.get_backend_status() in driver.BACKEND_RUNNING:
+            microscope = model.getMicroscope()
+            if microscope.role != "meteor":
+                logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
+                test.stop_backend()
+                test.start_backend(METEOR_CONFIG)
+            else:
+                logging.info("There is METEOR backend already running. It will be used.")
+        else:
+            try:
+                logging.info("METEOR backend will be turned on.")
+                test.start_backend(METEOR_CONFIG)
+            except Exception:
+                raise
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
@@ -399,7 +405,7 @@ class TestMeteorMove(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if driver.get_backend_status in [BACKEND_STARTING, BACKEND_RUNNING]:
+        if driver.get_backend_status == BACKEND_RUNNING:
             test.stop_backend()
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
@@ -566,16 +572,8 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
 
     def test_unknown_label_at_initialization(self):
-        f = model.CancellableFuture()
-        f._task_lock = threading.Lock()
-        f._task_state = RUNNING
-        f._running_subf = model.InstantaneousFuture()
-        filter_dict = lambda keys, d: {key: d[key] for key in keys}
-        sub_moves = []
         arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0}
-        sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, arbitrary_position)))
-        for component, sub_move in sub_moves:
-            run_sub_move(f, component, sub_move)
+        self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(UNKNOWN, current_imaging_mode)
         current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
@@ -639,7 +637,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
         point2 = {'rz': 1.0472}  # 60 degree
         # the rotation difference is 30 degree
-        expected_rotation = Rotation.from_euler('x', 30, degrees=True).as_matrix()
+        expected_rotation = Rotation.from_euler('z', 30, degrees=True).as_matrix()
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_rot_error = _getDifference(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
@@ -660,7 +658,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         pos2 = numpy.array([point2[a] for a in lin_axes])
         exp_lin_error = scipy.spatial.distance.euclidean(pos1, pos2)
         # the rotation difference is 30 degree
-        expected_rotation = Rotation.from_euler('x', 30, degrees=True).as_matrix()
+        expected_rotation = Rotation.from_euler('z', 30, degrees=True).as_matrix()
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_error = _getDifference(point1, point2)
         self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)

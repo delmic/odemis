@@ -42,6 +42,7 @@ meteor_labels = {SEM_IMAGING: "SEM IMAGING", FM_IMAGING: "FM IMAGING", GRID_1: "
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
+SCALING_FACTOR = 0.03
 
 
 def getTargetPosition(target_pos_lbl, stage):
@@ -239,8 +240,8 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     return UNKNOWN
 
 
-SCALING_FACTOR = 0.03
-
+# TODO for now this function is hardcoded to work only for rz and rx. Handle
+# also the ry axis to make the function generic
 def _getDifference(start, end):
     """
     Calculate the error/difference between two 3D points.
