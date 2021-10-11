@@ -743,14 +743,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def update_area_size(self, w, h):
         """
         Calculates the requested tiling area size, and updates it on the GUI.
-        w (int): width of the tiling area
-        h (int): height of the tiling area
+        w (float): width of the tiling area
+        h (float): height of the tiling area
         """
         pos = self._tab_data_model.main.stage.position.value
         rect_pts = self.get_ROA_rect(w, h, pos, self._tiling_rng)
         if rect_pts:
-            # Note: the area should be LTRB
-            self.area = (rect_pts[0], rect_pts[3], rect_pts[2], rect_pts[1])
+            # Note the area can accept LTRB or LBRT.
+            self.area = rect_pts
             area_size = util.readable_str(value=(w, h), unit="m", sig=3)
             self.area_size_txt.SetLabel(area_size)
             self.update_acquisition_time()
@@ -764,15 +764,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Finds the intersection between the requested tiling area 
             and the tiling range.
-        w (int): width of the tiling area
-        h (int): height of the tiling area
+        w (float): width of the tiling area
+        h (float): height of the tiling area
         pos (dict -> float): current position of the stage
         tiling_rng (dict -> list): the tiling range along x and y axes
         """
         tl = pos["x"] - w/2, pos["y"] + h/2
         br = pos["x"] + w/2, pos["y"] - h/2
         # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
-        # Note: the input is LTRB, but the returned is LBRT
+        # Note: the input is LTRB. The output is LBRT assuming y axis upwards, or LTRB assuming y axis downwards. 
         rect_pts = rect_intersect((tl[0], tl[1], br[0], br[1]), 
             (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
         return rect_pts
