@@ -42,47 +42,54 @@ meteor_labels = {SEM_IMAGING: "SEM IMAGING", FM_IMAGING: "FM IMAGING", GRID_1: "
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
-SCALING_FACTOR = 0.03
+SCALING_FACTOR = 0.03 # m (based on fine tuning)
 
 
 def getTargetPosition(target_pos_lbl, stage):
     """
     Returns the position that the stage would go to. It might return None in case the target
         position has not been determined. 
-    target_pos_lbl (int): a lable representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+    target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
     stage (Actuator): a stage component 
     returns (dict->float): the end position of the stage
     """
     stage_md = stage.getMetadata()
-    sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-    sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
     current_position = getCurrentPositionLabel(stage.position.value, stage)
     if target_pos_lbl == LOADING:
         end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
     elif current_position in [LOADING, SEM_IMAGING]: 
         if target_pos_lbl in [SEM_IMAGING, GRID_1]:
             # if at loading, and sem is pressed, choose grid1 by default
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
             sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = sem_grid1_pos
+        elif target_pos_lbl == GRID_2:
+            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+            sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            end_pos = sem_grid2_pos
         elif target_pos_lbl == FM_IMAGING:
             if current_position == LOADING:
                 # if at loading and fm is pressed, choose grid1 by default
+                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
                 fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
             elif current_position == SEM_IMAGING:
                 fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage)
             end_pos = fm_target_pos
-        elif target_pos_lbl == GRID_2:
-            sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-            end_pos = sem_grid2_pos
+        else:
+            raise ValueError("Unkown target position")
     elif current_position == FM_IMAGING:
         if target_pos_lbl == GRID_1:
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
             end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
         elif target_pos_lbl == GRID_2:
+            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
             end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
             end_pos = transformFromMeteorToSEM(stage.position.value, stage)                    
+        else:
+            raise ValueError("Unkown target position")
     else:
-        end_pos = None 
+        raise ValueError("Unkown target position")
     return end_pos
 
 
@@ -91,22 +98,24 @@ def getCurrentGridLabel(current_pos, stage):
     Detects which grid on the sample shuttle of meteor being viewed
     current_pos (dict str->float): position of the stage
     stage (Actuator): the stage component  
-    returns a label GRID_1 or GRID_2 
+    return (GRID_1 or GRID_2): the guessed grid. If current position is not SEM
+        or FM, None would be returned.
     """
     current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
     grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
     grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
     if current_pos_label == SEM_IMAGING:
-        distance_to_grid1 = _getDifference(current_pos, grid1_pos)
-        distance_to_grid2 = _getDifference(current_pos, grid2_pos)
+        distance_to_grid1 = _getDistance(current_pos, grid1_pos)
+        distance_to_grid2 = _getDistance(current_pos, grid2_pos)
         return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1 
     elif current_pos_label == FM_IMAGING:
-        distance_to_grid1 = _getDifference(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
-        distance_to_grid2 = _getDifference(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
+        distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
+        distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
     else: 
-        return
+        logging.warning("Cannot guess between grid 1 and grid2 in %s position" % meteor_labels[current_pos_label])
+        return None
 
 
 def _getCurrentEnzelPositionLabel(current_pos, stage):
@@ -197,10 +206,10 @@ def getCurrentPositionLabel(current_pos, stage):
     role = model.getMicroscope().role
     if role == 'enzel':
         return _getCurrentEnzelPositionLabel(current_pos, stage)
-    
     elif role == 'meteor':
         return _getCurrentMeteorPositionLabel(current_pos, stage)
-
+    else:
+        raise LookupError("Unhandled microscope role %s" % role)
 
 def getCurrentAlignerPositionLabel(current_pos, align):
     """
@@ -242,22 +251,24 @@ def getCurrentAlignerPositionLabel(current_pos, align):
 
 # TODO for now this function is hardcoded to work only for rz and rx. Handle
 # also the ry axis to make the function generic
-def _getDifference(start, end):
+def _getDistance(start, end):
     """
-    Calculate the error/difference between two 3D points.
-    start, end (dict -> float): a 3D point
-    return (float): the difference between two 3D points
+    Calculate the error/difference between two 3D postures with x, y, z, rx, rz axes
+        or a subset of these axes. If there are no common axes between the two passed
+        postures, an error would be raised. The scaling factor of the rotation error is in meter.
+    start, end (dict -> float): a 3D posture
+    return (float >= 0): the difference between two 3D postures.
     """
     axes = start.keys() & end.keys()
     lin_axes = axes & {'x', 'y', 'z'}  # only the axes found on both points
     rot_axes = axes & {'rx', 'rz'}  # only the axes found on both points
     if not lin_axes and not rot_axes:
-        return
+        raise ValueError("No common axes found between the two postures")
     lin_error = rot_error = 0
     # for the linear error
     if lin_axes:
-        sp = numpy.array([start[a] for a in lin_axes])
-        ep = numpy.array([end[a] for a in lin_axes])
+        sp = numpy.array([start[a] for a in sorted(lin_axes)])
+        ep = numpy.array([end[a] for a in sorted(lin_axes)])
         lin_error = scipy.spatial.distance.euclidean(ep, sp)
     # for the rotation error
     if rot_axes:
@@ -277,7 +288,7 @@ def _getDifference(start, end):
         # find the rotation error matrix
         R_diff = numpy.matmul(numpy.transpose(R_start), R_end)
         # map to scalar error
-        rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-R_diff)
+        rot_error = SCALING_FACTOR*abs(numpy.trace(numpy.eye(3)-R_diff))
     return lin_error+rot_error
     
 
@@ -291,9 +302,9 @@ def getMovementProgress(current_pos, start_pos, end_pos):
     :return:(0<=float<=1, or None) Ratio of the progress, None if it's far away from of the path
     """
     # Get distance for current point in respect to start and end
-    from_start = _getDifference(start_pos, current_pos)
-    to_end = _getDifference(current_pos, end_pos)
-    total_length = _getDifference(start_pos, end_pos)
+    from_start = _getDistance(start_pos, current_pos)
+    to_end = _getDistance(current_pos, end_pos)
+    total_length = _getDistance(start_pos, end_pos)
     if total_length == 0:  # same value
         return 1
     # Check if current position is on the line from start to end position
@@ -642,10 +653,11 @@ def _doCryoSwitchSamplePosition(future, target):
 def transformFromSEMToMeteor(pos, stage):
     """
     Transforms the current stage position from the SEM imaging area to the 
-        meteor/FM imaging area. 
-    pos (dict str->float): the current stage position
-    stage (Actuator): the stage component 
-    return (dict str->float): the transformed position
+        meteor/FM imaging area.
+    pos (dict str->float): the current stage position. The position has to have x, y, rz, and rx axes,
+        otherwise error would be raised.
+    stage (Actuator): the stage component. The stage has to have metadata "MD_POS_COR" and "MD_FAV_FM_POS_ACTIVE"
+    return (dict str->float): the transformed position. It returns the updated axes x, y, rx, rz. The axis z is same as the input.
     """
     if not {"x", "y", "rz", "rx"}.issubset(stage.axes):
         raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
@@ -653,8 +665,8 @@ def transformFromSEMToMeteor(pos, stage):
     transformed_pos = pos.copy()
     pos_cor = stage_md[model.MD_POS_COR]
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
-    transformed_pos["x"] = 2*pos_cor["x"]-pos["x"]
-    transformed_pos['y'] = 2*pos_cor["y"]-pos["y"]
+    transformed_pos["x"] = 2 * pos_cor["x"] - pos["x"]
+    transformed_pos['y'] = 2 * pos_cor["y"] - pos["y"]
     transformed_pos.update(fm_pos_active)
     return transformed_pos
 
