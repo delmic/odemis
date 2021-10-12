@@ -459,6 +459,8 @@ class LocalizationTab(Tab):
         if self.main_data.role == "enzel":
             self.stage = self.tab_data_model.main.stage
         elif self.main_data.role == "meteor":
+            # The stage is in the FM referential, but we care about the stage-bare 
+            # in the SEM referential to move between positions
             self.stage = self.tab_data_model.main.stage_bare
         self.stage.position.subscribe(self._on_stage_pos, init=True)
 
@@ -2380,15 +2382,15 @@ class CryoChamberTab(Tab):
         self._create_new_dir()
 
         if self._role == 'enzel':  
+            # start and end position are used for the gauge progress bar
+            self._stage = self.tab_data_model.main.stage
+            self._start_pos = self._stage.position.value
+            self._end_pos = self._start_pos
+            # Show current position of the stage via the progress bar
+            self._stage.position.subscribe(self._update_progress_bar, init=False)
+            # get the stage and its meta data
+            stage_metadata = self._stage.getMetadata()
             try:
-                # start and end position are used for the gauge progress bar
-                self._stage = self.tab_data_model.main.stage
-                self._start_pos = self._stage.position.value
-                self._end_pos = self._start_pos
-                # Show current position of the stage via the progress bar
-                self._stage.position.subscribe(self._update_progress_bar, init=False)
-                # get the stage and its meta data 
-                stage_metadata = self._stage.getMetadata()
                 self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
             except KeyError:
                 raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
@@ -2398,18 +2400,18 @@ class CryoChamberTab(Tab):
             # Set the milling angle range according to rx axis range
             try:
                 rx_range = self._stage.axes['rx'].range
-                milling_range = [-(self.ion_to_sample - a) for a in rx_range]
-                # sort milling range in case ion_to_sample made range values flip
-                actual_rng = sorted(milling_range)
-                ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
-                if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
-                    raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
-                panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
-                # Default value for milling angle, will be used to store the angle value out of milling position
-                self._prev_milling_angle = DEFAULT_MILLING_ANGLE
-                self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
             except KeyError:
                 raise ValueError('The stage is missing an rx axis.')
+            milling_range = [-(self.ion_to_sample - a) for a in rx_range]
+            # sort milling range in case ion_to_sample made range values flip
+            actual_rng = sorted(milling_range)
+            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
+            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
+                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
+            panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
+            # Default value for milling angle, will be used to store the angle value out of milling position
+            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
+            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
             panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
             if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
                 raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
@@ -2480,16 +2482,17 @@ class CryoChamberTab(Tab):
             self._stage.position.subscribe(self._update_progress_bar, init=False)
             self._stage.position.subscribe(self._on_stage_pos)
             # metadata 
+            stage_metadata = self._stage.getMetadata()
             # check for the metadata of meteor stage positions
-            if not model.MD_SAMPLE_CENTERS in self._stage.getMetadata():
+            if not model.MD_SAMPLE_CENTERS in stage_metadata:
                 raise ValueError("The stage misses the 'SAMPLE_CENTERS' metadata.")
-            if not model.MD_FAV_POS_DEACTIVE in self._stage.getMetadata():
+            if not model.MD_FAV_POS_DEACTIVE in stage_metadata:
                 raise ValueError("The stage misses the 'FAV_POS_DEACTIVE' metadata.")
-            if not model.MD_SEM_IMAGING_RANGE in self._stage.getMetadata():
+            if not model.MD_SEM_IMAGING_RANGE in stage_metadata:
                 raise ValueError("The stage misses the 'SEM_IMAGING_RANGE' metadata.")
-            if not model.MD_FM_IMAGING_RANGE in self._stage.getMetadata():
+            if not model.MD_FM_IMAGING_RANGE in stage_metadata:
                 raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
-            if not model.MD_POS_COR in self._stage.getMetadata():
+            if not model.MD_POS_COR in stage_metadata:
                 raise ValueError("The stage misses the 'POS_COR' metadata.")
             # Fail early when required axes are not found on the focuser positions metadata
             focuser = self.tab_data_model.main.focus
@@ -2503,10 +2506,10 @@ class CryoChamberTab(Tab):
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             # TODO: add buttons icons of meteor 
             self.btn_toggle_icons = {
-                self.panel.btn_switch_sem_imaging: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
-                self.panel.btn_switch_fm_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
-                self.panel.btn_switch_grid2: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
-                self.panel.btn_switch_grid1: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
+                self.panel.btn_switch_sem_imaging: "icon/ico_eject_green.png",
+                self.panel.btn_switch_fm_imaging: "icon/ico_imaging_green.png",
+                self.panel.btn_switch_grid2: "icon/ico_milling_green.png",
+                self.panel.btn_switch_grid1: "icon/ico_coating_green.png"}
             # hide some of enzel widgets 
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
@@ -2778,9 +2781,9 @@ class CryoChamberTab(Tab):
             # turn on the leds on 2 buttons: imaging button and one of the grids button
             current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
             if current_position in self.position_btns.keys() and current_grid_label in self.position_btns.keys():
-                self.position_btns[current_position].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_position]][1])
+                self.position_btns[current_position].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_position]])
                 self.position_btns[current_position].Refresh()
-                self.position_btns[current_grid_label].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_grid_label]][1])
+                self.position_btns[current_grid_label].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_grid_label]])
                 self.position_btns[current_grid_label].Refresh()
 
     def _enable_advanced_controls(self, enable=True):
@@ -2887,7 +2890,10 @@ class CryoChamberTab(Tab):
         self._cancel = False
         self._previous_position = self._current_position
         target_button = evt.theButton
-        target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
+        if self._role == "meteor":
+            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button])
+        elif self._role == "enzel":
+            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][1])
         move_future = self._perform_switch_position_movement(target_button)
         if move_future is None:
             target_button.SetValue(0)

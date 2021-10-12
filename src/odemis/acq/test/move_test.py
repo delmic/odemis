@@ -27,7 +27,7 @@ from scipy.spatial.transform import Rotation
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDifference, SCALING_FACTOR
+from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDistance, SCALING_FACTOR
 from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
 from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel, RUNNING
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
@@ -582,7 +582,7 @@ class TestMeteorMove(unittest.TestCase):
 
 class TestGetDifferenceFunction(unittest.TestCase):
     """
-    This class is to test _getDifference() function in the move module
+    This class is to test _getDistance() function in the move module
     """
     def setUp(self):
         pass 
@@ -596,14 +596,14 @@ class TestGetDifferenceFunction(unittest.TestCase):
         pos1 = numpy.array([point1[a] for a in list(point1.keys())])
         pos2 = numpy.array([point2[a] for a in list(point2.keys())])
         expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
-        actual_distance = _getDifference(point1, point2)
+        actual_distance = _getDistance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_linear_axes_but_without_difference(self):
         point1 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
         point2 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
         expected_distance = 0
-        actual_distance = _getDifference(point1, point2)
+        actual_distance = _getDistance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_linear_axes_but_without_common_axes(self):
@@ -613,7 +613,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         pos1 = numpy.array([point1[a] for a in common_axes])
         pos2 = numpy.array([point2[a] for a in common_axes])
         expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
-        actual_distance = _getDifference(point1, point2)
+        actual_distance = _getDistance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
@@ -622,7 +622,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         # the rotation difference is 30 degree
         expected_rotation = Rotation.from_euler('x', 30, degrees=True).as_matrix()
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_rot_error = _getDifference(point2, point1)
+        act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
 
     def test_only_rotation_axes_but_whtout_difference(self):
@@ -630,7 +630,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point2 = {'rx': 0, 'rz': 0.523599}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
-        act_rot_error = _getDifference(point2, point1)
+        act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error)
 
     def test_only_rotation_axes_but_whtout_common_axes(self):
@@ -639,15 +639,13 @@ class TestGetDifferenceFunction(unittest.TestCase):
         # the rotation difference is 30 degree
         expected_rotation = Rotation.from_euler('z', 30, degrees=True).as_matrix()
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_rot_error = _getDifference(point2, point1)
+        act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
 
     def test_no_common_axes(self):
         point1 = {'rx': 0.523599, 'rz': 0.523599}
         point2 = {'x': 0.082, 'y': 0.01}
-        exp_return = None
-        act_return = _getDifference(point1, point2)
-        self.assertEqual(exp_return, act_return)
+        self.assertRaises(ValueError, _getDistance, point1, point2)
 
     def test_both_axes(self):
         point1 = {'rx': 0, 'rz': 0.523599, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
@@ -660,7 +658,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         # the rotation difference is 30 degree
         expected_rotation = Rotation.from_euler('z', 30, degrees=True).as_matrix()
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_error = _getDifference(point1, point2)
+        act_error = _getDistance(point1, point2)
         self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)
 
 
