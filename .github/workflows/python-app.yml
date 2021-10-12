@@ -4,7 +4,7 @@
 name: Unit testing
 
 on:
-  [push]
+  [push, pull_request]
 jobs:
   build:
 
