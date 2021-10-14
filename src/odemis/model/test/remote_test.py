@@ -681,6 +681,8 @@ class RemoteTest(unittest.TestCase):
         self.called = 0
         self.last_value = None
         prop.subscribe(self.receive_va_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         # now count
         prop.value = 3 # +1
         prop.value = 0 # +1
@@ -700,6 +702,8 @@ class RemoteTest(unittest.TestCase):
 
         # re-subscribe
         prop.subscribe(self.receive_va_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         # change remotely
         self.comp.change_prop(45)
         time.sleep(0.1) # give time to receive notifications
@@ -758,6 +762,8 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(len(l.value), 2)
         self.called = 0
         l.subscribe(self.receive_listva_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         l.value += [3]
         self.assertEqual(len(l.value), 3)
         time.sleep(0.01)
