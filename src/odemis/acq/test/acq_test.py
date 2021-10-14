@@ -508,6 +508,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.fm_focuser = model.getComponent(role="focus")
+        cls.fm_focuser.reference({"z"}).result()
 
         cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
 
@@ -523,7 +524,6 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self._nb_updates = 0
         self.streams = []
 
-        self.fm_focuser.reference({"z"}).result()
         self.fm_focuser.moveAbs({"z": self.fm_focus_pos}).result()
 
     def _on_progress_update(self, f, s, e):

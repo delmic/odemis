@@ -151,7 +151,9 @@ def generate_zlevels(focuser, zrange, zstep):
     if n > MAX_ZLEVELS:
         raise IndexError("The number of zlevels, %s, is too large. The max allowable number of zlevels is %s. Reduce the zstep value." %(n, MAX_ZLEVELS))
     # try the floor and ceil values for the number of samples, and 
-    # take the one that give smaller error
+    # take the one that give smaller error.
+    # note: if n is 1 -> division by zero and step_c will always be picked,
+    # so just choose any large value for step_f (e.g infinite)
     try:
         step_f = (zrange[1] - zrange[0]) / (math.floor(n) - 1)
     except ZeroDivisionError:
