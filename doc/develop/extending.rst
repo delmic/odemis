@@ -180,9 +180,9 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and
+Install `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`_ and
 pick the right architecture for your computer (most likely 64-bit).
-Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.8)
+Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.9)
 The following instructions use the fact that Anaconda supports multiple versions of Python 
 simultaneously to install Python 3.6.
 
@@ -231,7 +231,7 @@ If you have access to the Delmic Bitbucket repository, do the following::
    cd ..
    git clone https://<YOUR_NAME>@bitbucket.org/delmic/arpolarimetry.git
    cd arpolarimetry
-   python setup.py
+   python setup.py install
 
 
 Building Odemis Viewer and the installer
