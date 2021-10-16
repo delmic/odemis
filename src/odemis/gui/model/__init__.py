@@ -1973,12 +1973,12 @@ class FixedOverviewView(StreamView):
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
 
-class FeatureView(StreamView):
+class FeatureView(MicroscopeView):
     """
     A stream view with optional bookmarked features
     """
     def __init__(self, name, stage=None, **kwargs):
-        StreamView.__init__(self, name, stage=stage, **kwargs)
+        MicroscopeView.__init__(self, name, stage=stage, **kwargs)
         # booleanVA to toggle showing/hiding the features
         self.showFeatures = model.BooleanVA(True)
 
