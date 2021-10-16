@@ -1903,6 +1903,8 @@ class MicroscopeView(StreamView):
     """
     def __init__(self, name, stage=None, **kwargs):
         StreamView.__init__(self, name, stage=stage, **kwargs)
+        # booleanVA to toggle showing/hiding the features
+        self.showFeatures = model.BooleanVA(True)
         if stage:
             self.stage_pos.subscribe(self._on_stage_pos)
 
@@ -1978,7 +1980,7 @@ class FeatureView(StreamView):
         # booleanVA to toggle showing/hiding the features
         self.showFeatures = model.BooleanVA(True)
 
-class FeatureOverviewView(StreamView):
+class FeatureOverviewView(FeatureView):
     """
     A large FoV view which is used to display an overview map with optional bookmarked features
     """

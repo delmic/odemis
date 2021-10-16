@@ -7301,7 +7301,7 @@ def __init_resources():
 											<object class="OwnerDrawnComboBox" name="cmb_features">
 											  <size>155,20</size>
 											  <fg>#2FA7D4</fg>
-											  <bg>#4D4D4D</bg>
+											  <bg>#333333</bg>
 											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
 											</object>
 									  </object>
@@ -7332,7 +7332,7 @@ def __init_resources():
 												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
 												  <size>110,16</size>
 												  <fg>#2FA7D4</fg>
-												  <bg>#4D4D4D</bg>
+												  <bg>#333333</bg>
 												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
 												</object>
 												<flag>wxLEFT</flag>
@@ -7369,7 +7369,7 @@ def __init_resources():
 												<size>-1,20</size>
 												<accuracy>4</accuracy>
 												<key_step>0.001</key_step>
-												  <bg>#000000</bg>
+                                                <bg>#333333</bg>
 												<scale>linear</scale>
 												<accuracy>2</accuracy>
 											</object>
@@ -7744,7 +7744,7 @@ def __init_resources():
                                     <object class="ImageTextButton" name="btn_acquire_overview">
                                         <height>48</height>
                                         <face_colour>def</face_colour>
-                                        <label>Acquire overview</label>
+                                        <label>ACQUIRE OVERVIEW</label>
                                         <font>
                                             <size>14</size>
                                             <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
