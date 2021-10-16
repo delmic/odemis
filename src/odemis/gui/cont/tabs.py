@@ -48,7 +48,7 @@ from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.model import getVAs
-from odemis.util.filename import guess_pattern, create_projectname
+from odemis.util.filename import guess_pattern, create_projectname, create_filename
 
 import odemis.acq.stream as acqstream
 import odemis.gui
@@ -495,13 +495,11 @@ class LocalizationTab(Tab):
               }),
             (viewports[2],
              {"name": "Live 1",
-              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
-              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
@@ -670,6 +668,17 @@ class LocalizationTab(Tab):
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
+        # Check project directory is the same in filename path, otherwise
+        # update it with a new filename
+        # Handled on show as project directory conf change in chamber tab init
+        if (
+            show
+            and self.conf.pj_last_path not in self.tab_data_model.filename.value
+        ):
+            self.tab_data_model.filename.value = create_filename(
+                self.conf.pj_last_path, self.conf.fn_ptn,
+                self.conf.last_extension,
+                self.conf.fn_count)
 
         if not show: # if localization tab is not chosen
             # pause streams when not displayed
@@ -691,6 +700,7 @@ class LocalizationTab(Tab):
         """
         stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, acquired_stream, self.tab_data_model,
                                        show_panel=True, view=selected_view, sb_ctrl=self._acquired_stream_controller)
+        stream_cont.to_static_mode()
         selected_view.addStream(acquired_stream)
 
         stream_cont.stream_panel.set_visible(True)
@@ -2391,8 +2401,9 @@ class CryoChamberTab(Tab):
 
         # Create new project directory on starting the GUI
         self._create_new_dir()
+        self._cancel = False
 
-        if self._role == 'enzel':  
+        if self._role == 'enzel':
             # start and end position are used for the gauge progress bar
             self._stage = self.tab_data_model.main.stage
             self._start_pos = self._stage.position.value
@@ -2537,7 +2548,6 @@ class CryoChamberTab(Tab):
             panel.btn_switch_grid2.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-            self._cancel = False
             # Determine and show current position of the stage
             self._enable_movement_controls()
             self._toggle_switch_buttons()
@@ -2668,6 +2678,7 @@ class CryoChamberTab(Tab):
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
             localization_tab.clear_overview_streams()
             localization_tab.clear_live_streams()
+            self.tab_data_model.main.features.value = []
         except LookupError:
             logging.warning("Unable to find localization tab.")
 
