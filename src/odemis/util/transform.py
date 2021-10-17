@@ -249,13 +249,13 @@ def to_pixel_index(
     return ji
 
 
-def _assertRotationMatrix(matrix: numpy.ndarray) -> None:
+def _assert_is_rotation_matrix(matrix: numpy.ndarray) -> None:
     """
     Check if a matrix is a rotation matrix.
 
     Parameters
     ----------
-    matrix : array_like
+    matrix : ndarray
         The matrix to check.
 
     Raises
@@ -331,7 +331,7 @@ def _rotation_matrix_to_angle(matrix: numpy.ndarray) -> float:
     1.5707963267948966
 
     """
-    _assertRotationMatrix(matrix)
+    _assert_is_rotation_matrix(matrix)
     if matrix.shape != (2, 2):
         raise NotImplementedError("Can only handle 2x2 matrices")
     return math.atan2(matrix[1, 0], matrix[0, 0])
