@@ -57,7 +57,6 @@ from __future__ import annotations
 import math
 import numpy
 import scipy.linalg
-import scipy.optimize
 
 from abc import ABCMeta, abstractmethod
 from numpy.linalg import LinAlgError
@@ -381,11 +380,6 @@ def _transformation_matrix_from_implicit(
     """
     Return the transformation matrix given the implicit parameters.
 
-    NOTE: No checking is performed to verify whether `scale` and `squeeze` are
-          positive or not. If a negative `scale` or `squeeze` is provided, the
-          returned transformation matrix has an additional 180 degree rotation
-          as compared to when called with the absolute value of the parameter.
-
     Parameters
     ----------
     scale : float, positive
@@ -403,38 +397,14 @@ def _transformation_matrix_from_implicit(
         The transformation matrix.
 
     """
+    if scale <= 0:
+        raise ValueError("The scale factor should be positive.")
+    if squeeze <= 0:
+        raise ValueError("The squeeze factor should be positive.")
     R = _rotation_matrix_from_angle(rotation)
-    S3 = _s3_matrix(scale, squeeze, shear)
-    return numpy.matmul(R, S3)  # type: ignore
-
-
-def _s3_matrix(scale: float = 1, squeeze: float = 1, shear: float = 0) -> numpy.ndarray:
-    """
-    Return the scale, squeeze, and shear (S3) matrix given the implicit
-    parameters.
-
-    NOTE: No checking is performed to verify whether `scale` and `squeeze` are
-          positive. If either one of them is not, the returned matrix is not
-          positive definite.
-
-    Parameters
-    ----------
-    scale : float, positive
-        Isotropic scale factor.
-    squeeze : float, positive
-        Anisotropic scale factor.
-    shear : float
-        Shear factor.
-
-    Returns
-    -------
-    matrix : ndarray
-        The transformation matrix.
-
-    """
     L = numpy.array([(1, 0), (shear, 1)], dtype=float)
-    D = scale * numpy.array([squeeze, 1.0 / squeeze], dtype=float)
-    return numpy.matmul(L * D, L.T)  # type: ignore
+    D = numpy.array([squeeze, 1.0 / squeeze], dtype=float)
+    return scale * R @ (L * D) @ L.T  # type: ignore
 
 
 def _transformation_matrix_to_implicit(
@@ -506,38 +476,6 @@ def _optimal_rotation(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
         u[:, -1] = -u[:, -1]
     numpy.matmul(vh.T, u.T, out=H)
     return H
-
-
-def _fre_cost_func(
-    params: Union[Tuple[float, float], Tuple[float, float, float]],
-    x: numpy.ndarray,
-    y: numpy.ndarray,
-) -> numpy.ndarray:
-    """
-    Return the fiducial registration error (FRE) for an affine transformation
-    between two zero-mean point sets `x` and `y`, with given scale, squeeze,
-    and shear, and optimal rotation.
-
-    Parameters
-    ----------
-    params : tuple
-        Transform parameters, either a 2-tuple `(scale, squeeze)` or 3-tuple
-        `(scale, squeeze, shear)`.
-    x : ndarray
-        Zero-mean coordinates in the source reference frame.
-    y : ndarray
-        Zero-mean coordinates in the destination reference frame.
-
-    Returns
-    -------
-    delta : ndarray
-        The fiducial registration eror as a flattened array.
-
-    """
-    _x = numpy.einsum("ik,jk->ji", _s3_matrix(*params), x)
-    R = _optimal_rotation(_x, y)
-    delta = numpy.einsum("ik,jk->ji", R, _x) - y
-    return delta.ravel()  # type: ignore
 
 
 class ImplicitParameter:
@@ -855,17 +793,8 @@ class AffineTransform(GeometricTransform):
 
     @staticmethod
     def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
-        # Find the scale, squeeze, and shear using an optimization search. Use
-        # the similarity transform as initial guess.
-        R = _optimal_rotation(x, y)
-        s = numpy.einsum("ik,jk,ji", R, x, y) / numpy.einsum("ij,ij", x, x)
-        params, ier = scipy.optimize.leastsq(_fre_cost_func, x0=(s, 1, 0), args=(x, y))
-        assert ier in {1, 2, 3, 4}
-        # Rotation is now the rigid transform of the scaled input
-        S3 = _s3_matrix(*params)
-        _x = numpy.einsum("ik,jk->ji", S3, x)
-        R = _optimal_rotation(_x, y)
-        return numpy.matmul(R, S3)  # type: ignore
+        at = numpy.linalg.lstsq(x, y, rcond=0)[0]
+        return numpy.transpose(at)
 
 
 class ScalingTransform(AffineTransform):
@@ -934,17 +863,17 @@ class ScalingTransform(AffineTransform):
 
     @staticmethod
     def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
-        # Find the scale and squeeze using an optimization search. Use the
-        # similarity transform as initial guess.
-        R = _optimal_rotation(x, y)
-        s = numpy.einsum("ik,jk,ji", R, x, y) / numpy.einsum("ij,ij", x, x)
-        params, ier = scipy.optimize.leastsq(_fre_cost_func, x0=(s, 1), args=(x, y))
-        assert ier in {1, 2, 3, 4}
-        # Rotation is now the rigid transform of the scaled input
-        S3 = _s3_matrix(*params)
-        _x = numpy.einsum("ik,jk->ji", S3, x)
-        R = _optimal_rotation(_x, y)
-        return numpy.matmul(R, S3)  # type: ignore
+        alpha = numpy.einsum("ij,ik->jk", x, y)
+        beta = numpy.einsum("ij,ij->j", x, x)
+        (a11, a12), (a21, a22) = alpha
+        b1, b2 = beta
+        k1 = numpy.square(a11) / b1 + numpy.square(a22) / b2
+        k2 = numpy.square(a12) / b1 + numpy.square(a21) / b2
+        k3 = 2 * (a11 * a12 / b1 - a21 * a22 / b2)
+        phi = 0.5 * numpy.arctan2(k3, k1 - k2)
+        R = _rotation_matrix_from_angle(phi)
+        scales = numpy.einsum("ij,ji->j", R, alpha) / beta
+        return scales * R  # type: ignore
 
     def _inverse_type_hook(self) -> Type[GeometricTransform]:
         """
