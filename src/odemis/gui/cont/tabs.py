@@ -756,7 +756,7 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("cryo-secom",):
+        if main_data.role in ("meteor", "enzel"):
             return 2
         else:
             return None
@@ -2347,6 +2347,9 @@ class ChamberTab(Tab):
                     return 2
 
         return None
+
+DEFAULT_MILLING_ANGLE = math.radians(10)
+MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
 
 
 class CryoChamberTab(Tab):
