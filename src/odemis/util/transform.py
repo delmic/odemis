@@ -863,6 +863,20 @@ class ScalingTransform(AffineTransform):
 
     @staticmethod
     def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+        """
+        See GeometricTransform._estimate_matrix() for a more detailed
+        description.
+
+        This implementation uses the closed-form solution obtained from [1]_.
+
+        References
+        ----------
+        .. [1] Škrinjar, O. (2006, July). Point-based registration with known
+               correspondence: Closed form optimal solutions and properties. In
+               International Workshop on Biomedical Image Registration
+               (pp. 315-321). Springer, Berlin, Heidelberg.
+
+        """
         alpha = numpy.einsum("ij,ik->jk", x, y)
         beta = numpy.einsum("ij,ij->j", x, x)
         (a11, a12), (a21, a22) = alpha
