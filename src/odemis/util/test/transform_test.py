@@ -21,10 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import copy
 import inspect
 import numpy
 from numpy.linalg import LinAlgError
+import operator
 import unittest
+
+from odemis.util.spot import GridPoints
 
 from odemis.util.transform import (
     _rotation_matrix_from_angle,
@@ -303,6 +307,10 @@ class RotationMatrixRoundTripCheck(unittest.TestCase):
 
 
 class TransformTestBase:
+    @classmethod
+    def setUpClass(cls):
+        numpy.random.seed(0)
+
     def test_attributes(self):
         """
         Each GeometricTransform instance should have the attributes `matrix`,
@@ -414,6 +422,35 @@ class TransformTestBase:
         tform = self.transform_type.from_pointset(src, src)
         numpy.testing.assert_array_almost_equal(tform.matrix, numpy.eye(2))
         numpy.testing.assert_array_almost_equal(tform.translation, numpy.zeros(2))
+
+    def test_from_pointset_optimal(self):
+        """
+        The transform returned by `GeometricTransform.from_pointset()` should
+        minimize the fiducial registration error (FRE). Here we test that a
+        pertubation of any of the non-constrained parameters results in an
+        increased FRE.
+
+        """
+        params = {
+            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
+            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
+            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
+            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
+        }
+        src = GridPoints(8, 8)
+        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
+        dst = AffineTransform(**params).apply(src + noise)
+        tform0 = self.transform_type.from_pointset(src, dst)
+        fre0 = tform0.fre(src, dst)
+        for param in ("scale", "rotation", "squeeze", "shear"):
+            if getattr(self.transform_type, param).constrained:
+                continue
+            val = getattr(tform0, param)
+            tform = copy.copy(tform0)
+            for op in (operator.add, operator.sub):
+                setattr(tform, param, op(val, 1.0e-6))
+                fre = tform.fre(src, dst)
+                self.assertGreater(fre, fre0)
 
     def test_apply_known_values(self):
         """

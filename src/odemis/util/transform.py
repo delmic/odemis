@@ -496,6 +496,8 @@ class ImplicitParameter:
         instance: GeometricTransform,
         owner: Optional[Type[GeometricTransform]] = None,
     ) -> float:
+        if instance is None:
+            return self
         return getattr(instance, self.private_name, self.default)  # type: ignore
 
     def __set__(self, instance: GeometricTransform, value: float) -> None:
