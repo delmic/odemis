@@ -512,5 +512,36 @@ class RigidTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = RigidTransform
 
 
+class TransformFromPointsetEquivalence(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        numpy.random.seed(0)
+
+    def test_transform_equal_rotation(self):
+        """
+        When estimating the transform using `from_pointset()` where the source
+        coordinates have zero moments, the estimated rotation should be equal
+        for transforms of class `AffineTransform`, `SimilarityTransform`, and
+        `RigidTransform`. Note: this list excludes `ScalingTransform`.
+
+        """
+        params = {
+            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
+            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
+            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
+            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
+        }
+        src = GridPoints(8, 8)
+        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
+        dst = AffineTransform(**params).apply(src + noise)
+        rotation = None
+        for transform_type in (AffineTransform, SimilarityTransform, RigidTransform):
+            tform = transform_type.from_pointset(src, dst)
+            if rotation is None:
+                rotation = tform.rotation
+            else:
+                self.assertAlmostEqual(rotation, tform.rotation)
+
+
 if __name__ == "__main__":
     unittest.main()
