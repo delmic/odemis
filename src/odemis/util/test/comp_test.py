@@ -28,9 +28,11 @@ import odemis
 from odemis.util import test
 import os
 import unittest
+from odemis.driver.tmcm import TMCLController
+import numpy
 
 from odemis.util.comp import compute_scanner_fov, get_fov_rect, \
-    compute_camera_fov
+    compute_camera_fov, generate_zlevels
 
 #logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -111,6 +113,128 @@ class TestFoV(unittest.TestCase):
                    center_im[0] + fov_im[0] / 2,
                    center_im[1] + fov_im[1] / 2)
         self.assertEqual(rect, rect_im)
+
+
+class TestGenerateZlevels(unittest.TestCase):
+    def setUp(self):
+        self.focus = TMCLController(name="test_focus", role="focus",
+                                         port="/dev/fake3",
+                                         axes=["z"],
+                                         ustepsize=[1e-6],
+                                         rng=[[-3000e-6, 3000e-6], ],
+                                         refproc="Standard")
+
+    def test_zero_zstep(self):
+        self.focus.moveAbsSync({"z": 1300e-6})
+        zMin = -500e-6
+        zMax = 500e-6
+        zrange = [zMin, zMax]
+        zStep = 0e-6
+        with self.assertRaises(ZeroDivisionError):
+            generate_zlevels(self.focus, zrange, zStep) 
+
+    def test_zmax_and_zmin_both_zeros(self):
+        self.focus.moveAbsSync({"z": 1300e-6})
+        zMin = -0e-6
+        zMax = 0e-6
+        zrange = [zMin, zMax]
+        zStep = 10e-6
+        with self.assertRaises(ValueError):
+            generate_zlevels(self.focus, zrange, zStep)
+
+    def test_zrange_not_in_proper_order(self):
+        self.focus.moveAbsSync({"z": 1300e-6})
+        zMin = -10e-6
+        zMax = 10e-6
+        zrange = [zMax, zMin]
+        zStep = 10e-6
+        with self.assertRaises(ValueError):
+            generate_zlevels(self.focus, zrange, zStep)
+
+    def test_zstep_greater_than_zmax_and_zmin(self):
+        self.focus.moveAbsSync({"z": 1300e-6})
+        zMin = -10e-6
+        zMax = 10e-6
+        zrange = [zMin, zMax]
+        zStep = 70e-6
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        expected = numpy.asarray([-10e-6, 10e-6]) + self.focus.position.value["z"]
+        numpy.testing.assert_array_almost_equal(actual, expected)
+
+    def test_normal_zlevels_output_with_positive_zstep(self):
+        self.focus.moveAbsSync({"z": 1000e-6})
+        zMax = 100e-6
+        zMin = -250e-6
+        zrange = [zMin, zMax]
+        zStep = 50e-6
+        expected = numpy.asarray([-250e-6, -200e-6, -150e-6, -100e-6, -50e-6,
+                           0e-6, 50e-6, 100e-6]) + self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
+
+    def test_normal_zlevels_output_with_negative_zstep(self):
+        self.focus.moveAbsSync({"z": 1000e-6})
+        zMax = 100e-6
+        zMin = -250e-6
+        zrange = [zMin, zMax]
+        zStep = -50e-6
+        expected = numpy.asarray([1.0e-04, 5.0e-05, 0.0, -5.0e-05, -1.0e-04, -
+                                 1.5e-04, -2.0e-04, -2.5e-04]) + self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
+
+    def test_normal_zlevels_output_with_rounding_down(self):
+        self.focus.moveAbsSync({"z": 1000e-6})
+        zMax = 10e-6
+        zMin = -10e-6
+        zrange = [zMin, zMax]
+        zStep = 6e-6
+        expected = numpy.asarray([-10e-6, -3.33e-6, 3.33e-6, 10e-6]
+                           ) + self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
+
+    def test_normal_zlevels_output_with_rounding_up(self):
+        self.focus.moveAbsSync({"z": 1000e-6})
+        zMax = 24e-6
+        zMin = -24e-6
+        zrange = [zMin, zMax]
+        zStep = 17e-6
+        expected = numpy.asarray([-24e-6, -8e-6, 8e-6, 24e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
+
+    def test_large_number_of_levels(self):
+        self.focus.moveAbsSync({"z": 1000e-6})
+        zMax = 100e-6
+        zMin = -100e-6
+        zrange = [zMin, zMax]
+        zStep = 0.5e-6
+        output = generate_zlevels(self.focus, zrange, zStep)
+        self.assertEqual(len(output), 401)
+
+    def test_clipping_zmin_on_actuator_lower_limit(self):
+        self.focus.moveAbsSync({"z": -2800e-6})
+        zMax = 0e-6
+        zMin = -300e-6
+        zrange = [zMin, zMax]
+        zStep = 100e-6
+        expected = numpy.asarray([-200e-6, -100e-6, 0e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
+
+    def test_clipping_zmax_on_actuator_upper_limit(self):
+        self.focus.moveAbsSync({"z": 2800e-6})
+        zMax = 300e-6
+        zMin = 0e-6
+        zrange = [zMin, zMax]
+        zStep = 100e-6
+        expected = numpy.asarray([0e-6, 100e-6, 200e-6]) + \
+            self.focus.position.value["z"]
+        actual = generate_zlevels(self.focus, zrange, zStep)
+        numpy.testing.assert_array_almost_equal(expected, actual)
 
 
 if __name__ == "__main__":

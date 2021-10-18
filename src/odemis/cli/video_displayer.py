@@ -133,12 +133,8 @@ class ImageWindowApp(wx.App):
         # (but it seems in Linux (GTK) frames don't receive key events anyway
         self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey)
 
-        if wx.MAJOR_VERSION <= 3:
-            self.img = wx.EmptyImage(*size, clear=True)
-            self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
-        else:
-            self.img = wx.Image(*size, clear=True)
-            self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
+        self.img = wx.Image(*size, clear=True)
+        self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
 
         self.panel.SetFocus()
         self.frame.Show()

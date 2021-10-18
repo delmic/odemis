@@ -196,9 +196,7 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True) # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
-        # TODO: for now it's readonly because no rotation is supported
-        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
-                                              readonly=True)
+        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad")
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 

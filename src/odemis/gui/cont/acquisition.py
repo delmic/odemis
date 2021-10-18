@@ -35,12 +35,11 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 
-from wx.core import CallAfter
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, StaticStream, FastEMOverviewStream
 from odemis.gui import conf, FG_COLOUR_BUTTON
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream, BrightfieldStream
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
@@ -52,8 +51,9 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.model import DataArrayShadow
-from odemis.util import units
 from odemis.util.dataio import open_acquisition, data_to_static_streams
+from odemis.util import units
+from odemis.util.comp import generate_zlevels
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
@@ -462,7 +462,6 @@ ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
 
-
 class CryoAcquiController(object):
     """
     Controller to handle the acquisitions of the cryo-secom
@@ -506,6 +505,10 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
+        # for the z parameters widgets 
+        self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
+        self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
+        self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -543,6 +546,29 @@ class CryoAcquiController(object):
         """
         called when the button "acquire" is pressed
         """
+        # store the focuser position 
+        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+
+        # acquire the data 
+        if self._zStackActive.value: # if zstack 
+            self._acq_future = acqmng.acquireZStack(
+                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
+
+        else: # if no zstack 
+            self._acq_future = acqmng.acquire(
+                self._acquiStreams.value, self._tab_data.main.settings_obs)
+
+        self._tab_data.main.is_acquiring.value = True
+        logging.info("Acquisition started")
+
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
+
         # hide/show/disable some widgets
         self._panel.gauge_cryosecom_acq.Show()
         self._panel.btn_cryosecom_acqui_cancel.Show()
@@ -553,28 +579,14 @@ class CryoAcquiController(object):
         self._panel.btn_acquire_overview.Disable()
         self._panel.z_stack_chkbox.Disable()
         self._panel.streams_chk_list.Disable()
+        self._panel.param_Zmin.Enable(False)
+        self._panel.param_Zmax.Enable(False)
+        self._panel.param_Zstep.Enable(False)
         # disable the streams settings
         self._tab.streambar_controller.pauseStreams()
         self._tab.streambar_controller.pause()
         self._panel.Layout()
-
-        # TODO use the function "generate_zlevels". The zrange
-        # is defined using the zMax and zMin obtained
-        # from the GUI from the user. Similarly for zStep. Pass
-        # the returned dictionary to the acquisition function below,
-        # after replacing "acquire" function with "acquireZStack".
-        self._acq_future = acqmng.acquire(
-            self._acquiStreams.value, self._tab_data.main.settings_obs
-        )
-        self._tab_data.main.is_acquiring.value = True
-        logging.info("Acquisition started")
-        # link the acquisition gauge to the acquisition future
-        self._gauge_future_conn = ProgressiveFutureConnector(
-            future=self._acq_future,
-            bar=self._panel.gauge_cryosecom_acq,
-            label=self._panel.txt_cryosecom_left_time,
-            full=False,
-        )
+        
         self._acq_future.add_done_callback(self._on_acquisition_done)
 
     @call_in_wx_main
@@ -586,6 +598,7 @@ class CryoAcquiController(object):
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
+        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
 
         # try to get the acquisition data
         try:
@@ -629,6 +642,9 @@ class CryoAcquiController(object):
         self._panel.z_stack_chkbox.Enable()
         self._panel.streams_chk_list.Enable()
         self._panel.txt_cryosecom_left_time.Hide()
+        self._panel.param_Zmin.Enable(self._zStackActive.value)
+        self._panel.param_Zmax.Enable(self._zStackActive.value)
+        self._panel.param_Zstep.Enable(self._zStackActive.value)
         self._tab.streambar_controller.resume()
         self._panel.Layout()
 
@@ -742,16 +758,23 @@ class CryoAcquiController(object):
         ]
         self._sort_streams(item_streams)
 
+        # update the zlevels dictionary with the added/removed stream
+        self._on_zstack()
+
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
         """
         Updates the estimated time
         required for acquisition
         """
-        acq_time = acqmng.estimateTime(self._acquiStreams.value)
-        acq_time = math.ceil(acq_time)  # round a bit pessimistic
-        # TODO take into account the time of acquiring the zlevels
-        # as well as the time required for moving the actuator
+        if not self._zStackActive.value: # if no zstack 
+            acq_time = acqmng.estimateTime(self._acquiStreams.value)
+
+        else: # if zstack 
+            acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
+
+        acq_time = math.ceil(acq_time)
+        # display the time on the GUI 
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
@@ -798,16 +821,41 @@ class CryoAcquiController(object):
         self._panel.param_Zmin.Enable(active)
         self._panel.param_Zmax.Enable(active)
         self._panel.param_Zstep.Enable(active)
+        self._on_zstack()
+        if not active:
+            self._update_acquisition_time()
+
+    def _on_zstack(self):
+        """
+        Takes care of preparing for the zstack by generating the zlevels,
+        and making the streams-zlevel dictionary that will be passed to the acquisition manager 
+        """
+        if not self._zStackActive.value:
+            return
+        self._zlevels = {}
+        for s in self._acquiStreams.value:
+            # the other possible streams are SEM which are generally not wanted by the user to be zstacked  
+            if isinstance(s, (FluoStream, BrightfieldStream)):  
+                levels = generate_zlevels(
+                    self._tab_data.main.focus,
+                    [self._tab_data.zMin.value, self._tab_data.zMax.value],
+                    self._tab_data.zStep.value)
+                self._zlevels[s] = levels
+
+        # update the time, taking the zstack into account 
         self._update_acquisition_time()
 
     def _on_z_min(self, zmin):
         self._tab_data.zMin.value = zmin
+        self._on_zstack()
 
     def _on_z_max(self, zmax):
         self._tab_data.zMax.value = zmax
+        self._on_zstack()
 
     def _on_z_step(self, zstep):
         self._tab_data.zStep.value = zstep
+        self._on_zstack()
 
     def _on_check_list(self, _):
         """
@@ -821,7 +869,6 @@ class CryoAcquiController(object):
                 and item not in self._acquiStreams.value
             ):
                 self._acquiStreams.value.append(item)
-                self._update_acquisition_time()
 
             # the user unchecked item
             elif (
@@ -829,7 +876,10 @@ class CryoAcquiController(object):
                 and item in self._acquiStreams.value
             ):
                 self._acquiStreams.value.remove(item)
-                self._update_acquisition_time()
+        
+        # update the zlevels dictionary
+        self._on_zstack()
+        self._update_acquisition_time()
 
     def _on_cancel(self, _):
         """
@@ -845,7 +895,7 @@ class CryoAcquiController(object):
         """
         das = self.overview_acqui_controller.open_acquisition_dialog()
         if das:
-            self._tab.load_data(das)
+            self._tab.load_overview_data(das)
 
     @call_in_wx_main
     def _on_filename(self, name):
@@ -1396,10 +1446,8 @@ class FastEMAcquiController(object):
         self._calibration_ctrl = calibration_ctrl
 
         # Path to the acquisition
-        # <External storage>/<date>/<project name>/<roa name>
-        # TODO: display proper path to external storage (if mounted)
         self.path = datetime.today().strftime('%Y-%m-%d')
-        self._tab_panel.txt_destination.SetValue("<External Storage>/%s" % self.path)
+        self._tab_panel.txt_destination.SetValue(self.path)
 
         # ROA count
         self.roa_count = 0
@@ -1413,6 +1461,8 @@ class FastEMAcquiController(object):
         self.txt_num_rois = self._tab_panel.txt_num_rois
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.acq_future = None  # ProgressiveBatchFuture
+        self._fs_connector = None  # ProgressiveFutureConnector
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -1427,7 +1477,10 @@ class FastEMAcquiController(object):
         self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
         tab_data.projects.subscribe(self._on_projects, init=True)
         for roc in self._tab_data_model.calibration_regions.value.values():
-            roc.coordinates.subscribe(self._on_roc)
+            roc.coordinates.subscribe(self._on_va_change)
+
+        self._main_data_model.is_aligned.subscribe(self._on_va_change, init=True)
+        self._main_data_model.is_acquiring.subscribe(self._on_va_change)
 
     def _on_projects(self, projects):
         for p in projects:
@@ -1437,23 +1490,32 @@ class FastEMAcquiController(object):
         # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
         for roa in roas:
             if roa not in self.roa_subscribers:
-                roa.roc.subscribe(self._on_roc)
+                roa.roc.subscribe(self._on_va_change)
                 self.roa_subscribers.append(roa)
         self._update_roa_count()
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
-    def _on_roc(self, _):
+    def _on_va_change(self, _):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self.roa_count and not self._get_undefined_calibrations())
+        self.btn_acquire.Enable(self._main_data_model.is_aligned.value and self.roa_count
+                                and not self._get_undefined_calibrations() and
+                                not self._main_data_model.is_acquiring.value)  # is_acquiring is True during alignment
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
+        # Update path (in case it's already the next day)
+        self.path = datetime.today().strftime('%Y-%m-%d')
+        self._tab_panel.txt_destination.SetValue(self.path)
+
         lvl = None  # icon status shown
-        if self.roa_count == 0:
+        if not self._main_data_model.is_aligned.value:
+            lvl = logging.WARN
+            txt = "System is not aligned."
+        elif self.roa_count == 0:
             lvl = logging.WARN
             txt = "No region of acquisition selected."
         elif self._get_undefined_calibrations():
@@ -1466,7 +1528,10 @@ class FastEMAcquiController(object):
                 return
             # Display acquisition time
             projects = self._tab_data_model.projects.value
-            acq_time = fastem.estimateTime([roa for p in projects for roa in p.roas.value])
+            acq_time = 0
+            for p in projects:
+                for roa in p.roas.value:
+                    acq_time += roa.estimate_acquisition_time()
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -1507,6 +1572,9 @@ class FastEMAcquiController(object):
         """
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
+        self._projectbar_ctrl._project_bar.Enable(True)
+        self._calibration_ctrl._calibration_bar.Enable(True)
+        self._tab_panel.btn_align.Enable(True)
         self._tab_panel.Layout()
 
         if text is not None:
@@ -1526,22 +1594,27 @@ class FastEMAcquiController(object):
         self.gauge_acq.Show()
         self._show_status_icons(None)
 
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        self._projectbar_ctrl._project_bar.Enable(False)
+        self._calibration_ctrl._calibration_bar.Enable(False)
+        self._tab_panel.btn_align.Enable(False)
+
         self.gauge_acq.Range = self.roa_count
         self.gauge_acq.Value = 0
 
         # Acquire ROAs for all projects
+        fs = {}
         for p in self._tab_data_model.projects.value:
-            ppath = os.path.join(self.path, p.name.value)
+            ppath = os.path.join(self.path, p.name.value)  # <acquisition date>/<project name>
             for roa in p.roas.value:
-                fn = os.path.join(ppath, roa.name.value)
-                f = fastem.acquire(roa, fn)
-                f.add_done_callback(self.increase_acq_progress)
+                f = fastem.acquire(roa, ppath, self._main_data_model.multibeam, self._main_data_model.descanner,
+                                   self._main_data_model.mppc, self._main_data_model.stage)
+                t = roa.estimate_acquisition_time()
+                fs[f] = t
 
-        f.add_done_callback(self.on_acquisition_done)
-
-    def increase_acq_progress(self, f):
-        # TODO: improve progress estimation
-        self.gauge_acq.Value += 1
+        self.acq_future = model.ProgressiveBatchFuture(fs)
+        self._fs_connector = ProgressiveFutureConnector(self.acq_future, self.gauge_acq, self.lbl_acqestimate)
+        self.acq_future.add_done_callback(self.on_acquisition_done)
 
     def on_cancel(self, evt):
         """
@@ -1562,8 +1635,11 @@ class FastEMAcquiController(object):
         self._tab_panel.Layout()
         self.lbl_acqestimate.SetLabel("Acquisition done.")
         self._main_data_model.is_acquiring.value = False
+        self.acq_future = None
+        self._fs_connector = None
         try:
             future.result()
+            self._reset_acquisition_gui()
         except CancelledError:
             self._reset_acquisition_gui()
             return
@@ -1591,7 +1667,8 @@ class FastEMOverviewAcquiController(object):
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_sparc_acquire
         self.btn_cancel = self._tab_panel.btn_sparc_cancel
-        self.acq_futures = []  # All acquisitions running
+        self.acq_future = None  # ProgressiveBatchFuture
+        self._fs_connector = None  # ProgressiveFutureConnector
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
         self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
@@ -1649,7 +1726,6 @@ class FastEMOverviewAcquiController(object):
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
-    @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         lvl = None  # icon status shown
         if not self._main_data_model.active_scintillators.value:
@@ -1672,15 +1748,9 @@ class FastEMOverviewAcquiController(object):
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
         logging.debug("Updating status message %s, with level %s", txt, lvl)
-        self.lbl_acqestimate.SetLabel(txt)
-        self._show_status_icons(lvl)
+        self._set_status_message(txt, lvl)
 
-    def _show_status_icons(self, lvl):
-        # update status icon to show the logging level
-        self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
-        self.bmp_acq_status_warn.Show(lvl == logging.WARN)
-        self._tab_panel.Layout()
-
+    @call_in_wx_main
     def _reset_acquisition_gui(self, text=None, level=None):
         """
         Set back every GUI elements to be ready for the next acquisition
@@ -1694,26 +1764,34 @@ class FastEMOverviewAcquiController(object):
         self._tab_panel.Layout()
 
         if text is not None:
-            self.lbl_acqestimate.SetLabel(text)
-            self._show_status_icons(level)
+            self._set_status_message(text, level)
         else:
             self.update_acquisition_time()
+
+    @wxlimit_invocation(1)
+    def _set_status_message(self, text, level=None):
+        self.lbl_acqestimate.SetLabel(text)
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(level in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(level == logging.WARN)
+        self._tab_panel.Layout()
 
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
         """
+        self.update_acquisition_time()  # make sure we show the right label if the previous acquisition failed
         self._main_data_model.is_acquiring.value = True
         self.btn_acquire.Enable(False)
         self.btn_cancel.Enable(True)
         self.btn_cancel.Show()
         self.gauge_acq.Show()
-        self._show_status_icons(None)
 
         self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
         self.gauge_acq.Value = 0
 
         # Acquire ROAs for all projects
+        acq_futures = {}
         for num in self._tab_data_model.selected_scintillators.value:
             center = self._tab_data_model.main.scintillator_positions[num]
             sz = self._tab_data_model.main.scintillator_size
@@ -1721,48 +1799,39 @@ class FastEMOverviewAcquiController(object):
                       center[0] + sz[0] / 2, center[1] + sz[1] / 2)
             try:
                 f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+                t = fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
             except Exception:
                 logging.exception("Failed to start overview acquisition")
                 # Try acquiring the other
                 continue
 
-            def acq_done(future, num=num):
-                if future in self.acq_futures:
-                    self.acq_futures.remove(future)
-                self.on_acquisition_done(future, num)
+            f.add_done_callback(lambda f: self.on_acquisition_done(f, num=num))
+            acq_futures[f] = t
 
-            f.add_done_callback(acq_done)
-
-            self.acq_futures.append(f)
-
-        if self.acq_futures:
-            self.acq_futures[-1].add_done_callback(self.full_acquisition_done)
+        if acq_futures:
+            self.acq_future = model.ProgressiveBatchFuture(acq_futures)
+            self.acq_future.add_done_callback(self.full_acquisition_done)
+            self._fs_connector = ProgressiveFutureConnector(self.acq_future, self.gauge_acq, self.lbl_acqestimate)
         else:  # In case all acquisitions failed to start
+            self._main_data_model.is_acquiring.value = False
             self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
-
-    def increase_acq_progress(self, f):
-        # TODO: improve progress estimation
-        self.gauge_acq.Value += 1
 
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
         """
-        if not self.acq_futures:
+        if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
             return
 
-        for f in self.acq_futures:
-            f.cancel()
+        self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
-    @call_in_wx_main
     def on_acquisition_done(self, future, num):
         """
         Callback called when the one overview image acquisition is finished.
         """
-        self.increase_acq_progress(None)
         try:
             da = future.result()
         except CancelledError:
@@ -1796,7 +1865,7 @@ class FastEMOverviewAcquiController(object):
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
         self._tab_panel.Layout()
-        self.lbl_acqestimate.SetLabel("Acquisition done.")
+        self._set_status_message("Acquisition done.", logging.INFO)
         self._main_data_model.is_acquiring.value = False
 
 
@@ -2187,3 +2256,53 @@ class AutoCenterController(object):
         self._tab_panel.lbl_auto_center.Show()
         self._tab_panel.gauge_auto_center.Hide()
         self._sizer.Layout()
+
+
+class FastEMAlignmentController:
+    def __init__(self, tab_data, panel):
+        self._tab_data = tab_data
+        self._panel = panel
+
+        self._panel.align_gauge_progress.Hide()
+        panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
+        tab_data.main.is_aligned.subscribe(self._on_align_state, init=True)
+
+    def _on_btn_align(self, evt):
+        # TODO: implement cancellation
+        if self._tab_data.main.is_acquiring.value:
+            logging.error("Cancelling alignment currently not supported.")
+            return
+        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
+
+        # Change button to "cancel", show progress bar
+        self._panel.align_gauge_progress.Show()
+        # Label is displayed on the right, but during the acquisition, we want the gauge bar to occupy the
+        # full available space --> use a panel instead of a spacer which can be hidden (spacers cannot) to
+        # make it look nice.
+        self._panel.align_spacer_panel.Hide()
+        self._panel.align_lbl_gauge.Hide()
+        self._panel.btn_align.SetLabel("Cancel")
+        self._panel.Layout()
+
+        # Start alignment
+        f = align.fastem.align(self._tab_data.main)
+        f.add_done_callback(self._on_alignment_done)
+
+    @call_in_wx_main
+    def _on_alignment_done(self, future):
+        self._tab_data.main.is_aligned.value = True
+        self._tab_data.main.is_acquiring.value = False
+
+        # Enable button, hide progress bar
+        self._panel.align_gauge_progress.Hide()
+        self._panel.align_spacer_panel.Show()
+        self._panel.align_lbl_gauge.Show()
+        self._panel.btn_align.SetLabel("Alignment...")
+        self._panel.Parent.Layout()
+
+    def _on_align_state(self, aligned):
+        if aligned:
+            self._panel.align_lbl_gauge.SetLabel("System is aligned.")
+        else:
+            # TODO: time estimation
+            self._panel.align_lbl_gauge.SetLabel("~ 2 seconds")

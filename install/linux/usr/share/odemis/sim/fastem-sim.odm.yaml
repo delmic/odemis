@@ -36,10 +36,13 @@ FASTEM-sim: {
         # stage movement and SEM image *AT LOW MAGNIFICATIONS*.
         # This is useful for the overview image acquisition.
         PIXEL_SIZE_COR: [1.05, 1.05], # ratio
+        SINGLE_BEAM_ROTATION: 0,  # rad
+        MULTI_BEAM_ROTATION: 0.015707963  # rad = 0.9 degrees
     },
     persistent: {
         metadata: [PIXEL_SIZE_COR],
     },
+    #affects: ["MultiBeam Scanner"],  # simulator doesn't have multibeam scanner component
 }
 
 "EBeam Focus": {
@@ -107,7 +110,6 @@ FASTEM-sim: {
     init: {
         locator: "fake",
         channels: {"x1": 0, "y1": 1, "y2": 2},
-        ref_on_init: "if necessary",  # use "always" to force referencing at init
     },
 }
 
@@ -116,10 +118,12 @@ FASTEM-sim: {
 "Stage Fine Position": {
     class: actuator.DualChannelPositionSensor,
     role: stage-pos,
-    dependencies: {"sensor": "Metrology Module"},
+    dependencies: {"sensor": "Metrology Module",
+                   "stage": "Sample Stage",},
     init: {
         channels: {"x": "x1", "y": ["y1", "y2"]},
         distance: 0.1, # (m)
+        ref_on_init: "if necessary",  # use "always" to force referencing at init
     },
 }
 

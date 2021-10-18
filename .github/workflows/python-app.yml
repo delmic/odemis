@@ -1,0 +1,34 @@
+# This workflow will install Python dependencies, and run tests from the Odemis repository.
+# It uses the python 3 system interpreter to run test cases.
+
+name: Unit testing
+
+on:
+  [push, pull_request]
+jobs:
+  build:
+
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Odemis dependencies
+      run: |
+        sudo add-apt-repository ppa:delmic-soft/odemis
+        sudo apt-get -y update
+
+        sudo apt-get -y install python3-pil python3-yaml python3-serial python3-zmq \
+        python3-scipy python3-decorator cgroup-bin \
+        python3-libtiff python3-comedilib python3-h5py libtiff5-dev python3-future \
+        python3-pkg-resources python3-netifaces python3-cairo python3-numpy python3-scipy \
+        python3-decorator python3-xdg python3-suds python3-matplotlib python3-opencv \
+        python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
+        graphicsmagick cgroup-bin authbind python3-setuptools cython python3-pyro4-delmic
+
+        sudo mkdir /var/run/odemisd
+        sudo chmod a+rw /var/run/odemisd
+
+    - name: Run tests from odemis.model
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest discover -s src/odemis/model/test -p "*_test.py" --verbose

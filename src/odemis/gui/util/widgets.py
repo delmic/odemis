@@ -126,7 +126,7 @@ class VigilantAttributeConnector(object):
         logging.debug("Disconnecting VigilantAttributeConnector")
         if self.value_ctrl:
             for event in self.change_events:
-                self.value_ctrl.Unbind(event, source=self.value_ctrl, handler=self._on_ctrl_value_change)
+                self.value_ctrl.Unbind(event, handler=self._on_ctrl_value_change)
         self.vigilattr.unsubscribe(self.va_2_ctrl)
 
 

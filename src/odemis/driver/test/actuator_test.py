@@ -1960,7 +1960,7 @@ class TestDualChannelPositionSensor(unittest.TestCase):
                                             )
 
         # Sensor needs to be referenced before we can request position
-        sensor.reference().result()
+        cls.dev.reference({"x", "y"}).result()
 
     @classmethod
     def tearDownClass(cls):
@@ -2011,6 +2011,98 @@ class TestDualChannelPositionSensor(unittest.TestCase):
         self.dev.sensor.core.positions = [0, -1e-6, 0]
         self.assertEqual(self.dev.position.value['x'], -0.5e-6)
         self.assertEqual(self.dev.rotation.value, -math.pi / 4)
+
+
+class TestDualChannelPositionSensorWithStage(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Construct DualChannelPositionSensor object and its dependencies.
+        """
+        cls.sensor = smaract.Picoscale(name="Stage Metrology",
+                                   role="metrology",
+                                   ref_on_init=False,
+                                   locator="fake",
+                                   channels={'x1': 0, 'x2': 1, 'y1': 2},
+                                   )
+        cls.stage = tmcm.TMCLController(name="test", role="test",
+                                    port="/dev/fake3",
+                                    axes=["x", "y"],
+                                    ustepsize=[5.9e-9, 5.8e-9],
+                                    rng=[[-1e-3, 1e-3], [0, 1e-3]],
+                                    refproc="Standard")
+        cls.dev = DualChannelPositionSensor(name="TestDualChannelPositionSensor",
+                                            role="stage-position",
+                                            dependencies={"sensor": cls.sensor,
+                                                          "stage": cls.stage},
+                                            channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                            distance=1e-6,
+                                            ref_on_init="if necessary"
+                                            )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_reference(self):
+        self.dev.reference({"x", "y"}).result()
+        self.assertTrue(all(self.stage.referenced.value.values()))
+        self.assertTrue(all(self.sensor.referenced.value.values()))
+
+    def test_startup_referencing_if_necessary(self):
+        # Reference stage
+        self.dev.reference({"x", "y"}).result()
+
+        # Move stage
+        stage_pos_x = 10e-6
+        self.stage.moveAbsSync({"x": stage_pos_x})
+
+        # Now start wrapper class with ref_on_init argument
+        dev2 = DualChannelPositionSensor(name="TestDualChannelPositionSensor",
+                                         role="stage-position",
+                                         dependencies={"sensor": self.sensor,
+                                                       "stage": self.stage},
+                                         channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                         distance=1e-6,
+                                         ref_on_init="if necessary"
+                                         )
+
+        # Wait until it's referenced
+        time.sleep(20)
+
+        # It should not reference the stage again (so we expect the stage position to still be at 10e-6)
+        try:
+            self.assertAlmostEqual(self.stage.position.value["x"], stage_pos_x, delta=1e-8)
+        finally:
+            dev2.terminate()
+
+    def test_startup_referencing_always(self):
+        # Reference stage
+        self.stage.reference({"x"}).result()
+
+        # Move stage
+        stage_pos_x = 10e-6
+        self.stage.moveAbsSync({"x": stage_pos_x})
+
+        # Now start wrapper class with ref_on_init argument
+        dev2 = DualChannelPositionSensor(name="TestDualChannelPositionSensor",
+                                         role="stage-position",
+                                         dependencies={"sensor": self.sensor,
+                                                       "stage": self.stage},
+                                         channels={'x': ['x1', 'x2'], 'y': 'y1'},
+                                         distance=1e-6,
+                                         ref_on_init="always"
+                                         )
+
+        # Wait until it's referenced
+        time.sleep(20)
+
+        # It should reference the stage again (so we expect the stage position to be 0)
+        try:
+            self.assertEqual(self.stage.position.value["x"], 0)
+        finally:
+            dev2.terminate()
 
 
 if __name__ == "__main__":

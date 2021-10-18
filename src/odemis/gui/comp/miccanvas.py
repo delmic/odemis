@@ -116,6 +116,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.line_overlay = None
         self.dicho_overlay = None
         self.gadget_overlay = None
+        self.cryofeature_overlay = None
 
         # play/pause icon
         self.play_overlay = view_overlay.PlayIconOverlay(self)
@@ -247,6 +248,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if guimodel.TOOL_LINE in tools_possible:
             self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
+
+        if guimodel.TOOL_FEATURE in tools_possible:
+            self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data)
+            self.add_world_overlay(self.cryofeature_overlay)
+            self.cryofeature_overlay.active.value = True
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 
@@ -612,6 +618,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         phys_pos (float, float): the coordinates of the center of the buffer in
                                  physical units (m, with Y going up)
         """
+        move_dict = self.view.clipToStageLimits({"x": phys_pos[0], "y": phys_pos[1]})
+        phys_pos = (move_dict["x"], move_dict["y"])
+
         # in case we are not attached to a view yet (shouldn't happen)
         super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
         if self.view:

@@ -121,6 +121,8 @@ class MetadataUpdater(model.Component):
                 elif a.role == "streak-lens":
                     # update the magnification of the streak lens
                     observed = self.observeStreakLens(a, d)
+                elif a.role == "e-beam":
+                    observed = self.observeEbeam(a, d)
                 else:
                     observed = False
 
@@ -369,6 +371,22 @@ class MetadataUpdater(model.Component):
 
         streak_lens.magnification.subscribe(updateMagnification, init=True)
         self._onTerminate.append((streak_lens.magnification.unsubscribe, (updateMagnification,)))
+
+        return True
+
+    def observeEbeam(self, ebeam, comp_affected):
+        """Add ebeam rotation to multibeam metadata to make sure that the thumbnails
+        are displayed correctly."""
+
+        if comp_affected.role != "multibeam":
+            return False
+
+        def updateRotation(rot, comp_affected=comp_affected):
+            md = {model.MD_ROTATION: rot}
+            comp_affected.updateMetadata(md)
+
+        ebeam.rotation.subscribe(updateRotation, init=True)
+        self._onTerminate.append((ebeam.rotation.unsubscribe, (updateRotation,)))
 
         return True
 

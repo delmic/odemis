@@ -308,7 +308,7 @@ class TileAcqPlugin(Plugin):
         self._tab = self.main_app.main_data.tab.value
         if self._tab.name not in ("secom_live", "sparc_acqui"):
             box = wx.MessageDialog(self.main_app.main_frame,
-                       "Tiled acquisition must be done from the acquisition stream.",
+                       "Tiled acquisition must be done from the acquisition tab.",
                        "Tiled acquisition not possible", wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()

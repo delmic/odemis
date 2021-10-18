@@ -4396,6 +4396,66 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
+                        <object class="wxPanel" name="pnl_fastem_alignment">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_align">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Alignment...</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="align_gauge_progress">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxPanel" name="align_spacer_panel">
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="align_lbl_gauge">
+                                <label>~ 30 seconds</label>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <style>wxALIGN_RIGHT</style>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                        </object>
+                        <label>ALIGNMENT</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+					  <object class="FoldPanelItem">
                         <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
@@ -4913,8 +4973,8 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img/icon/ico_pause.png</icon>
-                          <icon_on>img/icon/arr_right.png</icon_on>
+                          <icon>img/icon/ico_sem.png</icon>
+                          <icon_on>img/icon/ico_sem_green.png</icon_on>
                           <height>48</height>
                           <size>120,48</size>
                           <face_colour>def</face_colour>
@@ -4937,6 +4997,31 @@
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Pressure: </label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>10</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="pressure_label">
+                              <size>150,20</size>
+                              <value>...</value>
+                              <fg>#DDDDDD</fg>
+                              <bg>#333333</bg>
+                          </object>
+                        </object>
+                      </object>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                   </object>
                   <object class="sizeritem">
                       <object class="wxTextCtrl">
@@ -5628,10 +5713,10 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="FeatureOverviewViewport" name="vp_secom_tl">
+          <object class="FixedOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
-            <XRCED>
+            <XRCED>FixedOverviewViewport
               <assign_var>1</assign_var>
             </XRCED>
           </object>
@@ -6161,28 +6246,28 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="LiveViewport" name="vp_secom_tl">
+          <object class="FeatureOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_tr">
+          <object class="FeatureViewport" name="vp_secom_tr">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_bl">
+          <object class="FeatureViewport" name="vp_secom_bl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_br">
+          <object class="FeatureViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
@@ -6208,6 +6293,118 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
+					<object class="FoldPanelItem" name="fp_feature_panel">
+						<object class="wxPanel" name="pnl_features">
+							<object class="wxBoxSizer">				
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">										
+										<object class="sizeritem">
+											<object class="OwnerDrawnComboBox" name="cmb_features">
+											  <size>155,20</size>
+											  <fg>#2FA7D4</fg>
+											  <bg>#4D4D4D</bg>
+											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+											</object>
+									  </object>
+									  <object class="sizeritem">
+										<object class="ImageTextButton" name="btn_create_move_feature">
+										  <height>24</height>
+										    <bg>#000000</bg>
+										  <label>Create/Move</label>
+										  <style>wxALIGN_CENTRE</style>
+										</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+									</object>
+								<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+									<object class="wxBoxSizer">				
+										 <object class="sizeritem">
+												<object class="wxStaticText">
+												<label>Status</label>
+												<fg>#DDDDDD</fg>
+												</object>
+										</object>
+										<object class="sizeritem">
+												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
+												  <size>110,16</size>
+												  <fg>#2FA7D4</fg>
+												  <bg>#4D4D4D</bg>
+												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+												</object>
+												<flag>wxLEFT</flag>
+											<border>10</border>
+										  </object>
+										  <object class="sizeritem">
+												<object class="ImageTextButton" name="btn_go_to_feature">
+												  <height>24</height>
+												  <label>Go to feature</label>
+												  <style>wxALIGN_CENTRE</style>
+												    <bg>#000000</bg>
+												  <XRCED>
+													<assign_var>1</assign_var>
+												  </XRCED>
+												</object>
+												<flag>wxLEFT</flag>
+												<border>65</border>
+											</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">			
+									 <object class="sizeritem">
+											<object class="wxStaticText">
+											<label>Feature Z</label>
+											<fg>#DDDDDD</fg>
+											</object>
+										</object>
+										<object class="sizeritem">
+											<object class="UnitFloatCtrl"
+      												name="ctrl_feature_z">
+												<size>-1,20</size>
+												<accuracy>4</accuracy>
+												<key_step>0.001</key_step>
+												  <bg>#000000</bg>
+												<scale>linear</scale>
+												<accuracy>2</accuracy>
+											</object>
+											<flag>wxLEFT</flag>
+											<border>10</border>
+										</object>
+										 <object class="sizeritem">
+											<object class="ImageTextButton" name="btn_use_current_z">
+											  <height>24</height>
+											    <bg>#000000</bg>
+											  <label>Use Current Z</label>
+											  <style>wxALIGN_CENTRE</style>
+											</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+										</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+								<border>10</border>
+							</object>
+					   <flag>wxALIGN_RIGHT</flag>
+					   <orient>wxVERTICAL</orient>
+                      </object>
+							
+						</object>
+                        <label>FEATURES</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -6278,7 +6475,7 @@
                                                     <object class="UnitFloatCtrl" name="param_Zmin">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-1000</min>
                                                         <max>0</max>
                                                         <unit>m</unit>
@@ -6320,7 +6517,7 @@
                                                     <object class="UnitFloatCtrl" name="param_Zstep">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-100</min>
                                                         <max>100</max>
                                                         <unit>m</unit>
@@ -6362,7 +6559,7 @@
                                                     <object class="UnitFloatCtrl" name="param_Zmax">
                                                         <size>-1,15</size>
                                                         <value>1</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>0</min>
                                                         <max>1000</max>
                                                         <unit>m</unit>
@@ -6506,7 +6703,7 @@
                                                         </object>
                                                         <object class="sizeritem">
                                                             <object class="wxStaticText" name="txt_cryosecom_left_time">
-                                                                <label>3 m 15 s left</label>
+                                                                <label></label>
                                                                 <fg>#E5E5E5</fg>
                                                                 <hidden>1</hidden>
                                                             </object>

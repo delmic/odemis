@@ -855,6 +855,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.stop_listening_to_va()
 
         self.remove_all_streams()
+        # Set the streambar controller to None so it wouldn't be a listener to stream.remove
+        self.streambar_controller = None
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -868,8 +870,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.acq_future.cancel()
 
         self.terminate_listeners()
-        # Set the streambar controller to None so it wouldn't be a listener to stream.remove
-        self.streambar_controller = None
 
         self.EndModal(wx.ID_CANCEL)
 

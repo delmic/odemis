@@ -123,6 +123,16 @@ class InfoLegend(wx.Panel):
         self.zPos_text.SetToolTip("Z Position")
         self.zPos_text.Hide()
 
+        # Feature show/hide button
+        self._feature_toggle_va = None
+        bmp = img.getBitmap("menu/btn_feature_toggle_off.png")
+        bmpa = img.getBitmap("menu/btn_feature_toggle_on.png")
+        bmph = img.getBitmap("menu/btn_feature_toggle_off.png")
+
+        self.featureBtn = ImageToggleButton(self, pos=(0, 0), bitmap=bmp, size=(24, 24))
+        self.featureBtn.bmpSelected = bmpa
+        self.featureBtn.bmpHover = bmph
+        self.featureBtn.Show(False)
         # Scale window
         self.scale_win = ScaleWindow(self)
 
@@ -145,6 +155,10 @@ class InfoLegend(wx.Panel):
             flag=wx.ALIGN_CENTER | wx.EXPAND)
         slider_sizer.Add(
             self.bmp_slider_right, 0,
+            border=3,
+            flag=wx.ALIGN_CENTER | wx.LEFT)
+        slider_sizer.Add(
+            self.featureBtn, 0,
             border=3,
             flag=wx.ALIGN_CENTER | wx.LEFT)
 
@@ -247,6 +261,37 @@ class InfoLegend(wx.Panel):
             self.bmp_slider_left.SetBitmap(icon)
         else:
             self.bmp_slider_right.SetBitmap(icon)
+
+    @property
+    def feature_toggle_va(self):
+        return self._feature_toggle_va
+
+    @feature_toggle_va.setter
+    def feature_toggle_va(self, va):
+        """
+        Set feature toggle button with the va, show it and listen to the va changes to set/unset its toggle value
+        Note: The caller must run in the main GUI Thread
+        """
+        if self._feature_toggle_va != va:
+            if self._feature_toggle_va is not None:
+                self._feature_toggle_va.unsubscribe(self._feature_toggle_change)
+
+            # Show the feature toggle button
+            self.featureBtn.Show()
+            self.featureBtn.SetToggle(va.value)
+            self._feature_toggle_va = va
+
+            self.featureBtn.Bind(wx.EVT_BUTTON, self._feature_toggle_click)
+            self._feature_toggle_va.subscribe(self._feature_toggle_change)
+
+            self.Refresh()
+
+    def _feature_toggle_click(self, evt):
+        self._feature_toggle_va.value = evt.isDown
+
+    @call_in_wx_main
+    def _feature_toggle_change(self, new_value):
+        self.featureBtn.SetToggle(new_value)
 
 
 class AxisLegend(wx.Panel):

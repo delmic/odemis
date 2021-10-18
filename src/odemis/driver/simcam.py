@@ -118,7 +118,7 @@ class Camera(model.DigitalCamera):
                                               cls=(int, long), setter=self._setTranslation)
 
         self._orig_exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1)  # s
-        self.exposureTime = model.FloatContinuous(self._orig_exp, (1e-3, 10), unit="s")
+        self.exposureTime = model.FloatContinuous(self._orig_exp, range=(1e-3, max(10, self._orig_exp * 2)), unit="s")
 
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)

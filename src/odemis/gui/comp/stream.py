@@ -40,7 +40,7 @@ from odemis.gui.comp.combo import ComboBox, ColorMapComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
+from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl, PatternValidator
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
@@ -1630,7 +1630,8 @@ class FastEMProjectPanelHeader(wx.Control):
 
     def _add_text_ctrl(self, name):
         """ Add a label control to the header panel """
-        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, name, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE)
+        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, name, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE,
+                               validator=PatternValidator(r'[A-Za-z0-9_()-]+'))
         txt_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         txt_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(txt_ctrl, stretch=True)
@@ -2003,7 +2004,8 @@ class FastEMROAPanel(wx.Panel):
         :param default_text: (str)
         :return: (wx.TextCtrl)
         """
-        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, default_text, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE)
+        txt_ctrl = wx.TextCtrl(self, wx.ID_ANY, default_text, style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE,
+                               validator=PatternValidator(r'[A-Za-z0-9_()-]+'))
         txt_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         txt_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self._add_ctrl(txt_ctrl, True)

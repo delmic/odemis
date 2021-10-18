@@ -39,7 +39,7 @@ import time
 import unittest
 from multiprocessing import Process
 
-
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
@@ -681,6 +681,8 @@ class RemoteTest(unittest.TestCase):
         self.called = 0
         self.last_value = None
         prop.subscribe(self.receive_va_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         # now count
         prop.value = 3 # +1
         prop.value = 0 # +1
@@ -700,6 +702,8 @@ class RemoteTest(unittest.TestCase):
 
         # re-subscribe
         prop.subscribe(self.receive_va_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         # change remotely
         self.comp.change_prop(45)
         time.sleep(0.1) # give time to receive notifications
@@ -714,6 +718,7 @@ class RemoteTest(unittest.TestCase):
             pass # as it should be
 
     def receive_va_update(self, value):
+        logging.debug("Update va to %s", value)
         self.called += 1
         self.last_value = value
         self.assertIsInstance(value, (int, float))
@@ -757,13 +762,20 @@ class RemoteTest(unittest.TestCase):
         l = self.comp.listval
         self.assertEqual(len(l.value), 2)
         self.called = 0
+
         l.subscribe(self.receive_listva_update)
+        time.sleep(0.01)  # It can take some time to subscribe
+
         l.value += [3]
         self.assertEqual(len(l.value), 3)
         time.sleep(0.01)
+        self.assertEqual(self.called, 1)
+
         l.value[-1] = 4
         self.assertEqual(l.value[-1], 4)
         time.sleep(0.01)
+        self.assertEqual(self.called, 2)
+
         l.value.reverse()
         self.assertEqual(l.value[0], 4)
         time.sleep(0.1)
@@ -771,6 +783,7 @@ class RemoteTest(unittest.TestCase):
         l.unsubscribe(self.receive_listva_update)
 
     def receive_listva_update(self, value):
+        logging.debug("listva changed to %s", value)
         self.called += 1
         self.last_value = value
         self.assertIsInstance(value, list)

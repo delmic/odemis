@@ -502,6 +502,11 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_alignment = xrc.XRCCTRL(self, "pnl_fastem_alignment")
+        self.btn_align = xrc.XRCCTRL(self, "btn_align")
+        self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
+        self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
+        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
         self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
@@ -584,6 +589,7 @@ class xrcpnl_tab_fastem_chamber(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.btn_pressure = xrc.XRCCTRL(self, "btn_pressure")
         self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
+        self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
@@ -759,6 +765,14 @@ class xrcpnl_tab_localization(wx.Panel):
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_feature_panel = xrc.XRCCTRL(self, "fp_feature_panel")
+        self.pnl_features = xrc.XRCCTRL(self, "pnl_features")
+        self.cmb_features = xrc.XRCCTRL(self, "cmb_features")
+        self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
+        self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
+        self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
+        self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
+        self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
@@ -5282,6 +5296,66 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
+                        <object class="wxPanel" name="pnl_fastem_alignment">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_align">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Alignment...</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="align_gauge_progress">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxPanel" name="align_spacer_panel">
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="align_lbl_gauge">
+                                <label>~ 30 seconds</label>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <style>wxALIGN_RIGHT</style>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                        </object>
+                        <label>ALIGNMENT</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+					  <object class="FoldPanelItem">
                         <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
@@ -5799,8 +5873,8 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img_icon_ico_pause_png</icon>
-                          <icon_on>img_icon_arr_right_png</icon_on>
+                          <icon>img_icon_ico_sem_png</icon>
+                          <icon_on>img_icon_ico_sem_green_png</icon_on>
                           <height>48</height>
                           <size>120,48</size>
                           <face_colour>def</face_colour>
@@ -5823,6 +5897,31 @@ def __init_resources():
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Pressure: </label>
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>10</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="pressure_label">
+                              <size>150,20</size>
+                              <value>...</value>
+                              <fg>#DDDDDD</fg>
+                              <bg>#333333</bg>
+                          </object>
+                        </object>
+                      </object>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                   </object>
                   <object class="sizeritem">
                       <object class="wxTextCtrl">
@@ -6514,10 +6613,10 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="FeatureOverviewViewport" name="vp_secom_tl">
+          <object class="FixedOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
-            <XRCED>
+            <XRCED>FixedOverviewViewport
               <assign_var>1</assign_var>
             </XRCED>
           </object>
@@ -7047,28 +7146,28 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="LiveViewport" name="vp_secom_tl">
+          <object class="FeatureOverviewViewport" name="vp_secom_tl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_tr">
+          <object class="FeatureViewport" name="vp_secom_tr">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_bl">
+          <object class="FeatureViewport" name="vp_secom_bl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_secom_br">
+          <object class="FeatureViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
@@ -7094,6 +7193,117 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
+					<object class="FoldPanelItem" name="fp_feature_panel">
+						<object class="wxPanel" name="pnl_features">
+							<object class="wxBoxSizer">				
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">										
+										<object class="sizeritem">
+											<object class="OwnerDrawnComboBox" name="cmb_features">
+											  <size>155,20</size>
+											  <fg>#2FA7D4</fg>
+											  <bg>#4D4D4D</bg>
+											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+											</object>
+									  </object>
+									  <object class="sizeritem">
+										<object class="ImageTextButton" name="btn_create_move_feature">
+										  <height>24</height>
+										    <bg>#000000</bg>
+										  <label>Create/Move</label>
+										  <style>wxALIGN_CENTRE</style>
+										</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+									</object>
+								<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+									<object class="wxBoxSizer">				
+										 <object class="sizeritem">
+												<object class="wxStaticText">
+												<label>Status</label>
+												<fg>#DDDDDD</fg>
+												</object>
+										</object>
+										<object class="sizeritem">
+												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
+												  <size>110,16</size>
+												  <fg>#2FA7D4</fg>
+												  <bg>#4D4D4D</bg>
+												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+												</object>
+												<flag>wxLEFT</flag>
+											<border>10</border>
+										  </object>
+										  <object class="sizeritem">
+												<object class="ImageTextButton" name="btn_go_to_feature">
+												  <height>24</height>
+												  <label>Go to feature</label>
+												  <style>wxALIGN_CENTRE</style>
+												    <bg>#000000</bg>
+												  <XRCED>
+													<assign_var>1</assign_var>
+												  </XRCED>
+												</object>
+												<flag>wxLEFT</flag>
+												<border>65</border>
+											</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP</flag>
+								<border>10</border>
+							</object>
+							<object class="sizeritem">		
+								<object class="wxBoxSizer">			
+									 <object class="sizeritem">
+											<object class="wxStaticText">
+											<label>Feature Z</label>
+											<fg>#DDDDDD</fg>
+											</object>
+										</object>
+										<object class="sizeritem">
+											<object class="UnitFloatCtrl" name="ctrl_feature_z">
+												<size>-1,20</size>
+												<accuracy>4</accuracy>
+												<key_step>0.001</key_step>
+												  <bg>#000000</bg>
+												<scale>linear</scale>
+												<accuracy>2</accuracy>
+											</object>
+											<flag>wxLEFT</flag>
+											<border>10</border>
+										</object>
+										 <object class="sizeritem">
+											<object class="ImageTextButton" name="btn_use_current_z">
+											  <height>24</height>
+											    <bg>#000000</bg>
+											  <label>Use Current Z</label>
+											  <style>wxALIGN_CENTRE</style>
+											</object>
+										<flag>wxLEFT</flag>
+										<border>65</border>
+										</object>
+									<orient>wxHORIZONTAL</orient>
+								</object>
+								<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+								<border>10</border>
+							</object>
+					   <flag>wxALIGN_RIGHT</flag>
+					   <orient>wxVERTICAL</orient>
+                      </object>
+							
+						</object>
+                        <label>FEATURES</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -7164,7 +7374,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zmin">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-1000</min>
                                                         <max>0</max>
                                                         <unit>m</unit>
@@ -7206,7 +7416,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zstep">
                                                         <size>-1,15</size>
                                                         <value>10</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>-100</min>
                                                         <max>100</max>
                                                         <unit>m</unit>
@@ -7248,7 +7458,7 @@ def __init_resources():
                                                     <object class="UnitFloatCtrl" name="param_Zmax">
                                                         <size>-1,15</size>
                                                         <value>1</value>
-                                                        <key_step>0.1</key_step>
+                                                        <key_step>0.000001</key_step>
                                                         <min>0</min>
                                                         <max>1000</max>
                                                         <unit>m</unit>
@@ -7392,7 +7602,7 @@ def __init_resources():
                                                         </object>
                                                         <object class="sizeritem">
                                                             <object class="wxStaticText" name="txt_cryosecom_left_time">
-                                                                <label>3 m 15 s left</label>
+                                                                <label/>
                                                                 <fg>#E5E5E5</fg>
                                                                 <hidden>1</hidden>
                                                             </object>
@@ -9407,29 +9617,6 @@ b\xa7\xc3g\xc3\x86\x86!8.\xd0s\xf2\xe5\xe4xvU\xeck\xb2\x05\x92\xd4\x9a\
 k:\x02}g\xe89\xacnS1\xfb\xb2\xdf\x1a\xe2\xff\x897\xd9u\xe0\xeb\xaa\xbe\
 \x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_ico_pause_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x12\x00\x00\x00\x12\x08\x06\x00\x00\x00\
-V\xce\x8eW\x00\x00\x00.IDAT8\x8dc`\x18\x05d\x813g\xce\xec\x87a|b\xc4\x18\
-\xf4\x1f\x86\xf1\x89\x8d\x1a4j\x10]\x0c:w\xee\x9c=\x0c\xe3\x13\x1b!\x00\
-\x00\xc1\xd1\xd9\xabx\xad\xca>\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_icon_arr_right_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x00\xbcIDAT8\xcbc\xf8\xff\xff?\x03%\x98ap\x18@\x11\
-@2\x80\x09\x88\xad\x818\x0c\x88\x99\xc91\x80\x0d\x88cAB@|\x1c\x88M\xa0\x86\
-\x12m\x00\x27\x10gA\x0d\x00\xe1\xbf@<\x1f\x88%\x80\x98\x91\x18\x03\xb8\x80\
-8\x1f\xc9\x00\x18\xfe\x04\xc4E@\xccN\xae\x010|\x0b\x88\xbd0\xbcE\x82\x01\
-0oE\xa1\x042\x09\x06\\\x05\xe24 \x96\x05bVR\x0cx\x03\xc4\xd3\x81\xd8\x07\
-\x88\xb5\x81X\x80X\x17\xfc\x04\xe2\x0d@\x1c\x09\xc4f@,\x05\x8d)\xa2\xc2\
-\xe0\x04\x10g\x03\xb1\x1d\x10+\x021/\xce\xc4\x85\x96\x0e\x02\x80\xb8\x18\
-\x88\xdd\x80X\x03\x88\x05\x81\x98\x85\xd8\x84\x04
-\x181\xa8\x8db\xd0xg$\x94\x10\x01\xe0\xcc\xeb\x93A\xf4\x92}\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
     img_icon_ico_export_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -9536,8 +9723,6 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', bytearray(img_icon_ico_acqui_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', bytearray(img_icon_ico_press_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_green_png', bytearray(img_icon_ico_press_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_pause_png', bytearray(img_icon_ico_pause_png))
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_arr_right_png', bytearray(img_icon_arr_right_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', bytearray(img_icon_ico_export_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', bytearray(img_icon_dialog_error_png))
     __res.Load('memory:XRC/main/main_xrc')
