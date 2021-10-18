@@ -2486,7 +2486,7 @@ class CryoChamberTab(Tab):
             self._show_warning_msg(None)
 
         elif self._role == 'meteor':
-            self._stage  = self.tab_data_model.main.stage_bare
+            self._stage = self.tab_data_model.main.stage_bare
             # start and end position are used for the gauge progress bar
             self._start_pos = self._end_pos = None
             # Show current position of the stage via the progress bar

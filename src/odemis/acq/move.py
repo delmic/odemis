@@ -649,7 +649,13 @@ def _doCryoSwitchSamplePosition(future, target):
                     raise CancelledError()
                 future._task_state = FINISHED
 
-
+# Note: this transformation consists of translation of along x and y 
+# axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
+# The rotation angles are constant existing in "FM_POS_ACTIVE" metadata,
+# but the translation are calculated based on the current position and some
+# correction/shifting parameters existing in metadata "FM_POS_ACTIVE". 
+# This correction parameters can change every session. They are calibrated
+# at the beginning of each run.
 def transformFromSEMToMeteor(pos, stage):
     """
     Transforms the current stage position from the SEM imaging area to the 
@@ -671,6 +677,12 @@ def transformFromSEMToMeteor(pos, stage):
     return transformed_pos
 
 
+# Note: this transformation also consists of translation and rotation. 
+# The translation is along x and y axes. They are calculated based on
+# the current position and correction parameters which are calibrated every session.
+# The rotation angles are 180 degree around rz axis, and a rotation angle
+# around rx axis which should also be calibrated at the beginning of the run. 
+# The rx angle is actually the same as the milling angle. 
 def transformFromMeteorToSEM(pos, stage):
     """
     Transforms the current stage position from the meteor/FM imaging area
