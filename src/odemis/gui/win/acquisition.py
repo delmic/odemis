@@ -619,7 +619,7 @@ class AcquisitionDialog(xrcfr_acq):
 
 # Step value for z stack levels
 ZSTEP = 2e-6  # m
-
+DEFAULT_FOV = (100e-6, 100e-6)
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
@@ -703,17 +703,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
         # on_streams_changed is compatible because it doesn't use the args
 
-        # To update the estimated time when streams are removed/added
-        self._view.stream_tree.flat.subscribe(self.on_streams_changed)
-
-        # get smallest fov
-        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
-        if not fovs:
-            raise ValueError("No stream so no FoV")
-        # smallest fov
-        self.fov = (min(f[0] for f in fovs),
-                    min(f[1] for f in fovs))
-
         # Set parameters for tiled acq
         self.overlap = 0.2
         try:
@@ -738,7 +727,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         for s in streams:
             self._view.addStream(s)
 
-        self.on_tiles_number()
+        # To update the estimated time when streams are removed/added
+        self._view.stream_tree.flat.subscribe(self.on_streams_changed, init=True)
 
     def update_area_size(self, w, h):
         """
@@ -757,7 +747,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         else:
             # there is no intersection
             self.area_size_txt.SetLabel("Invalid stage position")
-            return 
+            logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
 
     @staticmethod
     def get_ROA_rect(w, h, pos, tiling_rng):
@@ -867,6 +857,16 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         When the list of streams to acquire has changed
         """
+        # get smallest fov
+        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
+        if not fovs:
+            # fall back to a small fov (default)
+            self.fov = DEFAULT_FOV
+        else:
+            # smallest fov
+            self.fov = (min(f[0] for f in fovs),
+                        min(f[1] for f in fovs))
+        self.on_tiles_number()
         self.update_setting_display()
 
     def on_setting_change(self, _=None):
