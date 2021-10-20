@@ -2952,7 +2952,7 @@ class DualChannelPositionSensor(model.HwComponent):
                 if in_ch not in self.sensor.axes:
                     raise ValueError("Sensor component '%s' does not have axis '%s'" % (self.sensor.name, in_ch,))
             if self.stage and out_ch not in self.stage.axes:
-                raise ValueError("Stage doesn't have axis %s", out_ch)
+                raise ValueError("Stage doesn't have axis %s" % out_ch)
             self.channels[out_ch] = in_chs
         self._axes = {out_ch: self.sensor.axes[in_chs[0]] for out_ch, in_chs in self.channels.items()}
 
