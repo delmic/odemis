@@ -166,6 +166,7 @@ class ZStackAcquisitionTask(object):
         """
         remaining_t = self.estimate_total_duration()
         acquired_data = []
+        light = model.getComponent(role="light")
         # iterate through streams
         for stream in self._streams:
             zstack = []
@@ -206,6 +207,9 @@ class ZStackAcquisitionTask(object):
                     self._actuator_f = stream.focuser.moveAbs({"z": z})
                     self._actuator_f.result()
 
+                    light.power.value[1] = 0.07360291043169682
+                    time.sleep(1)
+
                     # check if cancellation happened while the actuator future is working
                     if self._future_state == CANCELLED:
                         raise CancelledError()
@@ -219,6 +223,7 @@ class ZStackAcquisitionTask(object):
                         # acquire this single stream, and get the data
                         self._single_acqui_f = acquire([stream], self._settings_obs)
                         data, exp = self._single_acqui_f.result()
+
                         if exp:
                             return acquired_data, exp
                         # check if cancellation happened while the acquiring future is working

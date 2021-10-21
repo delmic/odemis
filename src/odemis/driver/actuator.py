@@ -3377,6 +3377,9 @@ class LinkedAxesActuator(model.Actuator):
         with future._moving_lock:
             if future._must_stop.is_set():
                 raise CancelledError()
+            # DEBUG: should actually compare to the latest position requested
+            if all(util.almost_equal(pt, self._stage.position.value[axis],atol=400e-9) for axis, pt in pos.items()):
+                logging.info("skipping move to %s as the stage is already there", pos)
             future._running_subf = self._stage.moveAbs(pos)
         future._running_subf.result()
 
@@ -3402,3 +3405,21 @@ class LinkedAxesActuator(model.Actuator):
     def reference(self, axes):
         """Reference the linked axes stage"""
         raise NotImplementedError("Referencing is currently not implemented.")
+
+class MultiplexAbsActuator(MultiplexActuator):
+    def __init__(self, name, role, dependencies, axes_map, daemon=None, ):
+        super(MultiplexAbsActuator, self).__init__(name, role, dependencies, axes_map, daemon=daemon)
+
+    @isasync
+    def moveRel(self, shift):
+        x = self.position.value['x']
+        y = self.position.value['y']
+        z = self.position.value['z']
+        if 'x' in shift:
+            x = x + shift['x']
+        if 'y' in shift:
+            y = y + shift['y']
+        if 'z' in shift:
+            z = z + shift['y']
+
+        return self.moveAbs({'x': x, 'y': y, 'z': z})

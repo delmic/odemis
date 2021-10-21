@@ -645,7 +645,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # The pattern to use for storing each tile file individually
         # None disables storing them
-        self.filename_tiles = create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
+        self.filename_tiles = create_filename(self.conf.pj_last_path, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
 
         # Create a new settings controller for the acquisition dialog

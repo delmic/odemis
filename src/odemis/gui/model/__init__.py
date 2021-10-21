@@ -321,7 +321,7 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            if self.role in ("secom", "delphi", "enzel", "meteor"):
+            if self.role in ("secom", "delphi", "enzel", ):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role == "secom":
                     required_roles += ["align", "se-detector"]
@@ -329,6 +329,8 @@ class MainGUIData(object):
                 required_roles += ["e-beam", "mirror", "lens"]
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
+            elif self.role == "meteor":
+                required_roles += ["light", "stage", "focus"]
 
             for crole in required_roles:
                 attrname = self._ROLE_TO_ATTR[crole]
@@ -652,7 +654,7 @@ class CryoGUIData(MicroscopyGUIData):
         return feature
 
     # Todo: find the right margin
-    ATOL_FEATURE_POS = 0.1e-3  # m
+    ATOL_FEATURE_POS = 100e-6  # m
 
     def select_current_position_feature(self):
         """

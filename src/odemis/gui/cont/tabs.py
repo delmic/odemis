@@ -432,14 +432,14 @@ class LocalizationTab(Tab):
         # Will create SEM stream with all settings local
         emtvas = set()
         hwemtvas = set()
-        for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
-            if vaname in ("resolution", "dwellTime", "scale"):
-                emtvas.add(vaname)
-            else:
-                hwemtvas.add(vaname)
 
         # The sem stream is visible for enzel, but not for meteor 
-        if self.main_data.role == 'enzel': 
+        if self.main_data.role == 'enzel':
+            for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
+                if vaname in ("resolution", "dwellTime", "scale"):
+                    emtvas.add(vaname)
+                else:
+                    hwemtvas.add(vaname)
             # This stream is used both for rendering and acquisition
             sem_stream = acqstream.SEMStream(
                 "Secondary electrons",
@@ -2528,10 +2528,10 @@ class CryoChamberTab(Tab):
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             # TODO: add buttons icons of meteor 
             self.btn_toggle_icons = {
-                self.panel.btn_switch_sem_imaging: "icon/ico_eject_green.png",
-                self.panel.btn_switch_fm_imaging: "icon/ico_imaging_green.png",
-                self.panel.btn_switch_grid2: "icon/ico_milling_green.png",
-                self.panel.btn_switch_grid1: "icon/ico_coating_green.png"}
+                self.panel.btn_switch_sem_imaging: "icon/ico_sem_green.png",
+                self.panel.btn_switch_fm_imaging: "icon/ico_meteorimaging_green.png",
+                self.panel.btn_switch_grid2: "icon/ico_meteorgrid_green.png",
+                self.panel.btn_switch_grid1: "icon/ico_meteorgrid_green.png"}
             # hide some of enzel widgets 
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
