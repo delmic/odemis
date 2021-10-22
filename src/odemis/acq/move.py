@@ -635,6 +635,7 @@ def _doCryoSwitchSamplePosition(future, target):
             # run the moves 
             try:
                 for component, sub_move in sub_moves:
+                    logging.info("Moving from position {} to position {}.".format(meteor_labels[current_pos_label], meteor_labels[target]))
                     run_sub_move(future, component, sub_move)
             except Exception:
                 raise
