@@ -868,6 +868,7 @@ class xrcfr_overview_acq(wx.Dialog):
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
+        self.zstack_slider_step = xrc.XRCCTRL(self, "zstack_slider_step")
         self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
         self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
@@ -8087,7 +8088,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <cols>2</cols>
-                      <rows>4</rows>
+                      <rows>5</rows>
                       <vgap>10</vgap>
                       <hgap>50</hgap>
                       <object class="sizeritem">
@@ -8118,7 +8119,37 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND|wxTOP</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Zstep size</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="zstack_slider_step">
+                          <label>...</label>
+                          <fg>#777777</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <option>0</option>
+                        <flag>wxLEFT</flag>
                         <border>10</border>
                       </object>
                       <object class="sizeritem">

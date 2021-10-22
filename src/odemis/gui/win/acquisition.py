@@ -730,6 +730,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed, init=True)
 
+        zstep = util.readable_str(ZSTEP, unit="m", sig=3)
+        self.zstack_slider_step.SetLabel(zstep)
+
     def update_area_size(self, w, h):
         """
         Calculates the requested tiling area size, and updates it on the GUI.
