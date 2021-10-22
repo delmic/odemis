@@ -12,6 +12,6 @@ PyInstaller>=3.6
 psutil>=4.3.0
 PyYAML>=3.11
 pyzmq>=15.2.0
-scipy>=0.15.1
+scipy==1.5.4
 wxPython>=4.0.4
 setuptools>=39.2.0
