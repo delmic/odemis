@@ -777,7 +777,7 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("cryo-secom",):
+        if main_data.role in ("enzel", "meteor"):
             return 2
         else:
             return None
@@ -2370,6 +2370,11 @@ class ChamberTab(Tab):
         return None
 
 
+# Default Milling angle and range for cryo-based microscopes
+DEFAULT_MILLING_ANGLE = math.radians(10)  # rad
+MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
+
+
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """ CryoSECOM chamber view tab """
@@ -2526,12 +2531,12 @@ class CryoChamberTab(Tab):
             # the meteor buttons 
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
-            # TODO: add buttons icons of meteor 
+            # buttons icons of meteor 
             self.btn_toggle_icons = {
-                self.panel.btn_switch_sem_imaging: "icon/ico_eject_green.png",
-                self.panel.btn_switch_fm_imaging: "icon/ico_imaging_green.png",
-                self.panel.btn_switch_grid2: "icon/ico_milling_green.png",
-                self.panel.btn_switch_grid1: "icon/ico_coating_green.png"}
+                self.panel.btn_switch_sem_imaging: "icon/ico_sem_green.png",
+                self.panel.btn_switch_fm_imaging: "icon/ico_meteorimaging_green.png",
+                self.panel.btn_switch_grid2: "icon/ico_meteorgrid_green.png",
+                self.panel.btn_switch_grid1: "icon/ico_meteorgrid_green.png"}
             # hide some of enzel widgets 
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
@@ -3005,8 +3010,10 @@ class CryoChamberTab(Tab):
         return ans != wx.ID_NO
 
     def _display_meteor_pos_warning_msg(self, end_pos):
-        x, y, z = end_pos.get('x'), end_pos.get('y'), end_pos.get('z')
-        box = wx.MessageDialog(self.main_frame, "the sample stage will move to x_meteor = {x}, y_meteor = {y}, z_meteor = {z}, is this safe?".format(x=x, y=y, z=z),
+        x, y, z = round(end_pos.get('x'), ndigits=5), round(end_pos.get('y'), ndigits=5), round(end_pos.get('z'), ndigits=5)
+        rx, rz = round(math.degrees(end_pos.get("rx"))), round(math.degrees(end_pos.get("rz")))
+        rx, rz = str(rx) + "°", str(rz) + "°"
+        box = wx.MessageDialog(self.main_frame, "The sample stage will move to x = {x} m, y = {y} m, z = {z} m, rx = {rx}, rz = {rz}. Is this safe?".format(x=x, y=y, z=z, rx=rx, rz=rz),
                             caption="Moving to METEOR", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans != wx.ID_NO

@@ -364,7 +364,7 @@ class MainGUIData(object):
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
 
-            if "cryo" in microscope.role:
+            if microscope.role in ["meteor", "enzel"]:
                 # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
                 # VA for the currently selected feature
@@ -633,7 +633,7 @@ class CryoGUIData(MicroscopyGUIData):
     Represents an interface for handling cryo microscopes.
     """
     def __init__(self, main):
-        if "cryo" not in main.role:
+        if main.role not in ("enzel", "meteor"):
             raise ValueError(
                 "Expected a cryo microscope role but found it to be %s." % main.role)
         MicroscopyGUIData.__init__(self, main)
