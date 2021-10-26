@@ -198,6 +198,11 @@ class MergeChannelsPlugin(Plugin):
 
         try:
             data = udataio.open_acquisition(filename)[0]
+            pxs = data.metadata.get(model.MD_PIXEL_SIZE, (1e-06, 1e-06))
+            if pxs[0] > 1e-04 or pxs[1] > 1e-04:
+                data.metadata[model.MD_PIXEL_SIZE] = (1e-06, 1e-06)
+                logging.warning("The given pixel size %s is too big, it got replaced to the default value %s", pxs,
+                                (1e-06, 1e-06))
             data = self._ensureRGB(data, tint)
         except Exception as ex:
             logging.exception("Failed to open %s", filename)
