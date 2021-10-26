@@ -997,8 +997,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         zlevels = self._get_zstack_levels()
         logging.info("Acquisition tiles logged at %s", self.filename_tiles)
-        # store the stage position before the acquisition starts
-        self.pos_before = self._main_data_model.stage_bare.position.value
         self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
@@ -1039,9 +1037,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.acq_future = None  # To avoid holding the ref in memory
         self._acq_future_connector = None
-
-        # restore the stage position before the acquisition started
-        self._main_data_model.stage_bare.moveAbs(self.pos_before)
 
         try:
             # TODO: Add code for getting the data from the acquisition future
