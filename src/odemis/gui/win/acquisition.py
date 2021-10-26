@@ -1077,13 +1077,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.update_area_size(w, h)
 
     def get_fov(self, s):
-        # Estimate the FoV, based on the emitter/detector settings
-        if isinstance(s, SEMStream):
-            return compute_scanner_fov(s.emitter)
-        elif isinstance(s, CameraStream):
-            return compute_camera_fov(s.detector)
-        else:
-            raise TypeError("Unsupported Stream %s" % (s,))
+        try:
+            return s.guessFoV()
+        except (NotImplementedError, AttributeError):
+            raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
 
 def ShowAcquisitionFileDialog(parent, filename):
     """
