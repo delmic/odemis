@@ -1,11 +1,7 @@
 #-*- coding: utf-8 -*-
 
 """
-<<<<<<< HEAD
 Created on 30 Sep 2021
-=======
-Created on 8 October 2018
->>>>>>> 53f675a41... add test file (not finished yet)
 
 @author: Mahmood Barazi
 
@@ -33,11 +29,7 @@ import logging
 from odemis.util import test, driver
 from odemis import model
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
-<<<<<<< HEAD
 from odemis.acq.move import transformFromSEMToMeteor
-=======
-from odemis.acq.move import LOADING, cryoSwitchSamplePosition, transformFromSEMToMeteor
->>>>>>> 53f675a41... add test file (not finished yet)
 from odemis.gui.win.acquisition import OverviewAcquisitionDialog
 
 logging.getLogger().setLevel(logging.DEBUG)
