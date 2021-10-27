@@ -66,7 +66,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     # Bold spots
     # Third parameter must be a length in pixels somewhat larger than a typical
     # spot
-    filtered_image = bandpass_filter(filtered_image, 1, 20)
+    filtered_image = bandpass_filter(filtered_image, math.sqrt(2), 20)
 
     image = model.DataArray(filtered_image, data.metadata)  # TODO: why a DataArray?
     avg_intensity = numpy.average(image)

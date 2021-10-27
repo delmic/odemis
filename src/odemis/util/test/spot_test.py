@@ -300,9 +300,8 @@ class TestRadialSymmetryCenter(unittest.TestCase):
 class TestFindSpotPositions(unittest.TestCase):
     def test_multiple(self):
         """
-        Generate a test image containing at most 100 randomly distributed spots
-        with guaranteed minimal spacing. `find_spot_positions` should find all
-        spot positions.
+        `find_spot_positions` should find all spot positions in a generated
+        test image.
 
         """
         n = 100
@@ -321,6 +320,8 @@ class TestFindSpotPositions(unittest.TestCase):
             refractive_index, numerical_aperture, wavelength
         )
 
+        # Generate a test image containing at most 100 randomly distributed
+        # spots with a guaranteed minimal spacing.
         spacing = int(round(10 * sigma))
         border = numpy.asarray((spacing, spacing))
         srange = numpy.asarray(shape) - 2 * border - numpy.array((1, 1))
@@ -330,9 +331,12 @@ class TestFindSpotPositions(unittest.TestCase):
 
         ji = spot.find_spot_positions(image, sigma)
 
+        # Map the found spot locations to the known spot locations.
         tree = scipy.spatial.cKDTree(loc)
         distances, indices = tree.query(ji, k=1, workers=-1)
 
+        # Check that all spot positions have been found within the required
+        # accuracy.
         numpy.testing.assert_array_equal(sorted(indices), range(len(loc)))
         numpy.testing.assert_array_less(distances, 0.05)
 

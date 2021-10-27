@@ -280,7 +280,7 @@ def MaximaFind(image, qty, len_object=18):
 
     """
     # Reduce the noise in the image.
-    filtered = bandpass_filter(image, 1, len_object)
+    filtered = bandpass_filter(image, math.sqrt(2), len_object)
 
     # Dilate the filtered image to make the size of each spot larger.
     structure = _CreateSEDisk(len_object // 2)
@@ -339,7 +339,8 @@ def _get_subimage(
     image: numpy.ndarray, ji: Tuple[int, int], size: int
 ) -> numpy.ndarray:
     """
-    Return a subimage of an image.
+    Returns a square shaped region of interest of the input array `image`
+    as a view, where the region of interest is centered at `image[j, i]`.
 
     Parameters
     ----------
@@ -348,7 +349,7 @@ def _get_subimage(
     ji : tuple of ints (j, i)
         2-dimensional index of the array `image`
     size : int
-        Size of the output image
+        Controls the shape of the output subimage.
 
     Returns
     -------
@@ -372,7 +373,8 @@ def find_spot_positions(
     num_spots: Optional[int] = None,
 ) -> numpy.ndarray:
     """
-    Find the center coordinates of maximum spots in an image.
+    Find the center coordinates of spots with the highest intensity in an
+    image.
 
     Parameters
     ----------
@@ -385,7 +387,8 @@ def find_spot_positions(
         Minimum intensity of peaks. By default, the absolute threshold is
         the minimum intensity of the image.
     threshold_rel : float, optional
-        Minimum intensity of peaks, calculated as `max(image) * threshold_rel`.
+        If provided, apply a threshold on the minimum intensity of peaks,
+        calculated as `max(image) * threshold_rel`.
     num_spots : int, optional
         Maximum number of spots. When the number of spots exceeds `num_spots`,
         return `num_spots` peaks based on highest spot intensity.
