@@ -433,24 +433,28 @@ class LocalizationTab(Tab):
         # Will create SEM stream with all settings local
         emtvas = set()
         hwemtvas = set()
-        for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
-            if vaname in ("resolution", "dwellTime", "scale"):
-                emtvas.add(vaname)
-            else:
-                hwemtvas.add(vaname)
 
-        # This stream is used both for rendering and acquisition
-        sem_stream = acqstream.SEMStream(
-            "Secondary electrons",
-            main_data.sed,
-            main_data.sed.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=None,
-            emtvas=emtvas,
-            detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
-        )
+        # The sem stream is visible for enzel, but not for meteor
+        # TODO: once chamber PR is merged, remove 'cryo-secom'
+        if self.main_data.role in ['enzel', 'cryo-secom']:
+            for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
+                if vaname in ("resolution", "dwellTime", "scale"):
+                    emtvas.add(vaname)
+                else:
+                    hwemtvas.add(vaname)
+
+            # This stream is used both for rendering and acquisition
+            sem_stream = acqstream.SEMStream(
+                "Secondary electrons",
+                main_data.sed,
+                main_data.sed.data,
+                main_data.ebeam,
+                focuser=main_data.ebeam_focus,
+                hwemtvas=hwemtvas,
+                hwdetvas=None,
+                emtvas=emtvas,
+                detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
+            )
 
         # The sem stream is always visible, so add it by default
         sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
