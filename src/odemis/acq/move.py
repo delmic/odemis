@@ -29,7 +29,6 @@ from concurrent.futures._base import CANCELLED, RUNNING, FINISHED
 
 import numpy
 import scipy
-from scipy.spatial.transform import Rotation
 
 from odemis import model, util
 from odemis.util import executeAsyncTask
@@ -276,12 +275,12 @@ def _getDistance(start, end):
         for a in rot_axes:
             if a == "rx":
                 # find the elemental rotation around x axis
-                Rx_start = Rotation.from_euler('x', start["rx"], degrees=False).as_matrix()
-                Rx_end = Rotation.from_euler("x", end['rx']).as_matrix()
+                Rx_start = numpy.array([[1, 0, 0], [0, numpy.cos(start["rx"]), -numpy.sin(start["rx"])], [0, numpy.sin(start["rx"]), numpy.cos(start["rx"])]])
+                Rx_end = numpy.array([[1, 0, 0], [0, numpy.cos(end["rx"]), -numpy.sin(end["rx"])], [0, numpy.sin(end["rx"]), numpy.cos(end["rx"])]])
             elif a == "rz":
                 # find the elemental rotation around z axis
-                Rz_end = Rotation.from_euler("z", end['rz']).as_matrix()
-                Rz_start = Rotation.from_euler('z', start["rz"], degrees=False).as_matrix()
+                Rz_end = numpy.array([[numpy.cos(end["rz"]), -numpy.sin(end["rz"]), 0], [numpy.sin(end["rz"]), numpy.cos(end["rz"]), 0], [0, 0, 1]])
+                Rz_start = numpy.array([[numpy.cos(start["rz"]), -numpy.sin(start["rz"]), 0], [numpy.sin(start["rz"]), numpy.cos(start["rz"]), 0], [0, 0, 1]])
         # find the total rotations
         R_start = numpy.matmul(Rz_start, Rx_start)
         R_end = numpy.matmul(Rz_end, Rx_end)
