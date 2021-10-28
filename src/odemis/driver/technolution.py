@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 11 May 2020
 
 @author: Sabrina Rossberger, Kornee Kleijwegt
@@ -18,12 +18,15 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
+
 # Driver/wrapper for the ASP API in Odemis which can connect Odemis to the ASM API made by Technolution for the
 # multi-beam project
 from __future__ import division
 
 import math
+import os
+
 import numpy
 import base64
 import json
@@ -52,6 +55,14 @@ DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
 RUNNING = "installation in progress"
 FINISHED = "last installation successful"
 FAILED = "last installation failed"
+
+ASM_USER_CHARS = r'[A-Za-z0-9]+'  # + -> should be at least one character
+ASM_PASSWORD_CHARS = r'[A-Za-z0-9]+'
+ASM_HOST_CHARS = r'[A-Za-z0-9.]+'
+ASM_PATH_CHARS = r'[A-Za-z0-9/_()-]+'
+ASM_SUBDIR_CHARS = r'[A-Za-z0-9/_()-]*'  # * -> subdirectories can also be empty string
+ASM_FILE_CHARS = r'[A-Za-z0-9_()-]+'
+
 
 def convertRange(value, value_range, output_range):
     """
@@ -125,9 +136,9 @@ class AcquisitionServer(model.HwComponent):
 
         except Exception as error:
             logging.warning("First try to connect with the ASM host was not successful.\n"
-                          "This is possible because of an incorrect starting sequence, first the SAM should be "
-                          "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
-                          "Received error:\n %s" % error)
+                            "This is possible because of an incorrect starting sequence, first the SAM should be "
+                            "started up, then the ASM. To fix this a second call to the ASM will be made.\n"
+                            "Received error:\n %s" % error)
             try:
                 self.asmApiPostCall("/scan/finish_mega_field", 204)  # Stop acquisition
                 self.asmApiGetCall("/scan/clock_frequency", 200)  # Test connection from ASM to SAM
@@ -140,30 +151,28 @@ class AcquisitionServer(model.HwComponent):
                               "Check if the connection with the host is available and if the host URL is entered "
                               "correctly.")
 
-        clockFrequencyData = self.asmApiGetCall("/scan/clock_frequency", 200)
-        self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
-
         # NOTE: Do not write real username/password here since this is published on github in plain text!
-        # example = ftp://username:password@127.0.0.1:5000/directory/sub-directory
+        # example = ftp://username:password@127.0.0.1:5000/directory/
+        # fixed url of the external storage configuration
         self.externalStorageURL = model.StringVA('ftp://%s:%s@%s/%s' %
                                                  (externalStorage["username"],
                                                   externalStorage["password"],
                                                   externalStorage["host"],
                                                   externalStorage["directory"]),
-                                                 setter=self._setURL)
-        self._setURL(self.externalStorageURL.value)  # Check and set the external storage URL to the ASM.
+                                                 setter=self._setURL, readonly=True)
+        self.externalStorageURL._set_value(self.externalStorageURL.value, force_write=True)  # check URL ok
 
         # VA to switch between calibration and acquisition mode (megafield acquisition)
         self.calibrationMode = model.BooleanVA(False, setter=self._setCalibrationMode)
 
-        # CalibrationParameters contains the current calibration parameters
+        # contains the current calibration settings
         self._calibrationParameters = None
 
         # TODO: Commented out because not present on EA
         # self.asmApiPostCall("/config/set_system_sw_name?software=%s" % name, 204)
 
-        # Setup hw and sw version
-        # TODO make call set_system_sw_name too new simulator (if implemented)
+        # Read HW and SW version from ASM and SAM
+        # TODO make call set_system_sw_name to new simulator (if implemented)
         self._swVersion = "ASM service version '%s' " % (self.getAsmServiceVersion())
         self._hwVersion = "SAM firmware version '%s', SAM service version '%s'" % (self.getSamFirmwareVersion(),
                                                                                    self.getSamServiceVersion())
@@ -193,7 +202,7 @@ class AcquisitionServer(model.HwComponent):
     def terminate(self):
         """
         Stops the calibration method, calls the terminate command on all the children,
-         and closes the connection (via the request session) to the ASM.
+        and closes the connection (via the request session) to the ASM.
         """
         self.calibrationMode.value = False
         # terminate children
@@ -321,29 +330,33 @@ class AcquisitionServer(model.HwComponent):
                 logging.error(response)
 
         except Exception:
-            logging.exception("Performing system checks failed. Could not perform a successful call to %s ." % item_name)
+            logging.exception("Performing system checks failed. Could not perform a successful call to %s ."
+                              % item_name)
 
-    def checkMegaFieldExists(self, mega_field_id, storage_dir):
+    def checkMegaFieldExists(self, filename):
         """
-        Check if filename complies with set allowed characters.
-        :param mega_field_id (string): name of the mega field.
-        :param storage_dir (string): path to the mega field.
-        :return (bool): True if mega field exists.
+        Checks if a megafield image already exists on the external storage for a given path and file name
+        (megafield id).
+        :param filename: (str) Sub-directories and name of the mega field (id).
+        :return: (bool) True if the mega field exists on external storage. False if it does not exist yet.
+        :raises: (ValueError) When the input arguments contain invalid characters.
         """
-        ASM_FILE_ILLEGAL_CHARS = r'[^a-z0-9_()-]'
-        ASM_PATH_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-]'
-        if re.search(ASM_PATH_ILLEGAL_CHARS, storage_dir):
-            logging.error("The specified storage directory contains invalid characters, cannot check if mega field "
-                          "exists (only the characters '%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return False
+        path = os.path.dirname(filename)
+        file = os.path.basename(filename)
 
-        if re.search(ASM_FILE_ILLEGAL_CHARS, mega_field_id):
-            logging.error("The specified mega_field_id contains invalid characters, cannot check if mega field exists"
-                          "(only the characters '%s' are allowed)." % ASM_FILE_ILLEGAL_CHARS[2:-1])
-            return False
+        # dirname is equivalent to subdirectories on external storage
+        if not re.fullmatch(ASM_SUBDIR_CHARS, path):
+            raise ValueError("Path %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (path, ASM_SUBDIR_CHARS[1:-2]))
+
+        # filename is megafield id
+        if not re.fullmatch(ASM_FILE_CHARS, file):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (file, ASM_FILE_CHARS[1:-2]))
 
         response = self.asmApiPostCall("/scan/check_mega_field?mega_field_id=%s&storage_directory=%s" %
-                                       (mega_field_id, storage_dir), 200, raw_response=True)
+                                       (file, path), 200, raw_response=True)
+
         return json.loads(response.content)["exists"]
 
     def getSamServiceVersion(self):
@@ -443,37 +456,13 @@ class AcquisitionServer(model.HwComponent):
     def _assembleCalibrationMetadata(self):
         """
         Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
-
-        :return calibration_data (CalibrationLoopParameters object): calibration data object which can be send to the
-        ASM API
+        :return calibration_data: (CalibrationLoopParameters object) Calibration data object which can be sent
+                                  to the ASM API.
         """
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
-        acq_dwell_time = scanner.dwellTime.value
 
-        resolution = self._mppc.cellCompleteResolution.value[0]
-        line_scan_time = acq_dwell_time * resolution
-        flyback_time = descanner.physicalFlybackTime
-
-        # Check if the descanner clock period is still a multiple of the system clock period, otherwise raise an
-        # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
-        # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
-        # number of ticks.
-        if not almost_equal(descanner.clockPeriod.value % self.clockPeriod.value, 0):
-            logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
-                          "the system clock period. The calculation of the scanner calibration setpoints need "
-                          "to be adjusted.")
-            raise ValueError("Descanner clock period is no longer a whole multiple of the system clock period.")
-
-        # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
-        remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
-        if remainder_scanning_time is not 0:
-            # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
-            # line scan time is equal to a whole multiple of the descanner clock period
-            flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)
-
-        # Total line scan time is the period of the calibration signal.
-        total_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
+        total_line_scan_time = self._mppc.getTotalLineScanTime()
 
         # Get the scanner and descanner setpoints
         x_descan_setpoints, y_descan_setpoints = self._mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
@@ -534,60 +523,42 @@ class AcquisitionServer(model.HwComponent):
 
     def _setURL(self, url):
         """
-        Setter which checks for correctness of FTP url and otherwise returns old value.
-
-        :param url(str): e.g. ftp://username:password@127.0.0.1:5000/directory/sub-directory
-        :return: correct ftp url_parser
+        Set the external storage URL. Check if the requested url complies with the allowed pattern and characters.
+        :param url: (str) The requested external storage url
+                          e.g. ftp://username:password@127.0.0.1:5000/directory/sub-directory
+        :return: (str) The new external storage url.
         """
-        ASM_GENERAL_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-:@]'
-        ASM_USER_ILLEGAL_CHARS = r'[^A-Za-z0-9]'
-        ASM_PASSWORD_ILLEGAL_CHARS = r'[^A-Za-z0-9]'
-        ASM_HOST_ILLEGAL_CHARS = r'[^A-Za-z0-9.]'
-        ASM_PATH_ILLEGAL_CHARS = r'[^A-Za-z0-9/_()-]'
 
         url_parser = urlparse(url)  # Transform input string to url_parse object
 
-        # Perform general check on valid characters (parses works incorrectly for some invalid characters
-        if re.search(ASM_GENERAL_ILLEGAL_CHARS, urlunparse(url_parser)):
-            raise ValueError("Invalid character in ftp url is provided, allowed characters are %s placed in the form:"
-                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
-                             "(Only use the @ to separate the password and the host." % ASM_GENERAL_ILLEGAL_CHARS[2:-1])
+        # check that all sub-elements exist. There are special cases where the parser fails splitting correctly.
+        # This can happen, when for example an extra '@' is used after the first one. Then the parser works
+        # incorrectly and sub-elements are NoneType objects.
+        if not url_parser.scheme or not url_parser.username or not url_parser.password \
+           or not url_parser.hostname or not url_parser.path:
+            raise ValueError("URL %s scheme is incorrect. Must be of format: "
+                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'." % url)
 
-        # Perform detailed checks on input
-        if url_parser.scheme != 'ftp' \
-                or not url_parser.scheme or not url_parser.username or not url_parser.password \
-                or not url_parser.hostname or not url_parser.path:
-            # Check both the scheme as well if all sub-elements are non-empty
-            # Note that if an extra @ is used (e.g. in the password) the parser works incorrectly and sub-elements
-            # are empty after splitting the url input
-            raise ValueError("Incorrect ftp url is provided, please use form: "
-                             "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'\n"
-                             "(Only use the @ to separate the password and the host.")
+        # check the scheme is correct
+        if url_parser.scheme != 'ftp':
+            raise ValueError("URL %s scheme is incorrect. Must be: 'ftp'." % url_parser.scheme)
 
-        if re.search(ASM_USER_ILLEGAL_CHARS, url_parser.username):
-            raise ValueError(
-                    "Username contains invalid characters, username remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_USER_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_USER_CHARS, url_parser.username):
+            raise ValueError("Username %s contains invalid characters. Only the following characters are allowed: "
+                             " '%s'." % (url_parser.username, ASM_USER_CHARS[1:-2]))
 
-        if re.search(ASM_PASSWORD_ILLEGAL_CHARS, url_parser.password):
-            raise ValueError(
-                    "Password contains invalid characters, password remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_PASSWORD_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_PASSWORD_CHARS, url_parser.password):
+            raise ValueError("Password %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.password, ASM_PASSWORD_CHARS[1:-2]))
 
-        if re.search(ASM_HOST_ILLEGAL_CHARS, url_parser.hostname):
-            raise ValueError(
-                    "Host contains invalid characters, host remains unchanged "
-                    "(only the characters '%s' are allowed)." % ASM_HOST_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_HOST_CHARS, url_parser.hostname):
+            raise ValueError("Host %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.hostname, ASM_HOST_CHARS[1:-2]))
 
-        if re.search(ASM_PATH_ILLEGAL_CHARS, url_parser.path):
-            raise ValueError("Path on ftp server contains invalid characters, path remains unchanged "
-                             "(only the characters '%s' are allowed)." % ASM_PATH_ILLEGAL_CHARS[2:-1])
+        if not re.fullmatch(ASM_PATH_CHARS, url_parser.path):
+            raise ValueError("Path %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (url_parser.path, ASM_PATH_CHARS[1:-2]))
 
-        # TODO: Commented out because not present on EA
-        # self.asmApiPostCall("/config/set_external_storage?host=%s&user=%s&password=%s" %
-        #                     (urlparse(self.externalStorageURL.value).hostname,
-        #                      urlparse(self.externalStorageURL.value).username,
-        #                      urlparse(self.externalStorageURL.value).password), 204)
         return url
 
 
@@ -607,6 +578,7 @@ class EBeamScanner(model.Emitter):
         super(EBeamScanner, self).__init__(name, role, parent=parent, **kwargs)
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/clock_frequency", 200)
+        # period (=1/frequency) of the ASM clock
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # Minimum resolution is determined by:
@@ -618,6 +590,7 @@ class EBeamScanner(model.Emitter):
         # Making the minimum resolution (12*8) , because 12/4 is an integer (3.0)
         # Since the maximum cell size is 1000 (dividable by 4) the maximum resolution is (1000*8)
         mppcDetectorShape = MPPC.SHAPE
+        # size of a single field image (excluding overscanned pixels)
         self.resolution = model.ResolutionVA((6400, 6400),
                                              ((12*mppcDetectorShape[0], 12*mppcDetectorShape[1]),
                                               (1000*mppcDetectorShape[0], 1000*mppcDetectorShape[1])),
@@ -628,10 +601,15 @@ class EBeamScanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s')
         self.pixelSize = model.TupleContinuous((4e-9, 4e-9), range=((1e-9, 1e-9), (1e-3, 1e-3)), unit='m',
                                                setter=self._setPixelSize)
+        # direction of the executed scan
         self.rotation = model.FloatContinuous(0.0, range=(0.0, 2 * math.pi), unit='rad')
 
+        # the start of the sawtooth scanning signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)))
+        # the end (amplitude) of the sawtooth scanning signal
         self.scanGain = model.TupleContinuous((0.3, 0.3), range=((-1.0, -1.0), (1.0, 1.0)))
+        # delay between the trigger signal to start the acquisition and the scanner to start scanning
+        # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
         # TODO: y scan delay is y prescan lines which is currently unused an can probably be deleted.
         # The scanDelay in x direction maximum (200e-6) is experimentally determined.
         self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (200e-6, 10.0)), unit='s',
@@ -656,7 +634,7 @@ class EBeamScanner(model.Emitter):
         # Calculate the sampling period and number of setpoints (the sampling period in seconds is not needed here)
         calibration_dwell_time_ticks, _, nmbr_scanner_points = self._calc_calibration_sampling_period(
                                                                         total_line_scan_time,
-                                                                        self.parent.clockPeriod.value,
+                                                                        self.parent._ebeam_scanner.clockPeriod.value,
                                                                         self.parent._mirror_descanner.clockPeriod.value)
 
         # Determine the amplitude of the setpoints function in bits.
@@ -732,14 +710,14 @@ class EBeamScanner(model.Emitter):
         """
         :return: Scan delay in multiple of ticks of the ebeam scanner clock frequency
         """
-        return (int(self.scanDelay.value[0] / self.parent.clockPeriod.value),
-                int(self.scanDelay.value[1] / self.parent.clockPeriod.value))
+        return (int(self.scanDelay.value[0] / self.clockPeriod.value),
+                int(self.scanDelay.value[1] / self.clockPeriod.value))
 
     def getTicksDwellTime(self):
         """
         :return: Dwell time in multiple of ticks of the system clock period
         """
-        return int(self.dwellTime.value / self.parent.clockPeriod.value)
+        return int(self.dwellTime.value / self.clockPeriod.value)
 
     def getScanOffsetVolts(self):
         """
@@ -853,16 +831,19 @@ class MirrorDescanner(model.Emitter):
         """
         super(MirrorDescanner, self).__init__(name, role, parent=parent, **kwargs)
 
+        # direction of the executed descan
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
+        # start of the sawtooth descanner signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
+        # end (height) of the sawtooth descanner signal
         self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
+        # period (=1/frequency) of the descanner; update frequency for setpoints upload
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
-        # TODO: Adapt value of physical flyback time after testing on HW. --> Wilco/Andries
-        # Physical time for the mirror descanner to perform a flyback, assumed constant [s].
-        self.physicalFlybackTime = 250e-6
+        # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
+        self.physicalFlybackTime = 250e-6  # assumed constant [s]
 
     def getXAcqSetpoints(self):
         """
@@ -978,6 +959,7 @@ class MirrorDescanner(model.Emitter):
         # not uniformly distributed.
         return numpy.floor(x_setpoints).astype(int).tolist(), numpy.floor(y_setpoints).astype(int).tolist()
 
+
 class MPPC(model.Detector):
     """
     Represents the camera (mppc sensor) for acquiring the image data.
@@ -999,9 +981,12 @@ class MPPC(model.Detector):
         self._descanner = self.parent._mirror_descanner
 
         self._shape = MPPC.SHAPE
-        self.filename = model.StringVA("unnamed_acquisition", setter=self._setFilename)
+        # subdirectory + filename (megafield id) - adjustable part of the path on the external storage
+        self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
+        # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
         self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
+        # regulates the sensitivity of the mppc sensor
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
 
         # Cell acquisition parameters
@@ -1018,6 +1003,12 @@ class MPPC(model.Detector):
         # The minimum of the cell resolution cannot be lower than the minimum effective cell size.
         self.cellCompleteResolution = model.ResolutionVA((900, 900), ((12, 12), (1000, 1000)))
 
+        # acquisition time for a single field image including overscanned pixels and flyback time
+        self.frameDuration = model.FloatContinuous(0, range=(0, 100), unit='s', readonly=True)
+        # listen to changes to settings that affect the frame duration
+        self.cellCompleteResolution.subscribe(self._updateFrameDuration, init=True)
+        self.parent._ebeam_scanner.dwellTime.subscribe(self._updateFrameDuration)
+
         # Setup hw and sw version
         self._swVersion = self.parent.swVersion
         self._hwVersion = self.parent.hwVersion
@@ -1031,6 +1022,7 @@ class MPPC(model.Detector):
         # Acquisition queue with commands of actions that need to be executed. The queue should hold "(str,
         # *)" containing "(command, data corresponding to the call)".
         self.acq_queue = queue.Queue()
+
         self._acq_thread = None
 
         self.data = ASMDataFlow(self)
@@ -1064,16 +1056,17 @@ class MPPC(model.Detector):
         eff_cell_size = (int(self._scanner.resolution.value[0] / self._shape[0]),
                          int(self._scanner.resolution.value[1] / self._shape[1]))
 
+        # Calculate and convert from seconds to ticks
         scan_to_acq_delay = int((self.acqDelay.value - self._scanner.scanDelay.value[0]) /
-                                self.parent.clockPeriod.value)  # Calculate and convert from seconds to ticks
+                                self.parent._ebeam_scanner.clockPeriod.value)
 
         X_descan_setpoints = self._descanner.getXAcqSetpoints()
         Y_descan_setpoints = self._descanner.getYAcqSetpoints()
 
         megafield_metadata = \
             MegaFieldMetaData(
-                    mega_field_id=self.filename.value,
-                    storage_directory=urlparse(self.parent.externalStorageURL.value).path,
+                    mega_field_id=os.path.basename(self.filename.value),
+                    storage_directory=os.path.dirname(self.filename.value),
                     custom_data="No_custom_data",
                     stage_position_x=float(stage_position[0]),
                     stage_position_y=float(stage_position[1]),
@@ -1092,7 +1085,6 @@ class MPPC(model.Detector):
                     y_scan_gain=self._scanner.getScanGainVolts()[1],
                     x_scan_offset=self._scanner.getScanOffsetVolts()[0],
                     y_scan_offset=self._scanner.getScanOffsetVolts()[1],
-                    # TODO API gives error for values < 0 but YAML does not specify so
                     x_descan_setpoints=X_descan_setpoints,
                     y_descan_setpoints=Y_descan_setpoints,
                     # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
@@ -1391,7 +1383,7 @@ class MPPC(model.Detector):
         """
         :return: Acq delay in multiple of ticks of the system clock period
         """
-        return int(self.acqDelay.value / self.parent.clockPeriod.value)
+        return int(self.acqDelay.value / self.parent._ebeam_scanner.clockPeriod.value)
 
     def _mergeMetadata(self):
         """
@@ -1432,18 +1424,26 @@ class MPPC(model.Detector):
                          "mppc is %s" % (delay, self._scanner.scanDelay.value[0]))
             return delay
 
-    def _setFilename(self, file_name):
+    def _setFilename(self, filename):
         """
-        Check if filename complies with the set of allowed characters.
-        :param file_name: (str) The requested filename for the image data to be acquired.
-        :return: (str) The set filename for the image data to be acquired.
+        Set the requested sub-directories, where the image data should be stored on the external storage,
+        and the filename (megafield id). Note: Name stored in filename will be also a directory on the external
+        storage containing the tiles of the respective megafield.
+        Check if the file name complies with the set of allowed characters.
+        :param filename: (str) The requested sub-directories and filename for the image data to be acquired.
+        :return: (str) The set sub-directories and filename for the image data to be acquired.
         """
-        ASM_FILE_CHARS = r'[^a-z0-9_()-]'
-        if re.search(ASM_FILE_CHARS, file_name):
-            raise ValueError("Filename contains invalid characters. Only the following characters are allowed: "
-                             "'%s'. Please choose a new filename." % ASM_FILE_CHARS[2:-1])
-        else:
-            return file_name
+        # basename is equivalent to megafield id
+        if not re.fullmatch(ASM_FILE_CHARS, os.path.basename(filename)):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (filename, ASM_FILE_CHARS[1:-2]))
+
+        # dirname is equivalent to subdirectories on external storage
+        if not re.fullmatch(ASM_SUBDIR_CHARS, os.path.dirname(filename)):
+            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
+                             "'%s'." % (filename, ASM_SUBDIR_CHARS[1:-2]))
+
+        return filename
 
     def _setCellTranslation(self, cellTranslation):
         """
@@ -1575,6 +1575,63 @@ class MPPC(model.Detector):
         cellDarkOffset = tuple(tuple(item) for item in cellDarkOffset)
 
         return cellDarkOffset
+
+    def getTotalLineScanTime(self):
+        """
+        Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
+        pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
+        position for the next line scan).
+        :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback
+                 time in seconds.
+        """
+        descanner = self.parent._mirror_descanner
+        scanner = self.parent._ebeam_scanner
+        acq_dwell_time = scanner.dwellTime.value
+
+        resolution_x = self.cellCompleteResolution.value[0]
+        line_scan_time = acq_dwell_time * resolution_x
+        flyback_time = descanner.physicalFlybackTime
+
+        # Check if the descanner clock period is still a multiple of the system clock period, otherwise raise an
+        # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of
+        # the scanner the descanner period might be used. The descanner period value needs to be send to the ASM in
+        # number of ticks.
+        if not almost_equal(descanner.clockPeriod.value % self.parent._ebeam_scanner.clockPeriod.value, 0):
+            logging.error("Descanner and/or system clock period changed. Descanner period is no longer a multiple of "
+                          "the system clock period. The calculation of the scanner calibration setpoints need "
+                          "to be adjusted.")
+            raise ValueError("Descanner clock period is no longer a whole multiple of the system clock period.")
+
+        # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
+        remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
+        if remainder_scanning_time is not 0:
+            # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
+            # line scan time is equal to a whole multiple of the descanner clock period
+            flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)
+
+        # Total line scan time is the period of the calibration signal.
+        return numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
+
+    def getTotalFieldScanTime(self):
+        """
+        Calculate the time for scanning a single field image including over-scanned pixels (cell complete resolution)
+        and flyback time (time the descanner needs to move back to the start position for the next line scan).
+        :return: (float) Estimated time to scan a single field image including over-scanned pixels and the flyback
+                 time in seconds.
+        """
+        line_scan_time = self.getTotalLineScanTime()
+        resolution_y = self.cellCompleteResolution.value[1]
+        field_scan_time = line_scan_time * resolution_y
+
+        return field_scan_time
+
+    def _updateFrameDuration(self, _):
+        """
+        Update everytime when one of the settings that affect the acquisition time for a
+        single field image (frame), has changed.
+        """
+        field_scan_time = self.getTotalFieldScanTime()
+        self.frameDuration._set_value(field_scan_time, force_write=True)
 
 
 class ASMDataFlow(model.DataFlow):

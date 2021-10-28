@@ -1548,13 +1548,13 @@ class DraggableCanvas(BitmapCanvas):
 
             # recompute the view
             offset = (-shift[0] / self.scale, shift[1] / self.scale)
-            new_pos = (self.p_buffer_center[0] + offset[0],
-                       self.p_buffer_center[1] + offset[1])
+            new_pos = [self.p_buffer_center[0] + offset[0],
+                       self.p_buffer_center[1] + offset[1]]
+            logging.debug("Double click at %s", new_pos)
+
             self.recenter_buffer(new_pos)
 
             self.on_center_position_changed(offset)
-
-            logging.debug("Double click at %s", new_pos)
 
         super(DraggableCanvas, self).on_dbl_click(evt)
 

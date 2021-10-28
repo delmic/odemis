@@ -150,6 +150,14 @@ TOOLS = {
             model.TOOL_AUTO_FOCUS_OFF,
             "Apply autofocus"
         ),
+    model.TOOL_FEATURE:
+        ModeTool(
+            # TODO: pick a new icon
+            "btn_feature_toolbox_icon",
+            model.TOOL_FEATURE,
+            model.TOOL_NONE,
+            "Create/Move feature"
+        ),
 }
 
 

@@ -2,9 +2,9 @@
 '''
 Created on 29 Mar 2012
 
-@author: Éric Piel
+@author: Éric Piel, Arthur Helsloot
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2021 Éric Piel, Arthur Helsloot, Delmic
 
 This file is part of Odemis.
 
@@ -34,6 +34,7 @@ import random
 import time
 from past.builtins import long
 
+
 class Light(model.Emitter):
     """
     Simulated bright light component. Just pretends to be generating one source.
@@ -59,108 +60,6 @@ class Light(model.Emitter):
     def _setPower(self, value):
         logging.info("Light is at %g W", value[0])
         return value
-
-
-class Stage(model.Actuator):
-    """
-    Simulated stage component. Just pretends to be able to move all around.
-    """
-    def __init__(self, name, role, axes, ranges=None, **kwargs):
-        """
-        axes (set of string): names of the axes
-        ranges (dict string -> float,float): min/max of the axis
-        """
-        assert len(axes) > 0
-        if ranges is None:
-            ranges = {}
-
-        axes_def = {}
-        self._position = {}
-        init_speed = {}
-        for a in axes:
-            rng = ranges.get(a, (-0.1, 0.1))
-            axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
-            # start at the centre
-            self._position[a] = (rng[0] + rng[1]) / 2
-            init_speed[a] = 1.0  # we are fast!
-
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
-        # Special file "stage.fail" => will cause simulation of hardware error
-        if os.path.exists("stage.fail"):
-            raise HwError("stage.fail file present, simulating error")
-
-        self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
-
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        self._updatePosition()
-
-        self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
-
-    def terminate(self):
-        if self._executor:
-            self.stop()
-            self._executor.shutdown()
-            self._executor = None
-
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
-        pos = self._applyInversion(self._position)
-        self.position._set_value(pos, force_write=True)
-
-    def _doMoveRel(self, shift):
-        maxtime = 0
-        for axis, change in shift.items():
-            rng = self.axes[axis].range
-            if axis in self._inverted:
-                rng = (-rng[1], -rng[0])  # user -> internal range
-            if not rng[0] <= self._position[axis] + change <= rng[1]:
-                raise ValueError("moving axis %s to %f, outside of range %r" %
-                                 (axis, self._position[axis] + change, rng))
-
-            self._position[axis] += change
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
-
-        logging.debug("Sleeping %g s", maxtime)
-        time.sleep(maxtime)
-        self._updatePosition()
-
-    def _doMoveAbs(self, pos):
-        maxtime = 0
-        for axis, new_pos in pos.items():
-            change = self._position[axis] - new_pos
-            self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-
-        time.sleep(maxtime)
-        self._updatePosition()
-
-    @isasync
-    def moveRel(self, shift):
-        if not shift:
-            return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
-        shift = self._applyInversion(shift)
-
-        return self._executor.submit(self._doMoveRel, shift)
-
-    @isasync
-    def moveAbs(self, pos):
-        if not pos:
-            return model.InstantaneousFuture()
-        self._checkMoveAbs(pos)
-        pos = self._applyInversion(pos)
-
-        return self._executor.submit(self._doMoveAbs, pos)
-
-    def stop(self, axes=None):
-        self._executor.cancel()
-        logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
 
 PRESSURE_VENTED = 100e3 # Pa
@@ -339,3 +238,197 @@ class PhenomChamber(Chamber):
         # TODO: set to None/None when the sample is ejected
         self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL),
                                          readonly=True)
+
+
+class GenericComponent(model.Actuator):
+    """
+    Simulated component, capable of simulating both axes and VA's.
+    This component allows for communication with it, as if it were a real component with axes and VA's, but does not do
+    anything else.
+
+    This component inherits from Actuator instead of HwComponent, because this is the simplest way to allow the
+    component to have axes. The main drawbacks of this are that when it has no Axes (only VA's), it still inherits
+    from Actuator and still has methods like reference, moveAbs, moveRel, etc, even though those don't work at all
+    without defined axes. To solve this, you'd need something like conditional inheritance, which seems quite
+    difficult in Python without having to repeat pieces of code. Alternatively you could have a GenericComponent(
+    HwComponent) and a subclass GenericActuator(GenericComponent, Actuator), fix the diamond inheritance issues in
+    the model, and use a new() method in GenericComponent() to generate a GenericActuator if there are axes.
+    """
+    def __init__(self, name, role, vas=None, axes=None, **kwargs):
+        """
+        Only VA's specified in vas are created. Their type is determined based on the supplied initial value, and the
+        presence of range or choices in.
+        Both the presence of VA's and the presence of axes are optional.
+
+        vas (dict (string -> dict (string -> any))): This dict maps desired VA names to a dict with VA properties. The
+        VA property dict can contain the following keys:
+            "value" (any): initial values of the VA
+            "readonly" (bool): optional, True for read only VA, defaults to False
+            "unit" (str): optional, the unit of the VA, defaults to ""
+            "range" (float, float): optional, min/max of the VA, defaults to None
+            "choices" (set or dict): optional, possible values available to the VA, defaults to None, will be ignored if
+                                     range is defined
+        axes (dict (string -> dict (string -> any))): dict mapping desired axis names to dicts with axis properties. The
+        axis property dict can contain the following keys:
+            "unit" (str): optional, unit of the axis, defaults to "m"
+            "range" (float, float): optional, min/max of the axis, defaults to (-0.1, 0.1)
+            "choices" (dict): optional, alternative to ranges, these are the choices of the axis
+            "speed" (float, float): optional, allowable range of speeds, defaults to (0., 10.)
+
+        """
+        # Create desired VA's
+        if vas:
+            for vaname, vaprop in vas.items():
+                # Guess an appropriate VA type based on the initial value and the presence of range or choices
+                vavaluetype = vaprop["value"].__class__.__name__.capitalize()
+                if vavaluetype == "Bool":
+                    vavaluetype = "Boolean"
+                elif vavaluetype == "Str":
+                    vavaluetype = "String"
+                if "range" in vaprop:
+                    varangetype = "Continuous"
+                elif "choices" in vaprop:
+                    varangetype = "Enumerated"
+                else:
+                    varangetype = "VA"
+                vatype = vavaluetype + varangetype
+
+                if "value" not in vaprop:
+                    vaprop["value"] = 0.0  # default value
+
+                try:
+                    vaclass = getattr(model, vatype)
+                except KeyError:
+                    raise KeyError(f"VA type {vatype}, guessed for VA {vaname}, does not exist.")
+                va = vaclass(**vaprop)
+                setattr(self, vaname, va)
+
+        # Create desired axes
+        axes_def = {}
+        if axes:
+            self._position = {}
+            init_speed = {}
+            for axisname, axisprop in axes.items():
+                init_speed[axisname] = 1.0  # we are fast!
+                if "range" not in axisprop and "choices" not in axisprop:  # if no range nor choices are defined
+                    axisprop["range"] = (-0.1, 0.1)  # use the default range
+                if "speed" not in axisprop:
+                    axisprop["speed"] = (0., 10.)  # default speed
+                axes_def[axisname] = model.Axis(**axisprop)
+                if "range" in axisprop:
+                    self._position[axisname] = (axisprop["range"][0] + axisprop["range"][1]) / 2  # start at the centre
+                else:
+                    self._position[axisname] = next(iter(axisprop["choices"]))  # start at an arbitrary value
+
+            self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+            # RO, as to modify it the client must use .moveRel() or .moveAbs()
+            self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+
+            self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        if hasattr(self, "position"):
+            self._updatePosition()
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
+
+    def _doMoveRel(self, shift):
+        maxtime = 0
+        for axis, change in shift.items():
+            rng = self.axes[axis].range
+            if axis in self._inverted:
+                rng = (-rng[1], -rng[0])  # user -> internal range
+            if not rng[0] <= self._position[axis] + change <= rng[1]:
+                raise ValueError("moving axis %s to %f, outside of range %r" %
+                                 (axis, self._position[axis] + change, rng))
+
+            self._position[axis] += change
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
+
+        logging.debug("Sleeping %g s", maxtime)
+        time.sleep(maxtime)
+        self._updatePosition()
+
+    def _doMoveAbs(self, pos):
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            if isinstance(new_pos, float):
+                change = self._position[axis] - new_pos
+                maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+            else:  # for axes which are not of type float
+                maxtime = max(maxtime, 1 / self.speed.value[axis])
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %s", axis, self._position[axis])
+
+        time.sleep(maxtime)
+        self._updatePosition()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        shift = self._applyInversion(shift)
+
+        return self._executor.submit(self._doMoveRel, shift)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+        logging.info("Stopping all axes: %s", ", ".join(self.axes))
+
+
+class Stage(GenericComponent):
+    """
+    Simulated stage component. Just pretends to be able to move all around.
+    """
+    def __init__(self, name, role, axes, ranges=None, choices=None, **kwargs):
+        """
+        axes (set of string): names of the axes
+        ranges (dict string -> float,float): min/max of the axis
+        choices (dict string -> set): alternative to ranges, these are the choices of the axis
+        """
+        assert len(axes) > 0
+
+        # Special file "stage.fail" => will cause simulation of hardware error
+        if os.path.exists("stage.fail"):
+            raise HwError("stage.fail file present, simulating error")
+
+        # Transform the input style of the Stage to the style of the GenericComponent
+        if ranges is None:
+            ranges = {}
+        if choices is None:
+            choices = {}
+
+        axes_dict = {}
+        for a in axes:
+            d = {}
+            if a in ranges:
+                d["range"] = ranges[a]
+            elif a in choices:
+                d["choices"] = choices[a]
+            axes_dict[a] = d
+
+        GenericComponent.__init__(self, name, role, vas=None, axes=axes_dict, **kwargs)

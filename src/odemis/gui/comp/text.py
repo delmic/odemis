@@ -406,13 +406,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-if wx.MAJOR_VERSION <= 3:
-    ValidatorClass = wx.PyValidator
-else:
-    ValidatorClass = wx.Validator
-
-
-class _NumberValidator(ValidatorClass):
+class _NumberValidator(wx.Validator):
 
     def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
         """ Constructor """
@@ -616,6 +610,62 @@ def _step_from_range(min_val, max_val):
     except ValueError:
         msg = "Error calculating step size for range [%s..%s]" % (min_val, max_val)
         logging.exception(msg)
+
+
+class PatternValidator(wx.Validator):
+
+    def __init__(self, pattern):
+        """ pattern (str): regex pattern of allowed entries """
+        super().__init__()
+        self.Bind(wx.EVT_CHAR, self.on_char)
+        self._pattern = pattern
+        self.pattern_compiled = re.compile(pattern)
+
+    def _is_valid_value(self, val):
+        """ Validate the given value
+
+        Args:
+            val (str):
+
+        Returns:
+            (boolean): True if the given string is valid
+
+        """
+        return bool(self.pattern_compiled.fullmatch(val))
+
+    def on_char(self, event):
+        """ This method prevents the entry of illegal characters """
+        ukey = event.GetUnicodeKey()
+        # Allow control keys to propagate (most of them are WXK_NONE in unicode)
+        if ukey < wx.WXK_SPACE:
+            event.Skip()
+            return
+
+        field_val = str(self.GetWindow().GetValue())
+        start, end = self.GetWindow().GetSelection()
+        field_val = field_val[:start] + chr(ukey) + field_val[end:]
+
+        # Make sure the entire string matches the pattern (i.e. the match length equals the string length)
+        if self._is_valid_value(field_val):
+            # logging.debug("Field value %s accepted using %s", field_val, self.entry_pattern)
+            event.Skip()
+        else:
+            logging.debug("Field value %s NOT accepted using %s", field_val, self._pattern)
+
+    def Validate(self, win=None):
+        """ This method is called when the 'Validate()' method is called on the
+        parent of the TextCtrl to which this validator belongs. It can also
+        be called as a standalone validation method.
+
+        returns (boolean)
+        """
+        is_valid = self._is_valid_value(self.GetWindow().GetValue())
+        # logging.debug("Value '%s' is %s valid", self._get_str_value(), "" if is_valid else "not")
+        return is_valid
+
+    def Clone(self):
+        """ Required method """
+        return PatternValidator(self._pattern)
 
 
 class _NumberTextCtrl(wx.TextCtrl):

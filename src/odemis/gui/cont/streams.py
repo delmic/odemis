@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import re
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict
@@ -306,6 +307,12 @@ class StreamController(object):
                 self._disabled_entries.remove(entry)
 
         self.stream_panel.enable(True)
+
+    def pauseStream(self):
+        """ Pause (deactivate and stop updating) the stream """
+        if self.stream.should_update.value:
+            self.stream.is_active.value = False
+            self.stream.should_update.value = False
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries
@@ -1362,24 +1369,34 @@ class StreamController(object):
     @call_in_wx_main
     def _on_btn_autofocus(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.focuser.applyAutofocus(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autobc(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoContrastBrightness(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_btn_autostigmation(self, _):
         self.stream_panel.Enable(False)
+        self.pause()
+        self.pauseStream()
         f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
     def _on_autofunction_done(self, f):
         self.stream_panel.Enable(True)
+        self.resume()
+        # Don't automatically resume stream, autofunctions can take a long time.
+        # The user might not be at the system after the functions complete, so the stream
+        # would play idly.
 
 
 class StreamBarController(object):
@@ -1959,11 +1976,12 @@ class StreamBarController(object):
         # => need more ways to change current stream (at least pick one from the
         # current view?)
 
+        # Get the spot Stream, if the model has one, otherwise None
+        spots = getattr(self._tab_data_model, "spotStream", None)
         # Don't mess too much with the spot stream => just copy "should_update"
-        if hasattr(self._tab_data_model, "spotStream"):
-            if stream is self._tab_data_model.spotStream:
-                stream.is_active.value = updated
-                return
+        if stream is spots:
+            stream.is_active.value = updated
+            return
 
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
@@ -1972,7 +1990,7 @@ class StreamBarController(object):
                 # the other streams might or might not be updated, we don't care
             else:
                 # FIXME: hack to not stop the spot stream => different scheduling policy?
-                spots = getattr(self._tab_data_model, "spotStream", None)
+
                 # Make sure that other streams are not updated (and it also
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
@@ -2001,16 +2019,14 @@ class StreamBarController(object):
             # Activate or deactivate spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
-            if isinstance(stream, self._spot_incompatible):
+            if isinstance(stream, self._spot_incompatible) and spots:
                 if self._tab_data_model.tool.value == TOOL_SPOT:
                     logging.info("Stopping spot mode because %s starts", stream)
                     self._tab_data_model.tool.value = TOOL_NONE
-                    spots = self._tab_data_model.spotStream
                     spots.is_active.value = False
 
-            elif isinstance(stream, self._spot_required):
+            elif isinstance(stream, self._spot_required) and spots:
                 logging.info("Starting spot mode because %s starts", stream)
-                spots = self._tab_data_model.spotStream
                 was_active = spots.is_active.value
                 self._tab_data_model.tool.value = TOOL_SPOT
 
@@ -2039,10 +2055,9 @@ class StreamBarController(object):
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
         else:
-            # Deactivate spot mode if spot stream was just paused
-            if isinstance(stream, self._spot_required):
+            # The stream is now paused. If it used the spot stream, pause that one too.
+            if isinstance(stream, self._spot_required) and spots:
                 self._tab_data_model.tool.value = TOOL_NONE
-                spots = self._tab_data_model.spotStream
                 spots.is_active.value = False
 
     def on_tool_change(self, tool):
@@ -2221,10 +2236,11 @@ class StreamBarController(object):
         # would prevent the Stream render thread from terminating.
         gc.collect()
 
-    def clear(self):
+    def clear(self, clear_model=True):
         """
         Remove all the streams (from the model and the GUI)
         Must be called in the main GUI thread
+        :param clear_model: (bool) if True, streams will be removed from model
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
@@ -2232,17 +2248,19 @@ class StreamBarController(object):
         # clear the graphical part
         self._stream_bar.clear()
 
-        # clear the interface model
-        # (should handle cases where a new stream is added simultaneously)
-        while self._tab_data_model.streams.value:
-            stream = self._tab_data_model.streams.value.pop()
-            self._unscheduleStream(stream)
-            self._disconnectROI(stream)
-
-            # Remove from the views
+        # Remove from the views
+        for stream in self._tab_data_model.streams.value:
             for v in self._tab_data_model.views.value:
                 if hasattr(v, "removeStream"):
                     v.removeStream(stream)
+
+        # clear the interface model
+        # (should handle cases where a new stream is added simultaneously)
+        if clear_model:
+            while self._tab_data_model.streams.value:
+                stream = self._tab_data_model.streams.value.pop()
+                self._unscheduleStream(stream)
+                self._disconnectROI(stream)
 
         # Clear the stream controller
         self.stream_controllers = []
@@ -3099,7 +3117,7 @@ class FastEMProjectBarController(object):
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
         num = next(idx for idx, num in enumerate(sorted(self.project_ctrls.keys()) + [0], 1) if idx != num)
-        name = "Project %s" % num
+        name = "Project-%s" % num
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_bar, self._view_ctrl)
@@ -3169,6 +3187,9 @@ class FastEMProjectController(object):
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
             txt = make_unique_name(txt, [project.name.value for project in self._tab_data.projects.value])
             logging.debug("Renaming project from %s to %s.", self.model.name.value, txt)
@@ -3188,7 +3209,8 @@ class FastEMProjectController(object):
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.keys()) + [0], 1) if idx != n)
-        name = "ROA %s" % num
+        name = "ROA-%s" % num
+        name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
         roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
         self.roa_ctrls[num] = roa_ctrl
@@ -3282,7 +3304,9 @@ class FastEMROAController(object):
         self._project_panel = project_panel
         self._view_ctrl = view_ctrl
 
-        self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc)
+        self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc,
+                                                 self._tab_data.main.asm, self._tab_data.main.multibeam,
+                                                 self._tab_data.main.descanner, self._tab_data.main.mppc)
         self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc.subscribe(self._on_roc)
 
@@ -3335,12 +3359,20 @@ class FastEMROAController(object):
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
-        all_roas = [roa.name.value for project in self._tab_data.projects.value for roa in project.roas.value]
+
+        # Process input, make sure name is unique in project and complies with whitelisted characters of
+        # technolution driver
+        roa_project = [p for p in self._tab_data.projects.value if self.model in p.roas.value][0]
+        all_project_roas = [roa.name.value for roa in roa_project.roas.value]
+        if txt == "":
+            txt = current_name
+            self.panel.txt_ctrl.SetValue(txt)
         if txt != current_name:
-            txt = make_unique_name(txt, all_roas)
+            txt = make_unique_name(txt, all_project_roas)
             logging.debug("Renaming ROA from %s to %s.", self.model.name.value, txt)
             self.model.name.value = txt
             self.panel.txt_ctrl.SetValue(txt)
+
         evt.Skip()
 
 
@@ -3366,6 +3398,10 @@ class FastEMCalibrationController(object):
 
         for btn in self.panel.buttons.values():
             btn.Bind(wx.EVT_BUTTON, self._on_button)
+            btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
+
+        # Only enable buttons for scintillators which have been selected in the chamber tab
+        tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
 
     def _on_button(self, evt):
         btn = evt.GetEventObject()
@@ -3382,6 +3418,14 @@ class FastEMCalibrationController(object):
             # Zoom to existing calibration region
             roc_ctrl = self.roc_ctrls[num]
         roc_ctrl.fit_view_to_bbox()
+
+    @call_in_wx_main
+    def _on_active_scintillators(self, scintillators):
+        for num, b in self.panel.buttons.items():
+            if num in scintillators:
+                b.Enable(True)
+            else:
+                b.Enable(False)
 
 
 class FastEMROCController(object):

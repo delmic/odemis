@@ -1,4 +1,5 @@
 # Default bitrate for the CAN network. You can override it by copying this file
 # to /etc/udev/rules.d/ (and adjusting the value).
 SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set can0 type can bitrate 500000"
+SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set can0 type can restart-ms 100"
 SUBSYSTEM=="net", KERNEL=="can0", RUN+="/sbin/ip link set up can0"

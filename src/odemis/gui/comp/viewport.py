@@ -39,9 +39,10 @@ from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
-from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, StagePointSelectOverlay
+from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, CryoFeatureOverlay, \
+    StagePointSelectOverlay
 from odemis.gui.img import getBitmap
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
     release_mouse_on_drag
 from odemis.gui.util.raster import rasterize_line
@@ -769,7 +770,27 @@ class LiveViewport(MicroscopeViewport):
         else:
             self.canvas.abilities.discard(CAN_FOCUS)
 
-class FeatureOverviewViewport(LiveViewport):
+
+class FeatureViewport(LiveViewport):
+
+    def __init__(self, *args, **kwargs):
+        super(FeatureViewport, self).__init__(*args, **kwargs)
+
+    def setView(self, view, tab_data):
+        super(FeatureViewport, self).setView(view, tab_data)
+        if hasattr(view, "showFeatures"):
+            view.showFeatures.subscribe(self._show_hide_feature_overlay)
+            self.bottom_legend.feature_toggle_va = view.showFeatures
+
+    def _show_hide_feature_overlay(self, va_val):
+        # show/hide feature overlay based on the legend toggle button
+        foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
+        if foverlay:
+            foverlay.show = va_val
+            self.canvas.update_drawing()
+
+
+class FeatureOverviewViewport(FeatureViewport):
     """
     LiveViewport dedicated to show overview map area with bookmarked features.
     Do not move the stage by dragging, and instead show the stage position via
@@ -783,11 +804,52 @@ class FeatureOverviewViewport(LiveViewport):
 
     def setView(self, view, tab_data):
         super(FeatureOverviewViewport, self).setView(view, tab_data)
-        self.canvas.enable_drag()
         # Add needed feature bookmarking overlays
         cpol = CurrentPosCrossHairOverlay(self.canvas)
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
+
+        # Only create a feature overlay in chamber tab as the canvas would create the one shown on localization tab
+        if isinstance(tab_data, CryoChamberGUIData):
+            slol = CryoFeatureOverlay(self.canvas, tab_data)
+            slol.active.value = True
+            self.canvas.add_world_overlay(slol)
+
+
+class FastEMAcquisitionViewport(MicroscopeViewport):
+    """ MicroscopeViewport with specialized FastEMCanvas. """
+
+    canvas_class = miccanvas.FastEMAcquisitionCanvas
+
+    def setView(self, view, tab_data):
+        super().setView(view, tab_data)
+        self.canvas.add_background_overlay(self._tab_data_model.main.background)
+
+
+class FastEMOverviewViewport(LiveViewport):
+    """
+    Viewport for the FastEM overview: moves stage by double-clicking and
+    background overlay representing the sample carrier.
+    """
+
+    canvas_class = miccanvas.FastEMAcquisitionCanvas
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Cannot move stage by dragging (only by double clicking)
+        self.canvas.abilities.discard(CAN_MOVE_STAGE)
+
+    def setView(self, view, tab_data):
+        super().setView(view, tab_data)
+        self.canvas.add_background_overlay(self._tab_data_model.main.background)
+
+        # Show a crosshair where the stage is
+        cpol = CurrentPosCrossHairOverlay(self.canvas)
+        cpol.active.value = True
+        self.canvas.add_world_overlay(cpol)
+
+        # Double-click to move the stage
         slol = StagePointSelectOverlay(self.canvas)
         slol.active.value = True
         self.canvas.add_world_overlay(slol)
@@ -1904,25 +1966,3 @@ class LineSpectrumViewport(TwoDViewPort):
             self.clear()
 
         self.Refresh()
-
-
-class FastEMAcquisitionViewport(MicroscopeViewport):
-    """ MicroscopeViewport with specialized FastEMCanvas. """
-
-    canvas_class = miccanvas.FastEMAcquisitionCanvas
-
-    def setView(self, view, tab_data):
-        super().setView(view, tab_data)
-        self.canvas.add_background_overlay(self._tab_data_model.main.background)
-
-
-class FastEMOverviewViewport(FeatureOverviewViewport):
-    """ FeatureOverviewViewport (viewport with a CurrentPosCrossHairOverlay) with specialized FastEMCanvas
-    (which adds a background overlay). """
-
-    canvas_class = miccanvas.FastEMAcquisitionCanvas
-
-    def setView(self, view, tab_data):
-        super().setView(view, tab_data)
-        self.canvas.add_background_overlay(self._tab_data_model.main.background)
-
