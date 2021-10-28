@@ -117,15 +117,15 @@ Actuators:
     7. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
     8. FAV_POS_ALIGN: The initial position to start the alignment from.
    
- * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has two metadata:
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has one metadata:
   
     1. FAV_POS_ACTIVE: The latest focus position for optical microscopy. 
    
- * align: Alignment actuator. It has 2 axes: x and y. It has also 2 metadata:
+ * align: Alignment actuator. It has 2 axes: x and y. It has three metadata:
   
     1. FAV_POS_ACTIVE: The position corresponding to alignment. 
-    2. FAV_POS_DEACTIVE: The position corresponding to parked aligner.
-    3. FAV_POS_ALIGN: The safe position to go such that the stage cannot hit the objective lens. 
+    2. FAV_POS_DEACTIVE: The safe position to go such that the stage cannot hit the objective lens. 
+    3. FAV_POS_ALIGN: The default position when doing alignment. 
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM. 
