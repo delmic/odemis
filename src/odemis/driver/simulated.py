@@ -33,6 +33,7 @@ import os
 import random
 import time
 from past.builtins import long
+from collections import Iterable
 
 
 class Light(model.Emitter):
@@ -264,10 +265,10 @@ class GenericComponent(model.Actuator):
         VA property dict can contain the following keys:
             "value" (any): initial values of the VA
             "readonly" (bool): optional, True for read only VA, defaults to False
-            "unit" (str): optional, the unit of the VA, defaults to ""
-            "range" (float, float): optional, min/max of the VA, defaults to None
-            "choices" (set or dict): optional, possible values available to the VA, defaults to None, will be ignored if
-                                     range is defined
+            "unit" (str or None): optional, the unit of the VA, defaults to None
+            "range" (float, float): optional, min/max of the VA. Incompatible with "choices".
+            "choices" (list, set or dict): optional, possible values available to the VA.
+               Incompatible with "range".
         axes (dict (string -> dict (string -> any))): dict mapping desired axis names to dicts with axis properties. The
         axis property dict can contain the following keys:
             "unit" (str): optional, unit of the axis, defaults to "m"
@@ -280,26 +281,52 @@ class GenericComponent(model.Actuator):
         if vas:
             for vaname, vaprop in vas.items():
                 # Guess an appropriate VA type based on the initial value and the presence of range or choices
-                vavaluetype = vaprop["value"].__class__.__name__.capitalize()
-                if vavaluetype == "Bool":
-                    vavaluetype = "Boolean"
-                elif vavaluetype == "Str":
-                    vavaluetype = "String"
-                if "range" in vaprop:
-                    varangetype = "Continuous"
-                elif "choices" in vaprop:
-                    varangetype = "Enumerated"
-                else:
-                    varangetype = "VA"
-                vatype = vavaluetype + varangetype
-
-                if "value" not in vaprop:
-                    vaprop["value"] = 0.0  # default value
-
                 try:
-                    vaclass = getattr(model, vatype)
-                except KeyError:
-                    raise KeyError(f"VA type {vatype}, guessed for VA {vaname}, does not exist.")
+                    value = vaprop["value"]
+                except AttributeError:
+                    # TODO: support "short-cut" by using a choice or range
+                    raise AttributeError(f"VA {vaname}, does not have a 'value' key.")
+
+                if "choices" in vaprop:
+                    if "range" in  vaprop:
+                        raise ValueError(f"VA {vaname}, has both a range and choice, only one is possible.")
+                    # Always keep it simple as "VAEnumerated", it fits any type.
+                    vaclass = model.VAEnumerated
+                    # The "choices" argument can be either a dict or a set.
+                    # However, YAML, doesn't supports set. So we accept list,
+                    # and convert to a set.
+                    if isinstance(vaprop["choices"], list):
+                        vaprop["choices"] = set(vaprop["choices"])
+                elif isinstance(value, str):
+                    if "range" in vaprop:
+                        raise ValueError("String doesn't support range")
+                    vaclass = model.StringVA
+                elif isinstance(value, bool):
+                    if "range" in vaprop:
+                        raise ValueError("Boolean doesn't support range")
+                    vaclass = model.BooleanVA
+                elif isinstance(value, float):
+                    if "range" in vaprop:
+                        vaclass = model.FloatContinuous
+                    else:
+                        vaclass = model.FloatVA
+                elif isinstance(value, int):
+                    if "range" in vaprop:
+                        vaclass = model.IntContinuous
+                    else:
+                        vaclass = model.IntVA
+                elif isinstance(value, Iterable):
+                    # It's a little tricky because YAML only supports lists.
+                    # So we guess a ListVA for the basic type (which is the most full-feature),
+                    # and if there is a range, use TupleContinuous, as List doesn't
+                    # support a range.
+                    if "range" in vaprop:
+                        vaclass = model.TupleContinuous
+                    else:
+                        vaclass = model.ListVA
+                else:
+                    raise ValueError(f"VA {vaname}, has unsupported value type {value.__class__.__name__}.")
+
                 va = vaclass(**vaprop)
                 setattr(self, vaname, va)
 
