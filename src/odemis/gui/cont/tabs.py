@@ -2920,7 +2920,7 @@ class CryoChamberTab(Tab):
         if self._role == "meteor":
             target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button])
         elif self._role == "enzel":
-            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][1])
+            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
         move_future = self._perform_switch_position_movement(target_button)
         if move_future is None:
             target_button.SetValue(0)
