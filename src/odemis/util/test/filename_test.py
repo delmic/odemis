@@ -22,17 +22,20 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-import time
-import os
-import unittest
+
 from odemis.gui.util import get_home_folder
 from odemis.util.filename import create_filename, guess_pattern, update_counter, make_unique_name
+import os
+import time
+import unittest
 
 date = time.strftime("%Y%m%d")
 daterev = time.strftime("%d%m%Y")
 timeshrt = time.strftime("%H%M")
 timeshrt_colon = time.strftime("%H:%M")
 timelng = time.strftime("%H%M%S")
+timelng_hyphen = time.strftime("%H-%M-%S")
+timelng_colon = time.strftime("%H:%M:%S")
 # date_sl = time.strftime("%Y/%m/%d")
 # timelng_sl = time.strftime("%H/%M/%S")
 current_year = time.strftime("%Y")
@@ -57,17 +60,18 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test-123': ('test-{cnt}', '123'),
                    '%stest-123' % date: ('{datelng}test-{cnt}', '123'),
                    '123-test-%s' % date: ('{cnt}-test-{datelng}', '123'),
-                   'test-123-%s' % timeshrt: ('test-{cnt}-{timeshrt}', '123'),
+                   # This doesn't work "23-%s" % timelng_hyphen, but it's fine, as it's too much a corner case to be sure it was time
+                   'test-123 %s--' % timelng_hyphen: ('test-{cnt} {timelng_hyphen}--', '123'),
                    'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
+                   'test-%s-123-' % timelng_colon: ('test-{timelng_colon}-{cnt}-', '123'),
                    '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
-                   'test-0070': ('test-{cnt}', '0070'),  # test-0000 gives the wrong result at midnight
+                   'test-0070': ('test-{cnt}', '0070'),
                    '4580-test-%s' % dshrtrev: ('{cnt}-test-{dshrtrev}', '4580'),
                    '4580-test:%s' % dshrtrev_hyphen: ('{cnt}-test:{dshrtrev_hyphen}', '4580'),
                    '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
                    'test2-45': ('test2-{cnt}', '45'),
                    'test 1980-08-23': ('test 1980-08-{cnt}', '23'),  # a date, but not *now*
                    'test': ('test-{cnt}', '001'),
-                   'test%s' % timeshrt: ('test{timelng}', '001'),
                    '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),
                    '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001')
                     }
