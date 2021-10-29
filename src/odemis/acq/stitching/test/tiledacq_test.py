@@ -104,33 +104,58 @@ class CRYOSECOMTestCase(unittest.TestCase):
         :return:
         """
         fov = compute_camera_fov(self.ccd)
-
         # use area as multiples of fov (in case simulator parameters changed)
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 2 * fov[0], 2 * fov[1]),
-                                              overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (3, 3))
 
+        # Smaller than FoV => 1x1
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, fov[0] / 2, fov[1] / 2),
+                                              overlap=0, future=model.InstantaneousFuture())
+
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (1, 1))
+
+        # Precisely 2x2 FoV, without overlap => 2x2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=(0, 0, 2 * fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
         num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
         self.assertEqual(num_tiles, (2, 2))
 
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, fov[0] / 2, fov[1] / 2),  # smaller than fov
-                                              overlap=0, future=model.InstantaneousFuture())
-
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (1, 1))
-
-        # Precisely 1 x 2 FoV => should give 1 x 2 tiles
+        # Precisely 1 x 2 FoV, without overlap => should give 1 x 2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=(0, 0, fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
         num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
         self.assertEqual(num_tiles, (1, 2))
+
+        # Precisely 0.8 FoV, with overlap 0.2 => 1x1 tiles
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, 0.8 * fov[0], 0.8 * fov[1]),
+                                              overlap=0.2, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (1, 1))
+
+        # 2x3 FoV with overlap 0.2 => 3x4
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, 2 * fov[0], 3 * fov[1]),
+                                              overlap=0.2, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (3, 4))
+
+        # Precisely 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, 4 * 0.8 * fov[0], 7 * 0.8 * fov[1]),
+                                              overlap=0.2, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (4, 7))
+
+        # A tiny bit more 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
+        eps = 1e-12
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=(0, 0, 4 * 0.8 * fov[0] + eps, 7 * 0.8 * fov[1] + eps),
+                                              overlap=0.2, future=model.InstantaneousFuture())
+        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, (4, 7))
 
     def test_generate_indices(self):
         """
