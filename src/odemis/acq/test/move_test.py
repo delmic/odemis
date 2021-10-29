@@ -26,11 +26,11 @@ import scipy, numpy
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDistance, SCALING_FACTOR
+from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDistance, SCALING_FACTOR, getRotationMatrix
 from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
-from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel, RUNNING
-from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
-from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, run_sub_move
+from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel
+from odemis.util.driver import BACKEND_RUNNING
+from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util import driver, test
 import threading
 
@@ -613,7 +613,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point1 = {'rx': 0.523599, 'rz': 0} # 30 degree
         point2 = {'rx': 1.0472, 'rz': 0}    # 60 degree
         # the rotation difference is 30 degree
-        expected_rotation = numpy.array([[1, 0, 0], [0, numpy.cos(numpy.radians(30)), -numpy.sin(numpy.radians(30))], [0, numpy.sin(numpy.radians(30)), numpy.cos(numpy.radians(30))]])
+        expected_rotation = getRotationMatrix("rx", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
@@ -630,7 +630,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
         point2 = {'rz': 1.0472}  # 60 degree
         # the rotation difference is 30 degree
-        expected_rotation = numpy.array([[numpy.cos(numpy.radians(30)), -numpy.sin(numpy.radians(30)), 0], [numpy.sin(numpy.radians(30)), numpy.cos(numpy.radians(30)), 0], [0, 0, 1]])
+        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
@@ -649,7 +649,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
         pos2 = numpy.array([point2[a] for a in lin_axes])
         exp_lin_error = scipy.spatial.distance.euclidean(pos1, pos2)
         # the rotation difference is 30 degree
-        expected_rotation = numpy.array([[numpy.cos(numpy.radians(30)), -numpy.sin(numpy.radians(30)), 0], [numpy.sin(numpy.radians(30)), numpy.cos(numpy.radians(30)), 0], [0, 0, 1]])
+        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_error = _getDistance(point1, point2)
         self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)

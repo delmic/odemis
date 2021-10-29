@@ -275,21 +275,40 @@ def _getDistance(start, end):
         for a in rot_axes:
             if a == "rx":
                 # find the elemental rotation around x axis
-                Rx_start = numpy.array([[1, 0, 0], [0, numpy.cos(start["rx"]), -numpy.sin(start["rx"])], [0, numpy.sin(start["rx"]), numpy.cos(start["rx"])]])
-                Rx_end = numpy.array([[1, 0, 0], [0, numpy.cos(end["rx"]), -numpy.sin(end["rx"])], [0, numpy.sin(end["rx"]), numpy.cos(end["rx"])]])
+                Rx_start = getRotationMatrix(a, start["rx"])
+                Rx_end = getRotationMatrix(a, end["rx"])
             elif a == "rz":
                 # find the elemental rotation around z axis
-                Rz_end = numpy.array([[numpy.cos(end["rz"]), -numpy.sin(end["rz"]), 0], [numpy.sin(end["rz"]), numpy.cos(end["rz"]), 0], [0, 0, 1]])
-                Rz_start = numpy.array([[numpy.cos(start["rz"]), -numpy.sin(start["rz"]), 0], [numpy.sin(start["rz"]), numpy.cos(start["rz"]), 0], [0, 0, 1]])
+                Rz_end = getRotationMatrix(a, end["rz"])
+                Rz_start = getRotationMatrix(a, start["rz"])
         # find the total rotations
         R_start = numpy.matmul(Rz_start, Rx_start)
         R_end = numpy.matmul(Rz_end, Rx_end)
         # find the rotation error matrix
         R_diff = numpy.matmul(numpy.transpose(R_start), R_end)
         # map to scalar error
-        rot_error = SCALING_FACTOR*abs(numpy.trace(numpy.eye(3)-R_diff))
-    return lin_error+rot_error
+        rot_error = SCALING_FACTOR * abs(numpy.trace(numpy.eye(3) - R_diff))
+    return lin_error + rot_error
     
+
+def getRotationMatrix(axis, angle):
+    """
+    Computes the rotation matrix of the given angle around the given axis. 
+    The axis can be 'rx', 'ry' or 'rz'. The angle must be in radians.
+    axis (str): the axis around which the rotation matrix is to be calculated.
+    angle (float): the angle of rotation.
+    return (numpy.ndarray): the rotation matrix.
+    """
+    if axis == "rx":
+        Rx = numpy.array([[1, 0, 0], [0, numpy.cos(angle), -numpy.sin(angle)], [0, numpy.sin(angle), numpy.cos(angle)]])
+        return Rx
+    elif axis == "ry":
+        Ry = numpy.array([[numpy.cos(angle), 0, numpy.sin(angle)], [0, 1, 0], [-numpy.sin(angle), 0, numpy.cos(angle)]])
+        return Ry
+    elif axis == "rz":
+        Rz = numpy.array([[numpy.cos(angle), -numpy.sin(angle), 0], [numpy.sin(angle), numpy.cos(angle), 0], [0, 0, 1]])
+        return Rz
+
 
 def getMovementProgress(current_pos, start_pos, end_pos):
     """
