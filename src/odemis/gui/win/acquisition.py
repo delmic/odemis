@@ -619,7 +619,7 @@ class AcquisitionDialog(xrcfr_acq):
 
 # Step value for z stack levels
 ZSTEP = 2e-6  # m
-DEFAULT_FOV = (100e-6, 100e-6)
+DEFAULT_FOV = (100e-6, 100e-6) # m
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
