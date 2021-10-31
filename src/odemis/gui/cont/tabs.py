@@ -2712,7 +2712,7 @@ class CryoChamberTab(Tab):
 
     @call_in_wx_main
     def _on_stage_pos(self, _):
-        # TODO add docstring
+        """ Called every time the stage moves, to update the state of the chamber tab buttons. """
         if self._role == 'meteor':
             self._toggle_switch_buttons()
             self._enable_movement_controls()
