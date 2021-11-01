@@ -1065,10 +1065,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Called when the user enters values for the tiles number in the GUI.
         """
-        nx = self.tiles_nx.value - 1 
-        ny = self.tiles_ny.value - 1 
-        w = nx*self.fov[0]-(nx-1)*self.fov[0]*self.overlap
-        h = ny*self.fov[1]-(ny-1)*self.fov[1]*self.overlap
+        nx = self.tiles_nx.value 
+        ny = self.tiles_ny.value 
+        w = nx * self.fov[0] * (1 - self.overlap)
+        h = ny * self.fov[1] * (1 - self.overlap)
         self.update_area_size(w, h)
 
     def get_fov(self, s):
