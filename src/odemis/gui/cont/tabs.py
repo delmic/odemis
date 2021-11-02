@@ -3010,10 +3010,15 @@ class CryoChamberTab(Tab):
         return ans != wx.ID_NO
 
     def _display_meteor_pos_warning_msg(self, end_pos):
-        x, y, z = round(end_pos.get('x'), ndigits=5), round(end_pos.get('y'), ndigits=5), round(end_pos.get('z'), ndigits=5)
-        rx, rz = round(math.degrees(end_pos.get("rx"))), round(math.degrees(end_pos.get("rz")))
-        rx, rz = str(rx) + "°", str(rz) + "°"
-        box = wx.MessageDialog(self.main_frame, "The sample stage will move to x = {x} m, y = {y} m, z = {z} m, rx = {rx}, rz = {rz}. Is this safe?".format(x=x, y=y, z=z, rx=rx, rz=rz),
+        pos_str = []
+        for axis in ("x", "y", "z", "rx", "ry", "rz"):
+            if axis in end_pos:
+                if axis.startswith("r"):
+                    pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 3))
+                else:
+                    pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 3))
+        pos_str = ", ". join(pos_str)
+        box = wx.MessageDialog(self.main_frame, "The stage will move to this position: " + pos_str + ". Is this safe?",
                             caption="Moving to METEOR", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans != wx.ID_NO
