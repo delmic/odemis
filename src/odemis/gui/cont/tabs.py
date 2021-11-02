@@ -4437,6 +4437,10 @@ class EnzelAlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_flm_alignment.html")
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
+        # TODO K.K. set correct step size range
+        self.panel.controls_step_size_slider.SetRange(1e-6, 1e-4)
+        self.panel.controls_step_size_slider.set_position_value(1e-5)
+
         self.panel.pnl_z_align.Show(False)
         self.panel.pnl_sem_align.Show(False)
         self.panel.pnl_flm_xyz_align.Show(True)

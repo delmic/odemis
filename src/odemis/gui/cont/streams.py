@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import threading
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict
@@ -3117,9 +3118,35 @@ class EnzelAlignmentStreamsBarController:
         stream.is_active.value = True
         # TODO K.K. Implement better refreshing per stream the waiting time to get just one frame instead of a sleep.
         # TODO K.K. check if we can call get from the fron-end att all
-        # stream.detector.data.get(asap=False)
-        time.sleep(0.5)
+        self._getNewFrame(stream, timeout=20)
         stream.is_active.value = False
+
+    def _getNewFrame(self, stream, timeout=None):
+        """
+        Acquire one image from the given stream
+        stream (model.Detector): stream from which to acquire an image
+        timeout (None or 0<float): maximum time to wait
+        returns (model.DataArray):
+            Image (with subtracted background if requested)
+        raise:
+            IOError: if it timed out
+        """
+        # Code based on _getNextImage from autofocus.py
+        min_time = time.time()
+        is_received = threading.Event()
+        data_shared = [None]  # in python2 we need to create a new container object
+
+        def receive_one_image(image):
+            if image.metadata.get(model.MD_ACQ_DATE, float("inf")) >= min_time:
+                stream.image.unsubscribe(receive_one_image)
+                data_shared[0] = data
+                is_received.set()
+
+        stream.image.subscribe(receive_one_image)
+        if not is_received.wait(timeout):
+            stream.image.unsubscribe(receive_one_image)
+            raise IOError("No data received after %g s" % (timeout,))
+        return data_shared[0]
 
 class FastEMStreamsController(StreamBarController):
     """
