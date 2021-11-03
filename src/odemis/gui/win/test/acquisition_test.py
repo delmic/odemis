@@ -28,14 +28,13 @@ import odemis
 import logging
 from odemis.util import test, driver
 from odemis import model
-from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
-from odemis.acq.move import transformFromSEMToMeteor
+from odemis.util.driver import BACKEND_RUNNING
 from odemis.gui.win.acquisition import OverviewAcquisitionDialog
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 class TestgetROARectMethod(unittest.TestCase):
     """
@@ -45,30 +44,30 @@ class TestgetROARectMethod(unittest.TestCase):
     def setUpClass(cls):
         if driver.get_backend_status() in driver.BACKEND_RUNNING:
             microscope = model.getMicroscope()
-            if microscope.role == "meteor":
-                logging.info("There is METEOR backend already running. It will be used.")
+            # TODO once chamber PR of METEOR is merged, delete "cryo-secom" below.
+            if microscope.role in ("cryo-secom", "enzel"):
+                logging.info("There is ENZEL backend already running. It will be used.")
             else:
-                logging.info("A running backend was found. It will be turned off, and the backend of METEOR will be turned on.")
+                logging.info("A running backend was found. It will be turned off, and the backend of ENZEL will be turned on.")
                 try:
                     test.stop_backend()
-                    test.start_backend(METEOR_CONFIG)
+                    test.start_backend(ENZEL_CONFIG)
                 except Exception:
                     raise
         else:
-            logging.info("METEOR backend will be turned on.")
+            logging.info("ENZEL backend will be turned on.")
             try:
-                test.start_backend(METEOR_CONFIG)
+                test.start_backend(ENZEL_CONFIG)
             except Exception:
                 raise
 
         # get the stage components
         cls.stage = model.getComponent(role="stage")
-        cls.stage_bare = model.getComponent(role="stage-bare")
+        cls.stage.reference().result()
+        # cls.stage_bare = model.getComponent(role="stage-bare")
 
         # get the metadata
         stage_md = cls.stage.getMetadata()
-        stage_bare_md = cls.stage_bare.getMetadata()
-        cls.stage_grid1_sem = stage_bare_md[model.MD_SAMPLE_CENTERS]["GRID 1"]
         cls.tiling_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
 
     @classmethod
@@ -108,9 +107,9 @@ class TestgetROARectMethod(unittest.TestCase):
 
     def test_clipping_is_not_performed_same_width_and_height(self):
         # move the stage to some position away from the edges of the active
-        # range so that clipping is not needed. 
-        stage_grid1_fm = transformFromSEMToMeteor(self.stage_grid1_sem, self.stage_bare)
-        self.stage_bare.moveAbs(stage_grid1_fm).result()
+        # range so that clipping is not needed (i.e in the middle of the active range).
+        self.stage.moveAbs({"x": (self.tiling_rng["x"][0] + self.tiling_rng["x"][1])/2,
+                            "y": (self.tiling_rng["y"][0] + self.tiling_rng["y"][1])/2}).result()
         pos = self.stage.position.value
         w = 600e-6
         h = 600e-6
@@ -125,9 +124,9 @@ class TestgetROARectMethod(unittest.TestCase):
 
     def test_clipping_is_not_performed_different_width_and_height(self):
         # move the stage to some position away from the edges of the active
-        # range so that clipping is not needed. 
-        stage_grid1_fm = transformFromSEMToMeteor(self.stage_grid1_sem, self.stage_bare)
-        self.stage_bare.moveAbs(stage_grid1_fm).result()
+        # range so that clipping is not needed (i.e in the middle of the active range). 
+        self.stage.moveAbs({"x": (self.tiling_rng["x"][0] + self.tiling_rng["x"][1])/2,
+                            "y": (self.tiling_rng["y"][0] + self.tiling_rng["y"][1])/2}).result()
         pos = self.stage.position.value
         w = 500e-6
         h = 600e-6
