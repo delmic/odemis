@@ -80,6 +80,7 @@ class CryoFeatureController(object):
         :param features: list(CryoFeature) list of modified features
         """
         if not features:
+            # Clear current selections
             self._panel.cmb_features.Clear()
             self._on_current_feature_changes(None)
             return
