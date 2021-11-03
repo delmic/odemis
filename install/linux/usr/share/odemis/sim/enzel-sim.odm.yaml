@@ -349,7 +349,7 @@ ENZEL-Sim: {
     # Allowed range when in FM/SEM imaging mode. The X/Y ranges are also used
     # as default area for the overview acquisition.
     # X/Y range is small, to fit the limited simulated range of the camera
-    POS_ACTIVE_RANGE: { 'x': [ -23.e-6, 23.e-6 ], 'y': [ -33.e-6, 33.e-6 ], 'z': [ -0.003, 0.0 ], } ,
+    POS_ACTIVE_RANGE: { 'x': [ -23.e-4, 23.e-4 ], 'y': [ -33.e-4, 33.e-4 ], 'z': [ -0.003, 0.0 ], } ,
     # Initial position to start alignment from
     FAV_POS_ALIGN: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.001 },
     # Initial position when going to FM/SEM imaging.
