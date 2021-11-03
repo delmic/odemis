@@ -189,9 +189,6 @@ class TiledAcquisitionTask(object):
         # The size of the smallest tile, non-including the overlap, which will be
         # lost (and also indirectly represents the precision of the stage)
         reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
-        logging.debug("Would need tiles: nx= %s, ny= %s",
-                      abs(self._area_size[0] / reliable_fov[0]),
-                      abs(self._area_size[1] / reliable_fov[1]))
         nx = math.ceil(abs(self._area_size[0] / reliable_fov[0]))
         ny = math.ceil(abs(self._area_size[1] / reliable_fov[1]))
         logging.debug("Calculated number of tiles nx= %s, ny= %s" % (nx, ny))
