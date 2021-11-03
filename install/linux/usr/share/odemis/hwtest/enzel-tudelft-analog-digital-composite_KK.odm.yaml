@@ -295,6 +295,11 @@ ENZEL: {
   metadata: {
 #     Default position at init corresponding to (approximately) aligned
 #     It must have both x,y and z.
+# TODO K.K. currently the metadata which is used is on the 3DOF stage. This should be on the objective aligner to simplify the accessing of the metadata.
+# TODO K.K. Furthermore the metadata FAV_POS_ALIGN seems to be unused and neither Daan nor Kornee now the need for this option/position.
+# Since in both alignment and imaging position the 5DOF is really close to both the pole piece and the 3DOF no really safe place exict. There is an argument
+# For lowering before alignment (further away from the pole piece) but also one from putting it higher (further away from the 3DOF which might heat the sample
+# and can be damaged). Maybe the best choice is in the middle (imaging position). This needs to be checked with both Caspar, Bassim, Marre and Daan.
      FAV_POS_ACTIVE: {'x': -0.002151752407, 'y': 0.0001652431180230012, 'z': 0.0018668802080731735},  # Helios 20211011
      FAV_POS_ALIGN: {'x': -0.002151752407, 'y': 0.0001652431180230012, 'z': 0.0008668802080731735},
 #     "Safe" position to go to so that the 5DoF stage cannot hit the objective lens.

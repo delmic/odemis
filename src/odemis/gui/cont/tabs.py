@@ -45,6 +45,7 @@ import wx.html
 
 from odemis.gui import conf, img
 from odemis.gui.comp.overlay.world import StagePointSelectOverlay, CurrentPosCrossHairOverlay
+from odemis.gui.comp.popup import show_message
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.model import getVAs, VAEnumerated
@@ -103,7 +104,7 @@ from odemis.util.dataio import data_to_static_streams, open_acquisition
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
               TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
 
-# TODO K.K. remove this hack when Bassim fixed this with a new commit
+# TODO K.K. remove this hack when the branch is rebased on the fix of Bassim
 MILLING = ALIGNMENT  # Hack to deal with Bassim his updates
 
 
@@ -4133,7 +4134,9 @@ class EnzelAlignTab(Tab):
         self._stream_controllers = []
         self._stage = main_data.stage
         self._stage_global = main_data.stage_global
-        # TODO K.K. remove this by setting role properly or adjusting the metadata place.
+        # TODO K.K. remove this by adjusting the place the metadata is saved it should be on the objective alignet
+        #  instead of on the 3DOF
+        # FIX use everying on the actual aligner including the metadata. So don't use original 3DOF data
         self._3_DOF = model.getComponent("3DOF Stage")
         self._tilted_3_DOF = main_data.aligner
         # Check stage FAV positions in its metadata, and store them in respect to their movement
@@ -4176,30 +4179,23 @@ class EnzelAlignTab(Tab):
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
-        # Create CCD stream
-        # Force the "temperature" VA to be displayed by making it a hw VA
-        # TODO K.K. is this temperature VA is needed?
-        hwdetvas = set()
-        if model.hasVA(main_data.ccd, "temperature"):
-            hwdetvas.add("temperature")
-        # Don't include a focuser because it could ruin the alignment.
-        # TODO K.K. test/add filter anjd light to camerastream
-        self._opt_stream = acqstream.CameraStream("Optical CL",
+        # TODO K.K. check this : Someone once said don't include a focusser because it could ruin the alignment. This
+        #  is not as straightforward as it seems. The focus should not mess with the 5DOF alignment but it should
+        #  focus using the 5 DOF (not the 3DOF). Plus it is akward for a user that you can control both stages in a
+        #  mode. (The idea was that each mode is focussed to one part of the alignment and doesn't move multiple
+        #  parts.) Daan Boltje has a video on this an knows more about this. Please discuss this with both Daan
+        #  Boltje, Caspar and maybe check this with Kornee before merging.
+
+        # TODO K.K. Test on Hw if Fluostream works the light is turned on and the filter wheel works.
+        self._opt_stream = acqstream.FluoStream("Optical CL",
                                                   main_data.ccd,
                                                   main_data.ccd.data,
-                                                  emitter=None,
-                                                  # emitter=main_data.light,
-                                                  # main_data.filter,
-                                                  hwdetvas=hwdetvas,
+                                                  main_data.light,
+                                                  main_data.light_filter,
                                                   detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                                   forcemd={model.MD_ROTATION: 0,
                                                            model.MD_SHEAR   : 0},
                                                   )
-        # TODO K.K. why set the following settings?
-        # Synchronise the fine alignment dwell time with the CCD settings
-        self._opt_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
-        self._opt_stream.detBinning.value = self._opt_stream.detBinning.range[0]
-        self._opt_stream.detResolution.value = self._opt_stream.detResolution.range[1]
         self.tab_data_model.streams.value.append(self._opt_stream)
 
         # Create sem stream
@@ -4212,7 +4208,7 @@ class EnzelAlignTab(Tab):
                                                acq_type=model.MD_AT_EM,
                                                blanker=None
                                                )
-        # TODO K.K. remove with analog stream is implemented.
+
         self.tab_data_model.views.value[1].interpolate_content.value = True
         self.tab_data_model.streams.value.append(self._sem_stream)
 
@@ -4222,6 +4218,7 @@ class EnzelAlignTab(Tab):
                                                main_data.ion_sed.data,
                                                main_data.ion_beam,
                                                forcemd={model.MD_POS: (0, 0)}, )
+        viewports[0].canvas.disable_drag()
         self.tab_data_model.streams.value.append(self._fib_stream)
 
         # Create scheduler/stream bar controller
@@ -4249,21 +4246,18 @@ class EnzelAlignTab(Tab):
             panel.btn_align_flm: self._set_flm_alignment_mode,
         }
 
-        self._current_align_mode = VAEnumerated(panel.btn_align_z,
-                                                self._align_btn_functions,
-                                                setter=self._set_current_align_mode)
-        # TODO K.K. replace line below with init=True somehow
-        self._set_current_align_mode(self._current_align_mode.value)  # Start with the default mode
+        self._align_mode = VAEnumerated(panel.btn_align_z,
+                                        self._align_btn_functions,
+                                        setter=self._set_align_mode)
+        self._set_align_mode(self._align_mode.value)  # Start with the default mode
 
         # Bind the buttons to the align mode VA
         def __on_click_align_mode_buttons(evt):
-            self._current_align_mode.value = evt.theButton
+            self._align_mode.value = evt.theButton
 
         for btn in self._align_btn_functions:
             btn.Bind(wx.EVT_BUTTON, __on_click_align_mode_buttons)
 
-        # TODO K.K. If the stage movement calls are blocking the button will remain unclickable as long as the stage is
-        #  moving.
         # Vigilant attribute connectors for the slider
         self._step_size_controls_va_connector = VigilantAttributeConnector(tab_data.step_size,
                                                                            self.panel.controls_step_size_slider,
@@ -4300,7 +4294,7 @@ class EnzelAlignTab(Tab):
         self._combined_aligner_control_functions = {**z_aligner_control_functions,
                                                     **sem_aligner_control_functions,
                                                     **flm_aligner_control_functions}
-        # TODO K.K. if due to lack of referencing no stage movement can be done no error/warning is raised.....
+
         # Bind alignment control keys to defined control functions
         for btn, function in self._combined_aligner_control_functions.items():
             btn.Bind(wx.EVT_BUTTON, function)
@@ -4315,7 +4309,7 @@ class EnzelAlignTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
-    def _set_current_align_mode(self, clicked_align_mode):
+    def _set_align_mode(self, clicked_align_mode):
         """
         Setter for the current alignment mode. Changes the mode with the corresponding streams to be displayed, the
         instructions and the controls. Also takes care of the toggling of the buttons.
@@ -4342,6 +4336,9 @@ class EnzelAlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_z_alignment.html")
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
+        self.panel.controls_step_size_slider.SetRange(1e-6, 100e-6)
+        self.panel.controls_step_size_slider.set_position_value(10e-6)
+
         self.panel.pnl_z_align.Show(True)
         self.panel.pnl_sem_align.Show(False)
         self.panel.pnl_flm_xyz_align.Show(False)
@@ -4359,17 +4356,20 @@ class EnzelAlignTab(Tab):
         if hasattr(self, "_z_move_future") and self._z_move_future._state == RUNNING:
             logging.debug("The stage is still moving, this movement isn't performed.")
             return
-        # TODO K.K. maybe disabling both/all buttons per mode is better. Also because of possible asynchronous problem
-        #  with the stream refresher.
+
+        if hasattr(self, "_z_move_future") and not self._z_move_future.button.Enabled:
+            logging.error("The stream is still updating and hence button activity is suppressed.")
+            return
         evt.theButton.Enabled = False  # Disable the button to prevent queuing of movements and unnecessary refreshing.
 
+        @call_in_wx_main
         def move_done(future):
             self.stream_bar_controller.refreshStreams((self._FIB_view_and_control["stream"],
                                                        self._SEM_view_and_control["stream"]))
-            future.button.Enabled = True
             new_pos = self._stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
             new_pos.update({"z": self._stage.position.value["z"]})  # Add current Z position
             self._stage.updateMetadata({model.MD_FAV_POS_ACTIVE: new_pos})
+            future.button.Enabled = True
 
         self._z_move_future = self._stage_global.moveRel(
                 {axis: proportion * self.tab_data_model.step_size.value})
@@ -4387,6 +4387,10 @@ class EnzelAlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_sem_alignment.html")
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
+        self.panel.controls_step_size_slider.SetRange(1e-6,
+                                                      min(50e-6, abs(self._sem_stream.emitter.beamShift.range[1][0])))
+        self.panel.controls_step_size_slider.set_position_value(30e-6)
+
         self.panel.pnl_z_align.Show(False)
         self.panel.pnl_sem_align.Show(True)
         self.panel.pnl_flm_xyz_align.Show(False)
@@ -4400,12 +4404,11 @@ class EnzelAlignTab(Tab):
         :param proportion (int): direction of the movement represented by the button (-1/1)
         :param evt (GenButtonEvent): Clicked event
         """
-        # TODO K.K. implement moving + refreshing/blocking thing with or without a future remove time.sleep(0.5)
+        evt.theButton.Enabled = False
         # Beam shift control
         self._sem_move_beam_shift_rel({axis: proportion * self.tab_data_model.step_size.value})
-        time.sleep(0.5)
-        self.stream_bar_controller.refreshStreams((self._SEM_view_and_control["stream"],
-                                                   self._FIB_view_and_control["stream"]))
+        self.stream_bar_controller.refreshStreams((self._SEM_view_and_control["stream"],))
+        evt.theButton.Enabled = True
 
     def _sem_move_beam_shift_rel(self, shift):
         """
@@ -4418,12 +4421,18 @@ class EnzelAlignTab(Tab):
             if "x" in shift:
                 beamShiftVA.value = (beamShiftVA.value[0] + shift["x"], beamShiftVA.value[1])
         except IndexError:
+            show_message(wx.GetApp().main_frame,
+                         "Reached the limits of the beam shift, cannot move any further in x direction.",
+                         timeout=3.0, level=logging.WARNING)
             logging.error("Reached the limits of the beam shift, cannot move any further in x direction.")
 
         try:
             if "y" in shift:
                 beamShiftVA.value = (beamShiftVA.value[0], beamShiftVA.value[1] + shift["y"])
         except IndexError:
+            show_message(wx.GetApp().main_frame,
+                         "Reached the limits of the beam shift, cannot move any further in y direction.",
+                         timeout=3.0, level=logging.WARNING)
             logging.error("Reached the limits of the beam shift, cannot move any further in y direction.")
 
     def _set_flm_alignment_mode(self):
@@ -4437,8 +4446,7 @@ class EnzelAlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_flm_alignment.html")
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
-        # TODO K.K. set correct step size range
-        self.panel.controls_step_size_slider.SetRange(1e-6, 1e-4)
+        self.panel.controls_step_size_slider.SetRange(100e-9, 1e-4)
         self.panel.controls_step_size_slider.set_position_value(1e-5)
 
         self.panel.pnl_z_align.Show(False)
@@ -4458,15 +4466,19 @@ class EnzelAlignTab(Tab):
         if hasattr(self, "_flm_move_future") and self._flm_move_future._state == RUNNING:
             logging.debug("The stage is still moving, this movement isn't performed.")
             return
-        # TODO K.K. button disabling doesn't work here - it crashes now because stage movements are to fast.
-        # evt.theButton.Enabled = False
-        #
-        def move_done(future):
-            # future.button.Enabled = True
-            self._3_DOF.updateMetadata({model.MD_FAV_POS_ACTIVE: self._3_DOF.position.value})
 
-        self._flm_move_future = self._tilted_3_DOF.moveRel(
-                {axis: proportion * self.tab_data_model.step_size.value})
+        if hasattr(self, "_flm_move_future") and not self._flm_move_future.button.Enabled:
+            logging.error("The stream is still updating and hence button activity is suppressed.")
+            return
+
+        evt.theButton.Enabled = False
+
+        @call_in_wx_main
+        def move_done(future):
+            self._3_DOF.updateMetadata({model.MD_FAV_POS_ACTIVE: self._3_DOF.position.value})
+            future.button.Enabled = True
+
+        self._flm_move_future = self._tilted_3_DOF.moveRel({axis: proportion * self.tab_data_model.step_size.value})
         self._flm_move_future.button = evt.theButton
         self._flm_move_future.add_done_callback(move_done)
 
@@ -4478,7 +4490,6 @@ class EnzelAlignTab(Tab):
         :param top (dict): The top stream and corresponding viewport accessible via the keys 'stream'/'viewport'
         :param bottom(dict): The bottom stream and corresponding viewport accessible via the keys 'stream'/'viewport'
         """
-        # TODO K.K. check/discuss if parts/entire function should be moved to the stream scheduler.
         if top is bottom:
             raise ValueError("The bottom stream is equal to the top stream, this isn't allowed in a 2*1 mode.")
 
@@ -4504,7 +4515,7 @@ class EnzelAlignTab(Tab):
 
         self.panel.pnl_two_streams_grid._layout_viewports()
 
-        # TODO K.K. Why save/update self._stream_controllers if it seems to remain unused?
+        # Keep a reference to the stream controllers so the garbage collector does not delete them.
         self._stream_controllers = []
         # Replace the settings of the top stream controller with the new StreamController
         for stream_settings in self.panel.top_settings.stream_panels:

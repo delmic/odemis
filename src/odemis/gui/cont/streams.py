@@ -3073,10 +3073,12 @@ class EnzelAlignmentStreamsBarController:
                 logging.info("Stopping stream %s", stream)
                 stream.should_update.subscribe(cb)
 
-        # TODO K.K. see if such an implementation works.
-        if activated_stream is acqstream.FIBStream:
+        if isinstance(activated_stream, acqstream.FIBStream):
             self._refreshStream((activated_stream))
             logging.info("Preventing wear on the sample by stopping the FIB stream directly after starting it.")
+            # Wait so also for extremly short dwell times allow the user to see that the play button was activated.
+            time.sleep(0.5)
+            activated_stream.should_update.value = False
             return
 
         for stream, cb in self._scheduler_subscriptions.items():
@@ -3116,9 +3118,9 @@ class EnzelAlignmentStreamsBarController:
         :return:
         """
         stream.is_active.value = True
-        # TODO K.K. Implement better refreshing per stream the waiting time to get just one frame instead of a sleep.
-        # TODO K.K. check if we can call get from the fron-end att all
         self._getNewFrame(stream, timeout=20)
+        time.sleep(0.5)  # TODO K.K. Test on Hw if this sleep can be removed.
+        self._getNewFrame(stream, timeout=20)  # Get two new frames to ensure the image is properly updated
         stream.is_active.value = False
 
     def _getNewFrame(self, stream, timeout=None):

@@ -1476,7 +1476,8 @@ class FibScanner(model.Emitter):
         Make sure the scan mode is in "full_frame" and not in "external"
         """
         if self.parent.get_scan_mode() != "full_frame":
-            # TODO K.K. remove extra checks if properly tested switching scan modes.
+            # TODO K.K. Test on Hw and remove extra checking of switching the mode multiple times if properly tested
+            #  switching scan modes.
             for attempt_nmbr in range(1, 4):
                 try:
                     self.parent.set_scan_mode("full_frame")

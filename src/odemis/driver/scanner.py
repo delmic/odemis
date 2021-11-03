@@ -90,7 +90,7 @@ class CompositedScanner(model.Emitter):
         # VAs that could be both on internal or external. If on both, pick internal
         # TODO: add a better way to select if both provide: either via arg, or
         # select the one which provides a None (=auto), or which is not read-only?
-        for vaname in ("power", "blanker", "external", "rotation"):
+        for vaname in ("power", "external", "rotation"):
             if model.hasVA(self._internal, vaname):
                 va = getattr(self._internal, vaname)
                 setattr(self, vaname, va)
@@ -98,8 +98,21 @@ class CompositedScanner(model.Emitter):
                 va = getattr(self._external, vaname)
                 setattr(self, vaname, va)
 
+
+
+        self.blanker = model.VAEnumerated(
+            None,
+            setter=self._setBlanker,
+            choices={True: 'blanked', False: 'unblanked', None: 'auto'})
+
         # TODO: if blanker has True/False (only), add a None (=auto), which
         # automatically put the underlying value based on the detector acquisition.
+
+    def _setBlanker(self, blank):
+        if not model.hasVA(self._internal, "blanker"):
+            raise ValueError("Missing VA blanker on scanner")
+
+        self._internal.blanker.value = blank
 
     def _updateMagnification(self, hfw):
         new_mag = self._external.HFWNoMag / hfw
@@ -117,27 +130,15 @@ class CompositedScanner(model.Emitter):
     def getMetadata(self):
         return self._external.getMetadata()
 
-    # TODO K.K. improve naming
-    def blankBeamDirectly(self):
-        '''
-        Used to blank the beam on the XT client SEM directly when the blanker mode is set to automatic (blanker.value =
-        None)
-        '''
-        if hasattr(self, "blanker"):
-            # TODO K.K. check if blanker needs to be included in the tabs.py or we need to change something here.
-            if self.blanker.value is None:
-                self._internal.parent.blank_beam()
+    def claimBeam(self, claim):
+        """
+        Used to claim the beam by blanking the beam on the scanner of the XT client when the blanker
+        mode is set to automatic (blanker.value = None)
+        :param claim (boolean): True for unblanking and False for blanking
+        """
+        if self.blanker.value is None:
+            self._setBlanker(not claim)  # Set the blanker using the setter of the VA
 
-    # TODO K.K. improve naming
-    def unblankBeamDirectly(self):
-        '''
-        Used to unblank the beam on the XT client SEM directly when the blanker mode is set to automatic (
-        blanker.value = None)
-        '''
-        if hasattr(self, "blanker"):
-            # TODO K.K. check if blanker needs to be included in the tabs.py or we need to change something here.
-            if self.blanker.value is None:
-                self._internal.parent.unblank_beam()
 
 class CompositedDetector(model.Detector):
     '''
@@ -182,14 +183,6 @@ class CompositedDetector(model.Detector):
             raise ValueError("Dependency internal_scanner doesn't contain the necessary external VA")
         self._comp_scanner = comp_scanner
 
-        # TODO K.K. we can probably not need it. Because we just need to unblank the SEM stopping fib is assumed to
-        #  be done already by scheduler. Change blanker of compisted scanner.
-        # Only if composited scanner VA is None then in stat/stop generate we update the internal scanner external VA
-        # to True/False if not None we don't touch it. The same for the blanker.
-        # if model.hasVA(self._internal, "scanner"):
-        #     va = getattr(self._internal, "scanner")
-        #     self.scanner = va  # VA to set the scanner type (FIB/SEM)
-
         # Special event to request software unblocking on the scan
         self.softwareTrigger = self._external.softwareTrigger
         self._shape = self._external.shape
@@ -223,7 +216,7 @@ class CompositedDataflow(model.DataFlow):
         :return:
         """
         self._composited_scanner.external.value = True
-        self._composited_scanner.unblankBeamDirectly()
+        self._composited_scanner.claimBeam(True)
         self._external_dataflow.subscribe(self.notify)
 
     def stop_generate(self):
@@ -231,7 +224,7 @@ class CompositedDataflow(model.DataFlow):
         Unsubscribes self.notify of the external dataflow and sets the scan mode to "full_frame"
         """
         self._external_dataflow.unsubscribe(self.notify)
-        self._composited_scanner.blankBeamDirectly()
+        self._composited_scanner.claimBeam(False)
         self._composited_scanner.external.value = False
 
     def notify(self, dataflow, data):
