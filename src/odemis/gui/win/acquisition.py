@@ -1067,6 +1067,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         nx = self.tiles_nx.value 
         ny = self.tiles_ny.value 
+        # these formulas for w and h have to match the ones used in the 'stitching' module.
         w = nx * self.fov[0] * (1 - self.overlap)
         h = ny * self.fov[1] * (1 - self.overlap)
         self.update_area_size(w, h)
