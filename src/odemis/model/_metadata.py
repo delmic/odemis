@@ -219,3 +219,9 @@ TINT_RGB_AS_IS = "rgbasis"
 # Rotation for FastEM multi-beam and single-beam scanner
 MD_SINGLE_BEAM_ROTATION = "Single-beam rotation"
 MD_MULTI_BEAM_ROTATION = "Multi-beam rotation"
+
+# Scan amplitude, gain and offset for the FastEM scanner and descanner
+MD_SCAN_OFFSET = "Scan offset"  # tuple in [a.u.]
+MD_SCAN_AMPLITUDE = "Scan amplitude"  # tuple in [a.u.]
+MD_SCAN_GAIN = "Scan gain"  # tuple in [px/a.u.]
+
