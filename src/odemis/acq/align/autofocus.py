@@ -297,7 +297,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
         else:
             logging.debug("No depth of field info found")
             dof = 1e-6  # m, not too bad value
-        logging.debug("Depth of field is %f", dof)
+        logging.debug("Depth of field is %.7g", dof)
         min_step = dof / 2
 
         # adjust to rng_focus if provided
@@ -342,14 +342,14 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             current_pos = focus.position.value['z']
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_current = Measure(image)
-            logging.debug("Focus level at %f is %f", current_pos, fm_current)
+            logging.debug("Focus level at %.7g is %.7g", current_pos, fm_current)
             focus_levels[current_pos] = fm_current
 
             focus.moveAbsSync({"z": good_focus})
             good_focus = focus.position.value["z"]
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
-            logging.debug("Focus level at %f is %f", good_focus, fm_good)
+            logging.debug("Focus level at %.7g is %.7g", good_focus, fm_good)
             focus_levels[good_focus] = fm_good
             last_pos = good_focus
 
@@ -386,7 +386,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             else:
                 image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_center = Measure(image)
-                logging.debug("Focus level (center) at %f is %f", center, fm_center)
+                logging.debug("Focus level (center) at %.7g is %.7g", center, fm_center)
                 focus_levels[center] = fm_center
 
             last_pos = center
@@ -402,7 +402,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 last_pos = right
                 image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_right = Measure(image)
-                logging.debug("Focus level (right) at %f is %f", right, fm_right)
+                logging.debug("Focus level (right) at %.7g is %.7g", right, fm_right)
                 focus_levels[right] = fm_right
 
             # Move to left position
@@ -416,7 +416,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 last_pos = left
                 image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_left = Measure(image)
-                logging.debug("Focus level (left) at %f is %f", left, fm_left)
+                logging.debug("Focus level (left) at %.7g is %.7g", left, fm_left)
                 focus_levels[left] = fm_left
 
             fm_range = (fm_left, fm_center, fm_right)
@@ -527,7 +527,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         else:
             logging.debug("No depth of field info found")
             dof = 1e-6  # m, not too bad value
-        logging.debug("Depth of field is %f", dof)
+        logging.debug("Depth of field is %.7g", dof)
 
         # Pick measurement method based on the heuristics that SEM detectors
         # are typically just a point (ie, shape == data depth).
@@ -576,7 +576,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
             focus_levels.append(new_fm)
-            logging.debug("Focus level at %f is %f", next_pos, new_fm)
+            logging.debug("Focus level at %.7g is %.7g", next_pos, new_fm)
             if new_fm >= best_fm:
                 best_fm = new_fm
                 best_pos = next_pos
@@ -595,7 +595,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
             focus_levels.append(new_fm)
-            logging.debug("Focus level at %f is %f", next_pos, new_fm)
+            logging.debug("Focus level at %.7g is %.7g", next_pos, new_fm)
             if new_fm >= best_fm:
                 best_fm = new_fm
                 best_pos = next_pos
@@ -607,7 +607,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
-        logging.debug("No significant focus level was found so far, thus we just move to the best position found %f", best_pos)
+        logging.debug("No significant focus level was found so far, thus we just move to the best position found %.7g", best_pos)
         focus.moveAbsSync({"z": best_pos})
         return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
 
