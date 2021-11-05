@@ -41,17 +41,49 @@ def setlimits():
     resource.setrlimit(resource.RLIMIT_NOFILE, (3092, 3092))
 
 
+# TODO remove cryo-secom once the chamber tab PR of METEOR is merged.
+CRYOSECOM, ENZEL, METEOR, DELPHI = "cryo-secom", "enzel", "meteor", "delphi"
+SECOM, SPARC, FASTEM = "secom", "sparc", "mbsem"
+
+
 def start_backend(config):
     """
-    Start the backend
+    config (str): path to the microscope config file.
+    Start the backend by checking the currently running backend. Basically 2 cases/scenarios:
+        1. If no running backend => run the requested one.
+        2. If there is running backend =>
+            a. If the running backend is same as requested one => do nothing
+            b. If the running backend is different from the requested one => stop the running, and run the requested one.
+    """
+    # a backend running
+    if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
+        role = model.getMicroscope().role 
+        # TODO remove the statement of cryosecom once the chamber tab PR of METEOR is merged.
+        if (config.find(ENZEL) != -1 and role == ENZEL) or \
+            (config.find(METEOR) != -1 and role == METEOR) or \
+            (config.find(DELPHI) != -1 and role == DELPHI) or \
+            (config.find(SECOM) != -1 and role == SECOM) or \
+            (config.find(SPARC) != -1 and role == SPARC) or \
+            (config.find(FASTEM) != -1 and role == FASTEM) or \
+            (config.find(ENZEL) != -1 and role == CRYOSECOM):
+                return
+        else:
+            stop_backend()
+            run_backend(config)
+
+    # no backend running
+    else:
+        run_backend(config)
+
+
+def run_backend(config):
+    """
+    Run the backend based on the passed config yaml file.
     config (str): path to the microscope config file
     raises:
         LookupError: if a backend is already running
         IOError: if backend failed to start
     """
-    if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
-        raise LookupError("A running backend is already found")
-
     logging.info("Starting backend with config file '%s'", config)
 
     # run the backend as a daemon
