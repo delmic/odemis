@@ -35,6 +35,10 @@ class FluoTestCase(unittest.TestCase):
             out = fluo.get_center(inp)
             self.assertEqual(exp, out, "Failed while running with %s and got %s" % (inp, out))
 
+        # Special case for "pass-through": any number > 0 is fine
+        out = fluo.get_center("pass-through")
+        self.assertGreaterEqual(out, 0)
+
     def test_one_band_em(self):
         em_band = (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)
         em_bands = ((650e-9, 660e-9, 675e-9, 678e-9, 680e-9),
@@ -50,6 +54,10 @@ class FluoTestCase(unittest.TestCase):
                   ((em_bands, ((490e-9, 510e-9), (550e-9, 570e-9))), em_bands[0]),
                   # It should also work with lists (although not very officially supported
                   (([[400e-9, 500e-9], [500e-9, 600e-9]], [490e-9, 510e-9]), (500e-9, 600e-9)),  # smallest above 500nm
+                  # Try with a pass-through
+                  ((em_band, "pass-through"), em_band),
+                  ((em_bands, "pass-through"), em_bands[-1]),  # biggest
+                  (("pass-through", (490e-9, 510e-9)), "pass-through"),
                   ]
         for args, exp in in_exp:
             out = fluo.get_one_band_em(*args)
@@ -66,6 +74,10 @@ class FluoTestCase(unittest.TestCase):
                   ((em_bands, (690e-9, 697e-9, 700e-9, 703e-9, 710e-9)), fluo.get_center(em_bands[1])), # smallest above 700nm
                   ((em_bands, (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), fluo.get_center(em_bands[2])), # smallest above 800nm
                   ((em_bands[0:2], (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), fluo.get_center(em_bands[1])), # biggest
+                  # Try with a pass-through
+                  ((em_band, "pass-through"), 500e-9),
+                  ((em_bands, "pass-through"), 1100e-9),  # biggest
+                  # (("pass-through", (490e-9, 510e-9)), "pass-through"),
                   ]
         for args, exp in in_exp:
             out = fluo.get_one_center_em(*args)
@@ -81,6 +93,10 @@ class FluoTestCase(unittest.TestCase):
                   ((ex_bands, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)), ex_bands[0]),  # nothing fitting, but should pick the smallest
                   ((ex_bands, (690e-9, 697e-9, 700e-9, 703e-9, 710e-9)), ex_bands[0]),  # biggest below 700nm
                   ((ex_bands, (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), ex_bands[1]),  # biggest below 800nm
+                  # Try with a pass-through
+                  ((ex_band, "pass-through"), ex_band),
+                  ((ex_bands, "pass-through"), ex_bands[0]),  # smallest
+                  (("pass-through", (490e-9, 510e-9)), "pass-through"),
                   ]
         for args, exp in in_exp:
             out = fluo.get_one_band_ex(*args)
@@ -109,6 +125,7 @@ class FluoTestCase(unittest.TestCase):
                   ((489e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)), fluo.FIT_BAD), # almost good
                   ((515e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)), fluo.FIT_BAD), # almost good
                   ((900e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)), fluo.FIT_IMPOSSIBLE), # really bad
+                  ((500e-9, "pass-through"), fluo.FIT_IMPOSSIBLE),  # really bad
                   ]
         for args, exp in in_exp:
             out = fluo.estimate_fit_to_dye(*args)
@@ -125,6 +142,7 @@ class FluoTestCase(unittest.TestCase):
                (489e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)),
                (515e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)),
                (900e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)),
+               (500e-9, "pass-through")
                ]
         for args in ins:
             est = fluo.estimate_fit_to_dye(*args)

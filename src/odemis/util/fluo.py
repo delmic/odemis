@@ -30,6 +30,9 @@ FIT_GOOD = 2 # Should be fine
 FIT_BAD = 1 # Might work, but not at its best
 FIT_IMPOSSIBLE = 0 # Unlikely to work
 
+# Special filter name when there is no filter
+PASS_THROUGH = "pass-through"
+
 
 def get_center(band):
     """
@@ -38,6 +41,9 @@ def get_center(band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return ((tuple of) float): wavelength in m or list of wavelength for each band
     """
+    if band == PASS_THROUGH:
+        return 5000e-9  # Something large, so that if it's sorted, it's after every other band
+
     if isinstance(band, basestring):
         raise TypeError("Band must be a list or a tuple")
 
@@ -59,11 +65,16 @@ def get_one_band_em(bands, ex_band):
     ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
     return (tuple of 2 or 5 floats): emission band
     """
+    if bands == PASS_THROUGH:
+        return bands
+
     if not isinstance(next(iter(bands)), collections.Iterable):
         return bands
 
     # Need to guess: the closest above the excitation wavelength
-    if isinstance(next(iter(ex_band)), collections.Iterable):
+    if ex_band == PASS_THROUGH:
+        ex_center = 1e9  # Nothing will match
+    elif isinstance(next(iter(ex_band)), collections.Iterable):
         # It's getting tricky, but at least above the smallest one
         ex_center = min(get_center(ex_band))
     else:
@@ -102,12 +113,17 @@ def get_one_band_ex(bands, em_band):
     em_band ((list of) tuple of 2 or 5 floats): emission band(s)
     return (float): wavelength in m
     """
+    if bands == PASS_THROUGH:
+        return bands
+
     # FIXME: make it compatible with sets instead of list
     if not isinstance(next(iter(bands)), collections.Iterable):
         return bands
 
     # Need to guess: the closest below the emission wavelength
-    if isinstance(next(iter(em_band)), collections.Iterable):
+    if em_band == PASS_THROUGH:
+        em_center = 0  # Nothing will match
+    elif isinstance(next(iter(em_band)), collections.Iterable):
         # It's getting tricky, but at least below the biggest one
         em_center = max(get_center(em_band))
     else:
@@ -146,8 +162,7 @@ def get_one_center(band):
 
     :return: (float) wavelength in m
     """
-
-    if isinstance(band[0], collections.Iterable):
+    if isinstance(band[0], collections.Iterable) and band != PASS_THROUGH:
         return get_center(band[0])
     else:
         return get_center(band)
@@ -162,6 +177,8 @@ def estimate_fit_to_dye(wl, band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (FIT_*): how well it fits (the higher the better)
     """
+    if band == PASS_THROUGH:
+        return FIT_IMPOSSIBLE
     # TODO: support multiple-peak/band/curve for the dye
 
     # if multi-band: get the best of all
@@ -185,6 +202,9 @@ def quantify_fit_to_dye(wl, band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (0<float): the more, the merrier
     """
+    if band == PASS_THROUGH:
+        return 0  # Pass-through is never good for fluorescence microscopy
+
     # if multi-band: get the best of all
     if isinstance(band[0], collections.Iterable):
         return max(quantify_fit_to_dye(wl, b) for b in band)
