@@ -42,7 +42,7 @@ import matplotlib
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
-from odemis.util.transform import AffineTransform
+from odemis.util.transform import AffineTransform, alt_transformation_matrix_from_implicit
 
 UNDEFINED_ROI = (0, 0, 0, 0)
 
@@ -1252,13 +1252,11 @@ class Stream(object):
         shear = md.get(model.MD_SHEAR, 0)
         translation = md.get(model.MD_POS, (0, 0))
         size = raw.shape[-1], raw.shape[-2]
-        # The "squeeze" and "shear" arguments are not passed in the "AffineTransform" because MD_SHEAR defines a
-        # vertical shear, whereas AffineTransform applies a shear in both direction. Similarly MD_PIXEL_SIZE defines
-        # a scale in two directions, whereas this is separated in a isotropic scale and anisotropic squeeze for
-        # AffineTransform. Both squeeze and shear are applied afterwards by updating the transformation matrix.
-        tform = AffineTransform(rotation=rotation, translation=translation)
-        SL = pxs * numpy.array([(1, 0), (-shear, 1)])
-        tform.matrix = numpy.dot(tform.matrix, SL)
+        # The `pxs`, `rotation` and `shear` arguments are not directly passed
+        # in the `AffineTransform` because the formula of the `AffineTransform`
+        # uses a different definition of shear.
+        matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
+        tform = AffineTransform(matrix, translation)
         pixel_pos_c = tform.inverse().apply(p_pos)
         # a "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
         pixel_pos = int(pixel_pos_c[0] + size[0] / 2), - int(pixel_pos_c[1] - size[1] / 2)

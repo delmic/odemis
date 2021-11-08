@@ -32,9 +32,8 @@ from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
-from odemis.util.linalg import qrp
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
-from odemis.util.transform import AffineTransform, SimilarityTransform, _rotation_matrix_to_angle
+from odemis.util.transform import AffineTransform, SimilarityTransform, alt_transformation_matrix_to_implicit
 import os
 from scipy.spatial import cKDTree as KDTree
 import threading
@@ -412,14 +411,10 @@ def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
     # Find the transformation from a grid centered around the origin to the sorted positions.
     if method == GRID_AFFINE:
         transformation = AffineTransform.from_pointset(grid, pos_sorted)
-        R, S = qrp(transformation.matrix)
-        scale = numpy.tuple(numpy.diag(S))
-        rotation = _rotation_matrix_to_angle(R)
-        shear = S[0, 1] / S[0, 0]
+        scale, rotation, shear = alt_transformation_matrix_to_implicit(AffineTransform.matrix, "RSU")
     elif method == GRID_SIMILARITY:
         transformation = SimilarityTransform.from_pointset(grid, pos_sorted)
-        scale = transformation.scale
-        rotation = transformation.rotation
+        scale, rotation, _ = alt_transformation_matrix_to_implicit(AffineTransform.matrix, "RSU")
         shear = None  # The similarity transform does not have a shear component.
     else:
         raise ValueError("Method: %s is unknown, should be 'affine' or 'similarity'." % method)
