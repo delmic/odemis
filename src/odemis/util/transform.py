@@ -62,6 +62,8 @@ from abc import ABCMeta, abstractmethod
 from numpy.linalg import LinAlgError
 from typing import List, Optional, Tuple, Type, Union
 
+from odemis.util.linalg import qrp, qlp
+
 
 __all__ = [
     "to_physical_space",
@@ -441,6 +443,92 @@ def _transformation_matrix_to_implicit(
     return scale, rotation, squeeze, shear
 
 
+def alt_transformation_matrix_from_implicit(
+    scale: Union[numpy.ndarray, List[float], Tuple[float, float]],
+    rotation: float,
+    shear: float,
+    form: str,
+) -> numpy.ndarray:
+    """
+    Return a transformation matrix given an alternative description of the
+    implicit parameters. This implementation is provided for backwards
+    compatibility. Do not use for new design.
+
+    Returns a matrix of the form `RSL` or `RSU`, where `R` is an orthogonal
+    matrix and `S` is a diagonal matrix whose elements represent scale factors
+    along the coordinate axis. Shear is provided by the matrix `L` or `U`,
+    where `L` is a lower and `U` is an upper unitriangular matrix.
+
+    Parameters
+    ----------
+    scale : (sx, sy) as array, list, or tuple
+        x, y scale factors.
+    rotation : float
+        Rotation angle in counter-clockwise direction as radians.
+    shear : float
+        Shear factor.
+    form : {"RSU", "RSL"}
+        Whether the matrix is of the form `RSU` or `RSL`.
+
+    Returns
+    -------
+    matrix : ndarray
+        The transformation matrix.
+
+    """
+    R = _rotation_matrix_from_angle(rotation)
+    S = scale * numpy.eye(2)
+    if form == "RSU":
+        U = numpy.array([(1, shear), (0, 1)])
+        matrix = R @ S @ U
+    elif form == "RSL":
+        L = numpy.array([(1, 0), (shear, 1)])
+        matrix = R @ S @ L
+    else:
+        raise ValueError("`form` must be either 'RSU' or 'RSL'")
+    return matrix
+
+
+def alt_transformation_matrix_to_implicit(
+    matrix: numpy.ndarray, form: str,
+) -> Tuple[numpy.ndarray, float, float]:
+    """
+    Return an alternative description of the implicit parameters given a
+    transformation matrix. This implementation is provided for backwards
+    compatibility. Do not use for new design.
+
+    Parameters
+    ----------
+    matrix : ndarray
+        The transformation matrix.
+    form : {"RSU", "RSL"}
+        Whether the matrix is of the form `RSU` or `RSL`.
+
+    Returns
+    -------
+    scale : (sx, sy) as ndarray
+        x, y scale factors.
+    rotation : float
+        Roation angle in counter-clockwise direction as radians.
+    shear : float
+        Shear factor.
+
+    """
+    if form == "RSU":
+        R, SU = qrp(matrix)
+        scale = numpy.diag(SU)
+        rotation = _rotation_matrix_to_angle(R)
+        shear = SU[0, 1] / SU[0, 0]
+    elif form == "RSL":
+        R, SL = qlp(matrix)
+        scale = numpy.diag(SL)
+        rotation = _rotation_matrix_to_angle(R)
+        shear = SL[1, 0] / SL[1, 1]
+    else:
+        raise ValueError("`form` must be either 'RSU' or 'RSL'")
+    return scale, rotation, shear
+
+
 def _optimal_rotation(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
     """
     Returns the optimal rigid transformation matrix between two zero mean point
@@ -479,11 +567,35 @@ def _optimal_rotation(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
 
 
 class ImplicitParameter:
-    """Descriptor for implicit parameters"""
+    """
+    Descriptor for implicit parameters. Customizes lookup and storage of a
+    float-type attribute. Implements default value, positivity constraint, and
+    immutable (fixed) value. Must be instantiated as a class variable in
+    another class. For more info on the use of descriptors see [1]_.
+
+    References
+    ----------
+    .. [1] Hettinger, R. Descriptor HowTo Guide,
+           https://docs.python.org/3/howto/descriptor.html
+
+    """
 
     def __init__(
         self, default: float, constrained: bool = False, positive: bool = False
     ) -> None:
+        """
+        Initialize an implicit parameter.
+
+        Parameters
+        ----------
+        default : float
+            The default value provided on attribute lookup if not initialized.
+        constrained : bool
+            If True, the attribute can only be set to the default value.
+        positive : bool
+            If True, the attribute can only be set to a positive value.
+
+        """
         self.default = default
         self.constrained = constrained
         self.positive = positive
@@ -611,7 +723,7 @@ class GeometricTransform(metaclass=ABCMeta):
             Rotation matrix.
 
         """
-        ...
+        pass
 
     @classmethod
     def from_pointset(cls, x: numpy.ndarray, y: numpy.ndarray) -> GeometricTransform:
@@ -664,19 +776,13 @@ class GeometricTransform(metaclass=ABCMeta):
         x = numpy.asarray(x)
         return numpy.einsum("ik,...k->...i", self.matrix, x) + self.translation  # type: ignore
 
-    def _inverse_type_hook(self) -> Type[GeometricTransform]:
-        """
-        Returns the type of the inverse of the transform.
-
-        By default the type of the inverse of a GeometricTransform is the same
-        as the GeometricTransform itself. May be overridden by a subclass.
-
-        """
-        return type(self)
-
     def inverse(self) -> GeometricTransform:
         """
         Return the inverse transformation.
+
+        By default the type of the inverse of a GeometricTransform is the same
+        as the GeometricTransform itself. May be overridden by a subclass by
+        setting `self._inverse_type` to the inverse class.
 
         Returns
         -------
@@ -686,7 +792,7 @@ class GeometricTransform(metaclass=ABCMeta):
         """
         matrix = numpy.linalg.inv(self.matrix)
         translation = -numpy.matmul(matrix, self.translation)
-        cls = self._inverse_type_hook()
+        cls = getattr(self, "_inverse_type", type(self))
         return cls(matrix, translation)
 
     def fre(self, x: numpy.ndarray, y: numpy.ndarray) -> float:
@@ -732,12 +838,12 @@ class AffineTransform(GeometricTransform):
 
     The affine transform has the following form:
 
-        x' = RLDL^Tx + t
+        x' = RLDL⸆x + t
 
     where `R` is an orthogonal matrix, `L` is a lower triangular matrix with
     all diagonal elements equal to one and a single off-diagonal non-zero
     element, `D` is a diagonal matrix with diagonal entries `k` and `1/k` where
-    `k` is the squeeze factor, and `L^T` is the matrix transpose of `L`. To
+    `k` is the squeeze factor, and `L⸆` is the matrix transpose of `L`. To
     eliminate improper rotations (reflections) it is required that the
     determinant of `R` equals 1.
 
@@ -848,6 +954,7 @@ class ScalingTransform(AffineTransform):
 
     """
 
+    _inverse_type = AffineTransform
     shear = ImplicitParameter(0, constrained=True)
 
     def __init__(
@@ -890,14 +997,6 @@ class ScalingTransform(AffineTransform):
         R = _rotation_matrix_from_angle(phi)
         scales = numpy.einsum("ij,ji->j", R, alpha) / beta
         return scales * R  # type: ignore
-
-    def _inverse_type_hook(self) -> Type[GeometricTransform]:
-        """
-        The inverse transformation of a scaling transform is an affine
-        transformation.
-
-        """
-        return AffineTransform
 
 
 class SimilarityTransform(ScalingTransform):
