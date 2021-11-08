@@ -30,12 +30,11 @@ from odemis.acq import acqmng
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
 from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stitching._simple import register, weave
-from odemis.acq.stream import Stream, SEMStream, CameraStream, RepetitionStream, EMStream, ARStream, \
+from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img
-from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.util.img import assembleZCube
 import os
 import psutil
@@ -189,8 +188,19 @@ class TiledAcquisitionTask(object):
         # The size of the smallest tile, non-including the overlap, which will be
         # lost (and also indirectly represents the precision of the stage)
         reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
-        nx = math.ceil(abs(self._area_size[0] / reliable_fov[0]))
-        ny = math.ceil(abs(self._area_size[1] / reliable_fov[1]))
+
+        logging.debug("Would need tiles: nx= %s, ny= %s",
+                      abs(self._area_size[0] / reliable_fov[0]),
+                      abs(self._area_size[1] / reliable_fov[1])
+                      )
+        # Round up the number of tiles needed. With a twist: if we'd need less
+        # than 1% of a tile extra, round down. This handles floating point
+        # errors and other manual rounding when when the requested area size is
+        # exactly a multiple of the FoV.
+        area_size = [(s - f * 0.01) if s > f else s
+                     for s, f in zip(self._area_size, reliable_fov)]
+        nx = math.ceil(area_size[0] / reliable_fov[0])
+        ny = math.ceil(area_size[1] / reliable_fov[1])
         logging.debug("Calculated number of tiles nx= %s, ny= %s" % (nx, ny))
 
         # We have a little bit more tiles than needed, we then have two choices
