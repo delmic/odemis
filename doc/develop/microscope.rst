@@ -112,10 +112,9 @@ Actuators:
     2. FAV_POS_ACTIVE: Imaging position.
     3. FAV_POS_COATING: Coating position of the gas injection system (GIS). 
     4. POS_ACTIVE_RANGE: The allowed position range during the FM/SEM imaging.  
-    5. OVERVIEW_RANGE: The position range for the overview acquisition. 
-    6. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0.
-    7. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
-    8. FAV_POS_ALIGN: The initial position to start the alignment from.
+    5. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0.
+    6. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
+    7. FAV_POS_ALIGN: The initial position to start the alignment from.
    
  * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has one metadata:
   

@@ -184,7 +184,6 @@ MD_FAV_POS_COATING = "Favourite position coating"  # dict of str -> float repres
 MD_FAV_POS_ALIGN = "Favourite position alignment"  # dict of str -> float representing a good position to start 3 beam alignment procedure
 MD_FAV_POS_SEM_IMAGING = "Favourite position SEM imaging "  # dict of str -> float representing a good position for SEM imaging
 MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used during imaging
-MD_OVERVIEW_RANGE = "Range for overview map"  # dict str → (float, float): axis name → (min,max): the range of the axes within which overview map is acquired
 MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
 MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
 MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
