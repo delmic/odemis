@@ -18,11 +18,10 @@ You should have received a copy of the GNU General Public License along with Ode
 # various functions to help with computations related to fluorescence microscopy
 
 from __future__ import division
-from past.builtins import basestring # For Python 2 & 3
 
 import collections
-import logging
-
+from odemis.model import BAND_PASS_THROUGH
+from past.builtins import basestring  # For Python 2 & 3
 
 # constants to indicate how well a emission/excitation setting fits a dye
 # emission/excitation (peak)
@@ -30,18 +29,15 @@ FIT_GOOD = 2 # Should be fine
 FIT_BAD = 1 # Might work, but not at its best
 FIT_IMPOSSIBLE = 0 # Unlikely to work
 
-# Special filter name when there is no filter
-PASS_THROUGH = "pass-through"
-
 
 def get_center(band):
     """
     Return the center wavelength(es) of a emission/excitation band
-    band ((list of) tuple of 2 or 5 floats): either the min/max
+    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return ((tuple of) float): wavelength in m or list of wavelength for each band
     """
-    if band == PASS_THROUGH:
+    if band == BAND_PASS_THROUGH:
         return 5000e-9  # Something large, so that if it's sorted, it's after every other band
 
     if isinstance(band, basestring):
@@ -61,18 +57,18 @@ def get_one_band_em(bands, ex_band):
     """
     Return the band given or if it's a multi-band, return just the most likely
     one based on the current excitation band
-    bands ((list of) tuple of 2 or 5 floats): emission band(s)
-    ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
-    return (tuple of 2 or 5 floats): emission band
+    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
+    ex_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
+    return (tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band
     """
-    if bands == PASS_THROUGH:
+    if bands == BAND_PASS_THROUGH:
         return bands
 
     if not isinstance(next(iter(bands)), collections.Iterable):
         return bands
 
     # Need to guess: the closest above the excitation wavelength
-    if ex_band == PASS_THROUGH:
+    if ex_band == BAND_PASS_THROUGH:
         ex_center = 1e9  # Nothing will match
     elif isinstance(next(iter(ex_band)), collections.Iterable):
         # It's getting tricky, but at least above the smallest one
@@ -97,8 +93,8 @@ def get_one_center_em(bands, ex_band):
     """
     Return the center of an emission band, and if it's a multi-band, return just
     one of the centers based on the current excitation band
-    bands ((list of) tuple of 2 or 5 floats): emission band(s)
-    ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
+    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
+    ex_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
     return (float): wavelength in m
     """
     return get_center(get_one_band_em(bands, ex_band))
@@ -109,11 +105,11 @@ def get_one_band_ex(bands, em_band):
     Return the excitation band, and if it's a multi-band, return the band
       fitting best the current emission band: the first excitation wavelength
       below the emission.
-    bands ((list of) tuple of 2 or 5 floats): excitation band(s)
-    em_band ((list of) tuple of 2 or 5 floats): emission band(s)
+    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
+    em_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
     return (float): wavelength in m
     """
-    if bands == PASS_THROUGH:
+    if bands == BAND_PASS_THROUGH:
         return bands
 
     # FIXME: make it compatible with sets instead of list
@@ -121,7 +117,7 @@ def get_one_band_ex(bands, em_band):
         return bands
 
     # Need to guess: the closest below the emission wavelength
-    if em_band == PASS_THROUGH:
+    if em_band == BAND_PASS_THROUGH:
         em_center = 0  # Nothing will match
     elif isinstance(next(iter(em_band)), collections.Iterable):
         # It's getting tricky, but at least below the biggest one
@@ -147,8 +143,8 @@ def get_one_center_ex(bands, em_band):
     """
     Return the center of an excitation band, and if it's a multi-band, return
     just one of the centers based on the current emission band
-    bands ((list of) tuple of 2 or 5 floats): excitation band(s)
-    em_band ((list of) tuple of 2 or 5 floats): emission band(s)
+    bands ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
+    em_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
     return (float): wavelength in m
     """
     return get_center(get_one_band_ex(bands, em_band))
@@ -162,7 +158,7 @@ def get_one_center(band):
 
     :return: (float) wavelength in m
     """
-    if isinstance(band[0], collections.Iterable) and band != PASS_THROUGH:
+    if isinstance(band[0], collections.Iterable) and band != BAND_PASS_THROUGH:
         return get_center(band[0])
     else:
         return get_center(band)
@@ -173,11 +169,11 @@ def estimate_fit_to_dye(wl, band):
     Estimate how well the light settings of the hardware fit for a given dye
     emission or excitation wavelength.
     wl (float): the wavelength of peak of the dye
-    band ((list of) tuple of 2 or 5 floats): either the min/max
+    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (FIT_*): how well it fits (the higher the better)
     """
-    if band == PASS_THROUGH:
+    if band == BAND_PASS_THROUGH:
         return FIT_IMPOSSIBLE
     # TODO: support multiple-peak/band/curve for the dye
 
@@ -198,11 +194,11 @@ def quantify_fit_to_dye(wl, band):
     Quantifies how well the given wavelength matches the given
       band: the better the match, the higher the return value will be.
     wl (float): the wavelength of peak of the dye
-    band ((list of) tuple of 2 or 5 floats): either the min/max
+    band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (0<float): the more, the merrier
     """
-    if band == PASS_THROUGH:
+    if band == BAND_PASS_THROUGH:
         return 0  # Pass-through is never good for fluorescence microscopy
 
     # if multi-band: get the best of all
@@ -230,7 +226,7 @@ def find_best_band_for_dye(wl, bands):
     """
     Pick the best band for the given dye emission or excitation.
     wl (float): the wavelength of peak of the dye
-    bands (set of (list of) tuple of 2 or 5 floats): set of either the min/max
+    bands ({(list of) tuple of 2 or 5 floats or BAND_PASS_THROUGH}): set of either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return ((list of) tuple of 2 or 5 floats): the best fitting bands
     """

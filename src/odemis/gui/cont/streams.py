@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import re
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict
@@ -33,8 +32,6 @@ import gc
 import locale
 import logging
 import numpy
-
-import odemis.acq.fastem
 from odemis import model, util
 from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
@@ -53,10 +50,12 @@ from odemis.util.conversion import wave2rgb
 from odemis.util.filename import make_unique_name
 from odemis.util.fluo import to_readable_band, get_one_center
 from odemis.util.units import readable_str
+import re
 import time
 import wx
 from wx.lib.pubsub import pub
 
+import odemis.acq.fastem
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 
@@ -2740,7 +2739,7 @@ class SparcStreamsController(StreamBarController):
             choices = stream.axisFilter.choices
             if isinstance(choices, dict):
                 for pos, desc in choices.items():
-                    if desc == "pass-through":  # that's an official constant
+                    if desc == model.BAND_PASS_THROUGH:
                         stream.axisFilter.value = pos
                         logging.debug("Picking pass-through filter (%d) for spectrum stream", pos)
                         break
