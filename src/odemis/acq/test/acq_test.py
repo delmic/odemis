@@ -37,8 +37,6 @@ from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
 import odemis.acq.stream as stream
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
-from odemis.util.driver import BACKEND_RUNNING, BACKEND_STARTING
-from odemis.util import driver 
 from odemis.driver.tmcm import TMCLController
 from odemis.util.comp import generate_zlevels
 
@@ -48,7 +46,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
-
+@unittest.skip("")
 class Fake0DDetector(model.Detector):
     """
     Imitates a probe current detector, but you need to send the data yourself (using
@@ -58,7 +56,7 @@ class Fake0DDetector(model.Detector):
         model.Detector.__init__(self, name, "fakedet", parent=None)
         self.data = Fake0DDataFlow()
         self._shape = (float("inf"),)
-
+@unittest.skip("")
 class Fake0DDataFlow(model.DataFlow):
     """
     Mock object just sufficient for the ProbeCurrentAcquirer
@@ -66,13 +64,13 @@ class Fake0DDataFlow(model.DataFlow):
     def get(self):
         da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
         return da
-
+@unittest.skip("")
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
 
     # TODO
     pass
-
+@unittest.skip("")
 class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
@@ -216,7 +214,7 @@ class SECOMTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
-
+@unittest.skip("")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -495,10 +493,11 @@ class CRYOSECOMTestCase(unittest.TestCase):
         try:
             test.start_backend(ENZEL_CONFIG)
         except LookupError:
-            logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
-            test.stop_backend()
-            test.start_backend(ENZEL_CONFIG)
-        except Exception:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
             raise
 
         # create some streams connected to the backend
@@ -514,8 +513,9 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if driver.get_backend_status in [BACKEND_STARTING, BACKEND_RUNNING]:
-            test.stop_backend()
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
