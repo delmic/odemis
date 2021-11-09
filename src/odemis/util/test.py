@@ -44,14 +44,15 @@ def setlimits():
 
 def start_backend(config):
     """
-    config (str): path to the microscope config file.
     Start the backend by checking the currently running backend. Basically 2 cases/scenarios:
         1. If no running backend => run the requested one.
         2. If there is running backend =>
             a. If the running backend is same as requested one => do nothing
             b. If the running backend is different from the requested one => stop the running, and run the requested one.
+    
+    config (str): path to the microscope config file.
     """
-    # a backend running
+    # check if a backend is running
     if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
         current_model = model.getMicroscope().model
         req_model = modelgen.Instantiator(open(config)).ast
@@ -61,7 +62,7 @@ def start_backend(config):
             stop_backend()
             run_backend(config)
 
-    # no backend running
+    # check if no backend is running
     else:
         run_backend(config)
 
