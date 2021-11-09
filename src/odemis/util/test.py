@@ -49,16 +49,22 @@ def start_backend(config):
         2. If there is running backend =>
             a. If the running backend is same as requested one => do nothing
             b. If the running backend is different from the requested one => stop the running, and run the requested one.
-    
+    In case the backend fails to start a IOError will be raised.
     config (str): path to the microscope config file.
     """
     # check if a backend is running
     if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
         current_model = model.getMicroscope().model
-        req_model = modelgen.Instantiator(open(config)).ast
+        try:
+            req_model = modelgen.Instantiator(open(config)).ast
+        except Exception as exp:
+            raise ValueError(exp)
         if current_model == req_model:
+            logging.info("Backend for %s already running", config)
             return
         else:
+            logging.info("There is a backend running already, it will be turned off, and the backend \
+                                %s will be run instead.", config)
             stop_backend()
             run_backend(config)
 
@@ -75,6 +81,9 @@ def run_backend(config):
         LookupError: if a backend is already running
         IOError: if backend failed to start
     """
+    if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
+        raise LookupError("A running backend is already found")
+
     logging.info("Starting backend with config file '%s'", config)
 
     # run the backend as a daemon

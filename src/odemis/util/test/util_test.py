@@ -26,7 +26,6 @@ import os
 import odemis
 from odemis import model
 from odemis.util import test, driver
-from Pyro4.errors import CommunicationError
 import logging
 from odemis import util
 from odemis.model import CancellableFuture
@@ -360,7 +359,6 @@ ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
 
 class TestBackendStarter(unittest.TestCase):
-    # TODO do unit tests for all systems/backends available in odemis. (?)
 
     @classmethod
     def setUpClass(cls):
