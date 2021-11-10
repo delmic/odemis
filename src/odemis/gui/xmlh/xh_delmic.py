@@ -619,14 +619,6 @@ class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "LiveViewport")
 HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
 
-class FeatureViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.FeatureViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "FeatureViewport")
-HANDLER_CLASS_LIST.append(FeatureViewportXmlHandler)
-
 class FeatureOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.FeatureOverviewViewport
