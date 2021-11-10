@@ -87,7 +87,6 @@ METEOR-Sim: {
         # as default area for the overview acquisition. The values must be in the
         # stage coordinates, so converted from the SEM stage (in Y).
         POS_ACTIVE_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045],},
-        OVERVIEW_RANGE: {"x":  [51.5e-3, 52.0e-3], "y":  [-3.7e-3, -3.2e-3]}
     },
 }
 
