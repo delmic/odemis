@@ -294,7 +294,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
+                self._crosshair_ol = view_overlay.CenteredLineOverlay(self)
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
@@ -1531,7 +1531,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
+                self._crosshair_ol = view_overlay.CenteredLineOverlay(self)
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)

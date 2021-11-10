@@ -35,6 +35,7 @@ from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
+from odemis.gui.comp.overlay.view import HORIZONTAL_LINE, VERTICAL_LINE, CROSSHAIR
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
@@ -241,9 +242,16 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        hol = vol.CrossHairOverlay(cnvs)
+        hol = vol.CenteredLineOverlay(cnvs, shape=CROSSHAIR)
         cnvs.add_view_overlay(hol)
+        test.gui_loop()
 
+        hol = vol.CenteredLineOverlay(cnvs, shape=HORIZONTAL_LINE)
+        cnvs.add_view_overlay(hol)
+        test.gui_loop()
+
+        hol = vol.CenteredLineOverlay(cnvs, shape=VERTICAL_LINE)
+        cnvs.add_view_overlay(hol)
         test.gui_loop()
 
     def test_current_pos_crosshair_overlay(self):
