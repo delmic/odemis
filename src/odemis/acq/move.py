@@ -294,10 +294,9 @@ def _getDistance(start, end):
 def getRotationMatrix(axis, angle):
     """
     Computes the rotation matrix of the given angle around the given axis. 
-    The axis can be 'rx', 'ry' or 'rz'. The angle must be in radians.
-    axis (str): the axis around which the rotation matrix is to be calculated.
-    angle (float): the angle of rotation.
-    return (numpy.ndarray): the rotation matrix.
+    axis (str): the axis around which the rotation matrix is to be calculated. The axis can be 'rx', 'ry' or 'rz'.
+    angle (float): the angle of rotation. The angle must be in radians.
+    return (numpy.ndarray): the rotation matrix. It is 3x3 matrix of floats.
     """
     if axis == "rx":
         Rx = numpy.array([[1, 0, 0], [0, numpy.cos(angle), -numpy.sin(angle)], [0, numpy.sin(angle), numpy.cos(angle)]])
@@ -308,6 +307,8 @@ def getRotationMatrix(axis, angle):
     elif axis == "rz":
         Rz = numpy.array([[numpy.cos(angle), -numpy.sin(angle), 0], [numpy.sin(angle), numpy.cos(angle), 0], [0, 0, 1]])
         return Rz
+    else:
+        raise ValueError(f"Unknown axis name {axis}")
 
 
 def getMovementProgress(current_pos, start_pos, end_pos):
