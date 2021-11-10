@@ -718,6 +718,32 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.last_extension,
             config.fn_count))
         self.main.project_path.subscribe(self._on_project_path_change)
+        # Add zPos VA to control focus on acquired view
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+        self.streams.subscribe(self._on_stream_change, init=True)
+
+    def _updateZParams(self):
+        # Calculate the new range of z pos
+        limits = []
+
+        for s in self.streams.value:
+            if model.hasVA(s, "zIndex"):
+                metadata = s.getRawMetadata()[0]  # take only the first
+                zcentre = metadata[model.MD_POS][2]
+                zstep = metadata[model.MD_PIXEL_SIZE][2]
+                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
+
+        if len(limits) > 1:
+            self.zPos.range = (min(limits), max(limits))
+            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1],
+                          self.zPos.value)
+        else:
+            self.zPos.range = (0, 0)
+
+    def _on_stream_change(self, _):
+        self._updateZParams()
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()

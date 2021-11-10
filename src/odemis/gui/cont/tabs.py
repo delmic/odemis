@@ -492,6 +492,7 @@ class LocalizationTab(Tab):
             (viewports[1],
              {"name": "Acquired",
               "cls": guimod.FeatureView,
+              "zPos": self.tab_data_model.zPos,
               "stream_classes": StaticStream,
               }),
             (viewports[2],

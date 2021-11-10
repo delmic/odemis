@@ -184,7 +184,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         # refresh the canvas on _on_current_feature_va change & when status is changed
         self.cnvs.update_drawing()
         if self.tab_data.main.currentFeature.value:
-            self.tab_data.main.currentFeature.value.status.subscribe(self._on_status_change, init=True)
+            self.tab_data.main.currentFeature.value.status.subscribe(self._on_status_change)
 
     def _on_status_change(self, _):
         self.cnvs.update_drawing()
