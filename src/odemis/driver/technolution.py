@@ -24,33 +24,33 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # multi-beam project
 from __future__ import division
 
-import math
-import os
-
-import numpy
 import base64
 import json
 import logging
+import math
+import os
 import queue
 import re
 import threading
 import time
-from PIL import Image
 from io import BytesIO
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
+
+import numpy
+from PIL import Image
 from requests import Session
 from scipy import signal
 
 from odemis import model
 from odemis.model import HwError
 from odemis.util import almost_equal
-
+from technolution_asm.models.calibration_loop_parameters import CalibrationLoopParameters
+from technolution_asm.models.cell_parameters import CellParameters
 from technolution_asm.models.field_meta_data import FieldMetaData
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
-from technolution_asm.models.cell_parameters import CellParameters
-from technolution_asm.models.calibration_loop_parameters import CalibrationLoopParameters
 
 VOLT_RANGE = (-10, 10)
+I16_SYM_RANGE = (-2 ** 15, 2 ** 15)  # Note: on HW range is not symmetrically (-2**15, 2**15 - 1)
 DATA_CONTENT_TO_ASM = {"empty": None, "thumbnail": True, "full": False}
 RUNNING = "installation in progress"
 FINISHED = "last installation successful"
@@ -66,39 +66,26 @@ ASM_FILE_CHARS = r'[A-Za-z0-9_()-]+'
 
 def convertRange(value, value_range, output_range):
     """
-    Converts a value from one range to another range. For example: map a value in volts to the respective value in bits.
-    Converts an value with a given range to a provided output range.
-    The min value of the ranges cannot be above zero
-    :param value (tuple/array/list): input values to be converted
-    :param value_range (tuple/array/list): min, max values of the range that is provided for the input value.
-    :param output_range (tuple/array/list): min, max values of the range that is provided for the output value.
-    :return (numpy.array): Input value mapped to new range with same shape as input value
+    Converts a value from one range to another range. Can be used to map value(s) from one unit to another.
+    :param value: (tuple/array/list) Input value(s) of any unit to be mapped to the new range.
+    :param value_range: (tuple/array/list) Min and max values of the range for the input value(s).
+    :param output_range: (tuple/array/list) Min and max values of the range that the input value should be mapped to.
+    :return (numpy.array): Input value(s) mapped to the new range with same shape as input value(s).
     """
-    # Convert from possible tuple/list input to numpy arrays
+    # convert to numpy arrays
     input_range = numpy.array(value_range)
     output_range = numpy.array(output_range)
 
-    # Determine the span of each input range
+    # determine the span of each input range
     span_input_range = value_range[1] - value_range[0]
     span_output_range = output_range[1] - output_range[0]
 
-    # Map to range with span of 1
+    # map to range [0, 1]
     normalized_value = (value - input_range[0]) / span_input_range
-    # Map to output range
+    # map to output range
     mapped_value = normalized_value * span_output_range + output_range[0]
+
     return mapped_value
-
-
-def convert2Bits(value, value_range):
-    """
-    Converts an input value with corresponding range to a float with an int16 bit range.
-    Uses the convertRange function with as default output_range the int16 bit range. Does not round or apply floor.
-    :param value (tuple/array/list): input values to be converted
-    :param value_range (tuple/array/list): min, max values of the range that is provided for the input value.
-    :return(numpy.array of floats): Converted to INT16 range with same shape as the input value. Has type 'float' and
-    is not rounded nor is floor applied.
-    """
-    return convertRange(value, value_range, (-2**15, 2**15 - 1))
 
 
 class AcquisitionServer(model.HwComponent):
@@ -456,32 +443,34 @@ class AcquisitionServer(model.HwComponent):
     def _assembleCalibrationMetadata(self):
         """
         Assemble the calibration data and retrieve the input values from the scanner, descanner and mppc VA's.
-        :return calibration_data: (CalibrationLoopParameters object) Calibration data object which can be sent
-                                  to the ASM API.
+        :return calibration_data: (CalibrationLoopParameters object) Calibration data object which contains all
+                                    the HW settings and scanning profiles for calibration mode.
         """
         descanner = self._mirror_descanner
         scanner = self._ebeam_scanner
 
         total_line_scan_time = self._mppc.getTotalLineScanTime()
 
-        # Get the scanner and descanner setpoints
+        # get the scanner setpoints
         x_descan_setpoints, y_descan_setpoints = self._mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
 
-        x_scan_setpoints, y_scan_setpoints, tick_scan_calibration_dwell_time =\
-                                                self._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
+        # get the descanner setpoints
+        x_scan_setpoints, y_scan_setpoints, scan_calibration_dwell_time_ticks = \
+            self._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
 
         calibration_data = CalibrationLoopParameters(descanner.rotation.value,
                                                      0,  # Descan X offset parameter unused.
                                                      x_descan_setpoints,
                                                      0,  # Descan Y offset parameter unused.
                                                      y_descan_setpoints,
-                                                     tick_scan_calibration_dwell_time,
+                                                     scan_calibration_dwell_time_ticks,
                                                      scanner.rotation.value,
                                                      scanner.getTicksScanDelay()[0],
                                                      0.0,  # Scan X offset parameter unused.
                                                      x_scan_setpoints,
                                                      0.0,  # Scan Y offset parameter unused.
                                                      y_scan_setpoints)
+
         return calibration_data
 
     def _setCalibrationMode(self, mode):
@@ -604,10 +593,15 @@ class EBeamScanner(model.Emitter):
         # direction of the executed scan
         self.rotation = model.FloatContinuous(0.0, range=(0.0, 2 * math.pi), unit='rad')
 
+        # Scanner settings:
+        # In x we typically scan from negative to positive centered around zero and
+        # in y from positive to negative centered around zero.
         # the start of the sawtooth scanning signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)))
-        # the end (amplitude) of the sawtooth scanning signal
-        self.scanGain = model.TupleContinuous((0.3, 0.3), range=((-1.0, -1.0), (1.0, 1.0)))
+        # heights of the sawtooth scanner signal (it does not include the offset!)
+        self.scanAmplitude = model.TupleContinuous((0.1, -0.1), range=((-1.0, -1.0), (1.0, 1.0)))
+        # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
+
         # delay between the trigger signal to start the acquisition and the scanner to start scanning
         # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
         # The scan delay depends on the acquisition delay (MPPC.acqDelay). Acquisition delay must be decreased first.
@@ -621,91 +615,99 @@ class EBeamScanner(model.Emitter):
 
     def getCalibrationSetpoints(self, total_line_scan_time):
         """
-        Calculate the calibration setpoints in Volts for the scanner with a sinus shape for both x and y.
+        Calculate the setpoints for the scanner during calibration mode. The setpoints resemble a sine shape
+        in x and a sawtooth profile in y.
 
-        :param total_line_scan_time (float): Total line scanning time in seconds
+        :param total_line_scan_time: (float) Total line scanning time in seconds including
+                                    overscanned pixels and flyback time. TODO do we need the flyback?
         :return:
-                x_setpoints (list of ints): Contains the calibration setpoints in x direction in Volts
-                y_setpoints (list of ints): Contains the calibration setpoints in y direction in Volts
-                calibration_dwell_time_ticks (int): Sampling period in ticks
+                x_setpoints (list of floats): The calibration setpoints in x direction in volt.
+                y_setpoints (list of floats): The calibration setpoints in y direction in volt.
+                calibration_dwell_time_ticks (int): Sampling period in ticks.
         """
         # The calibration frequency is the inverse of the total line scan time.
-        calibration_frequency = 1 / total_line_scan_time
+        calibration_frequency = 1 / total_line_scan_time  # [1/sec]
 
-        # Calculate the sampling period and number of setpoints (the sampling period in seconds is not needed here)
-        calibration_dwell_time_ticks, _, nmbr_scanner_points = self._calc_calibration_sampling_period(
-                                                                        total_line_scan_time,
-                                                                        self.parent._ebeam_scanner.clockPeriod.value,
-                                                                        self.parent._mirror_descanner.clockPeriod.value)
+        # Calculate the total number of setpoints and the calibration dwell time (update frequency of the setpoints).
+        calibration_dwell_time_ticks, number_setpoints = self.getCalibrationDwellTime(total_line_scan_time)
 
-        # Determine the amplitude of the setpoints function in bits.
-        scan_gain_volts = convertRange(self.scanGain.value, numpy.array(self.scanGain.range)[:, 1], VOLT_RANGE)
-        scan_offset_volts = convertRange(self.scanOffset.value, numpy.array(self.scanOffset.range)[:, 1], VOLT_RANGE)
-        scan_amplitude_volts = scan_gain_volts - scan_offset_volts
+        # convert offset and amplitude from [a.u.] to [V]
+        scan_offset = convertRange(self.scanOffset.value, numpy.array(self.scanOffset.range)[:, 1], VOLT_RANGE)
+        scan_amplitude = convertRange(self.scanAmplitude.value, numpy.array(self.scanAmplitude.range)[:, 1], VOLT_RANGE)
 
-        # Using the time stamps the setpoints are determined.
-        time_points_scanner = numpy.linspace(0, total_line_scan_time, nmbr_scanner_points)
-        x_setpoints = scan_offset_volts[0] + scan_amplitude_volts[0] * numpy.sin(
-                2 * math.pi * calibration_frequency * time_points_scanner)
-        y_setpoints = scan_offset_volts[1] + scan_amplitude_volts[1] * signal.sawtooth(
-                2 * math.pi * calibration_frequency * time_points_scanner)
+        timestamps_setpoints = numpy.linspace(0, total_line_scan_time, number_setpoints)  # [sec]
+        # setpoints in x direction resemble a sine
+        x_setpoints = scan_offset[0] + scan_amplitude[0] * \
+                      numpy.sin(2 * math.pi * calibration_frequency * timestamps_setpoints)  # [V + V * sec/sec = V]
+        # setpoints in y direction resemble a sawtooth profile
+        y_setpoints = scan_offset[1] + scan_amplitude[1] * \
+                      signal.sawtooth(2 * math.pi * calibration_frequency * timestamps_setpoints)  # [V]
 
-        return x_setpoints.tolist(),\
-               y_setpoints.tolist(),\
-               calibration_dwell_time_ticks
+        return x_setpoints.tolist(), y_setpoints.tolist(), calibration_dwell_time_ticks
 
-    def _calc_calibration_sampling_period(self, total_line_scan_time, system_clock_period, descanner_clock_period):
+    def getCalibrationDwellTime(self, total_line_scan_time):
         """
-        For creation of the calibration setpoints the sampling period is variable but the total number of
-        setpoints is limited to maximum 4000 points. Depending on the total line scanning time the calibration
-        setpoints have a variable sampling period (calibration dwell time) which is a multiple of the system
-        clock period. The number of setpoints (and the corresponding sampling period is chosen such that the
-        biggest number of setpoints is used (highest resolution of the signal).
-        The sampling period is defined by finding the higest number of setpoints for the calibration signal
-        with a sampling period equal to a whole multiple of the system clock period. This is done by iteratively
-        increasing the sampling period.
+        Calculate the calibration dwell time. The calibration dwell time is the time the scanner stays at one
+        pixel position. However, the calibration dwell time is only used when the ASM is in calibration mode and
+        the calibration dwell time is calculated based on the acquisition dwell time (setting on the scanner.dwellTime
+        VA) that should be used during acquisition mode. During calibration mode the acquisition dwell time
+        is replaced with the calibration dwell time on the ASM.
 
-        :param total_line_scan_time (float): Total line scanning time in seconds
-        :param system_clock_period (float): clock period of the system and scanner in seconds
-        :param descanner_clock_period (float): Descanner lock period of the scanner in seconds
-        :return: (int) Sampling period in ticks
-                 (float) Sampling period is seconds
-                 (int) Number of setpoints
+        For the calculation of the calibration setpoints the calibration dwell time (or sampling period) is
+        variable but the total number of setpoints is limited to a maximum of 4000 points.
+        Depending on the total line scanning time the calibration setpoints can have a variable calibration
+        dwell time which needs to be multiple of the system clock period.
+        The number of setpoints and the corresponding calibration dwell time are chosen such that the
+        maximum number of setpoints is achieved (highest resolution of the signal).
+
+        :param total_line_scan_time: (float) Total line scanning time for the acquisition in seconds including
+                                     overscanned pixels and flyback time.
+        :return: (int) The calibration dwell time (sampling period) in ticks.
+                 (int) Total number of setpoints.
         """
-        # TODO MAX_NMBR_POINT value of 4000 is sufficient for the entire range of the dwell time because the maximum
-        #  dwell_time is decreased. However, for the original maximum dwell time of 1e-4 seconds, this value
-        #  needs to be increased on the ASM HW to a value above 9000.
-        MAX_NMBR_POINT = 4000  # Constant maximum number of setpoints
+        # TODO MAX_NMBR_POINT value of 4000 setpoints is currently sufficient for the entire range of the dwell time
+        #  on the scanner because the maximum dwell time is currently reduced.
+        #  However, for the anticipated maximum dwell time of 1e-4 seconds, more than 9000 setpoints are needed
+        #  in order to cover a full line scan for the given update frequency (system clock period).
+        MAX_NMBR_POINT = 4000  # maximum number of setpoints possible
+
+        descanner_clock_period = self.parent._mirror_descanner.clockPeriod.value  # [sec]
+        scanner_clock_period = self.clockPeriod.value  # [sec]
 
         # Calculate the range (minimum and maximum multiplication factor) in which to search for the best
         # calibration dwell time/sampling period.
 
-        # The minimal number of ticks of the system clock period to get a sampling period with max 4000 setpoints
-        min_sampling_period_ticks = int(numpy.ceil((total_line_scan_time / MAX_NMBR_POINT) / system_clock_period))
-        # If the found minimum sampling period (in ticks) is smaller than the minimal dwell time for the scanner,
-        # use the minimum dwell time in ticks.
-        min_sampling_period_ticks = max(min_sampling_period_ticks, int(self.dwellTime.range[0] / system_clock_period))
+        # The min calibration dwell time with a max number of setpoints
+        min_calib_dwell_time_ticks = int(numpy.ceil((total_line_scan_time / MAX_NMBR_POINT) / scanner_clock_period))
+        # check that the min calibration dwell time is not smaller than the allowed acquisition dwell time
+        acq_dwell_time_ticks = int(self.dwellTime.range[0] / scanner_clock_period)
+        if min_calib_dwell_time_ticks < acq_dwell_time_ticks:
+            min_calib_dwell_time_ticks = acq_dwell_time_ticks
 
-        # The max sampling period in ticks is defined by the descanner clock period
-        max_sampling_period_ticks = int(descanner_clock_period / system_clock_period)
+        # The max calibration dwell time in ticks is defined by the descanner clock period
+        max_calib_dwell_time_ticks = int(descanner_clock_period / scanner_clock_period)
 
-        for sampling_period_ticks in range(min_sampling_period_ticks, max_sampling_period_ticks):
-            sampling_period = sampling_period_ticks * system_clock_period
-            number_setpoints = total_line_scan_time / sampling_period
-            # Check if the number of points is an integer number (and round because of floating point error). If the
-            # number of points is an integer the found sampling period is correct and has the highest resolution
-            # possible.
-            if numpy.round(number_setpoints, 10) % 1 == 0:
-                # For now the sampling period in seconds remains unused by the callers of this method.
-                return sampling_period_ticks, sampling_period, int(numpy.round(number_setpoints))
+        # find the best possible calibration dwell time
+        # the smaller the dwell time, the higher the total number of setpoints (higher resolution)
+        for calib_dwell_time_ticks in range(min_calib_dwell_time_ticks, max_calib_dwell_time_ticks):
+            calib_dwell_time = calib_dwell_time_ticks * scanner_clock_period  # [sec]
+            number_setpoints = total_line_scan_time / calib_dwell_time  # [sec/sec]
 
+            # Check if the found number of setpoints is an integer number. If yes, use the found sampling period
+            # (calibration dwell time) as it has the highest possible resolution for the given total line scan time.
+            if numpy.round(number_setpoints, 10) % 1 == 0:  # round for floating point errors
+                logging.debug("Found calibration dwell time of %s sec and total number of %s setpoints."
+                              % (calib_dwell_time_ticks, number_setpoints))
+
+                return calib_dwell_time_ticks, number_setpoints  # break the loop -> found the best possible dwell time
         else:
-            logging.debug("Could not optimize the sampling period/calibration dwell time for the scanner. The "
-                          "descanner sampling period is used for the scanner as well")
-            sampling_period_ticks = max_sampling_period_ticks
+            calib_dwell_time_ticks = max_calib_dwell_time_ticks
+            # round for floating point errors
             number_setpoints = numpy.round(total_line_scan_time / descanner_clock_period, 10).astype(int)
-            # For now the sampling period in seconds remains unused by the callers of this method.
-            return sampling_period_ticks, descanner_clock_period, number_setpoints
+            logging.debug("Could not optimize the calibration dwell time for the scanner. Use calibration time "
+                          "of %s sec and total number of %s setpoints." % (calib_dwell_time_ticks, number_setpoints))
+
+            return calib_dwell_time_ticks, number_setpoints
 
     def getTicksScanDelay(self):
         """
@@ -724,45 +726,72 @@ class EBeamScanner(model.Emitter):
         """
         return int(self.dwellTime.value / self.clockPeriod.value)
 
-    def getScanOffsetVolts(self):
+    def getCenterScanVolt(self):
         """
-        Get the scan offset value in volts as defined in the ASM API.
-        In this wrapper the scan offset is defined as the minimum scan value on a scale from -10 to 10, while in the
-        ASM API the scan offset is defined as the median value of the setpoints during the scanning phase.
+        Calculate the center of the scanning ramp in volt. Convert from arbitrary units to volts.
+        The scan offset is defined as the start of the scanning ramp (typically a sawtooth signal),
+        while the acquisition server (ASM) handles the offset as the center of the scanning ramp.
 
-        :return (tuple of ints): slope found during the scanning phase for x, y in volts (with range VOLT_RANGE).
-        """
-        scan_offset_volts = convertRange(self.scanOffset.value, numpy.array(self.scanOffset.range)[:, 1], VOLT_RANGE)
-        scan_gain_volts = convertRange(self.scanGain.value, numpy.array(self.scanGain.range)[:, 1], VOLT_RANGE)
-        return tuple(((scan_gain_volts + scan_offset_volts) / 2))
-
-    def getScanGainVolts(self):
-        """
-        Get the scan gain value in Volts as defined in the ASM API.
-        In this wrapper the scan gain as the maximum scan value on a range from -1 to 1, while in the
-        ASM API the scan gain is defined as the gradient of the setpoints during the scanning phase.
-
-        :return (tuple of ints): slope found during the scanning phase for x, y in volts (with range VOLT_RANGE).
+        :return (tuple of floats): Center (offset) of the scanning ramp in x and y direction in volt.
         """
         ##################################################################
-        # For the acquisition in the ASM API the scan gain is defined as the stepsize in volts per setpoints.
-        # From the first to the last pixels the number of steps are: number of points - 1.
-        # So: number of steps = resolution - 1
-        # This means that the stepsize in volts per setpoint is (maximum value - minimum value) / number of steps
-        # example: scanning ramp resembled by 4 setpoints (values: 2 to 8)
-        #               --8-- amplitude (scan_gain) -> 4th (last) setpoint
+        # example: scanning ramp resembled by 4 pixels (values: 2 to 8)
+        #               --8-- end -> 4th (last) pixel
         #          --6--
         #     --4--
-        # --2-- offset (scan_offset) -> 1st setpoint
-        # Number of setpoints = 4
-        # Number of steps = number of setpoints - 1 = 3
-        # step size = (8 - 2) / 3 = 6 / 3 = 2
-        #################################################################
-        scan_offset_volts = convertRange(self.scanOffset.value, numpy.array(self.scanOffset.range)[:, 1], VOLT_RANGE)
-        scan_gain_volts = convertRange(self.scanGain.value, numpy.array(self.scanGain.range)[:, 1], VOLT_RANGE)
+        # --2-- start = offset (scan_offset)
+        # end = start + amplitude = 2 + 6 = 8
+        # center =  start + end = 2 + 8 = 5
+        ##################################################################
+        # Convert start of the scanning ramp from [a.u.] to [V].
+        scan_start = convertRange(self.scanOffset.value,
+                                  numpy.array(self.scanOffset.range)[:, 1],
+                                  VOLT_RANGE)  # [V]
+        # Convert end of the scanning ramp (offset + amplitude) from [a.u.] to [V].
+        scan_end = convertRange((self.scanOffset.value[0] + self.scanAmplitude.value[0],
+                                 self.scanOffset.value[1] + self.scanAmplitude.value[1]),
+                                numpy.array(self.scanAmplitude.range)[:, 1],
+                                VOLT_RANGE)  # [V]
+
+        # Calculate center of the scanning ramp in x and y.
+        center_scan = ((scan_start[0] + scan_end[0]) / 2,
+                       (scan_start[1] + scan_end[1]) / 2)  # [V]
+
+        return center_scan
+
+    def getGradientScanVolt(self):
+        """
+        Calculate the gradient of the scanning ramp. Convert from arbitrary units to volts.
+        The scan amplitude is defined as the heights of the scanning ramp (typically a sawtooth signal),
+        while the acquisition server (ASM) handles the gain as the gradient of the scanning ramp in [V/px].
+
+        :return (tuple of floats): Gradient (gain or step size) of the scanning ramp in x and y direction in volt.
+        """
+        #########################################################################################
+        # From the first to the last pixel: number of steps = number of pixels (resolution) - 1.
+        # -> stepsize in volt/pixel = (amplitude of the scanning ramp)/(number of steps)
+        #
+        # example: scanning ramp resembled by 4 pixels (values: 2 to 8)
+        #               --8-- end -> 4th (last) pixel
+        #          --6--
+        #     --4--
+        # --2-- start = offset (scan_offset)
+        # heights/amplitude = end - start = 8 -2 = 6
+        # number of pixels (ebeam positions) = 4
+        # number of steps = number of pixels - 1 = 4 - 1 = 3
+        # step size = 6 / 3 = 2 = amplitude/(resolution-1)
+        #########################################################################################
+        # Convert the amplitude from [a.u.] to [V].
+        scan_amplitude = convertRange(self.scanAmplitude.value,
+                                      numpy.array(self.scanAmplitude.range)[:, 1],
+                                      VOLT_RANGE)  # [V]
+
+        # number of pixel positions
         resolution = numpy.array(self.parent._mppc.cellCompleteResolution.value)
-        step_size_in_volts = tuple((scan_gain_volts - scan_offset_volts) / (resolution - 1))
-        return step_size_in_volts
+        # calculate the gradient (gain); number of steps from start to end of scanning ramp is resolution -1
+        gradient = tuple(scan_amplitude / (resolution - 1))
+        
+        return gradient
 
     def _setDwellTime(self, dwell_time):
         """
@@ -855,11 +884,12 @@ class MirrorDescanner(model.Emitter):
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
         # start of the sawtooth descanner signal
         self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
-        # end (height) of the sawtooth descanner signal
-        self.scanGain = model.TupleContinuous((0.007, 0.007), range=((-1, -1), (1, 1)))
+        # heights of the sawtooth descanner signal (it does not include the offset!)
+        self.scanAmplitude = model.TupleContinuous((0.008, 0.008), range=((-1, -1), (1, 1)))
+        # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
 
-        clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)
-        # period (=1/frequency) of the descanner; update frequency for setpoints upload
+        clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)  # [1/sec]
+        # period (=1/frequency) of the descanner in seconds; update frequency for setpoints upload
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
@@ -867,117 +897,175 @@ class MirrorDescanner(model.Emitter):
 
     def getXAcqSetpoints(self):
         """
-        Creates the setpoints for the descanner in x direction (used by the ASM) for scanning one row of pixels. The
-        x setpoints describe the movement of the descanner during the scanning of one full row of pixels.  To the ASM
-        API one period of setpoints (scanning of one row) is send which is repeated for all following rows.
-        A single sawtooth profile (rise and crash) followed by a flyback period (X=0) is used as trajectory. No
-        smoothing or low-pas filtering is used to create the trajectory of these setpoints.
+        Creates the setpoints for the descanner in x direction for de-scanning one row of pixels. The
+        x setpoints describe the movement of the descanner during the scanning of one full row of pixels.
+        The setpoints resemble a sawtooth profile followed by a flyback period.
 
-        :return (list of ints): Setpoints in x direction.
+        :return (list of ints): The setpoints (descanner positions) resembling the scanning ramp in x direction in bits.
         """
         # The setpoints for an acquisition resemble a linear ramp for scanning a line of pixels, followed by the
         # flyback, where the descanner moves back to its starting position.
-        # The scanning setpoints are determined via the linear equation x_setpoints = A*t + B
-        # With 'A' being the slope of the scanning line which is: (maximum - minimum) / scanning time
-        # And 'B' being the offset
+        # scanning setpoints: x_setpoints = A*t + B
+        # 'A': gradient of the scanning line -> (maximum - minimum) / scanning time
+        # 'B': offset
 
-        descan_period = self.clockPeriod.value  # in seconds
-        dwellTime = self.parent._ebeam_scanner.dwellTime.value  # in seconds
-        x_cell_resolution = self.parent._mppc.cellCompleteResolution.value[0]  # pixels
-        scan_offset_bits = convert2Bits(self.scanOffset.value[0], numpy.array(self.scanOffset.range)[:, 1])
-        scan_gain_bits = convert2Bits(self.scanGain.value[0], numpy.array(self.scanGain.range)[:, 1])
+        descan_period = self.clockPeriod.value  # [sec]
+        dwellTime = self.parent._ebeam_scanner.dwellTime.value  # [sec]
+        x_cell_resolution = self.parent._mppc.cellCompleteResolution.value[0]  # [px]
 
-        # all units in seconds
-        scanning_time = dwellTime * x_cell_resolution
+        # Note: .scanOffset and .scanAmplitude are in a.u. with range [-1, 1].
+        # Setpoints (here denoted in [bits]) calculated based on those VAs are also in a.u. but mapped to range
+        # [-2**15, 2**15] and finally clipped to [-2**15, 2**15 - 1] before send to the ASM.
 
-        # Remainder of the scanning time which is not a whole multiple of the descan periods.
-        remainder_scanning_time = scanning_time % descan_period
+        # Convert start of the scanning ramp from [a.u.] to [bits].
+        scan_start = convertRange(self.scanOffset.value[0], numpy.array(self.scanOffset.range)[:, 1],
+                                  I16_SYM_RANGE)  # [bits]
+        # Convert amplitude of the scanning ramp from [a.u.] to [bits].
+        scan_amplitude = convertRange(self.scanAmplitude.value[0],
+                                      numpy.array(self.scanAmplitude.range)[:, 1],
+                                      I16_SYM_RANGE)  # [bits]
+        # Convert the end of the scanning ramp from [a.u.] to [bits].
+        scan_end = convertRange(self.scanOffset.value[0] + self.scanAmplitude.value[0],
+                                numpy.array(self.scanAmplitude.range)[:, 1], I16_SYM_RANGE)  # [bits]
+
+        # line scan time including overscanned pixels but without flyback
+        scanning_time = dwellTime * x_cell_resolution  # [sec]
+
+        # Remainder of the line scan time which is not a whole multiple of the descan period.
+        remainder_scanning_time = scanning_time % descan_period  # [sec]
 
         # Calculate the time stamps for the setpoints excluding the remainder of the scanning time.
-        number_setpoints = int(scanning_time // descan_period)
-        timestamp_setpoints = numpy.linspace(0, scanning_time - remainder_scanning_time, number_setpoints)
+        # The number of setpoint does not necessarily match the number of pixels scanned.
+        # Every descanner period a new setpoint (mirror position) is set.
+        number_setpoints = int(scanning_time // descan_period)  # [sec/sec = no unit]
+        timestamp_setpoints = numpy.linspace(0, scanning_time - remainder_scanning_time, number_setpoints)  # [sec]
 
-        # Slope of the scanning ramp in bits per second
-        scanning_slope = (scan_gain_bits - scan_offset_bits) / scanning_time
-        scanning_points = scanning_slope * timestamp_setpoints + scan_offset_bits  # x_setpoints=slope*time + offset
+        # Gradient of the scanning ramp (independent of the offset).
+        scanning_gradient = scan_amplitude / scanning_time  # [bits/sec]
 
+        # Calculate positions of the descanner in the scanning ramp: x_setpoints = gradient * timestamps + offset
+        scanning_points = scanning_gradient * timestamp_setpoints + scan_start  # [bits/sec * sec + bits = bits]
+
+        # Check if the remaining scanning time is 0. If not, add one extra setpoint.
         # Use almost_equal to handle floating point errors.
         if not almost_equal(remainder_scanning_time, 0, rtol=0, atol=1e-10):
-            # Allow the descanner to finish scanning the last pixels by adding one setpoint with the scan gain value.
-            scanning_points = numpy.hstack((scanning_points, scan_gain_bits))
-            # Note: For now the extra setpoint to compensate for the remaining scanning time has a value equal to the
-            # scan gain. Because of the inertia of the mirror it is expected that this is the fastest solution
-            # which will not significantly disturb the trajectory of the mirror.
+            # add one setpoint with value same as end of scanning ramp
+            scanning_points = numpy.hstack((scanning_points, scan_end))  # [bits]
 
         # Calculation of the flyback points:
-        # Round up so that if the physical flyback time (physical restricted time for the mirror to move back to its
-        # original position) is not a whole multiple of the descan period the flyback points allow enough time for the
-        # descanner to move back.
-        number_flyback_points = math.ceil(self.physicalFlybackTime.value / descan_period)
-        flyback_points = scan_offset_bits + numpy.zeros(number_flyback_points)
+        # Check if the physical flyback time (time the mirror needs to move back to the start position
+        # of the line scan) is a whole multiple of the descan period. If not, round up.
+        number_flyback_points = math.ceil(self.physicalFlybackTime.value / descan_period)  # [sec/sec = no unit]
+        # convert flyback setpoints into bits; should be at the same level as the start of the ramp (=offset)
+        flyback_points = scan_start + numpy.zeros(number_flyback_points)  # [bits]
 
-        setpoints = numpy.concatenate((scanning_points, flyback_points))
+        setpoints = numpy.concatenate((scanning_points, flyback_points))  # [bits]
 
-        # Converting to an integer using numpy.floor() is more correct than int() because the latter one rounds down
-        # towards 0, so negative values are not treated the same as positive values, which makes values not uniformly
-        # distributed.
-        return numpy.floor(setpoints).astype(int).tolist()
+        # Setpoints need to be integers when send to the ASM. First round down found setpoints to next integer
+        # then convert to int type.
+        # For consistency in the rounding use numpy.floor() to always round down (also for negative numbers):
+        # e.g. int(-3.4) = -3 vs. numpy.floor(-3.4) = -4.
+        setpoints = numpy.floor(setpoints).astype(int)  # [bits]
+
+        # Mapping from a.u. to bits is symmetrically around 0, whereas the range in bits that is accepted by the ASM is
+        # not symetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
+        setpoints = numpy.minimum(setpoints, I16_SYM_RANGE[1] - 1)
+
+        return setpoints.tolist()
 
     def getYAcqSetpoints(self):
         """
-        Creates the setpoints for the descanner in y direction for the ASM.
-        During the scanning of a row of pixels the y value is constant. Only one y descan setpoint per full row of
-        pixels will be read. After completing the scan of a full row of pixels a y setpoints is read which
-        describes the movement when the scanner goes from one row to the next row of pixels.
+        Creates the setpoints for the descanner in y direction. The setpoints resemble a sawtooth profile
+        During the scanning of a row of pixels (x direction) the value of the corresponding y setpoint is constant.
+        Only one y descan setpoint per full row of pixels will be calculated and send to the ASM.
+        After completing the scan of a full row of pixels the next y setpoint is set.
 
-        :return (list of ints): contains the setpoints in y direction.
+        :return (list of ints): The setpoints (descanner positions) in y direction in bits (one setpoint per row).
         """
-        # Start value of the scanning ramp in bits
-        scan_offset_bits = convert2Bits(self.scanOffset.value[1], numpy.array(self.scanOffset.range)[:, 1])
-        # Amplitude of the scanning ramp in bits.
-        scan_gain_bits = convert2Bits(self.scanGain.value[1], numpy.array(self.scanGain.range)[:, 1])
+        # Note: .scanOffset and .scanAmplitude are in a.u. with range [-1, 1].
+        # Setpoints (here denoted in [bits]) calculated based on those VAs are also in a.u. but mapped to range
+        # [-2**15, 2**15] and finally clipped to [-2**15, 2**15 - 1] before send to the ASM.
 
-        y_cell_size = self.parent._mppc.cellCompleteResolution.value[1]  # pixels
-        setpoints = numpy.linspace(scan_offset_bits, scan_gain_bits, y_cell_size)
+        # Convert start of the scanning ramp from [a.u.] to [bits].
+        scan_start = convertRange(self.scanOffset.value[1], numpy.array(self.scanOffset.range)[:, 1],
+                                  I16_SYM_RANGE)  # [bits]
+        # Convert end of the scanning ramp (offset + amplitude) from [a.u.] to [bits].
+        scan_end = convertRange(self.scanOffset.value[1] + self.scanAmplitude.value[1],
+                                numpy.array(self.scanAmplitude.range)[:, 1], I16_SYM_RANGE)  # [bits]
 
-        # Converting to an integer using numpy.floor() is more correct than int() because the latter one rounds down
-        # towards 0, so negative values are not treated the same as positive values, which makes values not uniformly
-        # distributed.
-        return numpy.floor(setpoints).astype(int).tolist()
+        y_cell_size = self.parent._mppc.cellCompleteResolution.value[1]  # including overscanned pixels [px]
+        # calculate the setpoints: one setpoint per row
+        setpoints = numpy.linspace(scan_start, scan_end, y_cell_size)  # [bits]
+
+        # Setpoints need to be integers when send to the ASM. First round down found setpoints to next integer
+        # then convert to int type.
+        # For consistency in the rounding use numpy.floor() to always round down (also for negative numbers):
+        # e.g. int(-3.4) = -3 vs. numpy.floor(-3.4) = -4.
+        setpoints = numpy.floor(setpoints).astype(int)  # [bits]
+
+        # Mapping from a.u. to bits is symmetrically around 0, whereas the range in bits that is accepted by the ASM is
+        # not symetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
+        setpoints = numpy.minimum(setpoints, I16_SYM_RANGE[1] - 1)
+
+        return setpoints.tolist()
 
     def getCalibrationSetpoints(self, total_line_scan_time):
         """
-        Calculate and return the calibration setpoints in bits for the descanner with a sinus shape for x and a flat
-        line at zero for y.
+        Calculate the setpoints for the descanner during calibration mode. The setpoints resemble a sine shape
+        in x and a flat line at zero in y.
 
-        :param total_line_scan_time (float): Total line scanning time in seconds
+        :param total_line_scan_time: (float) Total line scanning time in seconds including
+                                     overscanned pixels and flyback time. TODO do we need the flyback?
         :return:
-                x_setpoints (list of ints): Contains the calibration setpoints in x direction in bits
-                y_setpoints (list of ints): Contains the calibration setpoints in y direction  in bits
+                x_setpoints (list of ints): The calibration setpoints in x direction in bits.
+                y_setpoints (list of ints): The calibration setpoints in y direction in bits.
         """
         # The calibration frequency is the inverse of the total line scan time.
-        calibration_frequency = 1 / total_line_scan_time
+        calibration_frequency = 1 / total_line_scan_time  # [1/sec]
 
         # Sampling period is equal to the descanner clock period. The number of setpoints is the total line scanning
         # time divided by the descanner clock period.
-        nmr_setpoints = numpy.round(total_line_scan_time / self.clockPeriod.value, 10).astype(int)
+        number_setpoints = numpy.round(total_line_scan_time / self.clockPeriod.value, 10).astype(int)  # [no unit]
 
-        # Determine the amplitude of the setpoints function in bits.
-        descan_gain_bits = convert2Bits(self.scanGain.value, numpy.array(self.scanGain.range)[:, 1])
-        descan_offset_bits = convert2Bits(self.scanOffset.value, numpy.array(self.scanOffset.range)[:, 1])
-        descan_amplitude_bits = descan_gain_bits - descan_offset_bits
+        # Note: .scanOffset and .scanAmplitude are in a.u. with range [-1, 1].
+        # Setpoints (here denoted in [bits]) calculated based on those VAs are also in a.u. but mapped to range
+        # [-2**15, 2**15] and finally clipped to [-2**15, 2**15 - 1] before send to the ASM.
 
-        # Using the time stamps the setpoints are determined
-        time_points_descanner = numpy.linspace(0, total_line_scan_time, nmr_setpoints)
-        x_setpoints = descan_offset_bits[0] + descan_amplitude_bits[0] * numpy.sin(
-                2 * math.pi * calibration_frequency * time_points_descanner)
-        # The decan setpoints in y direction should be constant and have a output of zero.
-        y_setpoints = 0 * time_points_descanner
+        # convert offset and amplitude from [a.u.] to [bits]
+        sine_offset = convertRange(self.scanOffset.value,
+                                   numpy.array(self.scanOffset.range)[:, 1], I16_SYM_RANGE)  # [bits]
+        sine_amplitude = convertRange(self.scanAmplitude.value,
+                                      numpy.array(self.scanAmplitude.range)[:, 1], I16_SYM_RANGE)  # [bits]
 
-        # Converting the setpoints to integers using numpy.floor() is more correct than int() because the latter
-        # one rounds down towards 0, so negative values are not treated the same as positive values, which makes values
-        # not uniformly distributed.
-        return numpy.floor(x_setpoints).astype(int).tolist(), numpy.floor(y_setpoints).astype(int).tolist()
+        timestamps_setpoints = numpy.linspace(0, total_line_scan_time, number_setpoints)  # [sec]
+        # setpoints in x direction resemble a sine
+        # Note: There is not necessarily a setpoint at the max/min amplitude of the sine.
+        #
+        # *               *  *
+        #   *           *      *
+        # -----------------------------------
+        #     *      *           *
+        #       *  *
+        #
+        x_setpoints = sine_offset[0] + sine_amplitude[0] * \
+                      numpy.sin(2 * math.pi * calibration_frequency * timestamps_setpoints)  # [bits+bits*sec/sec=bits]
+
+        # setpoints in y direction are constant (=0)
+        y_setpoints = 0 * timestamps_setpoints  # [bits]
+
+        # Setpoints need to be integers when send to the ASM. First round down found setpoints to next integer
+        # then convert to int type.
+        # For consistency in the rounding use numpy.floor() to always round down (also for negative numbers):
+        # e.g. int(-3.4) = -3 vs. numpy.floor(-3.4) = -4.
+        x_setpoints = numpy.floor(x_setpoints).astype(int)  # [bits]
+        y_setpoints = numpy.floor(y_setpoints).astype(int)  # [bits]
+
+        # mapping from a.u. to bits is symmetrically around 0, whereas the range in bits that is accepted by the ASM is
+        # not symetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
+        x_setpoints = numpy.minimum(x_setpoints, I16_SYM_RANGE[1] - 1)
+        y_setpoints = numpy.minimum(y_setpoints, I16_SYM_RANGE[1] - 1)
+
+        return x_setpoints.tolist(), y_setpoints.tolist()
 
 
 class MPPC(model.Detector):
@@ -1102,10 +1190,10 @@ class MPPC(model.Detector):
                     y_eff_cell_size=eff_cell_size[1],
                     # y_prescan_lines is not available on EA1
                     # y_prescan_lines=self._scanner.getTicksScanDelay()[1],
-                    x_scan_gain=self._scanner.getScanGainVolts()[0],
-                    y_scan_gain=self._scanner.getScanGainVolts()[1],
-                    x_scan_offset=self._scanner.getScanOffsetVolts()[0],
-                    y_scan_offset=self._scanner.getScanOffsetVolts()[1],
+                    x_scan_gain=self._scanner.getGradientScanVolt()[0],
+                    y_scan_gain=self._scanner.getGradientScanVolt()[1],
+                    x_scan_offset=self._scanner.getCenterScanVolt()[0],
+                    y_scan_offset=self._scanner.getCenterScanVolt()[1],
                     x_descan_setpoints=X_descan_setpoints,
                     y_descan_setpoints=Y_descan_setpoints,
                     # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
