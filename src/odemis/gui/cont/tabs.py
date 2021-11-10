@@ -671,17 +671,6 @@ class LocalizationTab(Tab):
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
-        # Check project directory is the same in filename path, otherwise
-        # update it with a new filename
-        # Handled on show as project directory conf change in chamber tab init
-        if (
-            show
-            and self.conf.pj_last_path not in self.tab_data_model.filename.value
-        ):
-            self.tab_data_model.filename.value = create_filename(
-                self.conf.pj_last_path, self.conf.fn_ptn,
-                self.conf.last_extension,
-                self.conf.fn_count)
 
         if not show: # if localization tab is not chosen
         # pause streams when not displayed
@@ -2687,6 +2676,7 @@ class CryoChamberTab(Tab):
         self.conf.pj_last_path = new_dir
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = self.conf.pj_last_path
+        self.tab_data_model.main.project_path.value = new_dir
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):

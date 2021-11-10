@@ -336,7 +336,10 @@ class MainGUIData(object):
                 attrname = self._ROLE_TO_ATTR[crole]
                 if getattr(self, attrname) is None:
                     raise KeyError("Microscope (%s) is missing the '%s' component" % (self.role, crole))
-
+            # Add project_path string VA to notify when `cryo` projects change
+            config = conf.get_acqui_conf()
+            pj_last_path = config.get("project", "pj_last_path")
+            self.project_path = StringVA(pj_last_path)  # a unicode
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
@@ -714,6 +717,14 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.pj_last_path, config.fn_ptn,
             config.last_extension,
             config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
@@ -793,10 +804,6 @@ class CryoChamberGUIData(CryoGUIData):
     def __init__(self, main):
         CryoGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
-
-        self._conf = get_acqui_conf()
-        pj_last_path = self._conf.get("project", "pj_last_path")
-        self.project_name = StringVA(pj_last_path)  # a unicode
 
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
