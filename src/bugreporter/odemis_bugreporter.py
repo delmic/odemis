@@ -34,7 +34,6 @@ import json
 import logging
 import notify2
 import os
-import platform
 import re
 import shlex
 import socket
@@ -155,11 +154,7 @@ class OdemisBugreporter(object):
         if ret_code == 0:
             scfn = "/tmp/odemis-bug-screenshot.png"
             try:
-                if int(platform.linux_distribution()[1][:2]) > 14:
-                    # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
-                    subprocess.call(['gnome-screenshot', '-f', scfn])
-                else:
-                    subprocess.call(['gm', 'import', '-window', 'root', scfn])
+                subprocess.call(['gnome-screenshot', '-f', scfn])
             except Exception as e:
                 logging.warning("Failed to take a screenshot with Exception %s" % e)
 
