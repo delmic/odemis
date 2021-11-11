@@ -26,9 +26,8 @@ import unittest
 import os
 import odemis
 import logging
-from odemis.util import test, driver
+from odemis.util import test
 from odemis import model
-from odemis.util.driver import BACKEND_RUNNING
 from odemis.gui.win.acquisition import OverviewAcquisitionDialog
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -42,24 +41,7 @@ class TestgetROARectMethod(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() in driver.BACKEND_RUNNING:
-            microscope = model.getMicroscope()
-            # TODO once chamber PR of METEOR is merged, delete "cryo-secom" below.
-            if microscope.role in ("cryo-secom", "enzel"):
-                logging.info("There is ENZEL backend already running. It will be used.")
-            else:
-                logging.info("A running backend was found. It will be turned off, and the backend of ENZEL will be turned on.")
-                try:
-                    test.stop_backend()
-                    test.start_backend(ENZEL_CONFIG)
-                except Exception:
-                    raise
-        else:
-            logging.info("ENZEL backend will be turned on.")
-            try:
-                test.start_backend(ENZEL_CONFIG)
-            except Exception:
-                raise
+        test.start_backend(ENZEL_CONFIG)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage")
@@ -72,8 +54,7 @@ class TestgetROARectMethod(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if driver.get_backend_status() == BACKEND_RUNNING:
-            test.stop_backend()
+        pass
 
     def test_clipping_is_performed_same_width_and_height(self):
         # move the stage close to the bottom left corner of the active range (200 micrometers 
