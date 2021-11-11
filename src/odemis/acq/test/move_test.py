@@ -21,19 +21,24 @@ import os
 import time
 import unittest
 
+import scipy, numpy
+
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, RTOL_PROGRESS, cryoSwitchAlignPosition, \
-    getCurrentAlignerPositionLabel, SEM_IMAGING, UNKNOWN
+from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDistance, SCALING_FACTOR, getRotationMatrix
 from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
+from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel
+from odemis.util.driver import BACKEND_RUNNING
 from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
-from odemis.util import test
+from odemis.util import driver, test
+import threading
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 
 class TestCryoMove(unittest.TestCase):
@@ -366,6 +371,288 @@ class TestCryoMove(unittest.TestCase):
         cryoSwitchSamplePosition(LOADING).result()
         test.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
+
+
+class TestMeteorMove(unittest.TestCase):
+    """
+    Test the function cryoSwitchSamplePosition stage movements of meteor 
+    """
+    @classmethod
+    def setUpClass(cls):
+        if driver.get_backend_status() in driver.BACKEND_RUNNING:
+            microscope = model.getMicroscope()
+            if microscope.role != "meteor":
+                logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
+                test.stop_backend()
+                test.start_backend(METEOR_CONFIG)
+            else:
+                logging.info("There is METEOR backend already running. It will be used.")
+        else:
+            try:
+                logging.info("METEOR backend will be turned on.")
+                test.start_backend(METEOR_CONFIG)
+            except Exception:
+                raise
+
+        # get the stage components
+        cls.stage = model.getComponent(role="stage-bare")
+
+        # get the metadata
+        stage_md = cls.stage.getMetadata()
+        cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
+        cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
+
+    @classmethod
+    def tearDownClass(cls):
+        if driver.get_backend_status == BACKEND_RUNNING:
+            test.stop_backend()
+
+    def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
+        # move the stage to the loading position  
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area, and grid1 will be chosen by default.
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
+        # move the stage to the loading position  
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to grid1, and sem imaging area will be chosen by default. 
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
+        # move the stage to the loading position  
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, FM_IMAGING)
+        self.assertEqual(grid_label, GRID_1)
+
+    def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
+        # move the stage to the loading position  
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, SEM_IMAGING)
+        self.assertEqual(grid_label, GRID_2)
+
+    def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
+        # move to loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # now the selected grid is already the grid1
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # move the stage to grid2 
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # make sure we are still in sem  imaging area 
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
+        # move to loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move the stage to grid2 
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # move the stage back to grid1
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # make sure we are still in the sem imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+    
+    def test_moving_from_sem_to_fm(self):
+        # move to loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # now the grid is grid1 by default
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # move to the grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # make sure we are still in fm imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move to the grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_2, current_grid)
+        # move back to the grid1 
+        f = cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
+        # make sure we are still in fm imaging area
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+    def test_moving_to_sem_from_fm(self):
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move to sem
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+
+    def test_unknown_label_at_initialization(self):
+        arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0}
+        self.stage.moveAbs(arbitrary_position).result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(UNKNOWN, current_imaging_mode)
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(current_grid, None)
+
+
+class TestGetDifferenceFunction(unittest.TestCase):
+    """
+    This class is to test _getDistance() function in the move module
+    """
+    def test_only_linear_axes(self):
+        point1 = {'x': 0.023, 'y': 0.032, 'z': 0.01}
+        point2 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
+        pos1 = numpy.array([point1[a] for a in list(point1.keys())])
+        pos2 = numpy.array([point2[a] for a in list(point2.keys())])
+        expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
+        actual_distance = _getDistance(point1, point2)
+        self.assertAlmostEqual(expected_distance, actual_distance)
+
+    def test_only_linear_axes_but_without_difference(self):
+        point1 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
+        point2 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
+        expected_distance = 0
+        actual_distance = _getDistance(point1, point2)
+        self.assertAlmostEqual(expected_distance, actual_distance)
+
+    def test_only_linear_axes_but_without_common_axes(self):
+        point1 = {'x': 0.023, 'y': 0.032}
+        point2 = {'x': 0.023, 'y': 0.032, 'z': 1}
+        common_axes = point1.keys() & point2.keys()
+        pos1 = numpy.array([point1[a] for a in common_axes])
+        pos2 = numpy.array([point2[a] for a in common_axes])
+        expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
+        actual_distance = _getDistance(point1, point2)
+        self.assertAlmostEqual(expected_distance, actual_distance)
+
+    def test_only_rotation_axes(self):
+        point1 = {'rx': 0.523599, 'rz': 0} # 30 degree
+        point2 = {'rx': 1.0472, 'rz': 0}    # 60 degree
+        # the rotation difference is 30 degree
+        expected_rotation = getRotationMatrix("rx", numpy.radians(30))
+        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
+        act_rot_error = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
+
+    def test_only_rotation_axes_but_whtout_difference(self):
+        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
+        point2 = {'rx': 0, 'rz': 0.523599}  # 30 degree
+        # the rotation difference is 0 degree
+        exp_rot_error = 0
+        act_rot_error = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_error, act_rot_error)
+
+    def test_only_rotation_axes_but_whtout_common_axes(self):
+        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
+        point2 = {'rz': 1.0472}  # 60 degree
+        # the rotation difference is 30 degree
+        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
+        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
+        act_rot_error = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
+
+    def test_no_common_axes(self):
+        point1 = {'rx': 0.523599, 'rz': 0.523599}
+        point2 = {'x': 0.082, 'y': 0.01}
+        self.assertRaises(ValueError, _getDistance, point1, point2)
+
+    def test_both_axes(self):
+        point1 = {'rx': 0, 'rz': 0.523599, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
+        point2 = {'rx': 0, 'rz': 1.0472, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
+        lin_axes = {'x', 'y', 'z'}  
+        rot_axes = {'rx', 'rz'}
+        pos1 = numpy.array([point1[a] for a in lin_axes])
+        pos2 = numpy.array([point2[a] for a in lin_axes])
+        exp_lin_error = scipy.spatial.distance.euclidean(pos1, pos2)
+        # the rotation difference is 30 degree
+        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
+        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
+        act_error = _getDistance(point1, point2)
+        self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)
 
 
 if __name__ == "__main__":
