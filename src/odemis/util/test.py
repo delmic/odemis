@@ -22,6 +22,7 @@ import numpy
 import odemis
 from odemis import model, util
 from odemis.util import driver
+from odemis.odemisd import modelgen 
 import os
 import resource
 import subprocess
@@ -43,7 +44,38 @@ def setlimits():
 
 def start_backend(config):
     """
-    Start the backend
+    Start the backend by checking the currently running backend. Basically 2 cases/scenarios:
+        1. If no running backend => run the requested one.
+        2. If there is running backend =>
+            a. If the running backend is same as requested one => do nothing
+            b. If the running backend is different from the requested one => stop the running, and run the requested one.
+    In case the backend fails to start a IOError will be raised.
+    config (str): path to the microscope config file.
+    """
+    # check if a backend is running
+    if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
+        current_model = model.getMicroscope().model
+        try:
+            req_model = modelgen.Instantiator(open(config)).ast
+        except Exception as exp:
+            raise ValueError(exp)
+        if current_model == req_model:
+            logging.info("Backend for %s already running", config)
+            return
+        else:
+            logging.info("There is a backend running already, it will be turned off, and the backend \
+                                %s will be run instead.", config)
+            stop_backend()
+            run_backend(config)
+
+    # check if no backend is running
+    else:
+        run_backend(config)
+
+
+def run_backend(config):
+    """
+    Run the backend based on the passed config yaml file.
     config (str): path to the microscope config file
     raises:
         LookupError: if a backend is already running

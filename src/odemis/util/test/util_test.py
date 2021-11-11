@@ -22,7 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 
 from functools import partial
-import gc
+import os
+import odemis
+from odemis import model
+from odemis.util import test, driver
 import logging
 from odemis import util
 from odemis.model import CancellableFuture
@@ -349,6 +352,63 @@ class CanvasTestCase(unittest.TestCase):
 
         for orig, clipped in outer_to_inner:
             self.assertEqual(clipped, clip(*orig))
+
+
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
+
+class TestBackendStarter(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # make sure initially no backend is running.
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            test.stop_backend()
+
+    @classmethod
+    def tearDownClass(cls):
+        # turn off everything when the testing finished.
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            test.stop_backend()
+
+    def test_no_running_backend(self):
+        # check if there is no running backend
+        backend_status = driver.get_backend_status()
+        self.assertIn(backend_status, [driver.BACKEND_STOPPED, driver.BACKEND_DEAD])
+        # run enzel
+        test.start_backend(ENZEL_CONFIG)
+        # now check if the role is enzel
+        role = model.getMicroscope().role
+        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
+        self.assertEqual(role, "cryo-secom")
+
+    def test_running_backend_same_as_requested(self):
+        # run enzel backend
+        test.start_backend(ENZEL_CONFIG)
+        # check if the role is enzel
+        role = model.getMicroscope().role
+        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
+        self.assertEqual(role, "cryo-secom")
+        # run enzel backend again
+        test.start_backend(ENZEL_CONFIG)
+        # it should still be enzel.
+        role = model.getMicroscope().role
+        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
+        self.assertEqual(role, "cryo-secom")
+
+    def test_running_backend_different_from_requested(self):
+        # run sparc backend
+        test.start_backend(SPARC_CONFIG)
+        # check if the role is sparc
+        role = model.getMicroscope().role
+        self.assertEqual(role, "sparc")
+        # now run another backend (enzel)
+        test.start_backend(ENZEL_CONFIG)
+        # check if the role now is enzel instead of sparc
+        role = model.getMicroscope().role
+        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
+        self.assertEqual(role, "cryo-secom")
 
 
 if __name__ == "__main__":
