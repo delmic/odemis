@@ -101,6 +101,8 @@ MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
+BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
+
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
 MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror

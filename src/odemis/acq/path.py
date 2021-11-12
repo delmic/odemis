@@ -26,12 +26,13 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import copy
 import logging
 import math
-import re
 from odemis import model, util
 from odemis.acq import stream
-import time
+from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 from odemis.util import TimeoutError
 import queue
+import re
+import time
 
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
@@ -65,19 +66,19 @@ SPARC_MODES = {'ar': ("ccd",
                 }),
          'mirror-align': ("ccd",
                 {'lens-switch': {'rx': 0},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': 0},
                 }),
          'chamber-view': ("ccd",
                 {'lens-switch': {'rx': math.radians(90)},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': 0},
                 }),
          'fiber-align': ("spectrometer",
                 {'lens-switch': {'rx': math.radians(90)},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'ar-spec-selector': {'rx': math.radians(90)},
                  'spec-det-selector': {'rx': 0},
                  'spectrograph': {'slit-in': 500e-6},
@@ -105,7 +106,7 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'spectral': (r"spectrometer.*",
                 {'lens-switch': {'x': 'off'},
@@ -118,31 +119,31 @@ SPARC2_MODES = {
                  # spectrometer (eg, when using a spectrograph-dedicated)
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'streak-align': ("streak-ccd",  # alignment tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'streak-focus': ("streak-ccd",  # manual focus in alignment tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                  }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
@@ -154,71 +155,71 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'time-correlator': ("time-correlator",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'mirror-align': (r"ccd.*",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
                  # Note: focus is store/restore when going to/from this mode
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
             'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'filter': {'band': 'pass-through'},
+                 'filter': {'band': BAND_PASS_THROUGH},
                  # In the current convention, only the spectrograph-dedicated
                  # can be after the fiber, so no need to check for spectrograph
                  'spectrograph-dedicated': {'slit-in': 50e-6},  # small, to get a sharp line, but enought to get some light
                  'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                 }),
          }
 
@@ -574,7 +575,7 @@ class OpticalPathManager(object):
                                     self._stored[comp_role, axis] = comp.position.value[axis]
                                 break
                         else:
-                            if mode == "mirror-align" and pos == "pass-through":
+                            if mode == "mirror-align" and pos == BAND_PASS_THROUGH:
                                 # On the SPARC, if there is a filter-wheel in front of the CCD,
                                 # there should be a pass-through position. So if it's missing
                                 # that's typically a sign that the microscope file is incorrect
