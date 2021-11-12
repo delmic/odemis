@@ -45,7 +45,7 @@ Detailed instructions
 ---------------------
 
 Download Ubuntu 18.04 at this address:
-https://ubuntu.com/download/desktop/thank-you?version=18.04.5&architecture=amd64
+https://ubuntu.com/download/desktop/thank-you?version=18.04.6&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -59,9 +59,8 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo add-apt-repository ppa:delmic-soft/odemis
     sudo apt-get update
     sudo apt-get dist-upgrade
-    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp \
-     python3-pyro4-delmic odemis fluodb \
-     python3-setuptools python3-sphinx inkscape dia-gnome texlive pngcrush cython3
+    sudo apt-get install odemis git vim meld libtiff-tools gimp \
+     fluodb imagej inkscape pngcrush
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
