@@ -2644,6 +2644,8 @@ class MCS2(model.Actuator):
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
+        self._focuser_pos_updater = RepeatingTimer(1.0, self._updatePosition)
+        self._focuser_pos_updater.start()
         self._updatePosition()
 
         self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
