@@ -3076,7 +3076,7 @@ def __init_resources():
                       <growablecols>1</growablecols>
                       <growablerows/>
                     </object>
-                    <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
@@ -3120,7 +3120,7 @@ def __init_resources():
                         <flag>wxEXPAND</flag>
                       </object>
                     </object>
-                    <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>10</border>
                   </object>
                 </object>
@@ -3177,7 +3177,7 @@ def __init_resources():
                       </object>
                       <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
@@ -3308,7 +3308,7 @@ def __init_resources():
                       </object>
                       <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
@@ -3501,12 +3501,10 @@ def __init_resources():
                           <style>wxBORDER_NONE|wxTE_READONLY</style>
                           <XRCED>
                             <assign_var>1</assign_var>
-                            <!-- ?? -->
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <!-- ?? -->
-                        <flag>wxALL|wxEXPAND|wxALIGN_CENTRE</flag>
+                        <flag>wxALL|wxEXPAND</flag>
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
@@ -3592,7 +3590,7 @@ def __init_resources():
                       </object>
                       <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
@@ -3778,7 +3776,7 @@ def __init_resources():
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                 </object>
@@ -3917,7 +3915,7 @@ def __init_resources():
                       </XRCED>
                     </object>
                     <option>1</option>
-                    <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+                    <flag>wxALL|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                 </object>

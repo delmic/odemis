@@ -850,9 +850,9 @@ class StreamPanel(wx.Panel):
         autobc_sz.Add(btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)
         autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
         autobc_sz.Add(sld_bc_outliers, 1,
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
+                      flag=wx.LEFT | wx.EXPAND, border=5)
         self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+                          flag=wx.EXPAND | wx.ALL, border=5)
 
         return btn_autobc, lbl_bc_outliers, sld_bc_outliers
 
@@ -909,14 +909,14 @@ class StreamPanel(wx.Panel):
 
         lh_sz.Add(lbl_lowi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
         lh_sz.Add(txt_lowi, 1, border=5,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT)
+                  flag=wx.EXPAND | wx.RIGHT | wx.LEFT)
         lh_sz.Add(lbl_highi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
         lh_sz.Add(txt_highi, 1, border=5,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT)
+                  flag=wx.EXPAND | wx.RIGHT | wx.LEFT)
 
         # Add spacing sizer to grid sizer
         self.gb_sizer.Add(lh_sz, (self.num_rows, 0), span=(1, 3), border=5,
-                          flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
+                          flag=wx.BOTTOM | wx.EXPAND)
 
         return sld_hist, txt_lowi, txt_highi
 
@@ -931,7 +931,7 @@ class StreamPanel(wx.Panel):
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+                          flag=wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
 
@@ -943,7 +943,7 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+                          flag=wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
 

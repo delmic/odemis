@@ -409,7 +409,7 @@ class AcquisitionDialog(xrcfr_plugin):
                               style=wx.ALIGN_CENTER, face_colour=face_colour)
         self.buttons.append(btn)
         sizer = self.pnl_buttons.GetSizer()
-        sizer.Add(btn, proportion=1, flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
+        sizer.Add(btn, proportion=1, flag=wx.ALL, border=10)
 
         if callback is not None and callable(callback):
             # Wrap the callback, to run in a separate thread, so it doesn't block

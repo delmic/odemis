@@ -176,18 +176,12 @@ class BackendStarter(object):
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
         frame.SetMinClientSize((400, 200)) 
-        # TODO: use ListCtrl
-        # self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
         self._list = wx.ListCtrl(frame,
                                  style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_SORT_HEADER)
         self._list.InsertColumn(0, "Component")
         self._list.InsertColumn(1, "Status")
         self._list.SetColumnWidth(0, 200)
         self._list.SetColumnWidth(1, 590)
-
-        window_sizer = wx.BoxSizer()
-        window_sizer.Add(self._list, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        frame.SetSizer(window_sizer)
 
         textsizer = wx.BoxSizer()
         textsizer.Add(self._list, 1, flag=wx.ALL | wx.EXPAND)
@@ -196,7 +190,7 @@ class BackendStarter(object):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
         frame.SetSizer(sizer)
 
         frame.CenterOnScreen()
@@ -215,7 +209,7 @@ class BackendStarter(object):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
         frame.SetSizer(sizer)
 
         # Show the end of the log (which is most likely showing the error)
