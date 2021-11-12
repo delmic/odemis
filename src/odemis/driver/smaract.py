@@ -2644,6 +2644,8 @@ class MCS2(model.Actuator):
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
+        self._update_position_timer = RepeatingTimer(1.0, self._updatePosition)
+        self._update_position_timer.start()
         self._updatePosition()
 
         self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
@@ -2661,6 +2663,7 @@ class MCS2(model.Actuator):
             self._executor = None
             self.core.SA_CTL_Close(self._id)
 
+        self._update_position_timer.cancel()
         super(MCS2, self).terminate()
 
     def updateMetadata(self, md):
