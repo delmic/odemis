@@ -507,6 +507,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.fm_focuser = model.getComponent(role="focus")
+        cls.fm_focuser.reference({"z"}).result()
 
         cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
 
