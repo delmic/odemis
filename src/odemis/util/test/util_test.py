@@ -380,22 +380,19 @@ class TestBackendStarter(unittest.TestCase):
         test.start_backend(ENZEL_CONFIG)
         # now check if the role is enzel
         role = model.getMicroscope().role
-        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
-        self.assertEqual(role, "cryo-secom")
+        self.assertEqual(role, "enzel")
 
     def test_running_backend_same_as_requested(self):
         # run enzel backend
         test.start_backend(ENZEL_CONFIG)
         # check if the role is enzel
         role = model.getMicroscope().role
-        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
-        self.assertEqual(role, "cryo-secom")
+        self.assertEqual(role, "enzel")
         # run enzel backend again
         test.start_backend(ENZEL_CONFIG)
         # it should still be enzel.
         role = model.getMicroscope().role
-        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
-        self.assertEqual(role, "cryo-secom")
+        self.assertEqual(role, "enzel")
 
     def test_running_backend_different_from_requested(self):
         # run sparc backend
@@ -407,8 +404,7 @@ class TestBackendStarter(unittest.TestCase):
         test.start_backend(ENZEL_CONFIG)
         # check if the role now is enzel instead of sparc
         role = model.getMicroscope().role
-        # TODO change 'cryo-secom' to 'enzel' once chamber PR is merged.
-        self.assertEqual(role, "cryo-secom")
+        self.assertEqual(role, "enzel")
 
 
 if __name__ == "__main__":
