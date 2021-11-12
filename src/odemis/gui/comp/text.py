@@ -434,7 +434,7 @@ class _NumberValidator(wx.Validator):
 
         reg_data = {
             'negative_sign': '',
-            'unit': u"[ ]*[GMkmµunp]?(%s)?" % unit if unit else ''
+            'unit': r"[ ]*[GMkmµunp]?(%s)?" % unit if unit else ''
         }
 
         if (
@@ -995,7 +995,7 @@ class IntegerValidator(_NumberValidator):
         # The regular expression to check the validity of what is being typed, is a bit different
         # from a regular expression that would validate an entire string, because we need to check
         # validity as the user types
-        self.entry_regex = u"[+{negative_sign}]?[\d]*{unit}$"
+        self.entry_regex = r"[+{negative_sign}]?[\d]*{unit}$"
         _NumberValidator.__init__(self, min_val, max_val, choices, unit)
 
     def Clone(self):
@@ -1102,7 +1102,7 @@ class FloatValidator(_NumberValidator):
         # The regular expression to check the validity of what is being typed, is a bit different
         # from a regular expression that would validate an entire string, because we need to check
         # validity as the user types
-        self.entry_regex = u"[+{negative_sign}]?[\d]*[.]?[\d]*[eE]?[+-]?[\d]*{unit}$"
+        self.entry_regex = r"[+{negative_sign}]?[\d]*[.]?[\d]*[eE]?[+-]?[\d]*{unit}$"
         _NumberValidator.__init__(self, min_val, max_val, choices, unit)
 
     def Clone(self):
