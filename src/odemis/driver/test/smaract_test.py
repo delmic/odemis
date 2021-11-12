@@ -605,12 +605,12 @@ class TestMCS2(unittest.TestCase):
         self.dev.moveAbs({"x": 0.0, "y": 0.0, "z": 0.0}).result()
         pos_before_move = self.dev.position.value
         rel_move = {"z": 5e-6}
+        expected_pos = pos_before_move.copy()
+        expected_pos["z"] += rel_move["z"]
         self.dev.moveRel(rel_move).result()
         # the position updater function is called every 1 sec, wait a bit more.
         time.sleep(2)
         pos_after_move = self.dev.position.value
-        expected_pos = pos_before_move.copy()
-        expected_pos["z"] += rel_move["z"]
         test.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
