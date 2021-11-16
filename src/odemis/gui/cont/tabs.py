@@ -1058,11 +1058,11 @@ class SecomStreamsTab(Tab):
                     vp.canvas.fit_view_to_next_image = False
 
         if main_data.ion_beam:
-            # Don't add stage control since the pixel size/magnification is unknown for the XT client FIB.
-            vpv[viewports[3]] = {"name"          : "FIB",
-                                 "stream_classes": FIBStream,
-                                 "stage": main_data.stage,
-                                 }
+            vpv[viewports[3]] = {
+                "name" : "FIB", 
+                "stream_classes": FIBStream,
+                "stage": main_data.stage,
+            }
 
         return vpv
 
