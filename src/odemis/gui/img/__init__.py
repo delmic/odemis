@@ -37,8 +37,13 @@ def getImage(fn):
        "src/odemis/gui/img"
     return (wx.Image)
     """
-    return wx.Image(getStream(fn))  # , wx.BITMAP_TYPE_PNG)
-
+    s = getStream(fn)
+    im = wx.Image(s)  # , wx.BITMAP_TYPE_PNG)
+    # Since wxPython v4.0.7, we need to explicitly close the stream, otherwise
+    # we run out of files to open.
+    # https://github.com/wxWidgets/Phoenix/issues/2025
+    s.close()
+    return im
 
 def getBitmap(fn):
     """
