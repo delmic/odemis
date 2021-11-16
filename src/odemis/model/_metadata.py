@@ -102,6 +102,8 @@ MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
+BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
+
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
 MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
@@ -185,10 +187,15 @@ MD_FAV_POS_COATING = "Favourite position coating"  # dict of str -> float repres
 MD_FAV_POS_ALIGN = "Favourite position alignment"  # dict of str -> float representing a good position to start 3 beam alignment procedure
 MD_FAV_POS_SEM_IMAGING = "Favourite position SEM imaging "  # dict of str -> float representing a good position for SEM imaging
 MD_POS_ACTIVE_RANGE = "Range for active position"  # dict str → (float, float): axis name → (min,max): the range of the axes within which can be used during imaging
-MD_OVERVIEW_RANGE = "Range for overview map"  # dict str → (float, float): axis name → (min,max): the range of the axes within which overview map is acquired
 MD_ION_BEAM_TO_SAMPLE_ANGLE = "Ion beam to sample angle"  # (float) angle between ion beam and sample stage
 MD_SAFE_REL_RANGE = "Safe relative range"  # (float, float) +/- safe range relative to a value
 MD_SAFE_SPEED_RANGE = "Safe speed range"  # (float, float) min, max of the safe speed range
+MD_SAMPLE_CENTERS = "Centers position of grids" # dict str → float representing the centers positions of the 2 grids loaded on the meteor stage
+MD_SEM_IMAGING_RANGE = "SEM imaging range"  # dict str → [float, float] defining the volume of the SEM imaging area, along x, y and z axes. 
+MD_FM_IMAGING_RANGE = "FM imaging range"    # dict str → [float, float] defining the volume of the FM imaging area, along x, y and z axes.
+MD_FAV_FM_POS_ACTIVE = "Favourite FM position active"   # dict str->float representing the position required for FM imaging
+MD_FAV_SEM_POS_ACTIVE = "Favourite SEM position active"     # dict -> float representing the position required for SEM imaging 
+
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str

@@ -42,7 +42,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
-from odemis.gui.comp.overlay.view import CrossHairOverlay
+from odemis.gui.comp.overlay.view import CenteredLineOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
@@ -89,7 +89,7 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw a cross hair to the Cairo context """
         center = self._get_current_stage_buffer_pos()
-        CrossHairOverlay.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
+        CenteredLineOverlay(self.cnvs).draw_crosshair(ctx, center, size=self.size, colour=self.colour)
 
 
 class StagePointSelectOverlay(WorldOverlay):
@@ -181,7 +181,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self._mode = MODE_SHOW_FEATURES
 
     def _on_current_feature_va(self, _):
-        # refresh the canvas on _on_current_feature_va change
+        # refresh the canvas on _on_current_feature_va change & when status is changed
+        self.cnvs.update_drawing()
+        if self.tab_data.main.currentFeature.value:
+            self.tab_data.main.currentFeature.value.status.subscribe(self._on_status_change, init=True)
+
+    def _on_status_change(self, _):
         self.cnvs.update_drawing()
 
     def _on_features_changes(self, _):

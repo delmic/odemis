@@ -37,7 +37,7 @@ import threading
 from odemis import model
 from odemis import util
 from odemis.util import driver, RepeatingTimer, almost_equal
-from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute
+from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute, roattribute
 
 
 def add_coord(pos1, pos2):
@@ -2644,6 +2644,8 @@ class MCS2(model.Actuator):
             else:
                 logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
 
+        self._update_position_timer = RepeatingTimer(1.0, self._updatePosition)
+        self._update_position_timer.start()
         self._updatePosition()
 
         self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
@@ -2661,6 +2663,7 @@ class MCS2(model.Actuator):
             self._executor = None
             self.core.SA_CTL_Close(self._id)
 
+        self._update_position_timer.cancel()
         super(MCS2, self).terminate()
 
     def updateMetadata(self, md):
@@ -3744,6 +3747,7 @@ class Picoscale(model.HwComponent):
             if not 0 <= num <= num_ch - 1:
                 raise ValueError("Channel %s not available, needs to be 0 < channel < %s." % (num, num_ch - 1))
         self._channels = channels  # channel name -> channel number used by controller
+        self._axes = {ch: model.Axis(range=(-10, 10), unit="m") for ch in self._channels}  # range is arbitrarily large
 
         # Device setup
         self.EnableFullAccess()
@@ -3829,6 +3833,11 @@ class Picoscale(model.HwComponent):
             self.core.SA_SI_Close(self._id)
             self._executor = None
         super(Picoscale, self).terminate()
+
+    @roattribute
+    def axes(self):
+        """ dict str->Axis: name of each axis available -> their definition."""
+        return self._axes
 
     @staticmethod
     def scan():
@@ -4467,7 +4476,7 @@ class FakePicoscale_DLL(object):
             SA_PS_AF_ADJUSTMENT_STATE_PROP: 0,
             SA_SI_NUMBER_OF_CHANNELS_PROP: 3,
             SA_PS_SYS_IS_STABLE_PROP: 1,
-            SA_PS_CH_IS_VALID_PROP: 1,
+            SA_PS_CH_IS_VALID_PROP: 0,
             SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP: 0,
             SA_PS_SYS_PRECISION_MODE_PROP: 0,
         }
@@ -4606,6 +4615,7 @@ class FakePicoscale_DLL(object):
         # Set parameters
         if not self.cancel_referencing:
             self.properties[SA_PS_SYS_IS_STABLE_PROP] = 1  # system stable
+            self.properties[SA_PS_CH_IS_VALID_PROP] = 1  # channel is referenced
             self.properties[SA_PS_AF_ADJUSTMENT_STATE_PROP] = finished_param
 
         # Reset cancelling flag

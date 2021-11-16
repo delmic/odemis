@@ -80,6 +80,8 @@ class CryoFeatureController(object):
         :param features: list(CryoFeature) list of modified features
         """
         if not features:
+            self._panel.cmb_features.Clear()
+            self._on_current_feature_changes(None)
             return
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
         self._panel.cmb_features.Clear()
@@ -110,6 +112,7 @@ class CryoFeatureController(object):
         if not feature:
             enable_feature_ctrls(False)
             self._panel.cmb_features.SetValue("No Feature Selected")
+            self._panel.cmb_feature_status.SetValue("Not Selected")
             return
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 

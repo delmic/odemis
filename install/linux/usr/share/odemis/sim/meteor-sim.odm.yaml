@@ -1,0 +1,202 @@
+# For now, this is esssentially just a FM microscope, as the FIB part is handled
+# separately by the SEM
+
+METEOR-Sim: {
+    class: Microscope,
+    role: meteor,
+    children: ["Optical Objective",
+               "Optical Focus",
+               "Light Source", "Filter Wheel", "Camera",
+               "Linked Stage", "EBeam",
+    ],
+}
+
+"SEM": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+    },
+    children: {scanner: "EBeam",
+               detector0: "SE Detector",
+               focus: "EBeam Focus",
+    }
+}
+
+"EBeam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    affects: ["BSED Phenom", "Camera"], # affects the CCD in case of cathodoluminescence
+}
+
+"EBeam Focus": {
+    role: ebeam-focus,
+    init: {},
+    affects: ["EBeam"]
+}
+
+"SE Detector": {
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+# Normally provided by the SEM
+"Stage": {
+    class: tmcm.TMCLController,
+    role: stage-bare,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["x", "y", "z", "rx", "rz"],
+        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
+        rng: [[-0.1, 0.1], [-0.05, 0.05], [0, 0.1], [-2, 2], [0, 6.28]],
+        unit: ["m", "m", "m", "rad", "rad"],
+        refproc: "Standard",
+    },
+    metadata: {
+        FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975 },
+        SEM_IMAGING_RANGE: {"x": [-0.0049, 0.0048], "y": [0.0004, 0.0044], "z": [0.0055, 0.0075]},
+        FM_IMAGING_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045], "z": [0.0046, 0.0087]},
+        SAMPLE_CENTERS: {"GRID 1": {'x': -0.003, 'y':  0.0025, 'z': 0.0066}, "GRID 2": {'x': 0.003, 'y': 0.0023, 'z': 0.0066}},
+        # Note that these values change every session 
+        POS_COR: { "x": 0.02447, "y": -0.000017 },
+        # Active tilting & rotation angles positions when switching between SEM & FM
+        # Note: these values are calibrated at installation time 
+        FAV_FM_POS_ACTIVE: {"rx": 0.122173048  , "rz":  5.06145483},
+        FAV_SEM_POS_ACTIVE: {"rx": 0.34906585, "rz": 1.91986218}    # Note that milling angle (rx) can be changed per session 
+    },
+}
+
+"Linked Stage": {
+    class: actuator.LinkedAxesActuator,
+    role: stage,
+    dependencies: {
+        "stage": "Stage",
+    },
+    affects: ["Camera", "EBeam"],
+    metadata: {
+        # Matrix to convert from X/Y to X/Y/Z (on the underlying stage)
+        # xd = POS_COR[0] + CALIB[0,0] * x + CALIB[0,1] * y
+        # yd = POS_COR[1] + CALIB[1,0] * x + CALIB[1,1] * y
+        # zd = POS_COR[2] + CALIB[2,0] * x + CALIB[2,1] * y
+        CALIB: [[1, 0],  [0, 0.6941955197522921], [0, -0.7197864824764667]],
+        POS_COR: [0, -0.0007363771884364807, 0.004945901888925916],
+        # Allowed range when in FM imaging mode. The X/Y ranges are also used
+        # as default area for the overview acquisition. The values must be in the
+        # stage coordinates, so converted from the SEM stage (in Y).
+        POS_ACTIVE_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045],},
+    },
+}
+
+"Light Source": {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyUSB*",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
+        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
+                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
+                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
+                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
+                 }
+        },
+        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"]
+}
+
+# Normally a IDS uEye
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    init: {
+        device: "fake",
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, -2], # To swap/invert axes
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake3",
+        address: null,
+        axes: ["fw"],
+        # TODO: check step size, so that 6.28 rad == one full rotation
+        ustepsize: [1.227184e-6], # [rad/µstep]
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "Optical Actuators"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [510.e-9, 540.e-9], # FF01-440/40-25
+             0.865398: [532.e-9, 552.e-9], # FF01-525/30-25
+             1.650796: [589.e-9, 625.e-9], # FF01-607/36-25
+             2.4361944: [672.e-9, 696.e-9], # FF02-684/24-25
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
+    affects: ["Camera"],
+}
+
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: focus,
+    affects: ["Camera"],
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        # TODO: check speed/accel
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                range: [-10.e-3, 8.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        FAV_POS_DEACTIVE: {'z': 0.002},
+        FAV_POS_ACTIVE: {'z': 0.00}
+    },
+}

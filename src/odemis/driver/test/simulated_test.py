@@ -307,7 +307,7 @@ class GenericComponentTest(unittest.TestCase):
         comp.vaChoices.value = 4
         self.assertEqual(comp.vaChoices.value, 4)  # check the VA can be written to
         self.assertEqual(comp.vaChoices.choices, set(range(0, 10)))  # check the choices are set correctly
-        self.assertTrue(comp.vaBool)  # check this VA is present too
+        self.assertTrue(comp.vaBool.value)  # check this VA is present too
 
         f = comp.moveAbs({'x': 0.1})
         f.result()
@@ -319,16 +319,32 @@ class GenericComponentTest(unittest.TestCase):
     def test_creation_vas_only(self):
         comp = simulated.GenericComponent(name="test_component", role="test",
                                           vas={"vaRange": {"value": 0.1, "readonly": True, "unit": "", "range": [0, 1]},
-                                               "vaChoices": {"value": 1, "choices": set(range(0, 10))},
-                                               "vaBool": {"value": True}})
+                                               "vaChoices": {"value": 1, "choices": {1: "Good", 5: "Bad"}},
+                                               "vaSet": {"value": "a", "choices": ["a", "b"]},
+                                               "vaBool": {"value": True},
+                                               "vaString": {"value": "test"},
+                                          }
+                                          )
         self.assertEqual(comp.vaRange.value, 0.1)  # check that it has the right value
         self.assertTrue(comp.vaRange.readonly)  # check that it is readonly
         self.assertEqual(comp.vaRange.unit, "")  # check the unit is correct
         self.assertEqual(comp.vaRange.range, (0, 1))  # check the range is set correctly
-        comp.vaChoices.value = 4
-        self.assertEqual(comp.vaChoices.value, 4)  # check the VA can be written to
-        self.assertEqual(comp.vaChoices.choices, set(range(0, 10)))  # check the choices are set correctly
-        self.assertTrue(comp.vaBool)  # check this VA is present too
+
+        comp.vaChoices.value = 5
+        self.assertEqual(comp.vaChoices.value, 5)  # check the VA can be written to
+        self.assertEqual(comp.vaChoices.choices.keys(), {1, 5})  # check the choices
+        with self.assertRaises(IndexError):
+            comp.vaChoices.value = 4
+
+        self.assertEqual(comp.vaSet.value, "a")
+        comp.vaSet.value = "b"
+        self.assertEqual(comp.vaSet.choices, {"a", "b"})
+
+        self.assertTrue(comp.vaBool.value)  # check this VA is present too
+        with self.assertRaises(TypeError):
+            comp.vaBool.value = 4
+
+        self.assertEqual(comp.vaString.value, "test")
 
 
 if __name__ == "__main__":

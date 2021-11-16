@@ -289,8 +289,7 @@ def enable_tab_on_stage_position(button, stage, pos, target):
     """
     Enable the given tab button if the stage is in target position, disable it otherwise
     :param button: (Button) the Tab button to enable/disable
-    :param stage: (Actuator) the stage driver
     :param pos: (dict str->float) current position to check its label
-    :param target: (int) target position label (IMAGING, LOADING..etc)
+    :param target: (list) target position labels for which the tab button is enabled [IMAGING, FM_IMAGING]
     """
-    button.Enable(getCurrentPositionLabel(pos, stage) == target)
+    button.Enable(getCurrentPositionLabel(pos, stage) in target)
