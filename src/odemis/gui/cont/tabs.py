@@ -72,7 +72,7 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
-    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream
+    ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
 from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
 from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -950,6 +950,16 @@ class SecomStreamsTab(Tab):
             else:
                 logging.error("No EM detector found")
 
+        if main_data.ion_beam:
+            fib_stream = acqstream.FIBStream("Fib scanner",
+                                             main_data.sed,
+                                             main_data.sed.data,
+                                             main_data.ion_beam,
+                                             )
+            tab_data.fib_stream = fib_stream
+            self._streambar_controller.addStream(fib_stream, add_to_view=True, visible=True, play=False)
+
+
         # Create streams before state controller, so based on the chamber state,
         # the streams will be enabled or not.
         self._ensure_base_streams()
@@ -1079,6 +1089,13 @@ class SecomStreamsTab(Tab):
                 if v.get("stream_classes") == EMStream:
                     v["fov_hw"] = main_data.ebeam
                     vp.canvas.fit_view_to_next_image = False
+
+        if main_data.ion_beam:
+            vpv[viewports[3]] = {
+                "name" : "FIB", 
+                "stream_classes": FIBStream,
+                "stage": main_data.stage,
+            }
 
         return vpv
 
