@@ -597,9 +597,9 @@ class EBeamScanner(model.Emitter):
         # In x we typically scan from negative to positive centered around zero and
         # in y from positive to negative centered around zero.
         # the start of the sawtooth scanning signal
-        self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)))
+        self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1.0, -1.0), (1.0, 1.0)), cls=(int, float))
         # heights of the sawtooth scanner signal (it does not include the offset!)
-        self.scanAmplitude = model.TupleContinuous((0.1, -0.1), range=((-1.0, -1.0), (1.0, 1.0)))
+        self.scanAmplitude = model.TupleContinuous((0.1, -0.1), range=((-1.0, -1.0), (1.0, 1.0)), cls=(int, float))
         # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
 
         # delay between the trigger signal to start the acquisition and the scanner to start scanning
@@ -883,9 +883,9 @@ class MirrorDescanner(model.Emitter):
         # direction of the executed descan
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit='rad')
         # start of the sawtooth descanner signal
-        self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)))
+        self.scanOffset = model.TupleContinuous((0.0, 0.0), range=((-1, -1), (1, 1)), cls=(int, float))
         # heights of the sawtooth descanner signal (it does not include the offset!)
-        self.scanAmplitude = model.TupleContinuous((0.008, 0.008), range=((-1, -1), (1, 1)))
+        self.scanAmplitude = model.TupleContinuous((0.008, 0.008), range=((-1, -1), (1, 1)), cls=(int, float))
         # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)  # [1/sec]

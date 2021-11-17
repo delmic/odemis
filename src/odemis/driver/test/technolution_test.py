@@ -569,6 +569,10 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.scanOffset.value = (1.2 * min_scanOffset, 1.2 * min_scanOffset)
         self.assertEqual(self.EBeamScanner.scanOffset.value, (0.9 * max_scanOffset, 0.9 * max_scanOffset))
 
+        # Check if int value is allowed
+        self.EBeamScanner.scanOffset.value = (0, 0)
+        self.assertEqual(self.EBeamScanner.scanOffset.value, (0, 0))
+
     def test_scanAmplitude_VA(self):
         """Testing the scanner gain VA. It defines the heights of the sawtooth scanning signal for the scanner."""
         min_scan_amplitude = self.EBeamScanner.scanAmplitude.range[0][0]
@@ -590,6 +594,10 @@ class TestEBeamScanner(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.EBeamScanner.scanAmplitude.value = (1.2 * min_scan_amplitude, 1.2 * min_scan_amplitude)
         self.assertEqual(self.EBeamScanner.scanAmplitude.value, (0.9 * max_scan_amplitude, 0.9 * max_scan_amplitude))
+
+        # Check if int value is allowed
+        self.EBeamScanner.scanAmplitude.value = (0, 0)
+        self.assertEqual(self.EBeamScanner.scanAmplitude.value, (0, 0))
 
     def test_scanDelay_VA(self):
         """Testing of the scanner delay VA. It is the delay between the start the acquisition trigger and the
@@ -849,6 +857,10 @@ class TestMirrorDescanner(unittest.TestCase):
             self.MirrorDescanner.scanOffset.value = (1.2 * min_scanOffset, 1.2 * min_scanOffset)
         self.assertEqual(self.MirrorDescanner.scanOffset.value, (0.9 * max_scanOffset, 0.9 * max_scanOffset))
 
+        # Check if int value is allowed
+        self.EBeamScanner.scanOffset.value = (0, 0)
+        self.assertEqual(self.EBeamScanner.scanOffset.value, (0, 0))
+
     def test_scanAmplitude_VA(self):
         """Testing the descanner gain VA. It defines the heights of the sawtooth scanning signal for the descanner."""
         min_scan_amplitude = self.MirrorDescanner.scanAmplitude.range[0][0]
@@ -870,6 +882,10 @@ class TestMirrorDescanner(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.MirrorDescanner.scanAmplitude.value = (1.2 * min_scan_amplitude, 1.2 * min_scan_amplitude)
         self.assertEqual(self.MirrorDescanner.scanAmplitude.value, (0.9 * max_scan_amplitude, 0.9 * max_scan_amplitude))
+
+        # Check if int value is allowed
+        self.EBeamScanner.scanAmplitude.value = (0, 0)
+        self.assertEqual(self.EBeamScanner.scanAmplitude.value, (0, 0))
 
     def test_physicalFlybackTime_VA(self):
         """Testing the physical flyback time VA. The physical flyback time is the time the descanner has to
