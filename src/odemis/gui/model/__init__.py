@@ -323,10 +323,12 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            if self.role in ("secom", "delphi", "enzel", "meteor"):
+            if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role == "secom":
                     required_roles += ["align", "se-detector"]
+            elif self.role == "meteor":
+                required_roles += ["light", "stage", "focus"]
             elif self.role in ("sparc", "sparc2"):
                 required_roles += ["e-beam", "mirror", "lens"]
             elif self.role == "mbsem":
