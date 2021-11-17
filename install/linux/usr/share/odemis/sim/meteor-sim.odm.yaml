@@ -7,7 +7,7 @@ METEOR-Sim: {
     children: ["Optical Objective",
                "Optical Focus",
                "Light Source", "Filter Wheel", "Camera",
-               "Linked Stage", "EBeam",
+               "Meteor Stage", "EBeam",
     ],
 }
 
@@ -69,25 +69,31 @@ METEOR-Sim: {
     },
 }
 
-"Linked Stage": {
-    class: actuator.LinkedAxesActuator,
-    role: stage,
-    dependencies: {
-        "stage": "Stage",
-    },
-    affects: ["Camera", "EBeam"],
-    metadata: {
-        # Matrix to convert from X/Y to X/Y/Z (on the underlying stage)
-        # xd = POS_COR[0] + CALIB[0,0] * x + CALIB[0,1] * y
-        # yd = POS_COR[1] + CALIB[1,0] * x + CALIB[1,1] * y
-        # zd = POS_COR[2] + CALIB[2,0] * x + CALIB[2,1] * y
-        CALIB: [[1, 0],  [0, 0.6941955197522921], [0, -0.7197864824764667]],
-        POS_COR: [0, -0.0007363771884364807, 0.004945901888925916],
-        # Allowed range when in FM imaging mode. The X/Y ranges are also used
-        # as default area for the overview acquisition. The values must be in the
-        # stage coordinates, so converted from the SEM stage (in Y).
-        POS_ACTIVE_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045],},
-    },
+
+"Linked YZ": {
+  class: actuator.ConvertStage,
+  role: null,
+  dependencies: {
+    "under": "Stage"
+  },
+  init: {
+    axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    rotation: -0.8034946943806713, # rad , -45°
+  },
+}
+
+"Meteor Stage": {
+  class: actuator.MultiplexActuator,
+  role: stage,
+  dependencies: { "x": "Stage", "y": "Linked YZ", "z": "Linked YZ", },
+  init: {
+          axes_map: { "x": "x", "y": "x", "z": "y",},
+  },
+  affects: ["Camera", "EBeam"],
+  metadata: {
+
+     POS_ACTIVE_RANGE: {"x":[0.040, 0.054], "y": [-0.0044, 0.0045]}
+  },
 }
 
 "Light Source": {
