@@ -559,9 +559,7 @@ class CryoAcquiController(object):
                 self._acquiStreams.value, self._tab_data.main.settings_obs)
 
         # Pause live streams before acquiring
-        for s in self._acquiStreams.value:
-            s.is_active.value = False
-            s.should_update.value = False
+        self._tab.streambar_controller.pauseStreams()
 
         self._tab_data.main.is_acquiring.value = True
         logging.info("Acquisition started")

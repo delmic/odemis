@@ -337,14 +337,16 @@ class MicroscopeViewport(ViewPort):
             view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
 
         if hasattr(view, "showFeatures"):
-                view.showFeatures.subscribe(self._show_hide_feature_overlay)
-                self.bottom_legend.feature_toggle_va = view.showFeatures
+            view.showFeatures.subscribe(self._show_hide_feature_overlay)
+            self.bottom_legend.feature_toggle_va = view.showFeatures
 
     def _show_hide_feature_overlay(self, va_val):
         # show/hide feature overlay based on the legend toggle button
         foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
         if foverlay:
             foverlay.show = va_val
+            # also activate/deactivate the overaly so it'd not be possible to intera with it
+            foverlay.active.value = va_val
             self.canvas.update_drawing()
 
     def clear(self):

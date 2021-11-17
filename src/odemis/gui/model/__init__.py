@@ -725,6 +725,7 @@ class CryoLocalizationGUIData(CryoGUIData):
 
     def _updateZParams(self):
         # Calculate the new range of z pos
+        # NB: this is a copy of AnalysisGUIData._updateZParams
         limits = []
 
         for s in self.streams.value:
