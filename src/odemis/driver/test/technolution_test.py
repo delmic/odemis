@@ -935,6 +935,10 @@ class TestMPPC(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.MPPC.filename.value = "@testing_file_name"
 
+        # Raise an error if filename is longer than 50 characters
+        with self.assertRaises(ValueError):
+            self.MPPC.filename.value = "a-very-very-very-very-very-very-very-very-long-filename"
+
     def test_acqDelay_VA(self):
         """Testing the acquisition delay VA, which defines the delay between the trigger signal to start the
         acquisition, and the start of the recording with the mppc detector."""
