@@ -43,6 +43,7 @@ def calibrate(dev, channels):
     """
     Set calibration option bits to calibration_options. See section 2.7.1 in programmer manual
     0 is for a default calibration
+    This property is volatile (it is reset after reboot)
     """
 
     if not channels:
@@ -74,6 +75,7 @@ def set_positioner_type(dev, channels, ptype):
     Set the type of positioner that is connected to the device channels. The positioner type implicitly gives the
     controller information about how to calculate positions, handle the referencing, configure the control-loop,
     etc. See sections 2.5 and 4.4.6 in programmer manual.
+    This property is not volatile (it will stay after reboot)
     """
     if not channels:
         return
@@ -84,12 +86,18 @@ def set_positioner_type(dev, channels, ptype):
 
 
 def set_reference_autozero(dev, channel, autozero):
+    """
+    This property is volatile (it is reset after reboot)
+    """
     logging.info(f"Setting the reference autozero mode to {autozero} for channel {channel}")
     ref_opt = dev.GetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS, channel)
     if autozero:
         ref_opt |= smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO
     else:
         ref_opt &= ~smaract.SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO
+
+    dev.SetProperty_i32(smaract.SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS,
+                        channel, ref_opt)
 
 def reference(dev, channels, autozero=False):
     for channel in channels:
