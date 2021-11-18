@@ -558,6 +558,9 @@ class CryoAcquiController(object):
             self._acq_future = acqmng.acquire(
                 self._acquiStreams.value, self._tab_data.main.settings_obs)
 
+        # Pause live streams before acquiring
+        self._tab.streambar_controller.pauseStreams()
+
         self._tab_data.main.is_acquiring.value = True
         logging.info("Acquisition started")
 

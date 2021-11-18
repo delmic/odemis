@@ -338,7 +338,10 @@ class MainGUIData(object):
                 attrname = self._ROLE_TO_ATTR[crole]
                 if getattr(self, attrname) is None:
                     raise KeyError("Microscope (%s) is missing the '%s' component" % (self.role, crole))
-
+            # Add project_path string VA to notify when `cryo` projects change
+            config = conf.get_acqui_conf()
+            pj_last_path = config.get("project", "pj_last_path")
+            self.project_path = StringVA(pj_last_path)  # a unicode
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
@@ -716,6 +719,41 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.pj_last_path, config.fn_ptn,
             config.last_extension,
             config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+        # Add zPos VA to control focus on acquired view
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+        self.streams.subscribe(self._on_stream_change, init=True)
+
+    def _updateZParams(self):
+        # Calculate the new range of z pos
+        # NB: this is a copy of AnalysisGUIData._updateZParams
+        limits = []
+
+        for s in self.streams.value:
+            if model.hasVA(s, "zIndex"):
+                metadata = s.getRawMetadata()[0]  # take only the first
+                zcentre = metadata[model.MD_POS][2]
+                zstep = metadata[model.MD_PIXEL_SIZE][2]
+                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
+
+        if len(limits) > 1:
+            self.zPos.range = (min(limits), max(limits))
+            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1],
+                          self.zPos.value)
+        else:
+            self.zPos.range = (0, 0)
+
+    def _on_stream_change(self, _):
+        self._updateZParams()
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
@@ -795,10 +833,6 @@ class CryoChamberGUIData(CryoGUIData):
     def __init__(self, main):
         CryoGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
-
-        self._conf = get_acqui_conf()
-        pj_last_path = self._conf.get("project", "pj_last_path")
-        self.project_name = StringVA(pj_last_path)  # a unicode
 
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
@@ -1975,12 +2009,12 @@ class FixedOverviewView(StreamView):
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
 
-class FeatureView(StreamView):
+class FeatureView(MicroscopeView):
     """
     A stream view with optional bookmarked features
     """
     def __init__(self, name, stage=None, **kwargs):
-        StreamView.__init__(self, name, stage=stage, **kwargs)
+        MicroscopeView.__init__(self, name, stage=stage, **kwargs)
         # booleanVA to toggle showing/hiding the features
         self.showFeatures = model.BooleanVA(True)
 

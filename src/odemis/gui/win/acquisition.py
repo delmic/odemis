@@ -645,7 +645,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # The pattern to use for storing each tile file individually
         # None disables storing them
-        self.filename_tiles = create_filename(self.conf.pj_last_path, "{datelng}-{timelng}-overview",
+        save_dir = self.conf.last_path
+        if isinstance(orig_tab_data, guimodel.CryoGUIData):
+            save_dir = self.conf.pj_last_path
+        self.filename_tiles = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
 
         # Create a new settings controller for the acquisition dialog

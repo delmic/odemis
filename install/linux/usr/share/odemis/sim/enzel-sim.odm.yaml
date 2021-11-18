@@ -250,7 +250,7 @@ ENZEL-Sim: {
     axes_map: { "z": "z" },
   },
   metadata: {
-    FAV_POS_ACTIVE: { 'z': 0.0 }
+    FAV_POS_ACTIVE: { 'z': 0.002 }
   },
   persistent: {
     metadata: [ FAV_POS_ACTIVE ],  # Store "good focus" position between run
@@ -323,7 +323,7 @@ ENZEL-Sim: {
         unit: 'm',
       },
       'z': {
-        range: [ -1.e-2, 0.002 ],
+        range: [ -1.e-2, 0.003 ],
         unit: 'm',
       },
       'rx': {
@@ -349,12 +349,12 @@ ENZEL-Sim: {
     # Allowed range when in FM/SEM imaging mode. The X/Y ranges are also used
     # as default area for the overview acquisition.
     # X/Y range is small, to fit the limited simulated range of the camera
-    POS_ACTIVE_RANGE: { 'x': [ -23.e-4, 23.e-4 ], 'y': [ -33.e-4, 33.e-4 ], 'z': [ -0.003, 0.0 ], } ,
+    POS_ACTIVE_RANGE: { 'x': [ -23.e-6, 23.e-6 ], 'y': [ -33.e-6, 33.e-6 ], 'z': [ -0.003, 0.0 ], } ,
     # Initial position to start alignment from
     FAV_POS_ALIGN: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.001 },
     # Initial position when going to FM/SEM imaging.
     # It should be within the ACTIVE_RANGE
-    FAV_POS_ACTIVE: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
+    FAV_POS_ACTIVE: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.002 },
     # SEM Imaging position
     FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
     # Loading position
