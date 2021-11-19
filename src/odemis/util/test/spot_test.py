@@ -333,7 +333,8 @@ class TestFindSpotPositions(unittest.TestCase):
 
         # Map the found spot locations to the known spot locations.
         tree = scipy.spatial.cKDTree(loc)
-        distances, indices = tree.query(ji, k=1, workers=-1)
+        # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
+        distances, indices = tree.query(ji, k=1, n_jobs=-1)
 
         # Check that all spot positions have been found within the required
         # accuracy.
