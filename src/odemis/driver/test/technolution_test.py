@@ -594,15 +594,13 @@ class TestEBeamScanner(unittest.TestCase):
         min_y_prescan_lines = self.EBeamScanner.scanDelay.range[0][1]
         max_y_prescan_lines = self.EBeamScanner.scanDelay.range[1][1]
 
-        # Set acquisition delay on detector to maximum value as scanner delay needs to be always smaller than the
-        # acquisition delay
-        self.MPPC.acqDelay.value = self.MPPC.acqDelay.range[1]
+        self.MPPC.acqDelay.value = self.MPPC.acqDelay.range[1]  # set to max
 
-        # Check if small scanDelay values are allowed
+        # Check if small delay values are allowed
         self.EBeamScanner.scanDelay.value = (0.1 * max_scanDelay, 0.1 * max_y_prescan_lines)
         self.assertEqual(self.EBeamScanner.scanDelay.value, (0.1 * max_scanDelay, 0.1 * max_y_prescan_lines))
 
-        # Check if big scanDelay values are allowed
+        # Check if big delay values are allowed
         self.EBeamScanner.scanDelay.value = (0.9 * max_scanDelay, 0.9 * max_y_prescan_lines)
         self.assertEqual(self.EBeamScanner.scanDelay.value, (0.9 * max_scanDelay, 0.9 * max_y_prescan_lines))
 
@@ -615,10 +613,19 @@ class TestEBeamScanner(unittest.TestCase):
             self.EBeamScanner.scanDelay.value = (-0.2 * max_scanDelay, -0.2 * max_y_prescan_lines)
         self.assertEqual(self.EBeamScanner.scanDelay.value, (0.9 * max_scanDelay, 0.9 * max_y_prescan_lines))
 
-        # Check that the scanner delay cannot be greater than the acquisition delay.
+        # Check scanner delay equal to acquisition delay is allowed
+        self.MPPC.acqDelay.value = self.MPPC.acqDelay.range[1]  # set to max
+        self.EBeamScanner.scanDelay.value = self.EBeamScanner.scanDelay.range[0]  # set to min
+        self.MPPC.acqDelay.value = 0.5 * self.EBeamScanner.scanDelay.range[1][0]
+        self.EBeamScanner.scanDelay.value = (0.5 * self.EBeamScanner.scanDelay.range[1][0], 0)  # set same value
+
+        # Check that a scanner delay greater than the acquisition delay raises an error
         self.EBeamScanner.scanDelay.value = (min_scanDelay, min_y_prescan_lines)
         self.EBeamScanner.parent._mppc.acqDelay.value = 0.5 * max_scanDelay
-        self.EBeamScanner.scanDelay.value = (0.6 * max_scanDelay, 0.6 * max_y_prescan_lines)
+        # try scanner delay > acquisition delay
+        with self.assertRaises(ValueError):
+            self.EBeamScanner.scanDelay.value = (0.6 * max_scanDelay, 0.6 * max_y_prescan_lines)
+        # Check that the scan delay remains unchanged.
         self.assertEqual(self.EBeamScanner.scanDelay.value, (min_scanDelay, min_y_prescan_lines))
 
 
@@ -939,28 +946,30 @@ class TestMPPC(unittest.TestCase):
         """Testing the acquisition delay VA, which defines the delay between the trigger signal to start the
         acquisition, and the start of the recording with the mppc detector."""
         max_acqDelay = self.MPPC.acqDelay.range[1]
-        # Set scanner delay to minimum as the detector acquisition delay needs to be always bigger than the
-        # scanner delay
-        self.EBeamScanner.scanDelay.value = self.EBeamScanner.scanDelay.range[0]
+
+        self.EBeamScanner.scanDelay.value = self.EBeamScanner.scanDelay.range[0]  # set to min
         self.assertEqual(self.EBeamScanner.scanDelay.value, (self.EBeamScanner.scanDelay.range[0]))
 
-        # Check if big acqDelay values are allowed
+        # Check if big delay values are allowed
         self.MPPC.acqDelay.value = max_acqDelay
         self.assertEqual(self.MPPC.acqDelay.value, max_acqDelay)
 
-        # Check if small acqDelay values are allowed
+        # Check if small delay values are allowed
         self.MPPC.acqDelay.value = 0.1 * max_acqDelay
         self.assertEqual(self.MPPC.acqDelay.value, 0.1 * max_acqDelay)
 
-        # Check that the scanner delay cannot be greater than the detector acquisition delay. If the detector
-        # acquisition delay is too small it should be automatically changed so its value matches the scanner delay.
-        self.MPPC.acqDelay.value = max_acqDelay
-        self.EBeamScanner.scanDelay.value = self.EBeamScanner.scanDelay.range[1]
-        self.MPPC.acqDelay.value = 0.2 * self.EBeamScanner.scanDelay.range[1][0]
-        # Check if acquisition delay is not updated to asked value but to the required value instead.
-        self.assertEqual(self.MPPC.acqDelay.value, self.EBeamScanner.scanDelay.range[1][0])
-        # Check if the scanner delay remains unchanged.
-        self.assertEqual(self.EBeamScanner.scanDelay.value, self.EBeamScanner.scanDelay.range[1])
+        # Check acquisition delay equals scanner delay is allowed
+        self.EBeamScanner.scanDelay.value = (self.MPPC.acqDelay.range[0], self.MPPC.acqDelay.range[0])
+        self.MPPC.acqDelay.value = self.MPPC.acqDelay.range[0]
+
+        # Check that a acquisition delay smaller than the scanner delay raises an error
+        self.MPPC.acqDelay.value = max_acqDelay  # set to max
+        self.EBeamScanner.scanDelay.value = self.EBeamScanner.scanDelay.range[1]  # set to max
+        # try acquisition delay < scanner delay
+        with self.assertRaises(ValueError):
+            self.MPPC.acqDelay.value = 0.2 * self.EBeamScanner.scanDelay.value[0]
+        # Check that the acquisition delay remains unchanged.
+        self.assertEqual(self.MPPC.acqDelay.value, max_acqDelay)
 
     def test_overVoltage_VA(self):
         """Testing the overvoltage VA. It regulates the sensitivity of the mppc sensor. The ASM then adds over voltage
