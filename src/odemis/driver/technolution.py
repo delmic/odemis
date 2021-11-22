@@ -843,7 +843,7 @@ class MirrorDescanner(model.Emitter):
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
-        self.physicalFlybackTime = 250e-6  # assumed constant [s]
+        self.physicalFlybackTime = model.FloatContinuous(250e-6, range=(0, 1e-3), unit='s')
 
     def getXAcqSetpoints(self):
         """
@@ -893,7 +893,7 @@ class MirrorDescanner(model.Emitter):
         # Round up so that if the physical flyback time (physical restricted time for the mirror to move back to its
         # original position) is not a whole multiple of the descan period the flyback points allow enough time for the
         # descanner to move back.
-        number_flyback_points = math.ceil(self.physicalFlybackTime / descan_period)
+        number_flyback_points = math.ceil(self.physicalFlybackTime.value / descan_period)
         flyback_points = scan_offset_bits + numpy.zeros(number_flyback_points)
 
         setpoints = numpy.concatenate((scanning_points, flyback_points))
@@ -1590,7 +1590,7 @@ class MPPC(model.Detector):
 
         resolution_x = self.cellCompleteResolution.value[0]
         line_scan_time = acq_dwell_time * resolution_x
-        flyback_time = descanner.physicalFlybackTime
+        flyback_time = descanner.physicalFlybackTime.value
 
         # Check if the descanner clock period is still a multiple of the system clock period, otherwise raise an
         # error. This check is needed because as a fallback option for the sampling period/calibration dwell time of

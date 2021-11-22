@@ -729,6 +729,30 @@ class TestMirrorDescanner(unittest.TestCase):
             self.MirrorDescanner.scanGain.value = (1.2 * min_scanGain, 1.2 * min_scanGain)
         self.assertEqual(self.MirrorDescanner.scanGain.value, (0.9 * max_scanGain, 0.9 * max_scanGain))
 
+    def test_physicalFlybackTime_VA(self):
+        """Testing the physical flyback time VA. The physical flyback time is the time the descanner has to
+        move back to the starting position for a new line scan."""
+        max_flyback = self.MirrorDescanner.physicalFlybackTime.range[1]
+
+        # Check if small sensor over voltage values are allowed
+        self.MirrorDescanner.physicalFlybackTime.value = 0.1 * max_flyback
+        self.assertEqual(self.MirrorDescanner.physicalFlybackTime.value, 0.1 * max_flyback)
+
+        # Check if big sensor over voltage values are allowed
+        self.MirrorDescanner.physicalFlybackTime.value = 0.9 * max_flyback
+        self.assertEqual(self.MirrorDescanner.physicalFlybackTime.value, 0.9 * max_flyback)
+
+        # Check if VA refuses to set limits outside allowed range
+        with self.assertRaises(IndexError):
+            self.MirrorDescanner.physicalFlybackTime.value = 1.1 * max_flyback
+        # Check that previous value is still set
+        self.assertEqual(self.MirrorDescanner.physicalFlybackTime.value, 0.9 * max_flyback)
+
+        with self.assertRaises(IndexError):
+            self.MirrorDescanner.physicalFlybackTime.value = (-0.1 * max_flyback)
+        # Check that previous value is still set
+        self.assertEqual(self.MirrorDescanner.physicalFlybackTime.value, 0.9 * max_flyback)
+
     def test_getXAcqSetpoints(self):
         """For multiple settings the x acquisition setpoints are checked on total number of setpoints (length) and the
         expected range of the setpoints."""
@@ -751,7 +775,7 @@ class TestMirrorDescanner(unittest.TestCase):
         X_descan_setpoints = descanner.getXAcqSetpoints()
         self.assertEqual(len(X_descan_setpoints),
                          expected_setpoint_length(scanner.dwellTime.value,
-                                                  descanner.physicalFlybackTime,
+                                                  descanner.physicalFlybackTime.value,
                                                   mppc.cellCompleteResolution.value[0],
                                                   descanner.clockPeriod.value))
 
@@ -773,7 +797,7 @@ class TestMirrorDescanner(unittest.TestCase):
             X_descan_setpoints = descanner.getXAcqSetpoints()
             self.assertEqual(len(X_descan_setpoints),
                              expected_setpoint_length(scanner.dwellTime.value,
-                                                      descanner.physicalFlybackTime,
+                                                      descanner.physicalFlybackTime.value,
                                                       mppc.cellCompleteResolution.value[0],
                                                       descanner.clockPeriod.value))
 
@@ -794,7 +818,7 @@ class TestMirrorDescanner(unittest.TestCase):
                                                   numpy.array(descanner.scanGain.range)[:, 1])[0]))
         self.assertEqual(len(X_descan_setpoints),
                          expected_setpoint_length(scanner.dwellTime.value,
-                                                  descanner.physicalFlybackTime,
+                                                  descanner.physicalFlybackTime.value,
                                                   mppc.cellCompleteResolution.value[0],
                                                   descanner.clockPeriod.value))
 
@@ -884,7 +908,7 @@ class TestMirrorDescanner(unittest.TestCase):
     def test_plot_getAcqSetpoints(self):
         """Test case for inspecting global behavior of the acquisition descan setpoint profiles."""
         self.EBeamScanner.dwellTime.value = 4e-6  # Increase dwell time to see steps in the profile better
-        self.MirrorDescanner.physicalFlybackTime = 25e-4  # Increase flybacktime to see its effect in the profile better
+        self.MirrorDescanner.physicalFlybackTime.value = 1.e-4  # Increase flybacktime to see its effect in the profile better
 
         X_descan_setpoints = self.MirrorDescanner.getXAcqSetpoints()
         Y_descan_setpoints = self.MirrorDescanner.getYAcqSetpoints()
@@ -1202,7 +1226,7 @@ class TestMPPC(unittest.TestCase):
         self.EBeamScanner.dwellTime.value = 430e-09
         acq_dwell_time = self.EBeamScanner.dwellTime.value
         resolution = self.MPPC.cellCompleteResolution.value[0]  # including overscanned pixels
-        flyback_time = self.MirrorDescanner.physicalFlybackTime
+        flyback_time = self.MirrorDescanner.physicalFlybackTime.value
 
         # calculate the expected time for one line scan with the above HW settings
         line_scan_time = acq_dwell_time * resolution
