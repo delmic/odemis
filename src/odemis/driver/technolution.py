@@ -612,7 +612,7 @@ class EBeamScanner(model.Emitter):
         # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
         # TODO: y scan delay is y prescan lines which is currently unused an can probably be deleted.
         # The scanDelay in x direction maximum (200e-6) is experimentally determined.
-        self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (200e-6, 10.0)), unit='s',
+        self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1.0, 10.0)), unit='s', cls=(int, float),
                                                setter=self._setScanDelay)
 
         self._metadata[model.MD_PIXEL_SIZE] = self.pixelSize.value
@@ -985,7 +985,7 @@ class MPPC(model.Detector):
         self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
-        self.acqDelay = model.FloatContinuous(0.0, range=(0, 200e-6), unit='s', setter=self._setAcqDelay)
+        self.acqDelay = model.FloatContinuous(0.0, range=(0.0, 1.0), unit='s', setter=self._setAcqDelay)
         # regulates the sensitivity of the mppc sensor
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
 
