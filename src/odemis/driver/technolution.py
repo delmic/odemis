@@ -1438,6 +1438,11 @@ class MPPC(model.Detector):
             raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
                              "'%s'." % (filename, ASM_FILE_CHARS[1:-2]))
 
+        # basename cannot be > 50 characters
+        if len(os.path.basename(filename)) > 50:
+            raise ValueError("Filename '%s' contains %s characters. Maximum of 50 characters is allowed."
+                             % (os.path.basename(filename), len(os.path.basename(filename))))
+
         # dirname is equivalent to subdirectories on external storage
         if not re.fullmatch(ASM_SUBDIR_CHARS, os.path.dirname(filename)):
             raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
