@@ -3008,7 +3008,8 @@ class CryoChamberTab(Tab):
             self._end_pos = getTargetPosition(self._target_position, self._stage)
             if not self._end_pos:
                 return
-            if self._target_position == FM_IMAGING and current_position in [LOADING, SEM_IMAGING]:
+            if (self._target_position in [FM_IMAGING, SEM_IMAGING] and
+                 current_position in [LOADING, SEM_IMAGING, FM_IMAGING]):
                 if not self._display_meteor_pos_warning_msg(self._end_pos):
                     return
         return cryoSwitchSamplePosition(self._target_position)
@@ -3030,7 +3031,7 @@ class CryoChamberTab(Tab):
                     pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 3))
         pos_str = ", ". join(pos_str)
         box = wx.MessageDialog(self.main_frame, "The stage will move to this position: " + pos_str + ". Is this safe?",
-                            caption="Moving to METEOR", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+                            caption="Large move of the stage", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans != wx.ID_NO
 
