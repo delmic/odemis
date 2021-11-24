@@ -73,8 +73,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
-from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, \
+    POSITION_NAMES
+from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -2751,10 +2752,8 @@ class CryoChamberTab(Tab):
         """
         # Show warning message if target position is indicated
         if self._target_position is not None:
-            if self._role == 'enzel':
-                current_label, target_label = target_pos_str[self._current_position], target_pos_str[self._target_position]
-            elif self._role == 'meteor':
-                current_label, target_label = meteor_labels[self._previous_position], meteor_labels[self._target_position]
+            current_label = POSITION_NAMES[self._current_position]
+            target_label = POSITION_NAMES[self._target_position]
             txt_warning = "Stage stopped between {} and {} positions".format(current_label, target_label)
             # self._show_warning_msg(txt_warning)
             self._tab_panel.Layout()

@@ -34,10 +34,22 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
+
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2 = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-target_pos_str = {LOADING: "LOADING", IMAGING: "IMAGING", COATING: "COATING", ALIGNMENT: "ALIGNMENT",
-                  LOADING_PATH: "LOADING PATH", UNKNOWN: "UNKNOWN", SEM_IMAGING: "SEM IMAGING"}
-meteor_labels = {SEM_IMAGING: "SEM IMAGING", FM_IMAGING: "FM IMAGING", GRID_1: "GRID 1", GRID_2: "GRID 2", LOADING: "LOADING", UNKNOWN: "UNKNOWN"}
+POSITION_NAMES = {
+    UNKNOWN: "UNKNOWN",
+    LOADING: "LOADING",
+    IMAGING: "IMAGING",
+    ALIGNMENT: "ALIGNMENT",
+    COATING: "COATING",
+    LOADING_PATH: "LOADING PATH",
+    MILLING: "MILLING",
+    SEM_IMAGING: "SEM IMAGING",
+    FM_IMAGING: "FM IMAGING",
+    GRID_1: "GRID 1",
+    GRID_2: "GRID 2"
+}
+
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
@@ -46,49 +58,52 @@ SCALING_FACTOR = 0.03 # m (based on fine tuning)
 
 def getTargetPosition(target_pos_lbl, stage):
     """
-    Returns the position that the stage would go to. It might return None in case the target
-        position has not been determined. 
+    Returns the position that the stage would go to.
     target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
     stage (Actuator): a stage component 
     returns (dict->float): the end position of the stage
+    raise ValueError: if the target position is not supported
     """
     stage_md = stage.getMetadata()
     current_position = getCurrentPositionLabel(stage.position.value, stage)
+    end_pos = None
+
     if target_pos_lbl == LOADING:
         end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
     elif current_position in [LOADING, SEM_IMAGING]: 
         if target_pos_lbl in [SEM_IMAGING, GRID_1]:
             # if at loading, and sem is pressed, choose grid1 by default
-            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
             sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = sem_grid1_pos
         elif target_pos_lbl == GRID_2:
-            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
             sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = sem_grid2_pos
         elif target_pos_lbl == FM_IMAGING:
             if current_position == LOADING:
                 # if at loading and fm is pressed, choose grid1 by default
-                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
                 fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
             elif current_position == SEM_IMAGING:
                 fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage)
             end_pos = fm_target_pos
-        else:
-            raise ValueError("Unkown target position")
     elif current_position == FM_IMAGING:
         if target_pos_lbl == GRID_1:
-            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
             end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
         elif target_pos_lbl == GRID_2:
-            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
             end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
             end_pos = transformFromMeteorToSEM(stage.position.value, stage)                    
-        else:
-            raise ValueError("Unkown target position")
-    else:
-        raise ValueError("Unkown target position")
+
+    if end_pos is None:
+        raise ValueError("Unknown target position {} when in {}".format(
+                        POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
+                        POSITION_NAMES.get(current_position, current_position))
+                        )
+
     return end_pos
 
 
@@ -102,8 +117,8 @@ def getCurrentGridLabel(current_pos, stage):
     """
     current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
-    grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_1]]
-    grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][meteor_labels[GRID_2]]
+    grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+    grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
     if current_pos_label == SEM_IMAGING:
         distance_to_grid1 = _getDistance(current_pos, grid1_pos)
         distance_to_grid2 = _getDistance(current_pos, grid2_pos)
@@ -113,7 +128,7 @@ def getCurrentGridLabel(current_pos, stage):
         distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
     else: 
-        logging.warning("Cannot guess between grid 1 and grid2 in %s position" % meteor_labels[current_pos_label])
+        logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
         return None
 
 
@@ -407,6 +422,11 @@ def _doCryoSwitchAlignPosition(future, align, target):
     :param target: target position either one of the constants LOADING, IMAGING and ALIGNMENT
     """
     try:
+        target_name = POSITION_NAMES[target]
+    except KeyError:
+        raise ValueError(f"Unknown target '{target}'")
+
+    try:
         align_md = align.getMetadata()
         target_pos = {LOADING: align_md[model.MD_FAV_POS_DEACTIVE],
                       IMAGING: align_md[model.MD_FAV_POS_ACTIVE],
@@ -425,6 +445,8 @@ def _doCryoSwitchAlignPosition(future, align, target):
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
         current_label = getCurrentAlignerPositionLabel(current_pos, align)
+        current_name = POSITION_NAMES[current_label]
+
         if target == LOADING:
             if current_label is UNKNOWN:
                 logging.warning("Parking aligner while current position is unknown.")
@@ -440,7 +462,7 @@ def _doCryoSwitchAlignPosition(future, align, target):
         elif target in (ALIGNMENT, IMAGING):
             if current_label is UNKNOWN:
                 raise ValueError("Unable to move aligner to {} while current position is unknown.".format(
-                    target_pos_str.get(target, lambda: "unknown")))
+                    target_name))
 
             # Add the sub moves to perform the imaging/alignment move
             sub_moves.append((align, filter_dict({'x', 'z'}, target_pos[target])))
@@ -448,13 +470,13 @@ def _doCryoSwitchAlignPosition(future, align, target):
         else:
             raise ValueError("Unknown target value %s." % target)
 
+        logging.info("Starting aligner movement from {} -> {}...".format(current_name, target_name))
         for component, sub_move in sub_moves:
-            logging.info("Starting aligner movement from {} -> {}...".format(target_pos_str[current_label], target_pos_str[target]))
             run_sub_move(future, component, sub_move)
     except CancelledError:
         logging.info("_doCryoSwitchAlignPosition cancelled.")
-    except Exception as exp:
-        logging.exception("Failure to move to {} position.".format(target_pos_str.get(target, lambda: "unknown")))
+    except Exception:
+        logging.exception("Failure to move to {} position.".format(target_name))
         raise
     finally:
         with future._task_lock:
@@ -465,8 +487,9 @@ def _doCryoSwitchAlignPosition(future, align, target):
 
 def cryoSwitchSamplePosition(target):
     """
-    Provide the ability to switch between loading, imaging and coating position, without bumping into anything.
-    :param target: (int) target position either one of the constants LOADING, IMAGING, COATING AND ALIGNMENT
+    Provide the ability to switch between different positions, without bumping into anything.
+    :param target: (int) target position either one of the constants: LOADING, IMAGING,
+       ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
     :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control raising the
     ValueError exception
     """
@@ -482,15 +505,22 @@ def cryoSwitchSamplePosition(target):
 
 def _doCryoSwitchSamplePosition(future, target):
     """
-    Do the actual switching procedure for the Cryo sample stage between loading, imaging and coating positions
+    Do the actual switching procedure for cryoSwitchSamplePosition
     :param future: cancellable future of the move
-    :param stage: sample stage that's being controlled
-    :param align: focus for optical lens
-    :param target: target position either one of the constants LOADING, IMAGING, ALIGNMENT and COATING
+    :param target: (int) target position either one of the constants: LOADING, IMAGING,
+       ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
     """
     role = model.getMicroscope().role
-    if role == "enzel":
-        try:
+    try:
+        target_name = POSITION_NAMES[target]
+    except KeyError:
+        raise ValueError(f"Unknown target '{target}'")
+
+    # Create axis->pos dict from target position given smaller number of axes
+    filter_dict = lambda keys, d: {key: d[key] for key in keys}
+
+    try:
+        if role == "enzel":
             # get the stage and aligner objects
             stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
@@ -514,10 +544,10 @@ def _doCryoSwitchSamplePosition(future, target):
             sub_moves = []
             # To hold the sub moves to run if the ordered sub moves failed
             fallback_submoves = []
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
             current_label = getCurrentPositionLabel(current_pos, stage)
+            current_name = POSITION_NAMES[current_label]
+
             if target == LOADING:
                 if current_label is UNKNOWN and stage_referenced:
                     logging.warning("Moving stage to loading while current position is unknown.")
@@ -550,8 +580,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # first step of the movement loading → imaging/coating position
                     run_reference(future, stage)
                 elif current_label is UNKNOWN:
-                    raise ValueError("Unable to move to {} while current position is unknown.".format(
-                        target_pos_str.get(target, lambda: "unknown")))
+                    raise ValueError(f"Unable to move to {target_name} while current position is unknown.")
 
                 fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[target])))
                 fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
@@ -565,14 +594,15 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos[target])))
                 sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
             else:
-                raise ValueError("Unknown target value %s." % target)
+                raise ValueError(f"Unsupported move to target {target_name}")
 
             try:
-                logging.info("Starting sample movement from {} -> {}...".format(target_pos_str[current_label], target_pos_str[target]))
+                logging.info("Starting sample movement from {} -> {}...".format(current_name, target_name))
                 # Park aligner to safe position before any movement
                 if not _isNearPosition(align.position.value, align_deactive, align.axes):
                     cryoSwitchAlignPosition(LOADING).result()
                 for component, sub_move in sub_moves:
+                    logging.debug("Moving %s to %s.", component.name, sub_move)
                     run_sub_move(future, component, sub_move)
                 if target in (IMAGING, ALIGNMENT):
                     cryoSwitchAlignPosition(target).result()
@@ -581,21 +611,10 @@ def _doCryoSwitchSamplePosition(future, target):
                 # Move all linear axes first then rotational ones using the fallback_submoves
                 logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
                 for component, sub_move in fallback_submoves:
+                    logging.debug("Moving %s to %s.", component.name, sub_move)
                     run_sub_move(future, component, sub_move)
 
-        except CancelledError:
-            logging.info("_doCryoSwitchSamplePosition cancelled.")
-        except Exception as exp:
-            logging.exception("Failure to move to {} position.".format(target_pos_str.get(target, lambda: "unknown")))
-            raise
-        finally:
-            with future._task_lock:
-                if future._task_state == CANCELLED:
-                    raise CancelledError()
-                future._task_state = FINISHED
-
-    elif role == "meteor":
-        try:
+        elif role == "meteor":
             # get the focus and stage components 
             focus = model.getComponent(role='focus')
             stage = model.getComponent(role='stage-bare')
@@ -605,69 +624,65 @@ def _doCryoSwitchSamplePosition(future, target):
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             # To hold the ordered sub moves list
             sub_moves = []
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
+
             # get the current label 
-            current_pos_label = getCurrentPositionLabel(stage.position.value, stage)
+            current_label = getCurrentPositionLabel(stage.position.value, stage)
+            current_name = POSITION_NAMES[current_label]
+
+            if current_label == target:
+                logging.warning(f"Requested move to the same position as current: {target_name}")
+
             # get the set point position
             target_pos = getTargetPosition(target, stage)
-            # determine the order of moves for the stage and focuser
-            if target == LOADING:
-                # park the focuser for safety 
+
+            # If at some "weird" position, it's quite unsafe. We consider the targets
+            # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
+            # by SEM_IMAGING and then go to the actual requested position.
+            if current_label == UNKNOWN:
+                logging.warning("Moving stage while current position is unknown.")
+                if target not in (LOADING, SEM_IMAGING):
+                    logging.debug("Moving first to SEM_IMAGING position")
+                    target_pos_sem = getTargetPosition(SEM_IMAGING, stage)
+                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
+                        sub_moves.append((focus, focus_deactive))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
+
+            if target in (GRID_1, GRID_2):
+                # The current mode doesn't change. Only X/Y/Z should move (typically
+                # only X/Y).
+                sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+                # Park the focuser for safety
                 if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                     sub_moves.append((focus, focus_deactive))
+
+                # Move translation axes, then rotational ones
                 sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif current_pos_label in [LOADING, SEM_IMAGING]:
-                if target in [SEM_IMAGING, GRID_1]:  
-                    # park the focuser for safety 
-                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                        sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                elif target == FM_IMAGING:
-                    # park focus for safety 
-                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                        sub_moves.append((focus, focus_deactive))
-                    if current_pos_label == LOADING:
-                        sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                        sub_moves.append((focus, focus_active))
-                    elif current_pos_label == SEM_IMAGING:
-                        sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-                        sub_moves.append((focus, focus_active))
-                elif target == GRID_2:
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif current_pos_label == FM_IMAGING:
-                if target in (GRID_1, GRID_2):
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                elif target == SEM_IMAGING:
-                    # park focus for safety 
-                    if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                        sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos)))
+
+                if target == FM_IMAGING:
+                    # Engage the focuser
+                    sub_moves.append((focus, focus_active))
             else:
-                return
-            # run the moves 
-            try:
-                for component, sub_move in sub_moves:
-                    logging.info("Moving from position {} to position {}.".format(meteor_labels[current_pos_label], meteor_labels[target]))
-                    run_sub_move(future, component, sub_move)
-            except Exception:
-                raise
-        except CancelledError:
-            logging.info("The movement was cancelled.")
-        except Exception as exp:
-            logging.exception("Failure to move to {} position.".format(meteor_labels.get(target)))
-            raise
-        finally:
-            with future._task_lock:
-                if future._task_state == CANCELLED:
-                    raise CancelledError()
-                future._task_state = FINISHED
+                raise ValueError(f"Unsupported move to target {target_name}")
+
+            # run the moves
+            logging.info("Moving from position {} to position {}.".format(current_name, target_name))
+            for component, sub_move in sub_moves:
+                logging.debug("Moving %s to %s.", component.name, sub_move)
+                run_sub_move(future, component, sub_move)
+
+    except CancelledError:
+        logging.info("CryoSwitchSamplePosition cancelled.")
+    except Exception:
+        logging.exception("Failure to move to {} position.".format(target_name))
+        raise
+    finally:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+            future._task_state = FINISHED
 
 # Note: this transformation consists of translation of along x and y 
 # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
