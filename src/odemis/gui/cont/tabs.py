@@ -3026,12 +3026,14 @@ class CryoChamberTab(Tab):
         for axis in ("x", "y", "z", "rx", "ry", "rz"):
             if axis in end_pos:
                 if axis.startswith("r"):
-                    pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 3))
+                    pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 4))
                 else:
-                    pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 3))
+                    pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 4))
         pos_str = ", ". join(pos_str)
-        box = wx.MessageDialog(self.main_frame, "The stage will move to this position: " + pos_str + ". Is this safe?",
-                            caption="Large move of the stage", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        box = wx.MessageDialog(self.main_frame,
+                               "The stage will move to this position:\n" + pos_str + "\nIs this safe?",
+                               caption="Large move of the stage",
+                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans != wx.ID_NO
 
