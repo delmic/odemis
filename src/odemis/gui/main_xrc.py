@@ -7252,21 +7252,21 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="FeatureViewport" name="vp_secom_tr">
+          <object class="MicroscopeViewport" name="vp_secom_tr">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="FeatureViewport" name="vp_secom_bl">
+          <object class="LiveViewport" name="vp_secom_bl">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="FeatureViewport" name="vp_secom_br">
+          <object class="LiveViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>

@@ -340,7 +340,11 @@ class FakeDG1000Z(object):
         self._listener_thread.start()
 
     def __del__(self):
-        self.terminate()
+        try:
+            self.terminate()
+        except Exception as ex:
+            # Can happen, especially if a failure happened during __init__()
+            logging.warning("Failed to properly terminate: %s", ex)
 
     def terminate(self):
         '''
@@ -348,6 +352,11 @@ class FakeDG1000Z(object):
         '''
         logging.debug('%s: Terminating. Shutting down socket', self.name)
         self._shutdown_flag.set()
+        try:
+            # Helps to close completely the socket, but only work on the first time
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            logging.debug("Failed to shutdown the socket", exc_info=True)
         self.socket.close()
 
     def _sendBuffer(self, connection):

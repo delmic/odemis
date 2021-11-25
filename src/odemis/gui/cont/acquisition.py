@@ -549,26 +549,6 @@ class CryoAcquiController(object):
         # store the focuser position 
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
 
-        # acquire the data 
-        if self._zStackActive.value: # if zstack 
-            self._acq_future = acqmng.acquireZStack(
-                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
-
-        else: # if no zstack 
-            self._acq_future = acqmng.acquire(
-                self._acquiStreams.value, self._tab_data.main.settings_obs)
-
-        self._tab_data.main.is_acquiring.value = True
-        logging.info("Acquisition started")
-
-        # link the acquisition gauge to the acquisition future
-        self._gauge_future_conn = ProgressiveFutureConnector(
-            future=self._acq_future,
-            bar=self._panel.gauge_cryosecom_acq,
-            label=self._panel.txt_cryosecom_left_time,
-            full=False,
-        )
-
         # hide/show/disable some widgets
         self._panel.gauge_cryosecom_acq.Show()
         self._panel.btn_cryosecom_acqui_cancel.Show()
@@ -585,9 +565,29 @@ class CryoAcquiController(object):
         # disable the streams settings
         self._tab.streambar_controller.pauseStreams()
         self._tab.streambar_controller.pause()
-        self._panel.Layout()
+        self._tab_data.main.is_acquiring.value = True
+
+        # acquire the data
+        if self._zStackActive.value:
+            self._acq_future = acqmng.acquireZStack(
+                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
+
+        else:  # no zstack
+            self._acq_future = acqmng.acquire(
+                self._acquiStreams.value, self._tab_data.main.settings_obs)
+
+        logging.info("Acquisition started")
+
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
         
         self._acq_future.add_done_callback(self._on_acquisition_done)
+        self._panel.Layout()
 
     @call_in_wx_main
     def _on_acquisition_done(self, future):

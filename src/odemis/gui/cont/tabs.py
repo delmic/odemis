@@ -73,8 +73,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, target_pos_str, meteor_labels, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition
-from odemis.acq.move import cryoSwitchSamplePosition, cryoTiltSample, getMovementProgress, getCurrentPositionLabel
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, \
+    POSITION_NAMES
+from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -453,14 +454,14 @@ class LocalizationTab(Tab):
                 emtvas=emtvas,
                 detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
             )
-    
+
             sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
             sem_stream_cont.stream_panel.show_remove_btn(False)
 
         if self.main_data.role == "enzel":
             self.stage = self.tab_data_model.main.stage
         elif self.main_data.role == "meteor":
-            # The stage is in the FM referential, but we care about the stage-bare 
+            # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
             self.stage = self.tab_data_model.main.stage_bare
         self.stage.position.subscribe(self._on_stage_pos, init=True)
@@ -492,15 +493,18 @@ class LocalizationTab(Tab):
             (viewports[1],
              {"name": "Acquired",
               "cls": guimod.FeatureView,
+              "zPos": self.tab_data_model.zPos,
               "stream_classes": StaticStream,
               }),
             (viewports[2],
              {"name": "Live 1",
+              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
             (viewports[3],
              {"name": "Live 2",
+              "cls": guimod.FeatureView,
               "stage": main_data.stage,
               "stream_classes": LiveStream,
               }),
@@ -669,19 +673,9 @@ class LocalizationTab(Tab):
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(LocalizationTab, self).Show(show)
-        # Check project directory is the same in filename path, otherwise
-        # update it with a new filename
-        # Handled on show as project directory conf change in chamber tab init
-        if (
-            show
-            and self.conf.pj_last_path not in self.tab_data_model.filename.value
-        ):
-            self.tab_data_model.filename.value = create_filename(
-                self.conf.pj_last_path, self.conf.fn_ptn,
-                self.conf.last_extension,
-                self.conf.fn_count)
 
         if not show: # if localization tab is not chosen
+        # pause streams when not displayed
             # pause streams when not displayed
             self._streambar_controller.pauseStreams()
             # stop listening to the focus position
@@ -691,8 +685,8 @@ class LocalizationTab(Tab):
             self.main_data.focus.position.subscribe(self._on_focus_pos_change)
 
     def _on_focus_pos_change(self, pos):
-        # store the new focus position, so that when going from POS_DEACTIVE to 
-        # POS_ACTIVE, the lastest focus is used. 
+        # store the new focus position, so that when going from POS_DEACTIVE to
+        # POS_ACTIVE, the lastest focus is used.
         self.main_data.focus.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
     def _show_acquired_stream(self, acquired_stream, selected_view):
@@ -751,7 +745,7 @@ class LocalizationTab(Tab):
                 for feature in self.tab_data_model.main.features.value:
                     if st in feature.streams.value:
                         feature.streams.value.remove(st)
-    
+
     @classmethod
     def get_display_priority(cls, main_data):
         if main_data.role in ("enzel", "meteor"):
@@ -1092,7 +1086,7 @@ class SecomStreamsTab(Tab):
 
         if main_data.ion_beam:
             vpv[viewports[3]] = {
-                "name" : "FIB", 
+                "name" : "FIB",
                 "stream_classes": FIBStream,
                 "stage": main_data.stage,
             }
@@ -2414,7 +2408,7 @@ class CryoChamberTab(Tab):
 
         self._view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self._tab_panel = panel
-        self._role = main_data.role 
+        self._role = main_data.role
         # For project selection
         self.conf = conf.get_acqui_conf()
         self.btn_change_folder = self.panel.btn_change_folder
@@ -2471,7 +2465,7 @@ class CryoChamberTab(Tab):
             panel.btn_switch_sem_imaging.Hide()
             panel.btn_switch_fm_imaging.Hide()
             panel.btn_switch_grid1.Hide()
-            panel.btn_switch_grid2.Hide() 
+            panel.btn_switch_grid2.Hide()
             # Vigilant attribute connectors for the align slider and show advanced button
             self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
                                                                         self.panel.stage_align_slider_aligner,
@@ -2525,7 +2519,7 @@ class CryoChamberTab(Tab):
             # Show current position of the stage via the progress bar
             self._stage.position.subscribe(self._update_progress_bar, init=False)
             self._stage.position.subscribe(self._on_stage_pos)
-            # metadata 
+            # metadata
             stage_metadata = self._stage.getMetadata()
             # check for the metadata of meteor stage positions
             if not model.MD_SAMPLE_CENTERS in stage_metadata:
@@ -2545,20 +2539,20 @@ class CryoChamberTab(Tab):
             for fmd_key, fmd_value in focus_md.items():
                 if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
                     raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(fmd_value)], required_axis))
-            # the meteor buttons 
+            # the meteor buttons
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                 GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
-            # buttons icons of meteor 
+            # buttons icons of meteor
             self.btn_toggle_icons = {
                 self.panel.btn_switch_sem_imaging: "icon/ico_sem_green.png",
                 self.panel.btn_switch_fm_imaging: "icon/ico_meteorimaging_green.png",
                 self.panel.btn_switch_grid2: "icon/ico_meteorgrid_green.png",
                 self.panel.btn_switch_grid1: "icon/ico_meteorgrid_green.png"}
-            # hide some of enzel widgets 
+            # hide some of enzel widgets
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
             panel.btn_switch_milling.Hide()
-            panel.btn_switch_coating.Hide()  
+            panel.btn_switch_coating.Hide()
             panel.lbl_milling_angle.Hide()
             panel.btn_switch_advanced.Hide()
             panel.ctrl_milling.Hide()
@@ -2684,6 +2678,7 @@ class CryoChamberTab(Tab):
         self.conf.pj_last_path = new_dir
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = self.conf.pj_last_path
+        self.tab_data_model.main.project_path.value = new_dir
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
@@ -2735,7 +2730,7 @@ class CryoChamberTab(Tab):
             self._enable_movement_controls()
             self._control_warning_msg()
         elif self._role == 'enzel':
-            pass 
+            pass
 
     def _control_warning_msg(self):
         # show/hide the warning msg
@@ -2752,20 +2747,18 @@ class CryoChamberTab(Tab):
 
     def _get_cancel_warning_msg(self):
         """
-        Create and return a text message to show under the progress bar. 
+        Create and return a text message to show under the progress bar.
         return (str): the cancel message. It returns None if the target position is None.
         """
         # Show warning message if target position is indicated
         if self._target_position is not None:
-            if self._role == 'enzel':
-                current_label, target_label = target_pos_str[self._current_position], target_pos_str[self._target_position]
-            elif self._role == 'meteor':
-                current_label, target_label = meteor_labels[self._previous_position], meteor_labels[self._target_position]
+            current_label = POSITION_NAMES[self._current_position]
+            target_label = POSITION_NAMES[self._target_position]
             txt_warning = "Stage stopped between {} and {} positions".format(current_label, target_label)
             # self._show_warning_msg(txt_warning)
             self._tab_panel.Layout()
             self._target_position = None
-            self._current_position = None 
+            self._current_position = None
             return txt_warning
 
     def _toggle_switch_buttons(self, currently_pressed=None):
@@ -2790,10 +2783,10 @@ class CryoChamberTab(Tab):
         """
         # Get current movement (including unknown and on the path)
         self._current_position = getCurrentPositionLabel(self._stage.position.value, self._stage)
-        # Enable stage advanced controls on milling, only for enzel 
+        # Enable stage advanced controls on milling, only for enzel
         if self._role == 'enzel':
             self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(False)
-        self._enable_position_controls(self._current_position)            
+        self._enable_position_controls(self._current_position)
 
     def _enable_position_controls(self, current_position=None):
         """
@@ -2997,11 +2990,11 @@ class CryoChamberTab(Tab):
                                      None)
         if self._target_position is None:
             return
-        # define the start position 
+        # define the start position
         self._start_pos = current_pos = self._stage.position.value
         current_position = getCurrentPositionLabel(current_pos, self._stage)
 
-        if self._role == 'enzel': 
+        if self._role == 'enzel':
             # target_position metadata has the end positions for all movements except milling
             if self._target_position in self.target_position_metadata.keys():
                 if current_position is LOADING:
@@ -3010,11 +3003,12 @@ class CryoChamberTab(Tab):
                 self._end_pos = self.target_position_metadata[self._target_position]
 
         elif self._role == 'meteor':
-            # determine the end position for the gauge 
+            # determine the end position for the gauge
             self._end_pos = getTargetPosition(self._target_position, self._stage)
             if not self._end_pos:
                 return
-            if self._target_position == FM_IMAGING and current_position in [LOADING, SEM_IMAGING]:
+            if (self._target_position in [FM_IMAGING, SEM_IMAGING] and
+                 current_position in [LOADING, SEM_IMAGING, FM_IMAGING]):
                 if not self._display_meteor_pos_warning_msg(self._end_pos):
                     return
         return cryoSwitchSamplePosition(self._target_position)
@@ -3031,12 +3025,14 @@ class CryoChamberTab(Tab):
         for axis in ("x", "y", "z", "rx", "ry", "rz"):
             if axis in end_pos:
                 if axis.startswith("r"):
-                    pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 3))
+                    pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 4))
                 else:
-                    pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 3))
+                    pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 4))
         pos_str = ", ". join(pos_str)
-        box = wx.MessageDialog(self.main_frame, "The stage will move to this position: " + pos_str + ". Is this safe?",
-                            caption="Moving to METEOR", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        box = wx.MessageDialog(self.main_frame,
+                               "The stage will move to this position:\n" + pos_str + "\nIs this safe?",
+                               caption="Large move of the stage",
+                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans != wx.ID_NO
 
@@ -4365,7 +4361,7 @@ class SecomAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         if self.tab_data_model.main.role == "meteor":
-            pos = self.tab_data_model.main.stage_bare.position.value 
+            pos = self.tab_data_model.main.stage_bare.position.value
         guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING])
 
     def _on_align_pos(self, pos):

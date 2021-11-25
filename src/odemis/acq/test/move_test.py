@@ -17,22 +17,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import logging
-import os
-import time
-import unittest
-
-import scipy, numpy
-
-import odemis
+import numpy
 from odemis import model
 from odemis import util
-from odemis.acq.move import cryoSwitchAlignPosition, getCurrentAlignerPositionLabel, _getDistance, SCALING_FACTOR, getRotationMatrix
-from odemis.acq.move import LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH
-from odemis.acq.move import ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2, RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel
-from odemis.util.driver import BACKEND_RUNNING
-from odemis.acq.move import cryoTiltSample, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
-from odemis.util import driver, test
-import threading
+import odemis
+from odemis.acq.move import (ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2,
+                             LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH,
+                             RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel,
+                             cryoSwitchAlignPosition, getCurrentAlignerPositionLabel,
+                             _getDistance, SCALING_FACTOR, getRotationMatrix, cryoTiltSample,
+                             cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel)
+from odemis.util import test
+import os
+import scipy
+import time
+import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -49,15 +48,7 @@ class TestCryoMove(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(ENZEL_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        test.start_backend(ENZEL_CONFIG)
 
         # find components by their role
         cls.stage = model.getComponent(role="stage")
@@ -83,16 +74,6 @@ class TestCryoMove(unittest.TestCase):
         # Set custom value that works well within the simulator range
         cls.rx_angle = 0.3
         cls.rz_angle = 0.1
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_sample_switch_procedures(self):
         """
@@ -379,20 +360,7 @@ class TestMeteorMove(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() in driver.BACKEND_RUNNING:
-            microscope = model.getMicroscope()
-            if microscope.role != "meteor":
-                logging.info("There is already running backend. It will be turned off, and the backend of METEOR will be turned on.")
-                test.stop_backend()
-                test.start_backend(METEOR_CONFIG)
-            else:
-                logging.info("There is METEOR backend already running. It will be used.")
-        else:
-            try:
-                logging.info("METEOR backend will be turned on.")
-                test.start_backend(METEOR_CONFIG)
-            except Exception:
-                raise
+        test.start_backend(METEOR_CONFIG)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
@@ -401,11 +369,6 @@ class TestMeteorMove(unittest.TestCase):
         stage_md = cls.stage.getMetadata()
         cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
         cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
-
-    @classmethod
-    def tearDownClass(cls):
-        if driver.get_backend_status == BACKEND_RUNNING:
-            test.stop_backend()
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # move the stage to the loading position  
@@ -571,7 +534,7 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
 
     def test_unknown_label_at_initialization(self):
-        arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0}
+        arbitrary_position = {"x": 0.0, "y": 0.0, "z":-3.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(UNKNOWN, current_imaging_mode)

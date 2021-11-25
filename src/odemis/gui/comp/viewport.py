@@ -336,6 +336,19 @@ class MicroscopeViewport(ViewPort):
             self.view.mpp.subscribe(self._on_view_mpp_change)
             view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
 
+        if hasattr(view, "showFeatures"):
+            view.showFeatures.subscribe(self._show_hide_feature_overlay)
+            self.bottom_legend.feature_toggle_va = view.showFeatures
+
+    def _show_hide_feature_overlay(self, va_val):
+        # show/hide feature overlay based on the legend toggle button
+        foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
+        if foverlay:
+            foverlay.show = va_val
+            # also activate/deactivate the overaly so it'd not be possible to intera with it
+            foverlay.active.value = va_val
+            self.canvas.update_drawing()
+
     def clear(self):
         super(MicroscopeViewport, self).clear()
         if self.canvas.gadget_overlay:
@@ -770,27 +783,7 @@ class LiveViewport(MicroscopeViewport):
         else:
             self.canvas.abilities.discard(CAN_FOCUS)
 
-
-class FeatureViewport(LiveViewport):
-
-    def __init__(self, *args, **kwargs):
-        super(FeatureViewport, self).__init__(*args, **kwargs)
-
-    def setView(self, view, tab_data):
-        super(FeatureViewport, self).setView(view, tab_data)
-        if hasattr(view, "showFeatures"):
-            view.showFeatures.subscribe(self._show_hide_feature_overlay)
-            self.bottom_legend.feature_toggle_va = view.showFeatures
-
-    def _show_hide_feature_overlay(self, va_val):
-        # show/hide feature overlay based on the legend toggle button
-        foverlay = next((ol for ol in self.canvas.world_overlays if isinstance(ol, CryoFeatureOverlay)), None)
-        if foverlay:
-            foverlay.show = va_val
-            self.canvas.update_drawing()
-
-
-class FeatureOverviewViewport(FeatureViewport):
+class FeatureOverviewViewport(MicroscopeViewport):
     """
     LiveViewport dedicated to show overview map area with bookmarked features.
     Do not move the stage by dragging, and instead show the stage position via

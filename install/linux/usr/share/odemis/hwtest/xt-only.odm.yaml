@@ -1,52 +1,58 @@
 SEM: {
-  class: Microscope,
-  role: sem,
-  children: ["EBeam Scanner", "EBeam Focus", "EBeam Stage",
-             "EBeam Detector"],
+    class: Microscope,
+    role: sem,
+    children: ["EBeam Scanner", "EBeam Focus", "EBeam Stage",
+               "EBeam Detector", "Chamber"],
 }
 
 # Connects to TFS Microscopes, the Support PC should be running the
 # Delmic XTAdapter. Update the address to match that of the Support PC.
 "SEM EXT": {
-  class: xt_client.SEM,
-  role: null,
-  init: {
-    address: "PYRO:Microscope@localhost:4242",
-  },
-  children: {
-    scanner: "EBeam Scanner",
-    fib-scanner: "FIB Scanner",
-    focus: "EBeam Focus",
-    stage: "EBeam Stage",
-    detector: "EBeam Detector",
-  }
+    class: xt_client.SEM,
+    role: null,
+    init: {
+      address: "PYRO:Microscope@localhost:4242",
+    },
+    children: {
+      scanner: "EBeam Scanner",
+      # fib-scanner: "FIB Scanner",
+      focus: "EBeam Focus",
+      stage: "EBeam Stage",
+      detector: "EBeam Detector",
+      chamber: "Chamber",
+    }
 }
 
-"FIB Scanner": {
-  role: ion-beam,
-  init: {
-  },
-}
+#"FIB Scanner": {
+#    role: ion-beam,
+#    init: {
+#    },
+#}
 
 "EBeam Scanner": {
-  role: e-beam,
-  init: {
-    hfw_nomag: 0.11,
-  },
+    role: e-beam,
+    init: {
+      hfw_nomag: 0.11,
+    },
 }
 
 "EBeam Focus": {
-  role: ebeam-focus,
+    role: ebeam-focus,
 }
 
 "EBeam Stage": {
-  role: stage,
-  init: {
-    inverted: ["x", "y"],
-  },
-  affects: ["EBeam Scanner"],
+    role: stage,
+    init: {
+      inverted: ["x", "y"],
+    },
+    affects: ["EBeam Scanner"],
 }
 
 "EBeam Detector": {
-  role: se-detector,
+    role: se-detector,
+}
+
+"Chamber": {
+    # Internal child of SEM, so no class
+    role: chamber,
 }
