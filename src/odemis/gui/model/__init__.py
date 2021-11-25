@@ -1941,8 +1941,6 @@ class MicroscopeView(StreamView):
     """
     def __init__(self, name, stage=None, **kwargs):
         StreamView.__init__(self, name, stage=stage, **kwargs)
-        # booleanVA to toggle showing/hiding the features
-        self.showFeatures = model.BooleanVA(True)
         if stage:
             self.stage_pos.subscribe(self._on_stage_pos)
 
