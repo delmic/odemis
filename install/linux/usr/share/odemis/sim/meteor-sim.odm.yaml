@@ -4,10 +4,15 @@
 METEOR-Sim: {
     class: Microscope,
     role: meteor,
-    children: ["Optical Objective",
-               "Optical Focus",
-               "Light Source", "Filter Wheel", "Camera",
-               "Linked Stage", "EBeam",
+    children: [
+        "Stage",
+        "Meteor Stage",
+        "Optical Objective",
+        "Optical Focus",
+        "Light Source",
+        "Filter Wheel",
+        "Camera",
+        "EBeam",
     ],
 }
 
@@ -17,7 +22,8 @@ METEOR-Sim: {
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
     },
-    children: {scanner: "EBeam",
+    children: {
+        scanner: "EBeam",
                detector0: "SE Detector",
                focus: "EBeam Focus",
     }
@@ -25,20 +31,22 @@ METEOR-Sim: {
 
 "EBeam": {
     # Internal child of SimSEM, so no class
-    role: e-beam,
+    role: e-beam,  # Not required for the meteor
     init: {},
-    affects: ["BSED Phenom", "Camera"], # affects the CCD in case of cathodoluminescence
+    affects: ["SE Detector"],
 }
 
 "EBeam Focus": {
-    role: ebeam-focus,
+    # role: ebeam-focus,
+    role: null,
     init: {},
     affects: ["EBeam"]
 }
 
 "SE Detector": {
     # Internal child of SimSEM, so no class
-    role: se-detector,
+    # role: se-detector,
+    role: null,
     init: {},
 }
 
@@ -51,59 +59,61 @@ METEOR-Sim: {
         address: null,
         axes: ["x", "y", "z", "rx", "rz"],
         ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
-        rng: [[-0.1, 0.1], [-0.05, 0.05], [0, 0.1], [-2, 2], [0, 6.28]],
+        rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
         unit: ["m", "m", "m", "rad", "rad"],
         refproc: "Standard",
     },
     metadata: {
+        # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975 },
-        SEM_IMAGING_RANGE: {"x": [-0.0049, 0.0048], "y": [0.0004, 0.0044], "z": [0.0055, 0.0075]},
-        FM_IMAGING_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045], "z": [0.0046, 0.0087]},
-        SAMPLE_CENTERS: {"GRID 1": {'x': -0.003, 'y':  0.0025, 'z': 0.0066}, "GRID 2": {'x': 0.003, 'y': 0.0023, 'z': 0.0066}},
-        # Note that these values change every session 
-        POS_COR: { "x": 0.02447, "y": -0.000017 },
-        # Active tilting & rotation angles positions when switching between SEM & FM
-        # Note: these values are calibrated at installation time 
-        FAV_FM_POS_ACTIVE: {"rx": 0.122173048  , "rz":  5.06145483},
-        FAV_SEM_POS_ACTIVE: {"rx": 0.34906585, "rz": 1.91986218}    # Note that milling angle (rx) can be changed per session 
+        # XYZ ranges for SEM & METEOR
+        SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+        # Grid centers in SEM range
+        # Adjusted so that at init (0,0,0), it's at the Grid 1.
+        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
+        # Mirroring values between SEM - METEOR
+        POS_COR: {"x": 0.0244925, "y": 0.0000641},
+        # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.
+        # Note: these values are calibrated at installation time.
+        FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  5.06145}, # 7° - 270°
+        # Typically rz = 110°, but we make it 0 so that at init it looks like in SEM position
+        FAV_SEM_POS_ACTIVE: {"rx": 0, "rz": 0}    # Note that milling angle (rx) can be changed per session 
     },
 }
 
-"Linked Stage": {
-    class: actuator.LinkedAxesActuator,
-    role: stage,
+"Linked YZ": {
+    class: actuator.ConvertStage,
+    role: null,
     dependencies: {
-        "stage": "Stage",
+        "under": "Stage"
+    },
+    init: {
+      axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+      rotation: -0.8034946943806713, # rad , -45°
+    },
+}
+
+"Meteor Stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    dependencies: { "x": "Stage", "y": "Linked YZ", "z": "Linked YZ", },
+    init: {
+        axes_map: { "x": "x", "y": "x", "z": "y",},
     },
     affects: ["Camera", "EBeam"],
     metadata: {
-        # Matrix to convert from X/Y to X/Y/Z (on the underlying stage)
-        # xd = POS_COR[0] + CALIB[0,0] * x + CALIB[0,1] * y
-        # yd = POS_COR[1] + CALIB[1,0] * x + CALIB[1,1] * y
-        # zd = POS_COR[2] + CALIB[2,0] * x + CALIB[2,1] * y
-        CALIB: [[1, 0],  [0, 0.6941955197522921], [0, -0.7197864824764667]],
-        POS_COR: [0, -0.0007363771884364807, 0.004945901888925916],
-        # Allowed range when in FM imaging mode. The X/Y ranges are also used
-        # as default area for the overview acquisition. The values must be in the
-        # stage coordinates, so converted from the SEM stage (in Y).
-        POS_ACTIVE_RANGE: {"x": [0.044, 0.054], "y": [-0.0044, 0.0045],},
+        POS_ACTIVE_RANGE: {"x":[0.040, 0.054], "y": [-5.e-3, 10.e-3]}
     },
 }
 
 "Light Source": {
-    class: lle.FakeLLE,
+    class: omicronxx.HubxX,
     role: light,
     init: {
-        port: "/dev/ttyUSB*",
-        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
-        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
-                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
-                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
-                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
-                 }
+        port: "/dev/fakehub", # Simulator
+        #port: "/dev/ttyFTDI*",
         },
-        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: ["Camera"],
 }
 
@@ -118,16 +128,21 @@ METEOR-Sim: {
     affects: ["Camera"]
 }
 
-# Normally a IDS uEye
+# Normally a IDS uEye or Zyla
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Camera": {
-    class: andorcam2.AndorCam2,
+    class: simcam.Camera,
     role: ccd,
+    dependencies: {focus: "Optical Focus"},
     init: {
-        device: "fake",
         image: "andorcam2-fake-clara.tiff",
-        transp: [-1, -2], # To swap/invert axes
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
     },
 }
 
@@ -137,10 +152,9 @@ METEOR-Sim: {
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/fake3",
-        address: null,
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
         axes: ["fw"],
-        # TODO: check step size, so that 6.28 rad == one full rotation
         ustepsize: [1.227184e-6], # [rad/µstep]
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
@@ -162,10 +176,10 @@ METEOR-Sim: {
         # "fast-path" between the last filter and the first one.
         positions: {
              # pos (rad) -> m,m
-             0.08: [510.e-9, 540.e-9], # FF01-440/40-25
-             0.865398: [532.e-9, 552.e-9], # FF01-525/30-25
-             1.650796: [589.e-9, 625.e-9], # FF01-607/36-25
-             2.4361944: [672.e-9, 696.e-9], # FF02-684/24-25
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
@@ -178,7 +192,6 @@ METEOR-Sim: {
 "Optical Focus": {
     class: smaract.MCS2,
     role: focus,
-    affects: ["Camera"],
     init: {
         locator: "fake",
         ref_on_init: True,
@@ -189,14 +202,20 @@ METEOR-Sim: {
         # TODO: check the ranges, and the channel
         axes: {
             'z': {
-                range: [-10.e-3, 8.e-3],
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 5.e-3],
                 unit: 'm',
                 channel: 0,
             },
         },
     },
     metadata: {
-        FAV_POS_DEACTIVE: {'z': 0.002},
-        FAV_POS_ACTIVE: {'z': 0.00}
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 1.5e-3}
     },
+    affects: ["Camera"],
 }
+
