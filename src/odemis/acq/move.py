@@ -706,8 +706,8 @@ def transformFromSEMToMeteor(pos, stage):
     transformed_pos = pos.copy()
     pos_cor = stage_md[model.MD_POS_COR]
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
-    transformed_pos["x"] = 2 * pos_cor["x"] - pos["x"]
-    transformed_pos['y'] = 2 * pos_cor["y"] - pos["y"]
+    transformed_pos[0] = 2 * pos_cor[0] - pos[0]
+    transformed_pos[1] = 2 * pos_cor[1] - pos[1]
     transformed_pos.update(fm_pos_active)
     return transformed_pos
 
@@ -732,8 +732,8 @@ def transformFromMeteorToSEM(pos, stage):
     transformed_pos = pos.copy()
     pos_cor = stage_md[model.MD_POS_COR]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-    transformed_pos["x"] = 2*pos_cor["x"]-pos["x"]
-    transformed_pos['y'] = 2*pos_cor["y"]-pos["y"]
+    transformed_pos[0] = 2 * pos_cor[0] - pos[0]
+    transformed_pos[1] = 2 * pos_cor[1] - pos[1]
     transformed_pos.update(sem_pos_active)
     return transformed_pos
 

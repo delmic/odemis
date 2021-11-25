@@ -73,7 +73,7 @@ METEOR-Sim: {
         # Adjusted so that at init (0,0,0), it's at the Grid 1.
         SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
         # Mirroring values between SEM - METEOR
-        POS_COR: {"x": 0.0244925, "y": 0.0000641},
+        POS_COR: [0.02447, -0.000017],
         # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.
         # Note: these values are calibrated at installation time.
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  5.06145}, # 7° - 270°
