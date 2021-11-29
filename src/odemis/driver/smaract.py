@@ -1804,14 +1804,15 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = SA_MC_Vec3()
 
         # Specify ranges
-        # Mirroring actual ranges
-        self._range = {}
-        self._range['x'] = (-1.6e-2, 1.6e-2)
-        self._range['y'] = (-1.5e-2, 1.5e-2)
-        self._range['z'] = (-1.e-2, 0.002)
-        self._range['rx'] = (-28, 28)
-        self._range['ry'] = (0, 0)
-        self._range['rz'] = (-28, 28)
+        # Make sure these ranges mirroring the simulator ranges (ie on the yaml file)
+        self._range = {
+            'x': (-1.6e-2, 1.6e-2),
+            'y': (-1.5e-2, 1.5e-2),
+            'z': (-1.0e-2, 0.003),
+            'rx': (-28, 28),
+            'ry': (0, 0),
+            'rz': (-28, 28),
+        }
 
         self.stopping = threading.Event()
 
