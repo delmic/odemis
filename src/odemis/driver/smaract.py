@@ -1195,11 +1195,7 @@ class MC_5DOF(model.Actuator):
         pos_deactive_after_ref (bool): if True, will move to the deactive position
             defined in metadata after referencing
         """
-        if locator != "fake":
-            self.core = MC_5DOF_DLL()
-        else:
-            self.core = FakeMC_5DOF_DLL()
-
+        self.core = MC_5DOF_DLL() if locator != "fake" else FakeMC_5DOF_DLL()
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
@@ -1281,9 +1277,8 @@ class MC_5DOF(model.Actuator):
         # If ref_on_init, reference immediately.
         if referenced:
             logging.debug("SA_MC is referenced")
-        else:
-            if ref_on_init:
-                self.reference()  # will reference now in background.
+        elif ref_on_init:
+            self.reference()  # will reference now in background.
 
         # Use a default actuator speed
         self.linear_speed = linear_speed
@@ -1514,12 +1509,11 @@ class MC_5DOF(model.Actuator):
         try:
             p = self.GetPose().asdict()
         except SA_MCError as ex:
-            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
-                logging.warning("Position unknown because SA_MC is not referenced")
-                p = self._unknown_pos
-            else:
+            if ex.errno != MC_5DOF_DLL.SA_MC_ERROR_NOT_REFERENCED:
                 raise
 
+            logging.warning("Position unknown because SA_MC is not referenced")
+            p = self._unknown_pos
         p = self._applyInversion(p)
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
@@ -1822,15 +1816,12 @@ class FakeMC_5DOF_DLL(object):
         self._current_move_finish = time.time()
 
     def _pose_in_range(self, pose):
-        if self._range['x'][0] <= pose.x <= self._range['x'][1] and \
+        return self._range['x'][0] <= pose.x <= self._range['x'][1] and \
             self._range['y'][0] <= pose.y <= self._range['y'][1] and \
             self._range['z'][0] <= pose.z <= self._range['z'][1] and \
             self._range['rx'][0] <= pose.rx <= self._range['rx'][1] and \
             self._range['ry'][0] <= pose.ry <= self._range['ry'][1] and \
-            self._range['rz'][0] <= pose.rz <= self._range['rz'][1]:
-            return True
-        else:
-            return False
+            self._range['rz'][0] <= pose.rz <= self._range['rz'][1]
 
     def _calc_move_after_dt(self, a, speed, dt):
         """
@@ -2928,12 +2919,11 @@ class MCS2(model.Actuator):
                 p[axis_name] = self._get_position(axis_channel)
 
         except SA_CTLError as ex:
-            if ex.errno == SA_CTLDLL.SA_CTL_ERROR_NOT_REFERENCED:
-                logging.warning("Position unknown because SA_CTL is not referenced")
-                p = {a: 0 for a in self.axes}
-            else:
+            if ex.errno != SA_CTLDLL.SA_CTL_ERROR_NOT_REFERENCED:
                 raise
 
+            logging.warning("Position unknown because SA_CTL is not referenced")
+            p = {a: 0 for a in self.axes}
         p = self._applyInversion(p)
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
@@ -3172,7 +3162,10 @@ class MCS2(model.Actuator):
                         # TODO: Raise some error here
 
                 # if referenced, move to the safe position (if requested)
-                all_axes_referenced = all([self.referenced._value[a] for a in self._axis_map.keys()])
+                all_axes_referenced = all(
+                    self.referenced._value[a] for a in self._axis_map.keys()
+                )
+
                 if self._pos_deactive_after_ref and all_axes_referenced:
                     try:
                         deactive_pos = self._metadata[model.MD_FAV_POS_DEACTIVE]
