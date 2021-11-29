@@ -610,8 +610,10 @@ class EBeamScanner(model.Emitter):
         self.scanGain = model.TupleContinuous((0.3, 0.3), range=((-1.0, -1.0), (1.0, 1.0)))
         # delay between the trigger signal to start the acquisition and the scanner to start scanning
         # x: delay in starting a line scan; y: delay in scanning full lines (prescan lines)
-        # TODO: y scan delay is y prescan lines which is currently unused an can probably be deleted.
-        self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1.0, 10.0)), unit='s', cls=(int, float),
+        # The scan delay depends on the acquisition delay (MPPC.acqDelay). Acquisition delay must be decreased first.
+        # TODO: y scan delay is y prescan lines in ASM API [not implemented yet]. If needed, convert from seconds to
+        #  line scan time via getTicksScanDelay(). For now here range is just 0.
+        self.scanDelay = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1.0, 0.0)), unit='s', cls=(int, float),
                                                setter=self._setScanDelay)
 
         self._metadata[model.MD_PIXEL_SIZE] = self.pixelSize.value
@@ -709,7 +711,9 @@ class EBeamScanner(model.Emitter):
         """
         Convert the scan delay in seconds into a multiple of the system clock period in ticks.
         Convert the number of pre-scanned lines to integer.
-        :return (int, int): Scan delay in ticks. Number of line scans before starting the actual acquisition.
+        :return:
+                x_delay (int): Scan delay in ticks.
+                y_delay (int): Number of line scans before starting the actual acquisition.
         """
         return (int(self.scanDelay.value[0] / self.clockPeriod.value),
                 int(self.scanDelay.value[1]))
@@ -986,6 +990,7 @@ class MPPC(model.Detector):
         self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
+        # The acquisition delay depends on the scan delay (EbeamScanner.scanDelay). Scan delay must be increased first.
         self.acqDelay = model.FloatContinuous(0.0, range=(0.0, 1.0), unit='s', setter=self._setAcqDelay)
         # regulates the sensitivity of the mppc sensor
         self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
