@@ -110,6 +110,7 @@ NI_AO_TRIG_AI_START1 = 19  # Trigger number for AI Start1 (= beginning of a comm
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2
 
+MAX_GC_PERIOD = 10  # s, maximum time elapsed before running the garbage collector
 
 class CancelledError(Exception):
     """
@@ -300,6 +301,35 @@ class SEMComedi(model.HwComponent):
         self._new_position_thread_pipe = [] # list to communicate with the current thread
 
         self._acquisition_thread = None
+
+        # Only run the garbage collector when we decide. It can block all the threads
+        # for ~15ms, which is quite long if we are about to acquire for a short time.
+        gc.disable()
+        self._last_gc = time.time()
+
+    def _gc_while_waiting(self, max_time=None):
+        """
+        May or may not run the garbage collector.
+        max_time (float or None): maximum time it's allow to take.
+            If None, consider we can always run it.
+        """
+        gen = 2  # That's all generations
+
+        if max_time is not None:
+            # No need if we already run
+            if time.time() < self._last_gc + MAX_GC_PERIOD:
+                return
+
+            # The garbage collector with generation 2 takes ~15ms, but gen 0 & 1
+            # it's a lot faster (<0.5 ms). So play safe, and only GC on gen 0
+            # if less than 100 ms of budget.
+            if max_time < 0.1:
+                gen = 0
+
+        start_gc = time.time()
+        gc.collect(gen)
+        self._last_gc = time.time()
+        logging.debug("GC at gen %d took %g ms", gen, (self._last_gc - start_gc) * 1000)
 
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -1219,6 +1249,7 @@ class SEMComedi(model.HwComponent):
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        self._gc_while_waiting(expected_time)
         rbuf = self._reader.wait(timeout)
         self._writer.wait(0.1)
         # reshape to 2D
@@ -1335,6 +1366,7 @@ class SEMComedi(model.HwComponent):
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        self._gc_while_waiting(expected_time)
         rbuf = self._reader.wait(timeout)
         if nwscans != 1:
             self._writer.wait() # writer is faster, so there should be no wait
@@ -1501,6 +1533,7 @@ class SEMComedi(model.HwComponent):
 
         timeout = expected_time * 1.10 + 0.1  # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        self._gc_while_waiting(expected_time)
         rbuf = counter.reader.wait(timeout)
         rbuf = rbuf[1:]  # discard first data
 
@@ -1639,7 +1672,6 @@ class SEMComedi(model.HwComponent):
           callbacks.
         Note: to be run in a separate thread
         """
-        last_gc = 0
         nfailures = 0
         try:
             while True:
@@ -1686,21 +1718,13 @@ class SEMComedi(model.HwComponent):
                         if d.inverted:
                             da = (d.shape[0] - 1) - da
                         d.data.notify(da)
-
-                    # force the GC to non-used buffers, for some reason, without this
-                    # the GC runs only after we've managed to fill up the memory
-                    if time.time() - last_gc > 2:  # Costly, so not too often
-                        gc.collect()  # TODO: if scan is long enough, during scan
-                        last_gc = time.time()
                 else:  # nothing to acquire => rest
                     # Delay the state change to avoid too fast switch in case
                     # a new acquisition starts soon after.
                     self._scanner.indicate_scan_state(False, delay=0.1)
                     self.set_to_resting_position()
-                    gc.collect()
                     # wait until something new comes in
                     self._check_cmd_q(block=True)
-                    last_gc = time.time()
         except CancelledError:
             logging.info("Acquisition threading terminated on request")
         except Exception:
@@ -2994,6 +3018,14 @@ class Scanner(model.Emitter):
                     self._set_scan_state(False)
                     self._scanning_ready.clear()
                     stopt = None
+                    # We now should have quite some time free, let's run the garbage collector.
+                    # Note that when starting the next acquisition, if a long time
+                    # has elapsed, the GC will immediately run. That would
+                    # probably not be necessary and we could avoid this by setting
+                    # the last GC time to the starting time. However, this is
+                    # also not a big deal as it runs while waiting for the hardware.
+                    # So we don't do it to avoid complexifying further the code.
+                    self.parent._gc_while_waiting(None)
                     continue
 
                 # parse the new message
